@@ -89,13 +89,15 @@ export default function Home() {
               Members-Only Access<br className="hidden md:block" />{" "}
               to the <em className="italic">Best</em>{" "}
               Golf<br className="hidden lg:block" />{" "}
-              <span className="relative inline-block">Has</span> to Offer{/* eslint-disable-next-line @next/next/no-img-element */}<img
-                src="/hero-golf-ball.png"
-                alt=""
-                className="inline-block align-baseline ml-2 md:ml-3 w-[0.55em] h-[0.55em] md:w-[0.5em] md:h-[0.5em] golf-ball-shadow"
-                style={{ marginBottom: "0.08em" }}
-                draggable={false}
-              />
+              <span className="relative inline-block">Has</span> to Offer<span
+                className="inline-block align-baseline ml-1 md:ml-2 golf-ball-shadow"
+                style={{ width: "0.45em", height: "0.45em", marginBottom: "0.06em" }}
+              >{/* eslint-disable-next-line @next/next/no-img-element */}<img
+                  src="/hero-golf-ball.png"
+                  alt=""
+                  className="w-full h-full object-contain rounded-full"
+                  draggable={false}
+                /></span>
             </h1>
           </div>
 
