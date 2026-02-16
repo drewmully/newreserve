@@ -41,60 +41,15 @@ export default function Home() {
       </header>
 
       {/* ─── HERO ─── */}
-      <section className="relative min-h-[92vh] flex items-center justify-center px-6 md:px-12 pt-16 bg-forest overflow-hidden">
-        {/* Radial glow for depth */}
+      <section className="relative min-h-[92vh] flex items-center justify-center px-6 md:px-12 pt-16 bg-bone overflow-hidden">
+        {/* Subtle dot grid */}
         <div
-          className="absolute inset-0 pointer-events-none"
+          className="absolute inset-0 opacity-[0.35] pointer-events-none"
           style={{
-            background:
-              "radial-gradient(ellipse 70% 50% at 50% 45%, rgba(110,139,116,0.12) 0%, transparent 70%)",
+            backgroundImage: `radial-gradient(circle at 1px 1px, #C8BFAF 0.5px, transparent 0)`,
+            backgroundSize: "48px 48px",
           }}
         />
-
-        {/* Subtle dot grid (light on dark) */}
-        <div
-          className="absolute inset-0 opacity-[0.025] pointer-events-none"
-          style={{
-            backgroundImage: `radial-gradient(circle at 1px 1px, #F5F1E8 0.5px, transparent 0)`,
-            backgroundSize: "40px 40px",
-          }}
-        />
-
-        {/* ── 3D Integrated Images ── */}
-
-        {/* Chalice - large, overlapping text from behind */}
-        <div className="absolute top-1/2 left-1/2 hero-chalice-drift pointer-events-none z-[5] animate-fade-up-delay-1">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/hero-chalice.png"
-            alt=""
-            className="w-[240px] md:w-[360px] lg:w-[440px] opacity-[0.35] md:opacity-[0.3]"
-            style={{ filter: "brightness(2.5)" }}
-            draggable={false}
-          />
-        </div>
-
-        {/* Tee + Flag - top left of text area */}
-        <div className="absolute top-[12%] left-[3%] md:top-[14%] md:left-[6%] lg:left-[10%] pointer-events-none z-[15] hero-flag-rock hero-3d-shadow animate-fade-up">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/hero-tee-flag.png"
-            alt=""
-            className="w-[100px] md:w-[180px] lg:w-[240px]"
-            draggable={false}
-          />
-        </div>
-
-        {/* Golf ball - bottom right, acting as period / accent */}
-        <div className="absolute bottom-[14%] right-[4%] md:bottom-[16%] md:right-[8%] lg:right-[12%] pointer-events-none z-[15] hero-3d-shadow animate-fade-up-delay-2">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/hero-golf-ball.png"
-            alt=""
-            className="w-[70px] md:w-[120px] lg:w-[160px]"
-            draggable={false}
-          />
-        </div>
 
         {/* ── Hero content ── */}
         <div className="relative max-w-5xl mx-auto text-center z-10">
@@ -106,13 +61,45 @@ export default function Home() {
             </span>
           </div>
 
-          <h1 className="font-serif text-4xl md:text-6xl lg:text-[5.5rem] text-bone leading-[1.08] tracking-tight mb-8 animate-fade-up-delay-1">
-            Members-Only Access to the{" "}
-            <em className="italic">Best</em>{" "}
-            Golf Has to Offer<span className="text-sage">.</span>
-          </h1>
+          {/* Headline with integrated objects */}
+          <div className="relative animate-fade-up-delay-1">
+            {/* Tee + Flag — top-left, overlapping first line */}
+            <div className="absolute -top-8 -left-4 md:-top-12 md:-left-8 lg:-top-16 lg:-left-12 pointer-events-none z-20 hero-flag-rock hero-3d-shadow">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/hero-tee-flag.png"
+                alt=""
+                className="w-[80px] md:w-[140px] lg:w-[190px]"
+                draggable={false}
+              />
+            </div>
 
-          <p className="text-lg md:text-xl text-bone/55 max-w-2xl mx-auto leading-relaxed mb-14 animate-fade-up-delay-2">
+            {/* Chalice — overlapping the "H" in "Has", in front of text */}
+            <div className="absolute hero-chalice-pos pointer-events-none z-20 hero-chalice-drift hero-3d-shadow">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/hero-chalice.png"
+                alt=""
+                className="w-[70px] md:w-[110px] lg:w-[140px]"
+                draggable={false}
+              />
+            </div>
+
+            <h1 className="font-serif text-4xl md:text-6xl lg:text-[5.5rem] text-forest leading-[1.08] tracking-tight mb-8">
+              Members-Only Access<br className="hidden md:block" />{" "}
+              to the <em className="italic">Best</em>{" "}
+              Golf<br className="hidden lg:block" />{" "}
+              <span className="relative inline-block">Has</span> to Offer{/* eslint-disable-next-line @next/next/no-img-element */}<img
+                src="/hero-golf-ball.png"
+                alt=""
+                className="inline-block align-baseline ml-2 md:ml-3 w-[0.55em] h-[0.55em] md:w-[0.5em] md:h-[0.5em] golf-ball-shadow"
+                style={{ marginBottom: "0.08em" }}
+                draggable={false}
+              />
+            </h1>
+          </div>
+
+          <p className="text-lg md:text-xl text-charcoal/55 max-w-2xl mx-auto leading-relaxed mb-14 animate-fade-up-delay-2">
             Curated products, boutique shop, mill river pricing,
             and exclusive benefits&mdash;built for players who care.
           </p>
@@ -122,16 +109,16 @@ export default function Home() {
               <input
                 type="email"
                 placeholder="Your email"
-                className="w-full sm:flex-1 h-13 px-5 rounded-xl bg-bone/10 border border-bone/20 text-bone placeholder:text-bone/35 text-base focus:border-bone/40 focus:ring-2 focus:ring-bone/10 transition-all duration-300"
+                className="w-full sm:flex-1 h-13 px-5 rounded-xl bg-white/60 border border-taupe/30 text-obsidian placeholder:text-charcoal/35 text-base focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300"
               />
               <button
                 type="submit"
-                className="w-full sm:w-auto h-13 px-8 rounded-xl bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-colors duration-300 cursor-pointer whitespace-nowrap"
+                className="w-full sm:w-auto h-13 px-8 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer whitespace-nowrap"
               >
                 Unlock Access
               </button>
             </form>
-            <p className="text-xs text-bone/35 tracking-wide">
+            <p className="text-xs text-charcoal/40 tracking-wide">
               Complimentary access &middot; No credit card required
             </p>
           </div>
@@ -139,7 +126,7 @@ export default function Home() {
 
         {/* Scroll indicator */}
         <div className="absolute bottom-8 left-1/2 -translate-x-1/2">
-          <ScrollChevron light />
+          <ScrollChevron />
         </div>
       </section>
 

@@ -60,10 +60,29 @@ input:focus {
 
 /* ─── HERO 3D OBJECTS ─── */
 
-/* Very subtle hover/float for the chalice */
+/* Chalice position — sits over the "H" in "Has" on the 3rd line */
+.hero-chalice-pos {
+  /* mobile: approximate center-left of last text line */
+  top: 52%;
+  left: 18%;
+}
+@media (min-width: 768px) {
+  .hero-chalice-pos {
+    top: 48%;
+    left: 28%;
+  }
+}
+@media (min-width: 1024px) {
+  .hero-chalice-pos {
+    top: 52%;
+    left: 14%;
+  }
+}
+
+/* Subtle float for the chalice */
 @keyframes chalice-drift {
-  0%, 100% { transform: translate(-50%, -50%) translateY(0); }
-  50% { transform: translate(-50%, -50%) translateY(-10px); }
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
 }
 
 .hero-chalice-drift {
@@ -72,36 +91,22 @@ input:focus {
 
 /* Gentle rock for flag */
 @keyframes flag-rock {
-  0%, 100% { transform: rotate(-15deg) translateY(0); }
-  50% { transform: rotate(-12deg) translateY(-6px); }
+  0%, 100% { transform: rotate(-8deg) translateY(0); }
+  50% { transform: rotate(-5deg) translateY(-5px); }
 }
 
 .hero-flag-rock {
   animation: flag-rock 6s ease-in-out infinite;
 }
 
-/* Gentle rock for glove */
-@keyframes glove-rock {
-  0%, 100% { transform: rotate(10deg) translateY(0); }
-  50% { transform: rotate(8deg) translateY(-8px); }
-}
-
-.hero-glove-rock {
-  animation: glove-rock 7s ease-in-out 0.5s infinite;
-}
-
-/* 3D drop shadows for hero objects */
+/* 3D drop shadows for hero objects (tuned for light bg) */
 .hero-3d-shadow {
-  filter: drop-shadow(0 20px 40px rgba(0,0,0,0.2)) drop-shadow(0 8px 16px rgba(0,0,0,0.1));
-}
-
-.hero-3d-shadow-sm {
-  filter: drop-shadow(0 12px 24px rgba(0,0,0,0.18)) drop-shadow(0 4px 8px rgba(0,0,0,0.08));
+  filter: drop-shadow(0 12px 32px rgba(31,61,43,0.18)) drop-shadow(0 4px 12px rgba(0,0,0,0.08));
 }
 
 /* Golf ball inline period shadow */
 .golf-ball-shadow {
-  filter: drop-shadow(0 3px 6px rgba(0,0,0,0.3));
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.25));
 }
 
 /* ─── SUBTLE ANIMATIONS ─── */
