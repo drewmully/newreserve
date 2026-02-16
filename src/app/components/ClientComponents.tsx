@@ -1,0 +1,156 @@
+"use client";
+
+import { useEffect, useRef, useState, type ReactNode } from "react";
+
+/* ─── SCROLL REVEAL ─── */
+
+interface ScrollRevealProps {
+  children: ReactNode;
+  className?: string;
+  direction?: "up" | "left" | "right";
+  delay?: number;
+  threshold?: number;
+  once?: boolean;
+}
+
+export function ScrollReveal({
+  children,
+  className = "",
+  direction = "up",
+  delay = 0,
+  threshold = 0.12,
+  once = true,
+}: ScrollRevealProps) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [isVisible, setIsVisible] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true);
+          if (once) observer.unobserve(entry.target);
+        }
+      },
+      { threshold }
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [threshold, once]);
+
+  const offsets: Record<string, string> = {
+    up: "translate3d(0, 48px, 0)",
+    left: "translate3d(-48px, 0, 0)",
+    right: "translate3d(48px, 0, 0)",
+  };
+
+  return (
+    <div
+      ref={ref}
+      className={className}
+      style={{
+        opacity: isVisible ? 1 : 0,
+        transform: isVisible ? "translate3d(0,0,0)" : offsets[direction],
+        transition: `opacity 0.9s cubic-bezier(0.16,1,0.3,1) ${delay}s, transform 0.9s cubic-bezier(0.16,1,0.3,1) ${delay}s`,
+        willChange: "opacity, transform",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/* ─── STAT COUNTER ─── */
+
+interface StatCounterProps {
+  end: number;
+  suffix?: string;
+  prefix?: string;
+  duration?: number;
+  label: string;
+}
+
+export function StatCounter({
+  end,
+  suffix = "",
+  prefix = "",
+  duration = 2200,
+  label,
+}: StatCounterProps) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [count, setCount] = useState(0);
+  const [started, setStarted] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !started) {
+          setStarted(true);
+          observer.unobserve(entry.target);
+        }
+      },
+      { threshold: 0.4 }
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [started]);
+
+  useEffect(() => {
+    if (!started) return;
+
+    const startTime = performance.now();
+    let raf: number;
+
+    const animate = (now: number) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setCount(Math.floor(eased * end));
+      if (progress < 1) raf = requestAnimationFrame(animate);
+    };
+
+    raf = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(raf);
+  }, [started, end, duration]);
+
+  return (
+    <div ref={ref} className="text-center">
+      <span className="font-serif text-4xl md:text-5xl lg:text-6xl text-forest block mb-2">
+        {prefix}
+        {count.toLocaleString()}
+        {suffix}
+      </span>
+      <span className="text-xs tracking-[0.25em] uppercase text-charcoal/50 font-medium">
+        {label}
+      </span>
+    </div>
+  );
+}
+
+/* ─── SCROLL-ANIMATED CHEVRON ─── */
+
+export function ScrollChevron() {
+  return (
+    <div className="flex flex-col items-center gap-1 animate-bounce-slow">
+      <svg
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        className="text-taupe/60"
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+      </svg>
+    </div>
+  );
+}
