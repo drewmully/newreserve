@@ -1,0 +1,92 @@
+@import "tailwindcss";
+
+@theme inline {
+  /* Brand Colors */
+  --color-forest: #1F3D2B;
+  --color-forest-light: #2a5239;
+  --color-forest-dark: #162b1e;
+  --color-bone: #F5F1E8;
+  --color-bone-dark: #EDE8DC;
+  --color-obsidian: #111111;
+  --color-sage: #6E8B74;
+  --color-taupe: #C8BFAF;
+  --color-charcoal: #2A2A2A;
+  --color-cream: #FAF9F6;
+
+  /* Font families */
+  --font-serif: "Playfair Display", Georgia, "Times New Roman", serif;
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: #F5F1E8;
+  color: #111111;
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Selection color */
+::selection {
+  background-color: #1F3D2B;
+  color: #F5F1E8;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F5F1E8;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #C8BFAF;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #6E8B74;
+}
+
+/* Input focus ring override */
+input:focus {
+  outline: none;
+}
+
+/* Subtle fade-in animation */
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fadeUp 0.8s ease-out forwards;
+}
+
+.animate-fade-up-delay-1 {
+  animation: fadeUp 0.8s ease-out 0.15s forwards;
+  opacity: 0;
+}
+
+.animate-fade-up-delay-2 {
+  animation: fadeUp 0.8s ease-out 0.3s forwards;
+  opacity: 0;
+}
+
+.animate-fade-up-delay-3 {
+  animation: fadeUp 0.8s ease-out 0.45s forwards;
+  opacity: 0;
+}

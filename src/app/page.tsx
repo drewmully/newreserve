@@ -1,0 +1,540 @@
+export default function Home() {
+  return (
+    <div className="min-h-screen bg-bone">
+      {/* ─── HEADER ─── */}
+      <header className="fixed top-0 left-0 right-0 z-50 bg-bone/90 backdrop-blur-md border-b border-taupe/30">
+        <div className="max-w-7xl mx-auto px-6 md:px-12 flex items-center justify-between h-16">
+          <a href="/" className="flex items-center gap-2.5">
+            <MullyMark className="w-7 h-7" />
+            <span className="font-serif text-xl tracking-wide text-obsidian font-semibold">
+              Mully
+            </span>
+          </a>
+          <nav className="flex items-center gap-8">
+            <a
+              href="#reserve"
+              className="hidden md:block text-sm tracking-wider uppercase text-charcoal/70 hover:text-forest transition-colors"
+            >
+              Reserve
+            </a>
+            <a
+              href="#tiers"
+              className="hidden md:block text-sm tracking-wider uppercase text-charcoal/70 hover:text-forest transition-colors"
+            >
+              Membership
+            </a>
+            <a
+              href="/login"
+              className="text-sm tracking-wider uppercase text-forest font-medium hover:text-forest-dark transition-colors"
+            >
+              Sign In
+            </a>
+          </nav>
+        </div>
+      </header>
+
+      {/* ─── HERO ─── */}
+      <section className="relative min-h-screen flex items-center justify-center px-6 md:px-12 pt-16">
+        {/* Subtle background pattern */}
+        <div className="absolute inset-0 opacity-[0.03]" style={{
+          backgroundImage: `radial-gradient(circle at 1px 1px, #1F3D2B 1px, transparent 0)`,
+          backgroundSize: '48px 48px',
+        }} />
+        <div className="relative max-w-4xl mx-auto text-center">
+          {/* Reserve label */}
+          <div className="animate-fade-up">
+            <span className="inline-block text-xs tracking-[0.35em] uppercase text-sage font-medium mb-8">
+              Mully Reserve
+            </span>
+          </div>
+
+          {/* Main headline */}
+          <h1 className="font-serif text-5xl md:text-7xl lg:text-8xl text-obsidian leading-[1.05] tracking-tight mb-8 animate-fade-up-delay-1">
+            Progress, Earned.
+          </h1>
+
+          {/* Subtitle */}
+          <p className="text-lg md:text-xl text-charcoal/70 max-w-2xl mx-auto leading-relaxed mb-12 animate-fade-up-delay-2">
+            Members-only access to curated partner benefits, reserve pricing,
+            and private club eligibility. No&nbsp;gimmicks. No&nbsp;hype. Just access
+            built for players who care.
+          </p>
+
+          {/* CTA */}
+          <div className="animate-fade-up-delay-3">
+            <form className="flex flex-col sm:flex-row items-center gap-3 max-w-md mx-auto mb-4">
+              <input
+                type="email"
+                placeholder="Your email"
+                className="w-full sm:flex-1 h-13 px-5 rounded-xl bg-cream border border-taupe/40 text-obsidian placeholder:text-taupe text-base focus:border-forest focus:ring-2 focus:ring-forest/20 transition-all"
+              />
+              <button
+                type="submit"
+                className="w-full sm:w-auto h-13 px-8 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors cursor-pointer whitespace-nowrap"
+              >
+                Unlock Access
+              </button>
+            </form>
+            <p className="text-xs text-taupe tracking-wide">
+              Complimentary access &middot; No credit card required
+            </p>
+          </div>
+
+          {/* Scroll indicator */}
+          <div className="absolute bottom-12 left-1/2 -translate-x-1/2">
+            <div className="w-px h-12 bg-gradient-to-b from-transparent to-taupe/50" />
+          </div>
+        </div>
+      </section>
+
+      {/* ─── WHAT IS MULLY RESERVE ─── */}
+      <section id="reserve" className="py-24 md:py-32 px-6 md:px-12">
+        <div className="max-w-6xl mx-auto">
+          <div className="max-w-3xl mx-auto text-center mb-20">
+            <span className="inline-block text-xs tracking-[0.3em] uppercase text-sage font-medium mb-6">
+              The Program
+            </span>
+            <h2 className="font-serif text-3xl md:text-5xl text-obsidian leading-tight mb-8">
+              What is Mully Reserve?
+            </h2>
+            <p className="text-lg text-charcoal/70 leading-relaxed">
+              Mully Reserve is a members-only access program built around curated partnerships,
+              preferred pricing, and private club eligibility. It is not a rewards program.
+              It is not a points system. It is access&mdash;earned, not bought.
+            </p>
+          </div>
+
+          {/* Benefits Grid */}
+          <div className="grid md:grid-cols-3 gap-6">
+            <BenefitCard
+              icon={<PartnerIcon />}
+              title="Curated Partner Access"
+              description="Exclusive access to vetted partners across gear, fitting, training, and lifestyle. Every partner is hand-selected."
+            />
+            <BenefitCard
+              icon={<PricingIcon />}
+              title="Reserve Pricing"
+              description="Members-only pricing on select products and experiences. No markups. No inflated MSRPs. Just honest value."
+            />
+            <BenefitCard
+              icon={<ClubIcon />}
+              title="Private Club Eligibility"
+              description="Qualify for Mully&rsquo;s private club program. Tee times, events, and community&mdash;for those who earn it."
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* ─── PHILOSOPHY BANNER ─── */}
+      <section className="py-24 md:py-32 px-6 md:px-12 bg-forest">
+        <div className="max-w-4xl mx-auto text-center">
+          <blockquote className="font-serif text-3xl md:text-5xl lg:text-6xl text-bone/95 leading-tight mb-8">
+            &ldquo;You don&rsquo;t buy status.<br />You build it.&rdquo;
+          </blockquote>
+          <p className="text-sage text-base md:text-lg tracking-wide">
+            Progress takes intention. Mully Reserve is for those who understand that.
+          </p>
+        </div>
+      </section>
+
+      {/* ─── MEMBERSHIP TIERS ─── */}
+      <section id="tiers" className="py-24 md:py-32 px-6 md:px-12 bg-cream">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-20">
+            <span className="inline-block text-xs tracking-[0.3em] uppercase text-sage font-medium mb-6">
+              Membership
+            </span>
+            <h2 className="font-serif text-3xl md:text-5xl text-obsidian leading-tight mb-6">
+              Choose Your Level
+            </h2>
+            <p className="text-lg text-charcoal/70 max-w-xl mx-auto">
+              Private club perks. Without the country club cost.
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-6 lg:gap-8">
+            {/* Tier 1 - Reserve Access */}
+            <div className="bg-bone rounded-2xl p-8 md:p-10 border border-taupe/30 flex flex-col">
+              <span className="text-xs tracking-[0.25em] uppercase text-sage font-medium mb-3">
+                Reserve Access
+              </span>
+              <div className="mb-6">
+                <span className="font-serif text-3xl text-obsidian">Complimentary</span>
+              </div>
+              <p className="text-sm text-charcoal/60 leading-relaxed mb-8 flex-1">
+                Your entry point. Unlock partner access, browse reserve-priced
+                products, and stay connected to private releases.
+              </p>
+              <ul className="space-y-3 mb-10">
+                <TierFeature text="Partner benefit access" />
+                <TierFeature text="Reserve pricing visibility" />
+                <TierFeature text="Private release notifications" />
+                <TierFeature text="Community access" />
+              </ul>
+              <a
+                href="#"
+                className="block w-full text-center h-12 leading-[3rem] rounded-xl border border-forest text-forest text-sm font-medium tracking-wider uppercase hover:bg-forest hover:text-bone transition-all"
+              >
+                Get Started
+              </a>
+            </div>
+
+            {/* Tier 2 - Reserve Member (Featured) */}
+            <div className="bg-forest rounded-2xl p-8 md:p-10 border border-forest flex flex-col relative">
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                <span className="inline-block bg-sage text-bone text-xs tracking-[0.2em] uppercase font-medium px-4 py-1.5 rounded-full">
+                  Most Popular
+                </span>
+              </div>
+              <span className="text-xs tracking-[0.25em] uppercase text-sage font-medium mb-3">
+                Reserve Member
+              </span>
+              <div className="mb-6">
+                <span className="font-serif text-3xl text-bone">$199</span>
+                <span className="text-bone/50 text-sm ml-1">/quarter</span>
+              </div>
+              <p className="text-sm text-bone/60 leading-relaxed mb-8 flex-1">
+                For the serious player. Guaranteed access windows, quarterly
+                allowance, and priority on every drop.
+              </p>
+              <ul className="space-y-3 mb-10">
+                <TierFeature text="Everything in Reserve Access" light />
+                <TierFeature text="Guaranteed access windows" light />
+                <TierFeature text="$150 quarterly allowance" light />
+                <TierFeature text="Priority release access" light />
+                <TierFeature text="Private club eligibility" light />
+              </ul>
+              <a
+                href="#"
+                className="block w-full text-center h-12 leading-[3rem] rounded-xl bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-all"
+              >
+                Join Now
+              </a>
+            </div>
+
+            {/* Tier 3 - Reserve Black */}
+            <div className="bg-obsidian rounded-2xl p-8 md:p-10 border border-charcoal flex flex-col">
+              <span className="text-xs tracking-[0.25em] uppercase text-taupe font-medium mb-3">
+                Reserve Black
+              </span>
+              <div className="mb-6">
+                <span className="font-serif text-3xl text-bone">Invite Only</span>
+              </div>
+              <p className="text-sm text-bone/40 leading-relaxed mb-8 flex-1">
+                The highest tier. Personal styling, concierge support, and
+                access to experiences money alone can&rsquo;t&nbsp;buy.
+              </p>
+              <ul className="space-y-3 mb-10">
+                <TierFeature text="Everything in Reserve Member" dark />
+                <TierFeature text="$1,000 quarterly credit" dark />
+                <TierFeature text="Personal stylist" dark />
+                <TierFeature text="Concierge phone support" dark />
+                <TierFeature text="Invite-only events" dark />
+              </ul>
+              <div className="block w-full text-center h-12 leading-[3rem] rounded-xl border border-charcoal text-taupe text-sm font-medium tracking-wider uppercase cursor-default">
+                By Invitation
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── HOW IT WORKS ─── */}
+      <section className="py-24 md:py-32 px-6 md:px-12 bg-bone">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-20">
+            <span className="inline-block text-xs tracking-[0.3em] uppercase text-sage font-medium mb-6">
+              Simple
+            </span>
+            <h2 className="font-serif text-3xl md:text-5xl text-obsidian leading-tight">
+              How It Works
+            </h2>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-12 md:gap-8">
+            <StepCard
+              number="01"
+              title="Unlock Access"
+              description="Enter your email to claim your complimentary Reserve Access. No credit card. No commitments."
+            />
+            <StepCard
+              number="02"
+              title="Access Activates"
+              description="Reserve access attaches to your account automatically. Partner benefits and pricing unlock instantly."
+            />
+            <StepCard
+              number="03"
+              title="Private Releases"
+              description="When curated products and experiences become available, you'll be the first to know. High signal, low noise."
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* ─── RECENT RELEASES TEASER ─── */}
+      <section className="py-24 md:py-32 px-6 md:px-12 bg-cream">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-16">
+            <span className="inline-block text-xs tracking-[0.3em] uppercase text-sage font-medium mb-6">
+              The Drop
+            </span>
+            <h2 className="font-serif text-3xl md:text-5xl text-obsidian leading-tight mb-6">
+              Recent Releases
+            </h2>
+            <p className="text-lg text-charcoal/70 max-w-xl mx-auto">
+              A look at what Reserve members have accessed. Updated periodically. No&nbsp;spam.
+            </p>
+          </div>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <ReleaseCard
+              name="Signature Tech Polo"
+              category="Apparel"
+              tag="Reserve Priced"
+            />
+            <ReleaseCard
+              name="Graphite Capsule Collection"
+              category="Limited Release"
+              tag="Sold Out"
+            />
+            <ReleaseCard
+              name="Ventilated Mesh Cap"
+              category="Accessories"
+              tag="Available"
+            />
+          </div>
+
+          <div className="text-center mt-12">
+            <a
+              href="#"
+              className="inline-block text-sm tracking-wider uppercase text-forest font-medium border-b border-forest/30 pb-0.5 hover:border-forest transition-colors"
+            >
+              View All Past Drops
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── FINAL CTA ─── */}
+      <section className="py-24 md:py-32 px-6 md:px-12 bg-bone">
+        <div className="max-w-3xl mx-auto text-center">
+          <h2 className="font-serif text-3xl md:text-5xl lg:text-6xl text-obsidian leading-tight mb-6">
+            Built for players<br />who care.
+          </h2>
+          <p className="text-lg text-charcoal/70 max-w-lg mx-auto leading-relaxed mb-12">
+            Earn your edge. Join Mully Reserve and get access to what matters&mdash;without the noise.
+          </p>
+          <form className="flex flex-col sm:flex-row items-center gap-3 max-w-md mx-auto mb-4">
+            <input
+              type="email"
+              placeholder="Your email"
+              className="w-full sm:flex-1 h-13 px-5 rounded-xl bg-cream border border-taupe/40 text-obsidian placeholder:text-taupe text-base focus:border-forest focus:ring-2 focus:ring-forest/20 transition-all"
+            />
+            <button
+              type="submit"
+              className="w-full sm:w-auto h-13 px-8 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors cursor-pointer whitespace-nowrap"
+            >
+              Unlock Access
+            </button>
+          </form>
+          <p className="text-xs text-taupe tracking-wide">
+            Complimentary access &middot; No credit card required
+          </p>
+        </div>
+      </section>
+
+      {/* ─── FOOTER ─── */}
+      <footer className="py-16 px-6 md:px-12 bg-obsidian">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-8 mb-12">
+            <div className="flex items-center gap-2.5">
+              <MullyMark className="w-6 h-6 text-bone" />
+              <span className="font-serif text-lg tracking-wide text-bone font-semibold">
+                Mully
+              </span>
+            </div>
+            <div className="flex items-center gap-8">
+              <a href="/terms" className="text-sm text-bone/40 hover:text-bone/70 transition-colors">
+                Terms
+              </a>
+              <a href="/privacy" className="text-sm text-bone/40 hover:text-bone/70 transition-colors">
+                Privacy
+              </a>
+              <a href="/contact" className="text-sm text-bone/40 hover:text-bone/70 transition-colors">
+                Contact
+              </a>
+            </div>
+          </div>
+          <div className="border-t border-charcoal pt-8">
+            <p className="text-sm text-bone/30 mb-2">
+              Mully Reserve is access&mdash;not a rewards program.
+            </p>
+            <p className="text-sm text-bone/20">
+              High signal. Low noise. Rare drops.
+            </p>
+          </div>
+          <div className="mt-8">
+            <p className="text-xs text-bone/15">
+              &copy; {new Date().getFullYear()} Mully Group, Inc. All rights reserved.
+            </p>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+}
+
+/* ─── COMPONENTS ─── */
+
+function MullyMark({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 28 28"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+    >
+      {/* Geometric flag mark — pin with triangular flag forming subtle upward arrow */}
+      <rect x="5" y="3" width="2.5" height="22" rx="1.25" fill="currentColor" className="text-forest" />
+      <path
+        d="M7.5 4L21 9.5L7.5 15V4Z"
+        fill="currentColor"
+        className="text-forest"
+      />
+      {/* Small ground mark */}
+      <ellipse cx="6.25" cy="26" rx="4" ry="1" fill="currentColor" className="text-forest" opacity="0.3" />
+    </svg>
+  );
+}
+
+function BenefitCard({
+  icon,
+  title,
+  description,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="bg-cream rounded-2xl p-8 md:p-10 border border-taupe/20 hover:border-sage/40 transition-colors group">
+      <div className="w-12 h-12 rounded-xl bg-forest/10 flex items-center justify-center mb-6 group-hover:bg-forest/15 transition-colors">
+        {icon}
+      </div>
+      <h3 className="font-serif text-xl text-obsidian mb-3">{title}</h3>
+      <p className="text-sm text-charcoal/60 leading-relaxed">{description}</p>
+    </div>
+  );
+}
+
+function TierFeature({
+  text,
+  light,
+  dark,
+}: {
+  text: string;
+  light?: boolean;
+  dark?: boolean;
+}) {
+  const checkColor = dark ? "text-taupe" : light ? "text-sage" : "text-forest";
+  const textColor = dark ? "text-bone/50" : light ? "text-bone/70" : "text-charcoal/70";
+
+  return (
+    <li className="flex items-start gap-3">
+      <svg
+        className={`w-4 h-4 mt-0.5 shrink-0 ${checkColor}`}
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2.5}
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+      </svg>
+      <span className={`text-sm ${textColor}`}>{text}</span>
+    </li>
+  );
+}
+
+function StepCard({
+  number,
+  title,
+  description,
+}: {
+  number: string;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="text-center md:text-left">
+      <span className="font-serif text-5xl text-forest/15 block mb-4">{number}</span>
+      <h3 className="font-serif text-xl text-obsidian mb-3">{title}</h3>
+      <p className="text-sm text-charcoal/60 leading-relaxed">{description}</p>
+    </div>
+  );
+}
+
+function ReleaseCard({
+  name,
+  category,
+  tag,
+}: {
+  name: string;
+  category: string;
+  tag: string;
+}) {
+  const tagStyle =
+    tag === "Available"
+      ? "bg-forest/10 text-forest"
+      : tag === "Sold Out"
+        ? "bg-charcoal/10 text-charcoal/50"
+        : "bg-sage/15 text-sage";
+
+  return (
+    <div className="group bg-bone rounded-2xl border border-taupe/20 overflow-hidden hover:border-sage/40 transition-colors">
+      {/* Placeholder image area */}
+      <div className="aspect-[4/3] bg-gradient-to-br from-bone-dark to-taupe/30 relative overflow-hidden">
+        <div className="absolute inset-0 flex items-center justify-center">
+          <MullyMark className="w-16 h-16 opacity-10" />
+        </div>
+      </div>
+      <div className="p-6">
+        <span className="text-xs tracking-[0.2em] uppercase text-sage font-medium">
+          {category}
+        </span>
+        <h4 className="font-serif text-lg text-obsidian mt-1 mb-3">{name}</h4>
+        <span
+          className={`inline-block text-xs tracking-wider uppercase font-medium px-3 py-1 rounded-full ${tagStyle}`}
+        >
+          {tag}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/* ─── ICONS ─── */
+
+function PartnerIcon() {
+  return (
+    <svg className="w-6 h-6 text-forest" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+    </svg>
+  );
+}
+
+function PricingIcon() {
+  return (
+    <svg className="w-6 h-6 text-forest" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" />
+    </svg>
+  );
+}
+
+function ClubIcon() {
+  return (
+    <svg className="w-6 h-6 text-forest" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v1.5M3 21v-6m0 0l2.77-.693a9 9 0 016.208.682l.108.054a9 9 0 006.086.71l3.114-.732a48.524 48.524 0 01-.005-10.499l-3.11.732a9 9 0 01-6.085-.711l-.108-.054a9 9 0 00-6.208-.682L3 4.5M3 15V4.5" />
+    </svg>
+  );
+}
