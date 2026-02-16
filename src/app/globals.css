@@ -71,14 +71,18 @@ input:focus {
   animation: chalice-drift 8s ease-in-out infinite;
 }
 
-/* Gentle rock for flag */
-@keyframes flag-rock {
-  0%, 100% { transform: rotate(-8deg) translateY(0); }
-  50% { transform: rotate(-5deg) translateY(-5px); }
+/* Gentle hover for polo */
+@keyframes polo-hover {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
 }
 
-.hero-flag-rock {
-  animation: flag-rock 6s ease-in-out infinite;
+.hero-polo-hover {
+  animation: polo-hover 7s ease-in-out infinite;
+}
+
+.hero-polo-shadow {
+  filter: drop-shadow(0 10px 24px rgba(0,0,0,0.18)) drop-shadow(0 4px 10px rgba(0,0,0,0.10));
 }
 
 /* 3D drop shadows for hero objects (tuned for light bg) */

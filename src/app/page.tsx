@@ -60,30 +60,31 @@ export default function Home() {
 
           {/* Headline with integrated objects */}
           <div className="relative animate-fade-up-delay-1">
-            {/* Tee + Flag — top-left, overlapping first line */}
-            <div className="absolute -top-8 -left-4 md:-top-12 md:-left-8 lg:-top-16 lg:-left-12 pointer-events-none z-20 hero-flag-rock hero-3d-shadow">
+            {/* Chalice — dead center of headline block */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20 hero-chalice-drift hero-3d-shadow">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src="/hero-tee-flag.png"
+                src="/hero-chalice.png"
                 alt=""
-                className="w-[80px] md:w-[140px] lg:w-[190px]"
+                className="w-[100px] md:w-[160px] lg:w-[200px] opacity-65"
                 draggable={false}
               />
             </div>
 
-            <h1 className="font-serif text-4xl md:text-6xl lg:text-[5.5rem] text-forest leading-[1.08] tracking-tight mb-8">
-              Members-Only Access<br className="hidden md:block" />{" "}
-              to the <em className="italic">Best</em>{" "}
-              Golf<br className="hidden lg:block" />{" "}
-              {/* "Has" with chalice anchored to the H */}
-              <span className="relative inline-block"><span className="absolute pointer-events-none z-20 hero-chalice-drift hero-3d-shadow" style={{ bottom: "15%", left: "-25%", width: "2em" }}>{/* eslint-disable-next-line @next/next/no-img-element */}<img
-                    src="/hero-chalice.png"
+            <h1 className="relative z-10 font-serif text-4xl md:text-6xl lg:text-[5.5rem] text-forest leading-[1.08] tracking-tight mb-8">
+              {/* Polo hovering over the M */}
+              <span className="relative inline-block"><span className="absolute pointer-events-none z-20 hero-polo-hover hero-polo-shadow" style={{ top: "-75%", left: "-15%", width: "1.8em" }}>{/* eslint-disable-next-line @next/next/no-img-element */}<img
+                    src="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/ChatGPT_Image_Feb_16_2026_02_54_09_PM.png?v=1771271674"
                     alt=""
                     className="w-full"
+                    style={{ transform: "rotate(-8deg)" }}
                     draggable={false}
-                  /></span>Has</span> to Offer{/* Golf ball as period */}<span
-                className="inline-block align-bottom ml-1 md:ml-2 golf-ball-shadow"
-                style={{ width: "0.38em", height: "0.38em", marginBottom: "-0.02em" }}
+                  /></span>M</span>embers-Only Access<br className="hidden md:block" />{" "}
+              to the <em className="italic">Best</em>{" "}
+              Golf<br className="hidden lg:block" />{" "}
+              Has to Offer{/* Golf ball as period */}<span
+                className="inline-block align-bottom golf-ball-shadow"
+                style={{ width: "0.38em", height: "0.38em", marginLeft: "0.12em", marginBottom: "-0.02em" }}
               >{/* eslint-disable-next-line @next/next/no-img-element */}<img
                   src="/hero-golf-ball.png"
                   alt=""
@@ -94,8 +95,8 @@ export default function Home() {
           </div>
 
           <p className="text-lg md:text-xl text-charcoal/55 max-w-2xl mx-auto leading-relaxed mb-14 animate-fade-up-delay-2">
-            Curated products, boutique shop, mill river pricing,
-            and exclusive benefits&mdash;built for players who care.
+            Curated gear, expert fittings, and top-tier experiences&mdash;everything
+            you&rsquo;d get at a private club, without the membership.
           </p>
 
           <div className="animate-fade-up-delay-3">
@@ -130,7 +131,7 @@ export default function Home() {
           <div className="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-4">
             <StatCounter end={2400} suffix="+" label="Members" />
             <StatCounter end={40} suffix="+" label="Brand Partners" />
-            <StatCounter end={12} label="Private Locations" />
+            <StatCounter end={60} suffix="%" label="Avg. Savings" />
             <StatCounter end={96} suffix="%" label="Renewal Rate" />
           </div>
         </section>
@@ -150,10 +151,10 @@ export default function Home() {
                 What is Mully Reserve?
               </h2>
               <p className="text-lg text-charcoal/65 leading-relaxed">
-                Mully Reserve is a members-only access program built around
-                curated partnerships, preferred pricing, and private club
-                eligibility. It is not a rewards program. It is not a points
-                system. It is access&mdash;earned, not bought.
+                Mully Reserve brings you the curated products, expert services,
+                and experiences you&rsquo;d expect from a top-tier club&mdash;all in
+                one place, at a fraction of the cost. No membership fees.
+                No&nbsp;gatekeeping. Just access.
               </p>
             </div>
           </ScrollReveal>
@@ -176,8 +177,8 @@ export default function Home() {
             <ScrollReveal delay={0.24}>
               <BenefitCard
                 icon={<ClubIcon />}
-                title="Private Club Eligibility"
-                description="Qualify for Mully&rsquo;s private club program. Tee times, events, and community&mdash;for those who earn it."
+                title="Club-Level Service"
+                description="Fittings, styling, concierge support, and exclusive events&mdash;the full club experience without the club membership."
               />
             </ScrollReveal>
           </div>
@@ -234,7 +235,7 @@ export default function Home() {
                 Choose Your Level
               </h2>
               <p className="text-lg text-charcoal/65 max-w-xl mx-auto">
-                Private club perks. Without the country club cost.
+                The full club experience. A fraction of the cost.
               </p>
             </div>
           </ScrollReveal>
@@ -294,7 +295,7 @@ export default function Home() {
                   <TierFeature text="Guaranteed access windows" light />
                   <TierFeature text="$150 quarterly allowance" light />
                   <TierFeature text="Priority release access" light />
-                  <TierFeature text="Private club eligibility" light />
+                  <TierFeature text="Concierge booking support" light />
                 </ul>
                 <a
                   href="#"
