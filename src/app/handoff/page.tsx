@@ -39,16 +39,17 @@ export default function HandoffPage() {
               ["2", "File Structure & Key Files", "#file-structure"],
               ["3", "Shopify → Shop Page Integration", "#shopify-shop"],
               ["4", "Shopify → Product Page Integration", "#shopify-product"],
-              ["5", "Cart Architecture", "#cart"],
-              ["6", "Identity & Auth (Firebase)", "#identity"],
-              ["7", "Store Credit & Subscriptions", "#wallet"],
-              ["8", "Landing Page Migration", "#landing-migration"],
-              ["9", "Shop Page Migration", "#shop-migration"],
-              ["10", "Environment Variables", "#env-vars"],
-              ["11", "API Routes to Build", "#api-routes"],
-              ["12", "Analytics Wiring", "#analytics"],
-              ["13", "Implementation Priority", "#priority"],
-              ["14", "Gotchas & Decisions", "#gotchas"],
+              ["5", "Reserve Pricing Logic", "#reserve-pricing"],
+              ["6", "Cart Architecture", "#cart"],
+              ["7", "Identity & Auth (Firebase)", "#identity"],
+              ["8", "Store Credit & Subscriptions", "#wallet"],
+              ["9", "Landing Page Migration", "#landing-migration"],
+              ["10", "Shop Page Migration", "#shop-migration"],
+              ["11", "Environment Variables", "#env-vars"],
+              ["12", "API Routes to Build", "#api-routes"],
+              ["13", "Analytics Wiring", "#analytics"],
+              ["14", "Implementation Priority", "#priority"],
+              ["15", "Gotchas & Decisions", "#gotchas"],
             ].map(([num, title, href]) => (
               <li key={num}>
                 <a
@@ -234,6 +235,7 @@ export default function HandoffPage() {
                 "                id              # needed for cartLinesAdd",
                 "                title",
                 "                price { amount currencyCode }",
+                "                compareAtPrice { amount currencyCode }",
                 "                availableForSale",
                 "              }",
                 "            }",
@@ -321,6 +323,9 @@ export default function HandoffPage() {
                 "    brand: node.vendor,",
                 "    collection: node.productType,",
                 "    price: parseFloat(node.priceRange.minVariantPrice.amount),",
+                "    retailPrice: node.variants.edges[0]?.node.compareAtPrice",
+                "      ? parseFloat(node.variants.edges[0].node.compareAtPrice.amount)",
+                "      : undefined,",
                 "    images: node.images.edges.map(e => e.node.url),",
                 "    description: node.descriptionHtml,",
                 "    // Metafields for accordion data",
@@ -423,8 +428,217 @@ export default function HandoffPage() {
             </Callout>
           </Section>
 
-          {/* 5. Cart */}
-          <Section id="cart" number="05" title="Cart Architecture">
+          {/* 5. Reserve Pricing */}
+          <Section
+            id="reserve-pricing"
+            number="05"
+            title="Reserve Pricing Logic"
+          >
+            <P>
+              Pricing in the shop is dynamic based on whether the user is a
+              Reserve member. Non-members see the retail price. Reserve members
+              see a lower &ldquo;Reserve Price&rdquo; with the retail price shown
+              as a strikethrough and a &ldquo;Reserve Pricing&rdquo; badge. This
+              applies to both the shop grid tiles and the product detail page.
+            </P>
+
+            <H3>How It Works</H3>
+            <Diagram
+              lines={[
+                "┌──────────────────────────────────────────────────────┐",
+                "│                   VISITOR (not logged in)            │",
+                "│                                                      │",
+                "│   Product Tile:    $185                              │",
+                "│   Product Detail:  $185                              │",
+                "│                                                      │",
+                "│   No badge. No strikethrough. Just the retail price. │",
+                "└──────────────────────────────────────────────────────┘",
+                "",
+                "┌──────────────────────────────────────────────────────┐",
+                "│                   RESERVE MEMBER (logged in)         │",
+                "│                                                      │",
+                "│   Product Tile:    $155  ̶$̶1̶8̶5̶                      │",
+                "│   Product Detail:  $155  ̶$̶1̶8̶5̶  [Reserve Pricing]   │",
+                "│                                                      │",
+                "│   Reserve price shown first, retail strikethrough,   │",
+                "│   green 'Reserve Pricing' badge on detail page.      │",
+                "└──────────────────────────────────────────────────────┘",
+              ]}
+            />
+
+            <H3>Data Model</H3>
+            <P>
+              Shopify supports two price fields per variant:{" "}
+              <code>price</code> (the selling price) and{" "}
+              <code>compareAtPrice</code> (the original/retail price). Use these
+              to drive the dual-price display:
+            </P>
+            <UL>
+              <li>
+                <strong>Reserve price</strong> = <code>variant.price.amount</code>{" "}
+                — the actual price the product is listed at in Shopify
+              </li>
+              <li>
+                <strong>Retail price</strong> ={" "}
+                <code>variant.compareAtPrice.amount</code> — the original retail
+                price (set in Shopify as &ldquo;Compare at price&rdquo;)
+              </li>
+            </UL>
+
+            <H3>Updated Shopify Query</H3>
+            <P>
+              Add <code>compareAtPrice</code> to the variant query:
+            </P>
+            <Code
+              lines={[
+                "variants(first: 10) {",
+                "  edges {",
+                "    node {",
+                "      id",
+                "      title",
+                "      price { amount currencyCode }",
+                "      compareAtPrice { amount currencyCode }  # ← retail price",
+                "      availableForSale",
+                "    }",
+                "  }",
+                "}",
+              ]}
+            />
+
+            <H3>Updated Product Interface</H3>
+            <Code
+              lines={[
+                "interface Product {",
+                "  // ... existing fields",
+                "  price: number;          // reserve/selling price (variant.price)",
+                "  retailPrice?: number;   // original retail price (variant.compareAtPrice)",
+                "}",
+                "",
+                "// In the transformer:",
+                "export function toProduct(node: ShopifyProduct): Product {",
+                "  const variant = node.variants.edges[0]?.node;",
+                "  return {",
+                "    // ... other fields",
+                "    price: parseFloat(variant.price.amount),",
+                "    retailPrice: variant.compareAtPrice",
+                "      ? parseFloat(variant.compareAtPrice.amount)",
+                "      : undefined,",
+                "  };",
+                "}",
+              ]}
+            />
+
+            <H3>UI Implementation</H3>
+            <P>
+              The pricing display is controlled by auth state. Create a helper
+              that the <code>ProductTile</code> and product detail page both use:
+            </P>
+            <Code
+              lines={[
+                "// src/app/shop/components/PriceDisplay.tsx",
+                '"use client";',
+                "",
+                "import { useAuth } from '@/lib/auth-context';",
+                "",
+                "interface PriceDisplayProps {",
+                "  price: number;           // reserve price",
+                "  retailPrice?: number;    // compare-at price",
+                "  showBadge?: boolean;     // show 'Reserve Pricing' badge (detail page)",
+                "}",
+                "",
+                "export function PriceDisplay({ price, retailPrice, showBadge }: PriceDisplayProps) {",
+                "  const { isReserveMember } = useAuth();",
+                "",
+                "  // Non-members see retail price only (or reserve price if no compare-at)",
+                "  const displayPrice = isReserveMember ? price : (retailPrice ?? price);",
+                "  const showComparison = isReserveMember && retailPrice && retailPrice > price;",
+                "",
+                "  return (",
+                "    <div className=\"flex items-baseline gap-2 flex-wrap\">",
+                "      <span className=\"text-sm font-medium text-obsidian\">",
+                "        ${displayPrice}",
+                "      </span>",
+                "      {showComparison && (",
+                "        <>",
+                "          <span className=\"text-xs text-charcoal/30 line-through\">",
+                "            ${retailPrice}",
+                "          </span>",
+                "          {showBadge && (",
+                "            <span className=\"text-xs tracking-wider uppercase bg-forest/10 text-forest font-medium px-2.5 py-1 rounded-full\">",
+                "              Reserve Pricing",
+                "            </span>",
+                "          )}",
+                "        </>",
+                "      )}",
+                "    </div>",
+                "  );",
+                "}",
+              ]}
+            />
+
+            <H3>Where It Applies</H3>
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr className="border-b-2 border-gray-200">
+                  <th className="text-left py-3 pr-4 font-semibold text-gray-900">
+                    Location
+                  </th>
+                  <th className="text-left py-3 pr-4 font-semibold text-gray-900">
+                    Non-Member
+                  </th>
+                  <th className="text-left py-3 font-semibold text-gray-900">
+                    Reserve Member
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="text-gray-600">
+                <tr className="border-b border-gray-100">
+                  <td className="py-3 pr-4">Shop grid tile</td>
+                  <td className="py-3 pr-4">$185</td>
+                  <td className="py-3">
+                    $155 <span className="line-through text-gray-400">$185</span>
+                  </td>
+                </tr>
+                <tr className="border-b border-gray-100">
+                  <td className="py-3 pr-4">Product detail page</td>
+                  <td className="py-3 pr-4">$185</td>
+                  <td className="py-3">
+                    $155 <span className="line-through text-gray-400">$185</span>{" "}
+                    <span className="text-xs bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded">
+                      Reserve Pricing
+                    </span>
+                  </td>
+                </tr>
+                <tr className="border-b border-gray-100">
+                  <td className="py-3 pr-4">Cart drawer</td>
+                  <td className="py-3 pr-4">$185 (retail)</td>
+                  <td className="py-3">$155 (reserve price at checkout)</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <Callout type="info" title="Shopify handles the actual checkout price">
+              The price charged at checkout is always the Shopify{" "}
+              <code>variant.price</code> — the reserve price. The{" "}
+              <code>compareAtPrice</code> is display-only. Non-members see the
+              <code>compareAtPrice</code> as the &ldquo;price&rdquo; in the UI,
+              but if they add to cart, they still get the reserve price at
+              checkout. To truly restrict pricing, use Shopify&rsquo;s customer
+              tags or a gated collection. For MVP, the visual distinction
+              (showing vs hiding the comparison) is enough to communicate value.
+            </Callout>
+
+            <Callout type="decision" title="Alternative: Shopify customer tags for true price gating">
+              For a harder gate, tag Reserve members in Shopify (e.g.,{" "}
+              <code>reserve_member</code>) and use Shopify Scripts or Shopify
+              Functions to apply member-only discounts at checkout. This ensures
+              non-members truly pay retail. This is a Phase 2+ consideration —
+              for MVP the visual approach is recommended.
+            </Callout>
+          </Section>
+
+          {/* 6. Cart */}
+          <Section id="cart" number="06" title="Cart Architecture">
             <P>
               The &ldquo;Add to Cart&rdquo; button currently shows a brief UI
               confirmation but doesn&rsquo;t persist anything. Here&rsquo;s how to
@@ -520,8 +734,8 @@ export default function HandoffPage() {
             </Callout>
           </Section>
 
-          {/* 6. Identity */}
-          <Section id="identity" number="06" title="Identity & Auth (Firebase)">
+          {/* 7. Identity */}
+          <Section id="identity" number="07" title="Identity & Auth (Firebase)">
             <P>
               Firebase Auth is the identity layer. Every login creates or updates
               a Firestore user document. The header currently shows
@@ -583,10 +797,10 @@ export default function HandoffPage() {
             </UL>
           </Section>
 
-          {/* 7. Wallet */}
+          {/* 8. Wallet */}
           <Section
             id="wallet"
-            number="07"
+            number="08"
             title="Store Credit & Subscriptions"
           >
             <P>
@@ -623,10 +837,10 @@ export default function HandoffPage() {
             />
           </Section>
 
-          {/* 8. Landing Page Migration */}
+          {/* 9. Landing Page Migration */}
           <Section
             id="landing-migration"
-            number="08"
+            number="09"
             title="Landing Page Migration"
           >
             <P>
@@ -709,10 +923,10 @@ export default function HandoffPage() {
             </table>
           </Section>
 
-          {/* 9. Shop Page Migration */}
+          {/* 10. Shop Page Migration */}
           <Section
             id="shop-migration"
-            number="09"
+            number="10"
             title="Shop Page Migration"
           >
             <P>
@@ -799,8 +1013,8 @@ export default function HandoffPage() {
             </UL>
           </Section>
 
-          {/* 10. Environment Variables */}
-          <Section id="env-vars" number="10" title="Environment Variables">
+          {/* 11. Environment Variables */}
+          <Section id="env-vars" number="11" title="Environment Variables">
             <Code
               lines={[
                 "# .env.local",
@@ -837,8 +1051,8 @@ export default function HandoffPage() {
             </Callout>
           </Section>
 
-          {/* 11. API Routes */}
-          <Section id="api-routes" number="11" title="API Routes to Build">
+          {/* 12. API Routes */}
+          <Section id="api-routes" number="12" title="API Routes to Build">
             <table className="w-full text-sm border-collapse">
               <thead>
                 <tr className="border-b-2 border-gray-200">
@@ -913,8 +1127,8 @@ export default function HandoffPage() {
             </P>
           </Section>
 
-          {/* 12. Analytics */}
-          <Section id="analytics" number="12" title="Analytics Wiring">
+          {/* 13. Analytics */}
+          <Section id="analytics" number="13" title="Analytics Wiring">
             <H3>Events to Track</H3>
             <table className="w-full text-sm border-collapse">
               <thead>
@@ -964,10 +1178,10 @@ export default function HandoffPage() {
             </P>
           </Section>
 
-          {/* 13. Priority */}
+          {/* 14. Priority */}
           <Section
             id="priority"
-            number="13"
+            number="14"
             title="Implementation Priority"
           >
             <P>
@@ -1060,10 +1274,10 @@ export default function HandoffPage() {
             </div>
           </Section>
 
-          {/* 14. Gotchas */}
+          {/* 15. Gotchas */}
           <Section
             id="gotchas"
-            number="14"
+            number="15"
             title="Gotchas & Decisions"
           >
             <div className="space-y-6">
