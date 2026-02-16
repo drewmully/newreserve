@@ -16,6 +16,12 @@ export default function Home() {
           </a>
           <nav className="flex items-center gap-8">
             <a
+              href="/shop"
+              className="hidden md:block text-sm tracking-wider uppercase text-charcoal/60 hover:text-forest transition-colors duration-300"
+            >
+              Shop
+            </a>
+            <a
               href="#reserve"
               className="hidden md:block text-sm tracking-wider uppercase text-charcoal/60 hover:text-forest transition-colors duration-300"
             >
