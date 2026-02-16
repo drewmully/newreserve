@@ -11,11 +11,8 @@ export default function Home() {
       {/* ─── HEADER ─── */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-bone/90 backdrop-blur-md border-b border-taupe/20">
         <div className="max-w-7xl mx-auto px-6 md:px-12 flex items-center justify-between h-16">
-          <a href="/" className="flex items-center gap-2.5">
-            <MullyMark className="w-7 h-7" />
-            <span className="font-serif text-xl tracking-wide text-obsidian font-semibold">
-              Mully
-            </span>
+          <a href="/" className="font-serif text-2xl text-ember font-bold tracking-wide">
+            mully.
           </a>
           <nav className="flex items-center gap-8">
             <a
@@ -41,7 +38,7 @@ export default function Home() {
       </header>
 
       {/* ─── HERO ─── */}
-      <section className="relative min-h-[92vh] flex items-center justify-center px-6 md:px-12 pt-16 bg-bone overflow-hidden">
+      <section className="relative h-[85vh] md:h-[88vh] flex items-center justify-center px-6 md:px-12 pt-16 bg-bone overflow-hidden">
         {/* Subtle dot grid */}
         <div
           className="absolute inset-0 opacity-[0.35] pointer-events-none"
@@ -553,12 +550,9 @@ export default function Home() {
       <footer className="py-16 px-6 md:px-12 bg-obsidian">
         <div className="max-w-6xl mx-auto">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-8 mb-12">
-            <div className="flex items-center gap-2.5">
-              <MullyMark className="w-6 h-6 text-bone" />
-              <span className="font-serif text-lg tracking-wide text-bone font-semibold">
-                Mully
-              </span>
-            </div>
+            <span className="font-serif text-xl text-ember font-bold tracking-wide">
+              mully.
+            </span>
             <div className="flex items-center gap-8">
               <a
                 href="/terms"
