@@ -64,6 +64,54 @@ export function ScrollReveal({
   );
 }
 
+/* ─── FADE-IN SECTION (for next-section peek) ─── */
+
+interface FadeInSectionProps {
+  children: ReactNode;
+  className?: string;
+  initialOpacity?: number;
+}
+
+export function FadeInSection({
+  children,
+  className = "",
+  initialOpacity = 0.2,
+}: FadeInSectionProps) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [opacity, setOpacity] = useState(initialOpacity);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const thresholds = Array.from({ length: 25 }, (_, i) => i / 24);
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        const ratio = entry.intersectionRatio;
+        setOpacity(initialOpacity + ratio * (1 - initialOpacity));
+      },
+      { threshold: thresholds }
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [initialOpacity]);
+
+  return (
+    <div
+      ref={ref}
+      className={className}
+      style={{
+        opacity,
+        transition: "opacity 0.15s ease-out",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 /* ─── STAT COUNTER ─── */
 
 interface StatCounterProps {
@@ -137,7 +185,7 @@ export function StatCounter({
 
 /* ─── SCROLL-ANIMATED CHEVRON ─── */
 
-export function ScrollChevron() {
+export function ScrollChevron({ light }: { light?: boolean }) {
   return (
     <div className="flex flex-col items-center gap-1 animate-bounce-slow">
       <svg
@@ -147,9 +195,13 @@ export function ScrollChevron() {
         fill="none"
         stroke="currentColor"
         strokeWidth="1.5"
-        className="text-taupe/60"
+        className={light ? "text-bone/40" : "text-taupe/60"}
       >
-        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M19 9l-7 7-7-7"
+        />
       </svg>
     </div>
   );
