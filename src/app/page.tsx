@@ -11,35 +11,15 @@ export default function Home() {
       {/* ─── HEADER ─── */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-bone/90 backdrop-blur-md border-b border-taupe/20">
         <div className="max-w-7xl mx-auto px-6 md:px-12 flex items-center justify-between h-16">
-          <a href="/" className="font-serif text-2xl text-ember font-bold tracking-wide">
+          <a href="/" className="font-serif text-2xl text-forest font-bold tracking-wide">
             mully.
           </a>
-          <nav className="flex items-center gap-8">
-            <a
-              href="/shop"
-              className="hidden md:block text-sm tracking-wider uppercase text-charcoal/60 hover:text-forest transition-colors duration-300"
-            >
-              Shop
-            </a>
-            <a
-              href="#reserve"
-              className="hidden md:block text-sm tracking-wider uppercase text-charcoal/60 hover:text-forest transition-colors duration-300"
-            >
-              Reserve
-            </a>
-            <a
-              href="#tiers"
-              className="hidden md:block text-sm tracking-wider uppercase text-charcoal/60 hover:text-forest transition-colors duration-300"
-            >
-              Membership
-            </a>
-            <a
-              href="/login"
-              className="text-sm tracking-wider uppercase text-forest font-medium hover:text-forest-dark transition-colors duration-300"
-            >
-              Sign In
-            </a>
-          </nav>
+          <a
+            href="/login"
+            className="text-sm tracking-wider uppercase text-forest font-medium hover:text-forest-dark transition-colors duration-300"
+          >
+            Sign In
+          </a>
         </div>
       </header>
 

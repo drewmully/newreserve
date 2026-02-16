@@ -47,30 +47,16 @@ export default async function ProductPage({ params }: Props) {
         <div className="max-w-7xl mx-auto px-6 md:px-12 flex items-center justify-between h-16">
           <Link
             href="/"
-            className="font-serif text-2xl text-ember font-bold tracking-wide"
+            className="font-serif text-2xl text-forest font-bold tracking-wide"
           >
             mully.
           </Link>
-          <nav className="flex items-center gap-8">
-            <Link
-              href="/shop"
-              className="hidden md:block text-sm tracking-wider uppercase text-charcoal/60 hover:text-forest transition-colors duration-300"
-            >
-              Shop
-            </Link>
-            <Link
-              href="/#reserve"
-              className="hidden md:block text-sm tracking-wider uppercase text-charcoal/60 hover:text-forest transition-colors duration-300"
-            >
-              Reserve
-            </Link>
-            <Link
-              href="/login"
-              className="text-sm tracking-wider uppercase text-forest font-medium hover:text-forest-dark transition-colors duration-300"
-            >
-              Sign In
-            </Link>
-          </nav>
+          <Link
+            href="/login"
+            className="text-sm tracking-wider uppercase text-forest font-medium hover:text-forest-dark transition-colors duration-300"
+          >
+            Sign In
+          </Link>
         </div>
       </header>
 
@@ -98,20 +84,10 @@ export default async function ProductPage({ params }: Props) {
               </h1>
 
               {/* Price */}
-              <div className="flex items-baseline gap-3 mb-6 pb-6 border-b border-taupe/20">
-                <span className="font-serif text-2xl text-forest">
+              <div className="mb-6 pb-6 border-b border-taupe/20">
+                <span className="font-serif text-2xl text-obsidian">
                   ${product.reservePrice}
                 </span>
-                {product.reservePrice < product.price && (
-                  <>
-                    <span className="text-base text-charcoal/30 line-through">
-                      ${product.price}
-                    </span>
-                    <span className="text-xs tracking-wider uppercase bg-forest/10 text-forest font-medium px-2.5 py-1 rounded-full">
-                      Reserve Price
-                    </span>
-                  </>
-                )}
               </div>
 
               {/* Short description */}

@@ -17,47 +17,22 @@ export default function ShopPage() {
         <div className="max-w-7xl mx-auto px-6 md:px-12 flex items-center justify-between h-16">
           <Link
             href="/"
-            className="font-serif text-2xl text-ember font-bold tracking-wide"
+            className="font-serif text-2xl text-forest font-bold tracking-wide"
           >
             mully.
           </Link>
-          <nav className="flex items-center gap-8">
-            <Link
-              href="/shop"
-              className="hidden md:block text-sm tracking-wider uppercase text-forest font-medium transition-colors duration-300"
-            >
-              Shop
-            </Link>
-            <Link
-              href="/#reserve"
-              className="hidden md:block text-sm tracking-wider uppercase text-charcoal/60 hover:text-forest transition-colors duration-300"
-            >
-              Reserve
-            </Link>
-            <Link
-              href="/login"
-              className="text-sm tracking-wider uppercase text-forest font-medium hover:text-forest-dark transition-colors duration-300"
-            >
-              Sign In
-            </Link>
-          </nav>
+          <Link
+            href="/login"
+            className="text-sm tracking-wider uppercase text-forest font-medium hover:text-forest-dark transition-colors duration-300"
+          >
+            Sign In
+          </Link>
         </div>
       </header>
 
       {/* ─── PAGE CONTENT ─── */}
-      <main className="pt-32 pb-24 px-6 md:px-12">
+      <main className="pt-24 pb-24 px-6 md:px-12">
         <div className="max-w-7xl mx-auto">
-          {/* Title */}
-          <div className="text-center mb-12 md:mb-16">
-            <h1 className="font-serif text-3xl md:text-5xl text-obsidian leading-tight mb-4">
-              The Shop
-            </h1>
-            <p className="text-base text-charcoal/50 max-w-lg mx-auto">
-              Curated products from our partner brands. Reserve members
-              get preferred pricing on everything.
-            </p>
-          </div>
-
           {/* Grid */}
           <ShopGrid
             products={products}

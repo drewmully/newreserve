@@ -30,53 +30,71 @@ export function ShopGrid({ products, brands, collections }: ShopGridProps) {
 
   return (
     <>
-      {/* Toggle */}
-      <div className="flex items-center justify-center gap-1 mb-12 md:mb-16">
+      {/* Toggle — subtle pill switch */}
+      <div className="flex items-center justify-center gap-3 mb-10">
+        <span className={`text-xs tracking-wider uppercase transition-colors duration-300 ${view === "brand" ? "text-obsidian font-medium" : "text-charcoal/30"}`}>
+          Brand
+        </span>
         <button
-          onClick={() => setView("brand")}
-          className={`px-5 py-2 text-xs tracking-[0.2em] uppercase font-medium rounded-full transition-all duration-300 cursor-pointer ${
-            view === "brand"
-              ? "bg-forest text-bone"
-              : "text-charcoal/50 hover:text-charcoal"
-          }`}
+          onClick={() => setView(view === "brand" ? "collection" : "brand")}
+          className="relative w-10 h-[22px] rounded-full bg-taupe/25 transition-colors duration-300 cursor-pointer"
+          aria-label="Toggle between brand and collection view"
         >
-          By Brand
+          <span
+            className="absolute top-[3px] w-4 h-4 rounded-full bg-forest shadow-sm transition-all duration-300"
+            style={{ left: view === "brand" ? "3px" : "calc(100% - 19px)" }}
+          />
         </button>
-        <button
-          onClick={() => setView("collection")}
-          className={`px-5 py-2 text-xs tracking-[0.2em] uppercase font-medium rounded-full transition-all duration-300 cursor-pointer ${
-            view === "collection"
-              ? "bg-forest text-bone"
-              : "text-charcoal/50 hover:text-charcoal"
-          }`}
-        >
-          By Collection
-        </button>
+        <span className={`text-xs tracking-wider uppercase transition-colors duration-300 ${view === "collection" ? "text-obsidian font-medium" : "text-charcoal/30"}`}>
+          Collection
+        </span>
       </div>
 
-      {/* Grid with brand/collection separators */}
-      {grouped.map((group) => (
-        <div key={group.label} className="mb-16 last:mb-0">
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
-            {/* Separator tile */}
-            <div className="aspect-[3/4] flex flex-col items-start justify-end p-5 md:p-7">
-              <span className="text-xs tracking-[0.25em] uppercase text-sage font-medium mb-2">
-                {view === "brand" ? "Brand" : "Collection"}
-              </span>
-              <h2 className="font-serif text-2xl md:text-3xl text-obsidian leading-tight">
-                {group.label}
-              </h2>
-              <span className="text-xs text-charcoal/40 mt-1">
-                {group.items.length} product{group.items.length !== 1 ? "s" : ""}
-              </span>
-            </div>
+      {/* Flat grid — separator cards inline with products */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
+        {grouped.map((group) => (
+          <SeparatorAndProducts key={group.label} group={group} view={view} />
+        ))}
+      </div>
+    </>
+  );
+}
 
-            {/* Product tiles */}
-            {group.items.map((product) => (
-              <ProductTile key={product.slug} product={product} />
-            ))}
-          </div>
+function SeparatorAndProducts({
+  group,
+  view,
+}: {
+  group: { label: string; items: Product[] };
+  view: "brand" | "collection";
+}) {
+  return (
+    <>
+      {/* Separator card — same size as product cards */}
+      <div className="aspect-[3/4] rounded-lg bg-forest relative overflow-hidden flex flex-col items-start justify-end p-5 md:p-7">
+        {/* Decorative pattern */}
+        <div
+          className="absolute inset-0 opacity-[0.06] pointer-events-none"
+          style={{
+            backgroundImage: `radial-gradient(circle at 1px 1px, #F5F1E8 0.5px, transparent 0)`,
+            backgroundSize: "20px 20px",
+          }}
+        />
+        <div className="relative z-10">
+          <span className="text-[10px] tracking-[0.3em] uppercase text-sage/70 font-medium block mb-2">
+            {view === "brand" ? "Brand" : "Collection"}
+          </span>
+          <h2 className="font-serif text-xl md:text-2xl text-bone leading-tight mb-1">
+            {group.label}
+          </h2>
+          <span className="text-[11px] text-bone/40">
+            {group.items.length} product{group.items.length !== 1 ? "s" : ""}
+          </span>
         </div>
+      </div>
+
+      {/* Product tiles */}
+      {group.items.map((product) => (
+        <ProductTile key={product.slug} product={product} />
       ))}
     </>
   );
@@ -90,19 +108,12 @@ function ProductTile({ product }: { product: Product }) {
       href={`/shop/${product.slug}`}
       className="group block"
     >
-      <div className="aspect-[3/4] bg-cream rounded-lg overflow-hidden mb-3 relative">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={product.images[0]}
-          alt={product.name}
-          className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.03]"
-          draggable={false}
-        />
-        {product.reservePrice < product.price && (
-          <span className="absolute top-3 left-3 bg-forest/90 text-bone text-[10px] tracking-[0.15em] uppercase font-medium px-2.5 py-1 rounded-full">
-            Reserve
-          </span>
-        )}
+      <div className="aspect-[3/4] bg-cream rounded-lg overflow-hidden mb-3 relative flex items-center justify-center">
+        {/* Placeholder icon */}
+        <div className="flex flex-col items-center gap-3 text-taupe/30 group-hover:text-taupe/45 transition-colors duration-500">
+          <ProductPlaceholderIcon collection={product.collection} />
+          <span className="text-[10px] tracking-[0.2em] uppercase">{product.collection}</span>
+        </div>
       </div>
       <div className="px-0.5">
         <p className="text-xs text-charcoal/40 tracking-wide uppercase mb-0.5">
@@ -111,19 +122,44 @@ function ProductTile({ product }: { product: Product }) {
         <h3 className="text-sm text-obsidian font-medium leading-snug mb-1.5 group-hover:text-forest transition-colors duration-300">
           {product.name}
         </h3>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-forest font-medium">
-            ${product.reservePrice}
-          </span>
-          {product.reservePrice < product.price && (
-            <span className="text-xs text-charcoal/30 line-through">
-              ${product.price}
-            </span>
-          )}
-        </div>
+        <span className="text-sm text-charcoal/60">
+          ${product.reservePrice}
+        </span>
       </div>
     </Link>
   );
+}
+
+function ProductPlaceholderIcon({ collection }: { collection: string }) {
+  const cls = "w-8 h-8 md:w-10 md:h-10";
+  switch (collection) {
+    case "Apparel":
+      return (
+        <svg className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6 2l-4 4 3 1.5V20a1 1 0 001 1h12a1 1 0 001-1V7.5L22 6l-4-4-3 3h-6L6 2z" />
+        </svg>
+      );
+    case "Accessories":
+      return (
+        <svg className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" />
+        </svg>
+      );
+    case "Equipment":
+      return (
+        <svg className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+          <circle cx="12" cy="12" r="4" />
+          <path strokeLinecap="round" d="M12 2v4m0 12v4m10-10h-4M6 12H2m17.07-7.07l-2.83 2.83M9.76 14.24l-2.83 2.83m14.14 0l-2.83-2.83M9.76 9.76L6.93 6.93" />
+        </svg>
+      );
+    default:
+      return (
+        <svg className={cls} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+        </svg>
+      );
+  }
 }
 
 /* ═══════════════════════════════════════════
