@@ -60,30 +60,10 @@ input:focus {
 
 /* ─── HERO 3D OBJECTS ─── */
 
-/* Chalice position — sits over/near the "H" in "Has" */
-.hero-chalice-pos {
-  /* mobile: "Has" is on the last line, roughly left-center */
-  top: 58%;
-  left: 22%;
-  transform: translate(-50%, -50%);
-}
-@media (min-width: 768px) {
-  .hero-chalice-pos {
-    top: 52%;
-    left: 30%;
-  }
-}
-@media (min-width: 1024px) {
-  .hero-chalice-pos {
-    top: 56%;
-    left: 16%;
-  }
-}
-
 /* Subtle float for the chalice */
 @keyframes chalice-drift {
-  0%, 100% { transform: translate(-50%, -50%) translateY(0); }
-  50% { transform: translate(-50%, -50%) translateY(-8px); }
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
 }
 
 .hero-chalice-drift {

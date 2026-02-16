@@ -74,24 +74,19 @@ export default function Home() {
               />
             </div>
 
-            {/* Chalice — overlapping the "H" in "Has", in front of text */}
-            <div className="absolute hero-chalice-pos pointer-events-none z-20 hero-chalice-drift hero-3d-shadow">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/hero-chalice.png"
-                alt=""
-                className="w-[70px] md:w-[110px] lg:w-[140px]"
-                draggable={false}
-              />
-            </div>
-
             <h1 className="font-serif text-4xl md:text-6xl lg:text-[5.5rem] text-forest leading-[1.08] tracking-tight mb-8">
               Members-Only Access<br className="hidden md:block" />{" "}
               to the <em className="italic">Best</em>{" "}
               Golf<br className="hidden lg:block" />{" "}
-              <span className="relative inline-block">Has</span> to Offer<span
-                className="inline-block align-baseline ml-1 md:ml-2 golf-ball-shadow"
-                style={{ width: "0.45em", height: "0.45em", marginBottom: "0.06em" }}
+              {/* "Has" with chalice anchored to the H */}
+              <span className="relative inline-block"><span className="absolute pointer-events-none z-20 hero-chalice-drift hero-3d-shadow" style={{ bottom: "15%", left: "-25%", width: "2em" }}>{/* eslint-disable-next-line @next/next/no-img-element */}<img
+                    src="/hero-chalice.png"
+                    alt=""
+                    className="w-full"
+                    draggable={false}
+                  /></span>Has</span> to Offer{/* Golf ball as period */}<span
+                className="inline-block align-bottom ml-1 md:ml-2 golf-ball-shadow"
+                style={{ width: "0.38em", height: "0.38em", marginBottom: "-0.02em" }}
               >{/* eslint-disable-next-line @next/next/no-img-element */}<img
                   src="/hero-golf-ball.png"
                   alt=""
