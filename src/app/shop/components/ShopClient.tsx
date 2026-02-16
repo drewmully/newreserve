@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, type ReactNode } from "react";
 import Link from "next/link";
 import type { Product } from "../products";
+import { BRAND_INFO, COLLECTION_INFO } from "../products";
 
 /* ═══════════════════════════════════════════
    SHOP GRID (brand / collection toggle)
@@ -16,6 +17,11 @@ interface ShopGridProps {
 
 export function ShopGrid({ products, brands, collections }: ShopGridProps) {
   const [view, setView] = useState<"brand" | "collection">("brand");
+  const [modalInfo, setModalInfo] = useState<{
+    name: string;
+    description: string;
+    image: string;
+  } | null>(null);
 
   const grouped =
     view === "brand"
@@ -53,9 +59,25 @@ export function ShopGrid({ products, brands, collections }: ShopGridProps) {
       {/* Flat grid — separator cards inline with products */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
         {grouped.map((group) => (
-          <SeparatorAndProducts key={group.label} group={group} view={view} />
+          <SeparatorAndProducts
+            key={group.label}
+            group={group}
+            view={view}
+            onCardClick={(label) => {
+              const info =
+                view === "brand"
+                  ? BRAND_INFO[label]
+                  : COLLECTION_INFO[label];
+              if (info) setModalInfo(info);
+            }}
+          />
         ))}
       </div>
+
+      {/* Brand / Collection modal */}
+      {modalInfo && (
+        <InfoModal info={modalInfo} onClose={() => setModalInfo(null)} />
+      )}
     </>
   );
 }
@@ -63,14 +85,23 @@ export function ShopGrid({ products, brands, collections }: ShopGridProps) {
 function SeparatorAndProducts({
   group,
   view,
+  onCardClick,
 }: {
   group: { label: string; items: Product[] };
   view: "brand" | "collection";
+  onCardClick: (label: string) => void;
 }) {
+  const info =
+    view === "brand" ? BRAND_INFO[group.label] : COLLECTION_INFO[group.label];
+  const blurb = info?.blurb ?? "";
+
   return (
     <>
       {/* Separator card — same size as product cards */}
-      <div className="aspect-[3/4] rounded-lg bg-forest relative overflow-hidden flex flex-col items-start justify-end p-5 md:p-7">
+      <button
+        onClick={() => onCardClick(group.label)}
+        className="aspect-[3/4] rounded-lg bg-forest relative overflow-hidden flex flex-col items-start justify-end p-5 md:p-7 text-left cursor-pointer group transition-all duration-300 hover:bg-forest-dark"
+      >
         {/* Decorative pattern */}
         <div
           className="absolute inset-0 opacity-[0.06] pointer-events-none"
@@ -83,20 +114,104 @@ function SeparatorAndProducts({
           <span className="text-[10px] tracking-[0.3em] uppercase text-sage/70 font-medium block mb-2">
             {view === "brand" ? "Brand" : "Collection"}
           </span>
-          <h2 className="font-serif text-xl md:text-2xl text-bone leading-tight mb-1">
+          <h2 className="font-serif text-xl md:text-2xl text-bone leading-tight mb-2">
             {group.label}
           </h2>
-          <span className="text-[11px] text-bone/40">
-            {group.items.length} product{group.items.length !== 1 ? "s" : ""}
+          {blurb && (
+            <p className="text-[11px] md:text-xs text-bone/50 leading-relaxed line-clamp-3 mb-3">
+              {blurb}
+            </p>
+          )}
+          <span className="inline-flex items-center gap-1.5 text-[10px] tracking-[0.15em] uppercase text-sage/50 group-hover:text-sage transition-colors duration-300">
+            Learn more
+            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+            </svg>
           </span>
         </div>
-      </div>
+      </button>
 
       {/* Product tiles */}
       {group.items.map((product) => (
         <ProductTile key={product.slug} product={product} />
       ))}
     </>
+  );
+}
+
+/* ─── INFO MODAL ─── */
+
+function InfoModal({
+  info,
+  onClose,
+}: {
+  info: { name: string; description: string; image: string };
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKey);
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", handleKey);
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8"
+      onClick={onClose}
+    >
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-obsidian/80 backdrop-blur-sm" />
+
+      {/* Card */}
+      <div
+        className="relative bg-bone rounded-2xl overflow-hidden max-w-lg w-full shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Close */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 z-10 w-8 h-8 flex items-center justify-center rounded-full bg-obsidian/10 hover:bg-obsidian/20 transition-colors duration-200 cursor-pointer"
+        >
+          <svg className="w-4 h-4 text-obsidian" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+
+        {/* Image */}
+        <div className="aspect-[16/9] bg-forest relative overflow-hidden">
+          <div
+            className="absolute inset-0 opacity-[0.06] pointer-events-none"
+            style={{
+              backgroundImage: `radial-gradient(circle at 1px 1px, #F5F1E8 0.5px, transparent 0)`,
+              backgroundSize: "24px 24px",
+            }}
+          />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={info.image}
+            alt={info.name}
+            className="w-full h-full object-cover"
+            draggable={false}
+          />
+        </div>
+
+        {/* Content */}
+        <div className="p-6 md:p-8">
+          <h2 className="font-serif text-2xl md:text-3xl text-obsidian mb-4">
+            {info.name}
+          </h2>
+          <p className="text-sm md:text-base text-charcoal/65 leading-relaxed">
+            {info.description}
+          </p>
+        </div>
+      </div>
+    </div>
   );
 }
 

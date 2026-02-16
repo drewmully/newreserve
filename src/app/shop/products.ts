@@ -29,6 +29,96 @@ export const COLLECTIONS = [
   "Lifestyle",
 ] as const;
 
+export interface BrandInfo {
+  name: string;
+  blurb: string;
+  description: string;
+  image: string;
+}
+
+export const BRAND_INFO: Record<string, BrandInfo> = {
+  Titleist: {
+    name: "Titleist",
+    blurb: "The #1 ball in golf — performance, quality, and consistency trusted by more professionals than any other brand.",
+    description:
+      "Titleist has been the benchmark in golf for over 80 years. From the Pro V1 — the most played ball on every major tour — to Vokey wedges and Scotty Cameron putters, Titleist products are developed with a relentless focus on performance. Every product goes through rigorous R&D at their Manchester Lane facility, tested by tour players and validated by data. When the best players in the world need equipment they can trust under pressure, they reach for Titleist.",
+    image: "https://placehold.co/800x500/1a3325/F5F1E8?text=Titleist",
+  },
+  TravisMathew: {
+    name: "TravisMathew",
+    blurb: "California lifestyle meets performance golf — designed to go from the course to dinner without missing a beat.",
+    description:
+      "TravisMathew was born in Huntington Beach, California with a simple idea: golf apparel should feel as good off the course as it does on it. Every piece is engineered with performance fabrics — 4-way stretch, UPF protection, moisture-wicking — but styled with a lifestyle-first approach. Their design team pulls from surf, skate, and street culture to create pieces that feel distinctly modern. It's why TravisMathew is one of the fastest-growing brands in golf and the go-to choice for players who refuse to sacrifice style for performance.",
+    image: "https://placehold.co/800x500/2a3d30/F5F1E8?text=TravisMathew",
+  },
+  "Peter Millar": {
+    name: "Peter Millar",
+    blurb: "The standard in luxury golf apparel — where craftsmanship meets genuine technical performance.",
+    description:
+      "Peter Millar started as a menswear brand rooted in Southern tradition and has evolved into the undisputed leader in luxury golf apparel. Their Crown Crafted line represents the pinnacle of performance fabric development — proprietary blends that deliver stretch, moisture management, and UV protection while maintaining the refined aesthetic of custom tailoring. Every stitch, every fabric choice, every silhouette is intentional. When you wear Peter Millar, you look like you belong at any club in the world.",
+    image: "https://placehold.co/800x500/111111/F5F1E8?text=Peter+Millar",
+  },
+  "G/FORE": {
+    name: "G/FORE",
+    blurb: "Disruptive design for the player with a point of view — bold colors, premium materials, zero blending in.",
+    description:
+      "G/FORE was created by Mossimo Giannulli with a mission to disrupt the predictable world of golf fashion. Italian leather shoes, Cabretta leather gloves in every color imaginable, and apparel that turns heads on every hole. G/FORE doesn't chase trends — they set them. Their Gallivanter shoe became an instant icon, and their gloves are the most recognized in the game. If you believe golf should be fun, expressive, and unapologetically stylish, G/FORE is your brand.",
+    image: "https://placehold.co/800x500/1F3D2B/F5F1E8?text=G%2FFORE",
+  },
+  Callaway: {
+    name: "Callaway",
+    blurb: "Where innovation meets performance — AI-designed club faces, precision-engineered balls, and tech that pushes boundaries.",
+    description:
+      "Callaway has been at the forefront of golf innovation for decades. They were the first to use AI to design club faces, resulting in the Paradym line that delivers ball speeds and forgiveness previously thought impossible. Their Chrome Soft golf ball competes at the highest level on tour. But Callaway isn't just about technology for technology's sake — every innovation is in service of making the game more enjoyable. From Big Bertha to Apex to Paradym, Callaway has consistently delivered the equipment that helps real golfers play their best.",
+    image: "https://placehold.co/800x500/2A2A2A/F5F1E8?text=Callaway",
+  },
+  Greyson: {
+    name: "Greyson",
+    blurb: "Fashion-forward golf apparel rooted in sport — Japanese fabrics, modern cuts, iconic wolf motif.",
+    description:
+      "Greyson was founded on the belief that golf apparel should be as considered as anything in your closet. Using Japanese technical fabrics, modern athletic silhouettes, and a design language that draws from fashion as much as sport, Greyson has carved out a unique space in the market. Their iconic wolf motif has become a symbol of the modern golfer — someone who takes the game seriously but doesn't take themselves too seriously. Every piece is designed in New York and crafted with the same attention to detail you'd expect from a luxury fashion house.",
+    image: "https://placehold.co/800x500/1a3325/F5F1E8?text=Greyson",
+  },
+};
+
+export interface CollectionInfo {
+  name: string;
+  blurb: string;
+  description: string;
+  image: string;
+}
+
+export const COLLECTION_INFO: Record<string, CollectionInfo> = {
+  Apparel: {
+    name: "Apparel",
+    blurb: "Polos, layers, trousers, and shorts — curated from brands that bridge performance and style.",
+    description:
+      "Our apparel collection is hand-selected from the best brands in golf. Every piece meets our standard: it has to perform on the course and look just as good off it. We focus on technical fabrics, modern fits, and versatile styling — the kind of pieces you'll reach for every day, not just on Saturday mornings.",
+    image: "https://placehold.co/800x500/1a3325/F5F1E8?text=Apparel",
+  },
+  Accessories: {
+    name: "Accessories",
+    blurb: "Hats, gloves, belts, and the details that complete the look.",
+    description:
+      "Accessories are the finishing touches that separate good style from great style. Our collection includes the best gloves, headwear, belts, and towels from brands that understand that details matter. Every accessory is chosen for quality, function, and the kind of understated style that gets noticed.",
+    image: "https://placehold.co/800x500/2a3d30/F5F1E8?text=Accessories",
+  },
+  Equipment: {
+    name: "Equipment",
+    blurb: "Clubs, balls, bags, and shoes — the gear that makes a difference in your game.",
+    description:
+      "From drivers to wedges, golf balls to stand bags, our equipment selection focuses on performance and value. We partner directly with manufacturers to offer reserve pricing on the gear that actually moves the needle. No gimmicks, no overhyped launches — just the equipment that our team and members trust.",
+    image: "https://placehold.co/800x500/111111/F5F1E8?text=Equipment",
+  },
+  Lifestyle: {
+    name: "Lifestyle",
+    blurb: "Off-course essentials — hoodies, joggers, totes, and pieces that carry the game into everyday life.",
+    description:
+      "Golf is a lifestyle, not just a sport. Our lifestyle collection includes the pieces that bridge the gap — premium hoodies, tailored joggers, versatile totes, and accessories that feel at home on the course and in the city. Every piece is selected for versatility, comfort, and that effortless quality that says you care without trying too hard.",
+    image: "https://placehold.co/800x500/1F3D2B/F5F1E8?text=Lifestyle",
+  },
+};
+
 const placeholder = (i: number) =>
   `https://placehold.co/800x1000/1a3325/F5F1E8?text=Product+${i}`;
 
