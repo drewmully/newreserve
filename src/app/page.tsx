@@ -9,30 +9,30 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-bone">
       {/* ─── HEADER ─── */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-forest-dark/80 backdrop-blur-md border-b border-bone/[0.06]">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-bone/90 backdrop-blur-md border-b border-taupe/20">
         <div className="max-w-7xl mx-auto px-6 md:px-12 flex items-center justify-between h-16">
           <a href="/" className="flex items-center gap-2.5">
-            <MullyMark className="w-7 h-7 text-bone" />
-            <span className="font-serif text-xl tracking-wide text-bone font-semibold">
+            <MullyMark className="w-7 h-7" />
+            <span className="font-serif text-xl tracking-wide text-obsidian font-semibold">
               Mully
             </span>
           </a>
           <nav className="flex items-center gap-8">
             <a
               href="#reserve"
-              className="hidden md:block text-sm tracking-wider uppercase text-bone/50 hover:text-bone/90 transition-colors duration-300"
+              className="hidden md:block text-sm tracking-wider uppercase text-charcoal/60 hover:text-forest transition-colors duration-300"
             >
               Reserve
             </a>
             <a
               href="#tiers"
-              className="hidden md:block text-sm tracking-wider uppercase text-bone/50 hover:text-bone/90 transition-colors duration-300"
+              className="hidden md:block text-sm tracking-wider uppercase text-charcoal/60 hover:text-forest transition-colors duration-300"
             >
               Membership
             </a>
             <a
               href="/login"
-              className="text-sm tracking-wider uppercase text-bone font-medium hover:text-bone/80 transition-colors duration-300"
+              className="text-sm tracking-wider uppercase text-forest font-medium hover:text-forest-dark transition-colors duration-300"
             >
               Sign In
             </a>
@@ -47,34 +47,53 @@ export default function Home() {
           className="absolute inset-0 pointer-events-none"
           style={{
             background:
-              "radial-gradient(ellipse 70% 50% at 50% 45%, rgba(110,139,116,0.15) 0%, transparent 70%)",
+              "radial-gradient(ellipse 70% 50% at 50% 45%, rgba(110,139,116,0.12) 0%, transparent 70%)",
           }}
         />
 
         {/* Subtle dot grid (light on dark) */}
         <div
-          className="absolute inset-0 opacity-[0.03] pointer-events-none"
+          className="absolute inset-0 opacity-[0.025] pointer-events-none"
           style={{
             backgroundImage: `radial-gradient(circle at 1px 1px, #F5F1E8 0.5px, transparent 0)`,
             backgroundSize: "40px 40px",
           }}
         />
 
-        {/* ── 3D Integrated Objects ── */}
+        {/* ── 3D Integrated Images ── */}
 
-        {/* Chalice - large, overlapping text, visible but text still legible */}
-        <div className="absolute top-1/2 left-1/2 hero-chalice-drift pointer-events-none z-[15] animate-fade-up-delay-1">
-          <HeroChalice className="w-[220px] md:w-[320px] lg:w-[400px] opacity-[0.22] md:opacity-[0.18]" />
+        {/* Chalice - large, overlapping text from behind */}
+        <div className="absolute top-1/2 left-1/2 hero-chalice-drift pointer-events-none z-[5] animate-fade-up-delay-1">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/hero-chalice.png"
+            alt=""
+            className="w-[240px] md:w-[360px] lg:w-[440px] opacity-[0.35] md:opacity-[0.3]"
+            style={{ filter: "brightness(2.5)" }}
+            draggable={false}
+          />
         </div>
 
-        {/* Flag - top left of text area */}
-        <div className="absolute top-[14%] left-[6%] md:top-[16%] md:left-[10%] lg:left-[14%] pointer-events-none z-[15] hero-flag-rock hero-3d-shadow-sm animate-fade-up">
-          <HeroFlag className="w-[60px] md:w-[100px] lg:w-[130px]" />
+        {/* Tee + Flag - top left of text area */}
+        <div className="absolute top-[12%] left-[3%] md:top-[14%] md:left-[6%] lg:left-[10%] pointer-events-none z-[15] hero-flag-rock hero-3d-shadow animate-fade-up">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/hero-tee-flag.png"
+            alt=""
+            className="w-[100px] md:w-[180px] lg:w-[240px]"
+            draggable={false}
+          />
         </div>
 
-        {/* Glove - near flag, top left */}
-        <div className="absolute top-[28%] left-[2%] md:top-[32%] md:left-[4%] lg:left-[7%] pointer-events-none z-[15] hero-glove-rock hero-3d-shadow-sm animate-fade-up-delay-2">
-          <HeroGlove className="w-[55px] md:w-[90px] lg:w-[120px]" />
+        {/* Golf ball - bottom right, acting as period / accent */}
+        <div className="absolute bottom-[14%] right-[4%] md:bottom-[16%] md:right-[8%] lg:right-[12%] pointer-events-none z-[15] hero-3d-shadow animate-fade-up-delay-2">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/hero-golf-ball.png"
+            alt=""
+            className="w-[70px] md:w-[120px] lg:w-[160px]"
+            draggable={false}
+          />
         </div>
 
         {/* ── Hero content ── */}
@@ -90,8 +109,7 @@ export default function Home() {
           <h1 className="font-serif text-4xl md:text-6xl lg:text-[5.5rem] text-bone leading-[1.08] tracking-tight mb-8 animate-fade-up-delay-1">
             Members-Only Access to the{" "}
             <em className="italic">Best</em>{" "}
-            Golf Has to Offer
-            <InlineGolfBall />
+            Golf Has to Offer<span className="text-sage">.</span>
           </h1>
 
           <p className="text-lg md:text-xl text-bone/55 max-w-2xl mx-auto leading-relaxed mb-14 animate-fade-up-delay-2">
@@ -879,340 +897,3 @@ function BellIcon() {
   );
 }
 
-/* ═══════════════════════════════════════════
-   HERO 3D OBJECTS
-   ═══════════════════════════════════════════ */
-
-/* Inline golf ball that replaces the period */
-function InlineGolfBall() {
-  return (
-    <span
-      className="inline-block align-baseline ml-2 md:ml-3 golf-ball-shadow"
-      style={{ marginBottom: "0.05em" }}
-    >
-      <svg
-        className="w-[0.45em] h-[0.45em] md:w-[0.5em] md:h-[0.5em]"
-        viewBox="0 0 48 48"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        {/* Ball body with gradient */}
-        <defs>
-          <radialGradient id="ball-grad" cx="40%" cy="35%" r="55%">
-            <stop offset="0%" stopColor="#FAF9F6" />
-            <stop offset="70%" stopColor="#EDE8DC" />
-            <stop offset="100%" stopColor="#C8BFAF" />
-          </radialGradient>
-        </defs>
-        <circle cx="24" cy="24" r="22" fill="url(#ball-grad)" />
-        {/* Dimples */}
-        <circle cx="16" cy="16" r="2" fill="#C8BFAF" opacity="0.4" />
-        <circle cx="24" cy="13" r="2" fill="#C8BFAF" opacity="0.35" />
-        <circle cx="32" cy="16" r="2" fill="#C8BFAF" opacity="0.4" />
-        <circle cx="19" cy="24" r="2" fill="#C8BFAF" opacity="0.3" />
-        <circle cx="28" cy="22" r="2" fill="#C8BFAF" opacity="0.35" />
-        <circle cx="35" cy="25" r="2" fill="#C8BFAF" opacity="0.3" />
-        <circle cx="22" cy="32" r="2" fill="#C8BFAF" opacity="0.25" />
-        <circle cx="30" cy="30" r="2" fill="#C8BFAF" opacity="0.3" />
-        <circle cx="15" cy="28" r="2" fill="#C8BFAF" opacity="0.25" />
-        {/* Highlight */}
-        <ellipse
-          cx="18"
-          cy="14"
-          rx="6"
-          ry="4"
-          fill="#FFFFFF"
-          opacity="0.25"
-          transform="rotate(-25 18 14)"
-        />
-      </svg>
-    </span>
-  );
-}
-
-/* Large chalice/trophy that overlaps the hero text */
-function HeroChalice({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 240 360"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
-    >
-      <defs>
-        <linearGradient id="chalice-bowl" x1="0.5" y1="0" x2="0.5" y2="1">
-          <stop offset="0%" stopColor="#FAF9F6" />
-          <stop offset="60%" stopColor="#EDE8DC" />
-          <stop offset="100%" stopColor="#C8BFAF" />
-        </linearGradient>
-        <linearGradient id="chalice-stem" x1="0.5" y1="0" x2="0.5" y2="1">
-          <stop offset="0%" stopColor="#EDE8DC" />
-          <stop offset="100%" stopColor="#C8BFAF" />
-        </linearGradient>
-        <linearGradient id="chalice-base" x1="0.5" y1="0" x2="0.5" y2="1">
-          <stop offset="0%" stopColor="#EDE8DC" />
-          <stop offset="100%" stopColor="#B0A898" />
-        </linearGradient>
-        <linearGradient id="chalice-handle" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#F5F1E8" />
-          <stop offset="100%" stopColor="#C8BFAF" />
-        </linearGradient>
-      </defs>
-
-      {/* Bowl */}
-      <path
-        d="M30 50 Q30 190 120 215 Q210 190 210 50 Z"
-        fill="url(#chalice-bowl)"
-      />
-
-      {/* Bowl rim */}
-      <ellipse cx="120" cy="50" rx="90" ry="18" fill="url(#chalice-bowl)" />
-      <ellipse cx="120" cy="50" rx="90" ry="18" fill="#FAF9F6" opacity="0.3" />
-
-      {/* Inner bowl shadow */}
-      <ellipse cx="120" cy="55" rx="72" ry="12" fill="#C8BFAF" opacity="0.3" />
-
-      {/* Left handle */}
-      <path
-        d="M30 70 Q-8 115 10 160 Q22 180 36 170"
-        stroke="url(#chalice-handle)"
-        strokeWidth="14"
-        fill="none"
-        strokeLinecap="round"
-      />
-
-      {/* Right handle */}
-      <path
-        d="M210 70 Q248 115 230 160 Q218 180 204 170"
-        stroke="url(#chalice-handle)"
-        strokeWidth="14"
-        fill="none"
-        strokeLinecap="round"
-      />
-
-      {/* Stem */}
-      <path
-        d="M108 215 L104 280 Q104 290 120 290 Q136 290 136 280 L132 215"
-        fill="url(#chalice-stem)"
-      />
-
-      {/* Stem knot */}
-      <ellipse cx="120" cy="250" rx="22" ry="10" fill="url(#chalice-stem)" />
-      <ellipse cx="120" cy="248" rx="22" ry="10" fill="#FAF9F6" opacity="0.15" />
-
-      {/* Base */}
-      <ellipse cx="120" cy="320" rx="65" ry="14" fill="url(#chalice-base)" />
-      <path
-        d="M104 290 Q80 310 55 320 L185 320 Q160 310 136 290"
-        fill="url(#chalice-base)"
-      />
-
-      {/* Base highlight */}
-      <ellipse cx="120" cy="316" rx="65" ry="10" fill="#FAF9F6" opacity="0.1" />
-
-      {/* Bowl highlight / reflection */}
-      <path
-        d="M65 70 Q82 170 105 205"
-        stroke="#FFFFFF"
-        strokeWidth="4"
-        opacity="0.2"
-        fill="none"
-        strokeLinecap="round"
-      />
-
-      {/* Small highlight curve */}
-      <path
-        d="M75 80 Q85 120 90 140"
-        stroke="#FFFFFF"
-        strokeWidth="2"
-        opacity="0.15"
-        fill="none"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-/* Golf flag / pin */
-function HeroFlag({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 100 280"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
-    >
-      <defs>
-        <linearGradient id="flag-cloth" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#FAF9F6" />
-          <stop offset="100%" stopColor="#EDE8DC" />
-        </linearGradient>
-        <linearGradient id="flag-pole" x1="0.5" y1="0" x2="0.5" y2="1">
-          <stop offset="0%" stopColor="#EDE8DC" />
-          <stop offset="100%" stopColor="#B0A898" />
-        </linearGradient>
-      </defs>
-
-      {/* Flag cloth with wave */}
-      <path
-        d="M18 12 L90 30 Q85 50 90 70 L18 52 Z"
-        fill="url(#flag-cloth)"
-      />
-      {/* Flag cloth shadow fold */}
-      <path
-        d="M55 25 Q60 42 55 58"
-        stroke="#C8BFAF"
-        strokeWidth="1"
-        opacity="0.4"
-        fill="none"
-      />
-      {/* Flag highlight */}
-      <path
-        d="M25 18 L60 28"
-        stroke="#FFFFFF"
-        strokeWidth="2"
-        opacity="0.25"
-        fill="none"
-        strokeLinecap="round"
-      />
-
-      {/* Flagstick */}
-      <line
-        x1="18"
-        y1="8"
-        x2="18"
-        y2="265"
-        stroke="url(#flag-pole)"
-        strokeWidth="4"
-        strokeLinecap="round"
-      />
-
-      {/* Stick highlight */}
-      <line
-        x1="16"
-        y1="12"
-        x2="16"
-        y2="260"
-        stroke="#FFFFFF"
-        strokeWidth="1"
-        opacity="0.15"
-      />
-
-      {/* Ball at base of pin */}
-      <circle cx="18" cy="268" r="10" fill="#FAF9F6" />
-      <circle cx="18" cy="268" r="10" fill="url(#flag-cloth)" />
-      {/* Ball dimples */}
-      <circle cx="14" cy="264" r="1.2" fill="#C8BFAF" opacity="0.3" />
-      <circle cx="20" cy="262" r="1.2" fill="#C8BFAF" opacity="0.3" />
-      <circle cx="22" cy="269" r="1.2" fill="#C8BFAF" opacity="0.3" />
-      <circle cx="15" cy="272" r="1.2" fill="#C8BFAF" opacity="0.3" />
-      {/* Ball highlight */}
-      <ellipse
-        cx="15"
-        cy="264"
-        rx="3"
-        ry="2"
-        fill="#FFFFFF"
-        opacity="0.25"
-        transform="rotate(-20 15 264)"
-      />
-    </svg>
-  );
-}
-
-/* Golf glove */
-function HeroGlove({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 160 200"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className={className}
-    >
-      <defs>
-        <linearGradient id="glove-body" x1="0.3" y1="0" x2="0.7" y2="1">
-          <stop offset="0%" stopColor="#FAF9F6" />
-          <stop offset="50%" stopColor="#EDE8DC" />
-          <stop offset="100%" stopColor="#C8BFAF" />
-        </linearGradient>
-        <linearGradient id="glove-strap" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0%" stopColor="#C8BFAF" />
-          <stop offset="100%" stopColor="#B0A898" />
-        </linearGradient>
-      </defs>
-
-      {/* Main glove body */}
-      <path
-        d="M35 195 L30 130 Q25 90 35 55
-           L42 25 Q48 8 56 18 L52 50
-           L62 20 Q68 5 76 14 L72 55
-           L82 22 Q88 8 96 16 L90 60
-           Q105 58 115 72 L125 110
-           Q130 140 118 165 Q108 185 85 195 Z"
-        fill="url(#glove-body)"
-        stroke="#C8BFAF"
-        strokeWidth="1.5"
-      />
-
-      {/* Thumb */}
-      <path
-        d="M35 90 Q15 80 18 60 Q20 45 32 50"
-        fill="url(#glove-body)"
-        stroke="#C8BFAF"
-        strokeWidth="1.5"
-      />
-
-      {/* Finger creases */}
-      <path d="M50 52 Q52 58 50 64" stroke="#C8BFAF" strokeWidth="1" opacity="0.4" fill="none" />
-      <path d="M70 50 Q72 56 70 62" stroke="#C8BFAF" strokeWidth="1" opacity="0.4" fill="none" />
-      <path d="M88 52 Q90 58 88 64" stroke="#C8BFAF" strokeWidth="1" opacity="0.4" fill="none" />
-
-      {/* Knuckle line */}
-      <path
-        d="M38 78 Q60 70 95 72"
-        stroke="#C8BFAF"
-        strokeWidth="1"
-        opacity="0.35"
-        fill="none"
-      />
-
-      {/* Velcro strap */}
-      <path
-        d="M30 145 Q30 135 40 135 L110 132 Q125 132 125 142 L125 152 Q125 162 110 162 L40 160 Q30 160 30 150 Z"
-        fill="url(#glove-strap)"
-      />
-
-      {/* Strap tab extending right */}
-      <rect x="115" y="130" width="35" height="28" rx="8" fill="#B0A898" />
-      <rect x="118" y="133" width="29" height="22" rx="6" fill="#C8BFAF" opacity="0.5" />
-
-      {/* Highlight on body */}
-      <path
-        d="M45 100 Q55 80 50 60"
-        stroke="#FFFFFF"
-        strokeWidth="3"
-        opacity="0.15"
-        fill="none"
-        strokeLinecap="round"
-      />
-
-      {/* Stitching detail on strap */}
-      <path
-        d="M45 140 L105 138"
-        stroke="#EDE8DC"
-        strokeWidth="1"
-        opacity="0.5"
-        strokeDasharray="3 3"
-        fill="none"
-      />
-      <path
-        d="M45 155 L105 153"
-        stroke="#EDE8DC"
-        strokeWidth="1"
-        opacity="0.5"
-        strokeDasharray="3 3"
-        fill="none"
-      />
-    </svg>
-  );
-}
