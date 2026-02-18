@@ -6,6 +6,7 @@ import { ShopGrid } from "../shop/components/ShopClient";
 import { products, BRANDS, COLLECTIONS } from "../shop/products";
 import { useMembership } from "../context/MembershipContext";
 import { SlideCart } from "../components/SlideCart";
+import { posts as SAMPLE_POSTS, FORUM_TAGS, type ForumPost, type ForumComment } from "../community/posts";
 
 /* ═══════════════════════════════════════════
    DASHBOARD — Shop · Community · Club · Benefits
@@ -735,116 +736,8 @@ function ClubTab() {
 
 /* ═══════════════════════════════════════════
    COMMUNITY TAB — Forum
+   (Post data imported from ../community/posts)
    ═══════════════════════════════════════════ */
-
-interface ForumComment {
-  id: string;
-  author: string;
-  avatar: string;
-  timestamp: string;
-  body: string;
-  likes: number;
-}
-
-interface ForumPost {
-  id: string;
-  author: string;
-  avatar: string;
-  timestamp: string;
-  title: string;
-  body: string;
-  likes: number;
-  comments: ForumComment[];
-  tag: string;
-  images?: string[];
-}
-
-const SAMPLE_POSTS: ForumPost[] = [
-  {
-    id: "1",
-    author: "Jack M.",
-    avatar: "JM",
-    timestamp: "2 hours ago",
-    title: "Oakland Hills guest day — anyone in?",
-    body: "Planning a guest day at Oakland Hills South Course next month. Reserve members welcome. Reach out if interested, trying to get a foursome together.",
-    likes: 14,
-    tag: "Guest Play",
-    comments: [
-      { id: "1a", author: "Mike R.", avatar: "MR", timestamp: "1 hour ago", body: "I'm in. DM me the date and I'll block it off.", likes: 3 },
-      { id: "1b", author: "Sarah K.", avatar: "SK", timestamp: "45 min ago", body: "Would love to join if there's room. South Course is incredible.", likes: 2 },
-      { id: "1c", author: "Dave T.", avatar: "DT", timestamp: "30 min ago", body: "Count me in as well. Haven't played Oakland Hills since the renovation.", likes: 1 },
-    ],
-  },
-  {
-    id: "2",
-    author: "Sarah K.",
-    avatar: "SK",
-    timestamp: "5 hours ago",
-    title: "Peter Millar Crown Sport — sizing question",
-    body: "Just ordered the Crown Sport polo in medium. For reference I'm 5'8\" 165lbs and it fits perfectly. The fabric is incredible, way better than the standard line. Highly recommend at Reserve pricing.",
-    likes: 23,
-    tag: "Gear Talk",
-    images: ["https://placehold.co/600x400/1a3325/F5F1E8?text=Crown+Sport+Polo"],
-    comments: [
-      { id: "2a", author: "Alex P.", avatar: "AP", timestamp: "4 hours ago", body: "Good to know on the sizing. I'm similar build, been eyeing that one. How's the collar hold up?", likes: 4 },
-      { id: "2b", author: "Sarah K.", avatar: "SK", timestamp: "3 hours ago", body: "Collar is structured but not stiff. Stays popped if that's your thing, lays flat cleanly too.", likes: 6 },
-    ],
-  },
-  {
-    id: "3",
-    author: "Mike R.",
-    avatar: "MR",
-    timestamp: "1 day ago",
-    title: "Club Champion fitting review — worth every minute",
-    body: "Just completed my fitting at Club Champion (Troy, MI location). The concierge booking through Mully made it seamless. Ended up getting fitted for a full iron set. The data they pull is unreal. If you haven't used this benefit yet, do it.",
-    likes: 41,
-    tag: "Fittings",
-    images: [
-      "https://placehold.co/600x400/1a3325/F5F1E8?text=Fitting+Session",
-      "https://placehold.co/600x400/1a3325/F5F1E8?text=Launch+Monitor+Data",
-    ],
-    comments: [
-      { id: "3a", author: "Jack M.", avatar: "JM", timestamp: "22 hours ago", body: "How long did the full iron fitting take? Been meaning to schedule mine.", likes: 2 },
-      { id: "3b", author: "Mike R.", avatar: "MR", timestamp: "20 hours ago", body: "About 2.5 hours for the full set. They test you on every club head and shaft combo. Worth blocking the afternoon.", likes: 5 },
-      { id: "3c", author: "Dave T.", avatar: "DT", timestamp: "18 hours ago", body: "Did mine last month. The difference in dispersion is night and day. Concierge made the whole booking effortless.", likes: 8 },
-      { id: "3d", author: "Alex P.", avatar: "AP", timestamp: "12 hours ago", body: "Just booked mine through concierge after reading this. Thanks for the push.", likes: 3 },
-    ],
-  },
-  {
-    id: "4",
-    author: "Dave T.",
-    avatar: "DT",
-    timestamp: "2 days ago",
-    title: "G/FORE MG4+ on-course review after 30 rounds",
-    body: "I've put about 30 rounds on the MG4+ from the Reserve drop. They've held up incredibly well. The traction is still solid and they're the most comfortable golf shoe I've owned. Zero break-in period.",
-    likes: 35,
-    tag: "Gear Talk",
-    images: ["https://placehold.co/600x400/1a3325/F5F1E8?text=MG4%2B+On+Course"],
-    comments: [
-      { id: "4a", author: "Sarah K.", avatar: "SK", timestamp: "2 days ago", body: "Been debating between these and the Gallivanter. You've convinced me on the MG4+.", likes: 4 },
-      { id: "4b", author: "Jack M.", avatar: "JM", timestamp: "1 day ago", body: "How are they in wet conditions? That's my main concern with a knit upper.", likes: 2 },
-      { id: "4c", author: "Dave T.", avatar: "DT", timestamp: "1 day ago", body: "Surprisingly good in the wet. Not fully waterproof but they dry fast and grip holds. I've played 3-4 dewy morning rounds with no issues.", likes: 7 },
-    ],
-  },
-  {
-    id: "5",
-    author: "Alex P.",
-    avatar: "AP",
-    timestamp: "3 days ago",
-    title: "New member — what should I check out first?",
-    body: "Just joined as a Reserve Member. What are the must-have benefits I should take advantage of right away? Already eyeing the Titleist Pro V1 at Reserve pricing.",
-    likes: 18,
-    tag: "General",
-    comments: [
-      { id: "5a", author: "Mike R.", avatar: "MR", timestamp: "3 days ago", body: "Pro V1 at Reserve pricing is a no-brainer. Also book a fitting ASAP — it's complimentary and the wait can be a few weeks.", likes: 9 },
-      { id: "5b", author: "Jack M.", avatar: "JM", timestamp: "3 days ago", body: "Welcome! Check the drops calendar first. The limited releases sell out fast even with member access.", likes: 5 },
-      { id: "5c", author: "Sarah K.", avatar: "SK", timestamp: "2 days ago", body: "The Peter Millar and TravisMathew apparel at Reserve pricing is honestly the best value. Way better than any sale you'll find retail.", likes: 11 },
-      { id: "5d", author: "Dave T.", avatar: "DT", timestamp: "2 days ago", body: "Free 2-day shipping alone pays for itself if you order regularly. And definitely join the community events — great way to meet people.", likes: 6 },
-    ],
-  },
-];
-
-const FORUM_TAGS = ["All", "General", "Gear Talk", "Fittings", "Guest Play", "Events"];
 
 function CommunityTab() {
   const { isSignedIn } = useMembership();
@@ -998,20 +891,6 @@ function CommunityTab() {
             <PostCard key={post.id} post={post} isSignedIn={isSignedIn} />
           ))}
         </div>
-
-        {/* SEO note */}
-        <noscript>
-          <div className="mt-8">
-            <h3>Recent Community Posts</h3>
-            {SAMPLE_POSTS.map((post) => (
-              <div key={post.id}>
-                <h4>{post.title}</h4>
-                <p>By {post.author} &middot; {post.tag}</p>
-                <p>{post.body}</p>
-              </div>
-            ))}
-          </div>
-        </noscript>
 
         {/* Sign-up modal (CommunityTab level — for + Post button) */}
         {showSignUp && <SignUpModal onClose={() => setShowSignUp(false)} />}
