@@ -45,7 +45,7 @@ const BRAND_OPTIONS = [
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const { setTier } = useMembership();
+  const { email, setEmail, setTier } = useMembership();
   const [step, setStep] = useState(1);
 
   // Step 1 state
@@ -98,9 +98,23 @@ export default function OnboardingPage() {
               <h1 className="font-serif text-3xl md:text-4xl text-obsidian leading-tight mb-3">
                 Tell us about your game.
               </h1>
-              <p className="text-base text-charcoal/55 leading-relaxed mb-10">
+              <p className="text-base text-charcoal/55 leading-relaxed mb-8">
                 We&rsquo;ll personalize your Reserve experience based on your preferences.
               </p>
+
+              {/* Email — persisted from landing or entered here */}
+              <div className="mb-10">
+                <h3 className="text-sm font-medium text-obsidian tracking-wide mb-4">
+                  Your email
+                </h3>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className="w-full max-w-sm h-11 px-4 rounded-xl bg-cream border border-taupe/25 text-obsidian text-sm placeholder:text-charcoal/30 focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300"
+                />
+              </div>
 
               {/* Handicap */}
               <div className="mb-10">

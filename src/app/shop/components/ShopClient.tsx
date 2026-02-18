@@ -228,14 +228,25 @@ function InfoModal({
 /* ─── PRODUCT TILE ─── */
 
 function ProductTile({ product }: { product: Product }) {
-  let tier: string = "free";
-  try {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    const ctx = useMembershipSafe();
-    if (ctx) tier = ctx.tier;
-  } catch { /* used outside provider — default free */ }
-
+  const ctx = useMembershipSafe();
+  const [justAdded, setJustAdded] = useState(false);
+  const tier = ctx?.tier ?? "free";
   const isPaid = tier !== "free";
+
+  const handleQuickAdd = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (ctx) {
+      ctx.addToCart({
+        slug: product.slug,
+        name: product.name,
+        brand: product.brand,
+        price: isPaid ? product.reservePrice : product.price,
+      });
+    }
+    setJustAdded(true);
+    setTimeout(() => setJustAdded(false), 1500);
+  };
 
   return (
     <Link
@@ -248,6 +259,27 @@ function ProductTile({ product }: { product: Product }) {
           <ProductPlaceholderIcon collection={product.collection} />
           <span className="text-[10px] tracking-[0.2em] uppercase">{product.collection}</span>
         </div>
+
+        {/* Quick-add to cart */}
+        <button
+          onClick={handleQuickAdd}
+          className={`absolute bottom-3 right-3 w-9 h-9 rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer shadow-sm ${
+            justAdded
+              ? "bg-sage text-bone scale-110"
+              : "bg-forest text-bone opacity-0 group-hover:opacity-100 translate-y-1 group-hover:translate-y-0 hover:bg-forest-dark"
+          }`}
+          aria-label="Add to cart"
+        >
+          {justAdded ? (
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          ) : (
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+          )}
+        </button>
       </div>
       <div className="px-0.5">
         <p className="text-xs text-charcoal/40 tracking-wide uppercase mb-0.5">

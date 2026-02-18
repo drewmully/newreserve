@@ -18,6 +18,10 @@ export interface CartItem {
 }
 
 interface MembershipContextValue {
+  // User
+  email: string;
+  setEmail: (email: string) => void;
+
   // Tier
   tier: MemberTier;
   setTier: (tier: MemberTier) => void;
@@ -63,6 +67,7 @@ const TIER_LABELS: Record<MemberTier, string> = {
 };
 
 export function MembershipProvider({ children }: { children: ReactNode }) {
+  const [email, setEmail] = useState("");
   const [tier, setTier] = useState<MemberTier>("free");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
@@ -100,6 +105,8 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
   return (
     <MembershipContext.Provider
       value={{
+        email,
+        setEmail,
         tier,
         setTier,
         tierLabel: TIER_LABELS[tier],

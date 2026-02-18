@@ -4,6 +4,7 @@ import {
   ScrollChevron,
   FadeInSection,
 } from "./components/ClientComponents";
+import { EmailCTA } from "./components/EmailCTA";
 
 export default function Home() {
   return (
@@ -87,14 +88,7 @@ export default function Home() {
           </p>
 
           <div className="animate-fade-up-delay-3">
-            <div className="flex flex-col sm:flex-row items-center gap-3 max-w-md mx-auto mb-5">
-              <a
-                href="/onboarding"
-                className="w-full sm:w-auto h-13 px-10 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer whitespace-nowrap flex items-center justify-center"
-              >
-                Unlock Access
-              </a>
-            </div>
+            <EmailCTA variant="hero" />
             <p className="text-xs text-charcoal/40 tracking-wide">
               Complimentary access &middot; No credit card required
             </p>
@@ -508,12 +502,7 @@ export default function Home() {
                 <p className="text-sm text-charcoal/50 mb-6">
                   Complimentary. No credit card required.
                 </p>
-                <a
-                  href="/onboarding"
-                  className="block w-full h-13 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer text-center leading-[3.25rem]"
-                >
-                  Get Started
-                </a>
+                <EmailCTA variant="bottom" />
                 <p className="text-xs text-taupe/70 mt-4 text-center">
                   Join 2,400+ members already inside.
                 </p>
