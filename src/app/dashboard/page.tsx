@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import Link from "next/link";
 import { ShopGrid } from "../shop/components/ShopClient";
 import { products, BRANDS, COLLECTIONS } from "../shop/products";
@@ -657,6 +657,7 @@ interface ForumPost {
   likes: number;
   comments: ForumComment[];
   tag: string;
+  images?: string[];
 }
 
 const SAMPLE_POSTS: ForumPost[] = [
@@ -684,6 +685,7 @@ const SAMPLE_POSTS: ForumPost[] = [
     body: "Just ordered the Crown Sport polo in medium. For reference I'm 5'8\" 165lbs and it fits perfectly. The fabric is incredible, way better than the standard line. Highly recommend at Reserve pricing.",
     likes: 23,
     tag: "Gear Talk",
+    images: ["https://placehold.co/600x400/1a3325/F5F1E8?text=Crown+Sport+Polo"],
     comments: [
       { id: "2a", author: "Alex P.", avatar: "AP", timestamp: "4 hours ago", body: "Good to know on the sizing. I'm similar build, been eyeing that one. How's the collar hold up?", likes: 4 },
       { id: "2b", author: "Sarah K.", avatar: "SK", timestamp: "3 hours ago", body: "Collar is structured but not stiff. Stays popped if that's your thing, lays flat cleanly too.", likes: 6 },
@@ -698,6 +700,10 @@ const SAMPLE_POSTS: ForumPost[] = [
     body: "Just completed my fitting at Club Champion (Troy, MI location). The concierge booking through Mully made it seamless. Ended up getting fitted for a full iron set. The data they pull is unreal. If you haven't used this benefit yet, do it.",
     likes: 41,
     tag: "Fittings",
+    images: [
+      "https://placehold.co/600x400/1a3325/F5F1E8?text=Fitting+Session",
+      "https://placehold.co/600x400/1a3325/F5F1E8?text=Launch+Monitor+Data",
+    ],
     comments: [
       { id: "3a", author: "Jack M.", avatar: "JM", timestamp: "22 hours ago", body: "How long did the full iron fitting take? Been meaning to schedule mine.", likes: 2 },
       { id: "3b", author: "Mike R.", avatar: "MR", timestamp: "20 hours ago", body: "About 2.5 hours for the full set. They test you on every club head and shaft combo. Worth blocking the afternoon.", likes: 5 },
@@ -714,6 +720,7 @@ const SAMPLE_POSTS: ForumPost[] = [
     body: "I've put about 30 rounds on the MG4+ from the Reserve drop. They've held up incredibly well. The traction is still solid and they're the most comfortable golf shoe I've owned. Zero break-in period.",
     likes: 35,
     tag: "Gear Talk",
+    images: ["https://placehold.co/600x400/1a3325/F5F1E8?text=MG4%2B+On+Course"],
     comments: [
       { id: "4a", author: "Sarah K.", avatar: "SK", timestamp: "2 days ago", body: "Been debating between these and the Gallivanter. You've convinced me on the MG4+.", likes: 4 },
       { id: "4b", author: "Jack M.", avatar: "JM", timestamp: "1 day ago", body: "How are they in wet conditions? That's my main concern with a knit upper.", likes: 2 },
@@ -743,6 +750,30 @@ const FORUM_TAGS = ["All", "General", "Gear Talk", "Fittings", "Guest Play", "Ev
 function CommunityTab() {
   const [activeTag, setActiveTag] = useState("All");
   const [showCompose, setShowCompose] = useState(false);
+  const [composeImages, setComposeImages] = useState<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    const newImages: string[] = [];
+    Array.from(files).forEach((file) => {
+      if (file.type.startsWith("image/")) {
+        newImages.push(URL.createObjectURL(file));
+      }
+    });
+    setComposeImages((prev) => [...prev, ...newImages].slice(0, 4));
+    // Reset input so the same file can be re-selected
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const removeComposeImage = (index: number) => {
+    setComposeImages((prev) => {
+      const removed = prev[index];
+      URL.revokeObjectURL(removed);
+      return prev.filter((_, i) => i !== index);
+    });
+  };
 
   const filtered = activeTag === "All"
     ? SAMPLE_POSTS
@@ -780,14 +811,62 @@ function CommunityTab() {
               rows={4}
               className="w-full px-4 py-3 rounded-xl bg-bone border border-taupe/30 text-obsidian text-sm placeholder:text-charcoal/30 focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300 resize-none mb-3"
             />
+
+            {/* Image previews */}
+            {composeImages.length > 0 && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+                {composeImages.map((src, i) => (
+                  <div key={i} className="relative aspect-[3/2] rounded-lg overflow-hidden bg-bone border border-taupe/20 group">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={src} alt={`Upload ${i + 1}`} className="w-full h-full object-cover" />
+                    <button
+                      onClick={() => removeComposeImage(i)}
+                      className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-obsidian/70 text-bone flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-pointer"
+                      aria-label="Remove image"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className="flex items-center justify-between">
-              <select className="h-9 px-3 rounded-lg bg-bone border border-taupe/30 text-xs text-charcoal/60 focus:border-forest/40 transition-all duration-300">
-                <option>General</option>
-                <option>Gear Talk</option>
-                <option>Fittings</option>
-                <option>Guest Play</option>
-                <option>Events</option>
-              </select>
+              <div className="flex items-center gap-3">
+                <select className="h-9 px-3 rounded-lg bg-bone border border-taupe/30 text-xs text-charcoal/60 focus:border-forest/40 transition-all duration-300">
+                  <option>General</option>
+                  <option>Gear Talk</option>
+                  <option>Fittings</option>
+                  <option>Guest Play</option>
+                  <option>Events</option>
+                </select>
+
+                {/* Photo upload */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleImageUpload}
+                  className="hidden"
+                />
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={composeImages.length >= 4}
+                  className={`flex items-center gap-1.5 h-9 px-3 rounded-lg border text-xs transition-all duration-300 cursor-pointer ${
+                    composeImages.length >= 4
+                      ? "border-taupe/20 text-charcoal/25 cursor-not-allowed"
+                      : "border-taupe/30 text-charcoal/50 hover:border-forest/30 hover:text-forest"
+                  }`}
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5a1.5 1.5 0 001.5-1.5V5.25a1.5 1.5 0 00-1.5-1.5H3.75a1.5 1.5 0 00-1.5 1.5v14.25a1.5 1.5 0 001.5 1.5zm14.47-11.47a.75.75 0 11-1.06-1.06.75.75 0 011.06 1.06z" />
+                  </svg>
+                  <span>Photo{composeImages.length > 0 ? ` (${composeImages.length}/4)` : ""}</span>
+                </button>
+              </div>
               <button className="h-10 px-6 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer">
                 Publish
               </button>
@@ -864,7 +943,6 @@ function PostCard({ post }: { post: ForumPost }) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Fallback for older browsers
       const textarea = document.createElement("textarea");
       textarea.value = postUrl;
       document.body.appendChild(textarea);
@@ -876,24 +954,32 @@ function PostCard({ post }: { post: ForumPost }) {
     }
   };
 
+  const handleShare = async () => {
+    // On mobile / browsers that support Web Share API, use it first
+    if (typeof navigator !== "undefined" && navigator.share) {
+      try {
+        await navigator.share({ title: post.title, text: shareText, url: postUrl });
+        return;
+      } catch {
+        // User cancelled or share failed — fall through to menu
+      }
+    }
+    // Desktop fallback — show the manual share menu
+    setShowShareMenu(!showShareMenu);
+  };
+
   const handleShareSMS = () => {
-    window.open(`sms:?body=${encodeURIComponent(`${shareText}\n${postUrl}`)}`, "_blank");
+    window.open(`sms:?&body=${encodeURIComponent(`${shareText}\n${postUrl}`)}`, "_self");
     setShowShareMenu(false);
   };
 
   const handleShareX = () => {
-    window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(postUrl)}`, "_blank");
+    window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(postUrl)}`, "_blank", "noopener");
     setShowShareMenu(false);
   };
 
   const handleShareFacebook = () => {
-    window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(postUrl)}`, "_blank");
-    setShowShareMenu(false);
-  };
-
-  const handleShareInstagram = async () => {
-    // Instagram doesn't have a direct share URL — copy link so user can paste in Stories/DMs
-    await handleCopyLink();
+    window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(postUrl)}`, "_blank", "noopener");
     setShowShareMenu(false);
   };
 
@@ -941,6 +1027,22 @@ function PostCard({ post }: { post: ForumPost }) {
               {post.body}
             </p>
 
+            {/* Images */}
+            {post.images && post.images.length > 0 && (
+              <div className={`mb-4 grid gap-2 ${post.images.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
+                {post.images.map((src, i) => (
+                  <div key={i} className="relative aspect-[3/2] rounded-lg overflow-hidden bg-cream border border-taupe/15">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={src}
+                      alt={`${post.title} photo ${i + 1}`}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* Actions */}
             <div className="flex items-center gap-5">
               {/* Like button */}
@@ -979,7 +1081,7 @@ function PostCard({ post }: { post: ForumPost }) {
               {/* Share button */}
               <div className="relative ml-auto">
                 <button
-                  onClick={() => setShowShareMenu(!showShareMenu)}
+                  onClick={handleShare}
                   className={`flex items-center gap-1.5 text-xs transition-colors duration-300 cursor-pointer ${
                     showShareMenu ? "text-forest" : "text-charcoal/40 hover:text-forest"
                   }`}
@@ -1018,7 +1120,7 @@ function PostCard({ post }: { post: ForumPost }) {
                           <span>{copied ? "Copied!" : "Copy Link"}</span>
                         </button>
 
-                        {/* SMS */}
+                        {/* SMS / iMessage */}
                         <button
                           onClick={handleShareSMS}
                           className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-charcoal/70 hover:bg-cream transition-colors duration-200 cursor-pointer"
@@ -1027,6 +1129,7 @@ function PostCard({ post }: { post: ForumPost }) {
                             <path strokeLinecap="round" strokeLinejoin="round" d="M8.625 9.75a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375m-13.5 3.01c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.184-4.183a1.14 1.14 0 01.778-.332 48.294 48.294 0 005.83-.498c1.585-.233 2.708-1.626 2.708-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
                           </svg>
                           <span>Text Message</span>
+                          <span className="text-[10px] text-charcoal/30 ml-auto">Mobile</span>
                         </button>
 
                         {/* X / Twitter */}
@@ -1051,17 +1154,21 @@ function PostCard({ post }: { post: ForumPost }) {
                           <span>Facebook</span>
                         </button>
 
-                        {/* Instagram — copy for Stories */}
-                        <button
-                          onClick={handleShareInstagram}
-                          className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-charcoal/70 hover:bg-cream transition-colors duration-200 cursor-pointer"
-                        >
-                          <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z" />
-                          </svg>
-                          <span>Instagram</span>
-                          <span className="text-[10px] text-charcoal/30 ml-auto">Copies link</span>
-                        </button>
+                        {/* More — native share on supported browsers */}
+                        {typeof navigator !== "undefined" && !!navigator.share && (
+                          <button
+                            onClick={async () => {
+                              try { await navigator.share({ title: post.title, text: shareText, url: postUrl }); } catch {}
+                              setShowShareMenu(false);
+                            }}
+                            className="w-full flex items-center gap-3 px-3 py-2.5 text-sm text-charcoal/70 hover:bg-cream transition-colors duration-200 cursor-pointer"
+                          >
+                            <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM12.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM18.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0z" />
+                            </svg>
+                            <span>More Options</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   </>
