@@ -405,6 +405,15 @@ function ClubTab() {
    COMMUNITY TAB — Forum
    ═══════════════════════════════════════════ */
 
+interface ForumComment {
+  id: string;
+  author: string;
+  avatar: string;
+  timestamp: string;
+  body: string;
+  likes: number;
+}
+
 interface ForumPost {
   id: string;
   author: string;
@@ -413,7 +422,7 @@ interface ForumPost {
   title: string;
   body: string;
   likes: number;
-  comments: number;
+  comments: ForumComment[];
   tag: string;
 }
 
@@ -426,8 +435,12 @@ const SAMPLE_POSTS: ForumPost[] = [
     title: "Oakland Hills guest day — anyone in?",
     body: "Planning a guest day at Oakland Hills South Course next month. Reserve members welcome. Reach out if interested, trying to get a foursome together.",
     likes: 14,
-    comments: 6,
     tag: "Guest Play",
+    comments: [
+      { id: "1a", author: "Mike R.", avatar: "MR", timestamp: "1 hour ago", body: "I'm in. DM me the date and I'll block it off.", likes: 3 },
+      { id: "1b", author: "Sarah K.", avatar: "SK", timestamp: "45 min ago", body: "Would love to join if there's room. South Course is incredible.", likes: 2 },
+      { id: "1c", author: "Dave T.", avatar: "DT", timestamp: "30 min ago", body: "Count me in as well. Haven't played Oakland Hills since the renovation.", likes: 1 },
+    ],
   },
   {
     id: "2",
@@ -437,8 +450,11 @@ const SAMPLE_POSTS: ForumPost[] = [
     title: "Peter Millar Crown Sport — sizing question",
     body: "Just ordered the Crown Sport polo in medium. For reference I'm 5'8\" 165lbs and it fits perfectly. The fabric is incredible, way better than the standard line. Highly recommend at Reserve pricing.",
     likes: 23,
-    comments: 8,
     tag: "Gear Talk",
+    comments: [
+      { id: "2a", author: "Alex P.", avatar: "AP", timestamp: "4 hours ago", body: "Good to know on the sizing. I'm similar build, been eyeing that one. How's the collar hold up?", likes: 4 },
+      { id: "2b", author: "Sarah K.", avatar: "SK", timestamp: "3 hours ago", body: "Collar is structured but not stiff. Stays popped if that's your thing, lays flat cleanly too.", likes: 6 },
+    ],
   },
   {
     id: "3",
@@ -448,8 +464,13 @@ const SAMPLE_POSTS: ForumPost[] = [
     title: "Club Champion fitting review — worth every minute",
     body: "Just completed my fitting at Club Champion (Troy, MI location). The concierge booking through Mully made it seamless. Ended up getting fitted for a full iron set. The data they pull is unreal. If you haven't used this benefit yet, do it.",
     likes: 41,
-    comments: 12,
     tag: "Fittings",
+    comments: [
+      { id: "3a", author: "Jack M.", avatar: "JM", timestamp: "22 hours ago", body: "How long did the full iron fitting take? Been meaning to schedule mine.", likes: 2 },
+      { id: "3b", author: "Mike R.", avatar: "MR", timestamp: "20 hours ago", body: "About 2.5 hours for the full set. They test you on every club head and shaft combo. Worth blocking the afternoon.", likes: 5 },
+      { id: "3c", author: "Dave T.", avatar: "DT", timestamp: "18 hours ago", body: "Did mine last month. The difference in dispersion is night and day. Concierge made the whole booking effortless.", likes: 8 },
+      { id: "3d", author: "Alex P.", avatar: "AP", timestamp: "12 hours ago", body: "Just booked mine through concierge after reading this. Thanks for the push.", likes: 3 },
+    ],
   },
   {
     id: "4",
@@ -459,8 +480,12 @@ const SAMPLE_POSTS: ForumPost[] = [
     title: "G/FORE MG4+ on-course review after 30 rounds",
     body: "I've put about 30 rounds on the MG4+ from the Reserve drop. They've held up incredibly well. The traction is still solid and they're the most comfortable golf shoe I've owned. Zero break-in period.",
     likes: 35,
-    comments: 15,
     tag: "Gear Talk",
+    comments: [
+      { id: "4a", author: "Sarah K.", avatar: "SK", timestamp: "2 days ago", body: "Been debating between these and the Gallivanter. You've convinced me on the MG4+.", likes: 4 },
+      { id: "4b", author: "Jack M.", avatar: "JM", timestamp: "1 day ago", body: "How are they in wet conditions? That's my main concern with a knit upper.", likes: 2 },
+      { id: "4c", author: "Dave T.", avatar: "DT", timestamp: "1 day ago", body: "Surprisingly good in the wet. Not fully waterproof but they dry fast and grip holds. I've played 3-4 dewy morning rounds with no issues.", likes: 7 },
+    ],
   },
   {
     id: "5",
@@ -470,8 +495,13 @@ const SAMPLE_POSTS: ForumPost[] = [
     title: "New member — what should I check out first?",
     body: "Just joined as a Reserve Member. What are the must-have benefits I should take advantage of right away? Already eyeing the Titleist Pro V1 at Reserve pricing.",
     likes: 18,
-    comments: 22,
     tag: "General",
+    comments: [
+      { id: "5a", author: "Mike R.", avatar: "MR", timestamp: "3 days ago", body: "Pro V1 at Reserve pricing is a no-brainer. Also book a fitting ASAP — it's complimentary and the wait can be a few weeks.", likes: 9 },
+      { id: "5b", author: "Jack M.", avatar: "JM", timestamp: "3 days ago", body: "Welcome! Check the drops calendar first. The limited releases sell out fast even with member access.", likes: 5 },
+      { id: "5c", author: "Sarah K.", avatar: "SK", timestamp: "2 days ago", body: "The Peter Millar and TravisMathew apparel at Reserve pricing is honestly the best value. Way better than any sale you'll find retail.", likes: 11 },
+      { id: "5d", author: "Dave T.", avatar: "DT", timestamp: "2 days ago", body: "Free 2-day shipping alone pays for itself if you order regularly. And definitely join the community events — great way to meet people.", likes: 6 },
+    ],
   },
 ];
 
@@ -552,61 +582,7 @@ function CommunityTab() {
         {/* Posts */}
         <div className="space-y-4">
           {filtered.map((post) => (
-            <article
-              key={post.id}
-              className="bg-cream rounded-xl border border-taupe/15 p-6 hover:border-taupe/30 transition-colors duration-300"
-            >
-              <div className="flex items-start gap-4">
-                {/* Avatar */}
-                <div className="w-10 h-10 rounded-full bg-forest/10 flex items-center justify-center shrink-0">
-                  <span className="text-xs font-medium text-forest">{post.avatar}</span>
-                </div>
-
-                <div className="flex-1 min-w-0">
-                  {/* Meta */}
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <span className="text-sm font-medium text-obsidian">{post.author}</span>
-                    <span className="text-xs text-charcoal/30">&middot;</span>
-                    <span className="text-xs text-charcoal/35">{post.timestamp}</span>
-                    <span className="text-xs text-sage bg-sage/10 px-2 py-0.5 rounded ml-auto">
-                      {post.tag}
-                    </span>
-                  </div>
-
-                  {/* Title */}
-                  <h3 className="text-base font-medium text-obsidian mb-2 leading-snug">
-                    {post.title}
-                  </h3>
-
-                  {/* Body */}
-                  <p className="text-sm text-charcoal/55 leading-relaxed mb-4">
-                    {post.body}
-                  </p>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-5">
-                    <button className="flex items-center gap-1.5 text-xs text-charcoal/40 hover:text-forest transition-colors duration-300 cursor-pointer">
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6.633 10.5c.806 0 1.533-.446 2.031-1.08a9.041 9.041 0 012.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 00.322-1.672V3.18a2.055 2.055 0 01.357-1.093A2.78 2.78 0 0115.455 1c1.725 0 2.295 1.467 2.295 2.913v2.437c0 .532-.065 1.06-.218 1.551l-1.474 4.74a3.375 3.375 0 00.851 3.421l.426.388M6.633 10.5H4.869a2.376 2.376 0 00-2.344 2.752l.88 5.749A2.376 2.376 0 005.749 21h1.102M6.633 10.5v10.5" />
-                      </svg>
-                      <span>{post.likes}</span>
-                    </button>
-                    <button className="flex items-center gap-1.5 text-xs text-charcoal/40 hover:text-forest transition-colors duration-300 cursor-pointer">
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 01-.923 1.785A5.969 5.969 0 006 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337z" />
-                      </svg>
-                      <span>{post.comments}</span>
-                    </button>
-                    <button className="flex items-center gap-1.5 text-xs text-charcoal/40 hover:text-forest transition-colors duration-300 cursor-pointer ml-auto">
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" />
-                      </svg>
-                      <span>Share</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </article>
+            <PostCard key={post.id} post={post} />
           ))}
         </div>
 
@@ -625,6 +601,182 @@ function CommunityTab() {
         </noscript>
       </div>
     </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   POST CARD — Interactive likes & comments
+   ═══════════════════════════════════════════ */
+
+function PostCard({ post }: { post: ForumPost }) {
+  const [liked, setLiked] = useState(false);
+  const [likeCount, setLikeCount] = useState(post.likes);
+  const [showComments, setShowComments] = useState(false);
+  const [commentLikes, setCommentLikes] = useState<Record<string, boolean>>({});
+  const [commentLikeCounts, setCommentLikeCounts] = useState<Record<string, number>>(
+    () => Object.fromEntries(post.comments.map((c) => [c.id, c.likes]))
+  );
+  const [replyText, setReplyText] = useState("");
+
+  const toggleLike = () => {
+    setLiked((prev) => !prev);
+    setLikeCount((prev) => (liked ? prev - 1 : prev + 1));
+  };
+
+  const toggleCommentLike = (commentId: string) => {
+    const wasLiked = commentLikes[commentId];
+    setCommentLikes((prev) => ({ ...prev, [commentId]: !wasLiked }));
+    setCommentLikeCounts((prev) => ({
+      ...prev,
+      [commentId]: wasLiked ? prev[commentId] - 1 : prev[commentId] + 1,
+    }));
+  };
+
+  return (
+    <article className="bg-cream rounded-xl border border-taupe/15 hover:border-taupe/30 transition-colors duration-300 overflow-hidden">
+      <div className="p-6">
+        <div className="flex items-start gap-4">
+          {/* Avatar */}
+          <div className="w-10 h-10 rounded-full bg-forest/10 flex items-center justify-center shrink-0">
+            <span className="text-xs font-medium text-forest">{post.avatar}</span>
+          </div>
+
+          <div className="flex-1 min-w-0">
+            {/* Meta */}
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="text-sm font-medium text-obsidian">{post.author}</span>
+              <span className="text-xs text-charcoal/30">&middot;</span>
+              <span className="text-xs text-charcoal/35">{post.timestamp}</span>
+              <span className="text-xs text-sage bg-sage/10 px-2 py-0.5 rounded ml-auto">
+                {post.tag}
+              </span>
+            </div>
+
+            {/* Title */}
+            <h3 className="text-base font-medium text-obsidian mb-2 leading-snug">
+              {post.title}
+            </h3>
+
+            {/* Body */}
+            <p className="text-sm text-charcoal/55 leading-relaxed mb-4">
+              {post.body}
+            </p>
+
+            {/* Actions */}
+            <div className="flex items-center gap-5">
+              {/* Like button */}
+              <button
+                onClick={toggleLike}
+                className={`flex items-center gap-1.5 text-xs transition-colors duration-300 cursor-pointer ${
+                  liked ? "text-forest" : "text-charcoal/40 hover:text-forest"
+                }`}
+              >
+                {liked ? (
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M7.493 18.75c-.425 0-.82-.236-.975-.632A7.48 7.48 0 016 15.375c0-1.75.599-3.358 1.602-4.634.151-.192.373-.309.6-.397.473-.183.89-.514 1.212-.924a9.042 9.042 0 012.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 00.322-1.672V3.18a2.055 2.055 0 01.357-1.093A2.78 2.78 0 0115.455 1c1.725 0 2.295 1.467 2.295 2.913V6.35c0 .532-.065 1.06-.218 1.551l-1.474 4.74a.75.75 0 00.213.855l.426.388a.75.75 0 01-.212 1.257l-.89.388a3.75 3.75 0 00-2.093 2.833l-.2 1.14a.75.75 0 01-.738.627H7.493z" />
+                    <path d="M3.61 14.096c-.106 0-.21.016-.311.048a.75.75 0 00-.524.721v5.385a.75.75 0 00.75.75h1.225a.75.75 0 00.75-.75V14.846a.75.75 0 00-.75-.75H3.61z" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6.633 10.5c.806 0 1.533-.446 2.031-1.08a9.041 9.041 0 012.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 00.322-1.672V3.18a2.055 2.055 0 01.357-1.093A2.78 2.78 0 0115.455 1c1.725 0 2.295 1.467 2.295 2.913v2.437c0 .532-.065 1.06-.218 1.551l-1.474 4.74a3.375 3.375 0 00.851 3.421l.426.388M6.633 10.5H4.869a2.376 2.376 0 00-2.344 2.752l.88 5.749A2.376 2.376 0 005.749 21h1.102M6.633 10.5v10.5" />
+                  </svg>
+                )}
+                <span className={liked ? "font-medium" : ""}>{likeCount}</span>
+              </button>
+
+              {/* Comment button */}
+              <button
+                onClick={() => setShowComments(!showComments)}
+                className={`flex items-center gap-1.5 text-xs transition-colors duration-300 cursor-pointer ${
+                  showComments ? "text-forest" : "text-charcoal/40 hover:text-forest"
+                }`}
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 01-.923 1.785A5.969 5.969 0 006 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337z" />
+                </svg>
+                <span>{post.comments.length}</span>
+              </button>
+
+              {/* Share button */}
+              <button className="flex items-center gap-1.5 text-xs text-charcoal/40 hover:text-forest transition-colors duration-300 cursor-pointer ml-auto">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M7.217 10.907a2.25 2.25 0 100 2.186m0-2.186c.18.324.283.696.283 1.093s-.103.77-.283 1.093m0-2.186l9.566-5.314m-9.566 7.5l9.566 5.314m0 0a2.25 2.25 0 103.935 2.186 2.25 2.25 0 00-3.935-2.186zm0-12.814a2.25 2.25 0 103.933-2.185 2.25 2.25 0 00-3.933 2.185z" />
+                </svg>
+                <span>Share</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Comment thread */}
+      {showComments && (
+        <div className="border-t border-taupe/15 bg-bone/50">
+          <div className="px-6 py-4 space-y-4">
+            {post.comments.map((comment) => (
+              <div key={comment.id} className="flex items-start gap-3">
+                <div className="w-7 h-7 rounded-full bg-forest/8 flex items-center justify-center shrink-0 mt-0.5">
+                  <span className="text-[10px] font-medium text-forest">{comment.avatar}</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="text-xs font-medium text-obsidian">{comment.author}</span>
+                    <span className="text-[10px] text-charcoal/30">{comment.timestamp}</span>
+                  </div>
+                  <p className="text-sm text-charcoal/60 leading-relaxed">{comment.body}</p>
+                  <button
+                    onClick={() => toggleCommentLike(comment.id)}
+                    className={`flex items-center gap-1 mt-1.5 text-[11px] transition-colors duration-300 cursor-pointer ${
+                      commentLikes[comment.id] ? "text-forest" : "text-charcoal/30 hover:text-forest"
+                    }`}
+                  >
+                    {commentLikes[comment.id] ? (
+                      <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M7.493 18.75c-.425 0-.82-.236-.975-.632A7.48 7.48 0 016 15.375c0-1.75.599-3.358 1.602-4.634.151-.192.373-.309.6-.397.473-.183.89-.514 1.212-.924a9.042 9.042 0 012.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 00.322-1.672V3.18a2.055 2.055 0 01.357-1.093A2.78 2.78 0 0115.455 1c1.725 0 2.295 1.467 2.295 2.913V6.35c0 .532-.065 1.06-.218 1.551l-1.474 4.74a.75.75 0 00.213.855l.426.388a.75.75 0 01-.212 1.257l-.89.388a3.75 3.75 0 00-2.093 2.833l-.2 1.14a.75.75 0 01-.738.627H7.493z" />
+                        <path d="M3.61 14.096c-.106 0-.21.016-.311.048a.75.75 0 00-.524.721v5.385a.75.75 0 00.75.75h1.225a.75.75 0 00.75-.75V14.846a.75.75 0 00-.75-.75H3.61z" />
+                      </svg>
+                    ) : (
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6.633 10.5c.806 0 1.533-.446 2.031-1.08a9.041 9.041 0 012.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 00.322-1.672V3.18a2.055 2.055 0 01.357-1.093A2.78 2.78 0 0115.455 1c1.725 0 2.295 1.467 2.295 2.913v2.437c0 .532-.065 1.06-.218 1.551l-1.474 4.74a3.375 3.375 0 00.851 3.421l.426.388M6.633 10.5H4.869a2.376 2.376 0 00-2.344 2.752l.88 5.749A2.376 2.376 0 005.749 21h1.102M6.633 10.5v10.5" />
+                      </svg>
+                    )}
+                    <span>{commentLikeCounts[comment.id]}</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Reply input */}
+          <div className="px-6 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-7 h-7 rounded-full bg-forest/10 flex items-center justify-center shrink-0">
+                <span className="text-[10px] font-medium text-forest">You</span>
+              </div>
+              <div className="flex-1 flex items-center gap-2">
+                <input
+                  type="text"
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value)}
+                  placeholder="Write a reply..."
+                  className="flex-1 h-9 px-3.5 rounded-lg bg-bone border border-taupe/25 text-sm text-obsidian placeholder:text-charcoal/30 focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300"
+                />
+                <button
+                  className={`h-9 px-4 rounded-lg text-xs font-medium tracking-wider uppercase transition-all duration-300 cursor-pointer ${
+                    replyText.trim()
+                      ? "bg-forest text-bone hover:bg-forest-dark"
+                      : "bg-taupe/20 text-charcoal/30 cursor-not-allowed"
+                  }`}
+                  disabled={!replyText.trim()}
+                >
+                  Reply
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </article>
   );
 }
 
