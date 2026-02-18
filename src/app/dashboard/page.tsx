@@ -748,8 +748,10 @@ const SAMPLE_POSTS: ForumPost[] = [
 const FORUM_TAGS = ["All", "General", "Gear Talk", "Fittings", "Guest Play", "Events"];
 
 function CommunityTab() {
+  const { isSignedIn } = useMembership();
   const [activeTag, setActiveTag] = useState("All");
   const [showCompose, setShowCompose] = useState(false);
+  const [showSignUp, setShowSignUp] = useState(false);
   const [composeImages, setComposeImages] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -791,7 +793,7 @@ function CommunityTab() {
             </p>
           </div>
           <button
-            onClick={() => setShowCompose(!showCompose)}
+            onClick={() => isSignedIn ? setShowCompose(!showCompose) : setShowSignUp(true)}
             className="h-10 px-5 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer whitespace-nowrap shrink-0 ml-4"
           >
             + Post
@@ -894,7 +896,7 @@ function CommunityTab() {
         {/* Posts */}
         <div className="space-y-4">
           {filtered.map((post) => (
-            <PostCard key={post.id} post={post} />
+            <PostCard key={post.id} post={post} isSignedIn={isSignedIn} />
           ))}
         </div>
 
@@ -911,8 +913,85 @@ function CommunityTab() {
             ))}
           </div>
         </noscript>
+
+        {/* Sign-up modal (CommunityTab level — for + Post button) */}
+        {showSignUp && <SignUpModal onClose={() => setShowSignUp(false)} />}
       </div>
     </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   SIGN-UP PROMPT MODAL
+   ═══════════════════════════════════════════ */
+
+function SignUpModal({ onClose }: { onClose: () => void }) {
+  return (
+    <>
+      {/* Backdrop */}
+      <div className="fixed inset-0 z-[60] bg-obsidian/40 backdrop-blur-sm" onClick={onClose} />
+
+      {/* Modal */}
+      <div className="fixed inset-0 z-[70] flex items-center justify-center p-6">
+        <div className="bg-bone rounded-2xl border border-taupe/20 shadow-xl w-full max-w-sm overflow-hidden">
+          {/* Header */}
+          <div className="bg-forest p-6 pb-5 relative overflow-hidden">
+            <div className="absolute inset-0 opacity-[0.05] pointer-events-none" style={{
+              backgroundImage: `radial-gradient(circle at 1px 1px, #F5F1E8 0.5px, transparent 0)`,
+              backgroundSize: "20px 20px",
+            }} />
+            <div className="relative flex items-center gap-2 mb-3">
+              <svg viewBox="0 0 1002 540" fill="currentColor" className="h-4 w-auto text-bone" aria-hidden="true"><path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" /></svg>
+              <span className="font-serif text-lg font-bold tracking-wide text-bone">mully.</span>
+            </div>
+            <h3 className="font-serif text-xl text-bone leading-snug">
+              Join the conversation.
+            </h3>
+            <p className="text-sm text-bone/55 mt-1.5 leading-relaxed">
+              Sign up for free to like, comment, and post in the Reserve community.
+            </p>
+          </div>
+
+          {/* Body */}
+          <div className="p-6">
+            <div className="space-y-2.5 mb-6">
+              <div className="flex items-center gap-3">
+                <svg className="w-4 h-4 text-forest shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                </svg>
+                <span className="text-sm text-charcoal/65">Like and comment on posts</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <svg className="w-4 h-4 text-forest shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                </svg>
+                <span className="text-sm text-charcoal/65">Share gear reviews and tips</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <svg className="w-4 h-4 text-forest shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                </svg>
+                <span className="text-sm text-charcoal/65">Connect with fellow golfers</span>
+              </div>
+            </div>
+
+            <Link
+              href="/onboarding"
+              className="flex items-center justify-center h-11 w-full rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300"
+            >
+              Sign Up Free
+            </Link>
+
+            <button
+              onClick={onClose}
+              className="w-full mt-3 text-sm text-charcoal/40 hover:text-charcoal/60 transition-colors duration-300 cursor-pointer py-2"
+            >
+              Maybe later
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -920,7 +999,7 @@ function CommunityTab() {
    POST CARD — Interactive likes & comments
    ═══════════════════════════════════════════ */
 
-function PostCard({ post }: { post: ForumPost }) {
+function PostCard({ post, isSignedIn }: { post: ForumPost; isSignedIn: boolean }) {
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(post.likes);
   const [showComments, setShowComments] = useState(false);
@@ -931,6 +1010,15 @@ function PostCard({ post }: { post: ForumPost }) {
   const [replyText, setReplyText] = useState("");
   const [showShareMenu, setShowShareMenu] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showSignUp, setShowSignUp] = useState(false);
+
+  const requireAuth = (action: () => void) => {
+    if (!isSignedIn) {
+      setShowSignUp(true);
+      return;
+    }
+    action();
+  };
 
   const postUrl = typeof window !== "undefined"
     ? `${window.location.origin}/community/post/${post.id}`
@@ -1047,7 +1135,7 @@ function PostCard({ post }: { post: ForumPost }) {
             <div className="flex items-center gap-5">
               {/* Like button */}
               <button
-                onClick={toggleLike}
+                onClick={() => requireAuth(toggleLike)}
                 className={`flex items-center gap-1.5 text-xs transition-colors duration-300 cursor-pointer ${
                   liked ? "text-forest" : "text-charcoal/40 hover:text-forest"
                 }`}
@@ -1067,7 +1155,7 @@ function PostCard({ post }: { post: ForumPost }) {
 
               {/* Comment button */}
               <button
-                onClick={() => setShowComments(!showComments)}
+                onClick={() => requireAuth(() => setShowComments(!showComments))}
                 className={`flex items-center gap-1.5 text-xs transition-colors duration-300 cursor-pointer ${
                   showComments ? "text-forest" : "text-charcoal/40 hover:text-forest"
                 }`}
@@ -1195,7 +1283,7 @@ function PostCard({ post }: { post: ForumPost }) {
                   </div>
                   <p className="text-sm text-charcoal/60 leading-relaxed">{comment.body}</p>
                   <button
-                    onClick={() => toggleCommentLike(comment.id)}
+                    onClick={() => requireAuth(() => toggleCommentLike(comment.id))}
                     className={`flex items-center gap-1 mt-1.5 text-[11px] transition-colors duration-300 cursor-pointer ${
                       commentLikes[comment.id] ? "text-forest" : "text-charcoal/30 hover:text-forest"
                     }`}
@@ -1219,33 +1307,47 @@ function PostCard({ post }: { post: ForumPost }) {
 
           {/* Reply input */}
           <div className="px-6 pb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-7 h-7 rounded-full bg-forest/10 flex items-center justify-center shrink-0">
-                <span className="text-[10px] font-medium text-forest">You</span>
+            {isSignedIn ? (
+              <div className="flex items-center gap-3">
+                <div className="w-7 h-7 rounded-full bg-forest/10 flex items-center justify-center shrink-0">
+                  <span className="text-[10px] font-medium text-forest">You</span>
+                </div>
+                <div className="flex-1 flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={replyText}
+                    onChange={(e) => setReplyText(e.target.value)}
+                    placeholder="Write a reply..."
+                    className="flex-1 h-9 px-3.5 rounded-lg bg-bone border border-taupe/25 text-sm text-obsidian placeholder:text-charcoal/30 focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300"
+                  />
+                  <button
+                    className={`h-9 px-4 rounded-lg text-xs font-medium tracking-wider uppercase transition-all duration-300 cursor-pointer ${
+                      replyText.trim()
+                        ? "bg-forest text-bone hover:bg-forest-dark"
+                        : "bg-taupe/20 text-charcoal/30 cursor-not-allowed"
+                    }`}
+                    disabled={!replyText.trim()}
+                  >
+                    Reply
+                  </button>
+                </div>
               </div>
-              <div className="flex-1 flex items-center gap-2">
-                <input
-                  type="text"
-                  value={replyText}
-                  onChange={(e) => setReplyText(e.target.value)}
-                  placeholder="Write a reply..."
-                  className="flex-1 h-9 px-3.5 rounded-lg bg-bone border border-taupe/25 text-sm text-obsidian placeholder:text-charcoal/30 focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300"
-                />
-                <button
-                  className={`h-9 px-4 rounded-lg text-xs font-medium tracking-wider uppercase transition-all duration-300 cursor-pointer ${
-                    replyText.trim()
-                      ? "bg-forest text-bone hover:bg-forest-dark"
-                      : "bg-taupe/20 text-charcoal/30 cursor-not-allowed"
-                  }`}
-                  disabled={!replyText.trim()}
-                >
-                  Reply
-                </button>
-              </div>
-            </div>
+            ) : (
+              <button
+                onClick={() => setShowSignUp(true)}
+                className="w-full flex items-center justify-center gap-2 h-9 rounded-lg bg-bone border border-taupe/25 text-sm text-charcoal/40 hover:text-forest hover:border-forest/30 transition-all duration-300 cursor-pointer"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                </svg>
+                Sign up to reply
+              </button>
+            )}
           </div>
         </div>
       )}
+      {/* Sign-up modal */}
+      {showSignUp && <SignUpModal onClose={() => setShowSignUp(false)} />}
     </article>
   );
 }

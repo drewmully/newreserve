@@ -30,7 +30,7 @@ const INTEREST_OPTIONS = [
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const { email, setEmail, setTier } = useMembership();
+  const { email, setEmail, setTier, signIn } = useMembership();
   const [step, setStep] = useState(1);
 
   // Step 1 state
@@ -190,7 +190,7 @@ export default function OnboardingPage() {
                     "Partner benefit access",
                     "Free 2-day shipping",
                   ]}
-                  onSelect={() => { setTier("access"); router.push("/dashboard"); }}
+                  onSelect={() => { signIn(); setTier("access"); router.push("/dashboard"); }}
                   buttonText="Join Reserve Access"
                   variant="solid"
                 />
@@ -208,7 +208,7 @@ export default function OnboardingPage() {
                     "Concierge booking support",
                     "Invite-only events",
                   ]}
-                  onSelect={() => { setTier("member"); router.push("/dashboard"); }}
+                  onSelect={() => { signIn(); setTier("member"); router.push("/dashboard"); }}
                   buttonText="Join Reserve Member"
                   variant="featured"
                   badge="Most Popular"
@@ -244,7 +244,7 @@ export default function OnboardingPage() {
               {/* Start Free */}
               <div className="mt-6 text-center">
                 <button
-                  onClick={() => { setTier("free"); router.push("/dashboard"); }}
+                  onClick={() => { signIn(); setTier("free"); router.push("/dashboard"); }}
                   className="text-sm text-charcoal/40 hover:text-charcoal/60 underline underline-offset-4 decoration-charcoal/20 hover:decoration-charcoal/40 transition-all duration-300 cursor-pointer"
                 >
                   Or start free

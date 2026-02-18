@@ -18,6 +18,10 @@ export interface CartItem {
 }
 
 interface MembershipContextValue {
+  // Auth
+  isSignedIn: boolean;
+  signIn: () => void;
+
   // User
   email: string;
   setEmail: (email: string) => void;
@@ -67,12 +71,15 @@ const TIER_LABELS: Record<MemberTier, string> = {
 };
 
 export function MembershipProvider({ children }: { children: ReactNode }) {
+  const [isSignedIn, setIsSignedIn] = useState(false);
   const [email, setEmail] = useState("");
   const [tier, setTier] = useState<MemberTier>("free");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [clubStatus, setClubStatus] = useState<ClubStatus>("none");
   const [interestedClubs, setInterestedClubs] = useState<string[]>([]);
+
+  const signIn = useCallback(() => setIsSignedIn(true), []);
 
   const addToCart = useCallback((item: Omit<CartItem, "quantity">) => {
     setCart((prev) => {
@@ -105,6 +112,8 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
   return (
     <MembershipContext.Provider
       value={{
+        isSignedIn,
+        signIn,
         email,
         setEmail,
         tier,
