@@ -206,22 +206,6 @@ export default function OnboardingPage() {
               </p>
 
               <div className="space-y-4">
-                {/* Free */}
-                <PlanCard
-                  name="Free"
-                  price="Complimentary"
-                  period=""
-                  description="Browse the shop, see Reserve pricing, and stay connected to drops."
-                  features={[
-                    "Browse reserve pricing",
-                    "Release notifications",
-                    "Community access",
-                  ]}
-                  onSelect={() => router.push("/dashboard")}
-                  buttonText="Start Free"
-                  variant="outline"
-                />
-
                 {/* Reserve Access */}
                 <PlanCard
                   name="Reserve Access"
@@ -284,6 +268,16 @@ export default function OnboardingPage() {
                     <span>By invitation only &middot; Based on membership history &amp; spend</span>
                   </div>
                 </div>
+              </div>
+
+              {/* Start Free */}
+              <div className="mt-6 text-center">
+                <button
+                  onClick={() => router.push("/dashboard")}
+                  className="text-sm text-charcoal/40 hover:text-charcoal/60 underline underline-offset-4 decoration-charcoal/20 hover:decoration-charcoal/40 transition-all duration-300 cursor-pointer"
+                >
+                  Or start free
+                </button>
               </div>
 
               {/* Back */}
