@@ -131,29 +131,9 @@ function BenefitsTab() {
             backgroundSize: "24px 24px",
           }} />
           <div className="relative">
-            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
-              <div>
-                <p className="text-xs tracking-[0.3em] uppercase text-sage font-medium mb-2">Your Status</p>
-                <h2 className="font-serif text-3xl text-bone mb-2">Reserve Member</h2>
-                <p className="text-sm text-bone/50">Member since January 2026</p>
-              </div>
-              <div className="text-right">
-                <p className="text-xs tracking-[0.3em] uppercase text-sage font-medium mb-2">Reserve Points</p>
-                <p className="font-serif text-4xl text-bone">2,450</p>
-                <p className="text-sm text-bone/40 mt-1">Points this quarter</p>
-              </div>
-            </div>
-
-            {/* Progress bar */}
-            <div className="mt-8">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-bone/50">Progress to Reserve Black</span>
-                <span className="text-xs text-sage">2,450 / 10,000</span>
-              </div>
-              <div className="h-1.5 bg-bone/10 rounded-full overflow-hidden">
-                <div className="h-full bg-sage rounded-full" style={{ width: "24.5%" }} />
-              </div>
-            </div>
+            <p className="text-xs tracking-[0.3em] uppercase text-sage font-medium mb-2">Your Tier</p>
+            <h2 className="font-serif text-3xl text-bone mb-2">Reserve Member</h2>
+            <p className="text-sm text-bone/50">Member since January 2026 &middot; $249/quarter</p>
           </div>
         </div>
 
@@ -205,30 +185,6 @@ function BenefitsTab() {
             description="Track your handicap officially through Mully Reserve. Post scores from any course."
             status="Coming Soon"
           />
-          <BenefitTile
-            icon={<PointsBenefitIcon />}
-            title="Reserve Points"
-            description="Earn points on every purchase. Redeem for store credit, experiences, and exclusive gear."
-            status="Active"
-          />
-        </div>
-
-        {/* Points earning table */}
-        <div className="mt-12 bg-cream rounded-2xl border border-taupe/15 p-8">
-          <h3 className="font-serif text-xl text-obsidian mb-6">How You Earn Points</h3>
-          <div className="space-y-4">
-            <PointsRow action="Every $1 spent in Pro Shop" points="1 pt" />
-            <PointsRow action="Refer a friend who joins" points="500 pts" />
-            <PointsRow action="Post a review" points="25 pts" />
-            <PointsRow action="Attend an event" points="100 pts" />
-            <PointsRow action="Complete a fitting" points="200 pts" />
-            <PointsRow action="Quarterly membership renewal" points="250 pts" />
-          </div>
-          <div className="mt-6 pt-6 border-t border-taupe/15">
-            <p className="text-xs text-charcoal/40">
-              1,000 points = $10 store credit. Points never expire for active members.
-            </p>
-          </div>
         </div>
       </div>
     </div>
@@ -711,15 +667,6 @@ function BenefitTile({
   );
 }
 
-function PointsRow({ action, points }: { action: string; points: string }) {
-  return (
-    <div className="flex items-center justify-between py-2 border-b border-taupe/10 last:border-0">
-      <span className="text-sm text-charcoal/65">{action}</span>
-      <span className="text-sm font-medium text-forest">{points}</span>
-    </div>
-  );
-}
-
 /* ═══════════════════════════════════════════
    BENEFIT ICONS
    ═══════════════════════════════════════════ */
@@ -781,10 +728,3 @@ function HandicapBenefitIcon() {
   );
 }
 
-function PointsBenefitIcon() {
-  return (
-    <svg className="w-5 h-5 text-forest" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" />
-    </svg>
-  );
-}
