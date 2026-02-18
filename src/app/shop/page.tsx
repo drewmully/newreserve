@@ -43,31 +43,17 @@ export default function ShopPage() {
       </main>
 
       {/* ─── FOOTER ─── */}
-      <footer className="py-12 px-6 md:px-12 bg-obsidian">
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-6">
-          <span className="font-serif text-xl text-ember font-bold tracking-wide">
+      <footer className="py-10 px-6 md:px-12 bg-ember">
+        <div className="max-w-6xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <span className="font-serif text-xl text-white font-bold tracking-wide">
             mully.
           </span>
           <div className="flex items-center gap-8">
-            <Link
-              href="/terms"
-              className="text-sm text-bone/40 hover:text-bone/70 transition-colors duration-300"
-            >
-              Terms
-            </Link>
-            <Link
-              href="/privacy"
-              className="text-sm text-bone/40 hover:text-bone/70 transition-colors duration-300"
-            >
-              Privacy
-            </Link>
-            <Link
-              href="/contact"
-              className="text-sm text-bone/40 hover:text-bone/70 transition-colors duration-300"
-            >
-              Contact
-            </Link>
+            <Link href="/policies/terms" className="text-sm text-white/50 hover:text-white transition-colors duration-300">Terms</Link>
+            <Link href="/policies/privacy" className="text-sm text-white/50 hover:text-white transition-colors duration-300">Privacy</Link>
+            <Link href="/faq" className="text-sm text-white/50 hover:text-white transition-colors duration-300">FAQ</Link>
           </div>
+          <p className="text-xs text-white/30">&copy; {new Date().getFullYear()} Mully Group, Inc.</p>
         </div>
       </footer>
     </div>
