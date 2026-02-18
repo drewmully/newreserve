@@ -83,7 +83,7 @@ export default function Home() {
           </div>
 
           <p className="text-lg md:text-xl text-charcoal/55 max-w-2xl mx-auto leading-relaxed mb-14 animate-fade-up-delay-2">
-            Curated gear, expert fittings, and top-tier experiences&mdash;everything
+            Curated gear, exclusive access, and top-tier experiences&mdash;everything
             you&rsquo;d get at a private club, without the membership.
           </p>
 
@@ -140,7 +140,7 @@ export default function Home() {
               <BenefitCard
                 icon={<PartnerIcon />}
                 title="Curated Partner Access"
-                description="Exclusive access to vetted partners across gear, fitting, training, and lifestyle. Every partner is hand-selected."
+                description="Exclusive access to vetted partners across gear, training, and lifestyle. Every partner is hand-selected."
               />
             </ScrollReveal>
             <ScrollReveal delay={0.12}>
@@ -154,7 +154,7 @@ export default function Home() {
               <BenefitCard
                 icon={<ClubIcon />}
                 title="Club-Level Service"
-                description="Fittings, styling, concierge support, and exclusive events&mdash;the full club experience without the club membership."
+                description="Concierge support, styling, and exclusive events&mdash;the full club experience without the club membership."
               />
             </ScrollReveal>
           </div>

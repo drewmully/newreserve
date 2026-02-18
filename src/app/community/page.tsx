@@ -5,11 +5,11 @@ import { posts, FORUM_TAGS } from "./posts";
 export const metadata: Metadata = {
   title: "Community | Mully Reserve",
   description:
-    "Connect with fellow Reserve members. Gear reviews, fitting tips, guest play coordination, and more from the Mully Reserve golf community.",
+    "Connect with fellow Reserve members. Gear reviews, guest play coordination, and more from the Mully Reserve golf community.",
   openGraph: {
     title: "Mully Reserve Community",
     description:
-      "Gear reviews, fitting tips, and guest play — from real Reserve members.",
+      "Gear reviews, guest play, and more — from real Reserve members.",
     type: "website",
   },
 };
@@ -41,8 +41,8 @@ export default function CommunityPage() {
               Community
             </h1>
             <p className="text-base text-charcoal/55 leading-relaxed max-w-xl">
-              Real conversations from Reserve members — gear reviews, fitting
-              experiences, guest play coordination, and more.
+              Real conversations from Reserve members — gear reviews,
+              guest play coordination, and more.
             </p>
           </div>
 

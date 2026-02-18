@@ -22,7 +22,6 @@ const HANDICAP_OPTIONS = [
 const INTEREST_OPTIONS = [
   { id: "gear", label: "Gear & Equipment", icon: GearIcon },
   { id: "apparel", label: "Apparel & Style", icon: ApparelIcon },
-  { id: "fittings", label: "Expert Fittings", icon: FittingIcon },
   { id: "experiences", label: "Curated Experiences", icon: ExperienceIcon },
   { id: "training", label: "Training & Coaching", icon: TrainingIcon },
   { id: "community", label: "Community & Events", icon: CommunityIcon },
@@ -414,14 +413,6 @@ function ApparelIcon({ active }: { active: boolean }) {
   return (
     <svg className={`w-5 h-5 shrink-0 ${active ? "text-bone/70" : "text-sage"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
-    </svg>
-  );
-}
-
-function FittingIcon({ active }: { active: boolean }) {
-  return (
-    <svg className={`w-5 h-5 shrink-0 ${active ? "text-bone/70" : "text-sage"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75" />
     </svg>
   );
 }

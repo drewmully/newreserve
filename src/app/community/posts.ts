@@ -26,7 +26,7 @@ export interface ForumPost {
   images?: string[];
 }
 
-export const FORUM_TAGS = ["All", "General", "Gear Talk", "Fittings", "Guest Play", "Events"];
+export const FORUM_TAGS = ["All", "General", "Gear Talk", "Guest Play", "Events"];
 
 export const posts: ForumPost[] = [
   {
@@ -64,19 +64,19 @@ export const posts: ForumPost[] = [
     author: "Mike R.",
     avatar: "MR",
     timestamp: "1 day ago",
-    title: "Club Champion fitting review — worth every minute",
-    body: "Just completed my fitting at Club Champion (Troy, MI location). The concierge booking through Mully made it seamless. Ended up getting fitted for a full iron set. The data they pull is unreal. If you haven't used this benefit yet, do it.",
+    title: "Titleist Hybrid 14 stand bag — 6 months in",
+    body: "Just hit the six-month mark with the Hybrid 14 from the Reserve drop. This bag is the real deal. 14-way divider keeps everything organized, the straps are comfortable for 18, and it still looks brand new. Best bag I've owned.",
     likes: 41,
-    tag: "Fittings",
+    tag: "Gear Talk",
     images: [
-      "https://placehold.co/600x400/1a3325/F5F1E8?text=Fitting+Session",
-      "https://placehold.co/600x400/1a3325/F5F1E8?text=Launch+Monitor+Data",
+      "https://placehold.co/600x400/1a3325/F5F1E8?text=Hybrid+14+Bag",
+      "https://placehold.co/600x400/1a3325/F5F1E8?text=Bag+Organization",
     ],
     comments: [
-      { id: "3a", author: "Jack M.", avatar: "JM", timestamp: "22 hours ago", body: "How long did the full iron fitting take? Been meaning to schedule mine.", likes: 2 },
-      { id: "3b", author: "Mike R.", avatar: "MR", timestamp: "20 hours ago", body: "About 2.5 hours for the full set. They test you on every club head and shaft combo. Worth blocking the afternoon.", likes: 5 },
-      { id: "3c", author: "Dave T.", avatar: "DT", timestamp: "18 hours ago", body: "Did mine last month. The difference in dispersion is night and day. Concierge made the whole booking effortless.", likes: 8 },
-      { id: "3d", author: "Alex P.", avatar: "AP", timestamp: "12 hours ago", body: "Just booked mine through concierge after reading this. Thanks for the push.", likes: 3 },
+      { id: "3a", author: "Jack M.", avatar: "JM", timestamp: "22 hours ago", body: "How's the weight? I walk most rounds and my current bag feels like a brick by the back nine.", likes: 2 },
+      { id: "3b", author: "Mike R.", avatar: "MR", timestamp: "20 hours ago", body: "It's noticeably lighter than my old Sun Mountain. The stand mechanism is solid too — never had it tip over.", likes: 5 },
+      { id: "3c", author: "Dave T.", avatar: "DT", timestamp: "18 hours ago", body: "Picked one up at Reserve pricing last month. The pockets are surprisingly deep. Fits everything I need for 18.", likes: 8 },
+      { id: "3d", author: "Alex P.", avatar: "AP", timestamp: "12 hours ago", body: "This post just sold me. Adding to cart now.", likes: 3 },
     ],
   },
   {
@@ -105,7 +105,7 @@ export const posts: ForumPost[] = [
     likes: 18,
     tag: "General",
     comments: [
-      { id: "5a", author: "Mike R.", avatar: "MR", timestamp: "3 days ago", body: "Pro V1 at Reserve pricing is a no-brainer. Also book a fitting ASAP — it's complimentary and the wait can be a few weeks.", likes: 9 },
+      { id: "5a", author: "Mike R.", avatar: "MR", timestamp: "3 days ago", body: "Pro V1 at Reserve pricing is a no-brainer. And check the drops calendar — the limited releases go fast even with member access.", likes: 9 },
       { id: "5b", author: "Jack M.", avatar: "JM", timestamp: "3 days ago", body: "Welcome! Check the drops calendar first. The limited releases sell out fast even with member access.", likes: 5 },
       { id: "5c", author: "Sarah K.", avatar: "SK", timestamp: "2 days ago", body: "The Peter Millar and TravisMathew apparel at Reserve pricing is honestly the best value. Way better than any sale you'll find retail.", likes: 11 },
       { id: "5d", author: "Dave T.", avatar: "DT", timestamp: "2 days ago", body: "Free 2-day shipping alone pays for itself if you order regularly. And definitely join the community events — great way to meet people.", likes: 6 },

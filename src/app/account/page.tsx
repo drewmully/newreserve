@@ -18,6 +18,7 @@ export default function AccountPage() {
     setUsername,
     tier,
     tierLabel,
+    setTier,
     cartCount,
     setCartOpen,
   } = useMembership();
@@ -26,13 +27,6 @@ export default function AccountPage() {
   const [editingEmail, setEditingEmail] = useState(false);
   const [tempUsername, setTempUsername] = useState(username);
   const [tempEmail, setTempEmail] = useState(email);
-
-  const tierPricing: Record<string, string> = {
-    free: "Free",
-    access: "$99/year",
-    member: "$249/quarter",
-    black: "By Invitation",
-  };
 
   const handleSaveUsername = () => {
     setUsername(tempUsername);
@@ -78,6 +72,8 @@ export default function AccountPage() {
       </div>
     );
   }
+
+  const isPaid = tier === "access" || tier === "member" || tier === "black";
 
   return (
     <div className="min-h-screen bg-bone">
@@ -218,35 +214,8 @@ export default function AccountPage() {
             </div>
           </section>
 
-          {/* ── Membership ── */}
-          <section className="mb-10">
-            <h2 className="text-xs tracking-[0.25em] uppercase text-sage font-medium mb-5">Membership</h2>
-
-            <div className={`rounded-xl p-6 border ${tier === "free" ? "bg-cream border-taupe/15" : "bg-forest border-forest"}`}>
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className={`text-xs tracking-[0.2em] uppercase font-medium mb-1 ${tier === "free" ? "text-sage" : "text-sage"}`}>Current Plan</p>
-                  <h3 className={`font-serif text-xl mb-1 ${tier === "free" ? "text-obsidian" : "text-bone"}`}>{tierLabel}</h3>
-                  <p className={`text-sm ${tier === "free" ? "text-charcoal/45" : "text-bone/50"}`}>{tierPricing[tier]}</p>
-                </div>
-                {tier === "free" && (
-                  <Link
-                    href="/onboarding"
-                    className="h-9 px-5 rounded-lg bg-forest text-bone text-xs font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 flex items-center"
-                  >
-                    Upgrade
-                  </Link>
-                )}
-              </div>
-              {tier !== "free" && (
-                <div className="mt-4 pt-4 border-t border-bone/15">
-                  <p className="text-xs text-bone/35">
-                    Member since February 2026
-                  </p>
-                </div>
-              )}
-            </div>
-          </section>
+          {/* ── Concierge Request ── */}
+          {isPaid && <ConciergeRequestSection />}
 
           {/* ── Orders ── */}
           <section className="mb-10">
@@ -299,6 +268,9 @@ export default function AccountPage() {
             </div>
           </section>
 
+          {/* ── Subscription Management (buried lower) ── */}
+          <SubscriptionSection tier={tier} tierLabel={tierLabel} setTier={setTier} />
+
           {/* ── Danger Zone ── */}
           <section>
             <h2 className="text-xs tracking-[0.25em] uppercase text-charcoal/30 font-medium mb-5">Account</h2>
@@ -329,6 +301,383 @@ export default function AccountPage() {
 
       <SlideCart />
     </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   CONCIERGE REQUEST FORM
+   ═══════════════════════════════════════════ */
+
+const DEPARTMENTS = [
+  { value: "concierge", label: "Concierge Services", description: "Guest play, travel, and experience bookings" },
+  { value: "styling", label: "Styling & Recommendations", description: "Personal styling advice and product curation" },
+  { value: "partnerships", label: "Partnerships", description: "Brand partnerships and collaboration inquiries" },
+  { value: "general", label: "General Inquiry", description: "Questions, feedback, or anything else" },
+];
+
+function ConciergeRequestSection() {
+  const [department, setDepartment] = useState("");
+  const [subject, setSubject] = useState("");
+  const [message, setMessage] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+
+  const canSubmit = department && subject.trim() && message.trim();
+
+  const handleSubmit = () => {
+    if (!canSubmit) return;
+    setSubmitted(true);
+  };
+
+  const handleReset = () => {
+    setDepartment("");
+    setSubject("");
+    setMessage("");
+    setSubmitted(false);
+  };
+
+  return (
+    <section className="mb-10">
+      <h2 className="text-xs tracking-[0.25em] uppercase text-sage font-medium mb-5">Concierge Request</h2>
+
+      {submitted ? (
+        <div className="bg-cream rounded-2xl border border-taupe/15 p-8 text-center animate-fade-up">
+          <div className="w-12 h-12 rounded-2xl bg-forest/10 flex items-center justify-center mx-auto mb-4">
+            <svg className="w-6 h-6 text-forest" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h3 className="font-serif text-lg text-obsidian mb-2">Request Submitted</h3>
+          <p className="text-sm text-charcoal/50 leading-relaxed mb-5 max-w-sm mx-auto">
+            Our concierge team has received your request and will respond within 24 hours via email.
+          </p>
+          <button
+            onClick={handleReset}
+            className="text-xs text-forest hover:text-forest-dark transition-colors duration-300 cursor-pointer underline underline-offset-2"
+          >
+            Submit another request
+          </button>
+        </div>
+      ) : (
+        <div className="bg-cream rounded-2xl border border-taupe/15 p-6">
+          <p className="text-sm text-charcoal/50 leading-relaxed mb-5">
+            Our concierge team is here to help. Select a department and tell us how we can assist.
+          </p>
+
+          {/* Department select */}
+          <div className="mb-4">
+            <label className="text-xs tracking-wide uppercase text-charcoal/50 font-medium mb-2 block">
+              Department
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {DEPARTMENTS.map((dept) => (
+                <button
+                  key={dept.value}
+                  onClick={() => setDepartment(dept.value)}
+                  className={`text-left px-4 py-3 rounded-xl border transition-all duration-300 cursor-pointer ${
+                    department === dept.value
+                      ? "bg-forest text-bone border-forest"
+                      : "bg-bone border-taupe/20 hover:border-forest/30"
+                  }`}
+                >
+                  <p className={`text-sm font-medium ${department === dept.value ? "text-bone" : "text-obsidian"}`}>
+                    {dept.label}
+                  </p>
+                  <p className={`text-xs mt-0.5 ${department === dept.value ? "text-bone/55" : "text-charcoal/40"}`}>
+                    {dept.description}
+                  </p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Subject */}
+          <div className="mb-4">
+            <label className="text-xs tracking-wide uppercase text-charcoal/50 font-medium mb-2 block">
+              Subject
+            </label>
+            <input
+              type="text"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              placeholder="Brief summary of your request"
+              className="w-full h-11 px-4 rounded-xl bg-bone border border-taupe/25 text-obsidian text-sm placeholder:text-charcoal/30 focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300"
+            />
+          </div>
+
+          {/* Message */}
+          <div className="mb-5">
+            <label className="text-xs tracking-wide uppercase text-charcoal/50 font-medium mb-2 block">
+              Message
+            </label>
+            <textarea
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder="How can we help?"
+              rows={4}
+              className="w-full px-4 py-3 rounded-xl bg-bone border border-taupe/25 text-obsidian text-sm placeholder:text-charcoal/30 focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300 resize-none"
+            />
+          </div>
+
+          <button
+            onClick={handleSubmit}
+            disabled={!canSubmit}
+            className={`h-11 px-8 rounded-xl text-sm font-medium tracking-wider uppercase transition-all duration-300 cursor-pointer btn-press ${
+              canSubmit
+                ? "bg-forest text-bone hover:bg-forest-dark"
+                : "bg-taupe/25 text-charcoal/30 cursor-not-allowed"
+            }`}
+          >
+            Submit Request
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   SUBSCRIPTION MANAGEMENT
+   ═══════════════════════════════════════════ */
+
+function SubscriptionSection({
+  tier,
+  tierLabel,
+  setTier,
+}: {
+  tier: string;
+  tierLabel: string;
+  setTier: (t: "free" | "access" | "member" | "black") => void;
+}) {
+  const [showManage, setShowManage] = useState(false);
+  const [cancelStep, setCancelStep] = useState<"idle" | "confirm" | "done">("idle");
+
+  const tierPricing: Record<string, string> = {
+    free: "Free",
+    access: "$99/year",
+    member: "$249/quarter",
+    black: "By Invitation",
+  };
+
+  // Calculate "active until" date
+  const getActiveUntilDate = () => {
+    const d = new Date();
+    if (tier === "member") {
+      // Quarterly — end of current quarter
+      const quarterEnd = new Date(d.getFullYear(), Math.ceil((d.getMonth() + 1) / 3) * 3, 0);
+      return quarterEnd.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+    }
+    // Annual — end of current period
+    const yearEnd = new Date(d.getFullYear() + 1, d.getMonth(), d.getDate());
+    return yearEnd.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  };
+
+  const canDowngrade = tier === "member"; // member can downgrade to access
+
+  const handleCancel = () => {
+    setCancelStep("done");
+  };
+
+  const handleDowngrade = () => {
+    setTier("access");
+    setShowManage(false);
+    setCancelStep("idle");
+  };
+
+  const handleKeep = () => {
+    setCancelStep("idle");
+    setShowManage(false);
+  };
+
+  const isPaid = tier !== "free";
+
+  return (
+    <section className="mb-10">
+      <h2 className="text-xs tracking-[0.25em] uppercase text-charcoal/30 font-medium mb-5">Subscription</h2>
+
+      <div className={`rounded-2xl border ${isPaid ? "bg-forest border-forest" : "bg-cream border-taupe/15"}`}>
+        {/* Plan overview */}
+        <div className="p-6">
+          <div className="flex items-start justify-between">
+            <div>
+              <p className={`text-xs tracking-[0.2em] uppercase font-medium mb-1 ${isPaid ? "text-sage" : "text-sage"}`}>
+                Current Plan
+              </p>
+              <h3 className={`font-serif text-xl mb-1 ${isPaid ? "text-bone" : "text-obsidian"}`}>
+                {tierLabel}
+              </h3>
+              <p className={`text-sm ${isPaid ? "text-bone/50" : "text-charcoal/45"}`}>
+                {tierPricing[tier]}
+              </p>
+            </div>
+            {tier === "free" ? (
+              <Link
+                href="/onboarding"
+                className="h-9 px-5 rounded-lg bg-forest text-bone text-xs font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 flex items-center btn-press"
+              >
+                Upgrade
+              </Link>
+            ) : (
+              <button
+                onClick={() => { setShowManage(!showManage); setCancelStep("idle"); }}
+                className={`text-xs transition-colors duration-300 cursor-pointer ${
+                  isPaid ? "text-bone/40 hover:text-bone/70" : "text-charcoal/35 hover:text-charcoal/60"
+                }`}
+              >
+                {showManage ? "Close" : "Manage"}
+              </button>
+            )}
+          </div>
+
+          {isPaid && !showManage && (
+            <div className="mt-4 pt-4 border-t border-bone/15">
+              <p className="text-xs text-bone/35">
+                Member since February 2026
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Expanded manage panel */}
+        {showManage && isPaid && (
+          <div className={`border-t ${isPaid ? "border-bone/10" : "border-taupe/15"}`}>
+            {cancelStep === "idle" && (
+              <div className="p-6 animate-tab-in">
+                <div className="space-y-3">
+                  {/* Upgrade option */}
+                  {tier !== "black" && (
+                    <Link
+                      href="/onboarding"
+                      className="block w-full text-left bg-bone/10 hover:bg-bone/15 rounded-xl p-4 transition-colors duration-300"
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-bone">Upgrade Plan</p>
+                          <p className="text-xs text-bone/45 mt-0.5">
+                            {tier === "access" ? "Unlock priority access, concierge support, and events" : "View available plans"}
+                          </p>
+                        </div>
+                        <svg className="w-4 h-4 text-bone/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+                        </svg>
+                      </div>
+                    </Link>
+                  )}
+
+                  {/* Cancel option */}
+                  <button
+                    onClick={() => setCancelStep("confirm")}
+                    className="w-full text-left bg-bone/5 hover:bg-bone/10 rounded-xl p-4 transition-colors duration-300 cursor-pointer"
+                  >
+                    <p className="text-sm text-bone/50">Cancel Membership</p>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {cancelStep === "confirm" && (
+              <div className="p-6 animate-tab-in">
+                <h4 className="font-serif text-lg text-bone mb-2">Before you go&hellip;</h4>
+                <p className="text-sm text-bone/50 leading-relaxed mb-5">
+                  We&rsquo;d hate to see you leave. Here&rsquo;s what you&rsquo;ll lose access to:
+                </p>
+
+                <ul className="space-y-2 mb-6">
+                  <li className="flex items-center gap-2.5">
+                    <svg className="w-4 h-4 text-bone/30 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    <span className="text-sm text-bone/45">Reserve pricing on all products</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <svg className="w-4 h-4 text-bone/30 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    <span className="text-sm text-bone/45">Free 2-day shipping</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <svg className="w-4 h-4 text-bone/30 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    <span className="text-sm text-bone/45">Early and priority drop access</span>
+                  </li>
+                  {tier === "member" && (
+                    <li className="flex items-center gap-2.5">
+                      <svg className="w-4 h-4 text-bone/30 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      <span className="text-sm text-bone/45">Concierge support and invite-only events</span>
+                    </li>
+                  )}
+                </ul>
+
+                {/* Downgrade option */}
+                {canDowngrade && (
+                  <div className="bg-bone/10 rounded-xl p-5 mb-5">
+                    <p className="text-sm font-medium text-bone mb-1">
+                      Consider downgrading instead?
+                    </p>
+                    <p className="text-xs text-bone/45 leading-relaxed mb-4">
+                      Keep Reserve pricing and free shipping with Reserve Access at just $99/year &mdash; a fraction of your current plan.
+                    </p>
+                    <button
+                      onClick={handleDowngrade}
+                      className="h-10 px-6 rounded-xl bg-bone text-forest text-xs font-medium tracking-wider uppercase hover:bg-bone-dark transition-colors duration-300 cursor-pointer btn-press"
+                    >
+                      Downgrade to Access &mdash; $99/yr
+                    </button>
+                  </div>
+                )}
+
+                <p className="text-xs text-bone/35 leading-relaxed mb-5">
+                  If you cancel, your benefits remain active through{" "}
+                  <span className="text-bone/55 font-medium">{getActiveUntilDate()}</span>.
+                  You won&rsquo;t be charged again after that date.
+                </p>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={handleKeep}
+                    className="h-10 px-6 rounded-xl bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-colors duration-300 cursor-pointer btn-press"
+                  >
+                    Keep My Membership
+                  </button>
+                  <button
+                    onClick={handleCancel}
+                    className="text-xs text-bone/30 hover:text-bone/50 transition-colors duration-300 cursor-pointer underline underline-offset-2"
+                  >
+                    Confirm cancellation
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {cancelStep === "done" && (
+              <div className="p-6 animate-tab-in">
+                <div className="flex items-start gap-3 mb-4">
+                  <svg className="w-5 h-5 text-bone/40 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div>
+                    <h4 className="text-sm font-medium text-bone mb-1">Cancellation confirmed</h4>
+                    <p className="text-xs text-bone/45 leading-relaxed">
+                      Your {tierLabel} benefits will remain active through{" "}
+                      <span className="text-bone/60 font-medium">{getActiveUntilDate()}</span>.
+                      You can resubscribe anytime from this page.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={handleKeep}
+                  className="text-xs text-bone/35 hover:text-bone/55 transition-colors duration-300 cursor-pointer underline underline-offset-2"
+                >
+                  Changed your mind? Resubscribe
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
