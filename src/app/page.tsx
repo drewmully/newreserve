@@ -87,19 +87,14 @@ export default function Home() {
           </p>
 
           <div className="animate-fade-up-delay-3">
-            <form className="flex flex-col sm:flex-row items-center gap-3 max-w-md mx-auto mb-5">
-              <input
-                type="email"
-                placeholder="Your email"
-                className="w-full sm:flex-1 h-13 px-5 rounded-xl bg-white/60 border border-taupe/30 text-obsidian placeholder:text-charcoal/35 text-base focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300"
-              />
-              <button
-                type="submit"
-                className="w-full sm:w-auto h-13 px-8 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer whitespace-nowrap"
+            <div className="flex flex-col sm:flex-row items-center gap-3 max-w-md mx-auto mb-5">
+              <a
+                href="/onboarding"
+                className="w-full sm:w-auto h-13 px-10 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer whitespace-nowrap flex items-center justify-center"
               >
                 Unlock Access
-              </button>
-            </form>
+              </a>
+            </div>
             <p className="text-xs text-charcoal/40 tracking-wide">
               Complimentary access &middot; No credit card required
             </p>
@@ -249,7 +244,7 @@ export default function Home() {
                   <TierFeature text="Community access" />
                 </ul>
                 <a
-                  href="#"
+                  href="/onboarding"
                   className="block w-full text-center h-11 leading-[2.75rem] rounded-xl border border-forest text-forest text-sm font-medium tracking-wider uppercase hover:bg-forest hover:text-bone transition-all duration-300"
                 >
                   Sign Up Free
@@ -279,7 +274,7 @@ export default function Home() {
                   <TierFeature text="Free 2-day shipping on Pro Shop" />
                 </ul>
                 <a
-                  href="#"
+                  href="/onboarding"
                   className="block w-full text-center h-11 leading-[2.75rem] rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-all duration-300"
                 >
                   Join Now
@@ -314,7 +309,7 @@ export default function Home() {
                   <TierFeature text="Invite-only events" light />
                 </ul>
                 <a
-                  href="#"
+                  href="/onboarding"
                   className="block w-full text-center h-11 leading-[2.75rem] rounded-xl bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-all duration-300"
                 >
                   Join Now
@@ -505,7 +500,7 @@ export default function Home() {
                 </p>
               </div>
 
-              {/* Right: Form */}
+              {/* Right: CTA */}
               <div className="bg-cream rounded-2xl p-8 md:p-10 border border-taupe/20 shadow-sm">
                 <h3 className="font-serif text-xl text-obsidian mb-2">
                   Unlock Reserve Access
@@ -513,19 +508,12 @@ export default function Home() {
                 <p className="text-sm text-charcoal/50 mb-6">
                   Complimentary. No credit card required.
                 </p>
-                <form className="space-y-3">
-                  <input
-                    type="email"
-                    placeholder="Your email"
-                    className="w-full h-13 px-5 rounded-xl bg-bone border border-taupe/30 text-obsidian placeholder:text-taupe text-base focus:border-forest focus:ring-2 focus:ring-forest/20 transition-all duration-300"
-                  />
-                  <button
-                    type="submit"
-                    className="w-full h-13 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer"
-                  >
-                    Get Started
-                  </button>
-                </form>
+                <a
+                  href="/onboarding"
+                  className="block w-full h-13 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer text-center leading-[3.25rem]"
+                >
+                  Get Started
+                </a>
                 <p className="text-xs text-taupe/70 mt-4 text-center">
                   Join 2,400+ members already inside.
                 </p>

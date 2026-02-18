@@ -4,6 +4,8 @@ import { useState } from "react";
 import Link from "next/link";
 import { ShopGrid } from "../shop/components/ShopClient";
 import { products, BRANDS, COLLECTIONS } from "../shop/products";
+import { useMembership } from "../context/MembershipContext";
+import { SlideCart } from "../components/SlideCart";
 
 /* ═══════════════════════════════════════════
    DASHBOARD — Shop · Benefits · Club · Community
@@ -13,7 +15,7 @@ type Tab = "shop" | "benefits" | "club" | "community";
 
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<Tab>("shop");
-  const [cartCount] = useState(0);
+  const { cartCount, setCartOpen } = useMembership();
 
   return (
     <div className="min-h-screen bg-bone">
@@ -26,7 +28,11 @@ export default function DashboardPage() {
           </Link>
           <div className="flex items-center gap-5">
             {/* Cart */}
-            <button className="relative text-forest hover:text-forest-dark transition-colors duration-300 cursor-pointer" aria-label="Cart">
+            <button
+              onClick={() => setCartOpen(true)}
+              className="relative text-forest hover:text-forest-dark transition-colors duration-300 cursor-pointer"
+              aria-label="Cart"
+            >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
               </svg>
@@ -74,13 +80,28 @@ export default function DashboardPage() {
         </div>
       </nav>
 
+      {/* ─── LAUNCH BANNER ─── */}
+      <div className="fixed top-[7.25rem] left-0 right-0 z-30 bg-forest text-bone">
+        <div className="max-w-7xl mx-auto px-6 md:px-12 py-2.5 flex items-center justify-center gap-2">
+          <svg className="w-4 h-4 text-sage shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z" />
+          </svg>
+          <p className="text-xs tracking-wide text-center">
+            Tell your friends &mdash; we&rsquo;re having a launch party with <strong className="text-bone">free priority shipping</strong> for all.
+          </p>
+        </div>
+      </div>
+
       {/* ─── TAB CONTENT ─── */}
-      <main className="pt-32 pb-24">
+      <main className="pt-42 pb-24">
         {activeTab === "shop" && <ShopTab />}
         {activeTab === "benefits" && <BenefitsTab />}
         {activeTab === "club" && <ClubTab />}
         {activeTab === "community" && <CommunityTab />}
       </main>
+
+      {/* ─── SLIDE CART ─── */}
+      <SlideCart />
 
       {/* ─── FOOTER ─── */}
       <footer className="py-10 px-6 md:px-12 bg-forest">
@@ -121,20 +142,44 @@ function ShopTab() {
    ═══════════════════════════════════════════ */
 
 function BenefitsTab() {
+  const { tier, tierLabel } = useMembership();
+  const isFree = tier === "free";
+  const isPaid = tier === "access" || tier === "member" || tier === "black";
+  const isMemberPlus = tier === "member" || tier === "black";
+
+  const tierPricing: Record<string, string> = {
+    free: "Complimentary",
+    access: "$99/year",
+    member: "$249/quarter",
+    black: "By Invitation",
+  };
+
   return (
     <div className="px-6 md:px-12">
       <div className="max-w-5xl mx-auto">
         {/* Status card */}
-        <div className="bg-forest rounded-2xl p-8 md:p-10 mb-10 relative overflow-hidden">
+        <div className={`rounded-2xl p-8 md:p-10 mb-10 relative overflow-hidden ${isFree ? "bg-cream border border-taupe/20" : "bg-forest"}`}>
           <div className="absolute inset-0 opacity-[0.04] pointer-events-none" style={{
-            backgroundImage: `radial-gradient(circle at 1px 1px, #F5F1E8 0.5px, transparent 0)`,
+            backgroundImage: `radial-gradient(circle at 1px 1px, ${isFree ? "#C8BFAF" : "#F5F1E8"} 0.5px, transparent 0)`,
             backgroundSize: "24px 24px",
           }} />
           <div className="relative">
-            <p className="text-xs tracking-[0.3em] uppercase text-sage font-medium mb-2">Your Tier</p>
-            <h2 className="font-serif text-3xl text-bone mb-2">Reserve Member</h2>
-            <p className="text-sm text-bone/50">Member since January 2026 &middot; $249/quarter</p>
+            <p className={`text-xs tracking-[0.3em] uppercase font-medium mb-2 ${isFree ? "text-sage" : "text-sage"}`}>Your Tier</p>
+            <h2 className={`font-serif text-3xl mb-2 ${isFree ? "text-obsidian" : "text-bone"}`}>{tierLabel}</h2>
+            <p className={`text-sm ${isFree ? "text-charcoal/50" : "text-bone/50"}`}>
+              Member since February 2026 &middot; {tierPricing[tier]}
+            </p>
           </div>
+          {isFree && (
+            <div className="relative mt-5">
+              <a
+                href="/onboarding"
+                className="inline-flex h-10 px-6 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 items-center"
+              >
+                Upgrade Membership
+              </a>
+            </div>
+          )}
         </div>
 
         {/* Benefit categories */}
@@ -146,38 +191,38 @@ function BenefitsTab() {
           <BenefitTile
             icon={<PricingBenefitIcon />}
             title="Reserve Pricing"
-            description="Members-only pricing on all products. Save an average of $250+ per year across gear, apparel, and accessories."
-            status="Active"
+            description={isPaid ? "Members-only pricing on all products. Save an average of $250+ per year across gear, apparel, and accessories." : "Browse Reserve pricing to see what members save. Upgrade to unlock members-only pricing."}
+            status={isPaid ? "Active" : "Locked"}
           />
           <BenefitTile
             icon={<ShippingBenefitIcon />}
             title="Free 2-Day Shipping"
-            description="Complimentary 2-day shipping on all Pro Shop orders. No minimums."
-            status="Active"
+            description={isPaid ? "Complimentary 2-day shipping on all Pro Shop orders. No minimums." : "Free priority shipping during our launch party! Normally a paid member benefit."}
+            status={isPaid ? "Active" : "Launch Promo"}
           />
           <BenefitTile
             icon={<DropBenefitIcon />}
             title="Priority Drop Access"
-            description="48-hour early access to limited releases before they go live to Access members."
-            status="Active"
+            description={isMemberPlus ? "48-hour early access to limited releases before they go live to Access members." : "Upgrade to Reserve Member for 48-hour early access to limited releases."}
+            status={isMemberPlus ? "Active" : isPaid ? "Upgrade" : "Locked"}
           />
           <BenefitTile
             icon={<FittingBenefitIcon />}
             title="Expert Fittings"
-            description="Complimentary club fitting sessions with our partner network. Book through concierge."
-            status="Active"
+            description={isPaid ? "Complimentary club fitting sessions with our partner network. Book through concierge." : "Complimentary club fitting sessions. Available with paid membership."}
+            status={isPaid ? "Active" : "Locked"}
           />
           <BenefitTile
             icon={<ConciergeBenefitIcon />}
             title="Concierge Support"
-            description="Dedicated concierge for booking, styling advice, and product recommendations."
-            status="Active"
+            description={isMemberPlus ? "Dedicated concierge for booking, styling advice, and product recommendations." : "Dedicated concierge support. Available with Reserve Member tier."}
+            status={isMemberPlus ? "Active" : "Locked"}
           />
           <BenefitTile
             icon={<EventBenefitIcon />}
             title="Invite-Only Events"
-            description="Access to member-only outings, demo days, and partner experiences."
-            status="Active"
+            description={isMemberPlus ? "Access to member-only outings, demo days, and partner experiences." : "Exclusive events for Reserve Member and above."}
+            status={isMemberPlus ? "Active" : "Locked"}
           />
           <BenefitTile
             icon={<HandicapBenefitIcon />}
@@ -226,6 +271,7 @@ interface ClubEntry {
 }
 
 function ClubTab() {
+  const { clubStatus, setClubStatus, interestedClubs, toggleClubInterest } = useMembership();
   const [selectedState, setSelectedState] = useState("Michigan");
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
@@ -238,6 +284,241 @@ function ClubTab() {
 
   const filteredClubs = SAMPLE_CLUBS.filter((c) => c.state === selectedState);
 
+  const handleSubmitApplication = () => {
+    setClubStatus("pending");
+    setShowForm(false);
+  };
+
+  // ── Not yet applied ──
+  if (clubStatus === "none") {
+    return (
+      <div className="px-6 md:px-12">
+        <div className="max-w-5xl mx-auto">
+          {/* Intro */}
+          <div className="mb-10">
+            <h2 className="font-serif text-2xl md:text-3xl text-obsidian mb-3">Private Club Registry</h2>
+            <p className="text-base text-charcoal/55 leading-relaxed max-w-2xl">
+              The Club Registry connects Reserve members who belong to private clubs. List your club to unlock the full registry and connect with fellow members for guest play.
+            </p>
+          </div>
+
+          {/* Gated explanation */}
+          <div className="bg-forest rounded-2xl p-8 md:p-10 mb-10 relative overflow-hidden">
+            <div className="absolute inset-0 opacity-[0.04] pointer-events-none" style={{
+              backgroundImage: `radial-gradient(circle at 1px 1px, #F5F1E8 0.5px, transparent 0)`,
+              backgroundSize: "24px 24px",
+            }} />
+            <div className="relative">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-bone/10 flex items-center justify-center">
+                  <svg className="w-5 h-5 text-sage" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                  </svg>
+                </div>
+                <h3 className="font-serif text-xl text-bone">How It Works</h3>
+              </div>
+              <div className="grid md:grid-cols-3 gap-6">
+                <div>
+                  <span className="text-xs tracking-[0.2em] uppercase text-sage/60 font-medium block mb-2">Step 1</span>
+                  <p className="text-sm text-bone/60 leading-relaxed">List your private club membership below. Include your club name, location, and guest policy.</p>
+                </div>
+                <div>
+                  <span className="text-xs tracking-[0.2em] uppercase text-sage/60 font-medium block mb-2">Step 2</span>
+                  <p className="text-sm text-bone/60 leading-relaxed">Our team reviews your application to verify your membership. This typically takes 1&ndash;2 business days.</p>
+                </div>
+                <div>
+                  <span className="text-xs tracking-[0.2em] uppercase text-sage/60 font-medium block mb-2">Step 3</span>
+                  <p className="text-sm text-bone/60 leading-relaxed">Once approved, browse the full registry and indicate interest. Our concierge will facilitate introductions.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Application form */}
+          <div className="bg-cream rounded-2xl border border-taupe/15 p-6 md:p-8">
+            {!showForm ? (
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div>
+                  <h3 className="font-serif text-lg text-obsidian mb-1">List Your Club</h3>
+                  <p className="text-sm text-charcoal/50">
+                    Submit your club membership for review to unlock the full registry.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowForm(true)}
+                  className="h-11 px-8 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer whitespace-nowrap"
+                >
+                  Apply Now
+                </button>
+              </div>
+            ) : (
+              <div>
+                <h3 className="font-serif text-lg text-obsidian mb-5">Register Your Club Membership</h3>
+                <div className="grid md:grid-cols-2 gap-4 mb-6">
+                  <div>
+                    <label className="text-xs tracking-wide uppercase text-charcoal/50 font-medium mb-1.5 block">Club Name</label>
+                    <input
+                      type="text"
+                      value={formData.clubName}
+                      onChange={(e) => setFormData((p) => ({ ...p, clubName: e.target.value }))}
+                      placeholder="e.g. Oakland Hills Country Club"
+                      className="w-full h-11 px-4 rounded-xl bg-bone border border-taupe/30 text-obsidian text-sm placeholder:text-charcoal/30 focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs tracking-wide uppercase text-charcoal/50 font-medium mb-1.5 block">City</label>
+                    <input
+                      type="text"
+                      value={formData.city}
+                      onChange={(e) => setFormData((p) => ({ ...p, city: e.target.value }))}
+                      placeholder="e.g. Bloomfield Hills"
+                      className="w-full h-11 px-4 rounded-xl bg-bone border border-taupe/30 text-obsidian text-sm placeholder:text-charcoal/30 focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs tracking-wide uppercase text-charcoal/50 font-medium mb-1.5 block">State</label>
+                    <select
+                      value={formData.state}
+                      onChange={(e) => setFormData((p) => ({ ...p, state: e.target.value }))}
+                      className="w-full h-11 px-4 rounded-xl bg-bone border border-taupe/30 text-obsidian text-sm focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300"
+                    >
+                      <option value="">Select state</option>
+                      {US_STATES.map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs tracking-wide uppercase text-charcoal/50 font-medium mb-1.5 block">Holes</label>
+                    <select
+                      value={formData.holes}
+                      onChange={(e) => setFormData((p) => ({ ...p, holes: e.target.value }))}
+                      className="w-full h-11 px-4 rounded-xl bg-bone border border-taupe/30 text-obsidian text-sm focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300"
+                    >
+                      <option value="9">9 holes</option>
+                      <option value="18">18 holes</option>
+                      <option value="27">27 holes</option>
+                      <option value="36">36 holes</option>
+                    </select>
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="text-xs tracking-wide uppercase text-charcoal/50 font-medium mb-1.5 block">Guest Policy</label>
+                    <input
+                      type="text"
+                      value={formData.guestPolicy}
+                      onChange={(e) => setFormData((p) => ({ ...p, guestPolicy: e.target.value }))}
+                      placeholder="e.g. Member must accompany guest"
+                      className="w-full h-11 px-4 rounded-xl bg-bone border border-taupe/30 text-obsidian text-sm placeholder:text-charcoal/30 focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={handleSubmitApplication}
+                    className="h-11 px-8 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer"
+                  >
+                    Submit for Review
+                  </button>
+                  <button
+                    onClick={() => setShowForm(false)}
+                    className="h-11 px-6 rounded-xl text-sm text-charcoal/50 hover:text-charcoal/70 transition-colors duration-300 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Blurred preview of registry */}
+          <div className="mt-10 relative">
+            <div className="absolute inset-0 z-10 flex items-center justify-center">
+              <div className="bg-bone/90 backdrop-blur-sm rounded-xl px-6 py-4 text-center border border-taupe/20 shadow-sm">
+                <svg className="w-6 h-6 text-forest mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                </svg>
+                <p className="text-sm font-medium text-obsidian">List your club to unlock the registry</p>
+              </div>
+            </div>
+            <div className="filter blur-sm opacity-50 pointer-events-none">
+              <h3 className="font-serif text-xl text-obsidian mb-5">Browse Clubs by State</h3>
+              <div className="space-y-3">
+                {SAMPLE_CLUBS.slice(0, 3).map((club) => (
+                  <div key={club.name} className="bg-cream rounded-xl border border-taupe/15 p-5">
+                    <h4 className="text-sm font-medium text-obsidian">{club.name}</h4>
+                    <p className="text-xs text-charcoal/45 mt-0.5">{club.city}, {club.state}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Application pending review ──
+  if (clubStatus === "pending") {
+    return (
+      <div className="px-6 md:px-12">
+        <div className="max-w-5xl mx-auto">
+          <div className="mb-10">
+            <h2 className="font-serif text-2xl md:text-3xl text-obsidian mb-3">Private Club Registry</h2>
+          </div>
+
+          {/* Pending status card */}
+          <div className="bg-cream rounded-2xl border border-taupe/15 p-8 md:p-10 text-center mb-10">
+            <div className="w-14 h-14 rounded-2xl bg-sage/10 flex items-center justify-center mx-auto mb-5">
+              <svg className="w-7 h-7 text-sage" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <h3 className="font-serif text-xl text-obsidian mb-2">Application Under Review</h3>
+            <p className="text-sm text-charcoal/55 leading-relaxed max-w-md mx-auto mb-6">
+              Your club listing has been submitted and is being reviewed by our team. This typically takes 1&ndash;2 business days. We&rsquo;ll notify you once you&rsquo;re approved.
+            </p>
+            <div className="inline-flex items-center gap-2 text-xs tracking-wider uppercase text-sage bg-sage/10 px-4 py-2 rounded-lg font-medium">
+              <span className="w-2 h-2 rounded-full bg-sage animate-pulse" />
+              Pending Review
+            </div>
+
+            {/* Demo: skip to approved */}
+            <div className="mt-8 pt-6 border-t border-taupe/15">
+              <p className="text-xs text-charcoal/30 mb-3">Demo: skip review process</p>
+              <button
+                onClick={() => setClubStatus("approved")}
+                className="h-9 px-5 rounded-lg text-xs font-medium tracking-wider uppercase border border-taupe/25 text-charcoal/50 hover:border-forest/30 hover:text-forest transition-all duration-300 cursor-pointer"
+              >
+                Simulate Approval
+              </button>
+            </div>
+          </div>
+
+          {/* Still blurred */}
+          <div className="relative">
+            <div className="absolute inset-0 z-10 flex items-center justify-center">
+              <div className="bg-bone/90 backdrop-blur-sm rounded-xl px-6 py-4 text-center border border-taupe/20 shadow-sm">
+                <p className="text-sm font-medium text-obsidian">Registry unlocks after approval</p>
+              </div>
+            </div>
+            <div className="filter blur-sm opacity-50 pointer-events-none">
+              <h3 className="font-serif text-xl text-obsidian mb-5">Browse Clubs by State</h3>
+              <div className="space-y-3">
+                {SAMPLE_CLUBS.slice(0, 3).map((club) => (
+                  <div key={club.name} className="bg-cream rounded-xl border border-taupe/15 p-5">
+                    <h4 className="text-sm font-medium text-obsidian">{club.name}</h4>
+                    <p className="text-xs text-charcoal/45 mt-0.5">{club.city}, {club.state}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Approved — full registry access ──
   return (
     <div className="px-6 md:px-12">
       <div className="max-w-5xl mx-auto">
@@ -245,102 +526,16 @@ function ClubTab() {
         <div className="mb-10">
           <h2 className="font-serif text-2xl md:text-3xl text-obsidian mb-3">Private Club Registry</h2>
           <p className="text-base text-charcoal/55 leading-relaxed max-w-2xl">
-            Reserve members can register their country club membership in the registry.
-            Once listed, browse clubs by state that offer guest play to fellow members.
+            You&rsquo;re approved! Browse clubs by state and indicate interest. Our concierge team will reach out to help coordinate guest play.
           </p>
         </div>
 
-        {/* Add your club CTA */}
-        <div className="bg-cream rounded-2xl border border-taupe/15 p-6 md:p-8 mb-10">
-          {!showForm ? (
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <div>
-                <h3 className="font-serif text-lg text-obsidian mb-1">List Your Club</h3>
-                <p className="text-sm text-charcoal/50">
-                  Share your membership to connect with fellow Reserve members for guest play.
-                </p>
-              </div>
-              <button
-                onClick={() => setShowForm(true)}
-                className="h-11 px-8 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer whitespace-nowrap"
-              >
-                Add Your Club
-              </button>
-            </div>
-          ) : (
-            <div>
-              <h3 className="font-serif text-lg text-obsidian mb-5">Register Your Club Membership</h3>
-              <div className="grid md:grid-cols-2 gap-4 mb-6">
-                <div>
-                  <label className="text-xs tracking-wide uppercase text-charcoal/50 font-medium mb-1.5 block">Club Name</label>
-                  <input
-                    type="text"
-                    value={formData.clubName}
-                    onChange={(e) => setFormData((p) => ({ ...p, clubName: e.target.value }))}
-                    placeholder="e.g. Oakland Hills Country Club"
-                    className="w-full h-11 px-4 rounded-xl bg-bone border border-taupe/30 text-obsidian text-sm placeholder:text-charcoal/30 focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs tracking-wide uppercase text-charcoal/50 font-medium mb-1.5 block">City</label>
-                  <input
-                    type="text"
-                    value={formData.city}
-                    onChange={(e) => setFormData((p) => ({ ...p, city: e.target.value }))}
-                    placeholder="e.g. Bloomfield Hills"
-                    className="w-full h-11 px-4 rounded-xl bg-bone border border-taupe/30 text-obsidian text-sm placeholder:text-charcoal/30 focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs tracking-wide uppercase text-charcoal/50 font-medium mb-1.5 block">State</label>
-                  <select
-                    value={formData.state}
-                    onChange={(e) => setFormData((p) => ({ ...p, state: e.target.value }))}
-                    className="w-full h-11 px-4 rounded-xl bg-bone border border-taupe/30 text-obsidian text-sm focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300"
-                  >
-                    <option value="">Select state</option>
-                    {US_STATES.map((s) => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs tracking-wide uppercase text-charcoal/50 font-medium mb-1.5 block">Holes</label>
-                  <select
-                    value={formData.holes}
-                    onChange={(e) => setFormData((p) => ({ ...p, holes: e.target.value }))}
-                    className="w-full h-11 px-4 rounded-xl bg-bone border border-taupe/30 text-obsidian text-sm focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300"
-                  >
-                    <option value="9">9 holes</option>
-                    <option value="18">18 holes</option>
-                    <option value="27">27 holes</option>
-                    <option value="36">36 holes</option>
-                  </select>
-                </div>
-                <div className="md:col-span-2">
-                  <label className="text-xs tracking-wide uppercase text-charcoal/50 font-medium mb-1.5 block">Guest Policy</label>
-                  <input
-                    type="text"
-                    value={formData.guestPolicy}
-                    onChange={(e) => setFormData((p) => ({ ...p, guestPolicy: e.target.value }))}
-                    placeholder="e.g. Member must accompany guest"
-                    className="w-full h-11 px-4 rounded-xl bg-bone border border-taupe/30 text-obsidian text-sm placeholder:text-charcoal/30 focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300"
-                  />
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <button className="h-11 px-8 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer">
-                  Submit
-                </button>
-                <button
-                  onClick={() => setShowForm(false)}
-                  className="h-11 px-6 rounded-xl text-sm text-charcoal/50 hover:text-charcoal/70 transition-colors duration-300 cursor-pointer"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
+        {/* Approved status */}
+        <div className="bg-forest/5 border border-forest/15 rounded-xl px-5 py-3 mb-8 flex items-center gap-3">
+          <svg className="w-5 h-5 text-forest shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <p className="text-sm text-forest">Your club membership has been verified. You have full registry access.</p>
         </div>
 
         {/* State browser */}
@@ -349,45 +544,83 @@ function ClubTab() {
 
           {/* State pills */}
           <div className="flex flex-wrap gap-2 mb-8">
-            {US_STATES.map((state) => (
-              <button
-                key={state}
-                onClick={() => setSelectedState(state)}
-                className={`px-3.5 py-2 rounded-lg text-xs tracking-wide transition-all duration-300 cursor-pointer border ${
-                  selectedState === state
-                    ? "bg-forest text-bone border-forest"
-                    : "bg-cream border-taupe/20 text-charcoal/50 hover:border-forest/30"
-                }`}
-              >
-                {state}
-              </button>
-            ))}
+            {US_STATES.map((state) => {
+              const count = SAMPLE_CLUBS.filter((c) => c.state === state).length;
+              return (
+                <button
+                  key={state}
+                  onClick={() => setSelectedState(state)}
+                  className={`px-3.5 py-2 rounded-lg text-xs tracking-wide transition-all duration-300 cursor-pointer border ${
+                    selectedState === state
+                      ? "bg-forest text-bone border-forest"
+                      : "bg-cream border-taupe/20 text-charcoal/50 hover:border-forest/30"
+                  }`}
+                >
+                  {state}{count > 0 && <span className="ml-1 opacity-60">({count})</span>}
+                </button>
+              );
+            })}
           </div>
 
           {/* Club list */}
           {filteredClubs.length > 0 ? (
             <div className="space-y-3">
-              {filteredClubs.map((club) => (
-                <div
-                  key={club.name}
-                  className="bg-cream rounded-xl border border-taupe/15 p-5 flex flex-col md:flex-row md:items-center md:justify-between gap-3"
-                >
-                  <div>
-                    <h4 className="text-sm font-medium text-obsidian">{club.name}</h4>
-                    <p className="text-xs text-charcoal/45 mt-0.5">
-                      {club.city}, {club.state} &middot; {club.holes} holes
-                    </p>
+              {filteredClubs.map((club) => {
+                const isInterested = interestedClubs.includes(club.name);
+                return (
+                  <div
+                    key={club.name}
+                    className="bg-cream rounded-xl border border-taupe/15 p-5 hover:border-taupe/25 transition-colors duration-300"
+                  >
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                      <div>
+                        <h4 className="text-sm font-medium text-obsidian">{club.name}</h4>
+                        <p className="text-xs text-charcoal/45 mt-0.5">
+                          {club.city}, {club.state} &middot; {club.holes} holes
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs text-sage bg-sage/10 px-3 py-1.5 rounded-lg">
+                          {club.guestPolicy}
+                        </span>
+                        <span className="text-xs text-charcoal/30">
+                          Listed by {club.addedBy}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Interest / Concierge */}
+                    <div className="mt-4 pt-3 border-t border-taupe/10 flex items-center justify-between">
+                      {isInterested ? (
+                        <div className="flex items-center gap-2">
+                          <svg className="w-4 h-4 text-forest" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                          <span className="text-xs text-forest font-medium">Interest noted &mdash; our concierge will reach out</span>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => toggleClubInterest(club.name)}
+                          className="flex items-center gap-2 text-xs text-forest font-medium hover:text-forest-dark transition-colors duration-300 cursor-pointer"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z" />
+                          </svg>
+                          I&rsquo;m Interested
+                        </button>
+                      )}
+                      {isInterested && (
+                        <button
+                          onClick={() => toggleClubInterest(club.name)}
+                          className="text-xs text-charcoal/30 hover:text-charcoal/50 transition-colors duration-300 cursor-pointer"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <span className="text-xs text-sage bg-sage/10 px-3 py-1.5 rounded-lg">
-                      {club.guestPolicy}
-                    </span>
-                    <span className="text-xs text-charcoal/30">
-                      Listed by {club.addedBy}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="text-center py-16 bg-cream rounded-2xl border border-taupe/15">
@@ -793,23 +1026,28 @@ function BenefitTile({
   icon: React.ReactNode;
   title: string;
   description: string;
-  status: "Active" | "Coming Soon";
+  status: string;
 }) {
+  const statusStyle =
+    status === "Active"
+      ? "bg-forest/10 text-forest"
+      : status === "Launch Promo"
+        ? "bg-forest/10 text-forest"
+        : status === "Locked" || status === "Upgrade"
+          ? "bg-taupe/20 text-charcoal/40"
+          : "bg-taupe/20 text-charcoal/40";
+
+  const isLocked = status === "Locked" || status === "Upgrade";
+
   return (
-    <div className="bg-cream rounded-xl border border-taupe/15 p-6 flex gap-4">
-      <div className="w-10 h-10 rounded-xl bg-forest/8 flex items-center justify-center shrink-0">
+    <div className={`bg-cream rounded-xl border border-taupe/15 p-6 flex gap-4 ${isLocked ? "opacity-70" : ""}`}>
+      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isLocked ? "bg-taupe/10" : "bg-forest/8"}`}>
         {icon}
       </div>
       <div className="flex-1">
         <div className="flex items-center gap-2 mb-1">
           <h4 className="text-sm font-medium text-obsidian">{title}</h4>
-          <span
-            className={`text-[10px] tracking-wider uppercase font-medium px-2 py-0.5 rounded-full ${
-              status === "Active"
-                ? "bg-forest/10 text-forest"
-                : "bg-taupe/20 text-charcoal/40"
-            }`}
-          >
+          <span className={`text-[10px] tracking-wider uppercase font-medium px-2 py-0.5 rounded-full ${statusStyle}`}>
             {status}
           </span>
         </div>

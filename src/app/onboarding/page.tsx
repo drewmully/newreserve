@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useMembership } from "../context/MembershipContext";
 
 /* ═══════════════════════════════════════════
    ONBOARDING — Preferences → Plan Selection
@@ -44,6 +45,7 @@ const BRAND_OPTIONS = [
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const { setTier } = useMembership();
   const [step, setStep] = useState(1);
 
   // Step 1 state
@@ -219,7 +221,7 @@ export default function OnboardingPage() {
                     "Partner benefit access",
                     "Free 2-day shipping",
                   ]}
-                  onSelect={() => router.push("/dashboard")}
+                  onSelect={() => { setTier("access"); router.push("/dashboard"); }}
                   buttonText="Join Reserve Access"
                   variant="solid"
                 />
@@ -237,7 +239,7 @@ export default function OnboardingPage() {
                     "Concierge booking support",
                     "Invite-only events",
                   ]}
-                  onSelect={() => router.push("/dashboard")}
+                  onSelect={() => { setTier("member"); router.push("/dashboard"); }}
                   buttonText="Join Reserve Member"
                   variant="featured"
                   badge="Most Popular"
@@ -273,7 +275,7 @@ export default function OnboardingPage() {
               {/* Start Free */}
               <div className="mt-6 text-center">
                 <button
-                  onClick={() => router.push("/dashboard")}
+                  onClick={() => { setTier("free"); router.push("/dashboard"); }}
                   className="text-sm text-charcoal/40 hover:text-charcoal/60 underline underline-offset-4 decoration-charcoal/20 hover:decoration-charcoal/40 transition-all duration-300 cursor-pointer"
                 >
                   Or start free

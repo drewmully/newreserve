@@ -4,6 +4,16 @@ import { useState, useCallback, useEffect, type ReactNode } from "react";
 import Link from "next/link";
 import type { Product } from "../products";
 import { BRAND_INFO, COLLECTION_INFO } from "../products";
+import { useMembership } from "../../context/MembershipContext";
+
+/* Safe membership hook — returns null when used outside the provider (e.g. public /shop) */
+function useMembershipSafe() {
+  try {
+    return useMembership();
+  } catch {
+    return null;
+  }
+}
 
 /* ═══════════════════════════════════════════
    SHOP GRID (brand / collection toggle)
@@ -218,6 +228,15 @@ function InfoModal({
 /* ─── PRODUCT TILE ─── */
 
 function ProductTile({ product }: { product: Product }) {
+  let tier: string = "free";
+  try {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const ctx = useMembershipSafe();
+    if (ctx) tier = ctx.tier;
+  } catch { /* used outside provider — default free */ }
+
+  const isPaid = tier !== "free";
+
   return (
     <Link
       href={`/shop/${product.slug}`}
@@ -237,9 +256,19 @@ function ProductTile({ product }: { product: Product }) {
         <h3 className="text-sm text-obsidian font-medium leading-snug mb-1.5 group-hover:text-forest transition-colors duration-300">
           {product.name}
         </h3>
-        <span className="text-sm text-charcoal/60">
-          ${product.reservePrice}
-        </span>
+        <div className="flex items-center gap-2">
+          {isPaid ? (
+            <span className="text-sm text-forest font-medium">${product.reservePrice}</span>
+          ) : (
+            <>
+              <span className="text-sm text-charcoal/40 line-through">${product.price}</span>
+              <span className="text-sm text-forest font-medium">${product.reservePrice}</span>
+              <span className="text-[10px] tracking-wide uppercase text-sage bg-sage/10 px-1.5 py-0.5 rounded">
+                Mill River
+              </span>
+            </>
+          )}
+        </div>
       </div>
     </Link>
   );
@@ -458,12 +487,22 @@ export function ProductImageGallery({ images, name }: { images: string[]; name: 
    ADD TO CART BUTTON
    ═══════════════════════════════════════════ */
 
-export function AddToCartButton() {
+export function AddToCartButton({ product }: { product?: { slug: string; name: string; brand: string; reservePrice: number; price: number } }) {
   const [added, setAdded] = useState(false);
+  const ctx = useMembershipSafe();
 
   return (
     <button
       onClick={() => {
+        if (ctx && product) {
+          const isPaid = ctx.tier !== "free";
+          ctx.addToCart({
+            slug: product.slug,
+            name: product.name,
+            brand: product.brand,
+            price: isPaid ? product.reservePrice : product.price,
+          });
+        }
         setAdded(true);
         setTimeout(() => setAdded(false), 2000);
       }}

@@ -83,9 +83,13 @@ export default async function ProductPage({ params }: Props) {
 
               {/* Price */}
               <div className="mb-6 pb-6 border-b border-taupe/20">
-                <span className="font-serif text-2xl text-obsidian">
-                  ${product.reservePrice}
-                </span>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-charcoal/40 line-through">${product.price}</span>
+                  <span className="font-serif text-2xl text-forest">${product.reservePrice}</span>
+                  <span className="text-[10px] tracking-wide uppercase text-sage bg-sage/10 px-2 py-1 rounded font-medium">
+                    Mill River Price
+                  </span>
+                </div>
               </div>
 
               {/* Short description */}
@@ -95,7 +99,7 @@ export default async function ProductPage({ params }: Props) {
 
               {/* Add to cart */}
               <div className="mb-8">
-                <AddToCartButton />
+                <AddToCartButton product={{ slug: product.slug, name: product.name, brand: product.brand, reservePrice: product.reservePrice, price: product.price }} />
               </div>
 
               {/* Accordions */}
