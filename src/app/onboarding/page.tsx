@@ -28,21 +28,6 @@ const INTEREST_OPTIONS = [
   { id: "community", label: "Community & Events", icon: CommunityIcon },
 ];
 
-const BRAND_OPTIONS = [
-  "Titleist",
-  "TravisMathew",
-  "Peter Millar",
-  "G/FORE",
-  "Callaway",
-  "Greyson",
-  "FootJoy",
-  "TaylorMade",
-  "Ping",
-  "Mizuno",
-  "Puma Golf",
-  "Nike Golf",
-];
-
 export default function OnboardingPage() {
   const router = useRouter();
   const { email, setEmail, setTier } = useMembership();
@@ -51,17 +36,9 @@ export default function OnboardingPage() {
   // Step 1 state
   const [handicap, setHandicap] = useState("");
   const [interests, setInterests] = useState<string[]>([]);
-  const [brands, setBrands] = useState<string[]>([]);
-
   const toggleInterest = (id: string) => {
     setInterests((prev) =>
       prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
-    );
-  };
-
-  const toggleBrand = (name: string) => {
-    setBrands((prev) =>
-      prev.includes(name) ? prev.filter((b) => b !== name) : [...prev, name]
     );
   };
 
@@ -156,28 +133,6 @@ export default function OnboardingPage() {
                     >
                       <Icon active={interests.includes(id)} />
                       <span>{label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Brands */}
-              <div className="mb-12">
-                <h3 className="text-sm font-medium text-obsidian tracking-wide mb-4">
-                  Favorite brands? <span className="text-charcoal/35 font-normal">(optional)</span>
-                </h3>
-                <div className="flex flex-wrap gap-2">
-                  {BRAND_OPTIONS.map((name) => (
-                    <button
-                      key={name}
-                      onClick={() => toggleBrand(name)}
-                      className={`px-4 py-2.5 rounded-xl text-sm transition-all duration-300 cursor-pointer border ${
-                        brands.includes(name)
-                          ? "bg-forest text-bone border-forest"
-                          : "bg-cream border-taupe/25 text-charcoal/70 hover:border-forest/40"
-                      }`}
-                    >
-                      {name}
                     </button>
                   ))}
                 </div>
