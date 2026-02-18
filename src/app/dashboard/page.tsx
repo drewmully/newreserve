@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { ShopGrid } from "../shop/components/ShopClient";
+import { products, BRANDS, COLLECTIONS } from "../shop/products";
 
 /* ═══════════════════════════════════════════
    DASHBOARD — Shop · Benefits · Club · Community
@@ -18,11 +20,9 @@ export default function DashboardPage() {
       {/* ─── TOP BAR ─── */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-bone/90 backdrop-blur-md border-b border-taupe/20">
         <div className="max-w-7xl mx-auto px-6 md:px-12 flex items-center justify-between h-16">
-          <Link
-            href="/"
-            className="font-serif text-2xl text-forest font-bold tracking-wide"
-          >
-            mully.
+          <Link href="/" className="flex items-center gap-2 text-forest">
+            <svg viewBox="0 0 1002 540" fill="currentColor" className="h-5 w-auto" aria-hidden="true"><path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" /></svg>
+            <span className="font-serif text-2xl font-bold tracking-wide">mully.</span>
           </Link>
           <div className="flex items-center gap-5">
             {/* Cart */}
@@ -83,12 +83,13 @@ export default function DashboardPage() {
       </main>
 
       {/* ─── FOOTER ─── */}
-      <footer className="py-10 px-6 md:px-12 bg-ember">
+      <footer className="py-10 px-6 md:px-12 bg-forest">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <span className="font-serif text-xl text-white font-bold tracking-wide">
-            mully.
+          <span className="flex items-center gap-2 text-bone">
+            <svg viewBox="0 0 1002 540" fill="currentColor" className="h-4 w-auto" aria-hidden="true"><path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" /></svg>
+            <span className="font-serif text-xl font-bold tracking-wide">mully.</span>
           </span>
-          <p className="text-xs text-white/40">
+          <p className="text-xs text-bone/40">
             &copy; {new Date().getFullYear()} Mully Group, Inc. All rights reserved.
           </p>
         </div>
@@ -104,58 +105,16 @@ export default function DashboardPage() {
 function ShopTab() {
   return (
     <div className="px-6 md:px-12">
-      <div className="max-w-6xl mx-auto">
-        <div className="text-center mb-10">
-          <p className="text-sm text-charcoal/50">
-            Browse and shop at Reserve pricing.{" "}
-            <Link href="/shop" className="text-forest underline underline-offset-2 hover:text-forest-dark transition-colors">
-              Open full shop
-            </Link>
-          </p>
-        </div>
-
-        {/* Featured products grid (placeholder) */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
-          {FEATURED_PRODUCTS.map((p) => (
-            <Link key={p.slug} href={`/shop/${p.slug}`} className="group">
-              <div className="aspect-square bg-cream rounded-xl border border-taupe/15 flex items-center justify-center mb-3 overflow-hidden">
-                <div className="w-12 h-12 text-taupe/30 group-hover:text-taupe/50 transition-colors duration-300">
-                  <ProductIcon />
-                </div>
-              </div>
-              <p className="text-xs text-sage tracking-wide uppercase">{p.brand}</p>
-              <p className="text-sm text-obsidian font-medium mt-0.5 group-hover:text-forest transition-colors duration-300">{p.name}</p>
-              <p className="text-sm text-forest font-medium mt-1">${p.price}</p>
-            </Link>
-          ))}
-        </div>
-
-        <div className="text-center mt-10">
-          <Link
-            href="/shop"
-            className="inline-flex items-center gap-2 h-11 px-8 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300"
-          >
-            View All Products
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-            </svg>
-          </Link>
-        </div>
+      <div className="max-w-7xl mx-auto">
+        <ShopGrid
+          products={products}
+          brands={BRANDS}
+          collections={COLLECTIONS}
+        />
       </div>
     </div>
   );
 }
-
-const FEATURED_PRODUCTS = [
-  { slug: "titleist-tour-soft-ball", name: "Tour Soft Ball (Dozen)", brand: "Titleist", price: 36 },
-  { slug: "travismathew-el-capitano-polo", name: "El Capitano Polo", brand: "TravisMathew", price: 72 },
-  { slug: "peter-millar-crown-sport-polo", name: "Crown Sport Polo", brand: "Peter Millar", price: 89 },
-  { slug: "gfore-mg4-shoe", name: "MG4+ Golf Shoe", brand: "G/FORE", price: 169 },
-  { slug: "callaway-chrome-soft-ball", name: "Chrome Soft Ball (Dozen)", brand: "Callaway", price: 39 },
-  { slug: "greyson-spirit-wolf-polo", name: "Spirit Wolf Polo", brand: "Greyson", price: 95 },
-  { slug: "titleist-players-cap", name: "Players Performance Cap", brand: "Titleist", price: 24 },
-  { slug: "travismathew-brekkie-short", name: "Brekkie Short", brand: "TravisMathew", price: 68 },
-];
 
 /* ═══════════════════════════════════════════
    BENEFITS TAB — SkyMiles-style perks
@@ -758,14 +717,6 @@ function PointsRow({ action, points }: { action: string; points: string }) {
       <span className="text-sm text-charcoal/65">{action}</span>
       <span className="text-sm font-medium text-forest">{points}</span>
     </div>
-  );
-}
-
-function ProductIcon() {
-  return (
-    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
-    </svg>
   );
 }
 
