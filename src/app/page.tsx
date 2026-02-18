@@ -473,34 +473,6 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ─── PARTNER STRIP ─── */}
-      <section className="py-14 px-6 md:px-12 border-y border-taupe/15 bg-bone">
-        <ScrollReveal>
-          <div className="max-w-5xl mx-auto">
-            <p className="text-center text-xs tracking-[0.3em] uppercase text-taupe/70 font-medium mb-8">
-              Trusted Partner Network
-            </p>
-            <div className="flex flex-wrap items-center justify-center gap-x-12 gap-y-4">
-              {[
-                "Titleist",
-                "TravisMathew",
-                "Club Champion",
-                "Callaway",
-                "Peter Millar",
-                "G/FORE",
-              ].map((name) => (
-                <span
-                  key={name}
-                  className="text-sm md:text-base font-medium text-charcoal/25 tracking-wide"
-                >
-                  {name}
-                </span>
-              ))}
-            </div>
-          </div>
-        </ScrollReveal>
-      </section>
-
       {/* ─── FINAL CTA ─── */}
       <section className="py-28 md:py-40 px-6 md:px-12 bg-bone relative overflow-hidden">
         {/* Decorative background elements */}
