@@ -291,7 +291,7 @@ export default function Home() {
             <ScrollReveal delay={0.16}>
               <div className="bg-forest rounded-2xl p-7 md:p-8 border border-forest flex flex-col relative card-hover h-full">
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <span className="inline-block bg-sage text-bone text-xs tracking-[0.2em] uppercase font-medium px-4 py-1.5 rounded-full shadow-sm">
+                  <span className="inline-block bg-sage text-bone text-xs tracking-[0.2em] uppercase font-medium px-4 py-1.5 rounded-full shadow-sm whitespace-nowrap">
                     Most Popular
                   </span>
                 </div>
