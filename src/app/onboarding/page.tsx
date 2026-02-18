@@ -30,10 +30,11 @@ const INTEREST_OPTIONS = [
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const { email, setEmail, setTier, signIn } = useMembership();
+  const { email, setEmail, username, setUsername, setTier, signIn } = useMembership();
   const [step, setStep] = useState(1);
 
   // Step 1 state
+  const [editingEmail, setEditingEmail] = useState(false);
   const [handicap, setHandicap] = useState("");
   const [interests, setInterests] = useState<string[]>([]);
   const toggleInterest = (id: string) => {
@@ -79,16 +80,47 @@ export default function OnboardingPage() {
                 We&rsquo;ll personalize your Reserve experience based on your preferences.
               </p>
 
-              {/* Email — persisted from landing or entered here */}
-              <div className="mb-10">
+              {/* Email — pre-filled and greyed out, with option to edit */}
+              <div className="mb-8">
                 <h3 className="text-sm font-medium text-obsidian tracking-wide mb-4">
                   Your email
                 </h3>
+                {email && !editingEmail ? (
+                  <div className="flex items-center gap-3 max-w-sm">
+                    <div className="flex-1 h-11 px-4 rounded-xl bg-taupe/10 border border-taupe/15 flex items-center">
+                      <span className="text-sm text-charcoal/50">{email}</span>
+                    </div>
+                    <button
+                      onClick={() => setEditingEmail(true)}
+                      className="text-xs text-charcoal/40 hover:text-forest transition-colors duration-300 cursor-pointer whitespace-nowrap"
+                    >
+                      Edit
+                    </button>
+                  </div>
+                ) : (
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    onBlur={() => email && setEditingEmail(false)}
+                    placeholder="you@example.com"
+                    autoFocus={editingEmail}
+                    className="w-full max-w-sm h-11 px-4 rounded-xl bg-cream border border-taupe/25 text-obsidian text-sm placeholder:text-charcoal/30 focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300"
+                  />
+                )}
+              </div>
+
+              {/* Username — for community */}
+              <div className="mb-10">
+                <h3 className="text-sm font-medium text-obsidian tracking-wide mb-2">
+                  Choose a username
+                </h3>
+                <p className="text-xs text-charcoal/40 mb-4">This is how you&rsquo;ll appear in the community.</p>
                 <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
+                  type="text"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="e.g. jack_m"
                   className="w-full max-w-sm h-11 px-4 rounded-xl bg-cream border border-taupe/25 text-obsidian text-sm placeholder:text-charcoal/30 focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300"
                 />
               </div>

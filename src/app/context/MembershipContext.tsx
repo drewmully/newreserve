@@ -25,6 +25,8 @@ interface MembershipContextValue {
   // User
   email: string;
   setEmail: (email: string) => void;
+  username: string;
+  setUsername: (username: string) => void;
 
   // Tier
   tier: MemberTier;
@@ -73,6 +75,7 @@ const TIER_LABELS: Record<MemberTier, string> = {
 export function MembershipProvider({ children }: { children: ReactNode }) {
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [tier, setTier] = useState<MemberTier>("free");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
@@ -116,6 +119,8 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
         signIn,
         email,
         setEmail,
+        username,
+        setUsername,
         tier,
         setTier,
         tierLabel: TIER_LABELS[tier],

@@ -8,14 +8,15 @@ import { useMembership } from "../context/MembershipContext";
 import { SlideCart } from "../components/SlideCart";
 
 /* ═══════════════════════════════════════════
-   DASHBOARD — Shop · Benefits · Club · Community
+   DASHBOARD — Shop · Community · Club · Benefits
    ═══════════════════════════════════════════ */
 
-type Tab = "shop" | "benefits" | "club" | "community";
+type Tab = "shop" | "community" | "club" | "benefits";
 
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<Tab>("shop");
-  const { cartCount, setCartOpen } = useMembership();
+  const { isSignedIn, tier, cartCount, setCartOpen } = useMembership();
+  const isPaid = tier === "access" || tier === "member" || tier === "black";
 
   return (
     <div className="min-h-screen bg-bone">
@@ -43,11 +44,15 @@ export default function DashboardPage() {
               )}
             </button>
             {/* Account */}
-            <button className="text-forest hover:text-forest-dark transition-colors duration-300 cursor-pointer" aria-label="Account">
+            <Link
+              href="/account"
+              className="text-forest hover:text-forest-dark transition-colors duration-300"
+              aria-label="Account"
+            >
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
               </svg>
-            </button>
+            </Link>
           </div>
         </div>
       </header>
@@ -59,9 +64,9 @@ export default function DashboardPage() {
             {(
               [
                 { key: "shop", label: "Shop" },
-                { key: "benefits", label: "Benefits" },
-                { key: "club", label: "Club" },
                 { key: "community", label: "Community" },
+                { key: "club", label: "Club" },
+                { key: "benefits", label: "Benefits" },
               ] as const
             ).map(({ key, label }) => (
               <button
@@ -94,10 +99,10 @@ export default function DashboardPage() {
 
       {/* ─── TAB CONTENT ─── */}
       <main className="pt-42 pb-24">
-        {activeTab === "shop" && <ShopTab />}
-        {activeTab === "benefits" && <BenefitsTab />}
-        {activeTab === "club" && <ClubTab />}
+        {activeTab === "shop" && (isSignedIn ? <ShopTab /> : <GatedTab type="shop" />)}
         {activeTab === "community" && <CommunityTab />}
+        {activeTab === "club" && (isPaid ? <ClubTab /> : <GatedTab type="club" />)}
+        {activeTab === "benefits" && (isPaid ? <BenefitsTab /> : <GatedTab type="benefits" />)}
       </main>
 
       {/* ─── SLIDE CART ─── */}
@@ -115,6 +120,100 @@ export default function DashboardPage() {
           </p>
         </div>
       </footer>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   GATED TAB — Upgrade / Sign-in prompt
+   ═══════════════════════════════════════════ */
+
+const GATED_CONTENT = {
+  shop: {
+    icon: (
+      <svg className="w-8 h-8 text-forest" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+      </svg>
+    ),
+    title: "The Reserve Pro Shop",
+    description: "Curated golf products from the best brands at Reserve pricing. Sign up for free to browse the shop, or upgrade to unlock members-only pricing.",
+    cta: "Sign Up Free",
+    href: "/onboarding",
+    features: ["30+ products from top brands", "Reserve pricing for paid members", "Free 2-day shipping during launch"],
+  },
+  club: {
+    icon: (
+      <svg className="w-8 h-8 text-forest" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0012 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75z" />
+      </svg>
+    ),
+    title: "Private Club Registry",
+    description: "Connect with fellow members who belong to private clubs. List your club, browse the registry, and coordinate guest play through our concierge.",
+    cta: "Upgrade Membership",
+    href: "/onboarding",
+    features: ["Verified club member network", "Guest play coordination", "Concierge-facilitated introductions"],
+  },
+  benefits: {
+    icon: (
+      <svg className="w-8 h-8 text-forest" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z" />
+      </svg>
+    ),
+    title: "Member Benefits",
+    description: "Reserve pricing, free shipping, expert fittings, concierge support, and invite-only events. Upgrade your membership to unlock the full experience.",
+    cta: "Upgrade Membership",
+    href: "/onboarding",
+    features: ["Reserve pricing on all products", "Free 2-day shipping", "Complimentary club fittings", "Concierge support & events"],
+  },
+};
+
+function GatedTab({ type }: { type: "shop" | "club" | "benefits" }) {
+  const content = GATED_CONTENT[type];
+  return (
+    <div className="px-6 md:px-12">
+      <div className="max-w-2xl mx-auto pt-8">
+        <div className="text-center">
+          {/* Icon */}
+          <div className="w-16 h-16 rounded-2xl bg-forest/8 flex items-center justify-center mx-auto mb-6">
+            {content.icon}
+          </div>
+
+          <h2 className="font-serif text-2xl md:text-3xl text-obsidian mb-3">
+            {content.title}
+          </h2>
+          <p className="text-base text-charcoal/55 leading-relaxed mb-8 max-w-lg mx-auto">
+            {content.description}
+          </p>
+
+          {/* Feature list */}
+          <div className="inline-flex flex-col items-start gap-2.5 mb-8">
+            {content.features.map((f) => (
+              <div key={f} className="flex items-center gap-3">
+                <svg className="w-4 h-4 text-forest shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                </svg>
+                <span className="text-sm text-charcoal/65">{f}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* CTA */}
+          <div>
+            <Link
+              href={content.href}
+              className="inline-flex items-center justify-center h-12 px-10 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300"
+            >
+              {content.cta}
+            </Link>
+          </div>
+
+          {type === "shop" && (
+            <p className="mt-4 text-xs text-charcoal/35">
+              You can also browse the <Link href="/shop" className="underline underline-offset-2 hover:text-forest transition-colors duration-300">public shop</Link> without signing in.
+            </p>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

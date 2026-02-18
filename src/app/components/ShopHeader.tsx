@@ -36,9 +36,9 @@ export function ShopHeader() {
                 </span>
               )}
             </button>
-            {/* Account — links to dashboard in frontend mode; will check auth when wired up */}
+            {/* Account */}
             <Link
-              href="/dashboard"
+              href="/account"
               className="text-forest hover:text-forest-dark transition-colors duration-300"
               aria-label="Account"
             >
