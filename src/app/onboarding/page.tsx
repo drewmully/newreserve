@@ -181,7 +181,7 @@ export default function OnboardingPage() {
                 <button
                   onClick={() => setStep(2)}
                   disabled={!canAdvance}
-                  className={`h-12 px-10 rounded-xl text-sm font-medium tracking-wider uppercase transition-all duration-300 cursor-pointer ${
+                  className={`h-12 px-10 rounded-xl text-sm font-medium tracking-wider uppercase transition-all duration-300 cursor-pointer btn-press ${
                     canAdvance
                       ? "bg-forest text-bone hover:bg-forest-dark"
                       : "bg-taupe/25 text-charcoal/30 cursor-not-allowed"
@@ -388,7 +388,7 @@ function PlanCard({
         <div className="md:ml-6 md:pt-4 shrink-0">
           <button
             onClick={onSelect}
-            className={`h-11 px-8 rounded-xl text-sm font-medium tracking-wider uppercase transition-all duration-300 cursor-pointer whitespace-nowrap ${buttonClass}`}
+            className={`h-11 px-8 rounded-xl text-sm font-medium tracking-wider uppercase transition-all duration-300 cursor-pointer whitespace-nowrap btn-press ${buttonClass}`}
           >
             {buttonText}
           </button>

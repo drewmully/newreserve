@@ -26,7 +26,7 @@ export default function CommunityPage() {
           </Link>
           <Link
             href="/onboarding"
-            className="h-9 px-5 rounded-lg bg-forest text-bone text-xs font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 flex items-center"
+            className="h-9 px-5 rounded-lg bg-forest text-bone text-xs font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 flex items-center btn-press"
           >
             Join Free
           </Link>
@@ -63,7 +63,7 @@ export default function CommunityPage() {
             {posts.map((post) => (
               <article
                 key={post.id}
-                className="bg-cream rounded-xl border border-taupe/15 hover:border-taupe/30 transition-colors duration-300 overflow-hidden"
+                className="bg-cream rounded-xl border border-taupe/15 hover:border-taupe/30 overflow-hidden tile-hover"
               >
                 <Link href={`/community/post/${post.id}`} className="block p-6">
                   <div className="flex items-start gap-4">
@@ -140,7 +140,7 @@ export default function CommunityPage() {
               </p>
               <Link
                 href="/onboarding"
-                className="inline-flex items-center justify-center h-11 px-8 rounded-xl bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-colors duration-300"
+                className="inline-flex items-center justify-center h-11 px-8 rounded-xl bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-colors duration-300 btn-press"
               >
                 Sign Up Free
               </Link>
@@ -157,9 +157,9 @@ export default function CommunityPage() {
             <span className="font-serif text-xl font-bold tracking-wide">mully.</span>
           </span>
           <div className="flex items-center gap-8">
-            <Link href="/policies/terms" className="text-sm text-bone/50 hover:text-bone transition-colors duration-300">Terms</Link>
-            <Link href="/policies/privacy" className="text-sm text-bone/50 hover:text-bone transition-colors duration-300">Privacy</Link>
-            <Link href="/faq" className="text-sm text-bone/50 hover:text-bone transition-colors duration-300">FAQ</Link>
+            <Link href="/policies/terms" className="text-sm text-bone/50 hover:text-bone transition-colors duration-300 link-hover-underline">Terms</Link>
+            <Link href="/policies/privacy" className="text-sm text-bone/50 hover:text-bone transition-colors duration-300 link-hover-underline">Privacy</Link>
+            <Link href="/faq" className="text-sm text-bone/50 hover:text-bone transition-colors duration-300 link-hover-underline">FAQ</Link>
           </div>
           <p className="text-xs text-bone/30">&copy; {new Date().getFullYear()} Mully Group, Inc.</p>
         </div>

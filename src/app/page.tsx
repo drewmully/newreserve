@@ -239,7 +239,7 @@ export default function Home() {
                 </ul>
                 <a
                   href="/onboarding"
-                  className="block w-full text-center h-11 leading-[2.75rem] rounded-xl border border-forest text-forest text-sm font-medium tracking-wider uppercase hover:bg-forest hover:text-bone transition-all duration-300"
+                  className="block w-full text-center h-11 leading-[2.75rem] rounded-xl border border-forest text-forest text-sm font-medium tracking-wider uppercase hover:bg-forest hover:text-bone transition-all duration-300 btn-press"
                 >
                   Sign Up Free
                 </a>
@@ -269,7 +269,7 @@ export default function Home() {
                 </ul>
                 <a
                   href="/onboarding"
-                  className="block w-full text-center h-11 leading-[2.75rem] rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-all duration-300"
+                  className="block w-full text-center h-11 leading-[2.75rem] rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-all duration-300 btn-press"
                 >
                   Join Now
                 </a>
@@ -304,7 +304,7 @@ export default function Home() {
                 </ul>
                 <a
                   href="/onboarding"
-                  className="block w-full text-center h-11 leading-[2.75rem] rounded-xl bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-all duration-300"
+                  className="block w-full text-center h-11 leading-[2.75rem] rounded-xl bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-all duration-300 btn-press"
                 >
                   Join Now
                 </a>
@@ -438,9 +438,9 @@ export default function Home() {
             <div className="text-center mt-12">
               <a
                 href="#"
-                className="inline-flex items-center gap-2 text-sm tracking-wider uppercase text-forest font-medium group"
+                className="inline-flex items-center gap-2 text-sm tracking-wider uppercase text-forest font-medium group link-hover-underline"
               >
-                <span className="border-b border-forest/30 pb-0.5 group-hover:border-forest transition-colors duration-300">
+                <span className="group-hover:text-forest-dark transition-colors duration-300">
                   View All Past Drops
                 </span>
                 <svg
@@ -654,7 +654,7 @@ function BenefitCard({
 }) {
   return (
     <div className="bg-cream rounded-2xl p-8 md:p-10 border border-taupe/15 card-hover group h-full">
-      <div className="w-14 h-14 rounded-2xl bg-forest/8 flex items-center justify-center mb-7 group-hover:bg-forest/12 transition-colors duration-300">
+      <div className="w-14 h-14 rounded-2xl bg-forest/8 flex items-center justify-center mb-7 icon-hover-shift">
         {icon}
       </div>
       <h3 className="font-serif text-xl text-obsidian mb-3">{title}</h3>
@@ -716,7 +716,7 @@ function StepCard({
 }) {
   return (
     <div className="text-center px-4">
-      <div className="w-14 h-14 rounded-2xl bg-forest/8 flex items-center justify-center mx-auto mb-5">
+      <div className="w-14 h-14 rounded-2xl bg-forest/8 flex items-center justify-center mx-auto mb-5 icon-hover-shift">
         {icon}
       </div>
       <span className="font-serif text-xs tracking-[0.2em] text-forest/30 uppercase block mb-3">
@@ -741,7 +741,7 @@ function FooterLink({
     <li>
       <a
         href={href}
-        className="text-sm text-bone/50 hover:text-bone transition-colors duration-300"
+        className="text-sm text-bone/50 hover:text-bone transition-colors duration-300 link-hover-underline"
       >
         {children}
       </a>

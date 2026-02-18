@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { ShopGrid } from "../shop/components/ShopClient";
 import { products, BRANDS, COLLECTIONS } from "../shop/products";
@@ -18,6 +18,18 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<Tab>("shop");
   const { isSignedIn, tier, cartCount, setCartOpen } = useMembership();
   const isPaid = tier === "access" || tier === "member" || tier === "black";
+
+  // Cart badge pop animation
+  const [badgePop, setBadgePop] = useState(false);
+  const prevCartCount = useRef(cartCount);
+  useEffect(() => {
+    if (cartCount > prevCartCount.current) {
+      setBadgePop(true);
+      const t = setTimeout(() => setBadgePop(false), 400);
+      return () => clearTimeout(t);
+    }
+    prevCartCount.current = cartCount;
+  }, [cartCount]);
 
   return (
     <div className="min-h-screen bg-bone">
@@ -39,7 +51,7 @@ export default function DashboardPage() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
               </svg>
               {cartCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-ember text-white text-[10px] font-medium flex items-center justify-center">
+                <span className={`absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-ember text-white text-[10px] font-medium flex items-center justify-center ${badgePop ? "animate-badge-pop" : ""}`}>
                   {cartCount}
                 </span>
               )}
@@ -100,10 +112,12 @@ export default function DashboardPage() {
 
       {/* ─── TAB CONTENT ─── */}
       <main className="pt-42 pb-24">
-        {activeTab === "shop" && (isSignedIn ? <ShopTab /> : <GatedTab type="shop" />)}
-        {activeTab === "community" && <CommunityTab />}
-        {activeTab === "club" && (isPaid ? <ClubTab /> : <GatedTab type="club" />)}
-        {activeTab === "benefits" && (isPaid ? <BenefitsTab /> : <GatedTab type="benefits" />)}
+        <div key={activeTab} className="animate-tab-in">
+          {activeTab === "shop" && (isSignedIn ? <ShopTab /> : <GatedTab type="shop" />)}
+          {activeTab === "community" && <CommunityTab />}
+          {activeTab === "club" && (isPaid ? <ClubTab /> : <GatedTab type="club" />)}
+          {activeTab === "benefits" && (isPaid ? <BenefitsTab /> : <GatedTab type="benefits" />)}
+        </div>
       </main>
 
       {/* ─── SLIDE CART ─── */}
@@ -202,7 +216,7 @@ function GatedTab({ type }: { type: "shop" | "club" | "benefits" }) {
           <div>
             <Link
               href={content.href}
-              className="inline-flex items-center justify-center h-12 px-10 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300"
+              className="inline-flex items-center justify-center h-12 px-10 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 btn-press"
             >
               {content.cta}
             </Link>
@@ -446,7 +460,7 @@ function ClubTab() {
                 </div>
                 <button
                   onClick={() => setShowForm(true)}
-                  className="h-11 px-8 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer whitespace-nowrap"
+                  className="h-11 px-8 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer whitespace-nowrap btn-press"
                 >
                   Apply Now
                 </button>
@@ -515,7 +529,7 @@ function ClubTab() {
                 <div className="flex items-center gap-3">
                   <button
                     onClick={handleSubmitApplication}
-                    className="h-11 px-8 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer"
+                    className="h-11 px-8 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer btn-press"
                   >
                     Submit for Review
                   </button>
@@ -670,7 +684,7 @@ function ClubTab() {
                 return (
                   <div
                     key={club.name}
-                    className="bg-cream rounded-xl border border-taupe/15 p-5 hover:border-taupe/25 transition-colors duration-300"
+                    className="bg-cream rounded-xl border border-taupe/15 p-5 hover:border-taupe/25 tile-hover"
                   >
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                       <div>
@@ -786,7 +800,7 @@ function CommunityTab() {
           </div>
           <button
             onClick={() => isSignedIn ? setShowCompose(!showCompose) : setShowSignUp(true)}
-            className="h-10 px-5 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer whitespace-nowrap shrink-0 ml-4"
+            className="h-10 px-5 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer whitespace-nowrap shrink-0 ml-4 btn-press"
           >
             + Post
           </button>
@@ -861,7 +875,7 @@ function CommunityTab() {
                   <span>Photo{composeImages.length > 0 ? ` (${composeImages.length}/4)` : ""}</span>
                 </button>
               </div>
-              <button className="h-10 px-6 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer">
+              <button className="h-10 px-6 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer btn-press">
                 Publish
               </button>
             </div>
@@ -907,11 +921,11 @@ function SignUpModal({ onClose }: { onClose: () => void }) {
   return (
     <>
       {/* Backdrop */}
-      <div className="fixed inset-0 z-[60] bg-obsidian/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-0 z-[60] bg-obsidian/40 backdrop-blur-sm animate-modal-backdrop" onClick={onClose} />
 
       {/* Modal */}
       <div className="fixed inset-0 z-[70] flex items-center justify-center p-6">
-        <div className="bg-bone rounded-2xl border border-taupe/20 shadow-xl w-full max-w-sm overflow-hidden">
+        <div className="bg-bone rounded-2xl border border-taupe/20 shadow-xl w-full max-w-sm overflow-hidden animate-modal-content">
           {/* Header */}
           <div className="bg-forest p-6 pb-5 relative overflow-hidden">
             <div className="absolute inset-0 opacity-[0.05] pointer-events-none" style={{
@@ -955,7 +969,7 @@ function SignUpModal({ onClose }: { onClose: () => void }) {
 
             <Link
               href="/onboarding"
-              className="flex items-center justify-center h-11 w-full rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300"
+              className="flex items-center justify-center h-11 w-full rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 btn-press"
             >
               Sign Up Free
             </Link>
@@ -1247,7 +1261,7 @@ function PostCard({ post, isSignedIn }: { post: ForumPost; isSignedIn: boolean }
 
       {/* Comment thread */}
       {showComments && (
-        <div className="border-t border-taupe/15 bg-bone/50">
+        <div className="border-t border-taupe/15 bg-bone/50 animate-comment-reveal">
           <div className="px-6 py-4 space-y-4">
             {post.comments.map((comment) => (
               <div key={comment.id} className="flex items-start gap-3">
@@ -1357,7 +1371,7 @@ function BenefitTile({
   const isLocked = status === "Locked" || status === "Upgrade";
 
   return (
-    <div className={`bg-cream rounded-xl border border-taupe/15 p-6 flex gap-4 ${isLocked ? "opacity-70" : ""}`}>
+    <div className={`bg-cream rounded-xl border border-taupe/15 p-6 flex gap-4 ${isLocked ? "opacity-70" : "tile-hover"}`}>
       <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isLocked ? "bg-taupe/10" : "bg-forest/8"}`}>
         {icon}
       </div>

@@ -176,11 +176,11 @@ function InfoModal({
       onClick={onClose}
     >
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-obsidian/80 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-obsidian/80 backdrop-blur-sm animate-modal-backdrop" />
 
       {/* Card */}
       <div
-        className="relative bg-bone rounded-2xl overflow-hidden max-w-lg w-full shadow-2xl"
+        className="relative bg-bone rounded-2xl overflow-hidden max-w-lg w-full shadow-2xl animate-modal-content"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Close */}
@@ -248,22 +248,49 @@ function ProductTile({ product }: { product: Product }) {
     setTimeout(() => setJustAdded(false), 1500);
   };
 
+  const hasImages = product.images && product.images.length > 0;
+  const hasSecondImage = product.images && product.images.length > 1;
+
   return (
     <Link
       href={`/shop/${product.slug}`}
-      className="group block"
+      className="group block product-tile-hover"
     >
-      <div className="aspect-[3/4] bg-cream rounded-lg overflow-hidden mb-3 relative flex items-center justify-center">
-        {/* Placeholder icon */}
-        <div className="flex flex-col items-center gap-3 text-taupe/30 group-hover:text-taupe/45 transition-colors duration-500">
-          <ProductPlaceholderIcon collection={product.collection} />
-          <span className="text-[10px] tracking-[0.2em] uppercase">{product.collection}</span>
-        </div>
+      <div className="aspect-[3/4] bg-cream rounded-lg overflow-hidden mb-3 relative product-img-wrap">
+        {hasImages ? (
+          <>
+            {/* Primary image */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={product.images[0]}
+              alt={product.name}
+              className="w-full h-full object-cover product-img-primary"
+              draggable={false}
+            />
+            {/* Secondary image — shown on hover */}
+            {hasSecondImage && (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={product.images[1]}
+                alt={`${product.name} alternate view`}
+                className="w-full h-full object-cover product-img-secondary"
+                draggable={false}
+                loading="lazy"
+              />
+            )}
+          </>
+        ) : (
+          /* Fallback placeholder icon */
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-taupe/30 group-hover:text-taupe/45 transition-colors duration-500">
+            <ProductPlaceholderIcon collection={product.collection} />
+            <span className="text-[10px] tracking-[0.2em] uppercase">{product.collection}</span>
+          </div>
+        )}
 
         {/* Quick-add to cart */}
         <button
           onClick={handleQuickAdd}
-          className={`absolute bottom-3 right-3 w-9 h-9 rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer shadow-sm ${
+          className={`absolute bottom-3 right-3 w-9 h-9 rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer shadow-sm btn-press ${
             justAdded
               ? "bg-sage text-bone scale-110"
               : "bg-forest text-bone opacity-0 group-hover:opacity-100 translate-y-1 group-hover:translate-y-0 hover:bg-forest-dark"
@@ -538,7 +565,7 @@ export function AddToCartButton({ product }: { product?: { slug: string; name: s
         setAdded(true);
         setTimeout(() => setAdded(false), 2000);
       }}
-      className={`w-full h-13 rounded-xl text-sm font-medium tracking-wider uppercase transition-all duration-300 cursor-pointer ${
+      className={`w-full h-13 rounded-xl text-sm font-medium tracking-wider uppercase transition-all duration-300 cursor-pointer btn-press ${
         added
           ? "bg-sage text-bone"
           : "bg-forest text-bone hover:bg-forest-dark"

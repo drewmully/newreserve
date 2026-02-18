@@ -43,7 +43,7 @@ export default async function PostPage({ params }: Props) {
           </Link>
           <Link
             href="/onboarding"
-            className="h-9 px-5 rounded-lg bg-forest text-bone text-xs font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 flex items-center"
+            className="h-9 px-5 rounded-lg bg-forest text-bone text-xs font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 flex items-center btn-press"
           >
             Join Free
           </Link>
@@ -153,7 +153,7 @@ export default async function PostPage({ params }: Props) {
                 </p>
                 <Link
                   href="/onboarding"
-                  className="inline-flex items-center justify-center h-10 px-6 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300"
+                  className="inline-flex items-center justify-center h-10 px-6 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 btn-press"
                 >
                   Sign Up to Reply
                 </Link>
@@ -171,9 +171,9 @@ export default async function PostPage({ params }: Props) {
             <span className="font-serif text-xl font-bold tracking-wide">mully.</span>
           </span>
           <div className="flex items-center gap-8">
-            <Link href="/policies/terms" className="text-sm text-bone/50 hover:text-bone transition-colors duration-300">Terms</Link>
-            <Link href="/policies/privacy" className="text-sm text-bone/50 hover:text-bone transition-colors duration-300">Privacy</Link>
-            <Link href="/faq" className="text-sm text-bone/50 hover:text-bone transition-colors duration-300">FAQ</Link>
+            <Link href="/policies/terms" className="text-sm text-bone/50 hover:text-bone transition-colors duration-300 link-hover-underline">Terms</Link>
+            <Link href="/policies/privacy" className="text-sm text-bone/50 hover:text-bone transition-colors duration-300 link-hover-underline">Privacy</Link>
+            <Link href="/faq" className="text-sm text-bone/50 hover:text-bone transition-colors duration-300 link-hover-underline">FAQ</Link>
           </div>
           <p className="text-xs text-bone/30">&copy; {new Date().getFullYear()} Mully Group, Inc.</p>
         </div>

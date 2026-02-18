@@ -26,7 +26,7 @@ export function SlideCart() {
     <div className="fixed inset-0 z-[90]">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-obsidian/50 backdrop-blur-sm"
+        className="absolute inset-0 bg-obsidian/50 backdrop-blur-sm animate-modal-backdrop"
         onClick={() => setCartOpen(false)}
       />
 
@@ -118,7 +118,7 @@ export function SlideCart() {
                 </div>
               )}
             </div>
-            <button className="w-full h-12 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer">
+            <button className="w-full h-12 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer btn-press">
               Go to Checkout
             </button>
             <button
