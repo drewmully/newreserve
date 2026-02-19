@@ -216,139 +216,146 @@ export default function Home() {
             </div>
           </ScrollReveal>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5 lg:gap-4">
-            {/* Tier 1 - Free */}
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5 lg:gap-4 items-stretch">
+            {/* ── Tier 1 — Free ── */}
             <ScrollReveal delay={0}>
               <div className="bg-cream rounded-2xl p-7 md:p-8 border border-taupe/20 flex flex-col card-hover h-full">
-                <span className="text-xs tracking-[0.25em] uppercase text-sage font-medium mb-3">
+                <div className="h-5 mb-3" />
+                <span className="text-[11px] tracking-[0.25em] uppercase text-sage font-medium">
                   Free
                 </span>
-                <div className="mb-4">
-                  <span className="font-serif text-2xl text-obsidian">
-                    Complimentary
-                  </span>
+                <div className="mt-2 mb-5">
+                  <span className="font-serif text-3xl text-obsidian">$0</span>
                 </div>
-                <p className="text-sm text-charcoal/50 mb-6">
-                  Your starting point.
-                </p>
-                <ul className="space-y-2.5 mb-8">
-                  <TierFeature text="Browse Reserve pricing" />
-                  <TierFeature text="Drop notifications" />
-                  <TierFeature text="Community access" />
-                </ul>
-                <a
-                  href="/onboarding"
-                  className="mt-auto block w-full text-center h-11 leading-[2.75rem] rounded-xl border border-forest text-forest text-sm font-medium tracking-wider uppercase hover:bg-forest hover:text-bone transition-all duration-300 btn-press"
-                >
-                  Sign Up Free
-                </a>
+                <div className="border-t border-taupe/12 pt-5 flex-1 flex flex-col">
+                  <ul className="space-y-3 flex-1">
+                    <TierFeature text="Browse Reserve pricing" />
+                    <TierFeature text="Drop notifications" />
+                    <TierFeature text="Community access" />
+                  </ul>
+                  <a
+                    href="/onboarding"
+                    className="mt-8 block w-full text-center h-12 leading-[3rem] rounded-xl border border-forest/80 text-forest text-sm font-medium tracking-wider uppercase hover:bg-forest hover:text-bone transition-all duration-300 btn-press"
+                  >
+                    Sign Up Free
+                  </a>
+                </div>
               </div>
             </ScrollReveal>
 
-            {/* Tier 2 - Reserve Access ($99/yr) */}
+            {/* ── Tier 2 — Reserve Access ($99/yr) ── */}
             <ScrollReveal delay={0.08}>
               <div className="bg-cream rounded-2xl p-7 md:p-8 border border-taupe/20 flex flex-col card-hover h-full">
-                <span className="text-xs tracking-[0.25em] uppercase text-forest font-medium mb-3">
+                <div className="h-5 mb-3" />
+                <span className="text-[11px] tracking-[0.25em] uppercase text-forest font-medium">
                   Reserve Access
                 </span>
-                <div className="mb-4">
-                  <span className="font-serif text-2xl text-obsidian">$99</span>
+                <div className="mt-2 mb-5">
+                  <span className="font-serif text-3xl text-obsidian">$99</span>
                   <span className="text-charcoal/40 text-sm ml-1">/year</span>
                 </div>
-                <p className="text-sm text-charcoal/50 mb-6">
-                  Full digital membership.
-                </p>
-                <ul className="space-y-2.5 mb-8">
-                  <TierFeature text="Reserve pricing" />
-                  <TierFeature text="Early drop access" />
-                  <TierFeature text="Partner benefits" />
-                  <TierFeature text="Free 2-day shipping" />
-                  <TierFeature text="USGA Handicap (soon)" />
-                </ul>
-                <a
-                  href="/onboarding"
-                  className="mt-auto block w-full text-center h-11 leading-[2.75rem] rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-all duration-300 btn-press"
-                >
-                  Join Now
-                </a>
+                <div className="border-t border-taupe/12 pt-5 flex-1 flex flex-col">
+                  <ul className="space-y-3 flex-1">
+                    <TierFeature text="Reserve pricing on all gear" />
+                    <TierFeature text="Early drop access" />
+                    <TierFeature text="Partner benefits" />
+                    <TierFeature text="Free 2-day shipping" />
+                    <TierFeature text="USGA Handicap (soon)" />
+                  </ul>
+                  <a
+                    href="/onboarding"
+                    className="mt-8 block w-full text-center h-12 leading-[3rem] rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-all duration-300 btn-press"
+                  >
+                    Join Now
+                  </a>
+                </div>
               </div>
             </ScrollReveal>
 
-            {/* Tier 3 - Reserve Member ($249/qtr, Featured) */}
+            {/* ── Tier 3 — Reserve Member ($249/qtr, Featured) ── */}
             <ScrollReveal delay={0.16}>
-              <div className="bg-forest rounded-2xl p-7 md:p-8 border border-forest flex flex-col relative card-hover h-full overflow-hidden">
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                  <span className="inline-block bg-sage text-bone text-xs tracking-[0.2em] uppercase font-medium px-4 py-1.5 rounded-full shadow-sm whitespace-nowrap">
+              <div className="relative h-full">
+                {/* Badge — lives outside overflow-hidden so it never clips */}
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-20">
+                  <span className="inline-block bg-sage text-bone text-[10px] tracking-[0.2em] uppercase font-semibold px-4 py-1.5 rounded-full shadow-sm whitespace-nowrap">
                     Most Popular
                   </span>
                 </div>
-                <span className="text-xs tracking-[0.25em] uppercase text-sage font-medium mb-3">
-                  Reserve Member
-                </span>
-                <div className="mb-4">
-                  <span className="font-serif text-2xl text-bone">$249</span>
-                  <span className="text-bone/50 text-sm ml-1">/quarter</span>
-                </div>
-                <p className="text-sm text-bone/50 mb-5">
-                  The complete experience.
-                </p>
 
-                {/* Curated box visual */}
-                <div className="flex justify-center my-3">
+                <div className="bg-forest rounded-2xl overflow-hidden relative flex flex-col card-hover h-full shadow-xl shadow-forest/20 ring-1 ring-sage/20">
+                  {/* Decorative box image — atmospheric bg, bottom-right */}
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/Untitled_design_17.png?v=1771516197"
-                    alt="Curated quarterly box"
-                    className="h-28 w-auto object-contain drop-shadow-[0_8px_24px_rgba(0,0,0,0.25)]"
+                    alt=""
+                    aria-hidden="true"
                     draggable={false}
+                    className="absolute -bottom-6 -right-6 h-52 w-auto opacity-[0.18] pointer-events-none select-none"
                   />
-                </div>
 
-                <ul className="space-y-2.5 mt-5 mb-8">
-                  <TierFeature text="Everything in Access" light />
-                  <TierFeature text="Quarterly curated box" light />
-                  <TierFeature text="Guaranteed access windows" light />
-                  <TierFeature text="Concierge support" light />
-                  <TierFeature text="Invite-only events" light />
-                </ul>
-                <a
-                  href="/onboarding"
-                  className="mt-auto block w-full text-center h-11 leading-[2.75rem] rounded-xl bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-all duration-300 btn-press"
-                >
-                  Join Now
-                </a>
+                  {/* Content — layered above the background image */}
+                  <div className="relative z-10 p-7 md:p-8 flex flex-col flex-1">
+                    <div className="h-5 mb-3" />
+                    <span className="text-[11px] tracking-[0.25em] uppercase text-sage font-medium">
+                      Reserve Member
+                    </span>
+                    <div className="mt-2 mb-5">
+                      <span className="font-serif text-3xl text-bone">$249</span>
+                      <span className="text-bone/45 text-sm ml-1">/quarter</span>
+                    </div>
+                    <div className="border-t border-bone/10 pt-5 flex-1 flex flex-col">
+                      <ul className="space-y-3 flex-1">
+                        <TierFeature text="Everything in Access" light />
+                        <TierFeature text="Quarterly curated box" light />
+                        <TierFeature text="Guaranteed access windows" light />
+                        <TierFeature text="Concierge support" light />
+                        <TierFeature text="Invite-only events" light />
+                      </ul>
+                      <a
+                        href="/onboarding"
+                        className="mt-8 block w-full text-center h-12 leading-[3rem] rounded-xl bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-all duration-300 btn-press"
+                      >
+                        Join Now
+                      </a>
+                    </div>
+                  </div>
+                </div>
               </div>
             </ScrollReveal>
 
-            {/* Tier 4 - Reserve Black */}
+            {/* ── Tier 4 — Reserve Black ── */}
             <ScrollReveal delay={0.24}>
               <div className="bg-cream rounded-2xl p-7 md:p-8 border border-taupe/20 flex flex-col card-hover h-full relative overflow-hidden">
-                {/* Subtle dark accent strip */}
                 <div className="absolute top-0 left-0 right-0 h-1 bg-obsidian" />
-                <span className="text-xs tracking-[0.25em] uppercase text-charcoal/50 font-medium mb-3">
+                <div className="h-5 mb-3" />
+                <span className="text-[11px] tracking-[0.25em] uppercase text-charcoal/50 font-medium">
                   Reserve Black
                 </span>
-                <div className="mb-4">
-                  <span className="font-serif text-2xl text-obsidian">
-                    Invite Only
-                  </span>
+                <div className="mt-2 mb-5">
+                  <span className="font-serif text-3xl text-obsidian">Invite Only</span>
                 </div>
-                <p className="text-sm text-charcoal/45 mb-6">
-                  For our most valued members.
-                </p>
-                <ul className="space-y-2.5 mb-8">
-                  <TierFeature text="Everything in Member" />
-                  <TierFeature text="$1,000 quarterly credit" />
-                  <TierFeature text="Personal stylist" />
-                  <TierFeature text="Concierge phone line" />
-                  <TierFeature text="Invite-only experiences" />
-                </ul>
-                <div className="mt-auto block w-full text-center h-11 leading-[2.75rem] rounded-xl border border-charcoal/15 text-charcoal/40 text-sm font-medium tracking-wider uppercase cursor-default">
-                  By Invitation
+                <div className="border-t border-taupe/12 pt-5 flex-1 flex flex-col">
+                  <ul className="space-y-3 flex-1">
+                    <TierFeature text="Everything in Member" />
+                    <TierFeature text="$1,000 quarterly credit" />
+                    <TierFeature text="Personal stylist" />
+                    <TierFeature text="Concierge phone line" />
+                    <TierFeature text="Invite-only experiences" />
+                  </ul>
+                  <div className="mt-8 block w-full text-center h-12 leading-[3rem] rounded-xl border border-charcoal/15 text-charcoal/40 text-sm font-medium tracking-wider uppercase cursor-default">
+                    By Invitation
+                  </div>
                 </div>
               </div>
             </ScrollReveal>
           </div>
+
+          {/* Reassurance — reduces friction */}
+          <ScrollReveal delay={0.3}>
+            <p className="text-center text-sm text-charcoal/40 mt-12">
+              Start free &mdash; upgrade or cancel anytime. No commitments.
+            </p>
+          </ScrollReveal>
         </div>
       </section>
 
