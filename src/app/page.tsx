@@ -219,7 +219,7 @@ export default function Home() {
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5 lg:gap-4">
             {/* Tier 1 - Free */}
             <ScrollReveal delay={0}>
-              <div className="bg-bone rounded-2xl p-7 md:p-8 border border-taupe/25 flex flex-col card-hover h-full">
+              <div className="bg-cream rounded-2xl p-7 md:p-8 border border-taupe/20 flex flex-col card-hover h-full">
                 <span className="text-xs tracking-[0.25em] uppercase text-sage font-medium mb-3">
                   Free
                 </span>
@@ -291,10 +291,25 @@ export default function Home() {
                   <span className="font-serif text-2xl text-bone">$249</span>
                   <span className="text-bone/50 text-sm ml-1">/quarter</span>
                 </div>
-                <p className="text-sm text-bone/55 leading-relaxed mb-7 flex-1">
+                <p className="text-sm text-bone/55 leading-relaxed mb-5 flex-1">
                   The full experience. Priority on every drop, concierge
                   support, and guaranteed access windows.
                 </p>
+
+                {/* Curated box visual */}
+                <div className="mb-6 rounded-xl bg-bone/10 p-3 flex items-center gap-3">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src="https://placehold.co/80x80/2a5239/F5F1E8?text=Box"
+                    alt="Curated quarterly box"
+                    className="w-12 h-12 rounded-lg object-cover shrink-0"
+                  />
+                  <div>
+                    <p className="text-xs font-medium text-bone">Curated quarterly box</p>
+                    <p className="text-[11px] text-bone/40 leading-snug mt-0.5">Hand-picked gear and apparel delivered each quarter</p>
+                  </div>
+                </div>
+
                 <ul className="space-y-2.5 mb-8">
                   <TierFeature text="Everything in Reserve Access" light />
                   <TierFeature text="Guaranteed access windows" light />
@@ -313,27 +328,29 @@ export default function Home() {
 
             {/* Tier 4 - Reserve Black */}
             <ScrollReveal delay={0.24}>
-              <div className="bg-obsidian rounded-2xl p-7 md:p-8 border border-charcoal/60 flex flex-col card-hover h-full">
-                <span className="text-xs tracking-[0.25em] uppercase text-taupe font-medium mb-3">
+              <div className="bg-cream rounded-2xl p-7 md:p-8 border border-taupe/20 flex flex-col card-hover h-full relative overflow-hidden">
+                {/* Subtle dark accent strip */}
+                <div className="absolute top-0 left-0 right-0 h-1 bg-obsidian" />
+                <span className="text-xs tracking-[0.25em] uppercase text-charcoal/50 font-medium mb-3">
                   Reserve Black
                 </span>
                 <div className="mb-5">
-                  <span className="font-serif text-2xl text-bone">
+                  <span className="font-serif text-2xl text-obsidian">
                     Invite Only
                   </span>
                 </div>
-                <p className="text-sm text-bone/35 leading-relaxed mb-7 flex-1">
+                <p className="text-sm text-charcoal/45 leading-relaxed mb-7 flex-1">
                   Extended to existing members based on spend. Personal
                   styling, concierge, and experiences money can&rsquo;t&nbsp;buy.
                 </p>
                 <ul className="space-y-2.5 mb-8">
-                  <TierFeature text="Everything in Reserve Member" dark />
-                  <TierFeature text="$1,000 quarterly credit" dark />
-                  <TierFeature text="Personal stylist" dark />
-                  <TierFeature text="Concierge phone support" dark />
-                  <TierFeature text="Invite-only experiences" dark />
+                  <TierFeature text="Everything in Reserve Member" />
+                  <TierFeature text="$1,000 quarterly credit" />
+                  <TierFeature text="Personal stylist" />
+                  <TierFeature text="Concierge phone support" />
+                  <TierFeature text="Invite-only experiences" />
                 </ul>
-                <div className="block w-full text-center h-11 leading-[2.75rem] rounded-xl border border-charcoal/60 text-taupe text-sm font-medium tracking-wider uppercase cursor-default">
+                <div className="block w-full text-center h-11 leading-[2.75rem] rounded-xl border border-charcoal/15 text-charcoal/40 text-sm font-medium tracking-wider uppercase cursor-default">
                   By Invitation
                 </div>
               </div>
@@ -534,7 +551,7 @@ export default function Home() {
                 Company
               </h4>
               <ul className="space-y-2.5">
-                <FooterLink href="/outings">Outings &amp; Groups</FooterLink>
+                <FooterLink href="https://outings-self.vercel.app">Outings &amp; Groups</FooterLink>
                 <FooterLink href="/blog">Blog</FooterLink>
                 <FooterLink href="/faq">FAQ</FooterLink>
                 <FooterLink href="/login">Log In</FooterLink>

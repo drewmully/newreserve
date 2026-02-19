@@ -145,7 +145,7 @@ export default function DashboardPage() {
                 Company
               </h4>
               <ul className="space-y-2.5">
-                <li><a href="/outings" className="text-sm text-bone/50 hover:text-bone transition-colors duration-300 link-hover-underline">Outings &amp; Groups</a></li>
+                <li><a href="https://outings-self.vercel.app" className="text-sm text-bone/50 hover:text-bone transition-colors duration-300 link-hover-underline">Outings &amp; Groups</a></li>
                 <li><a href="/blog" className="text-sm text-bone/50 hover:text-bone transition-colors duration-300 link-hover-underline">Blog</a></li>
                 <li><a href="/faq" className="text-sm text-bone/50 hover:text-bone transition-colors duration-300 link-hover-underline">FAQ</a></li>
               </ul>
