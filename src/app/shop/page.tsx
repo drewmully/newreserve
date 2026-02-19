@@ -7,7 +7,7 @@ import { ShopHeader } from "../components/ShopHeader";
 export const metadata: Metadata = {
   title: "Shop | Mully Reserve",
   description:
-    "Curated golf products from the best brands — at Reserve pricing.",
+    "Curated golf products from the best brands at Reserve pricing.",
 };
 
 export default function ShopPage() {

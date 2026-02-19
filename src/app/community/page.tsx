@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Mully Reserve Community",
     description:
-      "Gear reviews, guest play, and more — from real Reserve members.",
+      "Gear reviews, guest play, and more from real Reserve members.",
     type: "website",
   },
 };
@@ -41,7 +41,7 @@ export default function CommunityPage() {
               Community
             </h1>
             <p className="text-base text-charcoal/55 leading-relaxed max-w-xl">
-              Real conversations from Reserve members — gear reviews,
+              Real conversations from Reserve members: gear reviews,
               guest play coordination, and more.
             </p>
           </div>

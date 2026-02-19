@@ -83,7 +83,7 @@ export default function Home() {
           </div>
 
           <p className="text-lg md:text-xl text-charcoal/55 max-w-2xl mx-auto leading-relaxed mb-14 animate-fade-up-delay-2">
-            Curated gear, exclusive access, and top-tier experiences&mdash;everything
+            Curated gear, exclusive access, and top-tier experiences. Everything
             you&rsquo;d get at a private club, without the membership.
           </p>
 
@@ -128,7 +128,7 @@ export default function Home() {
               </h2>
               <p className="text-lg text-charcoal/65 leading-relaxed">
                 Mully Reserve brings you the curated products, expert services,
-                and experiences you&rsquo;d expect from a top-tier club&mdash;all in
+                and experiences you&rsquo;d expect from a top-tier club, all in
                 one place, at a fraction of the cost. No membership fees.
                 No&nbsp;gatekeeping. Just access.
               </p>
@@ -154,7 +154,7 @@ export default function Home() {
               <BenefitCard
                 icon={<ClubIcon />}
                 title="Club-Level Service"
-                description="Concierge support, styling, and exclusive events&mdash;the full club experience without the club membership."
+                description="Concierge support, styling, and exclusive events. The full club experience without the club membership."
               />
             </ScrollReveal>
           </div>
@@ -353,7 +353,7 @@ export default function Home() {
           {/* Reassurance — reduces friction */}
           <ScrollReveal delay={0.3}>
             <p className="text-center text-sm text-charcoal/40 mt-12">
-              Start free &mdash; upgrade or cancel anytime. No commitments.
+              Start free. Upgrade or cancel anytime. No commitments.
             </p>
           </ScrollReveal>
         </div>
@@ -504,7 +504,7 @@ export default function Home() {
                 </h2>
                 <p className="text-lg text-charcoal/60 leading-relaxed mb-4">
                   Earn your edge. Join Mully Reserve and get access to what
-                  matters&mdash;without the noise.
+                  matters. Without the noise.
                 </p>
                 <p className="text-sm text-sage italic">
                   &ldquo;Taste. Earned.&rdquo;

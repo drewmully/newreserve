@@ -12,7 +12,7 @@ import { posts as SAMPLE_POSTS, FORUM_TAGS, type ForumPost, type ForumComment } 
    DASHBOARD — Shop · Community · Club · Benefits
    ═══════════════════════════════════════════ */
 
-type Tab = "shop" | "community" | "club" | "benefits";
+type Tab = "shop" | "drops" | "community" | "club" | "benefits";
 
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<Tab>("shop");
@@ -77,6 +77,7 @@ export default function DashboardPage() {
             {(
               [
                 { key: "shop", label: "Shop" },
+                { key: "drops", label: "Drops" },
                 { key: "community", label: "Community" },
                 { key: "club", label: "Club" },
                 { key: "benefits", label: "Benefits" },
@@ -105,7 +106,7 @@ export default function DashboardPage() {
             <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z" />
           </svg>
           <p className="text-xs tracking-wide text-center">
-            Tell your friends &mdash; we&rsquo;re having a launch party with <strong className="text-bone">free priority shipping</strong> for all.
+            Tell your friends: we&rsquo;re having a launch party with <strong className="text-bone">free priority shipping</strong> for all.
           </p>
         </div>
       </div>
@@ -114,6 +115,7 @@ export default function DashboardPage() {
       <main className="pt-42 pb-24">
         <div key={activeTab} className="animate-tab-in">
           {activeTab === "shop" && (isSignedIn ? <ShopTab /> : <GatedTab type="shop" />)}
+          {activeTab === "drops" && (isPaid ? <DropsTab /> : <GatedTab type="drops" />)}
           {activeTab === "community" && <CommunityTab />}
           {activeTab === "club" && (isPaid ? <ClubTab /> : <GatedTab type="club" />)}
           {activeTab === "benefits" && (isPaid ? <BenefitsTab /> : <GatedTab type="benefits" />)}
@@ -249,6 +251,18 @@ const GATED_CONTENT = {
     href: "/onboarding",
     features: ["Verified club member network", "Guest play coordination", "Concierge-facilitated introductions"],
   },
+  drops: {
+    icon: (
+      <svg className="w-8 h-8 text-forest" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+      </svg>
+    ),
+    title: "Exclusive Drops",
+    description: "Limited runs, member-only deals, and time-sensitive releases. Upgrade your membership to get access when drops go live.",
+    cta: "Upgrade Membership",
+    href: "/onboarding",
+    features: ["Early access to limited releases", "Member-exclusive pricing", "First dibs on curated gear"],
+  },
   benefits: {
     icon: (
       <svg className="w-8 h-8 text-forest" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -263,7 +277,7 @@ const GATED_CONTENT = {
   },
 };
 
-function GatedTab({ type }: { type: "shop" | "club" | "benefits" }) {
+function GatedTab({ type }: { type: "shop" | "drops" | "club" | "benefits" }) {
   const content = GATED_CONTENT[type];
   return (
     <div className="px-6 md:px-12">
@@ -327,6 +341,145 @@ function ShopTab() {
           brands={BRANDS}
           collections={COLLECTIONS}
         />
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   DROPS TAB — Limited / member-exclusive releases
+   ═══════════════════════════════════════════ */
+
+const DROP_DATE = new Date("2026-05-15T21:00:00-04:00"); // Fri 5/15 9 PM EST (EDT in May)
+
+function useCountdown(target: Date) {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const diff = Math.max(0, target.getTime() - now.getTime());
+  const days = Math.floor(diff / 86_400_000);
+  const hours = Math.floor((diff % 86_400_000) / 3_600_000);
+  const minutes = Math.floor((diff % 3_600_000) / 60_000);
+  const seconds = Math.floor((diff % 60_000) / 1000);
+  return { days, hours, minutes, seconds, isLive: diff === 0 };
+}
+
+function DropsTab() {
+  const { days, hours, minutes, seconds, isLive } = useCountdown(DROP_DATE);
+
+  return (
+    <div className="px-6 md:px-12">
+      <div className="max-w-3xl mx-auto pt-4">
+        {/* Header */}
+        <div className="mb-10">
+          <span className="inline-flex items-center gap-2 text-xs tracking-[0.3em] uppercase text-sage font-medium mb-4">
+            <span className="w-6 h-px bg-sage/50" />
+            Drops
+            <span className="w-6 h-px bg-sage/50" />
+          </span>
+          <h2 className="font-serif text-2xl md:text-4xl text-obsidian leading-tight mb-3">
+            Limited runs. Member pricing.
+          </h2>
+          <p className="text-base text-charcoal/55 leading-relaxed max-w-xl">
+            Time-sensitive releases and member-exclusive deals. Once they sell out, they&rsquo;re gone.
+          </p>
+        </div>
+
+        {/* First Drop Card */}
+        <div className="bg-forest rounded-2xl p-8 md:p-10 relative overflow-hidden">
+          {/* Decorative glow */}
+          <div className="absolute top-0 right-0 w-64 h-64 bg-sage/5 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="relative z-10">
+            <div className="flex items-center gap-2 mb-6">
+              <span className="w-2 h-2 rounded-full bg-sage animate-pulse" />
+              <span className="text-xs tracking-[0.2em] uppercase text-sage font-medium">
+                {isLive ? "Live Now" : "Upcoming Drop"}
+              </span>
+            </div>
+
+            <h3 className="font-serif text-xl md:text-2xl text-bone mb-2">
+              Drop 001
+            </h3>
+            <p className="text-sm text-bone/50 mb-8">
+              Our first members-only release. Details revealed at drop time.
+            </p>
+
+            {/* Countdown */}
+            {!isLive ? (
+              <>
+                <p className="text-[10px] tracking-[0.3em] uppercase text-bone/40 font-medium mb-3">
+                  Goes live Friday, May 15 at 9 PM EST
+                </p>
+                <div className="grid grid-cols-4 gap-3 max-w-sm">
+                  {[
+                    { value: days, label: "Days" },
+                    { value: hours, label: "Hours" },
+                    { value: minutes, label: "Min" },
+                    { value: seconds, label: "Sec" },
+                  ].map(({ value, label }) => (
+                    <div key={label} className="bg-bone/8 rounded-xl py-4 text-center">
+                      <span className="block font-serif text-2xl md:text-3xl text-bone tabular-nums">
+                        {String(value).padStart(2, "0")}
+                      </span>
+                      <span className="text-[10px] tracking-[0.15em] uppercase text-bone/40 font-medium">
+                        {label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="bg-bone/10 rounded-xl p-6 text-center">
+                <p className="text-lg font-serif text-bone mb-2">The drop is live.</p>
+                <p className="text-sm text-bone/50">Check back here for exclusive deals as they go live.</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* How drops work */}
+        <div className="mt-10 grid md:grid-cols-3 gap-6">
+          {[
+            {
+              icon: (
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+                </svg>
+              ),
+              title: "Get notified",
+              desc: "We alert you before each drop so you never miss out.",
+            },
+            {
+              icon: (
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              ),
+              title: "Shop the window",
+              desc: "Drops are time-limited. Once they sell out, they're gone.",
+            },
+            {
+              icon: (
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                </svg>
+              ),
+              title: "Member pricing",
+              desc: "Every drop features exclusive Reserve pricing for members.",
+            },
+          ].map(({ icon, title, desc }) => (
+            <div key={title} className="text-center">
+              <div className="w-10 h-10 rounded-xl bg-forest/8 flex items-center justify-center mx-auto mb-3 text-forest">
+                {icon}
+              </div>
+              <h4 className="text-sm font-medium text-obsidian mb-1">{title}</h4>
+              <p className="text-xs text-charcoal/50 leading-relaxed">{desc}</p>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -513,7 +666,7 @@ function ClubTab() {
                 </div>
                 <div>
                   <span className="text-xs tracking-[0.2em] uppercase text-sage/60 font-medium block mb-2">Step 2</span>
-                  <p className="text-sm text-bone/60 leading-relaxed">Our team reviews your application to verify your membership. This typically takes 1&ndash;2 business days.</p>
+                  <p className="text-sm text-bone/60 leading-relaxed">Our team reviews your application to verify your membership. This typically takes 1 to 2 business days.</p>
                 </div>
                 <div>
                   <span className="text-xs tracking-[0.2em] uppercase text-sage/60 font-medium block mb-2">Step 3</span>
@@ -664,7 +817,7 @@ function ClubTab() {
             </div>
             <h3 className="font-serif text-xl text-obsidian mb-2">Application Under Review</h3>
             <p className="text-sm text-charcoal/55 leading-relaxed max-w-md mx-auto mb-6">
-              Your club listing has been submitted and is being reviewed by our team. This typically takes 1&ndash;2 business days. We&rsquo;ll notify you once you&rsquo;re approved.
+              Your club listing has been submitted and is being reviewed by our team. This typically takes 1 to 2 business days. We&rsquo;ll notify you once you&rsquo;re approved.
             </p>
             <div className="inline-flex items-center gap-2 text-xs tracking-wider uppercase text-sage bg-sage/10 px-4 py-2 rounded-lg font-medium">
               <span className="w-2 h-2 rounded-full bg-sage animate-pulse" />
@@ -785,7 +938,7 @@ function ClubTab() {
                           <svg className="w-4 h-4 text-forest" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                             <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
-                          <span className="text-xs text-forest font-medium">Interest noted &mdash; our concierge will reach out</span>
+                          <span className="text-xs text-forest font-medium">Interest noted. Our concierge will reach out</span>
                         </div>
                       ) : (
                         <button
@@ -1089,7 +1242,7 @@ function PostCard({ post, isSignedIn }: { post: ForumPost; isSignedIn: boolean }
   const postUrl = typeof window !== "undefined"
     ? `${window.location.origin}/community/post/${post.id}`
     : `/community/post/${post.id}`;
-  const shareText = `${post.title} — by ${post.author} on Mully Reserve`;
+  const shareText = `${post.title} by ${post.author} on Mully Reserve`;
 
   const handleCopyLink = async () => {
     try {

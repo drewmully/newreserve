@@ -617,13 +617,13 @@ function SubscriptionSection({
                       Consider downgrading instead?
                     </p>
                     <p className="text-xs text-bone/45 leading-relaxed mb-4">
-                      Keep Reserve pricing and free shipping with Reserve Access at just $99/year &mdash; a fraction of your current plan.
+                      Keep Reserve pricing and free shipping with Reserve Access at just $99/year. A fraction of your current plan.
                     </p>
                     <button
                       onClick={handleDowngrade}
                       className="h-10 px-6 rounded-xl bg-bone text-forest text-xs font-medium tracking-wider uppercase hover:bg-bone-dark transition-colors duration-300 cursor-pointer btn-press"
                     >
-                      Downgrade to Access &mdash; $99/yr
+                      Downgrade to Access: $99/yr
                     </button>
                   </div>
                 )}

@@ -529,7 +529,7 @@ export function ProductImageGallery({ images, name }: { images: string[]; name: 
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={img}
-                  alt={`${name} — image ${i + 1}`}
+                  alt={`${name} image ${i + 1}`}
                   className="w-full h-auto"
                   draggable={false}
                 />

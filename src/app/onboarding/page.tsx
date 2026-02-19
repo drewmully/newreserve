@@ -10,14 +10,34 @@ import { useMembership } from "../context/MembershipContext";
 
 const HANDICAP_OPTIONS = [
   "Scratch or better",
-  "1 – 5",
-  "6 – 10",
-  "11 – 15",
-  "16 – 20",
-  "21 – 30",
+  "1 to 5",
+  "6 to 10",
+  "11 to 15",
+  "16 to 20",
+  "21 to 30",
   "30+",
   "I don't keep one",
 ];
+
+function suggestUsernames(email: string): string[] {
+  const local = email.split("@")[0]?.toLowerCase().replace(/[^a-z0-9._-]/g, "") || "";
+  if (!local) return [];
+  const parts = local.split(/[._\-+]+/).filter(Boolean);
+  const suggestions: string[] = [];
+  if (parts.length >= 2) {
+    const [first, last] = [parts[0], parts[parts.length - 1]];
+    suggestions.push(`${first}_${last[0]}`);
+    suggestions.push(`${first}${last}`);
+    suggestions.push(`${first[0]}_${last}`);
+    suggestions.push(`${first}${last[0]}`);
+  } else if (local.length > 0) {
+    const base = parts[0].replace(/\d+$/, "");
+    if (base) suggestions.push(base);
+    suggestions.push(local);
+    if (base && base.length > 3) suggestions.push(`${base}_golf`);
+  }
+  return [...new Set(suggestions)].filter((s) => s.length >= 2).slice(0, 4);
+}
 
 const INTEREST_OPTIONS = [
   { id: "gear", label: "Gear & Equipment", icon: GearIcon },
@@ -34,6 +54,7 @@ export default function OnboardingPage() {
 
   // Step 1 state
   const [editingEmail, setEditingEmail] = useState(false);
+  const usernameSuggestions = suggestUsernames(email);
   const [handicap, setHandicap] = useState("");
   const [interests, setInterests] = useState<string[]>([]);
   const toggleInterest = (id: string) => {
@@ -122,6 +143,24 @@ export default function OnboardingPage() {
                   placeholder="e.g. jack_m"
                   className="w-full max-w-sm h-11 px-4 rounded-xl bg-cream border border-taupe/25 text-obsidian text-sm placeholder:text-charcoal/30 focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300"
                 />
+                {usernameSuggestions.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {usernameSuggestions.map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setUsername(s)}
+                        className={`px-3 py-1.5 rounded-lg text-xs transition-all duration-200 cursor-pointer ${
+                          username === s
+                            ? "bg-forest text-bone"
+                            : "bg-taupe/10 text-charcoal/55 hover:bg-taupe/20 border border-taupe/15"
+                        }`}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Handicap */}
@@ -305,7 +344,7 @@ export default function OnboardingPage() {
 
               {/* Reassurance */}
               <p className="text-center text-sm text-charcoal/40 mt-8">
-                Start free &mdash; upgrade or cancel anytime. No commitments.
+                Start free. Upgrade or cancel anytime. No commitments.
               </p>
 
               {/* Start Free */}

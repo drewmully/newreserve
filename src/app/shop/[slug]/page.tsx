@@ -23,7 +23,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const product = getProductBySlug(slug);
   if (!product) return {};
   return {
-    title: `${product.name} — ${product.brand} | Mully Reserve`,
+    title: `${product.name} | ${product.brand} | Mully Reserve`,
     description: product.description,
   };
 }
