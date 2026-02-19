@@ -1,0 +1,282 @@
+/* ── Outings route: scoped theme variables ── */
+.outings-root {
+  --color-background: #0b1a12;
+  --color-cream: #f2ede4;
+  --color-gold: #c8a951;
+  --color-gold-light: #dfc577;
+  --color-green-dark: #1a3328;
+  --color-green-medium: #2d5a3f;
+  --color-muted: #7a8c7a;
+  --color-surface: rgba(255, 255, 255, 0.035);
+  --color-surface-raised: #111e17;
+  --color-border: rgba(255, 255, 255, 0.08);
+  background: #0b1a12;
+  color: #f2ede4;
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+
+/* ── Scroll reveal ── */
+.outings-root .reveal {
+  opacity: 0;
+  transform: translateY(32px);
+  transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.outings-root .reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.outings-root .reveal-delay-1 { transition-delay: 0.1s; }
+.outings-root .reveal-delay-2 { transition-delay: 0.2s; }
+.outings-root .reveal-delay-3 { transition-delay: 0.3s; }
+.outings-root .reveal-delay-4 { transition-delay: 0.4s; }
+.outings-root .reveal-delay-5 { transition-delay: 0.5s; }
+.outings-root .reveal-delay-6 { transition-delay: 0.6s; }
+
+/* ── Hero animations ── */
+@keyframes outingsFadeInUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes outingsFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes outingsShimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+.outings-root .animate-fade-in-up {
+  animation: outingsFadeInUp 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.outings-root .animate-fade-in {
+  animation: outingsFadeIn 1s ease forwards;
+}
+
+/* ── Gold shimmer text ── */
+.outings-root .gold-shimmer {
+  background: linear-gradient(
+    90deg,
+    #c8a951 0%,
+    #dfc577 30%,
+    #c8a951 60%,
+    #dfc577 80%,
+    #c8a951 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: outingsShimmer 5s linear infinite;
+}
+
+/* ── Decorative gold line ── */
+.outings-root .gold-line {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #c8a951, transparent);
+}
+
+/* ── Card hover ── */
+.outings-root .card-hover {
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.4s ease;
+}
+
+.outings-root .card-hover:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  border-color: rgba(200, 169, 81, 0.25);
+}
+
+/* ── Primary button ── */
+.outings-root .btn-primary {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 32px;
+  border: 1px solid #c8a951;
+  color: #c8a951;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.outings-root .btn-primary::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: #c8a951;
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 0;
+}
+
+.outings-root .btn-primary:hover::before {
+  transform: scaleX(1);
+  transform-origin: left;
+}
+
+.outings-root .btn-primary:hover {
+  color: #0b1a12;
+}
+
+.outings-root .btn-primary span {
+  position: relative;
+  z-index: 1;
+}
+
+.outings-root .btn-primary:focus-visible {
+  outline: 2px solid #c8a951;
+  outline-offset: 2px;
+}
+
+/* ── Filled button variant ── */
+.outings-root .btn-filled {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 28px;
+  border: none;
+  background: #c8a951;
+  color: #0b1a12;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.3s ease, transform 0.2s ease;
+}
+
+.outings-root .btn-filled:hover {
+  background: #dfc577;
+  transform: translateY(-1px);
+}
+
+.outings-root .btn-filled:focus-visible {
+  outline: 2px solid #c8a951;
+  outline-offset: 2px;
+}
+
+/* ── Form inputs ── */
+.outings-root .form-input {
+  width: 100%;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #f2ede4;
+  font-size: 15px;
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  transition: border-color 0.3s ease, background 0.3s ease;
+  outline: none;
+}
+
+.outings-root .form-input:focus-visible {
+  border-color: #c8a951;
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: 0 0 0 2px rgba(200, 169, 81, 0.15);
+}
+
+.outings-root .form-input::placeholder {
+  color: #7a8c7a;
+}
+
+/* ── Select wrapper (custom arrow) ── */
+.outings-root .select-wrapper {
+  position: relative;
+}
+
+.outings-root .select-wrapper::after {
+  content: '';
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid #7a8c7a;
+  pointer-events: none;
+}
+
+.outings-root .select-wrapper select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 40px;
+  cursor: pointer;
+}
+
+/* ── Image containers ── */
+.outings-root .img-container {
+  position: relative;
+  overflow: hidden;
+  background: #1a3328;
+}
+
+.outings-root .img-container img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.outings-root .img-container:hover img {
+  transform: scale(1.03);
+}
+
+/* ── Grain overlay ── */
+.outings-root.grain-overlay::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ── Scrollbar ── */
+.outings-root::-webkit-scrollbar { width: 6px; }
+.outings-root::-webkit-scrollbar-track { background: #0b1a12; }
+.outings-root::-webkit-scrollbar-thumb { background: #2d5a3f; border-radius: 3px; }
+.outings-root::-webkit-scrollbar-thumb:hover { background: #c8a951; }
+
+/* ── Selection ── */
+.outings-root ::selection {
+  background: rgba(200, 169, 81, 0.3);
+  color: #f2ede4;
+}
+
+/* ── Reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+  .outings-root *,
+  .outings-root *::before,
+  .outings-root *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .outings-root .reveal {
+    opacity: 1;
+    transform: none;
+  }
+}
