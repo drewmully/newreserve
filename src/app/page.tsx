@@ -223,23 +223,22 @@ export default function Home() {
                 <span className="text-xs tracking-[0.25em] uppercase text-sage font-medium mb-3">
                   Free
                 </span>
-                <div className="mb-5">
+                <div className="mb-4">
                   <span className="font-serif text-2xl text-obsidian">
                     Complimentary
                   </span>
                 </div>
-                <p className="text-sm text-charcoal/55 leading-relaxed mb-7 flex-1">
-                  Your entry point. Browse the shop, see what Reserve
-                  members get, and stay connected to drops.
+                <p className="text-sm text-charcoal/50 mb-6">
+                  Your starting point.
                 </p>
                 <ul className="space-y-2.5 mb-8">
-                  <TierFeature text="Browse reserve pricing" />
-                  <TierFeature text="Release notifications" />
+                  <TierFeature text="Browse Reserve pricing" />
+                  <TierFeature text="Drop notifications" />
                   <TierFeature text="Community access" />
                 </ul>
                 <a
                   href="/onboarding"
-                  className="block w-full text-center h-11 leading-[2.75rem] rounded-xl border border-forest text-forest text-sm font-medium tracking-wider uppercase hover:bg-forest hover:text-bone transition-all duration-300 btn-press"
+                  className="mt-auto block w-full text-center h-11 leading-[2.75rem] rounded-xl border border-forest text-forest text-sm font-medium tracking-wider uppercase hover:bg-forest hover:text-bone transition-all duration-300 btn-press"
                 >
                   Sign Up Free
                 </a>
@@ -252,24 +251,23 @@ export default function Home() {
                 <span className="text-xs tracking-[0.25em] uppercase text-forest font-medium mb-3">
                   Reserve Access
                 </span>
-                <div className="mb-5">
+                <div className="mb-4">
                   <span className="font-serif text-2xl text-obsidian">$99</span>
                   <span className="text-charcoal/40 text-sm ml-1">/year</span>
                 </div>
-                <p className="text-sm text-charcoal/55 leading-relaxed mb-7 flex-1">
-                  Digital-only membership. Mill River pricing, early access
-                  to drops, and partner benefits unlocked.
+                <p className="text-sm text-charcoal/50 mb-6">
+                  Full digital membership.
                 </p>
                 <ul className="space-y-2.5 mb-8">
-                  <TierFeature text="Mill River pricing" />
-                  <TierFeature text="Early access to drops" />
-                  <TierFeature text="Official USGA Handicap (coming soon)" />
-                  <TierFeature text="Partner benefit access" />
-                  <TierFeature text="Free 2-day shipping on Pro Shop" />
+                  <TierFeature text="Reserve pricing" />
+                  <TierFeature text="Early drop access" />
+                  <TierFeature text="Partner benefits" />
+                  <TierFeature text="Free 2-day shipping" />
+                  <TierFeature text="USGA Handicap (soon)" />
                 </ul>
                 <a
                   href="/onboarding"
-                  className="block w-full text-center h-11 leading-[2.75rem] rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-all duration-300 btn-press"
+                  className="mt-auto block w-full text-center h-11 leading-[2.75rem] rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-all duration-300 btn-press"
                 >
                   Join Now
                 </a>
@@ -278,7 +276,7 @@ export default function Home() {
 
             {/* Tier 3 - Reserve Member ($249/qtr, Featured) */}
             <ScrollReveal delay={0.16}>
-              <div className="bg-forest rounded-2xl p-7 md:p-8 border border-forest flex flex-col relative card-hover h-full">
+              <div className="bg-forest rounded-2xl p-7 md:p-8 border border-forest flex flex-col relative card-hover h-full overflow-hidden">
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2">
                   <span className="inline-block bg-sage text-bone text-xs tracking-[0.2em] uppercase font-medium px-4 py-1.5 rounded-full shadow-sm whitespace-nowrap">
                     Most Popular
@@ -287,39 +285,35 @@ export default function Home() {
                 <span className="text-xs tracking-[0.25em] uppercase text-sage font-medium mb-3">
                   Reserve Member
                 </span>
-                <div className="mb-5">
+                <div className="mb-4">
                   <span className="font-serif text-2xl text-bone">$249</span>
                   <span className="text-bone/50 text-sm ml-1">/quarter</span>
                 </div>
-                <p className="text-sm text-bone/55 leading-relaxed mb-5 flex-1">
-                  The full experience. Priority on every drop, concierge
-                  support, and guaranteed access windows.
+                <p className="text-sm text-bone/50 mb-5">
+                  The complete experience.
                 </p>
 
                 {/* Curated box visual */}
-                <div className="mb-6 rounded-xl bg-bone/10 p-3 flex items-center gap-3">
+                <div className="flex justify-center my-3">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src="https://placehold.co/80x80/2a5239/F5F1E8?text=Box"
+                    src="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/Untitled_design_17.png?v=1771516197"
                     alt="Curated quarterly box"
-                    className="w-12 h-12 rounded-lg object-cover shrink-0"
+                    className="h-28 w-auto object-contain drop-shadow-[0_8px_24px_rgba(0,0,0,0.25)]"
+                    draggable={false}
                   />
-                  <div>
-                    <p className="text-xs font-medium text-bone">Curated quarterly box</p>
-                    <p className="text-[11px] text-bone/40 leading-snug mt-0.5">Hand-picked gear and apparel delivered each quarter</p>
-                  </div>
                 </div>
 
-                <ul className="space-y-2.5 mb-8">
-                  <TierFeature text="Everything in Reserve Access" light />
+                <ul className="space-y-2.5 mt-5 mb-8">
+                  <TierFeature text="Everything in Access" light />
+                  <TierFeature text="Quarterly curated box" light />
                   <TierFeature text="Guaranteed access windows" light />
-                  <TierFeature text="Priority release access" light />
-                  <TierFeature text="Concierge booking support" light />
+                  <TierFeature text="Concierge support" light />
                   <TierFeature text="Invite-only events" light />
                 </ul>
                 <a
                   href="/onboarding"
-                  className="block w-full text-center h-11 leading-[2.75rem] rounded-xl bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-all duration-300 btn-press"
+                  className="mt-auto block w-full text-center h-11 leading-[2.75rem] rounded-xl bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-all duration-300 btn-press"
                 >
                   Join Now
                 </a>
@@ -334,23 +328,22 @@ export default function Home() {
                 <span className="text-xs tracking-[0.25em] uppercase text-charcoal/50 font-medium mb-3">
                   Reserve Black
                 </span>
-                <div className="mb-5">
+                <div className="mb-4">
                   <span className="font-serif text-2xl text-obsidian">
                     Invite Only
                   </span>
                 </div>
-                <p className="text-sm text-charcoal/45 leading-relaxed mb-7 flex-1">
-                  Extended to existing members based on spend. Personal
-                  styling, concierge, and experiences money can&rsquo;t&nbsp;buy.
+                <p className="text-sm text-charcoal/45 mb-6">
+                  For our most valued members.
                 </p>
                 <ul className="space-y-2.5 mb-8">
-                  <TierFeature text="Everything in Reserve Member" />
+                  <TierFeature text="Everything in Member" />
                   <TierFeature text="$1,000 quarterly credit" />
                   <TierFeature text="Personal stylist" />
-                  <TierFeature text="Concierge phone support" />
+                  <TierFeature text="Concierge phone line" />
                   <TierFeature text="Invite-only experiences" />
                 </ul>
-                <div className="block w-full text-center h-11 leading-[2.75rem] rounded-xl border border-charcoal/15 text-charcoal/40 text-sm font-medium tracking-wider uppercase cursor-default">
+                <div className="mt-auto block w-full text-center h-11 leading-[2.75rem] rounded-xl border border-charcoal/15 text-charcoal/40 text-sm font-medium tracking-wider uppercase cursor-default">
                   By Invitation
                 </div>
               </div>
