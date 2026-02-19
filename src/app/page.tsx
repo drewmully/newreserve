@@ -427,26 +427,26 @@ export default function Home() {
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             <ScrollReveal delay={0}>
               <ReleaseCard
-                name="Signature Tech Polo"
-                category="Apparel"
+                name="SL2 Gen 2"
+                category="Stitch"
                 tag="Reserve Priced"
-                pattern="topo-pattern"
+                image="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/StitchGolf67d9ac3b246a3767d9ac3b248c7.3031551267d9ac3b248c7_x800_f11d3231-0562-431f-89d3-40892eb575f9.jpg?v=1771520832"
               />
             </ScrollReveal>
             <ScrollReveal delay={0.12}>
               <ReleaseCard
-                name="Graphite Capsule Collection"
-                category="Limited Release"
-                tag="Sold Out"
-                pattern="topo-pattern-dark"
+                name="Celtic Polo"
+                category="Quiet Golf"
+                tag="Available"
+                image="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/celticpoloslatefront_3b541e30-412e-4873-85c7-cb8b8b618e68.jpg?v=1771520789"
               />
             </ScrollReveal>
             <ScrollReveal delay={0.24}>
               <ReleaseCard
-                name="Ventilated Mesh Cap"
-                category="Accessories"
+                name="Golf Tour Trouser"
+                category="Rhone"
                 tag="Available"
-                pattern="topo-pattern-sage"
+                image="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/GolfTourTrouser-TidalGreen-102181-355_2_2000x_395dbcbe-7daa-4221-bfba-4f32b89f8a89.webp?v=1771520721"
               />
             </ScrollReveal>
           </div>
@@ -770,12 +770,14 @@ function ReleaseCard({
   name,
   category,
   tag,
+  image,
   pattern,
 }: {
   name: string;
   category: string;
   tag: string;
-  pattern: string;
+  image?: string;
+  pattern?: string;
 }) {
   const tagStyle =
     tag === "Available"
@@ -787,11 +789,23 @@ function ReleaseCard({
   return (
     <div className="group bg-bone rounded-2xl border border-taupe/15 overflow-hidden card-hover h-full">
       <div className="release-img-wrap">
-        <div
-          className={`release-img-inner aspect-[4/3] ${pattern} relative flex items-center justify-center`}
-        >
-          <MullyMark className="w-14 h-14 text-bone opacity-10" />
-        </div>
+        {image ? (
+          <div className="release-img-inner aspect-[4/3] relative bg-cream">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={image}
+              alt={name}
+              className="w-full h-full object-cover"
+              draggable={false}
+            />
+          </div>
+        ) : (
+          <div
+            className={`release-img-inner aspect-[4/3] ${pattern || ""} relative flex items-center justify-center`}
+          >
+            <MullyMark className="w-14 h-14 text-bone opacity-10" />
+          </div>
+        )}
       </div>
       <div className="p-6">
         <span className="text-xs tracking-[0.2em] uppercase text-sage font-medium">
