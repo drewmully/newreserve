@@ -207,73 +207,109 @@ export default function OnboardingPage() {
                 Start free or unlock the full Reserve experience. Upgrade anytime.
               </p>
 
-              <div className="space-y-4">
-                {/* Reserve Access */}
-                <PlanCard
-                  name="Reserve Access"
-                  price="$99"
-                  period="/year"
-                  description="Digital membership with Reserve pricing, early access, and partner benefits."
-                  features={[
-                    "Reserve pricing unlocked",
-                    "Early access to drops",
-                    "Official USGA Handicap (coming soon)",
-                    "Partner benefit access",
-                    "Free 2-day shipping",
-                  ]}
-                  onSelect={() => { signIn(); setTier("access"); router.push("/dashboard"); }}
-                  buttonText="Join Reserve Access"
-                  variant="solid"
-                />
+              <div className="space-y-5">
+                {/* ── Reserve Access ── */}
+                <div className="bg-cream rounded-2xl p-7 md:p-8 border border-taupe/20">
+                  <span className="text-[11px] tracking-[0.25em] uppercase text-forest font-medium">
+                    Reserve Access
+                  </span>
+                  <div className="mt-2 mb-5">
+                    <span className="font-serif text-3xl text-obsidian">$99</span>
+                    <span className="text-charcoal/40 text-sm ml-1">/year</span>
+                  </div>
+                  <div className="border-t border-taupe/12 pt-5">
+                    <ul className="grid grid-cols-2 gap-x-6 gap-y-2.5 mb-6">
+                      <FeatureItem text="Reserve pricing unlocked" />
+                      <FeatureItem text="Early access to drops" />
+                      <FeatureItem text="USGA Handicap (coming soon)" />
+                      <FeatureItem text="Partner benefit access" />
+                      <FeatureItem text="Free 2-day shipping" />
+                    </ul>
+                    <button
+                      onClick={() => { signIn(); setTier("access"); router.push("/dashboard"); }}
+                      className="h-12 px-10 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-all duration-300 cursor-pointer btn-press"
+                    >
+                      Join Reserve Access
+                    </button>
+                  </div>
+                </div>
 
-                {/* Reserve Member */}
-                <PlanCard
-                  name="Reserve Member"
-                  price="$249"
-                  period="/quarter"
-                  description="The full experience. Priority on every drop, concierge support, and guaranteed access."
-                  features={[
-                    "Everything in Reserve Access",
-                    "Guaranteed access windows",
-                    "Priority release access",
-                    "Concierge booking support",
-                    "Invite-only events",
-                  ]}
-                  onSelect={() => { signIn(); setTier("member"); router.push("/dashboard"); }}
-                  buttonText="Join Reserve Member"
-                  variant="featured"
-                  badge="Most Popular"
-                />
-
-                {/* Reserve Black */}
-                <div className="bg-obsidian rounded-2xl p-6 md:p-8 border border-charcoal/40">
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <span className="text-xs tracking-[0.25em] uppercase text-taupe font-medium">
-                        Reserve Black
+                {/* ── Reserve Member (Featured) ── */}
+                <div className="relative">
+                  {/* Badge — outside overflow-hidden so it never clips */}
+                  <div className="absolute -top-3 left-7 z-20">
+                    <span className="inline-block bg-sage text-bone text-[10px] tracking-[0.2em] uppercase font-semibold px-4 py-1.5 rounded-full shadow-sm">
+                      Most Popular
+                    </span>
+                  </div>
+                  <div className="bg-forest rounded-2xl overflow-hidden relative shadow-xl shadow-forest/20 ring-1 ring-sage/20">
+                    {/* Decorative box image — atmospheric bg, top-left */}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/Untitled_design_17.png?v=1771516197"
+                      alt=""
+                      aria-hidden="true"
+                      draggable={false}
+                      className="absolute -top-4 -left-4 w-44 h-44 object-cover object-right-bottom opacity-[0.18] -rotate-6 pointer-events-none select-none"
+                    />
+                    <div className="relative z-10 p-7 md:p-8">
+                      <span className="text-[11px] tracking-[0.25em] uppercase text-sage font-medium">
+                        Reserve Member
                       </span>
-                      <div className="mt-1">
-                        <span className="font-serif text-xl text-bone">
-                          Invite Only
-                        </span>
+                      <div className="mt-2 mb-5">
+                        <span className="font-serif text-3xl text-bone">$249</span>
+                        <span className="text-bone/45 text-sm ml-1">/quarter</span>
+                      </div>
+                      <div className="border-t border-bone/10 pt-5">
+                        <ul className="grid grid-cols-2 gap-x-6 gap-y-2.5 mb-6">
+                          <FeatureItem text="Everything in Access" light />
+                          <FeatureItem text="Guaranteed access windows" light />
+                          <FeatureItem text="Priority release access" light />
+                          <FeatureItem text="Concierge booking support" light />
+                          <FeatureItem text="Invite-only events" light />
+                        </ul>
+                        <button
+                          onClick={() => { signIn(); setTier("member"); router.push("/dashboard"); }}
+                          className="h-12 px-10 rounded-xl bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-all duration-300 cursor-pointer btn-press"
+                        >
+                          Join Reserve Member
+                        </button>
                       </div>
                     </div>
                   </div>
-                  <p className="text-sm text-bone/35 leading-relaxed mb-4">
-                    Extended occasionally to existing members based on spend. Personal styling,
-                    concierge phone support, and experiences money can&rsquo;t buy.
-                  </p>
-                  <div className="flex items-center gap-2 text-xs text-taupe/60">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
-                    </svg>
-                    <span>By invitation only &middot; Based on membership history &amp; spend</span>
+                </div>
+
+                {/* ── Reserve Black ── */}
+                <div className="bg-cream rounded-2xl p-7 md:p-8 border border-taupe/20 relative overflow-hidden">
+                  <div className="absolute top-0 left-0 right-0 h-1 bg-obsidian" />
+                  <span className="text-[11px] tracking-[0.25em] uppercase text-charcoal/50 font-medium">
+                    Reserve Black
+                  </span>
+                  <div className="mt-2 mb-5">
+                    <span className="font-serif text-3xl text-obsidian">Invite Only</span>
+                  </div>
+                  <div className="border-t border-taupe/12 pt-5">
+                    <ul className="grid grid-cols-2 gap-x-6 gap-y-2.5 mb-6">
+                      <FeatureItem text="Everything in Member" />
+                      <FeatureItem text="$1,000 quarterly credit" />
+                      <FeatureItem text="Personal stylist" />
+                      <FeatureItem text="Concierge phone line" />
+                      <FeatureItem text="Invite-only experiences" />
+                    </ul>
+                    <div className="inline-block h-12 px-10 leading-[3rem] rounded-xl border border-charcoal/15 text-charcoal/40 text-sm font-medium tracking-wider uppercase cursor-default">
+                      By Invitation
+                    </div>
                   </div>
                 </div>
               </div>
 
+              {/* Reassurance */}
+              <p className="text-center text-sm text-charcoal/40 mt-8">
+                Start free &mdash; upgrade or cancel anytime. No commitments.
+              </p>
+
               {/* Start Free */}
-              <div className="mt-6 text-center">
+              <div className="mt-4 text-center">
                 <button
                   onClick={() => { signIn(); setTier("free"); router.push("/dashboard"); }}
                   className="text-sm text-charcoal/40 hover:text-charcoal/60 underline underline-offset-4 decoration-charcoal/20 hover:decoration-charcoal/40 transition-all duration-300 cursor-pointer"
@@ -306,94 +342,20 @@ export default function OnboardingPage() {
    COMPONENTS
    ═══════════════════════════════════════════ */
 
-function PlanCard({
-  name,
-  price,
-  period,
-  description,
-  features,
-  onSelect,
-  buttonText,
-  variant,
-  badge,
-}: {
-  name: string;
-  price: string;
-  period: string;
-  description: string;
-  features: string[];
-  onSelect: () => void;
-  buttonText: string;
-  variant: "outline" | "solid" | "featured";
-  badge?: string;
-}) {
-  const wrapperClass =
-    variant === "featured"
-      ? "bg-forest rounded-2xl p-6 md:p-8 border border-forest relative"
-      : variant === "solid"
-        ? "bg-cream rounded-2xl p-6 md:p-8 border border-taupe/20"
-        : "bg-bone rounded-2xl p-6 md:p-8 border border-taupe/25";
-
-  const nameColor = variant === "featured" ? "text-sage" : "text-forest";
-  const priceColor = variant === "featured" ? "text-bone" : "text-obsidian";
-  const periodColor = variant === "featured" ? "text-bone/50" : "text-charcoal/40";
-  const descColor = variant === "featured" ? "text-bone/55" : "text-charcoal/55";
-  const checkColor = variant === "featured" ? "text-sage" : "text-forest";
-  const featureColor = variant === "featured" ? "text-bone/65" : "text-charcoal/65";
-
-  const buttonClass =
-    variant === "featured"
-      ? "bg-bone text-forest hover:bg-bone-dark"
-      : variant === "solid"
-        ? "bg-forest text-bone hover:bg-forest-dark"
-        : "border border-forest text-forest hover:bg-forest hover:text-bone";
-
+function FeatureItem({ text, light }: { text: string; light?: boolean }) {
   return (
-    <div className={wrapperClass}>
-      {badge && (
-        <div className="absolute -top-3 left-6">
-          <span className="inline-block bg-sage text-bone text-xs tracking-[0.2em] uppercase font-medium px-4 py-1.5 rounded-full shadow-sm">
-            {badge}
-          </span>
-        </div>
-      )}
-      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-        <div className="flex-1">
-          <span className={`text-xs tracking-[0.25em] uppercase font-medium ${nameColor}`}>
-            {name}
-          </span>
-          <div className="mt-1 mb-2">
-            <span className={`font-serif text-2xl ${priceColor}`}>{price}</span>
-            {period && <span className={`text-sm ml-1 ${periodColor}`}>{period}</span>}
-          </div>
-          <p className={`text-sm leading-relaxed mb-4 ${descColor}`}>{description}</p>
-          <ul className="space-y-1.5">
-            {features.map((f) => (
-              <li key={f} className="flex items-center gap-2">
-                <svg
-                  className={`w-3.5 h-3.5 shrink-0 ${checkColor}`}
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2.5}
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                </svg>
-                <span className={`text-sm ${featureColor}`}>{f}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-        <div className="md:ml-6 md:pt-4 shrink-0">
-          <button
-            onClick={onSelect}
-            className={`h-11 px-8 rounded-xl text-sm font-medium tracking-wider uppercase transition-all duration-300 cursor-pointer whitespace-nowrap btn-press ${buttonClass}`}
-          >
-            {buttonText}
-          </button>
-        </div>
-      </div>
-    </div>
+    <li className="flex items-center gap-2">
+      <svg
+        className={`w-3.5 h-3.5 shrink-0 ${light ? "text-sage" : "text-forest"}`}
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2.5}
+      >
+        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+      </svg>
+      <span className={`text-sm ${light ? "text-bone/65" : "text-charcoal/65"}`}>{text}</span>
+    </li>
   );
 }
 
