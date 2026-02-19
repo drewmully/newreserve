@@ -283,14 +283,14 @@ export default function Home() {
                 </div>
 
                 <div className="bg-forest rounded-2xl overflow-hidden relative flex flex-col card-hover h-full shadow-xl shadow-forest/20 ring-1 ring-sage/20">
-                  {/* Decorative box image — atmospheric bg, top-left corner */}
+                  {/* Decorative box image — cropped to the box graphic, hugging top-left */}
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/Untitled_design_17.png?v=1771516197"
                     alt=""
                     aria-hidden="true"
                     draggable={false}
-                    className="absolute -top-4 -left-4 h-52 w-auto opacity-[0.18] -rotate-6 pointer-events-none select-none"
+                    className="absolute -top-4 -left-4 w-44 h-44 object-cover object-right-bottom opacity-[0.18] -rotate-6 pointer-events-none select-none"
                   />
 
                   {/* Content — layered above the background image */}
