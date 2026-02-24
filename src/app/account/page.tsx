@@ -65,7 +65,7 @@ export default function AccountPage() {
             </p>
             <Link
               href="/onboarding"
-              className="inline-flex items-center justify-center h-12 px-10 bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 btn-glass btn-glass-forest"
+              className="inline-flex items-center justify-center h-12 px-10 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 btn-press"
             >
               Get Started
             </Link>
@@ -429,10 +429,10 @@ function ConciergeRequestSection() {
           <button
             onClick={handleSubmit}
             disabled={!canSubmit}
-            className={`h-11 px-8 text-sm font-medium tracking-wider uppercase transition-all duration-300 cursor-pointer ${
+            className={`h-11 px-8 rounded-xl text-sm font-medium tracking-wider uppercase transition-all duration-300 cursor-pointer btn-press ${
               canSubmit
-                ? "bg-forest text-bone hover:bg-forest-dark btn-glass btn-glass-forest"
-                : "bg-taupe/25 text-charcoal/30 cursor-not-allowed rounded-xl"
+                ? "bg-forest text-bone hover:bg-forest-dark"
+                : "bg-taupe/25 text-charcoal/30 cursor-not-allowed"
             }`}
           >
             Submit Request
@@ -522,7 +522,7 @@ function SubscriptionSection({
             {tier === "free" ? (
               <button
                 onClick={onUpgrade}
-                className="h-9 px-5 bg-forest text-bone text-xs font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 flex items-center btn-glass btn-glass-forest cursor-pointer"
+                className="h-9 px-5 rounded-lg bg-forest text-bone text-xs font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 flex items-center btn-press cursor-pointer"
               >
                 Upgrade
               </button>
@@ -631,7 +631,7 @@ function SubscriptionSection({
                     </p>
                     <button
                       onClick={handleDowngrade}
-                      className="h-10 px-6 bg-bone text-forest text-xs font-medium tracking-wider uppercase hover:bg-bone-dark transition-colors duration-300 cursor-pointer btn-glass btn-glass-bone"
+                      className="h-10 px-6 rounded-xl bg-bone text-forest text-xs font-medium tracking-wider uppercase hover:bg-bone-dark transition-colors duration-300 cursor-pointer btn-press"
                     >
                       Downgrade to Access: $99/yr
                     </button>
@@ -647,7 +647,7 @@ function SubscriptionSection({
                 <div className="flex items-center gap-3">
                   <button
                     onClick={handleKeep}
-                    className="h-10 px-6 bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-colors duration-300 cursor-pointer btn-glass btn-glass-bone"
+                    className="h-10 px-6 rounded-xl bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-colors duration-300 cursor-pointer btn-press"
                   >
                     Keep My Membership
                   </button>

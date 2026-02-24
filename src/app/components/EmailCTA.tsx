@@ -27,7 +27,7 @@ export function EmailCTA({ variant = "hero" }: { variant?: "hero" | "bottom" }) 
         />
         <button
           type="submit"
-          className="w-full sm:w-auto h-13 px-8 bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer whitespace-nowrap btn-glass btn-glass-forest"
+          className="w-full sm:w-auto h-13 px-8 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer whitespace-nowrap btn-press"
         >
           Unlock Access
         </button>
@@ -46,7 +46,7 @@ export function EmailCTA({ variant = "hero" }: { variant?: "hero" | "bottom" }) 
       />
       <button
         type="submit"
-        className="w-full h-13 bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer btn-glass btn-glass-forest"
+        className="w-full h-13 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer btn-press"
       >
         Get Started
       </button>

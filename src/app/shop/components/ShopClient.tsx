@@ -290,10 +290,10 @@ function ProductTile({ product }: { product: Product }) {
         {/* Quick-add to cart */}
         <button
           onClick={handleQuickAdd}
-          className={`absolute bottom-3 right-3 w-9 h-9 rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer shadow-sm ${
+          className={`absolute bottom-3 right-3 w-9 h-9 rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer shadow-sm btn-press ${
             justAdded
               ? "bg-sage text-bone scale-110"
-              : "text-bone opacity-0 group-hover:opacity-100 translate-y-1 group-hover:translate-y-0 btn-glass btn-glass-forest"
+              : "bg-forest text-bone opacity-0 group-hover:opacity-100 translate-y-1 group-hover:translate-y-0 hover:bg-forest-dark"
           }`}
           aria-label="Add to cart"
         >
@@ -565,10 +565,10 @@ export function AddToCartButton({ product }: { product?: { slug: string; name: s
         setAdded(true);
         setTimeout(() => setAdded(false), 2000);
       }}
-      className={`w-full h-13 text-sm font-medium tracking-wider uppercase transition-all duration-300 cursor-pointer ${
+      className={`w-full h-13 rounded-xl text-sm font-medium tracking-wider uppercase transition-all duration-300 cursor-pointer btn-press ${
         added
-          ? "bg-sage text-bone rounded-full"
-          : "text-bone btn-glass btn-glass-forest"
+          ? "bg-sage text-bone"
+          : "bg-forest text-bone hover:bg-forest-dark"
       }`}
     >
       {added ? "Added to Cart" : "Add to Cart"}

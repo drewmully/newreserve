@@ -31,7 +31,7 @@ export function SlideCart() {
       />
 
       {/* Slide panel */}
-      <div className="absolute top-0 right-0 bottom-0 w-full max-w-md bg-bone shadow-2xl flex flex-col animate-slide-in-right">
+      <div className="absolute top-0 right-0 bottom-0 w-full max-w-md flex flex-col animate-slide-in-right glass-modal">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-5 border-b border-taupe/20">
           <h2 className="font-serif text-xl text-obsidian">Your Cart</h2>
@@ -118,7 +118,7 @@ export function SlideCart() {
                 </div>
               )}
             </div>
-            <button className="w-full h-12 bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer btn-glass btn-glass-forest">
+            <button className="w-full h-12 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer btn-press">
               Go to Checkout
             </button>
             <button

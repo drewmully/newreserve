@@ -26,7 +26,7 @@ export default function CommunityPage() {
           </Link>
           <Link
             href="/onboarding"
-            className="h-9 px-5 bg-forest text-bone text-xs font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 flex items-center btn-glass btn-glass-forest"
+            className="h-9 px-5 rounded-lg bg-forest text-bone text-xs font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 flex items-center btn-press"
           >
             Join Free
           </Link>
@@ -140,7 +140,7 @@ export default function CommunityPage() {
               </p>
               <Link
                 href="/onboarding"
-                className="inline-flex items-center justify-center h-11 px-8 bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-colors duration-300 btn-glass btn-glass-bone"
+                className="inline-flex items-center justify-center h-11 px-8 rounded-xl bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-colors duration-300 btn-press"
               >
                 Sign Up Free
               </Link>

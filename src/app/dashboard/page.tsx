@@ -325,14 +325,14 @@ function GatedTab({ type, onUpgrade }: { type: "shop" | "drops" | "club" | "bene
             {useModal ? (
               <button
                 onClick={onUpgrade}
-                className="inline-flex items-center justify-center h-12 px-10 bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 btn-glass btn-glass-forest cursor-pointer"
+                className="inline-flex items-center justify-center h-12 px-10 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 btn-press cursor-pointer"
               >
                 {content.cta}
               </button>
             ) : (
               <Link
                 href={content.href}
-                className="inline-flex items-center justify-center h-12 px-10 bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 btn-glass btn-glass-forest"
+                className="inline-flex items-center justify-center h-12 px-10 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 btn-press"
               >
                 {content.cta}
               </Link>
@@ -710,7 +710,7 @@ function ClubTab() {
                 </div>
                 <button
                   onClick={() => setShowForm(true)}
-                  className="h-11 px-8 bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer whitespace-nowrap btn-glass btn-glass-forest"
+                  className="h-11 px-8 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer whitespace-nowrap btn-press"
                 >
                   Apply Now
                 </button>
@@ -779,7 +779,7 @@ function ClubTab() {
                 <div className="flex items-center gap-3">
                   <button
                     onClick={handleSubmitApplication}
-                    className="h-11 px-8 bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer btn-glass btn-glass-forest"
+                    className="h-11 px-8 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer btn-press"
                   >
                     Submit for Review
                   </button>
@@ -1050,7 +1050,7 @@ function CommunityTab() {
           </div>
           <button
             onClick={() => isSignedIn ? setShowCompose(!showCompose) : setShowSignUp(true)}
-            className="h-10 px-5 bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer whitespace-nowrap shrink-0 ml-4 btn-glass btn-glass-forest"
+            className="h-10 px-5 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer whitespace-nowrap shrink-0 ml-4 btn-press"
           >
             + Post
           </button>
@@ -1124,7 +1124,7 @@ function CommunityTab() {
                   <span>Photo{composeImages.length > 0 ? ` (${composeImages.length}/4)` : ""}</span>
                 </button>
               </div>
-              <button className="h-10 px-6 bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer btn-glass btn-glass-forest">
+              <button className="h-10 px-6 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer btn-press">
                 Publish
               </button>
             </div>
@@ -1218,7 +1218,7 @@ function SignUpModal({ onClose }: { onClose: () => void }) {
 
             <Link
               href="/onboarding"
-              className="flex items-center justify-center h-11 w-full bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 btn-glass btn-glass-forest"
+              className="flex items-center justify-center h-11 w-full rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 btn-press"
             >
               Sign Up Free
             </Link>

@@ -92,7 +92,7 @@ export function UpgradeModal({ open, onClose, currentTier, onSelectPlan }: Upgra
 
       {/* Modal */}
       <div className="absolute inset-0 flex items-center justify-center p-4 sm:p-6 pointer-events-none">
-        <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl bg-bone shadow-2xl pointer-events-auto animate-modal-content">
+        <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl pointer-events-auto animate-modal-content glass-modal-center">
           {/* Close */}
           <button
             onClick={onClose}
@@ -122,7 +122,7 @@ export function UpgradeModal({ open, onClose, currentTier, onSelectPlan }: Upgra
               <div className="space-y-4">
                 {/* Reserve Access */}
                 {showAccessCard && (
-                  <div className="bg-cream rounded-2xl p-6 border border-taupe/20">
+                  <div className="rounded-2xl p-6 glass-card glass-card-light">
                     <span className="text-[11px] tracking-[0.25em] uppercase text-forest font-medium">
                       Reserve Access
                     </span>
@@ -139,7 +139,7 @@ export function UpgradeModal({ open, onClose, currentTier, onSelectPlan }: Upgra
                       </ul>
                       <button
                         onClick={handleChooseAccess}
-                        className="h-11 px-8 bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-all duration-300 cursor-pointer btn-glass btn-glass-forest"
+                        className="h-11 px-8 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-all duration-300 cursor-pointer btn-press"
                       >
                         Join Reserve Access
                       </button>
@@ -155,7 +155,7 @@ export function UpgradeModal({ open, onClose, currentTier, onSelectPlan }: Upgra
                         Recommended
                       </span>
                     </div>
-                    <div className="bg-forest rounded-2xl overflow-hidden relative shadow-xl shadow-forest/20 ring-1 ring-sage/20">
+                    <div className="rounded-2xl overflow-hidden relative glass-card glass-card-dark">
                       <div className="relative z-10 p-6">
                         <span className="text-[11px] tracking-[0.25em] uppercase text-sage font-medium">
                           Reserve Member
@@ -178,7 +178,7 @@ export function UpgradeModal({ open, onClose, currentTier, onSelectPlan }: Upgra
                           </ul>
                           <button
                             onClick={handleChooseMember}
-                            className="h-11 px-8 bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-all duration-300 cursor-pointer btn-glass btn-glass-bone"
+                            className="h-11 px-8 rounded-xl bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-all duration-300 cursor-pointer btn-press"
                           >
                             Continue
                           </button>
@@ -189,7 +189,7 @@ export function UpgradeModal({ open, onClose, currentTier, onSelectPlan }: Upgra
                 )}
 
                 {/* Reserve Black */}
-                <div className="bg-cream rounded-2xl p-6 border border-taupe/20 relative overflow-hidden">
+                <div className="rounded-2xl p-6 relative overflow-hidden glass-card glass-card-light">
                   <div className="absolute top-0 left-0 right-0 h-1 bg-obsidian" />
                   <span className="text-[11px] tracking-[0.25em] uppercase text-charcoal/50 font-medium">
                     Reserve Black
@@ -400,7 +400,7 @@ export function FitNav({
         </button>
         <button
           onClick={onNext}
-          className="h-11 px-8 text-sm font-medium tracking-wider uppercase transition-all duration-300 cursor-pointer btn-glass btn-glass-forest bg-forest text-bone hover:bg-forest-dark"
+          className="h-11 px-8 rounded-xl text-sm font-medium tracking-wider uppercase transition-all duration-300 cursor-pointer btn-press bg-forest text-bone hover:bg-forest-dark"
         >
           {isLast ? "Finish" : "Next"}
         </button>

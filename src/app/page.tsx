@@ -198,8 +198,13 @@ export default function Home() {
       </section>
 
       {/* ─── MEMBERSHIP TIERS ─── */}
-      <section id="tiers" className="py-24 md:py-36 px-6 md:px-12 bg-cream">
-        <div className="max-w-6xl mx-auto">
+      <section id="tiers" className="py-24 md:py-36 px-6 md:px-12 bg-cream relative overflow-hidden">
+        {/* Subtle gradient blobs for glass card refraction */}
+        <div className="absolute top-1/4 -left-32 w-96 h-96 bg-forest/[0.04] rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-1/3 -right-24 w-80 h-80 bg-sage/[0.06] rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-2/3 left-1/3 w-64 h-64 bg-taupe/[0.08] rounded-full blur-3xl pointer-events-none" />
+
+        <div className="max-w-6xl mx-auto relative">
           <ScrollReveal>
             <div className="text-center mb-20">
               <span className="inline-flex items-center gap-2 text-xs tracking-[0.3em] uppercase text-sage font-medium mb-6">
@@ -219,7 +224,7 @@ export default function Home() {
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5 lg:gap-4 items-stretch">
             {/* ── Tier 1 — Free ── */}
             <ScrollReveal delay={0}>
-              <div className="bg-cream rounded-2xl p-7 md:p-8 border border-taupe/20 flex flex-col card-hover h-full">
+              <div className="rounded-2xl p-7 md:p-8 flex flex-col card-hover h-full glass-card glass-card-light">
                 <div className="h-5 mb-3" />
                 <span className="text-[11px] tracking-[0.25em] uppercase text-sage font-medium">
                   Free
@@ -235,7 +240,7 @@ export default function Home() {
                   </ul>
                   <a
                     href="/onboarding"
-                    className="mt-8 block w-full text-center h-12 leading-[3rem] text-forest text-sm font-medium tracking-wider uppercase transition-all duration-300 btn-glass btn-glass-outline"
+                    className="mt-8 block w-full text-center h-12 leading-[3rem] rounded-xl border border-forest/80 text-forest text-sm font-medium tracking-wider uppercase hover:bg-forest hover:text-bone transition-all duration-300 btn-press"
                   >
                     Sign Up Free
                   </a>
@@ -245,7 +250,7 @@ export default function Home() {
 
             {/* ── Tier 2 — Reserve Access ($99/yr) ── */}
             <ScrollReveal delay={0.08}>
-              <div className="bg-cream rounded-2xl p-7 md:p-8 border border-taupe/20 flex flex-col card-hover h-full">
+              <div className="rounded-2xl p-7 md:p-8 flex flex-col card-hover h-full glass-card glass-card-light">
                 <div className="h-5 mb-3" />
                 <span className="text-[11px] tracking-[0.25em] uppercase text-forest font-medium">
                   Reserve Access
@@ -264,7 +269,7 @@ export default function Home() {
                   </ul>
                   <a
                     href="/onboarding"
-                    className="mt-8 block w-full text-center h-12 leading-[3rem] bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-all duration-300 btn-glass btn-glass-forest"
+                    className="mt-8 block w-full text-center h-12 leading-[3rem] rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-all duration-300 btn-press"
                   >
                     Join Now
                   </a>
@@ -282,7 +287,7 @@ export default function Home() {
                   </span>
                 </div>
 
-                <div className="bg-forest rounded-2xl overflow-hidden relative flex flex-col card-hover h-full shadow-xl shadow-forest/20 ring-1 ring-sage/20">
+                <div className="rounded-2xl overflow-hidden relative flex flex-col card-hover h-full glass-card glass-card-dark">
                   {/* Decorative box image — cropped to the box graphic, hugging top-left */}
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
@@ -313,7 +318,7 @@ export default function Home() {
                       </ul>
                       <a
                         href="/onboarding"
-                        className="mt-8 block w-full text-center h-12 leading-[3rem] bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-all duration-300 btn-glass btn-glass-bone"
+                        className="mt-8 block w-full text-center h-12 leading-[3rem] rounded-xl bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-all duration-300 btn-press"
                       >
                         Join Now
                       </a>
@@ -325,7 +330,7 @@ export default function Home() {
 
             {/* ── Tier 4 — Reserve Black ── */}
             <ScrollReveal delay={0.24}>
-              <div className="bg-cream rounded-2xl p-7 md:p-8 border border-taupe/20 flex flex-col card-hover h-full relative overflow-hidden">
+              <div className="rounded-2xl p-7 md:p-8 flex flex-col card-hover h-full relative overflow-hidden glass-card glass-card-light">
                 <div className="absolute top-0 left-0 right-0 h-1 bg-obsidian" />
                 <div className="h-5 mb-3" />
                 <span className="text-[11px] tracking-[0.25em] uppercase text-charcoal/50 font-medium">
