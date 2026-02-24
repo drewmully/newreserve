@@ -235,7 +235,7 @@ export default function Home() {
                   </ul>
                   <a
                     href="/onboarding"
-                    className="mt-8 block w-full text-center h-12 leading-[3rem] border border-forest/80 text-forest text-sm font-medium tracking-wider uppercase hover:bg-forest hover:text-bone transition-all duration-300 btn-glass btn-glass-outline"
+                    className="mt-8 block w-full text-center h-12 leading-[3rem] text-forest text-sm font-medium tracking-wider uppercase transition-all duration-300 btn-glass btn-glass-outline"
                   >
                     Sign Up Free
                   </a>
