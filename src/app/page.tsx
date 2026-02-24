@@ -26,69 +26,77 @@ export default function Home() {
       </header>
 
       {/* ─── HERO ─── */}
-      <section className="relative min-h-[90vh] flex items-center px-6 md:px-12 lg:px-20 pt-20 pb-16 bg-bone overflow-hidden">
-        {/* Layer 1: Paper grain texture */}
+      <section className="relative min-h-screen flex items-center px-6 md:px-12 lg:px-20 pt-24 pb-20 bg-bone overflow-hidden">
+        {/* Layer 1: Background image — morning golf course, desaturated + faded + blurred */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/ChatGPT_Image_Feb_24_2026_03_08_18_PM.png?v=1771963720"
+          alt=""
+          aria-hidden="true"
+          draggable={false}
+          className="absolute inset-0 w-full h-full object-cover pointer-events-none select-none"
+          style={{
+            filter: "blur(20px) saturate(0.3)",
+            opacity: 0.18,
+            transform: "scale(1.08)",
+          }}
+        />
+
+        {/* Layer 2: Cream overlay — controls the fade level */}
+        <div className="absolute inset-0 bg-bone/60 pointer-events-none" />
+
+        {/* Layer 3: Paper grain texture */}
         <div className="absolute inset-0 hero-grain pointer-events-none" />
 
-        {/* Layer 2: Atmospheric mist / morning light gradients */}
-        <div className="absolute inset-0 pointer-events-none">
-          {/* Warm dawn glow — top right */}
-          <div className="absolute -top-20 -right-32 w-[600px] h-[500px] bg-gradient-to-bl from-taupe/[0.12] via-bone/0 to-transparent rounded-full blur-3xl" />
-          {/* Cool mist — bottom left (dew on grass feel) */}
-          <div className="absolute -bottom-32 -left-24 w-[500px] h-[400px] bg-gradient-to-tr from-sage/[0.07] via-forest/[0.03] to-transparent rounded-full blur-3xl" />
-          {/* Center depth haze */}
-          <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[700px] h-[300px] bg-gradient-to-b from-taupe/[0.04] to-transparent rounded-full blur-3xl" />
-        </div>
-
-        {/* Layer 3: Faint brand watermark — large Mully flag, offset */}
-        <div className="absolute top-1/2 left-[55%] -translate-y-1/2 pointer-events-none opacity-[0.03]">
+        {/* Layer 4: Faint brand watermark — large Mully flag, offset right */}
+        <div className="absolute top-1/2 left-[58%] -translate-y-1/2 pointer-events-none opacity-[0.025]">
           <svg viewBox="0 0 1002 540" fill="#1F3D2B" className="w-[500px] md:w-[700px] lg:w-[900px] h-auto" aria-hidden="true">
             <path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" />
           </svg>
         </div>
 
         {/* ── Two-column hero content ── */}
-        <div className="relative max-w-7xl mx-auto w-full grid md:grid-cols-2 gap-12 lg:gap-20 items-center z-10">
+        <div className="relative max-w-7xl mx-auto w-full grid md:grid-cols-2 gap-16 lg:gap-24 items-center z-10">
 
           {/* LEFT COLUMN — headline, subtext, CTA */}
-          <div className="max-w-xl">
-            <div className="animate-fade-up">
-              <span className="inline-flex items-center gap-2 text-xs tracking-[0.35em] uppercase text-sage font-medium mb-8">
+          <div className="max-w-lg">
+            <div className="animate-fade-up mb-10">
+              <span className="inline-flex items-center gap-2.5 text-[11px] tracking-[0.35em] uppercase text-sage font-medium">
                 <span className="w-8 h-px bg-sage/40" />
                 Mully Reserve
                 <span className="w-8 h-px bg-sage/40" />
               </span>
             </div>
 
-            <h1 className="font-serif text-4xl md:text-5xl lg:text-[4.25rem] text-forest leading-[1.08] tracking-tight mb-6 animate-fade-up-delay-1">
+            <h1 className="font-serif text-4xl md:text-5xl lg:text-[4.5rem] text-forest leading-[1.05] tracking-tight mb-7 animate-fade-up-delay-1">
               Access the Best<br />
               of Golf
             </h1>
 
-            <p className="text-lg md:text-xl text-charcoal/55 leading-relaxed mb-10 animate-fade-up-delay-2">
+            <p className="text-lg md:text-xl text-charcoal/50 leading-relaxed mb-12 max-w-sm animate-fade-up-delay-2">
               Live the private club life without country club costs.
             </p>
 
             <div className="animate-fade-up-delay-3">
               <EmailCTA variant="hero" />
-              <p className="text-xs text-charcoal/40 tracking-wide">
+              <p className="text-[11px] text-charcoal/35 tracking-wide mt-1">
                 Complimentary access &middot; No credit card required
               </p>
             </div>
           </div>
 
           {/* RIGHT COLUMN — Glassmorphic Reserve Member Card */}
-          <div className="flex items-center justify-center animate-fade-up-delay-2">
+          <div className="hidden md:flex items-center justify-center animate-fade-up-delay-2">
             <div className="member-card-glow">
               <div className="member-card-float">
                 <div
-                  className="relative w-[340px] md:w-[380px] aspect-[1.6/1] rounded-2xl overflow-hidden member-card-shimmer"
+                  className="relative w-[360px] lg:w-[400px] aspect-[1.6/1] rounded-2xl overflow-hidden member-card-shimmer"
                   style={{
-                    background: "linear-gradient(135deg, rgba(31,61,43,0.88) 0%, rgba(31,61,43,0.72) 50%, rgba(42,82,57,0.80) 100%)",
+                    background: "linear-gradient(135deg, rgba(31,61,43,0.90) 0%, rgba(31,61,43,0.74) 50%, rgba(42,82,57,0.82) 100%)",
                     backdropFilter: "blur(24px) saturate(1.4)",
                     WebkitBackdropFilter: "blur(24px) saturate(1.4)",
                     border: "1px solid rgba(255,255,255,0.10)",
-                    boxShadow: "0 8px 32px -4px rgba(0,0,0,0.25), 0 24px 64px -8px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.08), inset 0 0 0 0.5px rgba(255,255,255,0.05)",
+                    boxShadow: "0 8px 32px -4px rgba(0,0,0,0.30), 0 32px 72px -12px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.08), inset 0 0 0 0.5px rgba(255,255,255,0.05)",
                   }}
                 >
                   {/* Inner edge highlight — top */}
@@ -103,7 +111,7 @@ export default function Home() {
                   />
 
                   {/* Card content */}
-                  <div className="relative z-10 h-full flex flex-col justify-between p-6 md:p-7">
+                  <div className="relative z-10 h-full flex flex-col justify-between p-7">
                     {/* Top row: Logo + type */}
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-2 text-bone/80">
@@ -112,12 +120,12 @@ export default function Home() {
                         </svg>
                         <span className="font-serif text-sm font-bold tracking-wide">mully.</span>
                       </div>
-                      <span className="text-[9px] tracking-[0.2em] uppercase text-bone/35 font-medium">EST. 2025</span>
+                      <span className="text-[9px] tracking-[0.2em] uppercase text-bone/30 font-medium">EST. 2025</span>
                     </div>
 
                     {/* Center: Card title */}
-                    <div className="text-center -mt-1">
-                      <span className="text-[11px] tracking-[0.35em] uppercase text-bone/60 font-medium">
+                    <div className="text-center">
+                      <span className="text-[11px] tracking-[0.4em] uppercase text-bone/55 font-medium">
                         Mully Reserve
                       </span>
                     </div>
@@ -125,10 +133,10 @@ export default function Home() {
                     {/* Bottom row: Member info */}
                     <div className="flex items-end justify-between">
                       <div>
-                        <span className="block text-[9px] tracking-[0.2em] uppercase text-bone/35 mb-1">Member</span>
-                        <span className="text-sm text-bone/70 tracking-wide font-light">0001 &nbsp;2847</span>
+                        <span className="block text-[9px] tracking-[0.2em] uppercase text-bone/30 mb-1">Member</span>
+                        <span className="text-sm text-bone/65 tracking-widest font-light">0001 &nbsp;2847</span>
                       </div>
-                      <span className="text-[9px] tracking-[0.15em] uppercase text-bone/30 font-medium">
+                      <span className="text-[9px] tracking-[0.15em] uppercase text-bone/25 font-medium">
                         Reserve Member
                       </span>
                     </div>
@@ -140,7 +148,7 @@ export default function Home() {
         </div>
 
         {/* Scroll indicator */}
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2">
+        <div className="absolute bottom-10 left-1/2 -translate-x-1/2">
           <ScrollChevron />
         </div>
       </section>
@@ -182,21 +190,31 @@ export default function Home() {
           <div className="grid md:grid-cols-3 gap-6 lg:gap-8">
             <ScrollReveal delay={0}>
               <BenefitCard
-                icon={<PartnerIcon />}
+                image="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/ChatGPT_Image_Feb_24_2026_02_24_48_PM.png?v=1771961106"
                 title="Curated Partner Access"
                 description="Exclusive access to vetted partners across gear, training, and lifestyle. Every partner is hand-selected."
               />
             </ScrollReveal>
             <ScrollReveal delay={0.12}>
               <BenefitCard
-                icon={<PricingIcon />}
+                image="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/Colorado_Hoodie.webp?v=1771960357"
                 title="Reserve Pricing"
-                description="Members-only pricing on select products and experiences. No markups. No inflated MSRPs. Just honest value."
-              />
+                description="Members-only pricing on premium gear. No markups. Just honest value."
+              >
+                {/* Pricing comparison overlay */}
+                <div className="mt-4 rounded-xl bg-forest/[0.04] border border-forest/[0.08] p-4">
+                  <p className="text-[11px] tracking-wide uppercase text-charcoal/40 mb-2">Greyson Colorado Hoodie</p>
+                  <div className="flex items-baseline gap-3">
+                    <span className="text-sm text-charcoal/30 line-through">$170</span>
+                    <span className="text-base text-forest font-semibold">$144</span>
+                    <span className="text-[10px] tracking-[0.15em] uppercase text-forest/60 font-medium">-15% Reserve</span>
+                  </div>
+                </div>
+              </BenefitCard>
             </ScrollReveal>
             <ScrollReveal delay={0.24}>
               <BenefitCard
-                icon={<ClubIcon />}
+                image="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/ChatGPT_Image_Feb_24_2026_02_25_26_PM.png?v=1771961138"
                 title="Club-Level Service"
                 description="Concierge support, styling, and exclusive events. The full club experience without the club membership."
               />
@@ -710,21 +728,32 @@ function MullyMark({ className }: { className?: string }) {
 }
 
 function BenefitCard({
-  icon,
+  image,
   title,
   description,
+  children,
 }: {
-  icon: React.ReactNode;
+  image: string;
   title: string;
   description: string;
+  children?: React.ReactNode;
 }) {
   return (
-    <div className="bg-cream rounded-2xl p-8 md:p-10 border border-taupe/15 card-hover group h-full">
-      <div className="w-14 h-14 rounded-2xl bg-forest/8 flex items-center justify-center mb-7 icon-hover-shift">
-        {icon}
+    <div className="bg-cream rounded-2xl overflow-hidden border border-taupe/15 card-hover group h-full">
+      <div className="aspect-[4/3] overflow-hidden">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={image}
+          alt={title}
+          className="w-full h-full object-cover transition-transform duration-600 group-hover:scale-105"
+          draggable={false}
+        />
       </div>
-      <h3 className="font-serif text-xl text-obsidian mb-3">{title}</h3>
-      <p className="text-sm text-charcoal/55 leading-relaxed">{description}</p>
+      <div className="p-6 md:p-7">
+        <h3 className="font-serif text-lg text-obsidian mb-2">{title}</h3>
+        <p className="text-sm text-charcoal/50 leading-relaxed">{description}</p>
+        {children}
+      </div>
     </div>
   );
 }
