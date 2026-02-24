@@ -26,7 +26,7 @@ export default function Home() {
       </header>
 
       {/* ─── HERO ─── */}
-      <section className="relative h-[82vh] md:h-[84vh] flex items-center px-6 md:px-12 lg:px-20 pt-16 overflow-hidden">
+      <section className="relative min-h-[82vh] md:h-[84vh] flex items-center px-6 md:px-12 lg:px-20 pt-20 pb-12 md:pt-16 md:pb-0 overflow-hidden">
         {/* Layer 1: Full-bleed background image — displayed as-is */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -44,18 +44,25 @@ export default function Home() {
             background: "linear-gradient(105deg, rgba(245,241,232,0.88) 0%, rgba(245,241,232,0.65) 35%, rgba(245,241,232,0.15) 55%, transparent 70%)",
           }}
         />
+        {/* Layer 2b: Mobile scrim — centered content needs broader coverage */}
+        <div
+          className="absolute inset-0 pointer-events-none md:hidden"
+          style={{
+            background: "linear-gradient(180deg, rgba(245,241,232,0.75) 0%, rgba(245,241,232,0.60) 50%, rgba(245,241,232,0.40) 80%, transparent 100%)",
+          }}
+        />
 
         {/* ── Two-column hero content ── */}
-        <div className="relative max-w-7xl mx-auto w-full grid md:grid-cols-2 gap-8 md:gap-12 lg:gap-20 items-center z-10">
+        <div className="relative max-w-7xl mx-auto w-full grid md:grid-cols-2 gap-6 md:gap-12 lg:gap-20 items-center z-10">
 
           {/* LEFT COLUMN — headline, subtext, CTA */}
-          <div className="max-w-lg">
+          <div className="max-w-lg text-center md:text-left mx-auto md:mx-0">
             {/* Mobile member card — compact, above headline */}
-            <div className="md:hidden mb-6 animate-fade-up">
+            <div className="md:hidden flex justify-center mb-5 animate-fade-up">
               <MemberCard size="sm" />
             </div>
 
-            <div className="animate-fade-up mb-8">
+            <div className="animate-fade-up mb-5 md:mb-8">
               <span className="inline-flex items-center gap-2.5 text-[11px] tracking-[0.35em] uppercase text-sage font-medium">
                 <span className="w-8 h-px bg-sage/40" />
                 Mully Reserve
@@ -63,12 +70,12 @@ export default function Home() {
               </span>
             </div>
 
-            <h1 className="font-serif text-4xl md:text-5xl lg:text-[4.25rem] text-forest leading-[1.05] tracking-tight mb-6 animate-fade-up-delay-1">
+            <h1 className="font-serif text-3xl md:text-5xl lg:text-[4.25rem] text-forest leading-[1.05] tracking-tight mb-4 md:mb-6 animate-fade-up-delay-1">
               Access the Best<br />
               of Golf
             </h1>
 
-            <p className="text-lg md:text-xl text-charcoal/55 leading-relaxed mb-10 max-w-sm animate-fade-up-delay-2">
+            <p className="text-base md:text-xl text-charcoal/55 leading-relaxed mb-7 md:mb-10 max-w-sm mx-auto md:mx-0 animate-fade-up-delay-2">
               Live the private club life without country club costs.
             </p>
 
