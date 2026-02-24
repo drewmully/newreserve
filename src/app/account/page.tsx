@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useMembership } from "../context/MembershipContext";
 import { SlideCart } from "../components/SlideCart";
+import { UpgradeModal } from "../components/UpgradeModal";
 
 /* ═══════════════════════════════════════════
    ACCOUNT PAGE
@@ -27,6 +28,7 @@ export default function AccountPage() {
   const [editingEmail, setEditingEmail] = useState(false);
   const [tempUsername, setTempUsername] = useState(username);
   const [tempEmail, setTempEmail] = useState(email);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
 
   const handleSaveUsername = () => {
     setUsername(tempUsername);
@@ -269,7 +271,7 @@ export default function AccountPage() {
           </section>
 
           {/* ── Subscription Management (buried lower) ── */}
-          <SubscriptionSection tier={tier} tierLabel={tierLabel} setTier={setTier} />
+          <SubscriptionSection tier={tier} tierLabel={tierLabel} setTier={setTier} onUpgrade={() => setUpgradeOpen(true)} />
 
           {/* ── Danger Zone ── */}
           <section>
@@ -299,6 +301,12 @@ export default function AccountPage() {
         </div>
       </footer>
 
+      <UpgradeModal
+        open={upgradeOpen}
+        onClose={() => setUpgradeOpen(false)}
+        currentTier={tier}
+        onSelectPlan={(t) => setTier(t)}
+      />
       <SlideCart />
     </div>
   );
@@ -443,10 +451,12 @@ function SubscriptionSection({
   tier,
   tierLabel,
   setTier,
+  onUpgrade,
 }: {
   tier: string;
   tierLabel: string;
   setTier: (t: "free" | "access" | "member" | "black") => void;
+  onUpgrade: () => void;
 }) {
   const [showManage, setShowManage] = useState(false);
   const [cancelStep, setCancelStep] = useState<"idle" | "confirm" | "done">("idle");
@@ -510,12 +520,12 @@ function SubscriptionSection({
               </p>
             </div>
             {tier === "free" ? (
-              <Link
-                href="/onboarding"
-                className="h-9 px-5 rounded-lg bg-forest text-bone text-xs font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 flex items-center btn-press"
+              <button
+                onClick={onUpgrade}
+                className="h-9 px-5 rounded-lg bg-forest text-bone text-xs font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 flex items-center btn-press cursor-pointer"
               >
                 Upgrade
-              </Link>
+              </button>
             ) : (
               <button
                 onClick={() => { setShowManage(!showManage); setCancelStep("idle"); }}
@@ -545,9 +555,9 @@ function SubscriptionSection({
                 <div className="space-y-3">
                   {/* Upgrade option */}
                   {tier !== "black" && (
-                    <Link
-                      href="/onboarding"
-                      className="block w-full text-left bg-bone/10 hover:bg-bone/15 rounded-xl p-4 transition-colors duration-300"
+                    <button
+                      onClick={() => { setShowManage(false); onUpgrade(); }}
+                      className="block w-full text-left bg-bone/10 hover:bg-bone/15 rounded-xl p-4 transition-colors duration-300 cursor-pointer"
                     >
                       <div className="flex items-center justify-between">
                         <div>
@@ -560,7 +570,7 @@ function SubscriptionSection({
                           <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                         </svg>
                       </div>
-                    </Link>
+                    </button>
                   )}
 
                   {/* Cancel option */}

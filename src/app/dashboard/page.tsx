@@ -6,6 +6,7 @@ import { ShopGrid } from "../shop/components/ShopClient";
 import { products, BRANDS, COLLECTIONS } from "../shop/products";
 import { useMembership } from "../context/MembershipContext";
 import { SlideCart } from "../components/SlideCart";
+import { UpgradeModal } from "../components/UpgradeModal";
 import { posts as SAMPLE_POSTS, FORUM_TAGS, type ForumPost, type ForumComment } from "../community/posts";
 
 /* ═══════════════════════════════════════════
@@ -16,8 +17,9 @@ type Tab = "shop" | "drops" | "community" | "club" | "benefits";
 
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<Tab>("shop");
-  const { isSignedIn, tier, cartCount, setCartOpen } = useMembership();
+  const { isSignedIn, tier, setTier, cartCount, setCartOpen } = useMembership();
   const isPaid = tier === "access" || tier === "member" || tier === "black";
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
 
   // Cart badge pop animation
   const [badgePop, setBadgePop] = useState(false);
@@ -114,16 +116,24 @@ export default function DashboardPage() {
       {/* ─── TAB CONTENT ─── */}
       <main className="pt-42 pb-24">
         <div key={activeTab} className="animate-tab-in">
-          {activeTab === "shop" && (isSignedIn ? <ShopTab /> : <GatedTab type="shop" />)}
-          {activeTab === "drops" && (isPaid ? <DropsTab /> : <GatedTab type="drops" />)}
+          {activeTab === "shop" && (isSignedIn ? <ShopTab /> : <GatedTab type="shop" onUpgrade={() => setUpgradeOpen(true)} />)}
+          {activeTab === "drops" && (isPaid ? <DropsTab /> : <GatedTab type="drops" onUpgrade={() => setUpgradeOpen(true)} />)}
           {activeTab === "community" && <CommunityTab />}
-          {activeTab === "club" && (isPaid ? <ClubTab /> : <GatedTab type="club" />)}
-          {activeTab === "benefits" && (isPaid ? <BenefitsTab /> : <GatedTab type="benefits" />)}
+          {activeTab === "club" && (isPaid ? <ClubTab /> : <GatedTab type="club" onUpgrade={() => setUpgradeOpen(true)} />)}
+          {activeTab === "benefits" && (isPaid ? <BenefitsTab /> : <GatedTab type="benefits" onUpgrade={() => setUpgradeOpen(true)} />)}
         </div>
       </main>
 
       {/* ─── SLIDE CART ─── */}
       <SlideCart />
+
+      {/* ─── UPGRADE MODAL ─── */}
+      <UpgradeModal
+        open={upgradeOpen}
+        onClose={() => setUpgradeOpen(false)}
+        currentTier={tier}
+        onSelectPlan={(t) => setTier(t)}
+      />
 
       {/* ─── FOOTER ─── */}
       <footer className="py-16 px-6 md:px-12 bg-forest">
@@ -277,8 +287,11 @@ const GATED_CONTENT = {
   },
 };
 
-function GatedTab({ type }: { type: "shop" | "drops" | "club" | "benefits" }) {
+function GatedTab({ type, onUpgrade }: { type: "shop" | "drops" | "club" | "benefits"; onUpgrade: () => void }) {
   const content = GATED_CONTENT[type];
+  // "shop" gated = not signed in → link to onboarding. Others = signed in but unpaid → open modal.
+  const useModal = type !== "shop";
+
   return (
     <div className="px-6 md:px-12">
       <div className="max-w-2xl mx-auto pt-8">
@@ -309,12 +322,21 @@ function GatedTab({ type }: { type: "shop" | "drops" | "club" | "benefits" }) {
 
           {/* CTA */}
           <div>
-            <Link
-              href={content.href}
-              className="inline-flex items-center justify-center h-12 px-10 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 btn-press"
-            >
-              {content.cta}
-            </Link>
+            {useModal ? (
+              <button
+                onClick={onUpgrade}
+                className="inline-flex items-center justify-center h-12 px-10 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 btn-press cursor-pointer"
+              >
+                {content.cta}
+              </button>
+            ) : (
+              <Link
+                href={content.href}
+                className="inline-flex items-center justify-center h-12 px-10 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 btn-press"
+              >
+                {content.cta}
+              </Link>
+            )}
           </div>
 
           {type === "shop" && (
