@@ -26,8 +26,8 @@ export default function Home() {
       </header>
 
       {/* ─── HERO ─── */}
-      <section className="relative min-h-screen flex items-center px-6 md:px-12 lg:px-20 pt-24 pb-20 overflow-hidden">
-        {/* Layer 1: Full-bleed background image */}
+      <section className="relative h-[82vh] md:h-[84vh] flex items-center px-6 md:px-12 lg:px-20 pt-16 overflow-hidden">
+        {/* Layer 1: Full-bleed background image — displayed as-is */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/ChatGPT_Image_Feb_24_2026_03_08_18_PM.png?v=1771963720"
@@ -37,30 +37,20 @@ export default function Home() {
           className="absolute inset-0 w-full h-full object-cover pointer-events-none select-none"
         />
 
-        {/* Layer 2: Gradient overlay — readable left, image visible right */}
+        {/* Layer 2: Soft scrim for left-side text readability */}
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
-            background: "linear-gradient(to right, rgba(245,241,232,0.92) 0%, rgba(245,241,232,0.80) 40%, rgba(245,241,232,0.45) 70%, rgba(245,241,232,0.25) 100%)",
+            background: "linear-gradient(105deg, rgba(245,241,232,0.88) 0%, rgba(245,241,232,0.65) 35%, rgba(245,241,232,0.15) 55%, transparent 70%)",
           }}
         />
 
-        {/* Layer 3: Paper grain texture */}
-        <div className="absolute inset-0 hero-grain pointer-events-none" />
-
-        {/* Layer 4: Faint brand watermark */}
-        <div className="absolute top-1/2 left-[58%] -translate-y-1/2 pointer-events-none opacity-[0.03]">
-          <svg viewBox="0 0 1002 540" fill="#1F3D2B" className="w-[500px] md:w-[700px] lg:w-[900px] h-auto" aria-hidden="true">
-            <path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" />
-          </svg>
-        </div>
-
         {/* ── Two-column hero content ── */}
-        <div className="relative max-w-7xl mx-auto w-full grid md:grid-cols-2 gap-16 lg:gap-24 items-center z-10">
+        <div className="relative max-w-7xl mx-auto w-full grid md:grid-cols-2 gap-12 lg:gap-20 items-center z-10">
 
           {/* LEFT COLUMN — headline, subtext, CTA */}
           <div className="max-w-lg">
-            <div className="animate-fade-up mb-10">
+            <div className="animate-fade-up mb-8">
               <span className="inline-flex items-center gap-2.5 text-[11px] tracking-[0.35em] uppercase text-sage font-medium">
                 <span className="w-8 h-px bg-sage/40" />
                 Mully Reserve
@@ -68,18 +58,18 @@ export default function Home() {
               </span>
             </div>
 
-            <h1 className="font-serif text-4xl md:text-5xl lg:text-[4.5rem] text-forest leading-[1.05] tracking-tight mb-7 animate-fade-up-delay-1">
+            <h1 className="font-serif text-4xl md:text-5xl lg:text-[4.25rem] text-forest leading-[1.05] tracking-tight mb-6 animate-fade-up-delay-1">
               Access the Best<br />
               of Golf
             </h1>
 
-            <p className="text-lg md:text-xl text-charcoal/50 leading-relaxed mb-12 max-w-sm animate-fade-up-delay-2">
+            <p className="text-lg md:text-xl text-charcoal/55 leading-relaxed mb-10 max-w-sm animate-fade-up-delay-2">
               Live the private club life without country club costs.
             </p>
 
             <div className="animate-fade-up-delay-3">
               <EmailCTA variant="hero" />
-              <p className="text-[11px] text-charcoal/35 tracking-wide mt-1">
+              <p className="text-[11px] text-charcoal/40 tracking-wide mt-1">
                 Complimentary access &middot; No credit card required
               </p>
             </div>
@@ -92,40 +82,32 @@ export default function Home() {
                 <div
                   className="relative w-[360px] lg:w-[400px] aspect-[1.6/1] rounded-2xl overflow-hidden member-card-shimmer"
                   style={{
-                    background: "linear-gradient(135deg, rgba(31,61,43,0.90) 0%, rgba(31,61,43,0.74) 50%, rgba(42,82,57,0.82) 100%)",
-                    backdropFilter: "blur(24px) saturate(1.4)",
-                    WebkitBackdropFilter: "blur(24px) saturate(1.4)",
-                    border: "1px solid rgba(255,255,255,0.10)",
-                    boxShadow: "0 8px 32px -4px rgba(0,0,0,0.30), 0 32px 72px -12px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.08), inset 0 0 0 0.5px rgba(255,255,255,0.05)",
+                    background: "linear-gradient(135deg, rgba(31,61,43,0.55) 0%, rgba(31,61,43,0.40) 50%, rgba(42,82,57,0.50) 100%)",
+                    backdropFilter: "blur(20px) saturate(1.5)",
+                    WebkitBackdropFilter: "blur(20px) saturate(1.5)",
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    boxShadow: "0 8px 32px -4px rgba(0,0,0,0.30), 0 32px 72px -12px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.10), inset 0 0 0 0.5px rgba(255,255,255,0.06)",
                   }}
                 >
                   {/* Inner edge highlight — top */}
-                  <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent" />
-
-                  {/* Subtle topo-pattern overlay */}
-                  <div
-                    className="absolute inset-0 opacity-[0.04] pointer-events-none"
-                    style={{
-                      backgroundImage: `repeating-radial-gradient(ellipse at 30% 40%, transparent 0, transparent 35px, rgba(245,241,232,0.3) 36px, transparent 37px), repeating-radial-gradient(ellipse at 70% 60%, transparent 0, transparent 50px, rgba(245,241,232,0.2) 51px, transparent 52px)`,
-                    }}
-                  />
+                  <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
 
                   {/* Card content */}
                   <div className="relative z-10 h-full flex flex-col justify-between p-7">
                     {/* Top row: Logo + type */}
                     <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-2 text-bone/80">
+                      <div className="flex items-center gap-2 text-bone/85">
                         <svg viewBox="0 0 1002 540" fill="currentColor" className="h-4 w-auto" aria-hidden="true">
                           <path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" />
                         </svg>
                         <span className="font-serif text-sm font-bold tracking-wide">mully.</span>
                       </div>
-                      <span className="text-[9px] tracking-[0.2em] uppercase text-bone/30 font-medium">EST. 2025</span>
+                      <span className="text-[9px] tracking-[0.2em] uppercase text-bone/35 font-medium">EST. 2025</span>
                     </div>
 
                     {/* Center: Card title */}
                     <div className="text-center">
-                      <span className="text-[11px] tracking-[0.4em] uppercase text-bone/55 font-medium">
+                      <span className="text-[11px] tracking-[0.4em] uppercase text-bone/65 font-medium">
                         Mully Reserve
                       </span>
                     </div>
@@ -133,10 +115,10 @@ export default function Home() {
                     {/* Bottom row: Member info */}
                     <div className="flex items-end justify-between">
                       <div>
-                        <span className="block text-[9px] tracking-[0.2em] uppercase text-bone/30 mb-1">Member</span>
-                        <span className="text-sm text-bone/65 tracking-widest font-light">0001 &nbsp;2847</span>
+                        <span className="block text-[9px] tracking-[0.2em] uppercase text-bone/35 mb-1">Member</span>
+                        <span className="text-sm text-bone/70 tracking-widest font-light">0001 &nbsp;2847</span>
                       </div>
-                      <span className="text-[9px] tracking-[0.15em] uppercase text-bone/25 font-medium">
+                      <span className="text-[9px] tracking-[0.15em] uppercase text-bone/30 font-medium">
                         Reserve Member
                       </span>
                     </div>
@@ -148,7 +130,7 @@ export default function Home() {
         </div>
 
         {/* Scroll indicator */}
-        <div className="absolute bottom-10 left-1/2 -translate-x-1/2">
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2">
           <ScrollChevron />
         </div>
       </section>
@@ -202,20 +184,25 @@ export default function Home() {
                 description="Members-only pricing on premium gear. No markups. Just honest value."
                 overlay={
                   <div
-                    className="rounded-xl px-4 py-3"
+                    className="rounded-lg px-3 py-2.5"
                     style={{
-                      background: "rgba(245,241,232,0.85)",
+                      background: "rgba(245,241,232,0.82)",
                       backdropFilter: "blur(16px) saturate(1.4)",
                       WebkitBackdropFilter: "blur(16px) saturate(1.4)",
-                      border: "1px solid rgba(255,255,255,0.40)",
-                      boxShadow: "0 4px 20px -4px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.60)",
+                      border: "1px solid rgba(255,255,255,0.35)",
+                      boxShadow: "0 4px 16px -4px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.50)",
                     }}
                   >
-                    <p className="text-[10px] tracking-[0.15em] uppercase text-charcoal/50 mb-1.5">Greyson Colorado Hoodie</p>
-                    <div className="flex items-baseline gap-2.5">
-                      <span className="text-xs text-charcoal/30 line-through">$170</span>
+                    <p className="text-[9px] tracking-[0.12em] uppercase text-charcoal/45 mb-1">Greyson Colorado Hoodie</p>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-[11px] text-charcoal/30 line-through">$170</span>
                       <span className="text-sm text-forest font-semibold">$144</span>
-                      <span className="text-[9px] tracking-[0.15em] uppercase text-forest/60 font-medium">-15% Reserve</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-1.5 pt-1.5 border-t border-taupe/10">
+                      <svg className="w-3 h-3 text-forest/50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0H21M3.375 14.25h3.504c.576 0 1.09.22 1.49.588m0 0a3.012 3.012 0 015.171 0m-5.171 0H3.375m9.504 0h4.524c.577 0 1.09-.22 1.49-.588M14.25 14.25v-2.25m0 0h3.375a1.125 1.125 0 001.125-1.125v-3.375" />
+                      </svg>
+                      <span className="text-[8px] tracking-[0.1em] uppercase text-forest/50 font-medium">Free express shipping</span>
                     </div>
                   </div>
                 }
@@ -760,7 +747,7 @@ function BenefitCard({
           draggable={false}
         />
         {overlay && (
-          <div className="absolute bottom-3 left-3 right-3 z-10">
+          <div className="absolute top-3 right-3 z-10">
             {overlay}
           </div>
         )}
