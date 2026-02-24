@@ -301,7 +301,7 @@ export default function Home() {
                   {/* Content — layered above the background image */}
                   <div className="relative z-10 p-7 md:p-8 flex flex-col flex-1">
                     <div className="h-5 mb-3" />
-                    <span className="text-[11px] tracking-[0.25em] uppercase text-sage font-medium">
+                    <span className="text-[11px] tracking-[0.25em] uppercase text-bone/80 font-medium">
                       Reserve Member
                     </span>
                     <div className="mt-2 mb-5">
