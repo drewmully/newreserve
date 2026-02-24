@@ -82,32 +82,32 @@ export default function Home() {
                 <div
                   className="relative w-[360px] lg:w-[400px] aspect-[1.6/1] rounded-2xl overflow-hidden member-card-shimmer"
                   style={{
-                    background: "linear-gradient(135deg, rgba(31,61,43,0.55) 0%, rgba(31,61,43,0.40) 50%, rgba(42,82,57,0.50) 100%)",
-                    backdropFilter: "blur(20px) saturate(1.5)",
-                    WebkitBackdropFilter: "blur(20px) saturate(1.5)",
-                    border: "1px solid rgba(255,255,255,0.12)",
-                    boxShadow: "0 8px 32px -4px rgba(0,0,0,0.30), 0 32px 72px -12px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.10), inset 0 0 0 0.5px rgba(255,255,255,0.06)",
+                    background: "linear-gradient(135deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0.18) 50%, rgba(255,255,255,0.25) 100%)",
+                    backdropFilter: "blur(18px) saturate(1.6)",
+                    WebkitBackdropFilter: "blur(18px) saturate(1.6)",
+                    border: "1px solid rgba(255,255,255,0.45)",
+                    boxShadow: "0 8px 32px -4px rgba(0,0,0,0.15), 0 32px 72px -12px rgba(0,0,0,0.10), inset 0 1px 0 rgba(255,255,255,0.60), inset 0 0 0 0.5px rgba(255,255,255,0.30)",
                   }}
                 >
                   {/* Inner edge highlight — top */}
-                  <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
+                  <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/50 to-transparent" />
 
                   {/* Card content */}
                   <div className="relative z-10 h-full flex flex-col justify-between p-7">
                     {/* Top row: Logo + type */}
                     <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-2 text-bone/85">
+                      <div className="flex items-center gap-2 text-forest">
                         <svg viewBox="0 0 1002 540" fill="currentColor" className="h-4 w-auto" aria-hidden="true">
                           <path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" />
                         </svg>
                         <span className="font-serif text-sm font-bold tracking-wide">mully.</span>
                       </div>
-                      <span className="text-[9px] tracking-[0.2em] uppercase text-bone/35 font-medium">EST. 2025</span>
+                      <span className="text-[9px] tracking-[0.2em] uppercase text-forest/40 font-medium">EST. 2025</span>
                     </div>
 
                     {/* Center: Card title */}
                     <div className="text-center">
-                      <span className="text-[11px] tracking-[0.4em] uppercase text-bone/65 font-medium">
+                      <span className="text-[11px] tracking-[0.4em] uppercase text-forest/70 font-medium">
                         Mully Reserve
                       </span>
                     </div>
@@ -115,10 +115,10 @@ export default function Home() {
                     {/* Bottom row: Member info */}
                     <div className="flex items-end justify-between">
                       <div>
-                        <span className="block text-[9px] tracking-[0.2em] uppercase text-bone/35 mb-1">Member</span>
-                        <span className="text-sm text-bone/70 tracking-widest font-light">0001 &nbsp;2847</span>
+                        <span className="block text-[9px] tracking-[0.2em] uppercase text-forest/40 mb-1">Member</span>
+                        <span className="text-sm text-forest/80 tracking-widest font-light">0001 &nbsp;2847</span>
                       </div>
-                      <span className="text-[9px] tracking-[0.15em] uppercase text-bone/30 font-medium">
+                      <span className="text-[9px] tracking-[0.15em] uppercase text-forest/35 font-medium">
                         Reserve Member
                       </span>
                     </div>
