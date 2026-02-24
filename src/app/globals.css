@@ -59,40 +59,94 @@ input:focus {
   background: #6E8B74;
 }
 
-/* ─── HERO 3D OBJECTS ─── */
+/* ─── HEADER GRASS BORDER ─── */
 
-/* Subtle float for the chalice */
-@keyframes chalice-drift {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
+.header-grass {
+  position: relative;
+}
+.header-grass::after {
+  content: "";
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  right: 0;
+  height: 6px;
+  background: linear-gradient(
+    to bottom,
+    rgba(31, 61, 43, 0.18) 0%,
+    rgba(110, 139, 116, 0.10) 40%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+  pointer-events: none;
 }
 
-.hero-chalice-drift {
-  animation: chalice-drift 8s ease-in-out infinite;
+/* ─── HERO MEMBER CARD ─── */
+
+/* Gentle float for the member card */
+@keyframes member-card-float {
+  0%, 100% { transform: perspective(800px) rotateY(-4deg) rotateX(2deg) translateY(0); }
+  50% { transform: perspective(800px) rotateY(-4deg) rotateX(2deg) translateY(-10px); }
 }
 
-/* Gentle hover for polo */
-@keyframes polo-hover {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-6px); }
+.member-card-float {
+  animation: member-card-float 7s ease-in-out infinite;
+  transform-style: preserve-3d;
 }
 
-.hero-polo-hover {
-  animation: polo-hover 7s ease-in-out infinite;
+/* Holographic shimmer sweep */
+@keyframes holo-shimmer {
+  0% { transform: translateX(-120%) rotate(25deg); }
+  100% { transform: translateX(120%) rotate(25deg); }
 }
 
-.hero-polo-shadow {
-  filter: drop-shadow(0 10px 24px rgba(0,0,0,0.18)) drop-shadow(0 4px 10px rgba(0,0,0,0.10));
+.member-card-shimmer::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    105deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.06) 45%,
+    rgba(255, 255, 255, 0.12) 50%,
+    rgba(255, 255, 255, 0.06) 55%,
+    transparent 70%
+  );
+  animation: holo-shimmer 6s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 10;
 }
 
-/* 3D drop shadows for hero objects (tuned for light bg) */
-.hero-3d-shadow {
-  filter: drop-shadow(0 12px 32px rgba(31,61,43,0.18)) drop-shadow(0 4px 12px rgba(0,0,0,0.08));
+/* Spotlight glow behind the card */
+.member-card-glow {
+  position: relative;
+}
+.member-card-glow::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 120%;
+  height: 130%;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(110, 139, 116, 0.12) 0%,
+    rgba(31, 61, 43, 0.06) 40%,
+    transparent 70%
+  );
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: -1;
 }
 
-/* Golf ball inline period shadow */
-.golf-ball-shadow {
-  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.25));
+/* Hero background grain */
+.hero-grain {
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 200px 200px;
 }
 
 /* ─── SUBTLE ANIMATIONS ─── */
