@@ -3,6 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMembership } from "../context/MembershipContext";
+import {
+  FIT_SHIRT_SIZES, FIT_GLOVE_HANDS, FIT_GLOVE_SIZES,
+  FIT_WAIST_SIZES, FIT_SHOE_SIZES, FIT_PANTS_INSEAMS, FIT_SHORTS_INSEAMS,
+  FitDots, FitNav, PillButton,
+} from "../components/UpgradeModal";
 
 /* ═══════════════════════════════════════════
    ONBOARDING — Preferences → Plan Selection
@@ -100,6 +105,16 @@ export default function OnboardingPage() {
   // Step 1c state
   const [vibeCheck, setVibeCheck] = useState("");
 
+  // Step 3: Fit profile (only if Reserve Member)
+  const [fitStep, setFitStep] = useState(1); // 1 = tops, 2 = bottoms
+  const [shirtSize, setShirtSize] = useState("");
+  const [gloveHand, setGloveHand] = useState("");
+  const [gloveSize, setGloveSize] = useState("");
+  const [waistSize, setWaistSize] = useState("");
+  const [shoeSize, setShoeSize] = useState("");
+  const [pantsInseam, setPantsInseam] = useState("");
+  const [shortsInseam, setShortsInseam] = useState("");
+
   const canAdvance1a = email && username && birthMonth && birthDay && birthYear;
 
   const maxDays = daysInMonth(Number(birthMonth), Number(birthYear));
@@ -137,10 +152,13 @@ export default function OnboardingPage() {
 
       <main className="pt-28 pb-24 px-6 md:px-12">
         <div className="max-w-2xl mx-auto">
-          {/* Top progress: Step 1 vs Step 2 */}
+          {/* Top progress */}
           <div className="flex items-center gap-3 mb-10">
             <div className={`h-1 flex-1 rounded-full transition-colors duration-500 ${step >= 1 ? "bg-forest" : "bg-taupe/25"}`} />
             <div className={`h-1 flex-1 rounded-full transition-colors duration-500 ${step >= 2 ? "bg-forest" : "bg-taupe/25"}`} />
+            {step >= 3 && (
+              <div className="h-1 flex-1 rounded-full transition-colors duration-500 bg-forest" />
+            )}
           </div>
 
           {/* ════════════════════════════════════════
@@ -578,7 +596,7 @@ export default function OnboardingPage() {
                           <FeatureItem text="Invite-only events" light />
                         </ul>
                         <button
-                          onClick={() => { signIn(); setTier("member"); router.push("/dashboard"); }}
+                          onClick={() => { setFitStep(1); setStep(3); }}
                           className="h-12 px-10 rounded-xl bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-all duration-300 cursor-pointer btn-press"
                         >
                           Join Reserve Member
@@ -640,6 +658,121 @@ export default function OnboardingPage() {
                 </button>
               </div>
             </div>
+          )}
+
+          {/* ════════════════════════════════════════
+             STEP 3: FIT PROFILE (Reserve Member only)
+             ════════════════════════════════════════ */}
+          {step === 3 && (
+            <>
+              {/* Fit 1/2: Tops & Glove */}
+              {fitStep === 1 && (
+                <div className="animate-substep-in">
+                  <FitDots current={1} />
+
+                  <h1 className="font-serif text-3xl md:text-4xl text-obsidian leading-tight mb-2">
+                    Tops &amp; glove.
+                  </h1>
+                  <p className="text-sm text-charcoal/45 mb-10">
+                    So we can get your fit right from day one.
+                  </p>
+
+                  {/* Shirt */}
+                  <div className="mb-8">
+                    <h3 className="text-sm font-medium text-obsidian mb-3">Shirt size</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {FIT_SHIRT_SIZES.map((s) => (
+                        <PillButton key={s} label={s} active={shirtSize === s} onClick={() => setShirtSize(shirtSize === s ? "" : s)} />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Glove */}
+                  <div className="mb-10">
+                    <h3 className="text-sm font-medium text-obsidian mb-3">Glove</h3>
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {FIT_GLOVE_HANDS.map((h) => (
+                        <PillButton key={h} label={h} active={gloveHand === h} onClick={() => setGloveHand(gloveHand === h ? "" : h)} />
+                      ))}
+                    </div>
+                    {gloveHand && (
+                      <div className="flex flex-wrap gap-2 animate-fade-up">
+                        {FIT_GLOVE_SIZES.map((s) => (
+                          <PillButton key={s} label={s} active={gloveSize === s} onClick={() => setGloveSize(gloveSize === s ? "" : s)} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <FitNav
+                    onBack={() => setStep(2)}
+                    onSkip={() => { signIn(); setTier("member"); router.push("/dashboard"); }}
+                    onNext={() => setFitStep(2)}
+                  />
+                </div>
+              )}
+
+              {/* Fit 2/2: Bottoms & Shoes */}
+              {fitStep === 2 && (
+                <div className="animate-substep-in">
+                  <FitDots current={2} />
+
+                  <h1 className="font-serif text-3xl md:text-4xl text-obsidian leading-tight mb-2">
+                    Bottoms &amp; shoes.
+                  </h1>
+                  <p className="text-sm text-charcoal/45 mb-10">
+                    Almost there. Just a few more to lock in your profile.
+                  </p>
+
+                  {/* Waist */}
+                  <div className="mb-8">
+                    <h3 className="text-sm font-medium text-obsidian mb-3">Waist</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {FIT_WAIST_SIZES.map((s) => (
+                        <PillButton key={s} label={s} active={waistSize === s} onClick={() => setWaistSize(waistSize === s ? "" : s)} />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Pants Inseam */}
+                  <div className="mb-8">
+                    <h3 className="text-sm font-medium text-obsidian mb-3">Pants inseam</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {FIT_PANTS_INSEAMS.map((s) => (
+                        <PillButton key={s} label={s} active={pantsInseam === s} onClick={() => setPantsInseam(pantsInseam === s ? "" : s)} />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Shorts Inseam */}
+                  <div className="mb-8">
+                    <h3 className="text-sm font-medium text-obsidian mb-3">Shorts inseam</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {FIT_SHORTS_INSEAMS.map((s) => (
+                        <PillButton key={s} label={s} active={shortsInseam === s} onClick={() => setShortsInseam(shortsInseam === s ? "" : s)} />
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Shoe */}
+                  <div className="mb-10">
+                    <h3 className="text-sm font-medium text-obsidian mb-3">Shoe size</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {FIT_SHOE_SIZES.map((s) => (
+                        <PillButton key={s} label={s} active={shoeSize === s} onClick={() => setShoeSize(shoeSize === s ? "" : s)} />
+                      ))}
+                    </div>
+                  </div>
+
+                  <FitNav
+                    onBack={() => setFitStep(1)}
+                    onSkip={() => { signIn(); setTier("member"); router.push("/dashboard"); }}
+                    onNext={() => { signIn(); setTier("member"); router.push("/dashboard"); }}
+                    isLast
+                  />
+                </div>
+              )}
+            </>
           )}
         </div>
       </main>
