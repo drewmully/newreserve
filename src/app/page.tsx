@@ -697,12 +697,12 @@ function TierFeature({
   const checkColor = dark
     ? "text-taupe"
     : light
-      ? "text-sage"
+      ? "text-bone/80"
       : "text-forest";
   const textColor = dark
     ? "text-bone/45"
     : light
-      ? "text-bone/65"
+      ? "text-bone/80"
       : "text-charcoal/65";
 
   return (
