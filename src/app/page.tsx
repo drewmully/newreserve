@@ -26,8 +26,8 @@ export default function Home() {
       </header>
 
       {/* ─── HERO ─── */}
-      <section className="relative min-h-screen flex items-center px-6 md:px-12 lg:px-20 pt-24 pb-20 bg-bone overflow-hidden">
-        {/* Layer 1: Background image — morning golf course, desaturated + faded + blurred */}
+      <section className="relative min-h-screen flex items-center px-6 md:px-12 lg:px-20 pt-24 pb-20 overflow-hidden">
+        {/* Layer 1: Full-bleed background image */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/ChatGPT_Image_Feb_24_2026_03_08_18_PM.png?v=1771963720"
@@ -35,21 +35,21 @@ export default function Home() {
           aria-hidden="true"
           draggable={false}
           className="absolute inset-0 w-full h-full object-cover pointer-events-none select-none"
-          style={{
-            filter: "blur(20px) saturate(0.3)",
-            opacity: 0.18,
-            transform: "scale(1.08)",
-          }}
         />
 
-        {/* Layer 2: Cream overlay — controls the fade level */}
-        <div className="absolute inset-0 bg-bone/60 pointer-events-none" />
+        {/* Layer 2: Gradient overlay — readable left, image visible right */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background: "linear-gradient(to right, rgba(245,241,232,0.92) 0%, rgba(245,241,232,0.80) 40%, rgba(245,241,232,0.45) 70%, rgba(245,241,232,0.25) 100%)",
+          }}
+        />
 
         {/* Layer 3: Paper grain texture */}
         <div className="absolute inset-0 hero-grain pointer-events-none" />
 
-        {/* Layer 4: Faint brand watermark — large Mully flag, offset right */}
-        <div className="absolute top-1/2 left-[58%] -translate-y-1/2 pointer-events-none opacity-[0.025]">
+        {/* Layer 4: Faint brand watermark */}
+        <div className="absolute top-1/2 left-[58%] -translate-y-1/2 pointer-events-none opacity-[0.03]">
           <svg viewBox="0 0 1002 540" fill="#1F3D2B" className="w-[500px] md:w-[700px] lg:w-[900px] h-auto" aria-hidden="true">
             <path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" />
           </svg>
@@ -157,7 +157,7 @@ export default function Home() {
       <FadeInSection initialOpacity={0.15}>
         <section className="py-16 md:py-20 px-6 md:px-12 border-b border-taupe/15 bg-bone-dark/50">
           <div className="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-4">
-            <StatCounter end={2400} suffix="+" label="Members" />
+            <StatCounter end={100} suffix="K+" label="Orders Shipped" />
             <StatCounter end={40} suffix="+" label="Brand Partners" />
             <StatCounter end={250} prefix="$" suffix="+" label="Avg. Savings" />
             <StatCounter end={96} suffix="%" label="Renewal Rate" />
@@ -200,17 +200,26 @@ export default function Home() {
                 image="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/Colorado_Hoodie.webp?v=1771960357"
                 title="Reserve Pricing"
                 description="Members-only pricing on premium gear. No markups. Just honest value."
-              >
-                {/* Pricing comparison overlay */}
-                <div className="mt-4 rounded-xl bg-forest/[0.04] border border-forest/[0.08] p-4">
-                  <p className="text-[11px] tracking-wide uppercase text-charcoal/40 mb-2">Greyson Colorado Hoodie</p>
-                  <div className="flex items-baseline gap-3">
-                    <span className="text-sm text-charcoal/30 line-through">$170</span>
-                    <span className="text-base text-forest font-semibold">$144</span>
-                    <span className="text-[10px] tracking-[0.15em] uppercase text-forest/60 font-medium">-15% Reserve</span>
+                overlay={
+                  <div
+                    className="rounded-xl px-4 py-3"
+                    style={{
+                      background: "rgba(245,241,232,0.85)",
+                      backdropFilter: "blur(16px) saturate(1.4)",
+                      WebkitBackdropFilter: "blur(16px) saturate(1.4)",
+                      border: "1px solid rgba(255,255,255,0.40)",
+                      boxShadow: "0 4px 20px -4px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.60)",
+                    }}
+                  >
+                    <p className="text-[10px] tracking-[0.15em] uppercase text-charcoal/50 mb-1.5">Greyson Colorado Hoodie</p>
+                    <div className="flex items-baseline gap-2.5">
+                      <span className="text-xs text-charcoal/30 line-through">$170</span>
+                      <span className="text-sm text-forest font-semibold">$144</span>
+                      <span className="text-[9px] tracking-[0.15em] uppercase text-forest/60 font-medium">-15% Reserve</span>
+                    </div>
                   </div>
-                </div>
-              </BenefitCard>
+                }
+              />
             </ScrollReveal>
             <ScrollReveal delay={0.24}>
               <BenefitCard
@@ -731,16 +740,18 @@ function BenefitCard({
   image,
   title,
   description,
+  overlay,
   children,
 }: {
   image: string;
   title: string;
   description: string;
+  overlay?: React.ReactNode;
   children?: React.ReactNode;
 }) {
   return (
     <div className="bg-cream rounded-2xl overflow-hidden border border-taupe/15 card-hover group h-full">
-      <div className="aspect-[4/3] overflow-hidden">
+      <div className="relative aspect-[3/2] overflow-hidden">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={image}
@@ -748,6 +759,11 @@ function BenefitCard({
           className="w-full h-full object-cover transition-transform duration-600 group-hover:scale-105"
           draggable={false}
         />
+        {overlay && (
+          <div className="absolute bottom-3 left-3 right-3 z-10">
+            {overlay}
+          </div>
+        )}
       </div>
       <div className="p-6 md:p-7">
         <h3 className="font-serif text-lg text-obsidian mb-2">{title}</h3>
