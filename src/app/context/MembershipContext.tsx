@@ -17,6 +17,26 @@ export interface CartItem {
   quantity: number;
 }
 
+export interface FitProfile {
+  shirtSize: string;
+  gloveHand: string;
+  gloveSize: string;
+  waistSize: string;
+  pantsInseam: string;
+  shortsInseam: string;
+  shoeSize: string;
+}
+
+export const EMPTY_FIT: FitProfile = {
+  shirtSize: "",
+  gloveHand: "",
+  gloveSize: "",
+  waistSize: "",
+  pantsInseam: "",
+  shortsInseam: "",
+  shoeSize: "",
+};
+
 interface MembershipContextValue {
   // Auth
   isSignedIn: boolean;
@@ -41,6 +61,10 @@ interface MembershipContextValue {
   removeFromCart: (slug: string) => void;
   cartCount: number;
   cartTotal: number;
+
+  // Fit profile
+  fitProfile: FitProfile;
+  setFitProfile: (profile: FitProfile) => void;
 
   // Club
   clubStatus: ClubStatus;
@@ -79,6 +103,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
   const [tier, setTier] = useState<MemberTier>("free");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
+  const [fitProfile, setFitProfile] = useState<FitProfile>(EMPTY_FIT);
   const [clubStatus, setClubStatus] = useState<ClubStatus>("none");
   const [interestedClubs, setInterestedClubs] = useState<string[]>([]);
 
@@ -131,6 +156,8 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
         removeFromCart,
         cartCount,
         cartTotal,
+        fitProfile,
+        setFitProfile,
         clubStatus,
         setClubStatus,
         interestedClubs,

@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useMembership } from "../context/MembershipContext";
+import { useMembership, type FitProfile } from "../context/MembershipContext";
 import { SlideCart } from "../components/SlideCart";
-import { UpgradeModal } from "../components/UpgradeModal";
+import { UpgradeModal, PillButton, FIT_SHIRT_SIZES, FIT_GLOVE_HANDS, FIT_GLOVE_SIZES, FIT_WAIST_SIZES, FIT_SHOE_SIZES, FIT_PANTS_INSEAMS, FIT_SHORTS_INSEAMS } from "../components/UpgradeModal";
 
 /* ═══════════════════════════════════════════
-   ACCOUNT PAGE
+   ACCOUNT PAGE — Redesigned
+   Clean, low cognitive-load layout
    ═══════════════════════════════════════════ */
 
 export default function AccountPage() {
@@ -22,46 +23,27 @@ export default function AccountPage() {
     setTier,
     cartCount,
     setCartOpen,
+    fitProfile,
+    setFitProfile,
   } = useMembership();
 
-  const [editingUsername, setEditingUsername] = useState(false);
-  const [editingEmail, setEditingEmail] = useState(false);
-  const [tempUsername, setTempUsername] = useState(username);
-  const [tempEmail, setTempEmail] = useState(email);
   const [upgradeOpen, setUpgradeOpen] = useState(false);
 
-  const handleSaveUsername = () => {
-    setUsername(tempUsername);
-    setEditingUsername(false);
-  };
-
-  const handleSaveEmail = () => {
-    setEmail(tempEmail);
-    setEditingEmail(false);
-  };
-
-  // Not signed in — redirect nudge
+  /* ── Not signed in ── */
   if (!isSignedIn) {
     return (
       <div className="min-h-screen bg-bone">
-        <header className="fixed top-0 left-0 right-0 z-50 bg-bone/90 backdrop-blur-md border-b border-taupe/20">
-          <div className="max-w-7xl mx-auto px-6 md:px-12 flex items-center justify-between h-16">
-            <Link href="/" className="flex items-center gap-2 text-forest">
-              <svg viewBox="0 0 1002 540" fill="currentColor" className="h-5 w-auto" aria-hidden="true"><path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" /></svg>
-              <span className="font-serif text-2xl font-bold tracking-wide">mully.</span>
-            </Link>
-          </div>
-        </header>
-        <main className="pt-28 pb-24 px-6 md:px-12">
-          <div className="max-w-md mx-auto text-center">
-            <div className="w-16 h-16 rounded-2xl bg-forest/8 flex items-center justify-center mx-auto mb-6">
-              <svg className="w-8 h-8 text-forest" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <AccountHeader cartCount={cartCount} onCartOpen={() => setCartOpen(true)} />
+        <main className="pt-28 pb-24 px-6">
+          <div className="max-w-sm mx-auto text-center">
+            <div className="w-14 h-14 rounded-2xl bg-forest/8 flex items-center justify-center mx-auto mb-5">
+              <svg className="w-7 h-7 text-forest" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
               </svg>
             </div>
-            <h1 className="font-serif text-2xl text-obsidian mb-3">Your Account</h1>
-            <p className="text-sm text-charcoal/55 leading-relaxed mb-8">
-              Sign up or log in to access your account settings, order history, and membership details.
+            <h1 className="font-serif text-2xl text-obsidian mb-2">Your Account</h1>
+            <p className="text-sm text-charcoal/50 leading-relaxed mb-8">
+              Sign up or log in to manage your membership, fit profile, and orders.
             </p>
             <Link
               href="/onboarding"
@@ -79,223 +61,88 @@ export default function AccountPage() {
 
   return (
     <div className="min-h-screen bg-bone">
-      {/* ─── HEADER ─── */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-bone/90 backdrop-blur-md border-b border-taupe/20">
-        <div className="max-w-7xl mx-auto px-6 md:px-12 flex items-center justify-between h-16">
-          <Link href="/" className="flex items-center gap-2 text-forest">
-            <svg viewBox="0 0 1002 540" fill="currentColor" className="h-5 w-auto" aria-hidden="true"><path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" /></svg>
-            <span className="font-serif text-2xl font-bold tracking-wide">mully.</span>
-          </Link>
-          <div className="flex items-center gap-5">
-            <button
-              onClick={() => setCartOpen(true)}
-              className="relative text-forest hover:text-forest-dark transition-colors duration-300 cursor-pointer"
-              aria-label="Cart"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
-              </svg>
-              {cartCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-ember text-white text-[10px] font-medium flex items-center justify-center">
-                  {cartCount}
-                </span>
-              )}
-            </button>
-            <Link href="/dashboard" className="text-forest hover:text-forest-dark transition-colors duration-300" aria-label="Dashboard">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
-              </svg>
-            </Link>
-          </div>
-        </div>
-      </header>
+      <AccountHeader cartCount={cartCount} onCartOpen={() => setCartOpen(true)} />
 
-      <main className="pt-28 pb-24 px-6 md:px-12">
-        <div className="max-w-2xl mx-auto">
-          {/* Back to dashboard */}
+      <main className="pt-24 pb-20 px-5 md:px-12">
+        <div className="max-w-xl mx-auto">
+          {/* ── Back link ── */}
           <Link
             href="/dashboard"
-            className="inline-flex items-center gap-1.5 text-sm text-charcoal/40 hover:text-forest transition-colors duration-300 mb-8"
+            className="inline-flex items-center gap-1.5 text-xs text-charcoal/35 hover:text-forest transition-colors duration-300 mb-6"
           >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
             </svg>
-            Back to Dashboard
+            Dashboard
           </Link>
 
-          <h1 className="font-serif text-3xl text-obsidian mb-10">Account</h1>
+          {/* ── Page title + tier badge ── */}
+          <div className="flex items-center gap-3 mb-10">
+            <h1 className="font-serif text-2xl md:text-3xl text-obsidian">Account</h1>
+            <span className={`text-[10px] tracking-[0.15em] uppercase font-medium px-2.5 py-1 rounded-full ${
+              isPaid ? "bg-forest/10 text-forest" : "bg-taupe/15 text-charcoal/40"
+            }`}>
+              {tierLabel}
+            </span>
+          </div>
 
-          {/* ── Profile ── */}
+          {/* ═══ PROFILE ═══ */}
+          <ProfileSection
+            username={username}
+            email={email}
+            onSaveUsername={setUsername}
+            onSaveEmail={setEmail}
+          />
+
+          {/* ═══ FIT PROFILE ═══ */}
+          <FitProfileSection fitProfile={fitProfile} onSave={setFitProfile} />
+
+          {/* ═══ MEMBERSHIP ═══ */}
+          <SubscriptionSection
+            tier={tier}
+            tierLabel={tierLabel}
+            setTier={setTier}
+            onUpgrade={() => setUpgradeOpen(true)}
+          />
+
+          {/* ═══ NOTIFICATIONS ═══ */}
+          <NotificationSection />
+
+          {/* ═══ ORDERS ═══ */}
           <section className="mb-10">
-            <h2 className="text-xs tracking-[0.25em] uppercase text-sage font-medium mb-5">Profile</h2>
-
-            <div className="space-y-4">
-              {/* Username */}
-              <div className="bg-cream rounded-xl border border-taupe/15 p-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-charcoal/40 mb-1">Username</p>
-                    {editingUsername ? (
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={tempUsername}
-                          onChange={(e) => setTempUsername(e.target.value)}
-                          autoFocus
-                          className="h-9 px-3 rounded-lg bg-bone border border-taupe/25 text-sm text-obsidian focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300 w-48"
-                        />
-                        <button
-                          onClick={handleSaveUsername}
-                          className="h-9 px-4 rounded-lg bg-forest text-bone text-xs font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer"
-                        >
-                          Save
-                        </button>
-                        <button
-                          onClick={() => { setTempUsername(username); setEditingUsername(false); }}
-                          className="text-xs text-charcoal/40 hover:text-charcoal/60 transition-colors duration-300 cursor-pointer"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    ) : (
-                      <p className="text-sm text-obsidian font-medium">{username || "Not set"}</p>
-                    )}
-                  </div>
-                  {!editingUsername && (
-                    <button
-                      onClick={() => { setTempUsername(username); setEditingUsername(true); }}
-                      className="text-xs text-forest hover:text-forest-dark transition-colors duration-300 cursor-pointer"
-                    >
-                      Edit
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Email */}
-              <div className="bg-cream rounded-xl border border-taupe/15 p-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-charcoal/40 mb-1">Email</p>
-                    {editingEmail ? (
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="email"
-                          value={tempEmail}
-                          onChange={(e) => setTempEmail(e.target.value)}
-                          autoFocus
-                          className="h-9 px-3 rounded-lg bg-bone border border-taupe/25 text-sm text-obsidian focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300 w-56"
-                        />
-                        <button
-                          onClick={handleSaveEmail}
-                          className="h-9 px-4 rounded-lg bg-forest text-bone text-xs font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer"
-                        >
-                          Save
-                        </button>
-                        <button
-                          onClick={() => { setTempEmail(email); setEditingEmail(false); }}
-                          className="text-xs text-charcoal/40 hover:text-charcoal/60 transition-colors duration-300 cursor-pointer"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    ) : (
-                      <p className="text-sm text-obsidian font-medium">{email || "Not set"}</p>
-                    )}
-                  </div>
-                  {!editingEmail && (
-                    <button
-                      onClick={() => { setTempEmail(email); setEditingEmail(true); }}
-                      className="text-xs text-forest hover:text-forest-dark transition-colors duration-300 cursor-pointer"
-                    >
-                      Edit
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          </section>
-
-          {/* ── Concierge Request ── */}
-          {isPaid && <ConciergeRequestSection />}
-
-          {/* ── Orders ── */}
-          <section className="mb-10">
-            <h2 className="text-xs tracking-[0.25em] uppercase text-sage font-medium mb-5">Orders</h2>
-
-            <div className="bg-cream rounded-xl border border-taupe/15 p-8 text-center">
-              <svg className="w-10 h-10 text-taupe/30 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
-              </svg>
+            <SectionLabel>Orders</SectionLabel>
+            <div className="rounded-xl border border-taupe/12 bg-cream p-6 text-center">
               <p className="text-sm text-charcoal/40 mb-1">No orders yet</p>
-              <p className="text-xs text-charcoal/30 mb-5">Your order history will appear here once you make a purchase.</p>
+              <p className="text-xs text-charcoal/25 mb-4">Your history will appear here after your first purchase.</p>
               <Link
                 href="/dashboard"
-                className="inline-flex items-center justify-center h-9 px-5 rounded-lg border border-taupe/25 text-xs font-medium tracking-wider uppercase text-charcoal/50 hover:border-forest/30 hover:text-forest transition-all duration-300"
+                className="inline-flex items-center justify-center h-9 px-5 rounded-lg border border-taupe/20 text-xs font-medium tracking-wider uppercase text-charcoal/45 hover:border-forest/30 hover:text-forest transition-all duration-300"
               >
                 Browse Shop
               </Link>
             </div>
           </section>
 
-          {/* ── Preferences ── */}
-          <section className="mb-10">
-            <h2 className="text-xs tracking-[0.25em] uppercase text-sage font-medium mb-5">Preferences</h2>
-
-            <div className="space-y-4">
-              <div className="bg-cream rounded-xl border border-taupe/15 p-5 flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-obsidian font-medium">Email Notifications</p>
-                  <p className="text-xs text-charcoal/40 mt-0.5">New drops, community activity, and order updates</p>
-                </div>
-                <ToggleSwitch />
-              </div>
-              <div className="bg-cream rounded-xl border border-taupe/15 p-5 flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-obsidian font-medium">SMS Notifications</p>
-                  <p className="text-xs text-charcoal/40 mt-0.5">Priority drop alerts and shipping updates</p>
-                </div>
-                <ToggleSwitch />
-              </div>
-            </div>
-          </section>
-
-          {/* ── Addresses ── */}
-          <section className="mb-10">
-            <h2 className="text-xs tracking-[0.25em] uppercase text-sage font-medium mb-5">Shipping Address</h2>
-
-            <div className="bg-cream rounded-xl border border-taupe/15 p-8 text-center">
-              <p className="text-sm text-charcoal/40 mb-1">No address saved</p>
-              <p className="text-xs text-charcoal/30">You&rsquo;ll be prompted to enter a shipping address at checkout.</p>
-            </div>
-          </section>
-
-          {/* ── Subscription Management (buried lower) ── */}
-          <SubscriptionSection tier={tier} tierLabel={tierLabel} setTier={setTier} onUpgrade={() => setUpgradeOpen(true)} />
-
-          {/* ── Danger Zone ── */}
-          <section>
-            <h2 className="text-xs tracking-[0.25em] uppercase text-charcoal/30 font-medium mb-5">Account</h2>
-            <div className="flex items-center gap-4">
-              <button className="text-xs text-charcoal/35 hover:text-charcoal/60 transition-colors duration-300 cursor-pointer underline underline-offset-2">
-                Sign Out
-              </button>
-              <button className="text-xs text-ember/50 hover:text-ember transition-colors duration-300 cursor-pointer underline underline-offset-2">
-                Delete Account
-              </button>
-            </div>
-          </section>
+          {/* ═══ ACCOUNT ACTIONS ═══ */}
+          <div className="pt-6 border-t border-taupe/10 flex items-center gap-5">
+            <button className="text-xs text-charcoal/30 hover:text-charcoal/55 transition-colors duration-300 cursor-pointer">
+              Sign Out
+            </button>
+            <button className="text-xs text-ember/40 hover:text-ember transition-colors duration-300 cursor-pointer">
+              Delete Account
+            </button>
+          </div>
         </div>
       </main>
 
       {/* ─── FOOTER ─── */}
-      <footer className="py-10 px-6 md:px-12 bg-forest">
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <footer className="py-8 px-6 bg-forest">
+        <div className="max-w-6xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <span className="flex items-center gap-2 text-bone">
-            <svg viewBox="0 0 1002 540" fill="currentColor" className="h-4 w-auto" aria-hidden="true"><path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" /></svg>
-            <span className="font-serif text-xl font-bold tracking-wide">mully.</span>
+            <svg viewBox="0 0 1002 540" fill="currentColor" className="h-3.5 w-auto" aria-hidden="true"><path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" /></svg>
+            <span className="font-serif text-lg font-bold tracking-wide">mully.</span>
           </span>
-          <p className="text-xs text-bone/40">
+          <p className="text-xs text-bone/35">
             &copy; {new Date().getFullYear()} Mully Group, Inc. All rights reserved.
           </p>
         </div>
@@ -313,138 +160,412 @@ export default function AccountPage() {
 }
 
 /* ═══════════════════════════════════════════
-   CONCIERGE REQUEST FORM
+   HEADER
    ═══════════════════════════════════════════ */
 
-const DEPARTMENTS = [
-  { value: "concierge", label: "Concierge Services", description: "Guest play, travel, and experience bookings" },
-  { value: "styling", label: "Styling & Recommendations", description: "Personal styling advice and product curation" },
-  { value: "partnerships", label: "Partnerships", description: "Brand partnerships and collaboration inquiries" },
-  { value: "general", label: "General Inquiry", description: "Questions, feedback, or anything else" },
-];
+function AccountHeader({ cartCount, onCartOpen }: { cartCount: number; onCartOpen: () => void }) {
+  return (
+    <header className="fixed top-0 left-0 right-0 z-50 bg-bone/90 backdrop-blur-md border-b border-taupe/15">
+      <div className="max-w-7xl mx-auto px-5 md:px-12 flex items-center justify-between h-14">
+        <Link href="/" className="flex items-center gap-2 text-forest">
+          <svg viewBox="0 0 1002 540" fill="currentColor" className="h-4.5 w-auto" aria-hidden="true"><path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" /></svg>
+          <span className="font-serif text-xl font-bold tracking-wide">mully.</span>
+        </Link>
+        <div className="flex items-center gap-4">
+          <button
+            onClick={onCartOpen}
+            className="relative text-forest hover:text-forest-dark transition-colors duration-300 cursor-pointer p-1"
+            aria-label="Cart"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+            </svg>
+            {cartCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-ember text-white text-[10px] font-medium flex items-center justify-center">
+                {cartCount}
+              </span>
+            )}
+          </button>
+          <Link href="/dashboard" className="text-forest hover:text-forest-dark transition-colors duration-300 p-1" aria-label="Dashboard">
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+            </svg>
+          </Link>
+        </div>
+      </div>
+    </header>
+  );
+}
 
-function ConciergeRequestSection() {
-  const [department, setDepartment] = useState("");
-  const [subject, setSubject] = useState("");
-  const [message, setMessage] = useState("");
-  const [submitted, setSubmitted] = useState(false);
+/* ═══════════════════════════════════════════
+   SECTION LABEL
+   ═══════════════════════════════════════════ */
 
-  const canSubmit = department && subject.trim() && message.trim();
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <h2 className="text-[11px] tracking-[0.25em] uppercase text-sage font-medium mb-4">{children}</h2>
+  );
+}
 
-  const handleSubmit = () => {
-    if (!canSubmit) return;
-    setSubmitted(true);
-  };
+/* ═══════════════════════════════════════════
+   PROFILE SECTION
+   Consolidated username + email in one card
+   ═══════════════════════════════════════════ */
 
-  const handleReset = () => {
-    setDepartment("");
-    setSubject("");
-    setMessage("");
-    setSubmitted(false);
-  };
+function ProfileSection({
+  username,
+  email,
+  onSaveUsername,
+  onSaveEmail,
+}: {
+  username: string;
+  email: string;
+  onSaveUsername: (v: string) => void;
+  onSaveEmail: (v: string) => void;
+}) {
+  const [editingField, setEditingField] = useState<"username" | "email" | null>(null);
+  const [tempValue, setTempValue] = useState("");
+
+  function startEdit(field: "username" | "email") {
+    setTempValue(field === "username" ? username : email);
+    setEditingField(field);
+  }
+
+  function save() {
+    if (!editingField) return;
+    if (editingField === "username") onSaveUsername(tempValue);
+    else onSaveEmail(tempValue);
+    setEditingField(null);
+  }
+
+  function cancel() {
+    setEditingField(null);
+  }
 
   return (
-    <section className="mb-10">
-      <h2 className="text-xs tracking-[0.25em] uppercase text-sage font-medium mb-5">Concierge Request</h2>
-
-      {submitted ? (
-        <div className="bg-cream rounded-2xl border border-taupe/15 p-8 text-center animate-fade-up">
-          <div className="w-12 h-12 rounded-2xl bg-forest/10 flex items-center justify-center mx-auto mb-4">
-            <svg className="w-6 h-6 text-forest" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
+    <section className="mb-8">
+      <SectionLabel>Profile</SectionLabel>
+      <div className="rounded-xl border border-taupe/12 bg-cream overflow-hidden">
+        {/* Username row */}
+        <div className="px-5 py-4 flex items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] text-charcoal/35 mb-0.5">Username</p>
+            {editingField === "username" ? (
+              <div className="flex items-center gap-2 mt-1">
+                <input
+                  type="text"
+                  value={tempValue}
+                  onChange={(e) => setTempValue(e.target.value)}
+                  autoFocus
+                  className="h-9 px-3 rounded-lg bg-bone border border-taupe/25 text-sm text-obsidian focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300 w-full max-w-[220px]"
+                  onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") cancel(); }}
+                />
+                <button onClick={save} className="h-9 px-3.5 rounded-lg bg-forest text-bone text-xs font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer shrink-0">Save</button>
+                <button onClick={cancel} className="text-xs text-charcoal/35 hover:text-charcoal/55 transition-colors duration-300 cursor-pointer shrink-0">Cancel</button>
+              </div>
+            ) : (
+              <p className="text-sm text-obsidian font-medium truncate">{username || "Not set"}</p>
+            )}
           </div>
-          <h3 className="font-serif text-lg text-obsidian mb-2">Request Submitted</h3>
-          <p className="text-sm text-charcoal/50 leading-relaxed mb-5 max-w-sm mx-auto">
-            Our concierge team has received your request and will respond within 24 hours via email.
-          </p>
-          <button
-            onClick={handleReset}
-            className="text-xs text-forest hover:text-forest-dark transition-colors duration-300 cursor-pointer underline underline-offset-2"
-          >
-            Submit another request
-          </button>
+          {editingField !== "username" && (
+            <button onClick={() => startEdit("username")} className="text-xs text-forest/60 hover:text-forest transition-colors duration-300 cursor-pointer shrink-0">Edit</button>
+          )}
         </div>
-      ) : (
-        <div className="bg-cream rounded-2xl border border-taupe/15 p-6">
-          <p className="text-sm text-charcoal/50 leading-relaxed mb-5">
-            Our concierge team is here to help. Select a department and tell us how we can assist.
-          </p>
 
-          {/* Department select */}
-          <div className="mb-4">
-            <label className="text-xs tracking-wide uppercase text-charcoal/50 font-medium mb-2 block">
-              Department
-            </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {DEPARTMENTS.map((dept) => (
-                <button
-                  key={dept.value}
-                  onClick={() => setDepartment(dept.value)}
-                  className={`text-left px-4 py-3 rounded-xl border transition-all duration-300 cursor-pointer ${
-                    department === dept.value
-                      ? "bg-forest text-bone border-forest"
-                      : "bg-bone border-taupe/20 hover:border-forest/30"
-                  }`}
-                >
-                  <p className={`text-sm font-medium ${department === dept.value ? "text-bone" : "text-obsidian"}`}>
-                    {dept.label}
-                  </p>
-                  <p className={`text-xs mt-0.5 ${department === dept.value ? "text-bone/55" : "text-charcoal/40"}`}>
-                    {dept.description}
-                  </p>
-                </button>
-              ))}
-            </div>
+        <div className="h-px bg-taupe/10 mx-5" />
+
+        {/* Email row */}
+        <div className="px-5 py-4 flex items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] text-charcoal/35 mb-0.5">Email</p>
+            {editingField === "email" ? (
+              <div className="flex items-center gap-2 mt-1">
+                <input
+                  type="email"
+                  value={tempValue}
+                  onChange={(e) => setTempValue(e.target.value)}
+                  autoFocus
+                  className="h-9 px-3 rounded-lg bg-bone border border-taupe/25 text-sm text-obsidian focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300 w-full max-w-[260px]"
+                  onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") cancel(); }}
+                />
+                <button onClick={save} className="h-9 px-3.5 rounded-lg bg-forest text-bone text-xs font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer shrink-0">Save</button>
+                <button onClick={cancel} className="text-xs text-charcoal/35 hover:text-charcoal/55 transition-colors duration-300 cursor-pointer shrink-0">Cancel</button>
+              </div>
+            ) : (
+              <p className="text-sm text-obsidian font-medium truncate">{email || "Not set"}</p>
+            )}
           </div>
-
-          {/* Subject */}
-          <div className="mb-4">
-            <label className="text-xs tracking-wide uppercase text-charcoal/50 font-medium mb-2 block">
-              Subject
-            </label>
-            <input
-              type="text"
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              placeholder="Brief summary of your request"
-              className="w-full h-11 px-4 rounded-xl bg-bone border border-taupe/25 text-obsidian text-sm placeholder:text-charcoal/30 focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300"
-            />
-          </div>
-
-          {/* Message */}
-          <div className="mb-5">
-            <label className="text-xs tracking-wide uppercase text-charcoal/50 font-medium mb-2 block">
-              Message
-            </label>
-            <textarea
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              placeholder="How can we help?"
-              rows={4}
-              className="w-full px-4 py-3 rounded-xl bg-bone border border-taupe/25 text-obsidian text-sm placeholder:text-charcoal/30 focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300 resize-none"
-            />
-          </div>
-
-          <button
-            onClick={handleSubmit}
-            disabled={!canSubmit}
-            className={`h-11 px-8 rounded-xl text-sm font-medium tracking-wider uppercase transition-all duration-300 cursor-pointer btn-press ${
-              canSubmit
-                ? "bg-forest text-bone hover:bg-forest-dark"
-                : "bg-taupe/25 text-charcoal/30 cursor-not-allowed"
-            }`}
-          >
-            Submit Request
-          </button>
+          {editingField !== "email" && (
+            <button onClick={() => startEdit("email")} className="text-xs text-forest/60 hover:text-forest transition-colors duration-300 cursor-pointer shrink-0">Edit</button>
+          )}
         </div>
-      )}
+      </div>
     </section>
   );
 }
 
 /* ═══════════════════════════════════════════
-   SUBSCRIPTION MANAGEMENT
+   FIT PROFILE SECTION
+   States: empty → editing → viewing
+   ═══════════════════════════════════════════ */
+
+function FitProfileSection({ fitProfile, onSave }: { fitProfile: FitProfile; onSave: (p: FitProfile) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<FitProfile>(fitProfile);
+
+  const hasAny = Object.values(fitProfile).some((v) => v !== "");
+  const filledCount = Object.values(fitProfile).filter((v) => v !== "").length;
+  const totalFields = 7;
+  const isComplete = filledCount === totalFields;
+
+  function startEditing() {
+    setDraft({ ...fitProfile });
+    setEditing(true);
+  }
+
+  function handleSave() {
+    onSave(draft);
+    setEditing(false);
+  }
+
+  function handleCancel() {
+    setDraft({ ...fitProfile });
+    setEditing(false);
+  }
+
+  function updateDraft(key: keyof FitProfile, value: string) {
+    setDraft((prev) => ({
+      ...prev,
+      [key]: prev[key] === value ? "" : value,
+      // Clear glove size if hand changes
+      ...(key === "gloveHand" && prev.gloveHand !== value ? { gloveSize: "" } : {}),
+    }));
+  }
+
+  /* ── EMPTY STATE ── */
+  if (!hasAny && !editing) {
+    return (
+      <section className="mb-8">
+        <SectionLabel>Fit Profile</SectionLabel>
+        <div className="rounded-xl border border-dashed border-taupe/20 bg-cream/60 p-6 text-center">
+          <div className="w-11 h-11 rounded-xl bg-forest/8 flex items-center justify-center mx-auto mb-3">
+            <svg className="w-5.5 h-5.5 text-forest" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+            </svg>
+          </div>
+          <h3 className="text-sm font-medium text-obsidian mb-1">Set up your fit profile</h3>
+          <p className="text-xs text-charcoal/40 leading-relaxed mb-5 max-w-xs mx-auto">
+            Help us get your sizing right. We&rsquo;ll use this for curated drops, member boxes, and product recommendations.
+          </p>
+          <button
+            onClick={startEditing}
+            className="inline-flex items-center justify-center h-10 px-6 rounded-xl bg-forest text-bone text-xs font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 btn-press cursor-pointer"
+          >
+            Add Preferences
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  /* ── EDITING STATE ── */
+  if (editing) {
+    return (
+      <section className="mb-8">
+        <SectionLabel>Fit Profile</SectionLabel>
+        <div className="rounded-xl border border-forest/15 bg-cream p-5 space-y-6 animate-fade-up">
+          {/* Tops */}
+          <div>
+            <h3 className="text-xs font-medium text-obsidian tracking-wide uppercase mb-2.5">Shirt</h3>
+            <div className="flex flex-wrap gap-1.5">
+              {FIT_SHIRT_SIZES.map((s) => (
+                <PillButton key={s} label={s} active={draft.shirtSize === s} onClick={() => updateDraft("shirtSize", s)} />
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-xs font-medium text-obsidian tracking-wide uppercase mb-2.5">Glove hand</h3>
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {FIT_GLOVE_HANDS.map((h) => (
+                <PillButton key={h} label={h} active={draft.gloveHand === h} onClick={() => updateDraft("gloveHand", h)} />
+              ))}
+            </div>
+            {draft.gloveHand && (
+              <>
+                <h3 className="text-xs font-medium text-obsidian tracking-wide uppercase mb-2.5 mt-4">Glove size</h3>
+                <div className="flex flex-wrap gap-1.5 animate-fade-up">
+                  {FIT_GLOVE_SIZES.map((s) => (
+                    <PillButton key={s} label={s} active={draft.gloveSize === s} onClick={() => updateDraft("gloveSize", s)} />
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="h-px bg-taupe/12" />
+
+          {/* Bottoms */}
+          <div>
+            <h3 className="text-xs font-medium text-obsidian tracking-wide uppercase mb-2.5">Waist</h3>
+            <div className="flex flex-wrap gap-1.5">
+              {FIT_WAIST_SIZES.map((s) => (
+                <PillButton key={s} label={s} active={draft.waistSize === s} onClick={() => updateDraft("waistSize", s)} />
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-xs font-medium text-obsidian tracking-wide uppercase mb-2.5">Pants inseam</h3>
+            <div className="flex flex-wrap gap-1.5">
+              {FIT_PANTS_INSEAMS.map((s) => (
+                <PillButton key={s} label={s} active={draft.pantsInseam === s} onClick={() => updateDraft("pantsInseam", s)} />
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-xs font-medium text-obsidian tracking-wide uppercase mb-2.5">Shorts inseam</h3>
+            <div className="flex flex-wrap gap-1.5">
+              {FIT_SHORTS_INSEAMS.map((s) => (
+                <PillButton key={s} label={s} active={draft.shortsInseam === s} onClick={() => updateDraft("shortsInseam", s)} />
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-xs font-medium text-obsidian tracking-wide uppercase mb-2.5">Shoe size</h3>
+            <div className="flex flex-wrap gap-1.5">
+              {FIT_SHOE_SIZES.map((s) => (
+                <PillButton key={s} label={s} active={draft.shoeSize === s} onClick={() => updateDraft("shoeSize", s)} />
+              ))}
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex items-center gap-3 pt-2">
+            <button
+              onClick={handleSave}
+              className="h-10 px-6 rounded-xl bg-forest text-bone text-xs font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 btn-press cursor-pointer"
+            >
+              Save Profile
+            </button>
+            <button
+              onClick={handleCancel}
+              className="text-xs text-charcoal/40 hover:text-charcoal/60 transition-colors duration-300 cursor-pointer"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  /* ── VIEW STATE (has preferences) ── */
+  return (
+    <section className="mb-8">
+      <SectionLabel>Fit Profile</SectionLabel>
+      <div className="rounded-xl border border-taupe/12 bg-cream overflow-hidden">
+        {/* Summary grid */}
+        <div className="px-5 py-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              {isComplete ? (
+                <span className="flex items-center gap-1 text-[10px] tracking-wide text-forest/70 font-medium">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                  Complete
+                </span>
+              ) : (
+                <span className="text-[10px] tracking-wide text-charcoal/35 font-medium">
+                  {filledCount}/{totalFields} set
+                </span>
+              )}
+            </div>
+            <button
+              onClick={startEditing}
+              className="text-xs text-forest/60 hover:text-forest transition-colors duration-300 cursor-pointer"
+            >
+              Edit
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-3">
+            <FitField label="Shirt" value={fitProfile.shirtSize} />
+            <FitField label="Glove" value={fitProfile.gloveHand && fitProfile.gloveSize ? `${fitProfile.gloveHand}, ${fitProfile.gloveSize}` : fitProfile.gloveHand || fitProfile.gloveSize} />
+            <FitField label="Waist" value={fitProfile.waistSize} />
+            <FitField label="Pants" value={fitProfile.pantsInseam} />
+            <FitField label="Shorts" value={fitProfile.shortsInseam} />
+            <FitField label="Shoe" value={fitProfile.shoeSize} />
+          </div>
+        </div>
+
+        {/* Complete prompt */}
+        {!isComplete && (
+          <>
+            <div className="h-px bg-taupe/10 mx-5" />
+            <button
+              onClick={startEditing}
+              className="w-full px-5 py-3 text-left flex items-center gap-2 text-xs text-forest/70 hover:text-forest hover:bg-forest/[0.03] transition-all duration-300 cursor-pointer"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+              Complete your fit profile
+            </button>
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function FitField({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-[10px] text-charcoal/30 mb-0.5">{label}</p>
+      {value ? (
+        <p className="text-sm text-obsidian font-medium">{value}</p>
+      ) : (
+        <p className="text-sm text-charcoal/20">&mdash;</p>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   NOTIFICATION SECTION
+   ═══════════════════════════════════════════ */
+
+function NotificationSection() {
+  return (
+    <section className="mb-8">
+      <SectionLabel>Notifications</SectionLabel>
+      <div className="rounded-xl border border-taupe/12 bg-cream overflow-hidden">
+        <div className="px-5 py-3.5 flex items-center justify-between">
+          <div>
+            <p className="text-sm text-obsidian">Email</p>
+            <p className="text-[11px] text-charcoal/35 mt-0.5">Drops, community, and order updates</p>
+          </div>
+          <ToggleSwitch />
+        </div>
+        <div className="h-px bg-taupe/10 mx-5" />
+        <div className="px-5 py-3.5 flex items-center justify-between">
+          <div>
+            <p className="text-sm text-obsidian">SMS</p>
+            <p className="text-[11px] text-charcoal/35 mt-0.5">Priority alerts and shipping</p>
+          </div>
+          <ToggleSwitch />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   SUBSCRIPTION SECTION
    ═══════════════════════════════════════════ */
 
 function SubscriptionSection({
@@ -468,61 +589,38 @@ function SubscriptionSection({
     black: "By Invitation",
   };
 
-  // Calculate "active until" date
   const getActiveUntilDate = () => {
     const d = new Date();
     if (tier === "member") {
-      // Quarterly — end of current quarter
       const quarterEnd = new Date(d.getFullYear(), Math.ceil((d.getMonth() + 1) / 3) * 3, 0);
       return quarterEnd.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
     }
-    // Annual — end of current period
     const yearEnd = new Date(d.getFullYear() + 1, d.getMonth(), d.getDate());
     return yearEnd.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
   };
 
-  const canDowngrade = tier === "member"; // member can downgrade to access
-
-  const handleCancel = () => {
-    setCancelStep("done");
-  };
-
-  const handleDowngrade = () => {
-    setTier("access");
-    setShowManage(false);
-    setCancelStep("idle");
-  };
-
-  const handleKeep = () => {
-    setCancelStep("idle");
-    setShowManage(false);
-  };
-
   const isPaid = tier !== "free";
+  const canDowngrade = tier === "member";
 
   return (
-    <section className="mb-10">
-      <h2 className="text-xs tracking-[0.25em] uppercase text-charcoal/30 font-medium mb-5">Subscription</h2>
-
-      <div className={`rounded-2xl border ${isPaid ? "bg-forest border-forest" : "bg-cream border-taupe/15"}`}>
+    <section className="mb-8">
+      <SectionLabel>Membership</SectionLabel>
+      <div className={`rounded-xl border overflow-hidden ${isPaid ? "bg-forest border-forest" : "bg-cream border-taupe/12"}`}>
         {/* Plan overview */}
-        <div className="p-6">
+        <div className="px-5 py-4">
           <div className="flex items-start justify-between">
             <div>
-              <p className={`text-xs tracking-[0.2em] uppercase font-medium mb-1 ${isPaid ? "text-sage" : "text-sage"}`}>
-                Current Plan
-              </p>
-              <h3 className={`font-serif text-xl mb-1 ${isPaid ? "text-bone" : "text-obsidian"}`}>
+              <h3 className={`font-serif text-lg mb-0.5 ${isPaid ? "text-bone" : "text-obsidian"}`}>
                 {tierLabel}
               </h3>
-              <p className={`text-sm ${isPaid ? "text-bone/50" : "text-charcoal/45"}`}>
+              <p className={`text-sm ${isPaid ? "text-bone/45" : "text-charcoal/40"}`}>
                 {tierPricing[tier]}
               </p>
             </div>
             {tier === "free" ? (
               <button
                 onClick={onUpgrade}
-                className="h-9 px-5 rounded-lg bg-forest text-bone text-xs font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 flex items-center btn-press cursor-pointer"
+                className="h-9 px-5 rounded-lg bg-forest text-bone text-xs font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 btn-press cursor-pointer"
               >
                 Upgrade
               </button>
@@ -530,155 +628,124 @@ function SubscriptionSection({
               <button
                 onClick={() => { setShowManage(!showManage); setCancelStep("idle"); }}
                 className={`text-xs transition-colors duration-300 cursor-pointer ${
-                  isPaid ? "text-bone/40 hover:text-bone/70" : "text-charcoal/35 hover:text-charcoal/60"
+                  isPaid ? "text-bone/35 hover:text-bone/60" : "text-charcoal/35 hover:text-charcoal/55"
                 }`}
               >
                 {showManage ? "Close" : "Manage"}
               </button>
             )}
           </div>
-
           {isPaid && !showManage && (
-            <div className="mt-4 pt-4 border-t border-bone/15">
-              <p className="text-xs text-bone/35">
-                Member since February 2026
-              </p>
-            </div>
+            <p className="text-[11px] text-bone/25 mt-3 pt-3 border-t border-bone/10">
+              Member since February 2026
+            </p>
           )}
         </div>
 
-        {/* Expanded manage panel */}
+        {/* Manage panel */}
         {showManage && isPaid && (
-          <div className={`border-t ${isPaid ? "border-bone/10" : "border-taupe/15"}`}>
+          <div className={`border-t ${isPaid ? "border-bone/10" : "border-taupe/12"}`}>
             {cancelStep === "idle" && (
-              <div className="p-6 animate-tab-in">
-                <div className="space-y-3">
-                  {/* Upgrade option */}
-                  {tier !== "black" && (
-                    <button
-                      onClick={() => { setShowManage(false); onUpgrade(); }}
-                      className="block w-full text-left bg-bone/10 hover:bg-bone/15 rounded-xl p-4 transition-colors duration-300 cursor-pointer"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-medium text-bone">Upgrade Plan</p>
-                          <p className="text-xs text-bone/45 mt-0.5">
-                            {tier === "access" ? "Unlock priority access, concierge support, and events" : "View available plans"}
-                          </p>
-                        </div>
-                        <svg className="w-4 h-4 text-bone/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-                        </svg>
-                      </div>
-                    </button>
-                  )}
-
-                  {/* Cancel option */}
+              <div className="p-5 space-y-2 animate-tab-in">
+                {tier !== "black" && (
                   <button
-                    onClick={() => setCancelStep("confirm")}
-                    className="w-full text-left bg-bone/5 hover:bg-bone/10 rounded-xl p-4 transition-colors duration-300 cursor-pointer"
+                    onClick={() => { setShowManage(false); onUpgrade(); }}
+                    className="block w-full text-left bg-bone/10 hover:bg-bone/15 rounded-lg px-4 py-3 transition-colors duration-300 cursor-pointer"
                   >
-                    <p className="text-sm text-bone/50">Cancel Membership</p>
+                    <p className="text-sm font-medium text-bone">Upgrade Plan</p>
+                    <p className="text-xs text-bone/40 mt-0.5">
+                      {tier === "access" ? "Unlock concierge, events, and fit-curated drops" : "View plans"}
+                    </p>
                   </button>
-                </div>
+                )}
+                <button
+                  onClick={() => setCancelStep("confirm")}
+                  className="w-full text-left bg-bone/5 hover:bg-bone/10 rounded-lg px-4 py-3 transition-colors duration-300 cursor-pointer"
+                >
+                  <p className="text-sm text-bone/45">Cancel Membership</p>
+                </button>
               </div>
             )}
 
             {cancelStep === "confirm" && (
-              <div className="p-6 animate-tab-in">
-                <h4 className="font-serif text-lg text-bone mb-2">Before you go&hellip;</h4>
-                <p className="text-sm text-bone/50 leading-relaxed mb-5">
-                  We&rsquo;d hate to see you leave. Here&rsquo;s what you&rsquo;ll lose access to:
+              <div className="p-5 animate-tab-in">
+                <h4 className="font-serif text-base text-bone mb-1.5">Before you go&hellip;</h4>
+                <p className="text-xs text-bone/45 leading-relaxed mb-4">
+                  You&rsquo;ll lose access to:
                 </p>
-
-                <ul className="space-y-2 mb-6">
-                  <li className="flex items-center gap-2.5">
-                    <svg className="w-4 h-4 text-bone/30 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                    <span className="text-sm text-bone/45">Reserve pricing on all products</span>
+                <ul className="space-y-1.5 mb-5 text-xs text-bone/40">
+                  <li className="flex items-center gap-2">
+                    <span className="w-1 h-1 rounded-full bg-bone/25 shrink-0" />
+                    Reserve pricing on all products
                   </li>
-                  <li className="flex items-center gap-2.5">
-                    <svg className="w-4 h-4 text-bone/30 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                    <span className="text-sm text-bone/45">Free 2-day shipping</span>
+                  <li className="flex items-center gap-2">
+                    <span className="w-1 h-1 rounded-full bg-bone/25 shrink-0" />
+                    Free 2-day shipping
                   </li>
-                  <li className="flex items-center gap-2.5">
-                    <svg className="w-4 h-4 text-bone/30 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                    <span className="text-sm text-bone/45">Early and priority drop access</span>
+                  <li className="flex items-center gap-2">
+                    <span className="w-1 h-1 rounded-full bg-bone/25 shrink-0" />
+                    Early and priority drop access
                   </li>
                   {tier === "member" && (
-                    <li className="flex items-center gap-2.5">
-                      <svg className="w-4 h-4 text-bone/30 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                      <span className="text-sm text-bone/45">Concierge support and invite-only events</span>
+                    <li className="flex items-center gap-2">
+                      <span className="w-1 h-1 rounded-full bg-bone/25 shrink-0" />
+                      Concierge support and events
                     </li>
                   )}
                 </ul>
 
-                {/* Downgrade option */}
                 {canDowngrade && (
-                  <div className="bg-bone/10 rounded-xl p-5 mb-5">
-                    <p className="text-sm font-medium text-bone mb-1">
-                      Consider downgrading instead?
-                    </p>
-                    <p className="text-xs text-bone/45 leading-relaxed mb-4">
-                      Keep Reserve pricing and free shipping with Reserve Access at just $99/year. A fraction of your current plan.
+                  <div className="bg-bone/10 rounded-lg p-4 mb-4">
+                    <p className="text-xs font-medium text-bone mb-1">Consider downgrading?</p>
+                    <p className="text-[11px] text-bone/40 leading-relaxed mb-3">
+                      Keep Reserve pricing and shipping at $99/year.
                     </p>
                     <button
-                      onClick={handleDowngrade}
-                      className="h-10 px-6 rounded-xl bg-bone text-forest text-xs font-medium tracking-wider uppercase hover:bg-bone-dark transition-colors duration-300 cursor-pointer btn-press"
+                      onClick={() => { setTier("access"); setShowManage(false); setCancelStep("idle"); }}
+                      className="h-9 px-5 rounded-lg bg-bone text-forest text-xs font-medium tracking-wider uppercase hover:bg-bone-dark transition-colors duration-300 cursor-pointer btn-press"
                     >
-                      Downgrade to Access: $99/yr
+                      Downgrade to Access
                     </button>
                   </div>
                 )}
 
-                <p className="text-xs text-bone/35 leading-relaxed mb-5">
-                  If you cancel, your benefits remain active through{" "}
-                  <span className="text-bone/55 font-medium">{getActiveUntilDate()}</span>.
-                  You won&rsquo;t be charged again after that date.
+                <p className="text-[11px] text-bone/30 mb-4">
+                  Benefits remain active through <span className="text-bone/50 font-medium">{getActiveUntilDate()}</span>.
                 </p>
 
                 <div className="flex items-center gap-3">
                   <button
-                    onClick={handleKeep}
-                    className="h-10 px-6 rounded-xl bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-colors duration-300 cursor-pointer btn-press"
+                    onClick={() => { setCancelStep("idle"); setShowManage(false); }}
+                    className="h-9 px-5 rounded-lg bg-bone text-forest text-xs font-medium tracking-wider uppercase hover:bg-bone-dark transition-colors duration-300 cursor-pointer btn-press"
                   >
-                    Keep My Membership
+                    Keep Membership
                   </button>
                   <button
-                    onClick={handleCancel}
-                    className="text-xs text-bone/30 hover:text-bone/50 transition-colors duration-300 cursor-pointer underline underline-offset-2"
+                    onClick={() => setCancelStep("done")}
+                    className="text-xs text-bone/25 hover:text-bone/45 transition-colors duration-300 cursor-pointer"
                   >
-                    Confirm cancellation
+                    Confirm cancel
                   </button>
                 </div>
               </div>
             )}
 
             {cancelStep === "done" && (
-              <div className="p-6 animate-tab-in">
-                <div className="flex items-start gap-3 mb-4">
-                  <svg className="w-5 h-5 text-bone/40 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <div className="p-5 animate-tab-in">
+                <div className="flex items-start gap-2.5 mb-3">
+                  <svg className="w-4 h-4 text-bone/35 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   <div>
-                    <h4 className="text-sm font-medium text-bone mb-1">Cancellation confirmed</h4>
-                    <p className="text-xs text-bone/45 leading-relaxed">
-                      Your {tierLabel} benefits will remain active through{" "}
-                      <span className="text-bone/60 font-medium">{getActiveUntilDate()}</span>.
-                      You can resubscribe anytime from this page.
+                    <p className="text-sm font-medium text-bone mb-0.5">Cancelled</p>
+                    <p className="text-xs text-bone/40 leading-relaxed">
+                      Your {tierLabel} benefits stay active through <span className="text-bone/55 font-medium">{getActiveUntilDate()}</span>.
                     </p>
                   </div>
                 </div>
                 <button
-                  onClick={handleKeep}
-                  className="text-xs text-bone/35 hover:text-bone/55 transition-colors duration-300 cursor-pointer underline underline-offset-2"
+                  onClick={() => { setCancelStep("idle"); setShowManage(false); }}
+                  className="text-xs text-bone/30 hover:text-bone/50 transition-colors duration-300 cursor-pointer"
                 >
                   Changed your mind? Resubscribe
                 </button>
@@ -700,15 +767,15 @@ function ToggleSwitch() {
   return (
     <button
       onClick={() => setOn(!on)}
-      className={`relative w-11 h-6 rounded-full transition-colors duration-300 cursor-pointer ${
+      className={`relative w-10 h-[22px] rounded-full transition-colors duration-300 cursor-pointer shrink-0 ${
         on ? "bg-forest" : "bg-taupe/30"
       }`}
       role="switch"
       aria-checked={on}
     >
       <div
-        className={`absolute top-0.5 w-5 h-5 rounded-full bg-bone shadow-sm transition-transform duration-300 ${
-          on ? "translate-x-[22px]" : "translate-x-0.5"
+        className={`absolute top-[2px] w-[18px] h-[18px] rounded-full bg-bone shadow-sm transition-transform duration-300 ${
+          on ? "translate-x-[20px]" : "translate-x-[2px]"
         }`}
       />
     </button>
