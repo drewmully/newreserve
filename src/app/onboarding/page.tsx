@@ -19,6 +19,38 @@ const HANDICAP_OPTIONS = [
   "I don't keep one",
 ];
 
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+const VIBE_OPTIONS = [
+  {
+    id: "polite",
+    label: "Ask them to stop",
+    subtitle: "Respect the game.",
+    icon: HandIcon,
+  },
+  {
+    id: "turn-up",
+    label: "Turn it up",
+    subtitle: "Golf is supposed to be fun.",
+    icon: MusicIcon,
+  },
+  {
+    id: "move",
+    label: "Switch holes",
+    subtitle: "Not my problem to solve.",
+    icon: WalkIcon,
+  },
+  {
+    id: "depends",
+    label: "Depends on the song",
+    subtitle: "Taste matters.",
+    icon: HeadphonesIcon,
+  },
+];
+
 function suggestUsernames(email: string): string[] {
   const local = email.split("@")[0]?.toLowerCase().replace(/[^a-z0-9._-]/g, "") || "";
   if (!local) return [];
@@ -39,31 +71,57 @@ function suggestUsernames(email: string): string[] {
   return [...new Set(suggestions)].filter((s) => s.length >= 2).slice(0, 4);
 }
 
-const INTEREST_OPTIONS = [
-  { id: "gear", label: "Gear & Equipment", icon: GearIcon },
-  { id: "apparel", label: "Apparel & Style", icon: ApparelIcon },
-  { id: "experiences", label: "Curated Experiences", icon: ExperienceIcon },
-  { id: "training", label: "Training & Coaching", icon: TrainingIcon },
-  { id: "community", label: "Community & Events", icon: CommunityIcon },
-];
+function daysInMonth(month: number, year: number): number {
+  if (!month || !year) return 31;
+  return new Date(year, month, 0).getDate();
+}
 
 export default function OnboardingPage() {
   const router = useRouter();
   const { email, setEmail, username, setUsername, setTier, signIn } = useMembership();
   const [step, setStep] = useState(1);
 
-  // Step 1 state
+  // Sub-step within step 1 (1 = basics, 2 = your game, 3 = vibe check)
+  const [substep, setSubstep] = useState(1);
+  const [direction, setDirection] = useState<"forward" | "back">("forward");
+
+  // Step 1a state
   const [editingEmail, setEditingEmail] = useState(false);
   const usernameSuggestions = suggestUsernames(email);
-  const [handicap, setHandicap] = useState("");
-  const [interests, setInterests] = useState<string[]>([]);
-  const toggleInterest = (id: string) => {
-    setInterests((prev) =>
-      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
-    );
-  };
+  const [birthMonth, setBirthMonth] = useState("");
+  const [birthDay, setBirthDay] = useState("");
+  const [birthYear, setBirthYear] = useState("");
 
-  const canAdvance = handicap || interests.length > 0;
+  // Step 1b state
+  const [handicap, setHandicap] = useState("");
+  const [privateClub, setPrivateClub] = useState<boolean | null>(null);
+  const [clubName, setClubName] = useState("");
+
+  // Step 1c state
+  const [vibeCheck, setVibeCheck] = useState("");
+
+  const canAdvance1a = email && username && birthMonth && birthDay && birthYear;
+
+  const maxDays = daysInMonth(Number(birthMonth), Number(birthYear));
+  const currentYear = new Date().getFullYear();
+
+  function goForward() {
+    if (substep < 3) {
+      setDirection("forward");
+      setSubstep((s) => s + 1);
+    } else {
+      setStep(2);
+    }
+  }
+
+  function goBack() {
+    if (substep > 1) {
+      setDirection("back");
+      setSubstep((s) => s - 1);
+    }
+  }
+
+  const animClass = direction === "forward" ? "animate-substep-in" : "animate-substep-back-in";
 
   return (
     <div className="min-h-screen bg-bone">
@@ -79,159 +137,373 @@ export default function OnboardingPage() {
 
       <main className="pt-28 pb-24 px-6 md:px-12">
         <div className="max-w-2xl mx-auto">
-          {/* Progress */}
-          <div className="flex items-center gap-3 mb-12">
+          {/* Top progress: Step 1 vs Step 2 */}
+          <div className="flex items-center gap-3 mb-10">
             <div className={`h-1 flex-1 rounded-full transition-colors duration-500 ${step >= 1 ? "bg-forest" : "bg-taupe/25"}`} />
             <div className={`h-1 flex-1 rounded-full transition-colors duration-500 ${step >= 2 ? "bg-forest" : "bg-taupe/25"}`} />
           </div>
 
-          {/* Step 1: Preferences */}
+          {/* ════════════════════════════════════════
+             STEP 1: THE FITTING (3 sub-steps)
+             ════════════════════════════════════════ */}
           {step === 1 && (
-            <div className="animate-fade-up">
-              <span className="inline-flex items-center gap-2 text-xs tracking-[0.3em] uppercase text-sage font-medium mb-4">
-                <span className="w-6 h-px bg-sage/50" />
-                Step 1 of 2
-                <span className="w-6 h-px bg-sage/50" />
-              </span>
-              <h1 className="font-serif text-3xl md:text-4xl text-obsidian leading-tight mb-3">
-                Tell us about your game.
-              </h1>
-              <p className="text-base text-charcoal/55 leading-relaxed mb-8">
-                We&rsquo;ll personalize your Reserve experience based on your preferences.
-              </p>
-
-              {/* Email — pre-filled and greyed out, with option to edit */}
-              <div className="mb-8">
-                <h3 className="text-sm font-medium text-obsidian tracking-wide mb-4">
-                  Your email
-                </h3>
-                {email && !editingEmail ? (
-                  <div className="flex items-center gap-3 max-w-sm">
-                    <div className="flex-1 h-11 px-4 rounded-xl bg-taupe/10 border border-taupe/15 flex items-center">
-                      <span className="text-sm text-charcoal/50">{email}</span>
-                    </div>
-                    <button
-                      onClick={() => setEditingEmail(true)}
-                      className="text-xs text-charcoal/40 hover:text-forest transition-colors duration-300 cursor-pointer whitespace-nowrap"
-                    >
-                      Edit
-                    </button>
+            <>
+              {/* Sub-step dots */}
+              <div className="flex items-center justify-center gap-0 mb-10">
+                {[1, 2, 3].map((dot) => (
+                  <div key={dot} className="flex items-center">
+                    <div
+                      className={`w-2.5 h-2.5 rounded-full transition-all duration-500 ${
+                        substep >= dot ? "bg-forest scale-100" : "bg-taupe/30 scale-90"
+                      }`}
+                    />
+                    {dot < 3 && (
+                      <div className="w-10 h-px mx-1">
+                        <div
+                          className={`h-full rounded-full transition-all duration-500 ${
+                            substep > dot ? "bg-forest" : "bg-taupe/20"
+                          }`}
+                        />
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    onBlur={() => email && setEditingEmail(false)}
-                    placeholder="you@example.com"
-                    autoFocus={editingEmail}
-                    className="w-full max-w-sm h-11 px-4 rounded-xl bg-cream border border-taupe/25 text-obsidian text-sm placeholder:text-charcoal/30 focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300"
-                  />
-                )}
+                ))}
               </div>
 
-              {/* Username — for community */}
-              <div className="mb-10">
-                <h3 className="text-sm font-medium text-obsidian tracking-wide mb-2">
-                  Choose a username
-                </h3>
-                <p className="text-xs text-charcoal/40 mb-4">This is how you&rsquo;ll appear in the community.</p>
-                <input
-                  type="text"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  placeholder="e.g. jack_m"
-                  className="w-full max-w-sm h-11 px-4 rounded-xl bg-cream border border-taupe/25 text-obsidian text-sm placeholder:text-charcoal/30 focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300"
-                />
-                {usernameSuggestions.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-3">
-                    {usernameSuggestions.map((s) => (
+              {/* ── Sub-step 1a: The Basics ── */}
+              {substep === 1 && (
+                <div key="substep-1" className={animClass}>
+                  <span className="inline-flex items-center gap-2 text-xs tracking-[0.3em] uppercase text-sage font-medium mb-4">
+                    <span className="w-6 h-px bg-sage/50" />
+                    The Basics
+                    <span className="w-6 h-px bg-sage/50" />
+                  </span>
+                  <h1 className="font-serif text-3xl md:text-4xl text-obsidian leading-tight mb-3">
+                    Let&rsquo;s get started.
+                  </h1>
+                  <p className="text-base text-charcoal/55 leading-relaxed mb-10">
+                    The essentials, so we know who we&rsquo;re talking to.
+                  </p>
+
+                  {/* Email */}
+                  <div className="mb-8">
+                    <h3 className="text-sm font-medium text-obsidian tracking-wide mb-4">
+                      Your email
+                    </h3>
+                    {email && !editingEmail ? (
+                      <div className="flex items-center gap-3 max-w-sm">
+                        <div className="flex-1 h-11 px-4 rounded-xl bg-taupe/10 border border-taupe/15 flex items-center">
+                          <span className="text-sm text-charcoal/50">{email}</span>
+                        </div>
+                        <button
+                          onClick={() => setEditingEmail(true)}
+                          className="text-xs text-charcoal/40 hover:text-forest transition-colors duration-300 cursor-pointer whitespace-nowrap"
+                        >
+                          Edit
+                        </button>
+                      </div>
+                    ) : (
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        onBlur={() => email && setEditingEmail(false)}
+                        placeholder="you@example.com"
+                        autoFocus={editingEmail}
+                        className="w-full max-w-sm h-11 px-4 rounded-xl bg-cream border border-taupe/25 text-obsidian text-sm placeholder:text-charcoal/30 focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300"
+                      />
+                    )}
+                  </div>
+
+                  {/* Username */}
+                  <div className="mb-10">
+                    <h3 className="text-sm font-medium text-obsidian tracking-wide mb-2">
+                      Choose a username
+                    </h3>
+                    <p className="text-xs text-charcoal/40 mb-4">This is how you&rsquo;ll appear in the community.</p>
+                    <input
+                      type="text"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      placeholder="e.g. jack_m"
+                      className="w-full max-w-sm h-11 px-4 rounded-xl bg-cream border border-taupe/25 text-obsidian text-sm placeholder:text-charcoal/30 focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300"
+                    />
+                    {usernameSuggestions.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-3">
+                        {usernameSuggestions.map((s) => (
+                          <button
+                            key={s}
+                            type="button"
+                            onClick={() => setUsername(s)}
+                            className={`px-3 py-1.5 rounded-lg text-xs transition-all duration-200 cursor-pointer ${
+                              username === s
+                                ? "bg-forest text-bone"
+                                : "bg-taupe/10 text-charcoal/55 hover:bg-taupe/20 border border-taupe/15"
+                            }`}
+                          >
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Birthdate */}
+                  <div className="mb-12">
+                    <h3 className="text-sm font-medium text-obsidian tracking-wide mb-4">
+                      Date of birth
+                    </h3>
+                    <div className="flex gap-3 max-w-sm">
+                      <div className="flex-[2]">
+                        <select
+                          value={birthMonth}
+                          onChange={(e) => setBirthMonth(e.target.value)}
+                          className={`w-full h-11 px-3 rounded-xl bg-cream border border-taupe/25 text-sm transition-all duration-300 cursor-pointer focus:border-forest/40 focus:ring-2 focus:ring-forest/10 appearance-none ${
+                            birthMonth ? "text-obsidian" : "text-charcoal/30"
+                          }`}
+                          style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: "no-repeat", backgroundPosition: "right 12px center" }}
+                        >
+                          <option value="" disabled>Month</option>
+                          {MONTHS.map((m, i) => (
+                            <option key={m} value={String(i + 1)}>{m}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex-[1]">
+                        <select
+                          value={birthDay}
+                          onChange={(e) => setBirthDay(e.target.value)}
+                          className={`w-full h-11 px-3 rounded-xl bg-cream border border-taupe/25 text-sm transition-all duration-300 cursor-pointer focus:border-forest/40 focus:ring-2 focus:ring-forest/10 appearance-none ${
+                            birthDay ? "text-obsidian" : "text-charcoal/30"
+                          }`}
+                          style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: "no-repeat", backgroundPosition: "right 12px center" }}
+                        >
+                          <option value="" disabled>Day</option>
+                          {Array.from({ length: maxDays }, (_, i) => i + 1).map((d) => (
+                            <option key={d} value={String(d)}>{d}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex-[1.2]">
+                        <select
+                          value={birthYear}
+                          onChange={(e) => setBirthYear(e.target.value)}
+                          className={`w-full h-11 px-3 rounded-xl bg-cream border border-taupe/25 text-sm transition-all duration-300 cursor-pointer focus:border-forest/40 focus:ring-2 focus:ring-forest/10 appearance-none ${
+                            birthYear ? "text-obsidian" : "text-charcoal/30"
+                          }`}
+                          style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: "no-repeat", backgroundPosition: "right 12px center" }}
+                        >
+                          <option value="" disabled>Year</option>
+                          {Array.from({ length: 80 }, (_, i) => currentYear - 13 - i).map((y) => (
+                            <option key={y} value={String(y)}>{y}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Continue */}
+                  <div className="flex items-center justify-end">
+                    <button
+                      onClick={goForward}
+                      disabled={!canAdvance1a}
+                      className={`h-12 px-10 rounded-xl text-sm font-medium tracking-wider uppercase transition-all duration-300 cursor-pointer btn-press ${
+                        canAdvance1a
+                          ? "bg-forest text-bone hover:bg-forest-dark"
+                          : "bg-taupe/25 text-charcoal/30 cursor-not-allowed"
+                      }`}
+                    >
+                      Continue
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Sub-step 1b: Your Game ── */}
+              {substep === 2 && (
+                <div key="substep-2" className={animClass}>
+                  <span className="inline-flex items-center gap-2 text-xs tracking-[0.3em] uppercase text-sage font-medium mb-4">
+                    <span className="w-6 h-px bg-sage/50" />
+                    Your Game
+                    <span className="w-6 h-px bg-sage/50" />
+                  </span>
+                  <h1 className="font-serif text-3xl md:text-4xl text-obsidian leading-tight mb-3">
+                    Tell us about your game.
+                  </h1>
+                  <p className="text-base text-charcoal/55 leading-relaxed mb-10">
+                    Optional, but it helps us curate better.
+                  </p>
+
+                  {/* Handicap */}
+                  <div className="mb-10">
+                    <h3 className="text-sm font-medium text-obsidian tracking-wide mb-4">
+                      What&rsquo;s your handicap?
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {HANDICAP_OPTIONS.map((opt) => (
+                        <button
+                          key={opt}
+                          onClick={() => setHandicap(handicap === opt ? "" : opt)}
+                          className={`px-4 py-2.5 rounded-xl text-sm transition-all duration-300 cursor-pointer border ${
+                            handicap === opt
+                              ? "bg-forest text-bone border-forest"
+                              : "bg-cream border-taupe/25 text-charcoal/70 hover:border-forest/40"
+                          }`}
+                        >
+                          {opt}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Private Club */}
+                  <div className="mb-12">
+                    <h3 className="text-sm font-medium text-obsidian tracking-wide mb-4">
+                      Are you a member at a private club?
+                    </h3>
+                    <div className="flex gap-3">
                       <button
-                        key={s}
-                        type="button"
-                        onClick={() => setUsername(s)}
-                        className={`px-3 py-1.5 rounded-lg text-xs transition-all duration-200 cursor-pointer ${
-                          username === s
-                            ? "bg-forest text-bone"
-                            : "bg-taupe/10 text-charcoal/55 hover:bg-taupe/20 border border-taupe/15"
+                        onClick={() => setPrivateClub(privateClub === true ? null : true)}
+                        className={`px-6 py-2.5 rounded-xl text-sm transition-all duration-300 cursor-pointer border ${
+                          privateClub === true
+                            ? "bg-forest text-bone border-forest"
+                            : "bg-cream border-taupe/25 text-charcoal/70 hover:border-forest/40"
                         }`}
                       >
-                        {s}
+                        Yes
                       </button>
-                    ))}
+                      <button
+                        onClick={() => { setPrivateClub(privateClub === false ? null : false); setClubName(""); }}
+                        className={`px-6 py-2.5 rounded-xl text-sm transition-all duration-300 cursor-pointer border ${
+                          privateClub === false
+                            ? "bg-forest text-bone border-forest"
+                            : "bg-cream border-taupe/25 text-charcoal/70 hover:border-forest/40"
+                        }`}
+                      >
+                        No
+                      </button>
+                    </div>
+                    <div className="club-reveal mt-4" data-open={privateClub === true ? "true" : "false"}>
+                      <input
+                        type="text"
+                        value={clubName}
+                        onChange={(e) => setClubName(e.target.value)}
+                        placeholder="Club name"
+                        className="w-full max-w-sm h-11 px-4 rounded-xl bg-cream border border-taupe/25 text-obsidian text-sm placeholder:text-charcoal/30 focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300"
+                      />
+                    </div>
                   </div>
-                )}
-              </div>
 
-              {/* Handicap */}
-              <div className="mb-10">
-                <h3 className="text-sm font-medium text-obsidian tracking-wide mb-4">
-                  What&rsquo;s your handicap?
-                </h3>
-                <div className="flex flex-wrap gap-2">
-                  {HANDICAP_OPTIONS.map((opt) => (
+                  {/* Navigation */}
+                  <div className="flex items-center justify-between">
                     <button
-                      key={opt}
-                      onClick={() => setHandicap(opt)}
-                      className={`px-4 py-2.5 rounded-xl text-sm transition-all duration-300 cursor-pointer border ${
-                        handicap === opt
-                          ? "bg-forest text-bone border-forest"
-                          : "bg-cream border-taupe/25 text-charcoal/70 hover:border-forest/40"
-                      }`}
+                      onClick={goBack}
+                      className="text-sm text-charcoal/40 hover:text-charcoal/60 transition-colors duration-300 cursor-pointer flex items-center gap-1.5"
                     >
-                      {opt}
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                      </svg>
+                      Back
                     </button>
-                  ))}
+                    <div className="flex items-center gap-4">
+                      <button
+                        onClick={goForward}
+                        className="text-sm text-charcoal/40 hover:text-charcoal/60 transition-colors duration-300 cursor-pointer"
+                      >
+                        Skip
+                      </button>
+                      <button
+                        onClick={goForward}
+                        className="h-12 px-10 rounded-xl text-sm font-medium tracking-wider uppercase transition-all duration-300 cursor-pointer btn-press bg-forest text-bone hover:bg-forest-dark"
+                      >
+                        Continue
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {/* Interests */}
-              <div className="mb-10">
-                <h3 className="text-sm font-medium text-obsidian tracking-wide mb-4">
-                  What are you most interested in?
-                </h3>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {INTEREST_OPTIONS.map(({ id, label, icon: Icon }) => (
+              {/* ── Sub-step 1c: The Vibe Check ── */}
+              {substep === 3 && (
+                <div key="substep-3" className={animClass}>
+                  <span className="inline-flex items-center gap-2 text-xs tracking-[0.3em] uppercase text-sage font-medium mb-4">
+                    <span className="w-6 h-px bg-sage/50" />
+                    Vibe Check
+                    <span className="w-6 h-px bg-sage/50" />
+                  </span>
+                  <h1 className="font-serif text-3xl md:text-4xl text-obsidian leading-tight mb-3">
+                    One more thing.
+                  </h1>
+                  <p className="text-base text-charcoal/55 leading-relaxed mb-10">
+                    A quick vibe check. Just for fun.
+                  </p>
+
+                  <div className="mb-4">
+                    <h3 className="text-sm font-medium text-obsidian tracking-wide mb-6 leading-relaxed">
+                      Someone in the cart next to you starts playing music on the first tee. What&rsquo;s your move?
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 vibe-card-stagger">
+                      {VIBE_OPTIONS.map(({ id, label, subtitle, icon: Icon }) => {
+                        const active = vibeCheck === id;
+                        return (
+                          <button
+                            key={id}
+                            onClick={() => setVibeCheck(vibeCheck === id ? "" : id)}
+                            className={`animate-fade-up opacity-0 flex flex-col items-start p-5 rounded-2xl text-left transition-all duration-300 cursor-pointer border group/card ${
+                              active
+                                ? "bg-forest text-bone border-forest shadow-lg shadow-forest/15"
+                                : "bg-cream border-taupe/25 text-charcoal/70 hover:border-forest/30 hover:shadow-md hover:shadow-forest/5 hover:-translate-y-0.5"
+                            }`}
+                          >
+                            <div className={`mb-3 transition-colors duration-300 ${active ? "text-sage/70" : "text-sage"}`}>
+                              <Icon />
+                            </div>
+                            <span className={`font-medium text-sm mb-1 ${active ? "text-bone" : "text-obsidian"}`}>
+                              {label}
+                            </span>
+                            <span className={`text-xs leading-relaxed ${active ? "text-bone/55" : "text-charcoal/45"}`}>
+                              {subtitle}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Navigation */}
+                  <div className="flex items-center justify-between mt-10">
                     <button
-                      key={id}
-                      onClick={() => toggleInterest(id)}
-                      className={`flex items-center gap-3 px-4 py-4 rounded-xl text-sm transition-all duration-300 cursor-pointer border text-left ${
-                        interests.includes(id)
-                          ? "bg-forest text-bone border-forest"
-                          : "bg-cream border-taupe/25 text-charcoal/70 hover:border-forest/40"
-                      }`}
+                      onClick={goBack}
+                      className="text-sm text-charcoal/40 hover:text-charcoal/60 transition-colors duration-300 cursor-pointer flex items-center gap-1.5"
                     >
-                      <Icon active={interests.includes(id)} />
-                      <span>{label}</span>
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+                      </svg>
+                      Back
                     </button>
-                  ))}
+                    <div className="flex items-center gap-4">
+                      <button
+                        onClick={goForward}
+                        className="text-sm text-charcoal/40 hover:text-charcoal/60 transition-colors duration-300 cursor-pointer"
+                      >
+                        Skip
+                      </button>
+                      <button
+                        onClick={goForward}
+                        className="h-12 px-10 rounded-xl text-sm font-medium tracking-wider uppercase transition-all duration-300 cursor-pointer btn-press bg-forest text-bone hover:bg-forest-dark"
+                      >
+                        Continue
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
-
-              {/* Continue */}
-              <div className="flex items-center justify-between">
-                <button
-                  onClick={() => setStep(2)}
-                  className="text-sm text-charcoal/40 hover:text-charcoal/60 transition-colors duration-300 cursor-pointer"
-                >
-                  Skip for now
-                </button>
-                <button
-                  onClick={() => setStep(2)}
-                  disabled={!canAdvance}
-                  className={`h-12 px-10 rounded-xl text-sm font-medium tracking-wider uppercase transition-all duration-300 cursor-pointer btn-press ${
-                    canAdvance
-                      ? "bg-forest text-bone hover:bg-forest-dark"
-                      : "bg-taupe/25 text-charcoal/30 cursor-not-allowed"
-                  }`}
-                >
-                  Continue
-                </button>
-              </div>
-            </div>
+              )}
+            </>
           )}
 
-          {/* Step 2: Plan Selection */}
+          {/* ════════════════════════════════════════
+             STEP 2: Plan Selection (unchanged)
+             ════════════════════════════════════════ */}
           {step === 2 && (
             <div className="animate-fade-up">
               <span className="inline-flex items-center gap-2 text-xs tracking-[0.3em] uppercase text-sage font-medium mb-4">
@@ -247,7 +519,7 @@ export default function OnboardingPage() {
               </p>
 
               <div className="space-y-5">
-                {/* ── Reserve Access ── */}
+                {/* Reserve Access */}
                 <div className="bg-cream rounded-2xl p-7 md:p-8 border border-taupe/20">
                   <span className="text-[11px] tracking-[0.25em] uppercase text-forest font-medium">
                     Reserve Access
@@ -273,16 +545,14 @@ export default function OnboardingPage() {
                   </div>
                 </div>
 
-                {/* ── Reserve Member (Featured) ── */}
+                {/* Reserve Member (Featured) */}
                 <div className="relative">
-                  {/* Badge — outside overflow-hidden so it never clips */}
                   <div className="absolute -top-3 left-7 z-20">
                     <span className="inline-block bg-sage text-bone text-[10px] tracking-[0.2em] uppercase font-semibold px-4 py-1.5 rounded-full shadow-sm">
                       Most Popular
                     </span>
                   </div>
                   <div className="bg-forest rounded-2xl overflow-hidden relative shadow-xl shadow-forest/20 ring-1 ring-sage/20">
-                    {/* Decorative box image — atmospheric bg, top-left */}
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/Untitled_design_17.png?v=1771516197"
@@ -318,7 +588,7 @@ export default function OnboardingPage() {
                   </div>
                 </div>
 
-                {/* ── Reserve Black ── */}
+                {/* Reserve Black */}
                 <div className="bg-cream rounded-2xl p-7 md:p-8 border border-taupe/20 relative overflow-hidden">
                   <div className="absolute top-0 left-0 right-0 h-1 bg-obsidian" />
                   <span className="text-[11px] tracking-[0.25em] uppercase text-charcoal/50 font-medium">
@@ -399,45 +669,37 @@ function FeatureItem({ text, light }: { text: string; light?: boolean }) {
 }
 
 /* ═══════════════════════════════════════════
-   ICONS
+   VIBE CHECK ICONS
    ═══════════════════════════════════════════ */
 
-function GearIcon({ active }: { active: boolean }) {
+function HandIcon() {
   return (
-    <svg className={`w-5 h-5 shrink-0 ${active ? "text-bone/70" : "text-sage"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17l-5.386 3.107A1.531 1.531 0 014.5 17.3V3.75A1.5 1.5 0 016 2.25h12a1.5 1.5 0 011.5 1.5v13.55a1.531 1.531 0 01-1.534.977L12.58 15.17a1.5 1.5 0 00-1.16 0z" />
+    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M10.05 4.575a1.575 1.575 0 10-3.15 0v3m3.15-3v-1.5a1.575 1.575 0 013.15 0v1.5m-3.15 0l.075 5.925m3.075-5.925v2.7m0-2.7a1.575 1.575 0 013.15 0v2.7m0 0v1.65a4.237 4.237 0 01-.426 1.856L17.1 17.55a2.25 2.25 0 01-1.99 1.2H9.228a2.25 2.25 0 01-2.12-1.488l-1.96-5.49a1.575 1.575 0 012.106-1.894l.65.325" />
     </svg>
   );
 }
 
-function ApparelIcon({ active }: { active: boolean }) {
+function MusicIcon() {
   return (
-    <svg className={`w-5 h-5 shrink-0 ${active ? "text-bone/70" : "text-sage"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 9l10.5-3m0 6.553v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 11-.99-3.467l2.31-.66a2.25 2.25 0 001.632-2.163zm0 0V2.25L9 5.25v10.303m0 0v3.75a2.25 2.25 0 01-1.632 2.163l-1.32.377a1.803 1.803 0 01-.99-3.467l2.31-.66A2.25 2.25 0 009 15.553z" />
     </svg>
   );
 }
 
-function ExperienceIcon({ active }: { active: boolean }) {
+function WalkIcon() {
   return (
-    <svg className={`w-5 h-5 shrink-0 ${active ? "text-bone/70" : "text-sage"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" />
+    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9" />
     </svg>
   );
 }
 
-function TrainingIcon({ active }: { active: boolean }) {
+function HeadphonesIcon() {
   return (
-    <svg className={`w-5 h-5 shrink-0 ${active ? "text-bone/70" : "text-sage"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.438 60.438 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.905 59.905 0 0112 3.493a59.902 59.902 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5" />
-    </svg>
-  );
-}
-
-function CommunityIcon({ active }: { active: boolean }) {
-  return (
-    <svg className={`w-5 h-5 shrink-0 ${active ? "text-bone/70" : "text-sage"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z" />
+    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z" />
     </svg>
   );
 }

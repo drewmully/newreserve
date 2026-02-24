@@ -412,3 +412,58 @@ input:focus {
   background-color: rgba(31, 61, 43, 0.12);
   transform: scale(1.05);
 }
+
+/* ─── ONBOARDING SUB-STEP TRANSITIONS ─── */
+
+@keyframes substep-in {
+  from {
+    opacity: 0;
+    transform: translateX(40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+.animate-substep-in {
+  animation: substep-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes substep-back-in {
+  from {
+    opacity: 0;
+    transform: translateX(-40px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+.animate-substep-back-in {
+  animation: substep-back-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Club name conditional reveal */
+.club-reveal {
+  overflow: hidden;
+  transition: max-height 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 0.3s ease;
+}
+.club-reveal[data-open="false"] {
+  max-height: 0;
+  opacity: 0;
+}
+.club-reveal[data-open="true"] {
+  max-height: 120px;
+  opacity: 1;
+}
+
+/* Staggered fade-up for vibe check cards */
+.vibe-card-stagger > *:nth-child(1) { animation-delay: 0s; }
+.vibe-card-stagger > *:nth-child(2) { animation-delay: 0.08s; }
+.vibe-card-stagger > *:nth-child(3) { animation-delay: 0.16s; }
+.vibe-card-stagger > *:nth-child(4) { animation-delay: 0.24s; }
+
+select:focus {
+  outline: none;
+}
