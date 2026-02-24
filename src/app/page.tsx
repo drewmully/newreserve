@@ -46,10 +46,15 @@ export default function Home() {
         />
 
         {/* ── Two-column hero content ── */}
-        <div className="relative max-w-7xl mx-auto w-full grid md:grid-cols-2 gap-12 lg:gap-20 items-center z-10">
+        <div className="relative max-w-7xl mx-auto w-full grid md:grid-cols-2 gap-8 md:gap-12 lg:gap-20 items-center z-10">
 
           {/* LEFT COLUMN — headline, subtext, CTA */}
           <div className="max-w-lg">
+            {/* Mobile member card — compact, above headline */}
+            <div className="md:hidden mb-6 animate-fade-up">
+              <MemberCard size="sm" />
+            </div>
+
             <div className="animate-fade-up mb-8">
               <span className="inline-flex items-center gap-2.5 text-[11px] tracking-[0.35em] uppercase text-sage font-medium">
                 <span className="w-8 h-px bg-sage/40" />
@@ -75,55 +80,11 @@ export default function Home() {
             </div>
           </div>
 
-          {/* RIGHT COLUMN — Glassmorphic Reserve Member Card */}
+          {/* RIGHT COLUMN — Desktop member card */}
           <div className="hidden md:flex items-center justify-center animate-fade-up-delay-2">
             <div className="member-card-glow">
               <div className="member-card-float">
-                <div
-                  className="relative w-[360px] lg:w-[400px] aspect-[1.6/1] rounded-2xl overflow-hidden member-card-shimmer"
-                  style={{
-                    background: "linear-gradient(135deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0.18) 50%, rgba(255,255,255,0.25) 100%)",
-                    backdropFilter: "blur(18px) saturate(1.6)",
-                    WebkitBackdropFilter: "blur(18px) saturate(1.6)",
-                    border: "1px solid rgba(255,255,255,0.45)",
-                    boxShadow: "0 8px 32px -4px rgba(0,0,0,0.15), 0 32px 72px -12px rgba(0,0,0,0.10), inset 0 1px 0 rgba(255,255,255,0.60), inset 0 0 0 0.5px rgba(255,255,255,0.30)",
-                  }}
-                >
-                  {/* Inner edge highlight — top */}
-                  <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/50 to-transparent" />
-
-                  {/* Card content */}
-                  <div className="relative z-10 h-full flex flex-col justify-between p-7">
-                    {/* Top row: Logo + type */}
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-2 text-forest">
-                        <svg viewBox="0 0 1002 540" fill="currentColor" className="h-4 w-auto" aria-hidden="true">
-                          <path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" />
-                        </svg>
-                        <span className="font-serif text-sm font-bold tracking-wide">mully.</span>
-                      </div>
-                      <span className="text-[9px] tracking-[0.2em] uppercase text-forest/40 font-medium">EST. 2025</span>
-                    </div>
-
-                    {/* Center: Card title */}
-                    <div className="text-center">
-                      <span className="text-[11px] tracking-[0.4em] uppercase text-forest/70 font-medium">
-                        Mully Reserve
-                      </span>
-                    </div>
-
-                    {/* Bottom row: Member info */}
-                    <div className="flex items-end justify-between">
-                      <div>
-                        <span className="block text-[9px] tracking-[0.2em] uppercase text-forest/40 mb-1">Member</span>
-                        <span className="text-sm text-forest/80 tracking-widest font-light">0001 &nbsp;2847</span>
-                      </div>
-                      <span className="text-[9px] tracking-[0.15em] uppercase text-forest/35 font-medium">
-                        Reserve Member
-                      </span>
-                    </div>
-                  </div>
-                </div>
+                <MemberCard size="lg" />
               </div>
             </div>
           </div>
@@ -720,6 +681,52 @@ function MullyMark({ className }: { className?: string }) {
         opacity="0.3"
       />
     </svg>
+  );
+}
+
+/* ── Glassmorphic Reserve Member Card ── */
+function MemberCard({ size = "lg" }: { size?: "sm" | "lg" }) {
+  const isSmall = size === "sm";
+  return (
+    <div
+      className={`relative ${isSmall ? "w-[240px] aspect-[1.6/1] rounded-xl" : "w-[360px] lg:w-[400px] aspect-[1.6/1] rounded-2xl"} overflow-hidden member-card-shimmer`}
+      style={{
+        background: "linear-gradient(135deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0.18) 50%, rgba(255,255,255,0.25) 100%)",
+        backdropFilter: "blur(18px) saturate(1.6)",
+        WebkitBackdropFilter: "blur(18px) saturate(1.6)",
+        border: "1px solid rgba(255,255,255,0.45)",
+        boxShadow: isSmall
+          ? "0 4px 20px -4px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.50)"
+          : "0 8px 32px -4px rgba(0,0,0,0.15), 0 32px 72px -12px rgba(0,0,0,0.10), inset 0 1px 0 rgba(255,255,255,0.60), inset 0 0 0 0.5px rgba(255,255,255,0.30)",
+      }}
+    >
+      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/50 to-transparent" />
+      <div className={`relative z-10 h-full flex flex-col justify-between ${isSmall ? "p-4" : "p-7"}`}>
+        <div className="flex items-start justify-between">
+          <div className={`flex items-center gap-1.5 text-forest ${isSmall ? "" : "gap-2"}`}>
+            <svg viewBox="0 0 1002 540" fill="currentColor" className={`${isSmall ? "h-3" : "h-4"} w-auto`} aria-hidden="true">
+              <path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" />
+            </svg>
+            <span className={`font-serif font-bold tracking-wide ${isSmall ? "text-xs" : "text-sm"}`}>mully.</span>
+          </div>
+          <span className={`tracking-[0.2em] uppercase text-forest/40 font-medium ${isSmall ? "text-[7px]" : "text-[9px]"}`}>EST. 2026</span>
+        </div>
+        <div className="text-center">
+          <span className={`tracking-[0.4em] uppercase text-forest/70 font-medium ${isSmall ? "text-[9px]" : "text-[11px]"}`}>
+            Mully Reserve
+          </span>
+        </div>
+        <div className="flex items-end justify-between">
+          <div>
+            <span className={`block tracking-[0.2em] uppercase text-forest/40 mb-0.5 ${isSmall ? "text-[7px]" : "text-[9px] mb-1"}`}>Member</span>
+            <span className={`text-forest/80 tracking-widest font-light ${isSmall ? "text-xs" : "text-sm"}`}>0001 &nbsp;2847</span>
+          </div>
+          <span className={`tracking-[0.15em] uppercase text-forest/35 font-medium ${isSmall ? "text-[7px]" : "text-[9px]"}`}>
+            Reserve Member
+          </span>
+        </div>
+      </div>
+    </div>
   );
 }
 
