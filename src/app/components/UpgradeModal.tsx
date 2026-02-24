@@ -139,7 +139,7 @@ export function UpgradeModal({ open, onClose, currentTier, onSelectPlan }: Upgra
                       </ul>
                       <button
                         onClick={handleChooseAccess}
-                        className="h-11 px-8 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-all duration-300 cursor-pointer btn-press"
+                        className="h-11 px-8 bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-all duration-300 cursor-pointer btn-glass btn-glass-forest"
                       >
                         Join Reserve Access
                       </button>
@@ -178,7 +178,7 @@ export function UpgradeModal({ open, onClose, currentTier, onSelectPlan }: Upgra
                           </ul>
                           <button
                             onClick={handleChooseMember}
-                            className="h-11 px-8 rounded-xl bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-all duration-300 cursor-pointer btn-press"
+                            className="h-11 px-8 bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-all duration-300 cursor-pointer btn-glass btn-glass-bone"
                           >
                             Continue
                           </button>
@@ -400,7 +400,7 @@ export function FitNav({
         </button>
         <button
           onClick={onNext}
-          className="h-11 px-8 rounded-xl text-sm font-medium tracking-wider uppercase transition-all duration-300 cursor-pointer btn-press bg-forest text-bone hover:bg-forest-dark"
+          className="h-11 px-8 text-sm font-medium tracking-wider uppercase transition-all duration-300 cursor-pointer btn-glass btn-glass-forest bg-forest text-bone hover:bg-forest-dark"
         >
           {isLast ? "Finish" : "Next"}
         </button>

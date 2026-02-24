@@ -235,7 +235,7 @@ export default function Home() {
                   </ul>
                   <a
                     href="/onboarding"
-                    className="mt-8 block w-full text-center h-12 leading-[3rem] rounded-xl border border-forest/80 text-forest text-sm font-medium tracking-wider uppercase hover:bg-forest hover:text-bone transition-all duration-300 btn-press"
+                    className="mt-8 block w-full text-center h-12 leading-[3rem] border border-forest/80 text-forest text-sm font-medium tracking-wider uppercase hover:bg-forest hover:text-bone transition-all duration-300 btn-glass btn-glass-outline"
                   >
                     Sign Up Free
                   </a>
@@ -264,7 +264,7 @@ export default function Home() {
                   </ul>
                   <a
                     href="/onboarding"
-                    className="mt-8 block w-full text-center h-12 leading-[3rem] rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-all duration-300 btn-press"
+                    className="mt-8 block w-full text-center h-12 leading-[3rem] bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-all duration-300 btn-glass btn-glass-forest"
                   >
                     Join Now
                   </a>
@@ -313,7 +313,7 @@ export default function Home() {
                       </ul>
                       <a
                         href="/onboarding"
-                        className="mt-8 block w-full text-center h-12 leading-[3rem] rounded-xl bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-all duration-300 btn-press"
+                        className="mt-8 block w-full text-center h-12 leading-[3rem] bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-all duration-300 btn-glass btn-glass-bone"
                       >
                         Join Now
                       </a>

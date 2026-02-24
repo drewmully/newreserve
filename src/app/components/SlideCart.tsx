@@ -118,7 +118,7 @@ export function SlideCart() {
                 </div>
               )}
             </div>
-            <button className="w-full h-12 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer btn-press">
+            <button className="w-full h-12 bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer btn-glass btn-glass-forest">
               Go to Checkout
             </button>
             <button

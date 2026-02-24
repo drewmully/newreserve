@@ -43,7 +43,7 @@ export default async function PostPage({ params }: Props) {
           </Link>
           <Link
             href="/onboarding"
-            className="h-9 px-5 rounded-lg bg-forest text-bone text-xs font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 flex items-center btn-press"
+            className="h-9 px-5 bg-forest text-bone text-xs font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 flex items-center btn-glass btn-glass-forest"
           >
             Join Free
           </Link>
@@ -153,7 +153,7 @@ export default async function PostPage({ params }: Props) {
                 </p>
                 <Link
                   href="/onboarding"
-                  className="inline-flex items-center justify-center h-10 px-6 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 btn-press"
+                  className="inline-flex items-center justify-center h-10 px-6 bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 btn-glass btn-glass-forest"
                 >
                   Sign Up to Reply
                 </Link>

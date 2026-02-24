@@ -325,10 +325,10 @@ export default function OnboardingPage() {
                     <button
                       onClick={goForward}
                       disabled={!canAdvance1a}
-                      className={`h-12 px-10 rounded-xl text-sm font-medium tracking-wider uppercase transition-all duration-300 cursor-pointer btn-press ${
+                      className={`h-12 px-10 text-sm font-medium tracking-wider uppercase transition-all duration-300 cursor-pointer ${
                         canAdvance1a
-                          ? "bg-forest text-bone hover:bg-forest-dark"
-                          : "bg-taupe/25 text-charcoal/30 cursor-not-allowed"
+                          ? "btn-glass btn-glass-forest bg-forest text-bone hover:bg-forest-dark"
+                          : "bg-taupe/25 text-charcoal/30 cursor-not-allowed rounded-xl"
                       }`}
                     >
                       Continue
@@ -432,7 +432,7 @@ export default function OnboardingPage() {
                       </button>
                       <button
                         onClick={goForward}
-                        className="h-12 px-10 rounded-xl text-sm font-medium tracking-wider uppercase transition-all duration-300 cursor-pointer btn-press bg-forest text-bone hover:bg-forest-dark"
+                        className="h-12 px-10 text-sm font-medium tracking-wider uppercase transition-all duration-300 cursor-pointer btn-glass btn-glass-forest bg-forest text-bone hover:bg-forest-dark"
                       >
                         Continue
                       </button>
@@ -508,7 +508,7 @@ export default function OnboardingPage() {
                       </button>
                       <button
                         onClick={goForward}
-                        className="h-12 px-10 rounded-xl text-sm font-medium tracking-wider uppercase transition-all duration-300 cursor-pointer btn-press bg-forest text-bone hover:bg-forest-dark"
+                        className="h-12 px-10 text-sm font-medium tracking-wider uppercase transition-all duration-300 cursor-pointer btn-glass btn-glass-forest bg-forest text-bone hover:bg-forest-dark"
                       >
                         Continue
                       </button>
@@ -556,7 +556,7 @@ export default function OnboardingPage() {
                     </ul>
                     <button
                       onClick={() => { signIn(); setTier("access"); router.push("/dashboard"); }}
-                      className="h-12 px-10 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-all duration-300 cursor-pointer btn-press"
+                      className="h-12 px-10 bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-all duration-300 cursor-pointer btn-glass btn-glass-forest"
                     >
                       Join Reserve Access
                     </button>
@@ -597,7 +597,7 @@ export default function OnboardingPage() {
                         </ul>
                         <button
                           onClick={() => { setFitStep(1); setStep(3); }}
-                          className="h-12 px-10 rounded-xl bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-all duration-300 cursor-pointer btn-press"
+                          className="h-12 px-10 bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-all duration-300 cursor-pointer btn-glass btn-glass-bone"
                         >
                           Join Reserve Member
                         </button>

@@ -258,7 +258,7 @@ input:focus {
     );
 }
 
-/* ─── BUTTON PRESS FEEDBACK ─── */
+/* ─── BUTTON PRESS FEEDBACK (legacy) ─── */
 
 .btn-press {
   transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1),
@@ -268,6 +268,127 @@ input:focus {
 }
 .btn-press:active {
   transform: scale(0.97);
+}
+
+/* ─── GLASS BUTTONS ─── */
+
+.btn-glass {
+  position: relative;
+  isolation: isolate;
+  border-radius: 9999px;
+}
+
+/* Glass highlight / sheen overlay */
+.btn-glass::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    to bottom,
+    rgba(255,255,255,0.14) 0%,
+    rgba(255,255,255,0.04) 45%,
+    transparent 100%
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ── Forest variant (dark bg buttons) ── */
+.btn-glass-forest {
+  box-shadow:
+    0 1px 2px rgba(31,61,43,0.18),
+    0 4px 12px -2px rgba(31,61,43,0.22),
+    0 8px 20px -4px rgba(31,61,43,0.10),
+    inset 0 1px 0 rgba(255,255,255,0.09);
+  transition:
+    transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 0.3s ease;
+}
+.btn-glass-forest:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 2px 4px rgba(31,61,43,0.16),
+    0 8px 20px -2px rgba(31,61,43,0.26),
+    0 14px 28px -6px rgba(31,61,43,0.14),
+    inset 0 1px 0 rgba(255,255,255,0.12);
+}
+.btn-glass-forest:active {
+  transform: translateY(0.5px) scale(0.98);
+  box-shadow:
+    0 1px 2px rgba(31,61,43,0.18),
+    0 2px 6px -1px rgba(31,61,43,0.14),
+    inset 0 1px 0 rgba(255,255,255,0.06);
+  transition-duration: 0.15s;
+}
+
+/* ── Bone variant (light bg buttons) ── */
+.btn-glass-bone {
+  box-shadow:
+    0 1px 2px rgba(0,0,0,0.06),
+    0 4px 12px -2px rgba(0,0,0,0.09),
+    0 8px 20px -4px rgba(0,0,0,0.05),
+    inset 0 1px 0 rgba(255,255,255,0.50);
+  transition:
+    transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 0.3s ease;
+}
+.btn-glass-bone:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 2px 4px rgba(0,0,0,0.05),
+    0 8px 20px -2px rgba(0,0,0,0.11),
+    0 14px 28px -6px rgba(0,0,0,0.07),
+    inset 0 1px 0 rgba(255,255,255,0.60);
+}
+.btn-glass-bone:active {
+  transform: translateY(0.5px) scale(0.98);
+  box-shadow:
+    0 1px 2px rgba(0,0,0,0.06),
+    0 2px 6px -1px rgba(0,0,0,0.06),
+    inset 0 1px 0 rgba(255,255,255,0.40);
+  transition-duration: 0.15s;
+}
+
+/* ── Outline variant (ghost / border buttons) ── */
+.btn-glass-outline {
+  box-shadow:
+    0 1px 2px rgba(31,61,43,0.08),
+    0 4px 12px -2px rgba(31,61,43,0.10),
+    0 8px 20px -4px rgba(31,61,43,0.05);
+  transition:
+    transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 0.3s ease,
+    color 0.3s ease,
+    border-color 0.3s ease;
+}
+.btn-glass-outline:hover {
+  transform: translateY(-1px);
+  box-shadow:
+    0 2px 4px rgba(31,61,43,0.08),
+    0 8px 20px -2px rgba(31,61,43,0.13),
+    0 14px 28px -6px rgba(31,61,43,0.07);
+}
+.btn-glass-outline:active {
+  transform: translateY(0.5px) scale(0.98);
+  box-shadow:
+    0 1px 2px rgba(31,61,43,0.08),
+    0 2px 6px -1px rgba(31,61,43,0.06);
+  transition-duration: 0.15s;
+}
+
+/* Disabled glass buttons should not have effects */
+.btn-glass:disabled,
+.btn-glass-forest:disabled,
+.btn-glass-bone:disabled {
+  box-shadow: none;
+  transform: none;
+}
+.btn-glass:disabled::before {
+  display: none;
 }
 
 /* ─── CART BADGE POP ─── */
