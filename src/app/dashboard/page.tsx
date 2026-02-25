@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ShopGrid } from "../shop/components/ShopClient";
-import { products, BRANDS, COLLECTIONS } from "../shop/products";
+import { getCollectionProducts, type ShopifyProduct } from "@/lib/shopify";
 import { useMembership } from "../context/MembershipContext";
 import { SlideCart } from "../components/SlideCart";
 import { UpgradeModal } from "../components/UpgradeModal";
@@ -391,13 +391,83 @@ function GatedTab({ type, onUpgrade }: { type: "shop" | "drops" | "club" | "bene
    ═══════════════════════════════════════════ */
 
 function ShopTab() {
+  const [shopProducts, setShopProducts] = useState<ShopifyProduct[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(false);
+
+    async function load() {
+      try {
+        const [proShop, privateReleases] = await Promise.all([
+          getCollectionProducts("reserve-pro-shop"),
+          getCollectionProducts("private-releases"),
+        ]);
+        if (cancelled) return;
+        const seen = new Set<string>();
+        const merged: ShopifyProduct[] = [];
+        for (const p of [...proShop, ...privateReleases]) {
+          if (!seen.has(p.slug)) {
+            seen.add(p.slug);
+            merged.push(p);
+          }
+        }
+        setShopProducts(merged);
+      } catch {
+        if (!cancelled) setError(true);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void load();
+    return () => { cancelled = true; };
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="px-6 md:px-12">
+        <div className="max-w-7xl mx-auto">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="animate-pulse">
+                <div className="aspect-[3/4] bg-taupe/20 rounded-lg mb-3" />
+                <div className="h-3 bg-taupe/20 rounded w-2/3 mb-2" />
+                <div className="h-4 bg-taupe/20 rounded mb-1.5" />
+                <div className="h-3 bg-taupe/20 rounded w-1/3" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="px-6 md:px-12">
+        <div className="max-w-7xl mx-auto flex flex-col items-center justify-center py-24 text-center gap-3">
+          <p className="text-sm text-charcoal/50">
+            Unable to load products. Check your connection and try again.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const brands = [...new Set(shopProducts.map((p) => p.brand))];
+  const collections = [...new Set(shopProducts.map((p) => p.collection))];
+
   return (
     <div className="px-6 md:px-12">
       <div className="max-w-7xl mx-auto">
         <ShopGrid
-          products={products}
-          brands={BRANDS}
-          collections={COLLECTIONS}
+          products={shopProducts}
+          brands={brands}
+          collections={collections}
         />
       </div>
     </div>
