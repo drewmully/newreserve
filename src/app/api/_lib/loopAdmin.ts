@@ -1,0 +1,102 @@
+/**
+ * Loop Subscriptions API client — server-side only.
+ *
+ * Required env vars:
+ *   LOOP_ADMIN_API_TOKEN             — API key
+ *   LOOP_API_BASE_URL                — e.g. "https://api.loopwork.co"
+ *   LOOP_ADMIN_API_VERSION           — defaults to "v1"
+ *
+ * Optional env vars:
+ *   LOOP_MANAGE_SUBSCRIPTION_URL     — template with {customer_id} placeholder
+ *   LOOP_NEXT_UNBLOCK_URL            — fallback to mullybox-elite product URL
+ */
+
+const BASE_URL =
+  process.env.LOOP_API_BASE_URL ?? "https://api.loopwork.co";
+const API_VERSION = process.env.LOOP_ADMIN_API_VERSION ?? "v1";
+
+function getLoopHeaders(): Record<string, string> {
+  const token = process.env.LOOP_ADMIN_API_TOKEN;
+  if (!token) throw new Error("Missing LOOP_ADMIN_API_TOKEN");
+  return {
+    "Content-Type": "application/json",
+    "x-api-key": token,
+  };
+}
+
+interface LoopSubscription {
+  id: string;
+  status: string; // "ACTIVE" | "CANCELLED" | "PAUSED" | "FAILED" | ...
+  shopify_customer_id?: string;
+}
+
+export interface LoopSubscriptionStatus {
+  mullybox_active: boolean;
+  status: string;
+  total_subscription_count: number;
+  active_subscription_ids: string[];
+  manage_url: string | null;
+  next_unblock_url: string | null;
+}
+
+/**
+ * Fetch subscription status for a Shopify customer from Loop.
+ */
+export async function getLoopSubscriptionStatus(
+  shopifyCustomerId: string
+): Promise<LoopSubscriptionStatus> {
+  const url = `${BASE_URL}/${API_VERSION}/subscriptions?customer_id=${encodeURIComponent(shopifyCustomerId)}`;
+  const res = await fetch(url, { headers: getLoopHeaders() });
+
+  if (!res.ok) {
+    throw new Error(
+      `Loop API error ${res.status}: ${await res.text()}`
+    );
+  }
+
+  const data = (await res.json()) as {
+    subscriptions?: LoopSubscription[];
+  };
+
+  const subs = data.subscriptions ?? [];
+  const active = subs.filter((s) => s.status === "ACTIVE");
+
+  let status = "none";
+  if (active.length > 0) {
+    status = "active";
+  } else if (subs.length > 0) {
+    status = subs[0].status.toLowerCase();
+  }
+
+  return {
+    mullybox_active: active.length > 0,
+    status,
+    total_subscription_count: subs.length,
+    active_subscription_ids: active.map((s) => s.id),
+    manage_url: null, // populated by the route handler after calling getLoopManageSubscriptionUrl
+    next_unblock_url: null,
+  };
+}
+
+/**
+ * Build the customer-specific subscription management URL.
+ * Replaces the {customer_id} placeholder in LOOP_MANAGE_SUBSCRIPTION_URL.
+ */
+export function getLoopManageSubscriptionUrl(customerId: string): string {
+  const template = process.env.LOOP_MANAGE_SUBSCRIPTION_URL ?? "";
+  if (template) {
+    return template.replace("{customer_id}", encodeURIComponent(customerId));
+  }
+  return "";
+}
+
+/**
+ * Return the "next unblock" product URL.
+ * Falls back to the Mullybox Elite product if env var is not set.
+ */
+export function getLoopNextUnblockUrl(): string {
+  return (
+    process.env.LOOP_NEXT_UNBLOCK_URL ??
+    "https://mullybox-store.myshopify.com/products/mullybox-elite"
+  );
+}

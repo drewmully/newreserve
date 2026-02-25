@@ -1,0 +1,185 @@
+/**
+ * Server-side analytics dispatcher.
+ * Fires events to: Meta CAPI, GA4 Measurement Protocol,
+ * Google Ads conversion ping, and PostHog capture API.
+ *
+ * All providers are fire-and-forget (Promise.allSettled).
+ * A missing env var silently skips that provider.
+ *
+ * Required env vars per provider:
+ *   Meta CAPI:    META_PIXEL_ID, META_ACCESS_TOKEN
+ *   GA4:          GA4_MEASUREMENT_ID, GA4_API_SECRET
+ *   Google Ads:   GOOGLE_ADS_CONVERSION_ID, GOOGLE_ADS_CONVERSION_LABEL
+ *   PostHog:      POSTHOG_API_KEY  (POSTHOG_HOST defaults to app.posthog.com)
+ */
+
+import crypto from "crypto";
+
+export interface AnalyticsEvent {
+  event_name: string;
+  user_id?: string;
+  email?: string;
+  phone?: string;
+  ip?: string;
+  user_agent?: string;
+  page_url?: string;
+  segments?: string[];
+  properties?: Record<string, unknown>;
+  /** Unix epoch seconds */
+  timestamp?: number;
+}
+
+// ─── Meta Conversions API ────────────────────────────────────────────────────
+
+const META_EVENT_MAP: Record<string, string> = {
+  page_view: "PageView",
+  add_to_cart: "AddToCart",
+  initiate_checkout: "InitiateCheckout",
+  checkout_clicked: "InitiateCheckout",
+  purchase: "Purchase",
+  login: "Contact",
+  wallet_viewed: "ViewContent",
+  subscription_state: "Subscribe",
+  registry_applied: "Lead",
+};
+
+function sha256hex(value: string): string {
+  return crypto.createHash("sha256").update(value).digest("hex");
+}
+
+async function fireMetaCAPI(event: AnalyticsEvent): Promise<void> {
+  const pixelId = process.env.META_PIXEL_ID;
+  const accessToken = process.env.META_ACCESS_TOKEN;
+  if (!pixelId || !accessToken) return;
+
+  const userData: Record<string, unknown> = {};
+  if (event.email)
+    userData.em = sha256hex(event.email.trim().toLowerCase());
+  if (event.phone)
+    userData.ph = sha256hex(event.phone.replace(/\D/g, ""));
+  if (event.ip) userData.client_ip_address = event.ip;
+  if (event.user_agent) userData.client_user_agent = event.user_agent;
+
+  await fetch(
+    `https://graph.facebook.com/v19.0/${pixelId}/events?access_token=${accessToken}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        data: [
+          {
+            event_name: META_EVENT_MAP[event.event_name] ?? "CustomEvent",
+            event_time:
+              event.timestamp ?? Math.floor(Date.now() / 1000),
+            user_data: userData,
+            custom_data: event.properties ?? {},
+            action_source: "website",
+            event_source_url: event.page_url,
+          },
+        ],
+      }),
+    }
+  );
+}
+
+// ─── GA4 Measurement Protocol ────────────────────────────────────────────────
+
+async function fireGA4(event: AnalyticsEvent): Promise<void> {
+  const measurementId = process.env.GA4_MEASUREMENT_ID;
+  const apiSecret = process.env.GA4_API_SECRET;
+  if (!measurementId || !apiSecret) return;
+
+  await fetch(
+    `https://www.google-analytics.com/mp/collect?measurement_id=${measurementId}&api_secret=${apiSecret}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        client_id: event.user_id ?? "anonymous",
+        user_id: event.user_id,
+        events: [
+          {
+            name: event.event_name,
+            params: {
+              ...(event.properties ?? {}),
+              page_location: event.page_url,
+              engagement_time_msec: 100,
+            },
+          },
+        ],
+      }),
+    }
+  );
+}
+
+// ─── Google Ads conversion ping ──────────────────────────────────────────────
+
+async function fireGoogleAds(event: AnalyticsEvent): Promise<void> {
+  if (event.event_name !== "purchase") return;
+
+  const conversionId = process.env.GOOGLE_ADS_CONVERSION_ID;
+  const conversionLabel = process.env.GOOGLE_ADS_CONVERSION_LABEL;
+  if (!conversionId || !conversionLabel) return;
+
+  const value = (event.properties?.value as number) ?? 0;
+  const currency = (event.properties?.currency as string) ?? "USD";
+  const orderId = event.properties?.order_id as string | undefined;
+
+  const url = new URL(
+    `https://www.googleadservices.com/pagead/conversion/${conversionId}/`
+  );
+  url.searchParams.set("label", conversionLabel);
+  url.searchParams.set("value", String(value));
+  url.searchParams.set("currency_code", currency);
+  if (orderId) url.searchParams.set("transaction_id", orderId);
+
+  await fetch(url.toString(), { method: "GET" });
+}
+
+// ─── PostHog capture API ─────────────────────────────────────────────────────
+
+async function firePostHog(event: AnalyticsEvent): Promise<void> {
+  const apiKey = process.env.POSTHOG_API_KEY;
+  if (!apiKey) return;
+
+  const host = process.env.POSTHOG_HOST ?? "https://app.posthog.com";
+  const distinctId = event.user_id ?? event.email ?? "anonymous";
+
+  await fetch(`${host}/capture/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      api_key: apiKey,
+      event: event.event_name,
+      distinct_id: distinctId,
+      properties: {
+        ...(event.properties ?? {}),
+        $ip: event.ip,
+        $user_agent: event.user_agent,
+        $current_url: event.page_url,
+        segments: event.segments,
+      },
+      timestamp: event.timestamp
+        ? new Date(event.timestamp * 1000).toISOString()
+        : new Date().toISOString(),
+    }),
+  });
+}
+
+// ─── Public dispatcher ───────────────────────────────────────────────────────
+
+/**
+ * Fire an analytics event to all configured providers concurrently.
+ * Individual provider failures are swallowed so one bad integration
+ * never blocks the others.
+ */
+export async function dispatchAnalyticsEvent(
+  event: AnalyticsEvent
+): Promise<void> {
+  await Promise.allSettled([
+    fireMetaCAPI(event),
+    fireGA4(event),
+    fireGoogleAds(event),
+    firePostHog(event),
+  ]);
+}

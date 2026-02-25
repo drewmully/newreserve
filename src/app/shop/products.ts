@@ -11,6 +11,8 @@ export interface Product {
   aboutBrand: string;
   whyWeLikeIt: string;
   sizing: string;
+  /** Shopify variant GID — populated when data comes from the Storefront API */
+  variantId?: string;
 }
 
 export const BRANDS = [

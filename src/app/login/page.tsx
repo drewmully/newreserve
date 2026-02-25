@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useMembership } from "../context/MembershipContext";
@@ -11,7 +11,7 @@ import { useMembership } from "../context/MembershipContext";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { signIn, setEmail, setUsername } = useMembership();
+  const { signInWithEmail, signUpWithEmail, isSignedIn, authLoading } = useMembership();
 
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [emailValue, setEmailValue] = useState("");
@@ -19,23 +19,54 @@ export default function LoginPage() {
   const [nameValue, setNameValue] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!authLoading && isSignedIn) {
+      router.replace("/dashboard");
+    }
+  }, [authLoading, isSignedIn, router]);
+
+  if (authLoading || isSignedIn) {
+    return (
+      <div className="min-h-screen bg-bone flex items-center justify-center">
+        <div className="w-5 h-5 border-2 border-forest/30 border-t-forest rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   const canSubmit = mode === "login"
     ? emailValue.trim() && passwordValue.trim()
     : emailValue.trim() && passwordValue.trim() && nameValue.trim();
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
     setLoading(true);
+    setError(null);
 
-    // Simulate auth
-    setTimeout(() => {
-      setEmail(emailValue);
-      if (mode === "signup") setUsername(nameValue);
-      signIn();
+    try {
+      if (mode === "login") {
+        await signInWithEmail(emailValue, passwordValue);
+      } else {
+        await signUpWithEmail(emailValue, passwordValue, nameValue);
+      }
       router.push("/dashboard");
-    }, 600);
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code ?? "";
+      const messages: Record<string, string> = {
+        "auth/user-not-found": "No account found with that email.",
+        "auth/wrong-password": "Incorrect password.",
+        "auth/invalid-credential": "Incorrect email or password.",
+        "auth/email-already-in-use": "An account with that email already exists.",
+        "auth/weak-password": "Password must be at least 6 characters.",
+        "auth/invalid-email": "Please enter a valid email address.",
+        "auth/too-many-requests": "Too many attempts. Please try again later.",
+      };
+      setError(messages[code] ?? "Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -139,6 +170,12 @@ export default function LoginPage() {
                 </div>
               )}
             </div>
+
+            {error && (
+              <p className="text-xs text-red-600/80 bg-red-50 border border-red-200/60 rounded-lg px-3 py-2.5 text-center">
+                {error}
+              </p>
+            )}
 
             <button
               type="submit"

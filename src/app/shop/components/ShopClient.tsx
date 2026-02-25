@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { Product } from "../products";
 import { BRAND_INFO, COLLECTION_INFO } from "../products";
 import { useMembership } from "../../context/MembershipContext";
+import { trackEvent } from "@/lib/tracking";
 
 /* Safe membership hook — returns null when used outside the provider (e.g. public /shop) */
 function useMembershipSafe() {
@@ -32,6 +33,10 @@ export function ShopGrid({ products, brands, collections }: ShopGridProps) {
     description: string;
     image: string;
   } | null>(null);
+
+  useEffect(() => {
+    void trackEvent("page_view", { page: "shop_listing" });
+  }, []);
 
   const grouped =
     view === "brand"
@@ -237,11 +242,13 @@ function ProductTile({ product }: { product: Product }) {
     e.preventDefault();
     e.stopPropagation();
     if (ctx) {
-      ctx.addToCart({
+      void ctx.addToCart({
         slug: product.slug,
         name: product.name,
         brand: product.brand,
         price: isPaid ? product.reservePrice : product.price,
+        variantId: product.variantId,
+        image: product.images?.[0],
       });
     }
     setJustAdded(true);
@@ -546,20 +553,46 @@ export function ProductImageGallery({ images, name }: { images: string[]; name: 
    ADD TO CART BUTTON
    ═══════════════════════════════════════════ */
 
-export function AddToCartButton({ product }: { product?: { slug: string; name: string; brand: string; reservePrice: number; price: number } }) {
+export function AddToCartButton({
+  product,
+}: {
+  product?: {
+    slug: string;
+    name: string;
+    brand: string;
+    reservePrice: number;
+    price: number;
+    variantId?: string;
+    images?: string[];
+  };
+}) {
   const [added, setAdded] = useState(false);
   const ctx = useMembershipSafe();
+
+  useEffect(() => {
+    if (product?.slug) {
+      void trackEvent("page_view", {
+        page: "product_detail",
+        product_id: product.slug,
+        product_name: product.name,
+        brand: product.brand,
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product?.slug]);
 
   return (
     <button
       onClick={() => {
         if (ctx && product) {
           const isPaid = ctx.tier !== "free";
-          ctx.addToCart({
+          void ctx.addToCart({
             slug: product.slug,
             name: product.name,
             brand: product.brand,
             price: isPaid ? product.reservePrice : product.price,
+            variantId: product.variantId,
+            image: product.images?.[0],
           });
         }
         setAdded(true);

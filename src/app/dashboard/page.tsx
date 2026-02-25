@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ShopGrid } from "../shop/components/ShopClient";
 import { products, BRANDS, COLLECTIONS } from "../shop/products";
@@ -8,6 +9,7 @@ import { useMembership } from "../context/MembershipContext";
 import { SlideCart } from "../components/SlideCart";
 import { UpgradeModal } from "../components/UpgradeModal";
 import { posts as SAMPLE_POSTS, FORUM_TAGS, type ForumPost, type ForumComment } from "../community/posts";
+import { submitRegistryApplication } from "@/lib/registry";
 
 /* ═══════════════════════════════════════════
    DASHBOARD — Shop · Community · Club · Benefits
@@ -16,10 +18,36 @@ import { posts as SAMPLE_POSTS, FORUM_TAGS, type ForumPost, type ForumComment } 
 type Tab = "shop" | "drops" | "community" | "club" | "benefits";
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>("shop");
-  const { isSignedIn, tier, setTier, cartCount, setCartOpen } = useMembership();
+  const {
+    isSignedIn,
+    authLoading,
+    tier,
+    setTier,
+    cartCount,
+    setCartOpen,
+    refreshStoreCredit,
+    refreshSubscriptionStatus,
+  } = useMembership();
   const isPaid = tier === "access" || tier === "member" || tier === "black";
   const [upgradeOpen, setUpgradeOpen] = useState(false);
+
+  // Auth guard
+  useEffect(() => {
+    if (!authLoading && !isSignedIn) {
+      router.replace("/login");
+    }
+  }, [authLoading, isSignedIn, router]);
+
+  // Load store credit and subscription status on mount
+  useEffect(() => {
+    if (isSignedIn) {
+      void refreshStoreCredit();
+      void refreshSubscriptionStatus();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSignedIn]);
 
   // Cart badge pop animation
   const [badgePop, setBadgePop] = useState(false);
@@ -32,6 +60,14 @@ export default function DashboardPage() {
     }
     prevCartCount.current = cartCount;
   }, [cartCount]);
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-bone flex items-center justify-center">
+        <div className="w-5 h-5 border-2 border-forest/30 border-t-forest rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-bone">
@@ -635,9 +671,10 @@ interface ClubEntry {
 }
 
 function ClubTab() {
-  const { clubStatus, setClubStatus, interestedClubs, toggleClubInterest } = useMembership();
+  const { user, clubStatus, setClubStatus, interestedClubs, toggleClubInterest } = useMembership();
   const [selectedState, setSelectedState] = useState("Michigan");
   const [showForm, setShowForm] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     clubName: "",
     city: "",
@@ -648,9 +685,28 @@ function ClubTab() {
 
   const filteredClubs = SAMPLE_CLUBS.filter((c) => c.state === selectedState);
 
-  const handleSubmitApplication = () => {
-    setClubStatus("pending");
-    setShowForm(false);
+  const handleSubmitApplication = async () => {
+    if (!user?.uid) return;
+    setSubmitting(true);
+    try {
+      await submitRegistryApplication(user.uid, {
+        club_name: formData.clubName,
+        city: formData.city,
+        state: formData.state,
+        holes: Number(formData.holes),
+        guest_policy: formData.guestPolicy,
+        submitted_by_email: user.email ?? "",
+      });
+      setClubStatus("pending");
+      setShowForm(false);
+    } catch (err) {
+      console.error("[ClubTab] submitRegistryApplication failed:", err);
+      // Fall back to optimistic local update so UX isn't broken
+      setClubStatus("pending");
+      setShowForm(false);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   // ── Not yet applied ──
@@ -778,10 +834,11 @@ function ClubTab() {
                 </div>
                 <div className="flex items-center gap-3">
                   <button
-                    onClick={handleSubmitApplication}
-                    className="h-11 px-8 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer btn-press"
+                    onClick={() => void handleSubmitApplication()}
+                    disabled={submitting}
+                    className="h-11 px-8 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer btn-press disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    Submit for Review
+                    {submitting ? "Submitting…" : "Submit for Review"}
                   </button>
                   <button
                     onClick={() => setShowForm(false)}

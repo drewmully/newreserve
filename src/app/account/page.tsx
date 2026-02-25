@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMembership, type FitProfile } from "../context/MembershipContext";
 import { SlideCart } from "../components/SlideCart";
 import { UpgradeModal, PillButton, FIT_SHIRT_SIZES, FIT_GLOVE_HANDS, FIT_GLOVE_SIZES, FIT_WAIST_SIZES, FIT_SHOE_SIZES, FIT_PANTS_INSEAMS, FIT_SHORTS_INSEAMS } from "../components/UpgradeModal";
@@ -12,8 +13,10 @@ import { UpgradeModal, PillButton, FIT_SHIRT_SIZES, FIT_GLOVE_HANDS, FIT_GLOVE_S
    ═══════════════════════════════════════════ */
 
 export default function AccountPage() {
+  const router = useRouter();
   const {
     isSignedIn,
+    authLoading,
     email,
     setEmail,
     username,
@@ -25,34 +28,31 @@ export default function AccountPage() {
     setCartOpen,
     fitProfile,
     setFitProfile,
+    signOut,
+    refreshStoreCredit,
+    refreshSubscriptionStatus,
   } = useMembership();
 
   const [upgradeOpen, setUpgradeOpen] = useState(false);
 
-  /* ── Not signed in ── */
-  if (!isSignedIn) {
+  useEffect(() => {
+    if (!authLoading && !isSignedIn) {
+      router.replace("/login");
+    }
+  }, [authLoading, isSignedIn, router]);
+
+  useEffect(() => {
+    if (isSignedIn) {
+      void refreshStoreCredit();
+      void refreshSubscriptionStatus();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSignedIn]);
+
+  if (authLoading || !isSignedIn) {
     return (
-      <div className="min-h-screen bg-bone">
-        <AccountHeader cartCount={cartCount} onCartOpen={() => setCartOpen(true)} />
-        <main className="pt-28 pb-24 px-6">
-          <div className="max-w-sm mx-auto text-center">
-            <div className="w-14 h-14 rounded-2xl bg-forest/8 flex items-center justify-center mx-auto mb-5">
-              <svg className="w-7 h-7 text-forest" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-              </svg>
-            </div>
-            <h1 className="font-serif text-2xl text-obsidian mb-2">Your Account</h1>
-            <p className="text-sm text-charcoal/50 leading-relaxed mb-8">
-              Sign up or log in to manage your membership, fit profile, and orders.
-            </p>
-            <Link
-              href="/onboarding"
-              className="inline-flex items-center justify-center h-12 px-10 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 btn-press"
-            >
-              Get Started
-            </Link>
-          </div>
-        </main>
+      <div className="min-h-screen bg-bone flex items-center justify-center">
+        <div className="w-5 h-5 border-2 border-forest/30 border-t-forest rounded-full animate-spin" />
       </div>
     );
   }
@@ -125,7 +125,10 @@ export default function AccountPage() {
 
           {/* ═══ ACCOUNT ACTIONS ═══ */}
           <div className="pt-6 border-t border-taupe/10 flex items-center gap-5">
-            <button className="text-xs text-charcoal/30 hover:text-charcoal/55 transition-colors duration-300 cursor-pointer">
+            <button
+              onClick={() => void signOut()}
+              className="text-xs text-charcoal/30 hover:text-charcoal/55 transition-colors duration-300 cursor-pointer"
+            >
               Sign Out
             </button>
             <button className="text-xs text-ember/40 hover:text-ember transition-colors duration-300 cursor-pointer">

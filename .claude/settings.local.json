@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd D:/Repos/newreserve && npm install firebase firebase-admin 2>&12)",
+      "Bash(cd D:/Repos/newreserve && npx tsc --noEmit 2>&1)",
+      "Bash(cd:*)",
+      "Bash(cd /d/Repos/newreserve && npx tsc --noEmit 2>&1222)",
+      "Bash(cd /d/Repos/newreserve && npx tsc --noEmit 2>&1)",
+      "Bash(cd /d/Repos/newreserve && grep -rn \"\\\\\"use client\\\\\"\" src/app/shop/page.tsx src/app/shop/\\\\[slug\\\\]/page.tsx src/app/layout.tsx src/app/page.tsx src/app/community/page.tsx src/app/blog/page.tsx 2>&12)",
+      "Bash(cd /d/Repos/newreserve && ls .env* 2>&12)"
+    ]
+  }
+}

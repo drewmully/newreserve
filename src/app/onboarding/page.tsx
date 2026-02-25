@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useMembership } from "../context/MembershipContext";
+import { trackEvent } from "@/lib/tracking";
 import {
   FIT_SHIRT_SIZES, FIT_GLOVE_HANDS, FIT_GLOVE_SIZES,
   FIT_WAIST_SIZES, FIT_SHOE_SIZES, FIT_PANTS_INSEAMS, FIT_SHORTS_INSEAMS,
@@ -83,7 +84,22 @@ function daysInMonth(month: number, year: number): number {
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const { email, setEmail, username, setUsername, setTier, signIn } = useMembership();
+  const { email, setEmail, username, setUsername, setTier, user, authLoading, isSignedIn } = useMembership();
+
+  useEffect(() => {
+    if (!authLoading && !isSignedIn) {
+      router.replace("/login");
+    }
+  }, [authLoading, isSignedIn, router]);
+
+  function handleComplete(newTier: "free" | "access" | "member") {
+    setTier(newTier);
+    void trackEvent("registry_applied", {
+      user_id: user?.uid,
+      email: user?.email ?? email,
+    });
+    router.push("/dashboard");
+  }
   const [step, setStep] = useState(1);
 
   // Sub-step within step 1 (1 = basics, 2 = your game, 3 = vibe check)
@@ -555,7 +571,7 @@ export default function OnboardingPage() {
                       <FeatureItem text="Free 2-day shipping" />
                     </ul>
                     <button
-                      onClick={() => { signIn(); setTier("access"); router.push("/dashboard"); }}
+                      onClick={() => handleComplete("access")}
                       className="h-12 px-10 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-all duration-300 cursor-pointer btn-press"
                     >
                       Join Reserve Access
@@ -638,7 +654,7 @@ export default function OnboardingPage() {
               {/* Start Free */}
               <div className="mt-4 text-center">
                 <button
-                  onClick={() => { signIn(); setTier("free"); router.push("/dashboard"); }}
+                  onClick={() => handleComplete("free")}
                   className="text-sm text-charcoal/40 hover:text-charcoal/60 underline underline-offset-4 decoration-charcoal/20 hover:decoration-charcoal/40 transition-all duration-300 cursor-pointer"
                 >
                   Or start free
@@ -706,7 +722,7 @@ export default function OnboardingPage() {
 
                   <FitNav
                     onBack={() => setStep(2)}
-                    onSkip={() => { signIn(); setTier("member"); router.push("/dashboard"); }}
+                    onSkip={() => handleComplete("member")}
                     onNext={() => setFitStep(2)}
                   />
                 </div>
@@ -766,8 +782,8 @@ export default function OnboardingPage() {
 
                   <FitNav
                     onBack={() => setFitStep(1)}
-                    onSkip={() => { signIn(); setTier("member"); router.push("/dashboard"); }}
-                    onNext={() => { signIn(); setTier("member"); router.push("/dashboard"); }}
+                    onSkip={() => handleComplete("member")}
+                    onNext={() => handleComplete("member")}
                     isLast
                   />
                 </div>
