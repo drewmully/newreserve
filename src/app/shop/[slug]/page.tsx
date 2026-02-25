@@ -39,17 +39,27 @@ export async function generateStaticParams() {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const product = await getProductByHandle(slug);
-  if (!product) return {};
-  return {
-    title: `${product.name} | ${product.brand} | Mully Reserve`,
-    description: product.description,
-  };
+  try {
+    const product = await getProductByHandle(slug);
+    if (!product) return {};
+    return {
+      title: `${product.name} | ${product.brand} | Mully Reserve`,
+      description: product.description,
+    };
+  } catch {
+    return {};
+  }
 }
 
 export default async function ProductPage({ params }: Props) {
   const { slug } = await params;
-  const product = await getProductByHandle(slug);
+  let product;
+  try {
+    product = await getProductByHandle(slug);
+  } catch (err) {
+    console.error("[ProductPage] Shopify fetch failed:", err);
+    notFound();
+  }
   if (!product) notFound();
 
   const accordionItems = [

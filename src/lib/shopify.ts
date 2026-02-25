@@ -83,8 +83,8 @@ export interface ShopifyProduct {
   aboutBrand: string;
   whyWeLikeIt: string;
   sizing: string;
-  /** First variant GID — required for cart mutations */
-  variantId: string;
+  /** First variant GID — required for cart mutations. Undefined if Shopify returned no variants. */
+  variantId: string | undefined;
 }
 
 export interface CartLineInput {
@@ -189,7 +189,7 @@ function mapProduct(raw: RawProduct): ShopifyProduct {
     aboutBrand: raw.aboutBrandMeta?.value ?? "",
     whyWeLikeIt: raw.whyWeLikeItMeta?.value ?? "",
     sizing: raw.sizingMeta?.value ?? "",
-    variantId: variant?.id ?? "",
+    variantId: variant?.id,
   };
 }
 
