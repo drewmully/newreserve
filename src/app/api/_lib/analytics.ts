@@ -9,8 +9,11 @@
  * Required env vars per provider:
  *   Meta CAPI:    META_PIXEL_ID, META_ACCESS_TOKEN
  *   GA4:          GA4_MEASUREMENT_ID, GA4_API_SECRET
- *   Google Ads:   GOOGLE_ADS_CONVERSION_ID, GOOGLE_ADS_CONVERSION_LABEL
- *   PostHog:      POSTHOG_API_KEY  (POSTHOG_HOST defaults to app.posthog.com)
+ *   Google Ads:   GOOGLE_ADS_CONVERSION_ID
+ *                 GOOGLE_ADS_LABEL_PAGE_VIEW        (page_view events)
+ *                 GOOGLE_ADS_LABEL_CHECKOUT_INIT    (initiate_checkout, checkout_clicked)
+ *                 GOOGLE_ADS_LABEL_FUNNEL_CONVERSION (purchase events)
+ *   PostHog:      POSTHOG_PROJECT_API_KEY  (POSTHOG_HOST defaults to app.posthog.com)
  */
 
 import crypto from "crypto";
@@ -114,24 +117,38 @@ async function fireGA4(event: AnalyticsEvent): Promise<void> {
 
 // ─── Google Ads conversion ping ──────────────────────────────────────────────
 
+/** Maps event names to the env var key that holds the Google Ads label. */
+const GOOGLE_ADS_LABEL_ENV: Record<string, string> = {
+  page_view: "GOOGLE_ADS_LABEL_PAGE_VIEW",
+  initiate_checkout: "GOOGLE_ADS_LABEL_CHECKOUT_INIT",
+  checkout_clicked: "GOOGLE_ADS_LABEL_CHECKOUT_INIT",
+  purchase: "GOOGLE_ADS_LABEL_FUNNEL_CONVERSION",
+};
+
 async function fireGoogleAds(event: AnalyticsEvent): Promise<void> {
-  if (event.event_name !== "purchase") return;
-
   const conversionId = process.env.GOOGLE_ADS_CONVERSION_ID;
-  const conversionLabel = process.env.GOOGLE_ADS_CONVERSION_LABEL;
-  if (!conversionId || !conversionLabel) return;
+  if (!conversionId) return;
 
-  const value = (event.properties?.value as number) ?? 0;
-  const currency = (event.properties?.currency as string) ?? "USD";
-  const orderId = event.properties?.order_id as string | undefined;
+  const labelEnvKey = GOOGLE_ADS_LABEL_ENV[event.event_name];
+  if (!labelEnvKey) return; // event type not tracked via Google Ads
+
+  const label = process.env[labelEnvKey];
+  if (!label) return;
 
   const url = new URL(
     `https://www.googleadservices.com/pagead/conversion/${conversionId}/`
   );
-  url.searchParams.set("label", conversionLabel);
-  url.searchParams.set("value", String(value));
-  url.searchParams.set("currency_code", currency);
-  if (orderId) url.searchParams.set("transaction_id", orderId);
+  url.searchParams.set("label", label);
+
+  // Enrich purchase events with transaction data
+  if (event.event_name === "purchase") {
+    const value = (event.properties?.value as number) ?? 0;
+    const currency = (event.properties?.currency as string) ?? "USD";
+    const orderId = event.properties?.order_id as string | undefined;
+    url.searchParams.set("value", String(value));
+    url.searchParams.set("currency_code", currency);
+    if (orderId) url.searchParams.set("transaction_id", orderId);
+  }
 
   await fetch(url.toString(), { method: "GET" });
 }
@@ -139,7 +156,7 @@ async function fireGoogleAds(event: AnalyticsEvent): Promise<void> {
 // ─── PostHog capture API ─────────────────────────────────────────────────────
 
 async function firePostHog(event: AnalyticsEvent): Promise<void> {
-  const apiKey = process.env.POSTHOG_API_KEY;
+  const apiKey = process.env.POSTHOG_PROJECT_API_KEY;
   if (!apiKey) return;
 
   const host = process.env.POSTHOG_HOST ?? "https://app.posthog.com";

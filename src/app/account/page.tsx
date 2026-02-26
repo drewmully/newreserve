@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMembership, type FitProfile } from "../context/MembershipContext";
+import { useMembership, type FitProfile, type StoreCreditState, type SubscriptionsState } from "../context/MembershipContext";
 import { SlideCart } from "../components/SlideCart";
 import { UpgradeModal, PillButton, FIT_SHIRT_SIZES, FIT_GLOVE_HANDS, FIT_GLOVE_SIZES, FIT_WAIST_SIZES, FIT_SHOE_SIZES, FIT_PANTS_INSEAMS, FIT_SHORTS_INSEAMS } from "../components/UpgradeModal";
 
@@ -29,6 +29,8 @@ export default function AccountPage() {
     fitProfile,
     setFitProfile,
     signOut,
+    storeCredit,
+    subscriptions,
     refreshStoreCredit,
     refreshSubscriptionStatus,
   } = useMembership();
@@ -103,7 +105,11 @@ export default function AccountPage() {
             tierLabel={tierLabel}
             setTier={setTier}
             onUpgrade={() => setUpgradeOpen(true)}
+            subscriptions={subscriptions}
           />
+
+          {/* ═══ WALLET ═══ */}
+          <WalletSection storeCredit={storeCredit} />
 
           {/* ═══ NOTIFICATIONS ═══ */}
           <NotificationSection />
@@ -569,22 +575,21 @@ function NotificationSection() {
 
 /* ═══════════════════════════════════════════
    SUBSCRIPTION SECTION
+   Shows tier info + Loop-driven action button.
    ═══════════════════════════════════════════ */
 
 function SubscriptionSection({
   tier,
   tierLabel,
-  setTier,
   onUpgrade,
+  subscriptions,
 }: {
   tier: string;
   tierLabel: string;
   setTier: (t: "free" | "access" | "member" | "black") => void;
   onUpgrade: () => void;
+  subscriptions: SubscriptionsState | null;
 }) {
-  const [showManage, setShowManage] = useState(false);
-  const [cancelStep, setCancelStep] = useState<"idle" | "confirm" | "done">("idle");
-
   const tierPricing: Record<string, string> = {
     free: "Free",
     access: "$99/year",
@@ -592,18 +597,7 @@ function SubscriptionSection({
     black: "By Invitation",
   };
 
-  const getActiveUntilDate = () => {
-    const d = new Date();
-    if (tier === "member") {
-      const quarterEnd = new Date(d.getFullYear(), Math.ceil((d.getMonth() + 1) / 3) * 3, 0);
-      return quarterEnd.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-    }
-    const yearEnd = new Date(d.getFullYear() + 1, d.getMonth(), d.getDate());
-    return yearEnd.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
-  };
-
   const isPaid = tier !== "free";
-  const canDowngrade = tier === "member";
 
   return (
     <section className="mb-8">
@@ -620,142 +614,72 @@ function SubscriptionSection({
                 {tierPricing[tier]}
               </p>
             </div>
-            {tier === "free" ? (
+            {tier === "free" && (
               <button
                 onClick={onUpgrade}
                 className="h-9 px-5 rounded-lg bg-forest text-bone text-xs font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 btn-press cursor-pointer"
               >
                 Upgrade
               </button>
-            ) : (
-              <button
-                onClick={() => { setShowManage(!showManage); setCancelStep("idle"); }}
-                className={`text-xs transition-colors duration-300 cursor-pointer ${
-                  isPaid ? "text-bone/35 hover:text-bone/60" : "text-charcoal/35 hover:text-charcoal/55"
-                }`}
-              >
-                {showManage ? "Close" : "Manage"}
-              </button>
             )}
           </div>
-          {isPaid && !showManage && (
-            <p className="text-[11px] text-bone/25 mt-3 pt-3 border-t border-bone/10">
-              Member since February 2026
-            </p>
-          )}
         </div>
 
-        {/* Manage panel */}
-        {showManage && isPaid && (
-          <div className={`border-t ${isPaid ? "border-bone/10" : "border-taupe/12"}`}>
-            {cancelStep === "idle" && (
-              <div className="p-5 space-y-2 animate-tab-in">
-                {tier !== "black" && (
-                  <button
-                    onClick={() => { setShowManage(false); onUpgrade(); }}
-                    className="block w-full text-left bg-bone/10 hover:bg-bone/15 rounded-lg px-4 py-3 transition-colors duration-300 cursor-pointer"
-                  >
-                    <p className="text-sm font-medium text-bone">Upgrade Plan</p>
-                    <p className="text-xs text-bone/40 mt-0.5">
-                      {tier === "access" ? "Unlock concierge, events, and fit-curated drops" : "View plans"}
-                    </p>
-                  </button>
-                )}
-                <button
-                  onClick={() => setCancelStep("confirm")}
-                  className="w-full text-left bg-bone/5 hover:bg-bone/10 rounded-lg px-4 py-3 transition-colors duration-300 cursor-pointer"
-                >
-                  <p className="text-sm text-bone/45">Cancel Membership</p>
-                </button>
-              </div>
-            )}
+        {/* Loop subscription action */}
+        <div className={`border-t px-5 py-4 ${isPaid ? "border-bone/10" : "border-taupe/10"}`}>
+          {subscriptions === null ? (
+            <div className="h-9 w-44 rounded-lg bg-taupe/15 animate-pulse" />
+          ) : subscriptions.mullybox_active ? (
+            <a
+              href={subscriptions.manage_url ?? "#"}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`inline-flex items-center justify-center h-9 px-5 rounded-lg border text-xs font-medium tracking-wider uppercase transition-all duration-300 ${
+                isPaid
+                  ? "border-bone/20 text-bone hover:bg-bone/10"
+                  : "border-forest/20 text-forest hover:bg-forest/5"
+              }`}
+            >
+              Manage Subscription
+            </a>
+          ) : (
+            <a
+              href={subscriptions.next_unblock_url ?? "#"}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center h-9 px-5 rounded-lg bg-forest text-bone text-xs font-medium tracking-wider uppercase hover:bg-forest-dark transition-all duration-300 btn-press"
+            >
+              Next Unblock
+            </a>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
 
-            {cancelStep === "confirm" && (
-              <div className="p-5 animate-tab-in">
-                <h4 className="font-serif text-base text-bone mb-1.5">Before you go&hellip;</h4>
-                <p className="text-xs text-bone/45 leading-relaxed mb-4">
-                  You&rsquo;ll lose access to:
-                </p>
-                <ul className="space-y-1.5 mb-5 text-xs text-bone/40">
-                  <li className="flex items-center gap-2">
-                    <span className="w-1 h-1 rounded-full bg-bone/25 shrink-0" />
-                    Reserve pricing on all products
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="w-1 h-1 rounded-full bg-bone/25 shrink-0" />
-                    Free 2-day shipping
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <span className="w-1 h-1 rounded-full bg-bone/25 shrink-0" />
-                    Early and priority drop access
-                  </li>
-                  {tier === "member" && (
-                    <li className="flex items-center gap-2">
-                      <span className="w-1 h-1 rounded-full bg-bone/25 shrink-0" />
-                      Concierge support and events
-                    </li>
-                  )}
-                </ul>
+/* ═══════════════════════════════════════════
+   WALLET SECTION
+   ═══════════════════════════════════════════ */
 
-                {canDowngrade && (
-                  <div className="bg-bone/10 rounded-lg p-4 mb-4">
-                    <p className="text-xs font-medium text-bone mb-1">Consider downgrading?</p>
-                    <p className="text-[11px] text-bone/40 leading-relaxed mb-3">
-                      Keep Reserve pricing and shipping at $99/year.
-                    </p>
-                    <button
-                      onClick={() => { setTier("access"); setShowManage(false); setCancelStep("idle"); }}
-                      className="h-9 px-5 rounded-lg bg-bone text-forest text-xs font-medium tracking-wider uppercase hover:bg-bone-dark transition-colors duration-300 cursor-pointer btn-press"
-                    >
-                      Downgrade to Access
-                    </button>
-                  </div>
-                )}
-
-                <p className="text-[11px] text-bone/30 mb-4">
-                  Benefits remain active through <span className="text-bone/50 font-medium">{getActiveUntilDate()}</span>.
-                </p>
-
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => { setCancelStep("idle"); setShowManage(false); }}
-                    className="h-9 px-5 rounded-lg bg-bone text-forest text-xs font-medium tracking-wider uppercase hover:bg-bone-dark transition-colors duration-300 cursor-pointer btn-press"
-                  >
-                    Keep Membership
-                  </button>
-                  <button
-                    onClick={() => setCancelStep("done")}
-                    className="text-xs text-bone/25 hover:text-bone/45 transition-colors duration-300 cursor-pointer"
-                  >
-                    Confirm cancel
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {cancelStep === "done" && (
-              <div className="p-5 animate-tab-in">
-                <div className="flex items-start gap-2.5 mb-3">
-                  <svg className="w-4 h-4 text-bone/35 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <div>
-                    <p className="text-sm font-medium text-bone mb-0.5">Cancelled</p>
-                    <p className="text-xs text-bone/40 leading-relaxed">
-                      Your {tierLabel} benefits stay active through <span className="text-bone/55 font-medium">{getActiveUntilDate()}</span>.
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => { setCancelStep("idle"); setShowManage(false); }}
-                  className="text-xs text-bone/30 hover:text-bone/50 transition-colors duration-300 cursor-pointer"
-                >
-                  Changed your mind? Resubscribe
-                </button>
-              </div>
+function WalletSection({ storeCredit }: { storeCredit: StoreCreditState | null }) {
+  return (
+    <section className="mb-8">
+      <SectionLabel>Wallet</SectionLabel>
+      <div className="rounded-xl border border-taupe/12 bg-cream overflow-hidden">
+        <div className="px-5 py-4 flex items-center justify-between">
+          <div>
+            <p className="text-[11px] text-charcoal/35 mb-0.5">Store Credit</p>
+            {storeCredit === null ? (
+              <div className="h-5 w-20 rounded bg-taupe/15 animate-pulse" />
+            ) : (
+              <p className="text-sm font-medium text-obsidian">
+                ${(storeCredit.balance_cents / 100).toFixed(2)}{" "}
+                <span className="text-xs text-charcoal/30 font-normal">{storeCredit.currency}</span>
+              </p>
             )}
           </div>
-        )}
+        </div>
       </div>
     </section>
   );

@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── users ──────────────────────────────────────────────────────────────
+    // Owner-only read/create/update. Delete is never allowed.
+    match /users/{userId} {
+      allow read, create, update: if request.auth != null
+        && request.auth.uid == userId;
+      allow delete: if false;
+    }
+
+    // ── registry_applications ───────────────────────────────────────────────
+    // Create: must be authenticated, document id == uid, status must be
+    // "pending", metadata must be a map, and created_at must equal server time.
+    // Read/update: owner only. Delete is never allowed.
+    match /registry_applications/{applicationId} {
+      allow create: if request.auth != null
+        && applicationId == request.auth.uid
+        && request.resource.data.status == "pending"
+        && request.resource.data.metadata is map
+        && request.resource.data.created_at == request.time;
+
+      allow read, update: if request.auth != null
+        && request.auth.uid == applicationId;
+
+      allow delete: if false;
+    }
+
+    // ── default deny ────────────────────────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
