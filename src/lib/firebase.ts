@@ -62,6 +62,7 @@ export interface UserDocument {
     sms_marketing: boolean;
     push_notifications: boolean;
   };
+  fit_profile?: Record<string, string>;
 }
 
 const USER_DEFAULTS: Omit<

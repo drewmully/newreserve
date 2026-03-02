@@ -212,11 +212,27 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
   const [subscriptions, setSubscriptions] = useState<SubscriptionsState | null>(null);
 
   // ── Fit profile ───────────────────────────────────────────────────────────
-  const [fitProfile, setFitProfile] = useState<FitProfile>(EMPTY_FIT);
+  const [fitProfile, setFitProfileState] = useState<FitProfile>(EMPTY_FIT);
 
   // ── Club ──────────────────────────────────────────────────────────────────
   const [clubStatus, setClubStatus] = useState<ClubStatus>("none");
   const [interestedClubs, setInterestedClubs] = useState<string[]>([]);
+
+  /* ── Fit profile helpers ── */
+
+  const setFitProfile = useCallback(
+    async (profile: FitProfile) => {
+      setFitProfileState(profile);
+      if (user?.uid) {
+        try {
+          await updateDoc(doc(db, "users", user.uid), { fit_profile: profile });
+        } catch (err) {
+          console.error("[FitProfile] Firestore persist failed:", err);
+        }
+      }
+    },
+    [user]
+  );
 
   /* ── Cart helpers ── */
 
@@ -340,6 +356,9 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
               next_unblock_url: profile.subscriptions.next_unblock_url,
             });
           }
+          if (profile.fit_profile && typeof profile.fit_profile === "object") {
+            setFitProfileState({ ...EMPTY_FIT, ...profile.fit_profile });
+          }
         } catch (err) {
           console.error("[MembershipContext] syncUserProfile failed:", err);
         }
@@ -357,7 +376,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
         setCart([]);
         setCartId(null);
         setCartCheckoutUrl(null);
-        setFitProfile(EMPTY_FIT);
+        setFitProfileState(EMPTY_FIT);
         setStoreCredit(null);
         setSubscriptions(null);
         setClubStatus("none");

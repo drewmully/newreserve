@@ -3,6 +3,7 @@ import {
   StatCounter,
   ScrollChevron,
   FadeInSection,
+  LogoLink,
 } from "./components/ClientComponents";
 import { EmailCTA } from "./components/EmailCTA";
 
@@ -12,10 +13,7 @@ export default function Home() {
       {/* ─── HEADER ─── */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-bone/90 backdrop-blur-md header-grass">
         <div className="max-w-7xl mx-auto px-6 md:px-12 flex items-center justify-between h-16">
-          <a href="/" className="flex items-center gap-2 text-forest">
-            <svg viewBox="0 0 1002 540" fill="currentColor" className="h-5 w-auto" aria-hidden="true"><path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" /></svg>
-            <span className="font-serif text-2xl font-bold tracking-wide">mully.</span>
-          </a>
+          <LogoLink />
           <a
             href="/login"
             className="text-sm tracking-wider uppercase text-forest font-medium hover:text-forest-dark transition-colors duration-300"
