@@ -9,7 +9,8 @@
       "Bash(cd /d/Repos/newreserve && grep -rn \"\\\\\"use client\\\\\"\" src/app/shop/page.tsx src/app/shop/\\\\[slug\\\\]/page.tsx src/app/layout.tsx src/app/page.tsx src/app/community/page.tsx src/app/blog/page.tsx 2>&12)",
       "Bash(cd /d/Repos/newreserve && ls .env* 2>&12)",
       "Bash(npx tsc:*)",
-      "Bash(xargs grep:*)"
+      "Bash(xargs grep:*)",
+      "Bash(ls:*)"
     ]
   }
 }

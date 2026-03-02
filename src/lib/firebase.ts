@@ -1,5 +1,10 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import {
+  getAuth,
+  sendSignInLinkToEmail,
+  isSignInWithEmailLink,
+  signInWithEmailLink,
+} from "firebase/auth";
 import {
   getFirestore,
   doc,
@@ -128,3 +133,48 @@ export async function syncUserProfile(user: User): Promise<UserDocument> {
   const finalSnap = await getDoc(ref);
   return finalSnap.data() as UserDocument;
 }
+
+/* ═══════════════════════════════════════════
+   PASSWORDLESS EMAIL LINK AUTH
+   ─────────────────────────────────────────
+   SETUP REQUIRED: In Firebase Console →
+   Authentication → Sign-in methods →
+   Email/Password → enable "Email link
+   (passwordless sign-in)".
+   ═══════════════════════════════════════════ */
+
+/**
+ * Sends a Firebase Email Link (magic link) to the given email.
+ * Saves the email in localStorage so confirmOTPSignIn can retrieve
+ * it on the same device automatically.
+ */
+export async function sendOTPEmail(email: string): Promise<void> {
+  const actionCodeSettings = {
+    // Must be whitelisted in Firebase Console → Authentication → Settings → Authorized domains.
+    url: `${window.location.origin}/login`,
+    handleCodeInApp: true,
+  };
+  await sendSignInLinkToEmail(auth, email, actionCodeSettings);
+  try {
+    localStorage.setItem("emailForSignIn", email);
+  } catch {}
+}
+
+/**
+ * Completes the Email Link sign-in.
+ * Call this when isSignInWithEmailLink(auth, window.location.href) is true.
+ */
+export async function confirmOTPSignIn(
+  email: string,
+  link: string
+): Promise<void> {
+  if (!isSignInWithEmailLink(auth, link)) {
+    throw new Error("Invalid sign-in link.");
+  }
+  await signInWithEmailLink(auth, email, link);
+  try {
+    localStorage.removeItem("emailForSignIn");
+  } catch {}
+}
+
+export { isSignInWithEmailLink };

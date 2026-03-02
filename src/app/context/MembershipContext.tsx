@@ -11,14 +11,11 @@ import {
 } from "react";
 import {
   onAuthStateChanged,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  updateProfile,
   signOut as firebaseSignOut,
   type User as FirebaseUser,
 } from "firebase/auth";
 import { doc, updateDoc, getDoc, serverTimestamp } from "firebase/firestore";
-import { auth, db, syncUserProfile } from "@/lib/firebase";
+import { auth, db, syncUserProfile, sendOTPEmail, confirmOTPSignIn } from "@/lib/firebase";
 import { trackEvent } from "@/lib/tracking";
 import {
   cartCreate,
@@ -90,12 +87,8 @@ interface MembershipContextValue {
   user: FirebaseUser | null;
   isSignedIn: boolean;
   authLoading: boolean;
-  signInWithEmail: (email: string, password: string) => Promise<void>;
-  signUpWithEmail: (
-    email: string,
-    password: string,
-    displayName?: string
-  ) => Promise<void>;
+  sendOTPEmail: (email: string) => Promise<void>;
+  confirmOTPSignIn: (email: string, link: string) => Promise<void>;
   signOut: () => Promise<void>;
 
   // User
@@ -392,28 +385,6 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
   }, [rehydrateCart]);
 
   /* ── Auth actions ── */
-  const signInWithEmail = useCallback(
-    async (emailArg: string, password: string) => {
-      await signInWithEmailAndPassword(auth, emailArg, password);
-    },
-    []
-  );
-
-  const signUpWithEmail = useCallback(
-    async (emailArg: string, password: string, displayName?: string) => {
-      const { user: newUser } = await createUserWithEmailAndPassword(
-        auth,
-        emailArg,
-        password
-      );
-      if (displayName) {
-        await updateProfile(newUser, { displayName });
-        setUsername(displayName);
-      }
-    },
-    []
-  );
-
   const signOut = useCallback(async () => {
     await firebaseSignOut(auth);
   }, []);
@@ -600,8 +571,8 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
         user,
         isSignedIn: user !== null,
         authLoading,
-        signInWithEmail,
-        signUpWithEmail,
+        sendOTPEmail,
+        confirmOTPSignIn,
         signOut,
 
         // User

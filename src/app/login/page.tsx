@@ -4,30 +4,83 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useMembership } from "../context/MembershipContext";
+import { auth, isSignInWithEmailLink, confirmOTPSignIn } from "@/lib/firebase";
 
 /* ═══════════════════════════════════════════
-   LOGIN PAGE
+   LOGIN PAGE  —  passwordless Email Link flow
    ═══════════════════════════════════════════ */
+
+type Step = "email" | "sent" | "confirming";
+
+function mapAuthError(code: string): string {
+  const messages: Record<string, string> = {
+    "auth/invalid-email": "Please enter a valid email address.",
+    "auth/too-many-requests": "Too many attempts. Please try again later.",
+    "auth/unauthorized-continue-uri":
+      "Sign-in is not configured for this domain.",
+    "auth/expired-action-code":
+      "This link has expired. Please request a new one.",
+    "auth/invalid-action-code":
+      "This link has already been used or is invalid.",
+    "auth/user-disabled": "This account has been disabled.",
+  };
+  return messages[code] ?? "Something went wrong. Please try again.";
+}
 
 export default function LoginPage() {
   const router = useRouter();
-  const { signInWithEmail, signUpWithEmail, isSignedIn, authLoading } = useMembership();
+  const { sendOTPEmail, isSignedIn, authLoading } = useMembership();
 
-  const [mode, setMode] = useState<"login" | "signup">("login");
+  // Detect email link synchronously on first render so we never flash the form
+  const [step, setStep] = useState<Step>(() => {
+    if (typeof window === "undefined") return "email";
+    return isSignInWithEmailLink(auth, window.location.href)
+      ? "confirming"
+      : "email";
+  });
+
   const [emailValue, setEmailValue] = useState("");
-  const [passwordValue, setPasswordValue] = useState("");
-  const [nameValue, setNameValue] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  // True when the link is opened on a different device (no localStorage entry)
+  const [needsEmailForLink, setNeedsEmailForLink] = useState(false);
 
+  /* ── Handle email link on mount ── */
+  useEffect(() => {
+    if (!isSignInWithEmailLink(auth, window.location.href)) return;
+
+    const savedEmail = localStorage.getItem("emailForSignIn") ?? "";
+    if (savedEmail) {
+      // Same device — auto-confirm
+      setEmailValue(savedEmail);
+      confirmOTPSignIn(savedEmail, window.location.href).catch((err) => {
+        setError(mapAuthError((err as { code?: string })?.code ?? ""));
+        setStep("email");
+      });
+    } else {
+      // Different device — ask user for email
+      setStep("email");
+      setNeedsEmailForLink(true);
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* ── Redirect once authenticated ── */
   useEffect(() => {
     if (!authLoading && isSignedIn) {
       router.replace("/dashboard");
     }
   }, [authLoading, isSignedIn, router]);
 
-  if (authLoading || isSignedIn) {
+  /* ── Resend cooldown countdown ── */
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const t = setTimeout(() => setResendCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendCooldown]);
+
+  // Already signed in → brief spinner while redirect fires
+  if (!authLoading && isSignedIn) {
     return (
       <div className="min-h-screen bg-bone flex items-center justify-center">
         <div className="w-5 h-5 border-2 border-forest/30 border-t-forest rounded-full animate-spin" />
@@ -35,39 +88,93 @@ export default function LoginPage() {
     );
   }
 
-  const canSubmit = mode === "login"
-    ? emailValue.trim() && passwordValue.trim()
-    : emailValue.trim() && passwordValue.trim() && nameValue.trim();
+  /* ── Handlers ── */
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSendLink(e: React.FormEvent) {
     e.preventDefault();
-    if (!canSubmit) return;
+    const email = emailValue.trim();
+    if (!email) return;
     setLoading(true);
     setError(null);
-
     try {
-      if (mode === "login") {
-        await signInWithEmail(emailValue, passwordValue);
-      } else {
-        await signUpWithEmail(emailValue, passwordValue, nameValue);
-      }
-      router.push("/dashboard");
-    } catch (err: unknown) {
-      const code = (err as { code?: string })?.code ?? "";
-      const messages: Record<string, string> = {
-        "auth/user-not-found": "No account found with that email.",
-        "auth/wrong-password": "Incorrect password.",
-        "auth/invalid-credential": "Incorrect email or password.",
-        "auth/email-already-in-use": "An account with that email already exists.",
-        "auth/weak-password": "Password must be at least 6 characters.",
-        "auth/invalid-email": "Please enter a valid email address.",
-        "auth/too-many-requests": "Too many attempts. Please try again later.",
-      };
-      setError(messages[code] ?? "Something went wrong. Please try again.");
+      await sendOTPEmail(email);
+      setStep("sent");
+      setResendCooldown(60);
+    } catch (err) {
+      setError(mapAuthError((err as { code?: string })?.code ?? ""));
     } finally {
       setLoading(false);
     }
   }
+
+  async function handleResend() {
+    if (resendCooldown > 0 || loading) return;
+    setLoading(true);
+    setError(null);
+    try {
+      await sendOTPEmail(emailValue.trim());
+      setResendCooldown(60);
+    } catch (err) {
+      setError(mapAuthError((err as { code?: string })?.code ?? ""));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Confirm the link on a different device after the user types their email
+  async function handleConfirmWithEmail(e: React.FormEvent) {
+    e.preventDefault();
+    const email = emailValue.trim();
+    if (!email) return;
+    setLoading(true);
+    setError(null);
+    setStep("confirming");
+    try {
+      await confirmOTPSignIn(email, window.location.href);
+      // onAuthStateChanged → isSignedIn → redirect
+    } catch (err) {
+      setError(mapAuthError((err as { code?: string })?.code ?? ""));
+      setStep("email");
+      setNeedsEmailForLink(true);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  /* ── Shared UI pieces ── */
+
+  const logoBox = (
+    <div className="w-12 h-12 rounded-2xl bg-forest/8 flex items-center justify-center mx-auto mb-4">
+      <svg viewBox="0 0 1002 540" fill="currentColor" className="h-5 w-auto text-forest" aria-hidden="true">
+        <path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" />
+      </svg>
+    </div>
+  );
+
+  const spinner = (
+    <span className="inline-flex items-center gap-2">
+      <span className="w-4 h-4 border-2 border-bone/30 border-t-bone rounded-full animate-spin" />
+    </span>
+  );
+
+  const errorBanner = error && (
+    <p className="text-xs text-red-600/80 bg-red-50 border border-red-200/60 rounded-lg px-3 py-2.5 text-center">
+      {error}
+    </p>
+  );
+
+  const termsFooter = (
+    <p className="text-center text-[10px] text-charcoal/25 leading-relaxed mt-6">
+      By continuing, you agree to our{" "}
+      <Link href="/policies/terms" className="underline underline-offset-2 hover:text-charcoal/40 transition-colors">
+        Terms of Service
+      </Link>
+      {" "}and{" "}
+      <Link href="/policies/privacy" className="underline underline-offset-2 hover:text-charcoal/40 transition-colors">
+        Privacy Policy
+      </Link>.
+    </p>
+  );
 
   return (
     <div className="min-h-screen bg-bone flex flex-col">
@@ -75,7 +182,9 @@ export default function LoginPage() {
       <header className="fixed top-0 left-0 right-0 z-50 bg-bone/90 backdrop-blur-md border-b border-taupe/15">
         <div className="max-w-7xl mx-auto px-5 md:px-12 flex items-center justify-between h-14">
           <Link href="/" className="flex items-center gap-2 text-forest">
-            <svg viewBox="0 0 1002 540" fill="currentColor" className="h-4 w-auto" aria-hidden="true"><path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" /></svg>
+            <svg viewBox="0 0 1002 540" fill="currentColor" className="h-4 w-auto" aria-hidden="true">
+              <path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" />
+            </svg>
             <span className="font-serif text-xl font-bold tracking-wide">mully.</span>
           </Link>
         </div>
@@ -84,158 +193,158 @@ export default function LoginPage() {
       {/* ─── MAIN ─── */}
       <main className="flex-1 flex items-center justify-center pt-14 px-5 py-12">
         <div className="w-full max-w-sm">
-          {/* Heading */}
-          <div className="text-center mb-8">
-            <div className="w-12 h-12 rounded-2xl bg-forest/8 flex items-center justify-center mx-auto mb-4">
-              <svg viewBox="0 0 1002 540" fill="currentColor" className="h-5 w-auto text-forest" aria-hidden="true"><path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" /></svg>
-            </div>
-            <h1 className="font-serif text-2xl text-obsidian mb-1">
-              {mode === "login" ? "Welcome back" : "Create your account"}
-            </h1>
-            <p className="text-sm text-charcoal/45">
-              {mode === "login"
-                ? "Sign in to your Mully Reserve account."
-                : "Join Mully Reserve \u2014 it\u2019s free to start."}
-            </p>
-          </div>
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {mode === "signup" && (
-              <div>
-                <label className="block text-[11px] tracking-wide uppercase text-charcoal/45 font-medium mb-1.5">
-                  Full name
-                </label>
-                <input
-                  type="text"
-                  value={nameValue}
-                  onChange={(e) => setNameValue(e.target.value)}
-                  placeholder="Your name"
-                  autoComplete="name"
-                  className="w-full h-11 px-4 rounded-xl bg-cream border border-taupe/20 text-sm text-obsidian placeholder:text-charcoal/25 focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300"
-                />
+          {/* ══ STEP 1 — Email input ══ */}
+          {step === "email" && !needsEmailForLink && (
+            <>
+              <div className="text-center mb-8">
+                {logoBox}
+                <h1 className="font-serif text-2xl text-obsidian mb-1">Welcome back</h1>
+                <p className="text-sm text-charcoal/45">
+                  Enter your email and we&apos;ll send you a sign‑in link.
+                </p>
               </div>
-            )}
 
-            <div>
-              <label className="block text-[11px] tracking-wide uppercase text-charcoal/45 font-medium mb-1.5">
-                Email
-              </label>
-              <input
-                type="email"
-                value={emailValue}
-                onChange={(e) => setEmailValue(e.target.value)}
-                placeholder="you@example.com"
-                autoComplete="email"
-                className="w-full h-11 px-4 rounded-xl bg-cream border border-taupe/20 text-sm text-obsidian placeholder:text-charcoal/25 focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[11px] tracking-wide uppercase text-charcoal/45 font-medium mb-1.5">
-                Password
-              </label>
-              <div className="relative">
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={passwordValue}
-                  onChange={(e) => setPasswordValue(e.target.value)}
-                  placeholder="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
-                  autoComplete={mode === "login" ? "current-password" : "new-password"}
-                  className="w-full h-11 px-4 pr-11 rounded-xl bg-cream border border-taupe/20 text-sm text-obsidian placeholder:text-charcoal/25 focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-charcoal/30 hover:text-charcoal/55 transition-colors duration-300 cursor-pointer"
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                >
-                  {showPassword ? (
-                    <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
-                    </svg>
-                  ) : (
-                    <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                  )}
-                </button>
-              </div>
-              {mode === "login" && (
-                <div className="mt-2 text-right">
-                  <button type="button" className="text-xs text-forest/60 hover:text-forest transition-colors duration-300 cursor-pointer">
-                    Forgot password?
-                  </button>
+              <form onSubmit={handleSendLink} className="space-y-4">
+                <div>
+                  <label className="block text-[11px] tracking-wide uppercase text-charcoal/45 font-medium mb-1.5">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={emailValue}
+                    onChange={(e) => setEmailValue(e.target.value)}
+                    placeholder="you@example.com"
+                    autoComplete="email"
+                    autoFocus
+                    className="w-full h-11 px-4 rounded-xl bg-cream border border-taupe/20 text-sm text-obsidian placeholder:text-charcoal/25 focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300"
+                  />
                 </div>
-              )}
-            </div>
 
-            {error && (
-              <p className="text-xs text-red-600/80 bg-red-50 border border-red-200/60 rounded-lg px-3 py-2.5 text-center">
-                {error}
-              </p>
-            )}
+                {errorBanner}
 
-            <button
-              type="submit"
-              disabled={!canSubmit || loading}
-              className={`w-full h-11 rounded-xl text-sm font-medium tracking-wider uppercase transition-all duration-300 btn-press cursor-pointer ${
-                canSubmit && !loading
-                  ? "bg-forest text-bone hover:bg-forest-dark"
-                  : "bg-taupe/20 text-charcoal/25 cursor-not-allowed"
-              }`}
-            >
-              {loading ? (
-                <span className="inline-flex items-center gap-2">
-                  <span className="w-4 h-4 border-2 border-bone/30 border-t-bone rounded-full animate-spin" />
-                  {mode === "login" ? "Signing in\u2026" : "Creating account\u2026"}
-                </span>
-              ) : (
-                mode === "login" ? "Sign In" : "Create Account"
-              )}
-            </button>
-          </form>
-
-          {/* Divider */}
-          <div className="flex items-center gap-3 my-6">
-            <div className="flex-1 h-px bg-taupe/15" />
-            <span className="text-[10px] tracking-wider uppercase text-charcoal/25">or</span>
-            <div className="flex-1 h-px bg-taupe/15" />
-          </div>
-
-          {/* Toggle mode */}
-          <p className="text-center text-sm text-charcoal/45">
-            {mode === "login" ? (
-              <>
-                New to Mully?{" "}
                 <button
-                  onClick={() => setMode("signup")}
-                  className="text-forest font-medium hover:text-forest-dark transition-colors duration-300 cursor-pointer"
+                  type="submit"
+                  disabled={!emailValue.trim() || loading}
+                  className={`w-full h-11 rounded-xl text-sm font-medium tracking-wider uppercase transition-all duration-300 btn-press cursor-pointer ${
+                    emailValue.trim() && !loading
+                      ? "bg-forest text-bone hover:bg-forest-dark"
+                      : "bg-taupe/20 text-charcoal/25 cursor-not-allowed"
+                  }`}
                 >
-                  Create an account
+                  {loading ? spinner : "Continue"}
                 </button>
-              </>
-            ) : (
-              <>
-                Already have an account?{" "}
-                <button
-                  onClick={() => setMode("login")}
-                  className="text-forest font-medium hover:text-forest-dark transition-colors duration-300 cursor-pointer"
-                >
-                  Sign in
-                </button>
-              </>
-            )}
-          </p>
+              </form>
 
-          {/* Terms */}
-          <p className="text-center text-[10px] text-charcoal/25 leading-relaxed mt-6">
-            By continuing, you agree to our{" "}
-            <Link href="/policies/terms" className="underline underline-offset-2 hover:text-charcoal/40 transition-colors">Terms of Service</Link>
-            {" "}and{" "}
-            <Link href="/policies/privacy" className="underline underline-offset-2 hover:text-charcoal/40 transition-colors">Privacy Policy</Link>.
-          </p>
+              {termsFooter}
+            </>
+          )}
+
+          {/* ══ STEP 2 — Link sent ══ */}
+          {step === "sent" && (
+            <>
+              <div className="text-center mb-8">
+                {logoBox}
+                <h1 className="font-serif text-2xl text-obsidian mb-1">Check your email</h1>
+                <p className="text-sm text-charcoal/45">
+                  We sent a sign‑in link to{" "}
+                  <strong className="text-obsidian font-medium">{emailValue}</strong>.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="rounded-xl bg-cream border border-taupe/15 px-5 py-4 text-sm text-charcoal/55 leading-relaxed">
+                  Click the link in your inbox to sign in. It expires after 1&nbsp;hour.
+                </div>
+
+                {errorBanner}
+
+                <button
+                  onClick={handleResend}
+                  disabled={resendCooldown > 0 || loading}
+                  className={`w-full h-11 rounded-xl text-sm font-medium tracking-wider uppercase transition-all duration-300 btn-press cursor-pointer ${
+                    resendCooldown > 0 || loading
+                      ? "bg-taupe/20 text-charcoal/25 cursor-not-allowed"
+                      : "bg-forest text-bone hover:bg-forest-dark"
+                  }`}
+                >
+                  {loading
+                    ? spinner
+                    : resendCooldown > 0
+                    ? `Resend in ${resendCooldown}s`
+                    : "Resend link"}
+                </button>
+
+                <button
+                  onClick={() => { setStep("email"); setError(null); }}
+                  className="w-full text-sm text-charcoal/45 hover:text-charcoal/70 transition-colors duration-300 cursor-pointer"
+                >
+                  Use a different email
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* ══ Confirming — auto sign-in in progress ══ */}
+          {step === "confirming" && (
+            <>
+              <div className="text-center mb-8">
+                {logoBox}
+                <h1 className="font-serif text-2xl text-obsidian mb-1">Signing you in…</h1>
+                <p className="text-sm text-charcoal/45">Just a moment.</p>
+              </div>
+              <div className="flex justify-center py-4">
+                <div className="w-6 h-6 border-2 border-forest/30 border-t-forest rounded-full animate-spin" />
+              </div>
+            </>
+          )}
+
+          {/* ══ Different device — user must enter their email to confirm ══ */}
+          {needsEmailForLink && (
+            <>
+              <div className="text-center mb-8">
+                {logoBox}
+                <h1 className="font-serif text-2xl text-obsidian mb-1">Confirm your email</h1>
+                <p className="text-sm text-charcoal/45">
+                  Enter the email you used to request this link.
+                </p>
+              </div>
+
+              <form onSubmit={handleConfirmWithEmail} className="space-y-4">
+                <div>
+                  <label className="block text-[11px] tracking-wide uppercase text-charcoal/45 font-medium mb-1.5">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={emailValue}
+                    onChange={(e) => setEmailValue(e.target.value)}
+                    placeholder="you@example.com"
+                    autoComplete="email"
+                    autoFocus
+                    className="w-full h-11 px-4 rounded-xl bg-cream border border-taupe/20 text-sm text-obsidian placeholder:text-charcoal/25 focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300"
+                  />
+                </div>
+
+                {errorBanner}
+
+                <button
+                  type="submit"
+                  disabled={!emailValue.trim() || loading}
+                  className={`w-full h-11 rounded-xl text-sm font-medium tracking-wider uppercase transition-all duration-300 btn-press cursor-pointer ${
+                    emailValue.trim() && !loading
+                      ? "bg-forest text-bone hover:bg-forest-dark"
+                      : "bg-taupe/20 text-charcoal/25 cursor-not-allowed"
+                  }`}
+                >
+                  {loading ? spinner : "Sign In"}
+                </button>
+              </form>
+
+              {termsFooter}
+            </>
+          )}
+
         </div>
       </main>
     </div>
