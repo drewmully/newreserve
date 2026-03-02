@@ -4,6 +4,23 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMembership, type FitProfile, type StoreCreditState, type SubscriptionsState } from "../context/MembershipContext";
+
+interface OrderLineItem {
+  name: string;
+  quantity: number;
+  price: string;
+}
+
+interface OrderSummary {
+  order_number: number;
+  name: string;
+  created_at: string;
+  total_price: string;
+  currency: string;
+  financial_status: string;
+  fulfillment_status: string;
+  line_items: OrderLineItem[];
+}
 import { SlideCart } from "../components/SlideCart";
 import { UpgradeModal, PillButton, FIT_SHIRT_SIZES, FIT_GLOVE_HANDS, FIT_GLOVE_SIZES, FIT_WAIST_SIZES, FIT_SHOE_SIZES, FIT_PANTS_INSEAMS, FIT_SHORTS_INSEAMS } from "../components/UpgradeModal";
 
@@ -15,6 +32,7 @@ import { UpgradeModal, PillButton, FIT_SHIRT_SIZES, FIT_GLOVE_HANDS, FIT_GLOVE_S
 export default function AccountPage() {
   const router = useRouter();
   const {
+    user,
     isSignedIn,
     authLoading,
     email,
@@ -35,6 +53,8 @@ export default function AccountPage() {
     refreshSubscriptionStatus,
   } = useMembership();
 
+  const [orders, setOrders] = useState<OrderSummary[] | null>(null);
+
   const [upgradeOpen, setUpgradeOpen] = useState(false);
 
   useEffect(() => {
@@ -48,6 +68,20 @@ export default function AccountPage() {
       void refreshStoreCredit();
       void refreshSubscriptionStatus();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSignedIn]);
+
+  useEffect(() => {
+    if (!isSignedIn || !user) return;
+    user.getIdToken().then((token) =>
+      fetch("/api/shopify/orders", {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+    ).then((res) => (res.ok ? res.json() : null))
+      .then((data: { orders: OrderSummary[] } | null) => {
+        setOrders(data?.orders ?? []);
+      })
+      .catch(() => setOrders([]));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSignedIn]);
 
@@ -115,19 +149,7 @@ export default function AccountPage() {
           <NotificationSection />
 
           {/* ═══ ORDERS ═══ */}
-          <section className="mb-10">
-            <SectionLabel>Orders</SectionLabel>
-            <div className="rounded-xl border border-taupe/12 bg-cream p-6 text-center">
-              <p className="text-sm text-charcoal/40 mb-1">No orders yet</p>
-              <p className="text-xs text-charcoal/25 mb-4">Your history will appear here after your first purchase.</p>
-              <Link
-                href="/dashboard"
-                className="inline-flex items-center justify-center h-9 px-5 rounded-lg border border-taupe/20 text-xs font-medium tracking-wider uppercase text-charcoal/45 hover:border-forest/30 hover:text-forest transition-all duration-300"
-              >
-                Browse Shop
-              </Link>
-            </div>
-          </section>
+          <OrdersSection orders={orders} />
 
           {/* ═══ ACCOUNT ACTIONS ═══ */}
           <div className="pt-6 border-t border-taupe/10 flex items-center gap-5">
@@ -625,32 +647,61 @@ function SubscriptionSection({
           </div>
         </div>
 
-        {/* Loop subscription action */}
+        {/* Loop subscription status */}
         <div className={`border-t px-5 py-4 ${isPaid ? "border-bone/10" : "border-taupe/10"}`}>
           {subscriptions === null ? (
-            <div className="h-9 w-44 rounded-lg bg-taupe/15 animate-pulse" />
-          ) : subscriptions.mullybox_active ? (
-            <a
-              href={subscriptions.manage_url ?? "#"}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`inline-flex items-center justify-center h-9 px-5 rounded-lg border text-xs font-medium tracking-wider uppercase transition-all duration-300 ${
-                isPaid
-                  ? "border-bone/20 text-bone hover:bg-bone/10"
-                  : "border-forest/20 text-forest hover:bg-forest/5"
-              }`}
-            >
-              Manage Subscription
-            </a>
+            <div className="space-y-2.5">
+              <div className="h-5 w-20 rounded-full bg-taupe/15 animate-pulse" />
+              <div className="h-9 w-44 rounded-lg bg-taupe/15 animate-pulse" />
+            </div>
           ) : (
-            <a
-              href={subscriptions.next_unblock_url ?? "#"}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center justify-center h-9 px-5 rounded-lg bg-forest text-bone text-xs font-medium tracking-wider uppercase hover:bg-forest-dark transition-all duration-300 btn-press"
-            >
-              Next Unblock
-            </a>
+            <div className="space-y-3">
+              {/* Status badge + count */}
+              <div className="flex items-center gap-2.5">
+                {subscriptions.status.toUpperCase() === "ACTIVE" ? (
+                  <span className="inline-flex items-center gap-1.5 text-[10px] tracking-[0.12em] uppercase font-medium px-2.5 py-1 rounded-full bg-green-100 text-green-700">
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                    Active
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 text-[10px] tracking-[0.12em] uppercase font-medium px-2.5 py-1 rounded-full bg-taupe/15 text-charcoal/40">
+                    <span className="w-1.5 h-1.5 rounded-full bg-charcoal/25" />
+                    Inactive
+                  </span>
+                )}
+                {subscriptions.total_subscription_count > 0 && (
+                  <span className={`text-xs ${isPaid ? "text-bone/45" : "text-charcoal/35"}`}>
+                    {subscriptions.total_subscription_count}{" "}
+                    subscription{subscriptions.total_subscription_count !== 1 ? "s" : ""}
+                  </span>
+                )}
+              </div>
+
+              {/* Action button */}
+              {subscriptions.status.toUpperCase() === "ACTIVE" ? (
+                <a
+                  href={subscriptions.manage_url ?? "#"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`inline-flex items-center justify-center h-9 px-5 rounded-lg border text-xs font-medium tracking-wider uppercase transition-all duration-300 ${
+                    isPaid
+                      ? "border-bone/20 text-bone hover:bg-bone/10"
+                      : "border-forest/20 text-forest hover:bg-forest/5"
+                  }`}
+                >
+                  Manage Subscription
+                </a>
+              ) : (
+                <a
+                  href={subscriptions.next_unblock_url ?? "#"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center h-9 px-5 rounded-lg bg-forest text-bone text-xs font-medium tracking-wider uppercase hover:bg-forest-dark transition-all duration-300 btn-press"
+                >
+                  Next Unblock
+                </a>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -680,6 +731,112 @@ function WalletSection({ storeCredit }: { storeCredit: StoreCreditState | null }
             )}
           </div>
         </div>
+      </div>
+    </section>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   ORDERS SECTION
+   ═══════════════════════════════════════════ */
+
+function formatOrderDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return iso;
+  }
+}
+
+function OrderStatusBadge({ status }: { status: string }) {
+  const label = status.replace(/_/g, " ");
+  const isGood = ["paid", "partially_paid"].includes(status.toLowerCase());
+  return (
+    <span
+      className={`inline-flex text-[9px] tracking-[0.1em] uppercase font-medium px-2 py-0.5 rounded-full ${
+        isGood
+          ? "bg-forest/10 text-forest"
+          : "bg-taupe/15 text-charcoal/40"
+      }`}
+    >
+      {label}
+    </span>
+  );
+}
+
+function OrdersSection({ orders }: { orders: OrderSummary[] | null }) {
+  if (orders === null) {
+    return (
+      <section className="mb-10">
+        <SectionLabel>Orders</SectionLabel>
+        <div className="rounded-xl border border-taupe/12 bg-cream overflow-hidden divide-y divide-taupe/10">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="px-5 py-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="h-4 w-20 rounded bg-taupe/15 animate-pulse" />
+                <div className="h-3 w-24 rounded bg-taupe/10 animate-pulse" />
+              </div>
+              <div className="h-3 w-2/3 rounded bg-taupe/10 animate-pulse" />
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  }
+
+  if (orders.length === 0) {
+    return (
+      <section className="mb-10">
+        <SectionLabel>Orders</SectionLabel>
+        <div className="rounded-xl border border-taupe/12 bg-cream p-6 text-center">
+          <p className="text-sm text-charcoal/40 mb-1">No orders yet</p>
+          <p className="text-xs text-charcoal/25 mb-4">
+            Your history will appear here after your first purchase.
+          </p>
+          <Link
+            href="/dashboard"
+            className="inline-flex items-center justify-center h-9 px-5 rounded-lg border border-taupe/20 text-xs font-medium tracking-wider uppercase text-charcoal/45 hover:border-forest/30 hover:text-forest transition-all duration-300"
+          >
+            Browse Shop
+          </Link>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="mb-10">
+      <SectionLabel>Orders</SectionLabel>
+      <div className="rounded-xl border border-taupe/12 bg-cream overflow-hidden">
+        {orders.map((order, i) => (
+          <div key={order.order_number}>
+            {i > 0 && <div className="h-px bg-taupe/10 mx-5" />}
+            <div className="px-5 py-4">
+              <div className="flex items-center justify-between mb-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-obsidian">{order.name}</span>
+                  <OrderStatusBadge status={order.financial_status} />
+                </div>
+                <span className="text-sm font-medium text-obsidian">
+                  ${parseFloat(order.total_price).toFixed(2)}{" "}
+                  <span className="text-xs text-charcoal/30 font-normal">{order.currency}</span>
+                </span>
+              </div>
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-xs text-charcoal/40 leading-relaxed">
+                  {order.line_items.map((li) => `${li.name} ×${li.quantity}`).join(", ")}
+                </p>
+                <span className="text-[11px] text-charcoal/30 shrink-0">
+                  {formatOrderDate(order.created_at)}
+                </span>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     </section>
   );

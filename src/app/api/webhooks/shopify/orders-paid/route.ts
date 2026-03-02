@@ -17,6 +17,7 @@ import {
   persistAnalyticsEvent,
   aggregateKpiDaily,
 } from "@/app/api/_lib/kpiReporting";
+import { adminDb } from "@/lib/firebase-admin";
 
 // ─── HMAC verification ────────────────────────────────────────────────────────
 
@@ -43,6 +44,22 @@ async function verifyShopifyHmac(
   } catch {
     return false;
   }
+}
+
+// ─── Tier resolution ──────────────────────────────────────────────────────────
+
+type MemberTier = "free" | "access" | "member" | "black";
+
+function resolveTierFromLineItems(
+  lineItems: { title: string; sku: string | null }[]
+): MemberTier | null {
+  for (const item of lineItems) {
+    const text = `${item.title} ${item.sku ?? ""}`.toLowerCase();
+    if (text.includes("black")) return "black";
+    if (text.includes("member")) return "member";
+    if (text.includes("access")) return "access";
+  }
+  return null;
 }
 
 // ─── Shopify order shape (minimal) ───────────────────────────────────────────
@@ -116,10 +133,31 @@ export async function POST(request: NextRequest) {
 
   const eventId = randomUUID();
 
+  // ── Update Firestore user tier ────────────────────────────────────────────
+  const tierUpdate = email
+    ? (async () => {
+        const tier = resolveTierFromLineItems(order.line_items);
+        if (!tier || tier === "free") return;
+        try {
+          const snap = await adminDb
+            .collection("users")
+            .where("email", "==", email)
+            .limit(1)
+            .get();
+          if (!snap.empty) {
+            await snap.docs[0].ref.update({ tier });
+          }
+        } catch (err) {
+          console.error("[orders-paid] tier update failed:", err);
+        }
+      })()
+    : Promise.resolve();
+
   await Promise.allSettled([
     dispatchAnalyticsEvent(event),
     persistAnalyticsEvent(eventId, event),
     aggregateKpiDaily(event),
+    tierUpdate,
   ]);
 
   // Shopify expects a 200 response quickly or it will retry

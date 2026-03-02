@@ -352,6 +352,9 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
           if (profile.fit_profile && typeof profile.fit_profile === "object") {
             setFitProfileState({ ...EMPTY_FIT, ...profile.fit_profile });
           }
+          if (profile.tier && ["free", "access", "member", "black"].includes(profile.tier)) {
+            setTier(profile.tier as MemberTier);
+          }
         } catch (err) {
           console.error("[MembershipContext] syncUserProfile failed:", err);
         }

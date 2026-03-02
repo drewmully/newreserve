@@ -68,6 +68,7 @@ export interface UserDocument {
     push_notifications: boolean;
   };
   fit_profile?: Record<string, string>;
+  tier?: "free" | "access" | "member" | "black";
 }
 
 const USER_DEFAULTS: Omit<
