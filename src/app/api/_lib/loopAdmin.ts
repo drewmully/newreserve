@@ -58,6 +58,9 @@ export async function getLoopSubscriptionStatus(
     subscriptions?: LoopSubscription[];
   };
 
+  // TODO: remove after inspecting Loop API fields
+  console.log("Loop raw:", JSON.stringify(data.subscriptions?.[0], null, 2));
+
   const subs = data.subscriptions ?? [];
   const active = subs.filter((s) => s.status === "ACTIVE");
 
