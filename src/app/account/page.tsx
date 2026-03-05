@@ -823,7 +823,7 @@ function SubscriptionManagerModal({ open, onClose }: { open: boolean; onClose: (
                 ))}
               </div>
             ) : !sub ? (
-              <p className="text-sm text-charcoal/40 py-4">No active subscription found.</p>
+              <p className="text-sm text-charcoal/40 py-4">No subscription found.</p>
             ) : view === "main" ? (
               <div className="space-y-5">
                 {/* Details */}

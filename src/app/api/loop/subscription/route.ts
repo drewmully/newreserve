@@ -34,8 +34,8 @@ export async function GET(request: NextRequest) {
 
   try {
     const subs = await getLoopRawSubscriptions(email);
-    const active = subs.find((s) => s.status === "ACTIVE") ?? null;
-    return NextResponse.json({ subscription: active });
+    const sub = subs.find((s) => ["ACTIVE", "PAUSED", "CANCELLED"].includes(s.status)) ?? null;
+    return NextResponse.json({ subscription: sub });
   } catch (err) {
     console.error("[loop/subscription] GET failed:", err);
     return NextResponse.json({ error: "Loop API unavailable" }, { status: 502 });
