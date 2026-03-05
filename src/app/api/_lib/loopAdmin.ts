@@ -56,11 +56,11 @@ export async function getLoopSubscriptionStatus(
     );
   }
 
-  const data = (await res.json()) as { subscriptions?: LoopSubscription[] };
+  const data = (await res.json()) as { data?: LoopSubscription[] };
 
-  console.log("Loop raw:", JSON.stringify(data.subscriptions?.[0], null, 2));
+  console.log("Loop raw:", JSON.stringify(data.data?.[0], null, 2));
 
-  const subs = data.subscriptions ?? [];
+  const subs = data.data ?? [];
   const active = subs.filter((s) => s.status === "ACTIVE");
 
   let status = "none";
@@ -96,7 +96,7 @@ export async function getLoopRawSubscriptions(
   }
   const text = await res.text();
   console.log("[Loop] raw response:", text);
-  return (JSON.parse(text).subscriptions as LoopSubscription[]) ?? [];
+  return (JSON.parse(text).data as LoopSubscription[]) ?? [];
 }
 
 /**
