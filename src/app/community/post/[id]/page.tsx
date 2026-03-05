@@ -174,6 +174,7 @@ export default async function PostPage({ params }: Props) {
             <Link href="/policies/terms" className="text-sm text-bone/50 hover:text-bone transition-colors duration-300 link-hover-underline">Terms</Link>
             <Link href="/policies/privacy" className="text-sm text-bone/50 hover:text-bone transition-colors duration-300 link-hover-underline">Privacy</Link>
             <Link href="/faq" className="text-sm text-bone/50 hover:text-bone transition-colors duration-300 link-hover-underline">FAQ</Link>
+            <Link href="/returns" className="text-sm text-bone/50 hover:text-bone transition-colors duration-300 link-hover-underline">Returns</Link>
           </div>
           <p className="text-xs text-bone/30">&copy; {new Date().getFullYear()} Mully Group, Inc.</p>
         </div>

@@ -585,6 +585,7 @@ export default function Home() {
                 <FooterLink href="https://outings-self.vercel.app">Outings &amp; Groups</FooterLink>
                 <FooterLink href="/blog">Blog</FooterLink>
                 <FooterLink href="/faq">FAQ</FooterLink>
+                <FooterLink href="/returns">Returns</FooterLink>
                 <FooterLink href="/login">Log In</FooterLink>
               </ul>
             </div>
