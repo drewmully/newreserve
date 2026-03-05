@@ -94,8 +94,9 @@ export async function getLoopRawSubscriptions(
   if (!res.ok) {
     throw new Error(`Loop API error ${res.status}: ${await res.text()}`);
   }
-  const data = (await res.json()) as { subscriptions?: LoopSubscription[] };
-  return data.subscriptions ?? [];
+  const text = await res.text();
+  console.log("[Loop] raw response:", text);
+  return (JSON.parse(text).subscriptions as LoopSubscription[]) ?? [];
 }
 
 /**
