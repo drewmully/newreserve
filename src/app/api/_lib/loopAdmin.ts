@@ -100,6 +100,44 @@ export async function getLoopRawSubscriptions(
 }
 
 /**
+ * Returns the Loop subscription ID of the first ACTIVE subscription.
+ */
+export async function getActiveLoopSubscriptionId(
+  customerIdentifier: string
+): Promise<string | null> {
+  const subs = await getLoopRawSubscriptions(customerIdentifier);
+  return subs.find((s) => s.status === "ACTIVE")?.id ?? null;
+}
+
+async function loopSubscriptionMutation(
+  subscriptionId: string,
+  action: string,
+  body?: Record<string, unknown>
+): Promise<void> {
+  const url = `${BASE_URL}/subscription/${subscriptionId}/${action}`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: getLoopHeaders(),
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+  if (!res.ok) {
+    throw new Error(`Loop ${action} error ${res.status}: ${await res.text()}`);
+  }
+}
+
+export const pauseLoopSubscription = (id: string) =>
+  loopSubscriptionMutation(id, "pause");
+
+export const resumeLoopSubscription = (id: string) =>
+  loopSubscriptionMutation(id, "resume");
+
+export const cancelLoopSubscription = (id: string, reason: string) =>
+  loopSubscriptionMutation(id, "cancel", { reason });
+
+export const changeLoopSubscriptionPlan = (id: string, sellingPlanShopifyId: number) =>
+  loopSubscriptionMutation(id, "frequency", { sellingPlanShopifyId });
+
+/**
  * Build the customer-specific subscription management URL.
  * Replaces the {customer_id} placeholder in LOOP_MANAGE_SUBSCRIPTION_URL.
  */
