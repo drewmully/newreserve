@@ -9,7 +9,6 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
-import { resolveCustomerByEmail } from "@/app/api/_lib/shopifyAdmin";
 import { getLoopRawSubscriptions } from "@/app/api/_lib/loopAdmin";
 
 async function verifyFirebaseBearer(request: NextRequest): Promise<string> {
@@ -34,27 +33,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  const userData = userSnap.data()!;
-  let shopifyCustomerId: string | null = userData.shopify_customer_id ?? null;
-
-  if (!shopifyCustomerId && userData.email) {
-    try {
-      shopifyCustomerId = await resolveCustomerByEmail(userData.email as string);
-      if (shopifyCustomerId) {
-        await userRef.update({ shopify_customer_id: shopifyCustomerId });
-      }
-    } catch {
-      // non-fatal
-    }
-  }
-
-  if (!shopifyCustomerId) {
-    return NextResponse.json({ subscriptions: [], source: "no_customer" });
+  const email = userSnap.data()!.email as string | undefined;
+  if (!email) {
+    return NextResponse.json({ subscriptions: [], source: "no_email" });
   }
 
   try {
-    console.log("[loop/subscriptions] shopifyCustomerId:", shopifyCustomerId);
-    const subscriptions = await getLoopRawSubscriptions(shopifyCustomerId);
+    console.log("[loop/subscriptions] customerIdentifier (email):", email);
+    const subscriptions = await getLoopRawSubscriptions(email);
     return NextResponse.json({ subscriptions, source: "loop" });
   } catch (err) {
     console.error("[loop/subscriptions] fetch failed:", err);
