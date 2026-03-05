@@ -795,6 +795,7 @@ function SubscriptionManagerModal({ open, onClose }: { open: boolean; onClose: (
   const status = (sub?.status as string) ?? "";
   const isActive = status === "ACTIVE";
   const isPaused = status === "PAUSED";
+  const isCancelled = status === "CANCELLED";
   const price = sub?.price as number | undefined;
   const nextBillingEpoch = sub?.nextBillingDateEpoch as number | undefined;
   const nextBilling = nextBillingEpoch
@@ -862,36 +863,48 @@ function SubscriptionManagerModal({ open, onClose }: { open: boolean; onClose: (
 
                 {/* Actions */}
                 <div className="space-y-2.5">
-                  {isActive && (
+                  {isCancelled ? (
                     <button
-                      onClick={() => callAction("/api/loop/subscription/pause")}
-                      disabled={actionLoading}
-                      className="w-full h-10 rounded-xl border border-taupe/20 text-sm text-charcoal/60 hover:border-charcoal/25 hover:text-charcoal/80 transition-all cursor-pointer disabled:opacity-50"
-                    >
-                      {actionLoading ? "..." : "Pause Subscription"}
-                    </button>
-                  )}
-                  {isPaused && (
-                    <button
-                      onClick={() => callAction("/api/loop/subscription/resume")}
+                      onClick={() => callAction("/api/loop/subscription/reactivate")}
                       disabled={actionLoading}
                       className="w-full h-10 rounded-xl bg-forest text-bone text-sm font-medium hover:bg-forest-dark transition-all cursor-pointer btn-press disabled:opacity-50"
                     >
-                      {actionLoading ? "..." : "Resume Subscription"}
+                      {actionLoading ? "..." : "Reactivate Subscription"}
                     </button>
+                  ) : (
+                    <>
+                      {isActive && (
+                        <button
+                          onClick={() => callAction("/api/loop/subscription/pause")}
+                          disabled={actionLoading}
+                          className="w-full h-10 rounded-xl border border-taupe/20 text-sm text-charcoal/60 hover:border-charcoal/25 hover:text-charcoal/80 transition-all cursor-pointer disabled:opacity-50"
+                        >
+                          {actionLoading ? "..." : "Pause Subscription"}
+                        </button>
+                      )}
+                      {isPaused && (
+                        <button
+                          onClick={() => callAction("/api/loop/subscription/resume")}
+                          disabled={actionLoading}
+                          className="w-full h-10 rounded-xl bg-forest text-bone text-sm font-medium hover:bg-forest-dark transition-all cursor-pointer btn-press disabled:opacity-50"
+                        >
+                          {actionLoading ? "..." : "Resume Subscription"}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setView("change-plan")}
+                        className="w-full h-10 rounded-xl border border-taupe/20 text-sm text-charcoal/60 hover:border-charcoal/25 hover:text-charcoal/80 transition-all cursor-pointer"
+                      >
+                        Change Plan
+                      </button>
+                      <button
+                        onClick={() => setView("cancel")}
+                        className="w-full h-10 rounded-xl text-sm text-ember/60 hover:text-ember transition-colors cursor-pointer"
+                      >
+                        Cancel Subscription
+                      </button>
+                    </>
                   )}
-                  <button
-                    onClick={() => setView("change-plan")}
-                    className="w-full h-10 rounded-xl border border-taupe/20 text-sm text-charcoal/60 hover:border-charcoal/25 hover:text-charcoal/80 transition-all cursor-pointer"
-                  >
-                    Change Plan
-                  </button>
-                  <button
-                    onClick={() => setView("cancel")}
-                    className="w-full h-10 rounded-xl text-sm text-ember/60 hover:text-ember transition-colors cursor-pointer"
-                  >
-                    Cancel Subscription
-                  </button>
                 </div>
               </div>
             ) : view === "change-plan" ? (

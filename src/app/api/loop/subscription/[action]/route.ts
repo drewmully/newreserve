@@ -13,11 +13,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import {
-  getActiveLoopSubscriptionId,
+  getLoopRawSubscriptions,
   pauseLoopSubscription,
   resumeLoopSubscription,
   cancelLoopSubscription,
   changeLoopSubscriptionPlan,
+  reactivateLoopSubscription,
 } from "@/app/api/_lib/loopAdmin";
 
 async function verifyFirebaseBearer(request: NextRequest): Promise<string> {
@@ -47,12 +48,19 @@ export async function POST(
   const email = userSnap.data()!.email as string | undefined;
   if (!email) return NextResponse.json({ error: "No email on user" }, { status: 400 });
 
-  const subscriptionId = await getActiveLoopSubscriptionId(email);
-  if (!subscriptionId) {
-    return NextResponse.json({ error: "No active subscription found" }, { status: 404 });
-  }
-
   const { action } = await params;
+
+  // For reactivate, match any status; for all others, require ACTIVE/PAUSED
+  const subs = await getLoopRawSubscriptions(email);
+  const sub =
+    action === "reactivate"
+      ? subs.find((s) => s.status === "CANCELLED")
+      : subs.find((s) => s.status === "ACTIVE" || s.status === "PAUSED");
+
+  if (!sub?.id) {
+    return NextResponse.json({ error: "No matching subscription found" }, { status: 404 });
+  }
+  const subscriptionId = sub.id;
   let body: Record<string, unknown> = {};
   try {
     body = await request.json();
@@ -73,6 +81,9 @@ export async function POST(
         break;
       case "change-plan":
         await changeLoopSubscriptionPlan(subscriptionId, body.sellingPlanShopifyId as number);
+        break;
+      case "reactivate":
+        await reactivateLoopSubscription(subscriptionId);
         break;
       default:
         return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });

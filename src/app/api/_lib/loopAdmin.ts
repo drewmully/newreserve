@@ -137,6 +137,9 @@ export const cancelLoopSubscription = (id: string, reason: string) =>
 export const changeLoopSubscriptionPlan = (id: string, sellingPlanShopifyId: number) =>
   loopSubscriptionMutation(id, "frequency", { sellingPlanShopifyId });
 
+export const reactivateLoopSubscription = (id: string) =>
+  loopSubscriptionMutation(id, "reactivate");
+
 /**
  * Build the customer-specific subscription management URL.
  * Replaces the {customer_id} placeholder in LOOP_MANAGE_SUBSCRIPTION_URL.
