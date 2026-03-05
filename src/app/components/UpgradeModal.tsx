@@ -66,26 +66,55 @@ export function UpgradeModal({ open, onClose, currentTier, onSelectPlan }: Upgra
   if (!open) return null;
 
   const PLANS = {
-    access: { id: 47601025482944, selling_plan: 3259433152 },
-    member: { id: 47601025122496, selling_plan: 3241476288 },
+    access: {
+      merchandiseId: "gid://shopify/ProductVariant/47601025482944",
+      sellingPlanId: "gid://shopify/SellingPlan/3259433152",
+    },
+    member: {
+      merchandiseId: "gid://shopify/ProductVariant/47601025122496",
+      sellingPlanId: "gid://shopify/SellingPlan/3241476288",
+    },
   };
 
-  async function addToCartAndCheckout(plan: keyof typeof PLANS) {
-    const { id, selling_plan } = PLANS[plan];
-    await fetch("https://mullybox-store.myshopify.com/cart/add.js", {
+  async function createCartAndCheckout(plan: keyof typeof PLANS) {
+    const { merchandiseId, sellingPlanId } = PLANS[plan];
+    const domain = process.env.NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN;
+    const token = process.env.NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN;
+
+    const res = await fetch(`https://${domain}/api/2024-10/graphql.json`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ items: [{ id, quantity: 1, selling_plan }] }),
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Storefront-Access-Token": token!,
+      },
+      body: JSON.stringify({
+        query: `mutation {
+          cartCreate(input: {
+            lines: [{
+              merchandiseId: "${merchandiseId}",
+              quantity: 1,
+              sellingPlanId: "${sellingPlanId}"
+            }]
+          }) {
+            cart { checkoutUrl }
+          }
+        }`,
+      }),
     });
-    window.location.href = "https://mullybox-store.myshopify.com/checkout";
+
+    const json = await res.json();
+    const checkoutUrl = json?.data?.cartCreate?.cart?.checkoutUrl;
+    if (checkoutUrl) {
+      window.location.href = checkoutUrl;
+    }
   }
 
   function handleChooseAccess() {
-    addToCartAndCheckout("access");
+    createCartAndCheckout("access");
   }
 
   function handleChooseMember() {
-    addToCartAndCheckout("member");
+    createCartAndCheckout("member");
   }
 
   function finishMember() {
