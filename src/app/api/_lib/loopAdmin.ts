@@ -13,7 +13,7 @@
 
 const BASE_URL =
   process.env.LOOP_API_BASE_URL ?? "https://api.loopsubscriptions.com";
-const API_VERSION = process.env.LOOP_ADMIN_API_VERSION ?? "2023-10";
+const API_VERSION = process.env.LOOP_ADMIN_API_VERSION ?? "";
 
 function getLoopHeaders(): Record<string, string> {
   const token = process.env.LOOP_ADMIN_API_TOKEN;
