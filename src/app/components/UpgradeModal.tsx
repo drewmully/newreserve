@@ -65,15 +65,46 @@ export function UpgradeModal({ open, onClose, currentTier, onSelectPlan }: Upgra
 
   if (!open) return null;
 
-  const CHECKOUT_ACCESS = "https://mullybox-store.myshopify.com/cart/add?id=47601025482944&selling_plan=43666&quantity=1&return_to=/checkout";
-  const CHECKOUT_MEMBER = "https://mullybox-store.myshopify.com/cart/add?id=47601025122496&selling_plan=43667&quantity=1&return_to=/checkout";
+  const PLANS = {
+    access: { variantId: "47601025482944", sellingPlanId: "3241443520" },
+    member: { variantId: "47601025122496", sellingPlanId: "3241476288" },
+  };
+
+  function submitToShopify(plan: keyof typeof PLANS) {
+    const { variantId, sellingPlanId } = PLANS[plan];
+    const form = document.createElement("form");
+    form.method = "POST";
+    form.action = "https://mullybox-store.myshopify.com/cart/add";
+    form.style.display = "none";
+
+    const fields: Record<string, string> = {
+      "items[0][id]": variantId,
+      "items[0][quantity]": "1",
+      "items[0][selling_plan]": sellingPlanId,
+    };
+
+    for (const [name, value] of Object.entries(fields)) {
+      const input = document.createElement("input");
+      input.type = "hidden";
+      input.name = name;
+      input.value = value;
+      form.appendChild(input);
+    }
+
+    document.body.appendChild(form);
+    form.submit();
+
+    setTimeout(() => {
+      window.location.href = "https://mullybox-store.myshopify.com/checkout";
+    }, 500);
+  }
 
   function handleChooseAccess() {
-    window.location.href = CHECKOUT_ACCESS;
+    submitToShopify("access");
   }
 
   function handleChooseMember() {
-    window.location.href = CHECKOUT_MEMBER;
+    submitToShopify("member");
   }
 
   function finishMember() {
