@@ -53,6 +53,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    console.log("[loop/subscriptions] shopifyCustomerId:", shopifyCustomerId);
     const subscriptions = await getLoopRawSubscriptions(shopifyCustomerId);
     return NextResponse.json({ subscriptions, source: "loop" });
   } catch (err) {
