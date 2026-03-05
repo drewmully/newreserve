@@ -12,8 +12,8 @@
  */
 
 const BASE_URL =
-  process.env.LOOP_API_BASE_URL ?? "https://api.loopwork.co";
-const API_VERSION = process.env.LOOP_ADMIN_API_VERSION ?? "v1";
+  process.env.LOOP_API_BASE_URL ?? "https://api.loopsubscriptions.com";
+const API_VERSION = process.env.LOOP_ADMIN_API_VERSION ?? "2023-10";
 
 function getLoopHeaders(): Record<string, string> {
   const token = process.env.LOOP_ADMIN_API_TOKEN;
@@ -48,7 +48,7 @@ export interface LoopSubscriptionStatus {
 export async function getLoopSubscriptionStatus(
   shopifyCustomerId: string
 ): Promise<LoopSubscriptionStatus> {
-  const url = `${BASE_URL}/${API_VERSION}/subscriptions?customer_id=${encodeURIComponent(shopifyCustomerId)}`;
+  const url = `${BASE_URL}/admin/${API_VERSION}/subscriptions?shopify_customer_id=${encodeURIComponent(shopifyCustomerId)}`;
   const res = await fetch(url, { headers: getLoopHeaders() });
 
   if (!res.ok) {
@@ -90,7 +90,7 @@ export async function getLoopSubscriptionStatus(
 export async function getLoopRawSubscriptions(
   shopifyCustomerId: string
 ): Promise<LoopSubscription[]> {
-  const url = `${BASE_URL}/${API_VERSION}/subscriptions?customer_id=${encodeURIComponent(shopifyCustomerId)}`;
+  const url = `${BASE_URL}/admin/${API_VERSION}/subscriptions?shopify_customer_id=${encodeURIComponent(shopifyCustomerId)}`;
   const res = await fetch(url, { headers: getLoopHeaders() });
   if (!res.ok) {
     throw new Error(`Loop API error ${res.status}: ${await res.text()}`);
