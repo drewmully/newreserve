@@ -48,7 +48,7 @@ export interface LoopSubscriptionStatus {
 export async function getLoopSubscriptionStatus(
   shopifyCustomerId: string
 ): Promise<LoopSubscriptionStatus> {
-  const url = `${BASE_URL}/admin/${API_VERSION}/subscriptions?shopify_customer_id=${encodeURIComponent(shopifyCustomerId)}`;
+  const url = `${BASE_URL}/subscriptions?shopify_customer_id=${encodeURIComponent(shopifyCustomerId)}`;
   const res = await fetch(url, { headers: getLoopHeaders() });
 
   if (!res.ok) {
@@ -90,7 +90,7 @@ export async function getLoopSubscriptionStatus(
 export async function getLoopRawSubscriptions(
   shopifyCustomerId: string
 ): Promise<LoopSubscription[]> {
-  const url = `${BASE_URL}/admin/${API_VERSION}/subscriptions?shopify_customer_id=${encodeURIComponent(shopifyCustomerId)}`;
+  const url = `${BASE_URL}/subscriptions?shopify_customer_id=${encodeURIComponent(shopifyCustomerId)}`;
   const res = await fetch(url, { headers: getLoopHeaders() });
   if (!res.ok) {
     throw new Error(`Loop API error ${res.status}: ${await res.text()}`);
