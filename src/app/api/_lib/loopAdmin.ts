@@ -56,14 +56,11 @@ export async function getLoopSubscriptionStatus(
     );
   }
 
-  const data = (await res.json()) as {
-    subscriptions?: LoopSubscription[];
-  };
+  const data = (await res.json()) as { data?: LoopSubscription[] };
 
-  // TODO: remove after inspecting Loop API fields
-  console.log("Loop raw:", JSON.stringify(data.subscriptions?.[0], null, 2));
+  console.log("Loop raw:", JSON.stringify(data.data?.[0], null, 2));
 
-  const subs = data.subscriptions ?? [];
+  const subs = data.data ?? [];
   const active = subs.filter((s) => s.status === "ACTIVE");
 
   let status = "none";
@@ -95,8 +92,8 @@ export async function getLoopRawSubscriptions(
   if (!res.ok) {
     throw new Error(`Loop API error ${res.status}: ${await res.text()}`);
   }
-  const data = (await res.json()) as { subscriptions?: LoopSubscription[] };
-  return data.subscriptions ?? [];
+  const data = (await res.json()) as { data?: LoopSubscription[] };
+  return data.data ?? [];
 }
 
 /**
