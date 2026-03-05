@@ -29,11 +29,28 @@ export function EmailLinkHandler() {
       return;
     }
 
-    confirmOTPSignIn(email, window.location.href)
+    const withRetry = async (fn: () => Promise<void>, maxAttempts = 3): Promise<void> => {
+      let lastError: unknown;
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          return await fn();
+        } catch (err) {
+          lastError = err;
+          console.error(`[EmailLinkHandler] attempt ${attempt}/${maxAttempts} failed:`, err);
+          if (attempt < maxAttempts) {
+            await new Promise((r) => setTimeout(r, 600 * attempt));
+          }
+        }
+      }
+      throw lastError;
+    };
+
+    withRetry(() => confirmOTPSignIn(email, window.location.href))
       .then(() => {
         router.replace("/dashboard");
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error("[EmailLinkHandler] sign-in failed after all retries:", err);
         router.replace("/login");
       });
   }, [pathname, router]);

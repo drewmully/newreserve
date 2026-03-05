@@ -12,6 +12,22 @@ import { auth, isSignInWithEmailLink, confirmOTPSignIn } from "@/lib/firebase";
 
 type Step = "email" | "sent" | "confirming";
 
+async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      console.error(`[SignIn] attempt ${attempt}/${maxAttempts} failed:`, err);
+      if (attempt < maxAttempts) {
+        await new Promise((r) => setTimeout(r, 600 * attempt));
+      }
+    }
+  }
+  throw lastError;
+}
+
 function mapAuthError(code: string): string {
   const messages: Record<string, string> = {
     "auth/invalid-email": "Please enter a valid email address.",
@@ -54,7 +70,8 @@ export default function LoginPage() {
     if (savedEmail) {
       // Same device — auto-confirm
       setEmailValue(savedEmail);
-      confirmOTPSignIn(savedEmail, window.location.href).catch((err) => {
+      withRetry(() => confirmOTPSignIn(savedEmail, window.location.href)).catch((err) => {
+        console.error("[SignIn] auto-confirm failed after all retries:", err);
         setError(mapAuthError((err as { code?: string })?.code ?? ""));
         setStep("email");
       });
@@ -130,9 +147,10 @@ export default function LoginPage() {
     setError(null);
     setStep("confirming");
     try {
-      await confirmOTPSignIn(email, window.location.href);
+      await withRetry(() => confirmOTPSignIn(email, window.location.href));
       // onAuthStateChanged → isSignedIn → redirect
     } catch (err) {
+      console.error("[SignIn] handleConfirmWithEmail failed after all retries:", err);
       setError(mapAuthError((err as { code?: string })?.code ?? ""));
       setStep("email");
       setNeedsEmailForLink(true);
