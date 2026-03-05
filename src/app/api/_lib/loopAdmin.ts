@@ -88,7 +88,9 @@ export async function getLoopRawSubscriptions(
 ): Promise<LoopSubscription[]> {
   console.log("[Loop] getLoopRawSubscriptions customerIdentifier:", customerIdentifier);
   const url = `${BASE_URL}/customer/${encodeURIComponent(customerIdentifier)}/subscription`;
+  console.log("[Loop] fetching URL:", url);
   const res = await fetch(url, { headers: getLoopHeaders() });
+  console.log("[Loop] response status:", res.status);
   if (!res.ok) {
     throw new Error(`Loop API error ${res.status}: ${await res.text()}`);
   }
