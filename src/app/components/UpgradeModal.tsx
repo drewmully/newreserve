@@ -65,8 +65,8 @@ export function UpgradeModal({ open, onClose, currentTier, onSelectPlan }: Upgra
 
   if (!open) return null;
 
-  const CHECKOUT_ACCESS = "https://mullybox-store.myshopify.com/cart/47601025482944:1?selling_plan=43666";
-  const CHECKOUT_MEMBER = "https://mullybox-store.myshopify.com/cart/47601025122496:1?selling_plan=43667";
+  const CHECKOUT_ACCESS = "https://mullybox-store.myshopify.com/cart/add?id=47601025482944&selling_plan=43666&quantity=1&return_to=/checkout";
+  const CHECKOUT_MEMBER = "https://mullybox-store.myshopify.com/cart/add?id=47601025122496&selling_plan=43667&quantity=1&return_to=/checkout";
 
   function handleChooseAccess() {
     window.location.href = CHECKOUT_ACCESS;
