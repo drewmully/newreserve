@@ -105,7 +105,8 @@ export function UpgradeModal({ open, onClose, currentTier, onSelectPlan }: Upgra
     const json = await res.json();
     const checkoutUrl = json?.data?.cartCreate?.cart?.checkoutUrl;
     if (checkoutUrl) {
-      window.location.href = checkoutUrl;
+      const returnTo = "https://newreserve-ejrimbp0e-greensclub.vercel.app/auth/callback";
+      window.location.href = `${checkoutUrl}&return_url=${encodeURIComponent(returnTo)}`;
     }
   }
 
