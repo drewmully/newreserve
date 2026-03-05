@@ -56,11 +56,11 @@ export async function getLoopSubscriptionStatus(
     );
   }
 
-  const data = (await res.json()) as { data?: LoopSubscription[] };
+  const data = (await res.json()) as { subscriptions?: LoopSubscription[] };
 
-  console.log("Loop raw:", JSON.stringify(data.data?.[0], null, 2));
+  console.log("Loop raw:", JSON.stringify(data.subscriptions?.[0], null, 2));
 
-  const subs = data.data ?? [];
+  const subs = data.subscriptions ?? [];
   const active = subs.filter((s) => s.status === "ACTIVE");
 
   let status = "none";
@@ -73,7 +73,7 @@ export async function getLoopSubscriptionStatus(
   return {
     mullybox_active: active.length > 0,
     status,
-    total_subscription_count: subs.length,
+    total_subscription_count: active.length,
     active_subscription_ids: active.map((s) => s.id),
     manage_url: null, // populated by the route handler after calling getLoopManageSubscriptionUrl
     next_unblock_url: null,
@@ -92,20 +92,19 @@ export async function getLoopRawSubscriptions(
   if (!res.ok) {
     throw new Error(`Loop API error ${res.status}: ${await res.text()}`);
   }
-  const data = (await res.json()) as { data?: LoopSubscription[] };
-  return data.data ?? [];
+  const data = (await res.json()) as { subscriptions?: LoopSubscription[] };
+  return data.subscriptions ?? [];
 }
 
 /**
  * Build the customer-specific subscription management URL.
  * Replaces the {customer_id} placeholder in LOOP_MANAGE_SUBSCRIPTION_URL.
  */
-export function getLoopManageSubscriptionUrl(customerId: string): string {
-  const template = process.env.LOOP_MANAGE_SUBSCRIPTION_URL ?? "";
-  if (template) {
-    return template.replace("{customer_id}", encodeURIComponent(customerId));
-  }
-  return "";
+export function getLoopManageSubscriptionUrl(_customerId: string): string {
+  return (
+    process.env.LOOP_MANAGE_SUBSCRIPTION_URL ??
+    "https://mullybox-store.myshopify.com/a/loop_subscriptions/auth"
+  );
 }
 
 /**

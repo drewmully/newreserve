@@ -42,13 +42,10 @@ function resolveTierFromLoopSubs(
 ): MemberTier | null {
   const active = subs.filter((s) => s.status === "ACTIVE");
   for (const sub of active) {
-    // Loop may expose variant_id under different field names
-    const rawId =
-      sub.variant_id ??
-      sub.shopify_variant_id ??
-      sub.shopify_product_variant_id;
-    if (rawId != null) {
-      const tier = LOOP_VARIANT_TIER[String(rawId)];
+    const lines = sub.lines as Array<Record<string, unknown>> | undefined;
+    const variantShopifyId = lines?.[0]?.variantShopifyId;
+    if (variantShopifyId != null) {
+      const tier = LOOP_VARIANT_TIER[String(variantShopifyId)];
       if (tier) return tier;
     }
   }
