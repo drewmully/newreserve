@@ -68,7 +68,7 @@ export function UpgradeModal({ open, onClose, currentTier, onSelectPlan }: Upgra
   const PLANS = {
     access: {
       merchandiseId: "gid://shopify/ProductVariant/47601025482944",
-      sellingPlanId: "gid://shopify/SellingPlan/3259433152",
+      sellingPlanId: "gid://shopify/SellingPlan/3241443520",
     },
     member: {
       merchandiseId: "gid://shopify/ProductVariant/47601025122496",
