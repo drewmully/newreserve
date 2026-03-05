@@ -681,27 +681,16 @@ function SubscriptionSection({
               </div>
 
               {/* Action button */}
-              {isActive ? (
-                <button
-                  onClick={() => setManageOpen(true)}
-                  className={`inline-flex items-center justify-center h-9 px-5 rounded-lg border text-xs font-medium tracking-wider uppercase transition-all duration-300 cursor-pointer ${
-                    isPaid
-                      ? "border-bone/20 text-bone hover:bg-bone/10"
-                      : "border-forest/20 text-forest hover:bg-forest/5"
-                  }`}
-                >
-                  Manage Subscription
-                </button>
-              ) : (
-                <a
-                  href={subscriptions.next_unblock_url ?? "#"}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center h-9 px-5 rounded-lg bg-forest text-bone text-xs font-medium tracking-wider uppercase hover:bg-forest-dark transition-all duration-300 btn-press"
-                >
-                  Next Unblock
-                </a>
-              )}
+              <button
+                onClick={() => setManageOpen(true)}
+                className={`inline-flex items-center justify-center h-9 px-5 rounded-lg border text-xs font-medium tracking-wider uppercase transition-all duration-300 cursor-pointer ${
+                  isPaid
+                    ? "border-bone/20 text-bone hover:bg-bone/10"
+                    : "border-forest/20 text-forest hover:bg-forest/5"
+                }`}
+              >
+                Manage Subscription
+              </button>
             </div>
           )}
         </div>
