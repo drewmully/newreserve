@@ -30,7 +30,7 @@ async function verifyFirebaseBearer(request: NextRequest): Promise<string> {
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { action: string } }
+  { params }: { params: Promise<{ action: string }> }
 ) {
   let uid: string;
   try {
@@ -52,7 +52,7 @@ export async function POST(
     return NextResponse.json({ error: "No active subscription found" }, { status: 404 });
   }
 
-  const { action } = params;
+  const { action } = await params;
   let body: Record<string, unknown> = {};
   try {
     body = await request.json();
