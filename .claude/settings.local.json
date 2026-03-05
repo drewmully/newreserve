@@ -15,7 +15,8 @@
       "Bash(npx vercel:*)",
       "Bash(node:*)",
       "Bash(rm:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "WebFetch(domain:mullybox-store.myshopify.com)"
     ]
   }
 }
