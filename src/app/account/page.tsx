@@ -142,6 +142,11 @@ export default function AccountPage() {
             <svg viewBox="0 0 1002 540" fill="currentColor" className="h-3.5 w-auto" aria-hidden="true"><path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" /></svg>
             <span className="font-serif text-lg font-bold tracking-wide">mully.</span>
           </span>
+          <div className="flex items-center gap-6">
+            <Link href="/returns" className="text-xs text-bone/40 hover:text-bone transition-colors duration-300">Returns</Link>
+            <Link href="/policies/terms" className="text-xs text-bone/40 hover:text-bone transition-colors duration-300">Terms</Link>
+            <Link href="/policies/privacy" className="text-xs text-bone/40 hover:text-bone transition-colors duration-300">Privacy</Link>
+          </div>
           <p className="text-xs text-bone/35">
             &copy; {new Date().getFullYear()} Mully Group, Inc. All rights reserved.
           </p>
