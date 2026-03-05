@@ -24,10 +24,13 @@ function getLoopHeaders(): Record<string, string> {
   };
 }
 
-interface LoopSubscription {
+export interface LoopSubscription {
   id: string;
   status: string; // "ACTIVE" | "CANCELLED" | "PAUSED" | "FAILED" | ...
   shopify_customer_id?: string;
+  variant_id?: number | string | null;
+  shopify_variant_id?: number | string | null;
+  [key: string]: unknown; // allow unknown fields for raw inspection
 }
 
 export interface LoopSubscriptionStatus {
@@ -79,6 +82,21 @@ export async function getLoopSubscriptionStatus(
     manage_url: null, // populated by the route handler after calling getLoopManageSubscriptionUrl
     next_unblock_url: null,
   };
+}
+
+/**
+ * Fetch raw Loop subscriptions for a Shopify customer (all fields).
+ */
+export async function getLoopRawSubscriptions(
+  shopifyCustomerId: string
+): Promise<LoopSubscription[]> {
+  const url = `${BASE_URL}/${API_VERSION}/subscriptions?customer_id=${encodeURIComponent(shopifyCustomerId)}`;
+  const res = await fetch(url, { headers: getLoopHeaders() });
+  if (!res.ok) {
+    throw new Error(`Loop API error ${res.status}: ${await res.text()}`);
+  }
+  const data = (await res.json()) as { subscriptions?: LoopSubscription[] };
+  return data.subscriptions ?? [];
 }
 
 /**

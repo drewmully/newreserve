@@ -28,6 +28,34 @@ import {
 } from "@/lib/shopify";
 
 /* ═══════════════════════════════════════════
+   TIER RESOLUTION FROM LOOP SUBSCRIPTIONS
+   ═══════════════════════════════════════════ */
+
+const LOOP_VARIANT_TIER: Record<string, MemberTier> = {
+  "47601025482944": "access",  // Reserve Access
+  "47601025122496": "member",  // Reserve Member
+  "47601025679552": "member",  // Back 9 Legacy
+};
+
+function resolveTierFromLoopSubs(
+  subs: Array<Record<string, unknown>>
+): MemberTier | null {
+  const active = subs.filter((s) => s.status === "ACTIVE");
+  for (const sub of active) {
+    // Loop may expose variant_id under different field names
+    const rawId =
+      sub.variant_id ??
+      sub.shopify_variant_id ??
+      sub.shopify_product_variant_id;
+    if (rawId != null) {
+      const tier = LOOP_VARIANT_TIER[String(rawId)];
+      if (tier) return tier;
+    }
+  }
+  return null;
+}
+
+/* ═══════════════════════════════════════════
    TYPES
    ═══════════════════════════════════════════ */
 
@@ -357,6 +385,34 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
           }
         } catch (err) {
           console.error("[MembershipContext] syncUserProfile failed:", err);
+        }
+
+        // Reconcile tier against live Loop subscriptions
+        try {
+          const idToken = await firebaseUser.getIdToken();
+          const res = await fetch("/api/loop/subscriptions", {
+            headers: { Authorization: `Bearer ${idToken}` },
+          });
+          if (res.ok) {
+            const data = await res.json() as { subscriptions: Array<Record<string, unknown>>; source: string };
+            console.log("[Loop] raw subscriptions:", JSON.stringify(data, null, 2));
+
+            const loopTier = resolveTierFromLoopSubs(data.subscriptions);
+            if (loopTier) {
+              setTier(loopTier);
+              // Sync Firestore if it differs
+              try {
+                const snap = await getDoc(doc(db, "users", firebaseUser.uid));
+                if (snap.data()?.tier !== loopTier) {
+                  await updateDoc(doc(db, "users", firebaseUser.uid), { tier: loopTier });
+                }
+              } catch (err) {
+                console.error("[Loop] Firestore tier sync failed:", err);
+              }
+            }
+          }
+        } catch (err) {
+          console.error("[Loop] subscription tier check failed:", err);
         }
 
         if (firebaseUser.email) {
