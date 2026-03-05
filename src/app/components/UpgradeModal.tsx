@@ -65,13 +65,15 @@ export function UpgradeModal({ open, onClose, currentTier, onSelectPlan }: Upgra
 
   if (!open) return null;
 
+  const CHECKOUT_ACCESS = "https://mullybox-store.myshopify.com/cart/47601025482944:1?selling_plan=43666";
+  const CHECKOUT_MEMBER = "https://mullybox-store.myshopify.com/cart/47601025122496:1?selling_plan=43667";
+
   function handleChooseAccess() {
-    onSelectPlan("access");
-    onClose();
+    window.location.href = CHECKOUT_ACCESS;
   }
 
   function handleChooseMember() {
-    setFitStep(1);
+    window.location.href = CHECKOUT_MEMBER;
   }
 
   function finishMember() {
@@ -180,7 +182,7 @@ export function UpgradeModal({ open, onClose, currentTier, onSelectPlan }: Upgra
                             onClick={handleChooseMember}
                             className="h-11 px-8 rounded-xl bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-all duration-300 cursor-pointer btn-press"
                           >
-                            Continue
+                            Join Reserve Member
                           </button>
                         </div>
                       </div>

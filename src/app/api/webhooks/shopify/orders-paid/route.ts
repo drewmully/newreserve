@@ -50,14 +50,20 @@ async function verifyShopifyHmac(
 
 type MemberTier = "free" | "access" | "member" | "black";
 
+// Maps Shopify variant IDs to member tiers
+const VARIANT_TIER_MAP: Record<number, MemberTier> = {
+  47601025482944: "access",  // Reserve Access — $99/year
+  47601025122496: "member",  // Reserve Member — $249/quarter
+  47601025679552: "member",  // Back 9 Legacy
+};
+
 function resolveTierFromLineItems(
-  lineItems: { title: string; sku: string | null }[]
+  lineItems: { variant_id: number | null }[]
 ): MemberTier | null {
   for (const item of lineItems) {
-    const text = `${item.title} ${item.sku ?? ""}`.toLowerCase();
-    if (text.includes("black")) return "black";
-    if (text.includes("member")) return "member";
-    if (text.includes("access")) return "access";
+    if (item.variant_id && VARIANT_TIER_MAP[item.variant_id]) {
+      return VARIANT_TIER_MAP[item.variant_id];
+    }
   }
   return null;
 }

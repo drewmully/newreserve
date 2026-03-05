@@ -10,7 +10,12 @@
       "Bash(cd /d/Repos/newreserve && ls .env* 2>&12)",
       "Bash(npx tsc:*)",
       "Bash(xargs grep:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(printenv:*)",
+      "Bash(npx vercel:*)",
+      "Bash(node:*)",
+      "Bash(rm:*)",
+      "Bash(npm install:*)"
     ]
   }
 }
