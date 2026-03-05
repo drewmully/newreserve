@@ -3,8 +3,7 @@
  *
  * Required env vars:
  *   LOOP_ADMIN_API_TOKEN             — API key
- *   LOOP_API_BASE_URL                — e.g. "https://api.loopwork.co"
- *   LOOP_ADMIN_API_VERSION           — defaults to "v1"
+ *   LOOP_API_BASE_URL                — e.g. "https://api.loopsubscriptions.com/admin/2023-10"
  *
  * Optional env vars:
  *   LOOP_MANAGE_SUBSCRIPTION_URL     — template with {customer_id} placeholder
@@ -12,15 +11,14 @@
  */
 
 const BASE_URL =
-  process.env.LOOP_API_BASE_URL ?? "https://api.loopsubscriptions.com";
-const API_VERSION = process.env.LOOP_ADMIN_API_VERSION ?? "";
+  process.env.LOOP_API_BASE_URL ?? "https://api.loopsubscriptions.com/admin/2023-10";
 
 function getLoopHeaders(): Record<string, string> {
   const token = process.env.LOOP_ADMIN_API_TOKEN;
   if (!token) throw new Error("Missing LOOP_ADMIN_API_TOKEN");
   return {
     "Content-Type": "application/json",
-    "x-api-key": token,
+    "X-Loop-Token": token,
   };
 }
 
@@ -48,7 +46,7 @@ export interface LoopSubscriptionStatus {
 export async function getLoopSubscriptionStatus(
   shopifyCustomerId: string
 ): Promise<LoopSubscriptionStatus> {
-  const url = `${BASE_URL}/subscriptions?shopify_customer_id=${encodeURIComponent(shopifyCustomerId)}`;
+  const url = `${BASE_URL}/subscriptions?shopifyId=${encodeURIComponent(shopifyCustomerId)}`;
   const res = await fetch(url, { headers: getLoopHeaders() });
 
   if (!res.ok) {
@@ -90,7 +88,7 @@ export async function getLoopSubscriptionStatus(
 export async function getLoopRawSubscriptions(
   shopifyCustomerId: string
 ): Promise<LoopSubscription[]> {
-  const url = `${BASE_URL}/subscriptions?shopify_customer_id=${encodeURIComponent(shopifyCustomerId)}`;
+  const url = `${BASE_URL}/subscriptions?shopifyId=${encodeURIComponent(shopifyCustomerId)}`;
   const res = await fetch(url, { headers: getLoopHeaders() });
   if (!res.ok) {
     throw new Error(`Loop API error ${res.status}: ${await res.text()}`);
