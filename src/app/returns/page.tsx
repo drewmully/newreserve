@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useMembership } from "../context/MembershipContext";
+
 import { ShopHeader } from "../components/ShopHeader";
 
 /* ═══════════════════════════════════════════
@@ -45,9 +45,12 @@ interface SelectedItem {
 
 interface ReturnConfirmation {
   returnId: string;
+  itemTotal: number;
+  shippingCost: number;
+  handlingFee: number;
   creditAmount: number;
-  labelUrl?: string;
-  labelTrackingNumber?: string;
+  labelUrl: string;
+  labelTrackingNumber: string;
 }
 
 const RETURN_REASONS = [
@@ -123,8 +126,6 @@ export default function ReturnsPage() {
   const [order, setOrder] = useState<OrderData | null>(null);
   const [selections, setSelections] = useState<Map<string, SelectedItem>>(new Map());
   const [confirmation, setConfirmation] = useState<ReturnConfirmation | null>(null);
-
-  const { tier } = useMembership();
 
   /* ── Step 1: Lookup ── */
 
@@ -232,12 +233,20 @@ export default function ReturnsPage() {
        */
 
       // Demo: simulate API delay
+      // In production, POST /api/returns/create calls Shopify Returns API which
+      // generates a return label and provides the actual shipping cost.
       await new Promise((r) => setTimeout(r, 1000));
+      const itemTotal = creditTotal();
+      const shippingCost = DEMO_SHIPPING_COST; // from Shopify Returns label generation
+      const handlingFee = HANDLING_FEE;
       setConfirmation({
         returnId: "RET-" + Math.random().toString(36).substring(2, 8).toUpperCase(),
-        creditAmount: creditTotal(),
-        labelUrl: tier === "member" || tier === "black" ? "https://example.com/label.pdf" : undefined,
-        labelTrackingNumber: tier === "member" || tier === "black" ? "1Z999AA10123456784" : undefined,
+        itemTotal,
+        shippingCost,
+        handlingFee,
+        creditAmount: itemTotal - shippingCost - handlingFee,
+        labelUrl: "https://example.com/label.pdf",
+        labelTrackingNumber: "1Z999AA10123456784",
       });
 
       setStep(4);
@@ -248,19 +257,11 @@ export default function ReturnsPage() {
     }
   }
 
-  /* ── Shipping tier label ── */
+  /* ── Shipping / handling constants ── */
+  const HANDLING_FEE = 3.0;
 
-  function shippingInfo(): { label: string; detail: string } {
-    switch (tier) {
-      case "member":
-      case "black":
-        return { label: "Free Return Shipping", detail: "A prepaid return label will be emailed to you." };
-      case "access":
-        return { label: "$5.95 Return Shipping", detail: "A flat-rate return shipping fee will be deducted from your store credit." };
-      default:
-        return { label: "Self-Ship Return", detail: "You'll receive the return address to ship items back at your own cost." };
-    }
-  }
+  /* Demo shipping cost — in production this comes from Shopify Returns label generation */
+  const DEMO_SHIPPING_COST = 8.50;
 
   return (
     <div className="min-h-screen bg-bone">
@@ -305,7 +306,8 @@ export default function ReturnsPage() {
                 </h1>
                 <p className="text-sm text-charcoal/60 max-w-md mx-auto leading-relaxed">
                   Enter your order details below and we&rsquo;ll pull up your items.
-                  Returns are issued as store credit to your Mully Pro Shop account.
+                  Eligible returns are issued as store credit to your Mully Pro Shop account
+                  once our team has received and inspected your items.
                 </p>
               </div>
 
@@ -500,9 +502,13 @@ export default function ReturnsPage() {
               {/* Credit summary + Continue */}
               <div className="rounded-xl bg-forest/5 border border-forest/10 p-5 mb-6">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-charcoal/60">Estimated store credit</span>
+                  <span className="text-sm text-charcoal/60">Item value</span>
                   <span className="text-lg font-serif font-bold text-forest">${creditTotal().toFixed(2)}</span>
                 </div>
+                <p className="text-xs text-charcoal/40 mt-2 leading-relaxed">
+                  Return shipping and a $3.00 handling fee will be deducted from your store credit.
+                  Final credit amount will be shown after your label is generated.
+                </p>
               </div>
 
               <div className="flex gap-3">
@@ -564,34 +570,39 @@ export default function ReturnsPage() {
                 })}
               </div>
 
-              {/* Shipping info */}
-              {(() => {
-                const info = shippingInfo();
-                return (
-                  <div className="rounded-xl border border-taupe/20 bg-white px-5 py-4 mb-5">
-                    <div className="flex items-start gap-3">
-                      <svg className="w-5 h-5 text-sage shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 00-3.213-9.193 2.056 2.056 0 00-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 00-10.026 0 1.106 1.106 0 00-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" />
-                      </svg>
-                      <div>
-                        <p className="text-sm font-medium text-obsidian">{info.label}</p>
-                        <p className="text-xs text-charcoal/45 mt-0.5">{info.detail}</p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* Store credit policy */}
+              {/* Shipping & fees breakdown */}
               <div className="rounded-xl bg-forest/5 border border-forest/10 p-5 mb-6">
-                <p className="text-xs text-charcoal/50 leading-relaxed mb-3">
-                  Returns are issued as <strong className="text-charcoal/70">store credit</strong> to your Mully Pro Shop account at equal value of the item(s).
-                  Credit is typically available within 5&ndash;7 business days of receiving your return.
+                <p className="text-xs text-charcoal/50 leading-relaxed mb-4">
+                  Returns are issued as <strong className="text-charcoal/70">store credit</strong> to your Mully Pro Shop account
+                  once our team has received and inspected your items. Return shipping cost and a handling fee
+                  are deducted from your credit.
                 </p>
-                <div className="flex items-center justify-between pt-3 border-t border-forest/10">
-                  <span className="text-sm font-medium text-charcoal/60">Total store credit</span>
-                  <span className="text-xl font-serif font-bold text-forest">${creditTotal().toFixed(2)}</span>
+
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-charcoal/60">Item value</span>
+                    <span className="text-obsidian">${creditTotal().toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-charcoal/60">Return shipping <span className="text-xs text-charcoal/35">(via Shopify Returns)</span></span>
+                    <span className="text-obsidian">&minus;${DEMO_SHIPPING_COST.toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-charcoal/60">Handling fee</span>
+                    <span className="text-obsidian">&minus;${HANDLING_FEE.toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-center justify-between pt-3 border-t border-forest/10">
+                    <span className="font-medium text-charcoal/70">Estimated store credit</span>
+                    <span className="text-xl font-serif font-bold text-forest">
+                      ${(creditTotal() - DEMO_SHIPPING_COST - HANDLING_FEE).toFixed(2)}
+                    </span>
+                  </div>
                 </div>
+
+                <p className="text-[11px] text-charcoal/35 mt-3 leading-relaxed">
+                  Shipping cost is calculated when your return label is generated. Final credit is confirmed
+                  after our team inspects the returned items.
+                </p>
               </div>
 
               {error && (
@@ -645,52 +656,67 @@ export default function ReturnsPage() {
                 Return ID: <span className="font-mono text-charcoal/70">{confirmation.returnId}</span>
               </p>
               <p className="text-sm text-charcoal/50 mb-8">
-                We&rsquo;ll send a confirmation to <span className="text-charcoal/70">{email}</span>
+                We&rsquo;ve sent a confirmation and your return label to <span className="text-charcoal/70">{email}</span>
               </p>
 
-              {/* Credit amount */}
-              <div className="rounded-xl bg-forest/5 border border-forest/10 p-6 mb-6 max-w-sm mx-auto">
-                <p className="text-xs tracking-wide uppercase text-sage font-medium mb-2">Store Credit</p>
-                <p className="text-3xl font-serif font-bold text-forest">${confirmation.creditAmount.toFixed(2)}</p>
-                <p className="text-xs text-charcoal/40 mt-1">Available within 5&ndash;7 business days</p>
+              {/* Credit breakdown */}
+              <div className="rounded-xl bg-forest/5 border border-forest/10 p-6 mb-6 max-w-sm mx-auto text-left">
+                <p className="text-xs tracking-wide uppercase text-sage font-medium mb-3">Estimated Store Credit</p>
+                <div className="space-y-1.5 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-charcoal/55">Item value</span>
+                    <span className="text-obsidian">${confirmation.itemTotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-charcoal/55">Return shipping</span>
+                    <span className="text-obsidian">&minus;${confirmation.shippingCost.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-charcoal/55">Handling fee</span>
+                    <span className="text-obsidian">&minus;${confirmation.handlingFee.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between pt-2 border-t border-forest/10">
+                    <span className="font-medium text-charcoal/70">Credit total</span>
+                    <span className="text-xl font-serif font-bold text-forest">${confirmation.creditAmount.toFixed(2)}</span>
+                  </div>
+                </div>
+                <p className="text-[11px] text-charcoal/35 mt-3 leading-relaxed">
+                  Credit will be applied to your Pro Shop account once our team receives and inspects the returned items.
+                </p>
               </div>
 
-              {/* Return label (if available) */}
-              {confirmation.labelUrl && (
-                <div className="rounded-xl border border-taupe/20 bg-white p-5 mb-6 max-w-sm mx-auto text-left">
-                  <div className="flex items-start gap-3">
-                    <svg className="w-5 h-5 text-forest shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m.75 12l3 3m0 0l3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-                    </svg>
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-obsidian">Prepaid Return Label</p>
-                      {confirmation.labelTrackingNumber && (
-                        <p className="text-xs text-charcoal/40 mt-0.5 font-mono">{confirmation.labelTrackingNumber}</p>
-                      )}
+              {/* Return label — always generated via Shopify Returns */}
+              <div className="rounded-xl border border-taupe/20 bg-white p-5 mb-6 max-w-sm mx-auto text-left">
+                <div className="flex items-start gap-3">
+                  <svg className="w-5 h-5 text-forest shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m.75 12l3 3m0 0l3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                  </svg>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-obsidian">Return Shipping Label</p>
+                    <p className="text-xs text-charcoal/40 mt-0.5 font-mono">{confirmation.labelTrackingNumber}</p>
+                    <div className="flex flex-wrap gap-3 mt-2">
                       <a
                         href={confirmation.labelUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-block text-xs text-forest font-medium mt-2 hover:underline"
+                        className="inline-block text-xs text-forest font-medium hover:underline"
                       >
-                        Download Label &rarr;
+                        Print Label &rarr;
+                      </a>
+                      <a
+                        href={confirmation.labelUrl}
+                        download
+                        className="inline-block text-xs text-forest font-medium hover:underline"
+                      >
+                        Download PDF
                       </a>
                     </div>
+                    <p className="text-[11px] text-charcoal/35 mt-2">
+                      This label has also been emailed to {email}
+                    </p>
                   </div>
                 </div>
-              )}
-
-              {/* No label — show return address */}
-              {!confirmation.labelUrl && (
-                <div className="rounded-xl border border-taupe/20 bg-white p-5 mb-6 max-w-sm mx-auto text-left">
-                  <p className="text-xs tracking-wide uppercase text-charcoal/40 font-medium mb-2">Ship your return to</p>
-                  <p className="text-sm text-obsidian leading-relaxed">
-                    Mully Group, Inc.<br />
-                    555 Friendly St.<br />
-                    Pontiac, MI 48341
-                  </p>
-                </div>
-              )}
+              </div>
 
               {/* Actions */}
               <div className="flex flex-col sm:flex-row gap-3 max-w-sm mx-auto mt-8">
