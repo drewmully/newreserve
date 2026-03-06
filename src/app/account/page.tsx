@@ -36,9 +36,8 @@ export default function AccountPage() {
     isSignedIn,
     authLoading,
     email,
-    setEmail,
     username,
-    setUsername,
+    saveUsername,
     tier,
     tierLabel,
     setTier,
@@ -126,8 +125,7 @@ export default function AccountPage() {
           <ProfileSection
             username={username}
             email={email}
-            onSaveUsername={setUsername}
-            onSaveEmail={setEmail}
+            onSaveUsername={saveUsername}
           />
 
           {/* ═══ FIT PROFILE ═══ */}
@@ -247,30 +245,26 @@ function ProfileSection({
   username,
   email,
   onSaveUsername,
-  onSaveEmail,
 }: {
   username: string;
   email: string;
-  onSaveUsername: (v: string) => void;
-  onSaveEmail: (v: string) => void;
+  onSaveUsername: (v: string) => Promise<void>;
 }) {
-  const [editingField, setEditingField] = useState<"username" | "email" | null>(null);
+  const [editing, setEditing] = useState(false);
   const [tempValue, setTempValue] = useState("");
 
-  function startEdit(field: "username" | "email") {
-    setTempValue(field === "username" ? username : email);
-    setEditingField(field);
+  function startEdit() {
+    setTempValue(username);
+    setEditing(true);
   }
 
   function save() {
-    if (!editingField) return;
-    if (editingField === "username") onSaveUsername(tempValue);
-    else onSaveEmail(tempValue);
-    setEditingField(null);
+    void onSaveUsername(tempValue);
+    setEditing(false);
   }
 
   function cancel() {
-    setEditingField(null);
+    setEditing(false);
   }
 
   return (
@@ -281,7 +275,7 @@ function ProfileSection({
         <div className="px-5 py-4 flex items-center justify-between gap-3">
           <div className="min-w-0 flex-1">
             <p className="text-[11px] text-charcoal/35 mb-0.5">Username</p>
-            {editingField === "username" ? (
+            {editing ? (
               <div className="flex items-center gap-2 mt-1">
                 <input
                   type="text"
@@ -298,37 +292,17 @@ function ProfileSection({
               <p className="text-sm text-obsidian font-medium truncate">{username || "Not set"}</p>
             )}
           </div>
-          {editingField !== "username" && (
-            <button onClick={() => startEdit("username")} className="text-xs text-forest/60 hover:text-forest transition-colors duration-300 cursor-pointer shrink-0">Edit</button>
+          {!editing && (
+            <button onClick={startEdit} className="text-xs text-forest/60 hover:text-forest transition-colors duration-300 cursor-pointer shrink-0">Edit</button>
           )}
         </div>
 
         <div className="h-px bg-taupe/10 mx-5" />
 
-        {/* Email row */}
-        <div className="px-5 py-4 flex items-center justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <p className="text-[11px] text-charcoal/35 mb-0.5">Email</p>
-            {editingField === "email" ? (
-              <div className="flex items-center gap-2 mt-1">
-                <input
-                  type="email"
-                  value={tempValue}
-                  onChange={(e) => setTempValue(e.target.value)}
-                  autoFocus
-                  className="h-9 px-3 rounded-lg bg-bone border border-taupe/25 text-sm text-obsidian focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300 w-full max-w-[260px]"
-                  onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") cancel(); }}
-                />
-                <button onClick={save} className="h-9 px-3.5 rounded-lg bg-forest text-bone text-xs font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer shrink-0">Save</button>
-                <button onClick={cancel} className="text-xs text-charcoal/35 hover:text-charcoal/55 transition-colors duration-300 cursor-pointer shrink-0">Cancel</button>
-              </div>
-            ) : (
-              <p className="text-sm text-obsidian font-medium truncate">{email || "Not set"}</p>
-            )}
-          </div>
-          {editingField !== "email" && (
-            <button onClick={() => startEdit("email")} className="text-xs text-forest/60 hover:text-forest transition-colors duration-300 cursor-pointer shrink-0">Edit</button>
-          )}
+        {/* Email row — read-only */}
+        <div className="px-5 py-4">
+          <p className="text-[11px] text-charcoal/35 mb-0.5">Email</p>
+          <p className="text-sm text-obsidian font-medium truncate">{email || "Not set"}</p>
         </div>
       </div>
     </section>

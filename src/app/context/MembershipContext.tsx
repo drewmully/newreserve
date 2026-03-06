@@ -157,6 +157,7 @@ interface MembershipContextValue {
   // Onboarding
   onboardingCompleted: boolean;
   completeOnboarding: (data: { username: string }) => Promise<void>;
+  saveUsername: (username: string) => Promise<void>;
 
   // Data refreshers
   refreshStoreCredit: () => Promise<void>;
@@ -597,6 +598,23 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
     [user]
   );
 
+  const saveUsername = useCallback(
+    async (newUsername: string) => {
+      setUsername(newUsername);
+      if (user?.uid) {
+        try {
+          await updateDoc(doc(db, "users", user.uid), {
+            username: newUsername,
+            updated_at: serverTimestamp(),
+          });
+        } catch (err) {
+          console.error("[Username] Firestore persist failed:", err);
+        }
+      }
+    },
+    [user]
+  );
+
   /* ── Data refreshers ── */
 
   const refreshStoreCredit = useCallback(async () => {
@@ -703,6 +721,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
         // Onboarding
         onboardingCompleted,
         completeOnboarding,
+        saveUsername,
 
         // Data refreshers
         refreshStoreCredit,
