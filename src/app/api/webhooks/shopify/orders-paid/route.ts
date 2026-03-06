@@ -151,7 +151,12 @@ export async function POST(request: NextRequest) {
             .limit(1)
             .get();
           if (!snap.empty) {
-            await snap.docs[0].ref.update({ tier });
+            const userDoc = snap.docs[0];
+            const updates: Record<string, unknown> = { tier };
+            if (shopifyCustomerId && !userDoc.data().shopify_customer_id) {
+              updates.shopify_customer_id = shopifyCustomerId;
+            }
+            await userDoc.ref.update(updates);
           }
         } catch (err) {
           console.error("[orders-paid] tier update failed:", err);
