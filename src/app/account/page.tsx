@@ -201,7 +201,7 @@ function AccountHeader({ cartCount, onCartOpen }: { cartCount: number; onCartOpe
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-bone/90 backdrop-blur-md border-b border-taupe/15">
       <div className="max-w-7xl mx-auto px-5 md:px-12 flex items-center justify-between h-14">
-        <Link href="/" className="flex items-center gap-2 text-forest">
+        <Link href="/dashboard" className="flex items-center gap-2 text-forest">
           <svg viewBox="0 0 1002 540" fill="currentColor" className="h-4.5 w-auto" aria-hidden="true"><path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" /></svg>
           <span className="font-serif text-xl font-bold tracking-wide">mully.</span>
         </Link>
