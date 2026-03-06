@@ -4,6 +4,8 @@ import {
   sendSignInLinkToEmail,
   isSignInWithEmailLink,
   signInWithEmailLink,
+  signInWithPopup,
+  GoogleAuthProvider,
 } from "firebase/auth";
 import {
   getFirestore,
@@ -179,3 +181,11 @@ export async function confirmOTPSignIn(
 }
 
 export { isSignInWithEmailLink };
+
+/**
+ * Opens a Google sign-in popup and completes Firebase auth.
+ */
+export async function signInWithGoogle(): Promise<void> {
+  const provider = new GoogleAuthProvider();
+  await signInWithPopup(auth, provider);
+}
