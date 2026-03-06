@@ -263,7 +263,7 @@ export default function Home() {
                     <TierFeature text="Community access" />
                   </ul>
                   <a
-                    href="/onboarding"
+                    href="/login"
                     className="mt-8 block w-full text-center h-12 leading-[3rem] rounded-xl border border-forest/80 text-forest text-sm font-medium tracking-wider uppercase hover:bg-forest hover:text-bone transition-all duration-300 btn-press"
                   >
                     Sign Up Free
@@ -292,7 +292,7 @@ export default function Home() {
                     <TierFeature text="USGA Handicap (soon)" />
                   </ul>
                   <a
-                    href="/onboarding"
+                    href="/login"
                     className="mt-8 block w-full text-center h-12 leading-[3rem] rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-all duration-300 btn-press"
                   >
                     Join Now
@@ -341,7 +341,7 @@ export default function Home() {
                         <TierFeature text="Invite-only events" light />
                       </ul>
                       <a
-                        href="/onboarding"
+                        href="/login"
                         className="mt-8 block w-full text-center h-12 leading-[3rem] rounded-xl bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-all duration-300 btn-press"
                       >
                         Join Now

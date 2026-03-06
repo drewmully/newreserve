@@ -154,6 +154,10 @@ interface MembershipContextValue {
   storeCredit: StoreCreditState | null;
   subscriptions: SubscriptionsState | null;
 
+  // Onboarding
+  onboardingCompleted: boolean;
+  completeOnboarding: (data: { username: string }) => Promise<void>;
+
   // Data refreshers
   refreshStoreCredit: () => Promise<void>;
   refreshSubscriptionStatus: () => Promise<void>;
@@ -196,6 +200,9 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
 
   // ── Membership tier ───────────────────────────────────────────────────────
   const [tier, setTier] = useState<MemberTier>("free");
+
+  // ── Onboarding ────────────────────────────────────────────────────────────
+  const [onboardingCompleted, setOnboardingCompleted] = useState(false);
 
   // ── Cart state ────────────────────────────────────────────────────────────
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -356,6 +363,8 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
 
         try {
           const profile = await syncUserProfile(firebaseUser);
+          if (profile.username) setUsername(profile.username);
+          setOnboardingCompleted(profile.onboarding_completed ?? false);
           // Pre-populate store credit & subscriptions from Firestore — avoids
           // a "null data" flash before the dashboard calls the refresh APIs.
           if (profile.store_credit) {
@@ -428,6 +437,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
         setFitProfileState(EMPTY_FIT);
         setStoreCredit(null);
         setSubscriptions(null);
+        setOnboardingCompleted(false);
         setClubStatus("none");
         setInterestedClubs([]);
         cartIdRef.current = null;
@@ -566,6 +576,27 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
     [removeFromCart, syncFromShopifyCart]
   );
 
+  /* ── Onboarding ── */
+
+  const completeOnboarding = useCallback(
+    async (data: { username: string }) => {
+      setUsername(data.username);
+      setOnboardingCompleted(true);
+      if (user?.uid) {
+        try {
+          await updateDoc(doc(db, "users", user.uid), {
+            username: data.username,
+            onboarding_completed: true,
+            updated_at: serverTimestamp(),
+          });
+        } catch (err) {
+          console.error("[Onboarding] Firestore persist failed:", err);
+        }
+      }
+    },
+    [user]
+  );
+
   /* ── Data refreshers ── */
 
   const refreshStoreCredit = useCallback(async () => {
@@ -668,6 +699,10 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
         // Store credit & subscriptions
         storeCredit,
         subscriptions,
+
+        // Onboarding
+        onboardingCompleted,
+        completeOnboarding,
 
         // Data refreshers
         refreshStoreCredit,

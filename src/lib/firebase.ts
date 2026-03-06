@@ -69,6 +69,8 @@ export interface UserDocument {
     sms_marketing: boolean;
     push_notifications: boolean;
   };
+  username: string;
+  onboarding_completed: boolean;
   fit_profile?: Record<string, string>;
   tier?: "free" | "access" | "member" | "black";
 }
@@ -77,6 +79,8 @@ const USER_DEFAULTS: Omit<
   UserDocument,
   "email" | "created_at" | "last_login" | "updated_at"
 > = {
+  username: "",
+  onboarding_completed: false,
   shopify_customer_id: null,
   store_credit: {
     balance_cents: 0,

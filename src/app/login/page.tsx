@@ -45,7 +45,7 @@ function mapAuthError(code: string): string {
 
 export default function LoginPage() {
   const router = useRouter();
-  const { sendOTPEmail, isSignedIn, authLoading } = useMembership();
+  const { sendOTPEmail, isSignedIn, authLoading, onboardingCompleted, email: contextEmail } = useMembership();
 
   // Detect email link synchronously on first render so we never flash the form
   const [step, setStep] = useState<Step>(() => {
@@ -55,7 +55,7 @@ export default function LoginPage() {
       : "email";
   });
 
-  const [emailValue, setEmailValue] = useState("");
+  const [emailValue, setEmailValue] = useState(contextEmail);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -85,9 +85,9 @@ export default function LoginPage() {
   /* ── Redirect once authenticated ── */
   useEffect(() => {
     if (!authLoading && isSignedIn) {
-      router.replace("/dashboard");
+      router.replace(onboardingCompleted ? "/dashboard" : "/onboarding");
     }
-  }, [authLoading, isSignedIn, router]);
+  }, [authLoading, isSignedIn, onboardingCompleted, router]);
 
   /* ── Resend cooldown countdown ── */
   useEffect(() => {

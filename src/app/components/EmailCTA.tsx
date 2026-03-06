@@ -12,7 +12,7 @@ export function EmailCTA({ variant = "hero" }: { variant?: "hero" | "bottom" }) 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (value.trim()) setEmail(value.trim());
-    router.push("/onboarding");
+    router.push("/login");
   };
 
   if (variant === "hero") {

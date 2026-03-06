@@ -84,7 +84,7 @@ function daysInMonth(month: number, year: number): number {
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const { email, setEmail, username, setUsername, setTier, user, authLoading, isSignedIn } = useMembership();
+  const { email, setEmail, username, setUsername, setTier, setFitProfile, user, authLoading, isSignedIn, completeOnboarding } = useMembership();
 
   useEffect(() => {
     if (!authLoading && !isSignedIn) {
@@ -92,8 +92,12 @@ export default function OnboardingPage() {
     }
   }, [authLoading, isSignedIn, router]);
 
-  function handleComplete(newTier: "free" | "access" | "member") {
+  async function handleComplete(newTier: "free" | "access" | "member") {
+    await completeOnboarding({ username });
     setTier(newTier);
+    if (newTier === "member") {
+      void setFitProfile({ shirtSize, gloveHand, gloveSize, waistSize, pantsInseam, shortsInseam, shoeSize });
+    }
     void trackEvent("registry_applied", {
       user_id: user?.uid,
       email: user?.email ?? email,
