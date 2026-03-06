@@ -130,11 +130,16 @@ export async function syncUserProfile(user: User): Promise<UserDocument> {
     };
     await setDoc(ref, newDoc);
   } else {
-    await updateDoc(ref, {
+    const updates: Record<string, unknown> = {
       email: user.email ?? "",
       last_login: now,
       updated_at: now,
-    });
+    };
+    // Migrate existing users who predate the onboarding_completed field
+    if (snap.data()?.onboarding_completed === undefined) {
+      updates.onboarding_completed = true;
+    }
+    await updateDoc(ref, updates);
   }
 
   const finalSnap = await getDoc(ref);
