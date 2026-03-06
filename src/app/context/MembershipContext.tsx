@@ -363,6 +363,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
   /* ── Firebase auth listener ── */
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      setAuthLoading(true);
       setUser(firebaseUser);
 
       if (firebaseUser) {
