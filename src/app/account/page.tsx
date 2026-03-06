@@ -50,6 +50,8 @@ export default function AccountPage() {
     subscriptions,
     refreshStoreCredit,
     refreshSubscriptionStatus,
+    messagingPreferences,
+    saveMessagingPreferences,
   } = useMembership();
 
   const [orders, setOrders] = useState<OrderSummary[] | null>(null);
@@ -144,7 +146,10 @@ export default function AccountPage() {
           <WalletSection storeCredit={storeCredit} />
 
           {/* ═══ NOTIFICATIONS ═══ */}
-          <NotificationSection />
+          <NotificationSection
+            preferences={messagingPreferences}
+            onSave={saveMessagingPreferences}
+          />
 
           {/* ═══ ORDERS ═══ */}
           <OrdersSection orders={orders} />
@@ -544,7 +549,13 @@ function FitField({ label, value }: { label: string; value: string }) {
    NOTIFICATION SECTION
    ═══════════════════════════════════════════ */
 
-function NotificationSection() {
+function NotificationSection({
+  preferences,
+  onSave,
+}: {
+  preferences: { email_marketing: boolean; sms_marketing: boolean };
+  onSave: (prefs: { email_marketing: boolean; sms_marketing: boolean }) => Promise<void>;
+}) {
   return (
     <section className="mb-8">
       <SectionLabel>Notifications</SectionLabel>
@@ -554,7 +565,10 @@ function NotificationSection() {
             <p className="text-sm text-obsidian">Email</p>
             <p className="text-[11px] text-charcoal/35 mt-0.5">Drops, community, and order updates</p>
           </div>
-          <ToggleSwitch />
+          <ToggleSwitch
+            checked={preferences.email_marketing}
+            onChange={(v) => void onSave({ ...preferences, email_marketing: v })}
+          />
         </div>
         <div className="h-px bg-taupe/10 mx-5" />
         <div className="px-5 py-3.5 flex items-center justify-between">
@@ -562,7 +576,10 @@ function NotificationSection() {
             <p className="text-sm text-obsidian">SMS</p>
             <p className="text-[11px] text-charcoal/35 mt-0.5">Priority alerts and shipping</p>
           </div>
-          <ToggleSwitch />
+          <ToggleSwitch
+            checked={preferences.sms_marketing}
+            onChange={(v) => void onSave({ ...preferences, sms_marketing: v })}
+          />
         </div>
       </div>
     </section>
@@ -1058,20 +1075,19 @@ function OrdersSection({ orders }: { orders: OrderSummary[] | null }) {
    TOGGLE SWITCH
    ═══════════════════════════════════════════ */
 
-function ToggleSwitch() {
-  const [on, setOn] = useState(true);
+function ToggleSwitch({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
     <button
-      onClick={() => setOn(!on)}
+      onClick={() => onChange(!checked)}
       className={`relative w-10 h-[22px] rounded-full transition-colors duration-300 cursor-pointer shrink-0 ${
-        on ? "bg-forest" : "bg-taupe/30"
+        checked ? "bg-forest" : "bg-taupe/30"
       }`}
       role="switch"
-      aria-checked={on}
+      aria-checked={checked}
     >
       <div
         className={`absolute top-[2px] w-[18px] h-[18px] rounded-full bg-bone shadow-sm transition-transform duration-300 ${
-          on ? "translate-x-[20px]" : "translate-x-[2px]"
+          checked ? "translate-x-[20px]" : "translate-x-[2px]"
         }`}
       />
     </button>

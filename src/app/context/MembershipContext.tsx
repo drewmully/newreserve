@@ -154,6 +154,10 @@ interface MembershipContextValue {
   storeCredit: StoreCreditState | null;
   subscriptions: SubscriptionsState | null;
 
+  // Notifications
+  messagingPreferences: { email_marketing: boolean; sms_marketing: boolean };
+  saveMessagingPreferences: (prefs: { email_marketing: boolean; sms_marketing: boolean }) => Promise<void>;
+
   // Onboarding
   onboardingCompleted: boolean;
   completeOnboarding: (data: { username: string }) => Promise<void>;
@@ -204,6 +208,9 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
 
   // ── Onboarding ────────────────────────────────────────────────────────────
   const [onboardingCompleted, setOnboardingCompleted] = useState(false);
+
+  // ── Messaging preferences ─────────────────────────────────────────────────
+  const [messagingPreferences, setMessagingPreferences] = useState({ email_marketing: true, sms_marketing: false });
 
   // ── Cart state ────────────────────────────────────────────────────────────
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -366,6 +373,12 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
           const profile = await syncUserProfile(firebaseUser);
           if (profile.username) setUsername(profile.username);
           setOnboardingCompleted(profile.onboarding_completed ?? false);
+          if (profile.messaging_preferences) {
+            setMessagingPreferences({
+              email_marketing: profile.messaging_preferences.email_marketing ?? true,
+              sms_marketing: profile.messaging_preferences.sms_marketing ?? false,
+            });
+          }
           // Pre-populate store credit & subscriptions from Firestore — avoids
           // a "null data" flash before the dashboard calls the refresh APIs.
           if (profile.store_credit) {
@@ -439,6 +452,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
         setStoreCredit(null);
         setSubscriptions(null);
         setOnboardingCompleted(false);
+        setMessagingPreferences({ email_marketing: true, sms_marketing: false });
         setClubStatus("none");
         setInterestedClubs([]);
         cartIdRef.current = null;
@@ -598,6 +612,24 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
     [user]
   );
 
+  const saveMessagingPreferences = useCallback(
+    async (prefs: { email_marketing: boolean; sms_marketing: boolean }) => {
+      setMessagingPreferences(prefs);
+      if (user?.uid) {
+        try {
+          await updateDoc(doc(db, "users", user.uid), {
+            "messaging_preferences.email_marketing": prefs.email_marketing,
+            "messaging_preferences.sms_marketing": prefs.sms_marketing,
+            updated_at: serverTimestamp(),
+          });
+        } catch (err) {
+          console.error("[MessagingPrefs] Firestore persist failed:", err);
+        }
+      }
+    },
+    [user]
+  );
+
   const saveUsername = useCallback(
     async (newUsername: string) => {
       setUsername(newUsername);
@@ -717,6 +749,10 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
         // Store credit & subscriptions
         storeCredit,
         subscriptions,
+
+        // Notifications
+        messagingPreferences,
+        saveMessagingPreferences,
 
         // Onboarding
         onboardingCompleted,
