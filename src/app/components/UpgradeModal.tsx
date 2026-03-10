@@ -39,17 +39,17 @@ export function UpgradeModal({ open, onClose, currentTier, onSelectPlan }: Upgra
   const [pantsInseam, setPantsInseam] = useState("");
   const [shortsInseam, setShortsInseam] = useState("");
 
-  // Reset on open
-  useEffect(() => {
-    if (open) setFitStep(0);
-  }, [open]);
+  const handleClose = useCallback(() => {
+    setFitStep(0);
+    onClose();
+  }, [onClose]);
 
   // Escape key
   const handleEscape = useCallback(
     (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") handleClose();
     },
-    [onClose]
+    [handleClose]
   );
 
   useEffect(() => {
@@ -138,7 +138,7 @@ export function UpgradeModal({ open, onClose, currentTier, onSelectPlan }: Upgra
       {/* Backdrop */}
       <div
         className="absolute inset-0 bg-obsidian/50 backdrop-blur-sm animate-modal-backdrop"
-        onClick={onClose}
+        onClick={handleClose}
       />
 
       {/* Modal */}
@@ -146,7 +146,7 @@ export function UpgradeModal({ open, onClose, currentTier, onSelectPlan }: Upgra
         <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl pointer-events-auto animate-modal-content glass-modal-center">
           {/* Close */}
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="absolute top-4 right-4 z-10 w-8 h-8 rounded-full bg-taupe/10 hover:bg-taupe/20 flex items-center justify-center transition-colors duration-300 cursor-pointer"
             aria-label="Close"
           >

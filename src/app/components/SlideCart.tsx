@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { useMembership } from "../context/MembershipContext";
+import { trackEvent } from "@/lib/tracking";
 
 export function SlideCart() {
   const {
@@ -254,6 +255,15 @@ export function SlideCart() {
             {cartCheckoutUrl ? (
               <a
                 href={cartCheckoutUrl}
+                onClick={() => {
+                  void trackEvent("checkout_clicked", {
+                    properties: {
+                      cart_total: cartTotal,
+                      cart_items: cart.length,
+                      currency: "USD",
+                    },
+                  });
+                }}
                 className="w-full h-12 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer btn-press flex items-center justify-center"
               >
                 Go to Checkout

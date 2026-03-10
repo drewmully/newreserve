@@ -120,6 +120,65 @@ export interface DailyKPIs {
   raw: Record<string, unknown>;
 }
 
+export interface PopulationSnapshot {
+  date: string;
+  total_users: number;
+  users_with_store_credit: number;
+  users_with_active_subscription: number;
+}
+
+/**
+ * Refresh user-population counters for a given day from Firestore users.
+ * Intended to run from a scheduled job (e.g. Vercel Cron) and/or
+ * on-demand from protected reporting endpoints.
+ */
+export async function refreshPopulationKPIs(
+  date?: string
+): Promise<PopulationSnapshot> {
+  const d = date ?? todayISO();
+  const usersSnap = await adminDb.collection("users").get();
+
+  let totalUsers = 0;
+  let usersWithCredit = 0;
+  let usersWithActiveSubscription = 0;
+
+  usersSnap.forEach((docSnap) => {
+    totalUsers += 1;
+
+    const data = docSnap.data() as Record<string, unknown>;
+    const storeCredit = (data.store_credit ?? {}) as Record<string, unknown>;
+    const subscriptions = (data.subscriptions ?? {}) as Record<string, unknown>;
+
+    const balanceCents = Number(storeCredit.balance_cents ?? 0);
+    if (Number.isFinite(balanceCents) && balanceCents > 0) {
+      usersWithCredit += 1;
+    }
+
+    const status = String(subscriptions.status ?? "").toLowerCase();
+    const mullyboxActive = subscriptions.mullybox_active === true;
+    if (mullyboxActive || status === "active") {
+      usersWithActiveSubscription += 1;
+    }
+  });
+
+  await adminDb.collection("kpi_daily").doc(d).set(
+    {
+      total_users: totalUsers,
+      users_with_store_credit: usersWithCredit,
+      users_with_active_subscription: usersWithActiveSubscription,
+      population_snapshot_at: FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  return {
+    date: d,
+    total_users: totalUsers,
+    users_with_store_credit: usersWithCredit,
+    users_with_active_subscription: usersWithActiveSubscription,
+  };
+}
+
 export async function getDailyKPIs(date?: string): Promise<DailyKPIs> {
   const d = date ?? todayISO();
   const snap = await adminDb.collection("kpi_daily").doc(d).get();

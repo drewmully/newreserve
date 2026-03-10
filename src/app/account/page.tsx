@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMembership, type FitProfile, type StoreCreditState, type SubscriptionsState } from "../context/MembershipContext";
+import { trackEvent } from "@/lib/tracking";
 
 interface OrderLineItem {
   name: string;
@@ -70,6 +71,15 @@ export default function AccountPage() {
       void refreshSubscriptionStatus();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSignedIn]);
+
+  useEffect(() => {
+    if (!isSignedIn) return;
+    void trackEvent("wallet_viewed", {
+      properties: {
+        page: "account",
+      },
+    });
   }, [isSignedIn]);
 
   useEffect(() => {

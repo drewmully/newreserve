@@ -15,7 +15,10 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getDailyKPIs } from "@/app/api/_lib/kpiReporting";
+import {
+  getDailyKPIs,
+  refreshPopulationKPIs,
+} from "@/app/api/_lib/kpiReporting";
 
 export async function GET(request: NextRequest) {
   // ── Auth ──────────────────────────────────────────────────────────────────
@@ -33,8 +36,14 @@ export async function GET(request: NextRequest) {
   // ── Fetch KPIs ────────────────────────────────────────────────────────────
   const date =
     request.nextUrl.searchParams.get("date") ?? undefined;
+  const refresh =
+    request.nextUrl.searchParams.get("refresh") === "1" ||
+    request.nextUrl.searchParams.get("refresh") === "true";
 
   try {
+    if (refresh) {
+      await refreshPopulationKPIs(date);
+    }
     const kpis = await getDailyKPIs(date);
     return NextResponse.json(kpis);
   } catch (err) {

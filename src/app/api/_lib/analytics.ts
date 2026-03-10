@@ -21,6 +21,7 @@ import crypto from "crypto";
 export interface AnalyticsEvent {
   event_name: string;
   user_id?: string;
+  anonymous_id?: string;
   email?: string;
   phone?: string;
   ip?: string;
@@ -56,10 +57,21 @@ async function fireMetaCAPI(event: AnalyticsEvent): Promise<void> {
   if (!pixelId || !accessToken) return;
 
   const userData: Record<string, unknown> = {};
+  if (event.user_id) {
+    userData.external_id = sha256hex(event.user_id.trim());
+  }
   if (event.email)
     userData.em = sha256hex(event.email.trim().toLowerCase());
   if (event.phone)
     userData.ph = sha256hex(event.phone.replace(/\D/g, ""));
+  const fbp = event.properties?.fbp;
+  if (typeof fbp === "string" && fbp.trim().length > 0) {
+    userData.fbp = fbp.trim();
+  }
+  const fbc = event.properties?.fbc;
+  if (typeof fbc === "string" && fbc.trim().length > 0) {
+    userData.fbc = fbc.trim();
+  }
   if (event.ip) userData.client_ip_address = event.ip;
   if (event.user_agent) userData.client_user_agent = event.user_agent;
 
@@ -75,7 +87,11 @@ async function fireMetaCAPI(event: AnalyticsEvent): Promise<void> {
             event_time:
               event.timestamp ?? Math.floor(Date.now() / 1000),
             user_data: userData,
-            custom_data: event.properties ?? {},
+            custom_data: {
+              ...(event.properties ?? {}),
+              user_id: event.user_id,
+              segments: event.segments ?? [],
+            },
             action_source: "website",
             event_source_url: event.page_url,
           },
@@ -91,6 +107,10 @@ async function fireGA4(event: AnalyticsEvent): Promise<void> {
   const measurementId = process.env.GA4_MEASUREMENT_ID;
   const apiSecret = process.env.GA4_API_SECRET;
   if (!measurementId || !apiSecret) return;
+  const segmentTags =
+    event.segments && event.segments.length > 0
+      ? event.segments.join(",")
+      : undefined;
 
   await fetch(
     `https://www.google-analytics.com/mp/collect?measurement_id=${measurementId}&api_secret=${apiSecret}`,
@@ -98,7 +118,10 @@ async function fireGA4(event: AnalyticsEvent): Promise<void> {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        client_id: event.user_id ?? "anonymous",
+        client_id:
+          event.anonymous_id ??
+          event.user_id ??
+          `anon-${crypto.randomUUID()}`,
         user_id: event.user_id,
         events: [
           {
@@ -106,6 +129,8 @@ async function fireGA4(event: AnalyticsEvent): Promise<void> {
             params: {
               ...(event.properties ?? {}),
               page_location: event.page_url,
+              reserve_user_id: event.user_id,
+              segment_tags: segmentTags,
               engagement_time_msec: 100,
             },
           },

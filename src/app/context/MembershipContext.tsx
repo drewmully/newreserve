@@ -239,6 +239,10 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
   const creditLastFetchRef = useRef(0);
   /** Timestamp of last subscription-status fetch (ms) */
   const subLastFetchRef = useRef(0);
+  /** Last uid for which "login" was tracked in this session */
+  const loginTrackedUidRef = useRef<string | null>(null);
+  /** Last subscription state signature sent to analytics */
+  const lastTrackedSubscriptionStateRef = useRef<string | null>(null);
 
   // ── Store credit & subscriptions ──────────────────────────────────────────
   const [storeCredit, setStoreCredit] = useState<StoreCreditState | null>(null);
@@ -370,6 +374,15 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
         setEmail(firebaseUser.email ?? "");
         setUsername(firebaseUser.displayName ?? "");
 
+        if (loginTrackedUidRef.current !== firebaseUser.uid) {
+          loginTrackedUidRef.current = firebaseUser.uid;
+          void trackEvent("login", {
+            properties: {
+              auth_provider: firebaseUser.providerData[0]?.providerId ?? "unknown",
+            },
+          });
+        }
+
         try {
           const profile = await syncUserProfile(firebaseUser);
           if (profile.username) setUsername(profile.username);
@@ -406,6 +419,22 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
           }
         } catch (err) {
           console.error("[MembershipContext] syncUserProfile failed:", err);
+        }
+
+        // Load persisted registry status (if user has already applied)
+        try {
+          const registrySnap = await getDoc(
+            doc(db, "registry_applications", firebaseUser.uid)
+          );
+          const status = registrySnap.data()?.status;
+          if (status === "pending" || status === "approved") {
+            setClubStatus(status);
+          } else {
+            setClubStatus("none");
+          }
+        } catch (err) {
+          console.error("[MembershipContext] registry status load failed:", err);
+          setClubStatus("none");
         }
 
         // Reconcile tier against live Loop subscriptions
@@ -458,6 +487,8 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
         setInterestedClubs([]);
         cartIdRef.current = null;
         identityBoundRef.current = null;
+        loginTrackedUidRef.current = null;
+        lastTrackedSubscriptionStateRef.current = null;
       }
 
       setAuthLoading(false);
@@ -684,6 +715,23 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
       if (res.ok) {
         const data = (await res.json()) as { subscriptions: SubscriptionsState };
         setSubscriptions(data.subscriptions);
+
+        const sig = [
+          data.subscriptions.status,
+          data.subscriptions.mullybox_active ? "1" : "0",
+          String(data.subscriptions.total_subscription_count),
+        ].join(":");
+
+        if (lastTrackedSubscriptionStateRef.current !== sig) {
+          lastTrackedSubscriptionStateRef.current = sig;
+          void trackEvent("subscription_state", {
+            properties: {
+              status: data.subscriptions.status,
+              mullybox_active: data.subscriptions.mullybox_active,
+              total_subscription_count: data.subscriptions.total_subscription_count,
+            },
+          });
+        }
       }
     } catch (err) {
       console.error("[SubscriptionStatus] refresh failed:", err);

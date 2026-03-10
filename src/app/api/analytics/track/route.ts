@@ -85,6 +85,7 @@ export async function POST(request: NextRequest) {
   const event = {
     event_name: eventName,
     user_id: uid,
+    anonymous_id: body.anonymous_id as string | undefined,
     email: body.email as string | undefined,
     phone: body.phone as string | undefined,
     ip,

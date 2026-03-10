@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useMembership } from "../context/MembershipContext";
-import { trackEvent } from "@/lib/tracking";
 import {
   FIT_SHIRT_SIZES, FIT_GLOVE_HANDS, FIT_GLOVE_SIZES,
   FIT_WAIST_SIZES, FIT_SHOE_SIZES, FIT_PANTS_INSEAMS, FIT_SHORTS_INSEAMS,
@@ -84,7 +83,7 @@ function daysInMonth(month: number, year: number): number {
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const { email, setEmail, username, setUsername, setTier, setFitProfile, user, authLoading, isSignedIn, completeOnboarding } = useMembership();
+  const { email, setEmail, username, setUsername, setTier, setFitProfile, authLoading, isSignedIn, completeOnboarding } = useMembership();
 
   useEffect(() => {
     if (!authLoading && !isSignedIn) {
@@ -98,10 +97,6 @@ export default function OnboardingPage() {
     if (newTier === "member") {
       void setFitProfile({ shirtSize, gloveHand, gloveSize, waistSize, pantsInseam, shortsInseam, shoeSize });
     }
-    void trackEvent("registry_applied", {
-      user_id: user?.uid,
-      email: user?.email ?? email,
-    });
     router.push("/dashboard");
   }
   const [step, setStep] = useState(1);

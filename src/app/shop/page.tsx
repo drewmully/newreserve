@@ -16,7 +16,7 @@ export const revalidate = 3600;
 
 export default async function ShopPage() {
   // Fetch from both collections; merge + deduplicate by slug
-  let products: Awaited<ReturnType<typeof getCollectionProducts>> = [];
+  const products: Awaited<ReturnType<typeof getCollectionProducts>> = [];
 
   try {
     const [proShop, privateReleases] = await Promise.all([

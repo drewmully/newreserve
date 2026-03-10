@@ -11,18 +11,39 @@ service cloud.firestore {
     }
 
     // ── registry_applications ───────────────────────────────────────────────
-    // Create: must be authenticated, document id == uid, status must be
-    // "pending", metadata must be a map, and created_at must equal server time.
-    // Read/update: owner only. Delete is never allowed.
+    // The registry application is user-owned but approval state is server-managed.
+    // Clients can create and edit only their own "pending" application metadata.
+    // Status must stay "pending" from the client side.
     match /registry_applications/{applicationId} {
       allow create: if request.auth != null
         && applicationId == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          "user_id",
+          "status",
+          "created_at",
+          "metadata"
+        ])
+        && request.resource.data.user_id == request.auth.uid
         && request.resource.data.status == "pending"
         && request.resource.data.metadata is map
         && request.resource.data.created_at == request.time;
 
-      allow read, update: if request.auth != null
+      allow read: if request.auth != null
         && request.auth.uid == applicationId;
+
+      allow update: if request.auth != null
+        && request.auth.uid == applicationId
+        && resource.data.status == "pending"
+        && request.resource.data.keys().hasOnly([
+          "user_id",
+          "status",
+          "created_at",
+          "metadata"
+        ])
+        && request.resource.data.user_id == request.auth.uid
+        && request.resource.data.status == "pending"
+        && request.resource.data.metadata is map
+        && request.resource.data.created_at == resource.data.created_at;
 
       allow delete: if false;
     }

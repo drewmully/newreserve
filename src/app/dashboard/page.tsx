@@ -10,6 +10,7 @@ import { SlideCart } from "../components/SlideCart";
 import { UpgradeModal } from "../components/UpgradeModal";
 import { posts as SAMPLE_POSTS, FORUM_TAGS, type ForumPost, type ForumComment } from "../community/posts";
 import { submitRegistryApplication } from "@/lib/registry";
+import { trackEvent } from "@/lib/tracking";
 
 /* ═══════════════════════════════════════════
    DASHBOARD — Shop · Community · Club · Benefits
@@ -745,6 +746,7 @@ function ClubTab() {
   const [selectedState, setSelectedState] = useState("Michigan");
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     clubName: "",
     city: "",
@@ -758,6 +760,7 @@ function ClubTab() {
   const handleSubmitApplication = async () => {
     if (!user?.uid) return;
     setSubmitting(true);
+    setSubmitError(null);
     try {
       await submitRegistryApplication(user.uid, {
         club_name: formData.clubName,
@@ -769,11 +772,15 @@ function ClubTab() {
       });
       setClubStatus("pending");
       setShowForm(false);
+      void trackEvent("registry_applied", {
+        properties: {
+          source: "dashboard_club_tab",
+          club_state: formData.state,
+        },
+      });
     } catch (err) {
       console.error("[ClubTab] submitRegistryApplication failed:", err);
-      // Fall back to optimistic local update so UX isn't broken
-      setClubStatus("pending");
-      setShowForm(false);
+      setSubmitError("No se pudo enviar la solicitud. Intenta nuevamente.");
     } finally {
       setSubmitting(false);
     }
@@ -844,6 +851,11 @@ function ClubTab() {
             ) : (
               <div>
                 <h3 className="font-serif text-lg text-obsidian mb-5">Register Your Club Membership</h3>
+                {submitError && (
+                  <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {submitError}
+                  </p>
+                )}
                 <div className="grid md:grid-cols-2 gap-4 mb-6">
                   <div>
                     <label className="text-xs tracking-wide uppercase text-charcoal/50 font-medium mb-1.5 block">Club Name</label>
@@ -973,16 +985,6 @@ function ClubTab() {
               Pending Review
             </div>
 
-            {/* Demo: skip to approved */}
-            <div className="mt-8 pt-6 border-t border-taupe/15">
-              <p className="text-xs text-charcoal/30 mb-3">Demo: skip review process</p>
-              <button
-                onClick={() => setClubStatus("approved")}
-                className="h-9 px-5 rounded-lg text-xs font-medium tracking-wider uppercase border border-taupe/25 text-charcoal/50 hover:border-forest/30 hover:text-forest transition-all duration-300 cursor-pointer"
-              >
-                Simulate Approval
-              </button>
-            </div>
           </div>
 
           {/* Still blurred */}
