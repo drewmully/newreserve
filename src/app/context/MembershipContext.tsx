@@ -445,7 +445,6 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
           });
           if (res.ok) {
             const data = await res.json() as { subscriptions: Array<Record<string, unknown>>; source: string };
-            console.log("[Loop] raw subscriptions:", JSON.stringify(data, null, 2));
 
             const loopTier = resolveTierFromLoopSubs(data.subscriptions);
             if (loopTier) {

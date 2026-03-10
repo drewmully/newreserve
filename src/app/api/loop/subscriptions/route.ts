@@ -39,7 +39,6 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    console.log("[loop/subscriptions] customerIdentifier (email):", email);
     const subscriptions = await getLoopRawSubscriptions(email);
     return NextResponse.json({ subscriptions, source: "loop" });
   } catch (err) {

@@ -46,7 +46,6 @@ export interface LoopSubscriptionStatus {
 export async function getLoopSubscriptionStatus(
   customerIdentifier: string
 ): Promise<LoopSubscriptionStatus> {
-  console.log("[Loop] getLoopSubscriptionStatus customerIdentifier:", customerIdentifier);
   const url = `${BASE_URL}/customer/${encodeURIComponent(customerIdentifier)}/subscription`;
   const res = await fetch(url, { headers: getLoopHeaders() });
 
@@ -57,8 +56,6 @@ export async function getLoopSubscriptionStatus(
   }
 
   const data = (await res.json()) as { data?: LoopSubscription[] };
-
-  console.log("Loop raw:", JSON.stringify(data.data?.[0], null, 2));
 
   const subs = data.data ?? [];
   const active = subs.filter((s) => s.status === "ACTIVE");
@@ -86,16 +83,12 @@ export async function getLoopSubscriptionStatus(
 export async function getLoopRawSubscriptions(
   customerIdentifier: string
 ): Promise<LoopSubscription[]> {
-  console.log("[Loop] getLoopRawSubscriptions customerIdentifier:", customerIdentifier);
   const url = `${BASE_URL}/customer/${encodeURIComponent(customerIdentifier)}/subscription`;
-  console.log("[Loop] fetching URL:", url);
   const res = await fetch(url, { headers: getLoopHeaders() });
-  console.log("[Loop] response status:", res.status);
   if (!res.ok) {
     throw new Error(`Loop API error ${res.status}: ${await res.text()}`);
   }
   const text = await res.text();
-  console.log("[Loop] raw response:", text);
   return (JSON.parse(text).data as LoopSubscription[]) ?? [];
 }
 
