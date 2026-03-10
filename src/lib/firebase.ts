@@ -1,3 +1,5 @@
+"use client";
+
 import { initializeApp, getApps, getApp } from "firebase/app";
 import {
   getAuth,
@@ -32,8 +34,16 @@ const firebaseConfig = {
 
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-export const auth = getAuth(app);
-export const db = getFirestore(app);
+const isBrowser = typeof window !== "undefined";
+
+// During server-side prerender, Firebase Auth can throw if web env vars are
+// missing/invalid. Defer real Auth/Firestore instances to the browser.
+export const auth = isBrowser
+  ? getAuth(app)
+  : (null as unknown as ReturnType<typeof getAuth>);
+export const db = isBrowser
+  ? getFirestore(app)
+  : (null as unknown as ReturnType<typeof getFirestore>);
 
 /* ═══════════════════════════════════════════
    USER DOCUMENT SCHEMA

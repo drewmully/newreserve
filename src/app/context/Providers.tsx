@@ -3,13 +3,15 @@
 import { MembershipProvider } from "./MembershipContext";
 import { EmailLinkHandler } from "../components/EmailLinkHandler";
 import { PageViewTracker } from "../components/PageViewTracker";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 
 export function Providers({ children }: { children: ReactNode }) {
   return (
     <MembershipProvider>
       <EmailLinkHandler />
-      <PageViewTracker />
+      <Suspense fallback={null}>
+        <PageViewTracker />
+      </Suspense>
       {children}
     </MembershipProvider>
   );
