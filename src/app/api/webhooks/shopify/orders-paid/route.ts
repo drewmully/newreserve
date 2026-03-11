@@ -46,6 +46,31 @@ async function verifyShopifyHmac(
   }
 }
 
+async function isDuplicateWebhook(request: NextRequest): Promise<boolean> {
+  const webhookId = request.headers.get("x-shopify-webhook-id");
+  if (!webhookId) return false;
+
+  const dedupeKey = `shopify-orders-paid:${webhookId}`;
+  const ref = adminDb.collection("webhook_receipts").doc(dedupeKey);
+
+  try {
+    const existing = await ref.get();
+    if (existing.exists) return true;
+
+    await ref.set({
+      webhook_id: webhookId,
+      topic: request.headers.get("x-shopify-topic") ?? "orders/paid",
+      provider: "shopify",
+      received_at: Date.now(),
+    });
+  } catch (err) {
+    // Non-fatal: if dedupe storage is unavailable, continue processing.
+    console.error("[orders-paid] webhook dedupe check failed:", err);
+  }
+
+  return false;
+}
+
 // ─── Tier resolution ──────────────────────────────────────────────────────────
 
 type MemberTier = "free" | "access" | "member" | "black";
@@ -103,6 +128,11 @@ export async function POST(request: NextRequest) {
   const isValid = await verifyShopifyHmac(request, rawBody);
   if (!isValid) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const isDuplicate = await isDuplicateWebhook(request);
+  if (isDuplicate) {
+    return NextResponse.json({ ok: true, duplicate: true });
   }
 
   // ── Parse order ───────────────────────────────────────────────────────────

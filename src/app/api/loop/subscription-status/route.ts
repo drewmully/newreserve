@@ -24,7 +24,7 @@ async function verifyFirebaseBearer(request: NextRequest): Promise<string> {
   const header = request.headers.get("Authorization") ?? "";
   const token = header.replace(/^Bearer\s+/i, "").trim();
   if (!token) throw new Error("Missing Authorization header");
-  const decoded = await adminAuth.verifyIdToken(token);
+  const decoded = await adminAuth.verifyIdToken(token, true);
   return decoded.uid;
 }
 
@@ -38,7 +38,7 @@ const EMPTY_SUBSCRIPTIONS = {
 } as const;
 
 export async function GET(request: NextRequest) {
-  // ── Auth ──────────────────────────────────────────────────────────────────
+  // Auth
   let uid: string;
   try {
     uid = await verifyFirebaseBearer(request);
@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // ── Load user document ────────────────────────────────────────────────────
+  // Load user document
   const userRef = adminDb.collection("users").doc(uid);
   const userSnap = await userRef.get();
   if (!userSnap.exists) {
@@ -57,7 +57,7 @@ export async function GET(request: NextRequest) {
   let shopifyCustomerId: string | null =
     userData.shopify_customer_id ?? null;
 
-  // ── Resolve Shopify customer ID if missing ────────────────────────────────
+  // Resolve Shopify customer ID if missing
   if (!shopifyCustomerId && userData.email) {
     try {
       shopifyCustomerId = await resolveCustomerByEmail(userData.email as string);
@@ -69,7 +69,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // ── No Shopify customer → return cache ───────────────────────────────────
+  // No Shopify customer: return cache
   if (!shopifyCustomerId) {
     return NextResponse.json({
       subscriptions: userData.subscriptions ?? EMPTY_SUBSCRIPTIONS,
@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  // ── Fetch live Loop status ────────────────────────────────────────────────
+  // Fetch live Loop status
   try {
     const status = await getLoopSubscriptionStatus(shopifyCustomerId);
     const manageUrl = getLoopManageSubscriptionUrl(shopifyCustomerId);
@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ subscriptions, source: "loop" });
   } catch {
-    // Loop unavailable → serve Firestore cache
+    // Loop unavailable: serve Firestore cache
     return NextResponse.json({
       subscriptions: userData.subscriptions ?? EMPTY_SUBSCRIPTIONS,
       source: "cache",

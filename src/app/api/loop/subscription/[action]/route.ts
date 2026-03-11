@@ -25,7 +25,7 @@ async function verifyFirebaseBearer(request: NextRequest): Promise<string> {
   const header = request.headers.get("Authorization") ?? "";
   const token = header.replace(/^Bearer\s+/i, "").trim();
   if (!token) throw new Error("Missing Authorization header");
-  const decoded = await adminAuth.verifyIdToken(token);
+  const decoded = await adminAuth.verifyIdToken(token, true);
   return decoded.uid;
 }
 
@@ -49,6 +49,34 @@ export async function POST(
   if (!email) return NextResponse.json({ error: "No email on user" }, { status: 400 });
 
   const { action } = await params;
+  const VALID_ACTIONS = new Set([
+    "pause",
+    "resume",
+    "cancel",
+    "change-plan",
+    "reactivate",
+  ]);
+  if (!VALID_ACTIONS.has(action)) {
+    return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });
+  }
+
+  let body: Record<string, unknown> = {};
+  try {
+    body = await request.json();
+  } catch {
+    // body is optional
+  }
+
+  if (action === "change-plan") {
+    const planId = body.sellingPlanShopifyId;
+    if (typeof planId !== "number" || !Number.isFinite(planId) || planId <= 0) {
+      return NextResponse.json({ error: "Invalid sellingPlanShopifyId" }, { status: 400 });
+    }
+  }
+
+  if (action === "cancel" && body.reason !== undefined && typeof body.reason !== "string") {
+    return NextResponse.json({ error: "Invalid cancel reason" }, { status: 400 });
+  }
 
   // For reactivate, match any status; for all others, require ACTIVE/PAUSED
   const subs = await getLoopRawSubscriptions(email);
@@ -61,12 +89,8 @@ export async function POST(
     return NextResponse.json({ error: "No matching subscription found" }, { status: 404 });
   }
   const subscriptionId = sub.id;
-  let body: Record<string, unknown> = {};
-  try {
-    body = await request.json();
-  } catch {
-    // body is optional
-  }
+  const sellingPlanShopifyId = body.sellingPlanShopifyId as number | undefined;
+  const cancelReason = body.reason as string | undefined;
 
   try {
     switch (action) {
@@ -77,16 +101,14 @@ export async function POST(
         await resumeLoopSubscription(subscriptionId);
         break;
       case "cancel":
-        await cancelLoopSubscription(subscriptionId, (body.reason as string) ?? "");
+        await cancelLoopSubscription(subscriptionId, cancelReason ?? "");
         break;
       case "change-plan":
-        await changeLoopSubscriptionPlan(subscriptionId, body.sellingPlanShopifyId as number);
+        await changeLoopSubscriptionPlan(subscriptionId, sellingPlanShopifyId!);
         break;
       case "reactivate":
         await reactivateLoopSubscription(subscriptionId);
         break;
-      default:
-        return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });
     }
 
     return NextResponse.json({ ok: true });

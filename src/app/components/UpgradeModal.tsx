@@ -80,12 +80,16 @@ export function UpgradeModal({ open, onClose, currentTier, onSelectPlan }: Upgra
     const { merchandiseId, sellingPlanId } = PLANS[plan];
     const domain = process.env.NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN;
     const token = process.env.NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN;
+    if (!domain || !token) {
+      console.error("[UpgradeModal] missing Shopify storefront config");
+      return;
+    }
 
     const res = await fetch(`https://${domain}/api/2024-10/graphql.json`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Shopify-Storefront-Access-Token": token!,
+        "X-Shopify-Storefront-Access-Token": token,
       },
       body: JSON.stringify({
         query: `mutation {
@@ -103,11 +107,11 @@ export function UpgradeModal({ open, onClose, currentTier, onSelectPlan }: Upgra
     });
 
     const json = await res.json();
-    console.log("[UpgradeModal] cartCreate response:", JSON.stringify(json, null, 2));
     const checkoutUrl = json?.data?.cartCreate?.cart?.checkoutUrl;
     if (checkoutUrl) {
-      const returnTo = "https://newreserve-ejrimbp0e-greensclub.vercel.app/auth/callback";
-      window.location.href = `${checkoutUrl}&return_url=${encodeURIComponent(returnTo)}`;
+      const returnTo = `${window.location.origin}/auth/callback`;
+      const separator = checkoutUrl.includes("?") ? "&" : "?";
+      window.location.href = `${checkoutUrl}${separator}return_url=${encodeURIComponent(returnTo)}`;
     } else {
       console.error("[UpgradeModal] no checkoutUrl — errors:", json?.data?.cartCreate?.userErrors, json?.errors);
     }

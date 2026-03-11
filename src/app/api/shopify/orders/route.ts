@@ -16,7 +16,7 @@ async function verifyFirebaseBearer(request: NextRequest): Promise<string> {
   const header = request.headers.get("Authorization") ?? "";
   const token = header.replace(/^Bearer\s+/i, "").trim();
   if (!token) throw new Error("Missing Authorization header");
-  const decoded = await adminAuth.verifyIdToken(token);
+  const decoded = await adminAuth.verifyIdToken(token, true);
   return decoded.uid;
 }
 

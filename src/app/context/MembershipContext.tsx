@@ -449,15 +449,6 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
             const loopTier = resolveTierFromLoopSubs(data.subscriptions);
             if (loopTier) {
               setTier(loopTier);
-              // Sync Firestore if it differs
-              try {
-                const snap = await getDoc(doc(db, "users", firebaseUser.uid));
-                if (snap.data()?.tier !== loopTier) {
-                  await updateDoc(doc(db, "users", firebaseUser.uid), { tier: loopTier });
-                }
-              } catch (err) {
-                console.error("[Loop] Firestore tier sync failed:", err);
-              }
             }
           }
         } catch (err) {

@@ -2,18 +2,119 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ── users ──────────────────────────────────────────────────────────────
-    // Owner-only read/create/update. Delete is never allowed.
+    function isOwner(userId) {
+      return request.auth != null && request.auth.uid == userId;
+    }
+
+    // users
+    // Sensitive fields are server-managed after account creation.
     match /users/{userId} {
-      allow read, create, update: if request.auth != null
-        && request.auth.uid == userId;
+      allow read: if isOwner(userId);
+
+      allow create: if isOwner(userId)
+        && request.resource.data.keys().hasOnly([
+          "email",
+          "created_at",
+          "last_login",
+          "updated_at",
+          "shopify_customer_id",
+          "store_credit",
+          "subscriptions",
+          "cart",
+          "segments",
+          "messaging_preferences",
+          "username",
+          "onboarding_completed",
+          "fit_profile"
+        ])
+        && request.resource.data.email is string
+        && request.resource.data.created_at == request.time
+        && request.resource.data.last_login == request.time
+        && request.resource.data.updated_at == request.time
+        && request.resource.data.username is string
+        && request.resource.data.onboarding_completed is bool
+        && request.resource.data.shopify_customer_id == null
+        && request.resource.data.store_credit is map
+        && request.resource.data.store_credit.balance_cents == 0
+        && request.resource.data.store_credit.currency == "USD"
+        && request.resource.data.store_credit.last_synced == null
+        && request.resource.data.subscriptions is map
+        && request.resource.data.subscriptions.mullybox_active == false
+        && request.resource.data.subscriptions.status == "none"
+        && request.resource.data.subscriptions.total_subscription_count == 0
+        && request.resource.data.subscriptions.active_subscription_ids is list
+        && request.resource.data.subscriptions.active_subscription_ids.size() == 0
+        && request.resource.data.subscriptions.manage_url == null
+        && request.resource.data.subscriptions.next_unblock_url == null
+        && request.resource.data.subscriptions.last_checked == null
+        && request.resource.data.cart is map
+        && request.resource.data.cart.cart_id == null
+        && request.resource.data.cart.updated_at == null
+        && request.resource.data.segments is list
+        && request.resource.data.segments.size() == 0
+        && request.resource.data.messaging_preferences is map
+        && request.resource.data.messaging_preferences.email_marketing is bool
+        && request.resource.data.messaging_preferences.sms_marketing is bool
+        && request.resource.data.messaging_preferences.push_notifications is bool
+        && (
+          !request.resource.data.keys().hasAny(["fit_profile"])
+          || request.resource.data.fit_profile is map
+        );
+
+      allow update: if isOwner(userId)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "email",
+          "last_login",
+          "updated_at",
+          "username",
+          "onboarding_completed",
+          "fit_profile",
+          "messaging_preferences",
+          "messaging_preferences.email_marketing",
+          "messaging_preferences.sms_marketing",
+          "messaging_preferences.push_notifications",
+          "cart",
+          "cart.cart_id",
+          "cart.updated_at"
+        ])
+        && request.resource.data.created_at == resource.data.created_at
+        && request.resource.data.shopify_customer_id == resource.data.shopify_customer_id
+        && request.resource.data.store_credit == resource.data.store_credit
+        && request.resource.data.subscriptions == resource.data.subscriptions
+        && request.resource.data.segments == resource.data.segments
+        && (
+          request.resource.data.email == resource.data.email
+          || (
+            request.auth.token.email != null
+            && request.resource.data.email == request.auth.token.email
+          )
+        )
+        && (
+          !request.resource.data.keys().hasAny(["username"])
+          || request.resource.data.username is string
+        )
+        && (
+          !request.resource.data.keys().hasAny(["onboarding_completed"])
+          || request.resource.data.onboarding_completed is bool
+        )
+        && (
+          !request.resource.data.keys().hasAny(["messaging_preferences"])
+          || request.resource.data.messaging_preferences is map
+        )
+        && (
+          !request.resource.data.keys().hasAny(["cart"])
+          || request.resource.data.cart is map
+        )
+        && (
+          !request.resource.data.keys().hasAny(["fit_profile"])
+          || request.resource.data.fit_profile is map
+        );
+
       allow delete: if false;
     }
 
-    // ── registry_applications ───────────────────────────────────────────────
-    // The registry application is user-owned but approval state is server-managed.
-    // Clients can create and edit only their own "pending" application metadata.
-    // Status must stay "pending" from the client side.
+    // registry_applications
+    // User-owned draft document; approval status is server-managed.
     match /registry_applications/{applicationId} {
       allow create: if request.auth != null
         && applicationId == request.auth.uid
@@ -48,7 +149,7 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // ── default deny ────────────────────────────────────────────────────────
+    // default deny
     match /{document=**} {
       allow read, write: if false;
     }
