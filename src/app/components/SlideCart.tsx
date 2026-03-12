@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useMembership } from "../context/MembershipContext";
 import { trackEvent } from "@/lib/tracking";
 
@@ -17,6 +17,20 @@ export function SlideCart() {
     tier,
   } = useMembership();
   const isPaid = tier !== "free";
+
+  const checkoutHref = useMemo(() => {
+    if (!cartCheckoutUrl) return null;
+    if (typeof window === "undefined") return cartCheckoutUrl;
+
+    try {
+      const checkout = new URL(cartCheckoutUrl);
+      checkout.searchParams.set("return_url", window.location.href);
+      return checkout.toString();
+    } catch {
+      const separator = cartCheckoutUrl.includes("?") ? "&" : "?";
+      return `${cartCheckoutUrl}${separator}return_url=${encodeURIComponent(window.location.href)}`;
+    }
+  }, [cartCheckoutUrl]);
 
   useEffect(() => {
     if (!cartOpen) return;
@@ -252,9 +266,9 @@ export function SlideCart() {
               )}
             </div>
 
-            {cartCheckoutUrl ? (
+            {checkoutHref ? (
               <a
-                href={cartCheckoutUrl}
+                href={checkoutHref}
                 onClick={() => {
                   void trackEvent("checkout_clicked", {
                     properties: {

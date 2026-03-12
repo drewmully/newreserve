@@ -109,9 +109,15 @@ export function UpgradeModal({ open, onClose, currentTier, onSelectPlan }: Upgra
     const json = await res.json();
     const checkoutUrl = json?.data?.cartCreate?.cart?.checkoutUrl;
     if (checkoutUrl) {
-      const returnTo = `${window.location.origin}/auth/callback`;
-      const separator = checkoutUrl.includes("?") ? "&" : "?";
-      window.location.href = `${checkoutUrl}${separator}return_url=${encodeURIComponent(returnTo)}`;
+      const returnTo = window.location.href;
+      try {
+        const checkout = new URL(checkoutUrl);
+        checkout.searchParams.set("return_url", returnTo);
+        window.location.href = checkout.toString();
+      } catch {
+        const separator = checkoutUrl.includes("?") ? "&" : "?";
+        window.location.href = `${checkoutUrl}${separator}return_url=${encodeURIComponent(returnTo)}`;
+      }
     } else {
       console.error("[UpgradeModal] no checkoutUrl — errors:", json?.data?.cartCreate?.userErrors, json?.errors);
     }
