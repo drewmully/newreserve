@@ -104,6 +104,11 @@ export interface BuyerIdentityInput {
   countryCode?: string;
 }
 
+export interface CartAttributeInput {
+  key: string;
+  value: string;
+}
+
 export interface ShopifyCartLine {
   id: string;
   variantId: string;
@@ -306,7 +311,8 @@ export async function getProductByHandle(
 
 export async function cartCreate(
   lines: CartLineInput[],
-  buyerIdentity?: BuyerIdentityInput
+  buyerIdentity?: BuyerIdentityInput,
+  attributes?: CartAttributeInput[]
 ): Promise<ShopifyCart> {
   const query = `
     mutation CartCreate($input: CartInput!) {
@@ -322,7 +328,7 @@ export async function cartCreate(
       cart: RawCart | null;
       userErrors: Array<{ field: string[]; message: string }>;
     };
-  }>(query, { input: { lines, buyerIdentity } });
+  }>(query, { input: { lines, buyerIdentity, attributes } });
 
   if (!data.cartCreate.cart) {
     throw new Error(
@@ -331,6 +337,38 @@ export async function cartCreate(
   }
 
   return mapCart(data.cartCreate.cart);
+}
+
+export async function cartAttributesUpdate(
+  cartId: string,
+  attributes: CartAttributeInput[]
+): Promise<ShopifyCart> {
+  const query = `
+    mutation CartAttributesUpdate(
+      $cartId: ID!
+      $attributes: [AttributeInput!]!
+    ) {
+      cartAttributesUpdate(cartId: $cartId, attributes: $attributes) {
+        cart { ${CART_FIELDS} }
+        userErrors { field message }
+      }
+    }
+  `;
+
+  const data = await storefrontFetch<{
+    cartAttributesUpdate: {
+      cart: RawCart | null;
+      userErrors: Array<{ field: string[]; message: string }>;
+    };
+  }>(query, { cartId, attributes });
+
+  if (!data.cartAttributesUpdate.cart) {
+    throw new Error(
+      `cartAttributesUpdate failed: ${JSON.stringify(data.cartAttributesUpdate.userErrors)}`
+    );
+  }
+
+  return mapCart(data.cartAttributesUpdate.cart);
 }
 
 export async function cartLinesAdd(

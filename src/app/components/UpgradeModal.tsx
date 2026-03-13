@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { buildCheckoutOriginAttributes } from "@/lib/shopifyCheckoutOrigin";
 
 /* ═══════════════════════════════════════════
    UPGRADE MODAL
@@ -85,6 +86,9 @@ export function UpgradeModal({ open, onClose, currentTier, onSelectPlan }: Upgra
       return;
     }
 
+    const returnTo = `${window.location.origin}/auth/callback`;
+    const attributes = buildCheckoutOriginAttributes(returnTo);
+
     const res = await fetch(`https://${domain}/api/2024-10/graphql.json`, {
       method: "POST",
       headers: {
@@ -92,24 +96,34 @@ export function UpgradeModal({ open, onClose, currentTier, onSelectPlan }: Upgra
         "X-Shopify-Storefront-Access-Token": token,
       },
       body: JSON.stringify({
-        query: `mutation {
+        query: `mutation CreateSubscriptionCart(
+          $merchandiseId: ID!
+          $sellingPlanId: ID!
+          $attributes: [AttributeInput!]
+        ) {
           cartCreate(input: {
             lines: [{
-              merchandiseId: "${merchandiseId}",
+              merchandiseId: $merchandiseId,
               quantity: 1,
-              sellingPlanId: "${sellingPlanId}"
-            }]
+              sellingPlanId: $sellingPlanId
+            }],
+            attributes: $attributes
           }) {
             cart { checkoutUrl }
+            userErrors { field message }
           }
         }`,
+        variables: {
+          merchandiseId,
+          sellingPlanId,
+          attributes,
+        },
       }),
     });
 
     const json = await res.json();
     const checkoutUrl = json?.data?.cartCreate?.cart?.checkoutUrl;
     if (checkoutUrl) {
-      const returnTo = window.location.href;
       try {
         const checkout = new URL(checkoutUrl);
         checkout.searchParams.set("return_url", returnTo);

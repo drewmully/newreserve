@@ -19,6 +19,7 @@ import { auth, db, syncUserProfile, sendOTPEmail, confirmOTPSignIn } from "@/lib
 import { trackEvent } from "@/lib/tracking";
 import {
   cartCreate,
+  cartAttributesUpdate,
   cartLinesAdd,
   cartLinesRemove,
   cartLinesUpdate,
@@ -26,6 +27,7 @@ import {
   getCart,
   type ShopifyCart,
 } from "@/lib/shopify";
+import { buildCheckoutOriginAttributes } from "@/lib/shopifyCheckoutOrigin";
 
 /* ═══════════════════════════════════════════
    TIER RESOLUTION FROM LOOP SUBSCRIPTIONS
@@ -50,6 +52,15 @@ function resolveTierFromLoopSubs(
     }
   }
   return null;
+}
+
+function getProjectReturnUrl(path = ""): string {
+  if (typeof window === "undefined") return "";
+  return `${window.location.origin}${path}`;
+}
+
+function getProjectCartAttributes() {
+  return buildCheckoutOriginAttributes(getProjectReturnUrl());
 }
 
 /* ═══════════════════════════════════════════
@@ -351,7 +362,17 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
         const sc = await getCart(savedId);
         if (sc) {
           syncFromShopifyCart(sc);
-          bindCartBuyerIdentity(sc.id, userEmail);
+          try {
+            const taggedCart = await cartAttributesUpdate(
+              sc.id,
+              getProjectCartAttributes()
+            );
+            syncFromShopifyCart(taggedCart);
+            bindCartBuyerIdentity(taggedCart.id, userEmail);
+          } catch (err) {
+            console.error("[Cart] origin attribute sync failed:", err);
+            bindCartBuyerIdentity(sc.id, userEmail);
+          }
         } else {
           try {
             localStorage.removeItem(cartIdKey(uid));
@@ -519,6 +540,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
 
       try {
         let result: ShopifyCart;
+        const originAttributes = getProjectCartAttributes();
 
         if (currentCartId) {
           if (existing?.lineId) {
@@ -532,11 +554,16 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
               { merchandiseId: item.variantId, quantity: 1 },
             ]);
           }
+          try {
+            result = await cartAttributesUpdate(result.id, originAttributes);
+          } catch (err) {
+            console.error("[Cart] origin attribute sync failed:", err);
+          }
         } else {
           // No cart yet — create one
           result = await cartCreate([
             { merchandiseId: item.variantId, quantity: 1 },
-          ]);
+          ], undefined, originAttributes);
         }
 
         syncFromShopifyCart(result);
