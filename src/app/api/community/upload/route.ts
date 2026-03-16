@@ -30,9 +30,12 @@ export async function POST(req: NextRequest) {
     const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
     const storagePath = `community/posts/${fileName}`;
 
-    const bucketName = process.env.FIREBASE_STORAGE_BUCKET;
+    // Fall back to the public env var since FIREBASE_STORAGE_BUCKET may not be set server-side
+    const bucketName =
+      process.env.FIREBASE_STORAGE_BUCKET ||
+      process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
     if (!bucketName) {
-      return NextResponse.json({ error: "Storage not configured" }, { status: 500 });
+      return NextResponse.json({ error: "Storage bucket not configured" }, { status: 500 });
     }
 
     const bucket = adminStorage.bucket(bucketName);

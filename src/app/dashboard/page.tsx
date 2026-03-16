@@ -1193,19 +1193,22 @@ function CommunityTab() {
       const token = await user.getIdToken();
 
       // Upload images server-side (avoids CORS issues with Firebase Storage)
-      const imageUrls = await Promise.all(
-        composeImages.map(async ({ file }) => {
-          const fd = new FormData();
-          fd.append("file", file);
-          const r = await fetch("/api/community/upload", {
-            method: "POST",
-            headers: { Authorization: `Bearer ${token}` },
-            body: fd,
-          });
-          const { url } = await r.json();
-          return url as string;
-        })
-      );
+      const imageUrls = (
+        await Promise.all(
+          composeImages.map(async ({ file }) => {
+            const fd = new FormData();
+            fd.append("file", file);
+            const r = await fetch("/api/community/upload", {
+              method: "POST",
+              headers: { Authorization: `Bearer ${token}` },
+              body: fd,
+            });
+            if (!r.ok) return null;
+            const { url } = await r.json();
+            return (url as string) || null;
+          })
+        )
+      ).filter((u): u is string => !!u);
       const avatar = getInitials(username || user.email || "?");
       const res = await fetch("/api/community/posts", {
         method: "POST",
