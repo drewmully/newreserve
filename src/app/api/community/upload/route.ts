@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminAuth, adminStorage } from "@/lib/firebase-admin";
+import { adminAuth } from "@/lib/firebase-admin";
 
 async function verifyAuth(req: NextRequest): Promise<string | null> {
   const header = req.headers.get("Authorization");
@@ -13,6 +13,7 @@ async function verifyAuth(req: NextRequest): Promise<string | null> {
 }
 
 export async function POST(req: NextRequest) {
+  // Verify the user is authenticated
   const uid = await verifyAuth(req);
   if (!uid) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -21,16 +22,10 @@ export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
-
     if (!file) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
-    const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
-    const fileName = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-    const storagePath = `community/posts/${fileName}`;
-
-    // Fall back to the public env var since FIREBASE_STORAGE_BUCKET may not be set server-side
     const bucketName =
       process.env.FIREBASE_STORAGE_BUCKET ||
       process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
@@ -38,27 +33,35 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Storage bucket not configured" }, { status: 500 });
     }
 
-    const bucket = adminStorage.bucket(bucketName);
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const fileRef = bucket.file(storagePath);
+    const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
+    const storagePath = `community/posts/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
 
-    // Generate a Firebase download token so the URL works without ACL changes
-    // (modern Firebase buckets have uniform bucket-level access enabled,
-    //  which prevents per-object makePublic() / ACL calls)
-    const downloadToken =
-      Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+    // Proxy the upload to Firebase Storage REST API using the user's ID token.
+    // This avoids CORS (server-to-server) and doesn't require Storage Admin
+    // permissions on the service account — it respects Firebase Storage Rules.
+    const idToken = req.headers.get("Authorization")!.slice(7);
+    const uploadUrl = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o?name=${encodeURIComponent(storagePath)}`;
 
-    await fileRef.save(buffer, {
-      contentType: file.type || "image/jpeg",
-      metadata: {
-        cacheControl: "public, max-age=31536000",
-        metadata: { firebaseStorageDownloadTokens: downloadToken },
+    const uploadRes = await fetch(uploadUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Firebase ${idToken}`,
+        "Content-Type": file.type || "image/jpeg",
       },
+      body: await file.arrayBuffer(),
     });
 
-    // Standard Firebase Storage download URL with token
+    if (!uploadRes.ok) {
+      const errText = await uploadRes.text();
+      console.error("[community/upload] Firebase Storage error:", errText);
+      return NextResponse.json({ error: "Upload failed" }, { status: 500 });
+    }
+
+    const result = (await uploadRes.json()) as { downloadTokens?: string };
+    const token = result.downloadTokens;
     const encodedPath = encodeURIComponent(storagePath);
-    const url = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodedPath}?alt=media&token=${downloadToken}`;
+    const url = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodedPath}?alt=media${token ? `&token=${token}` : ""}`;
+
     return NextResponse.json({ url });
   } catch (err) {
     console.error("[community/upload POST]", err);
