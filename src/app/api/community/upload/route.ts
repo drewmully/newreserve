@@ -42,15 +42,23 @@ export async function POST(req: NextRequest) {
     const buffer = Buffer.from(await file.arrayBuffer());
     const fileRef = bucket.file(storagePath);
 
+    // Generate a Firebase download token so the URL works without ACL changes
+    // (modern Firebase buckets have uniform bucket-level access enabled,
+    //  which prevents per-object makePublic() / ACL calls)
+    const downloadToken =
+      Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+
     await fileRef.save(buffer, {
       contentType: file.type || "image/jpeg",
-      metadata: { cacheControl: "public, max-age=31536000" },
+      metadata: {
+        cacheControl: "public, max-age=31536000",
+        metadata: { firebaseStorageDownloadTokens: downloadToken },
+      },
     });
 
-    // Make the file publicly readable
-    await fileRef.makePublic();
-
-    const url = `https://storage.googleapis.com/${bucketName}/${storagePath}`;
+    // Standard Firebase Storage download URL with token
+    const encodedPath = encodeURIComponent(storagePath);
+    const url = `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodedPath}?alt=media&token=${downloadToken}`;
     return NextResponse.json({ url });
   } catch (err) {
     console.error("[community/upload POST]", err);

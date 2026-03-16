@@ -19,16 +19,20 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const tag = searchParams.get("tag");
 
-    const col = adminDb.collection("communityPosts");
-    let query =
-      tag && tag !== "All"
-        ? col.where("tag", "==", tag).orderBy("createdAt", "desc").limit(50)
-        : col.orderBy("createdAt", "desc").limit(50);
+    // Fetch all posts sorted by createdAt, then filter by tag in-app.
+    // This avoids requiring a Firestore composite index on (tag, createdAt).
+    const snapshot = await adminDb
+      .collection("communityPosts")
+      .orderBy("createdAt", "desc")
+      .limit(100)
+      .get();
 
-    const snapshot = await query.get();
+    const allDocs = tag && tag !== "All"
+      ? snapshot.docs.filter((doc) => doc.data().tag === tag)
+      : snapshot.docs;
 
     const posts = await Promise.all(
-      snapshot.docs.map(async (doc) => {
+      allDocs.map(async (doc) => {
         const d = doc.data();
         const commentsSnap = await doc.ref
           .collection("comments")
