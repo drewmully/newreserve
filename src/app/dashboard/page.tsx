@@ -8,7 +8,8 @@ import { getCollectionProducts, type ShopifyProduct } from "@/lib/shopify";
 import { useMembership } from "../context/MembershipContext";
 import { SlideCart } from "../components/SlideCart";
 import { UpgradeModal } from "../components/UpgradeModal";
-import { posts as SAMPLE_POSTS, FORUM_TAGS, type ForumPost, type ForumComment } from "../community/posts";
+import { FORUM_TAGS, type ForumPost, type ForumComment } from "../community/posts";
+import type { User as FirebaseUser } from "firebase/auth";
 import { submitRegistryApplication } from "@/lib/registry";
 import { trackEvent } from "@/lib/tracking";
 
@@ -1132,13 +1133,38 @@ function ClubTab() {
    (Post data imported from ../community/posts)
    ═══════════════════════════════════════════ */
 
+function getInitials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
+
 function CommunityTab() {
-  const { isSignedIn } = useMembership();
+  const { isSignedIn, user, username } = useMembership();
   const [activeTag, setActiveTag] = useState("All");
   const [showCompose, setShowCompose] = useState(false);
   const [showSignUp, setShowSignUp] = useState(false);
   const [composeImages, setComposeImages] = useState<string[]>([]);
+  const [composeTitle, setComposeTitle] = useState("");
+  const [composeBody, setComposeBody] = useState("");
+  const [composeTag, setComposeTag] = useState("General");
+  const [publishing, setPublishing] = useState(false);
+  const [posts, setPosts] = useState<ForumPost[]>([]);
+  const [loading, setLoading] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    const url =
+      activeTag === "All"
+        ? "/api/community/posts"
+        : `/api/community/posts?tag=${encodeURIComponent(activeTag)}`;
+    fetch(url)
+      .then((r) => r.json())
+      .then((data) => setPosts(data.posts || []))
+      .catch(() => setPosts([]))
+      .finally(() => setLoading(false));
+  }, [activeTag]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -1150,7 +1176,6 @@ function CommunityTab() {
       }
     });
     setComposeImages((prev) => [...prev, ...newImages].slice(0, 4));
-    // Reset input so the same file can be re-selected
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -1162,9 +1187,42 @@ function CommunityTab() {
     });
   };
 
-  const filtered = activeTag === "All"
-    ? SAMPLE_POSTS
-    : SAMPLE_POSTS.filter((p) => p.tag === activeTag);
+  const handlePublish = async () => {
+    if (!user || !composeTitle.trim() || !composeBody.trim()) return;
+    setPublishing(true);
+    try {
+      const token = await user.getIdToken();
+      const avatar = getInitials(username || user.email || "?");
+      const res = await fetch("/api/community/posts", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: composeTitle,
+          body: composeBody,
+          tag: composeTag,
+          author: username || user.email || "Member",
+          avatar,
+          images: [],
+        }),
+      });
+      if (res.ok) {
+        const { post } = await res.json();
+        setPosts((prev) => [post, ...prev]);
+        setComposeTitle("");
+        setComposeBody("");
+        setComposeTag("General");
+        setComposeImages([]);
+        setShowCompose(false);
+      }
+    } catch {
+      // silent
+    } finally {
+      setPublishing(false);
+    }
+  };
 
   return (
     <div className="px-6 md:px-12">
@@ -1190,10 +1248,14 @@ function CommunityTab() {
           <div className="bg-cream rounded-2xl border border-taupe/15 p-6 mb-6">
             <input
               type="text"
+              value={composeTitle}
+              onChange={(e) => setComposeTitle(e.target.value)}
               placeholder="Post title"
               className="w-full h-11 px-4 rounded-xl bg-bone border border-taupe/30 text-obsidian text-sm placeholder:text-charcoal/30 focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300 mb-3"
             />
             <textarea
+              value={composeBody}
+              onChange={(e) => setComposeBody(e.target.value)}
               placeholder="Share something with the community..."
               rows={4}
               className="w-full px-4 py-3 rounded-xl bg-bone border border-taupe/30 text-obsidian text-sm placeholder:text-charcoal/30 focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300 resize-none mb-3"
@@ -1222,7 +1284,11 @@ function CommunityTab() {
 
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <select className="h-9 px-3 rounded-lg bg-bone border border-taupe/30 text-xs text-charcoal/60 focus:border-forest/40 transition-all duration-300">
+                <select
+                  value={composeTag}
+                  onChange={(e) => setComposeTag(e.target.value)}
+                  className="h-9 px-3 rounded-lg bg-bone border border-taupe/30 text-xs text-charcoal/60 focus:border-forest/40 transition-all duration-300"
+                >
                   <option>General</option>
                   <option>Gear Talk</option>
                   <option>Guest Play</option>
@@ -1253,8 +1319,16 @@ function CommunityTab() {
                   <span>Photo{composeImages.length > 0 ? ` (${composeImages.length}/4)` : ""}</span>
                 </button>
               </div>
-              <button className="h-10 px-6 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer btn-press">
-                Publish
+              <button
+                onClick={handlePublish}
+                disabled={publishing || !composeTitle.trim() || !composeBody.trim()}
+                className={`h-10 px-6 rounded-xl text-sm font-medium tracking-wider uppercase transition-colors duration-300 btn-press ${
+                  publishing || !composeTitle.trim() || !composeBody.trim()
+                    ? "bg-taupe/20 text-charcoal/30 cursor-not-allowed"
+                    : "bg-forest text-bone hover:bg-forest-dark cursor-pointer"
+                }`}
+              >
+                {publishing ? "Publishing…" : "Publish"}
               </button>
             </div>
           </div>
@@ -1278,11 +1352,34 @@ function CommunityTab() {
         </div>
 
         {/* Posts */}
-        <div className="space-y-4">
-          {filtered.map((post) => (
-            <PostCard key={post.id} post={post} isSignedIn={isSignedIn} />
-          ))}
-        </div>
+        {loading ? (
+          <div className="space-y-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="bg-cream rounded-xl border border-taupe/15 p-6 animate-pulse">
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-full bg-taupe/20" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3 bg-taupe/20 rounded w-1/3" />
+                    <div className="h-4 bg-taupe/20 rounded w-2/3" />
+                    <div className="h-3 bg-taupe/15 rounded w-full" />
+                    <div className="h-3 bg-taupe/15 rounded w-4/5" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : posts.length === 0 ? (
+          <div className="text-center py-16 bg-cream rounded-2xl border border-taupe/15">
+            <p className="text-sm text-charcoal/40 mb-2">No posts yet.</p>
+            <p className="text-xs text-charcoal/30">Be the first to share something with the community.</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {posts.map((post) => (
+              <PostCard key={post.id} post={post} isSignedIn={isSignedIn} user={user} />
+            ))}
+          </div>
+        )}
 
         {/* Sign-up modal (CommunityTab level — for + Post button) */}
         {showSignUp && <SignUpModal onClose={() => setShowSignUp(false)} />}
@@ -1369,15 +1466,17 @@ function SignUpModal({ onClose }: { onClose: () => void }) {
    POST CARD — Interactive likes & comments
    ═══════════════════════════════════════════ */
 
-function PostCard({ post, isSignedIn }: { post: ForumPost; isSignedIn: boolean }) {
+function PostCard({ post, isSignedIn, user }: { post: ForumPost; isSignedIn: boolean; user: FirebaseUser | null }) {
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(post.likes);
   const [showComments, setShowComments] = useState(false);
+  const [localComments, setLocalComments] = useState<ForumComment[]>(post.comments);
   const [commentLikes, setCommentLikes] = useState<Record<string, boolean>>({});
   const [commentLikeCounts, setCommentLikeCounts] = useState<Record<string, number>>(
     () => Object.fromEntries(post.comments.map((c) => [c.id, c.likes]))
   );
   const [replyText, setReplyText] = useState("");
+  const [submittingReply, setSubmittingReply] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showSignUp, setShowSignUp] = useState(false);
@@ -1441,18 +1540,74 @@ function PostCard({ post, isSignedIn }: { post: ForumPost; isSignedIn: boolean }
     setShowShareMenu(false);
   };
 
-  const toggleLike = () => {
-    setLiked((prev) => !prev);
-    setLikeCount((prev) => (liked ? prev - 1 : prev + 1));
+  const toggleLike = async () => {
+    if (!user) return;
+    const wasLiked = liked;
+    setLiked(!wasLiked);
+    setLikeCount((prev) => (wasLiked ? prev - 1 : prev + 1));
+    try {
+      const token = await user.getIdToken();
+      await fetch(`/api/community/posts/${post.id}/like`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch {
+      setLiked(wasLiked);
+      setLikeCount((prev) => (wasLiked ? prev + 1 : prev - 1));
+    }
   };
 
-  const toggleCommentLike = (commentId: string) => {
-    const wasLiked = commentLikes[commentId];
+  const toggleCommentLike = async (commentId: string) => {
+    if (!user) return;
+    const wasLiked = commentLikes[commentId] || false;
     setCommentLikes((prev) => ({ ...prev, [commentId]: !wasLiked }));
     setCommentLikeCounts((prev) => ({
       ...prev,
-      [commentId]: wasLiked ? prev[commentId] - 1 : prev[commentId] + 1,
+      [commentId]: wasLiked ? (prev[commentId] || 0) - 1 : (prev[commentId] || 0) + 1,
     }));
+    try {
+      const token = await user.getIdToken();
+      await fetch(`/api/community/posts/${post.id}/comments/${commentId}/like`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch {
+      setCommentLikes((prev) => ({ ...prev, [commentId]: wasLiked }));
+      setCommentLikeCounts((prev) => ({
+        ...prev,
+        [commentId]: wasLiked ? (prev[commentId] || 0) + 1 : (prev[commentId] || 0) - 1,
+      }));
+    }
+  };
+
+  const handleReply = async () => {
+    if (!user || !replyText.trim()) return;
+    setSubmittingReply(true);
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch(`/api/community/posts/${post.id}/comments`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          body: replyText.trim(),
+          author: user.displayName || user.email || "Member",
+          avatar: getInitials(user.displayName || user.email || "?"),
+        }),
+      });
+      if (res.ok) {
+        const { comment } = await res.json();
+        setLocalComments((prev) => [...prev, comment]);
+        setCommentLikeCounts((prev) => ({ ...prev, [comment.id]: 0 }));
+        setReplyText("");
+      }
+    } catch {
+      // silent
+    } finally {
+      setSubmittingReply(false);
+    }
   };
 
   return (
@@ -1533,7 +1688,7 @@ function PostCard({ post, isSignedIn }: { post: ForumPost; isSignedIn: boolean }
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 01-.923 1.785A5.969 5.969 0 006 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337z" />
                 </svg>
-                <span>{post.comments.length}</span>
+                <span>{localComments.length}</span>
               </button>
 
               {/* Share button */}
@@ -1641,7 +1796,7 @@ function PostCard({ post, isSignedIn }: { post: ForumPost; isSignedIn: boolean }
       {showComments && (
         <div className="border-t border-taupe/15 bg-bone/50 animate-comment-reveal">
           <div className="px-6 py-4 space-y-4">
-            {post.comments.map((comment) => (
+            {localComments.map((comment) => (
               <div key={comment.id} className="flex items-start gap-3">
                 <div className="w-7 h-7 rounded-full bg-forest/8 flex items-center justify-center shrink-0 mt-0.5">
                   <span className="text-[10px] font-medium text-forest">{comment.avatar}</span>
@@ -1691,14 +1846,15 @@ function PostCard({ post, isSignedIn }: { post: ForumPost; isSignedIn: boolean }
                     className="flex-1 h-9 px-3.5 rounded-lg bg-bone border border-taupe/25 text-sm text-obsidian placeholder:text-charcoal/30 focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300"
                   />
                   <button
-                    className={`h-9 px-4 rounded-lg text-xs font-medium tracking-wider uppercase transition-all duration-300 cursor-pointer ${
-                      replyText.trim()
-                        ? "bg-forest text-bone hover:bg-forest-dark"
+                    onClick={handleReply}
+                    className={`h-9 px-4 rounded-lg text-xs font-medium tracking-wider uppercase transition-all duration-300 ${
+                      replyText.trim() && !submittingReply
+                        ? "bg-forest text-bone hover:bg-forest-dark cursor-pointer"
                         : "bg-taupe/20 text-charcoal/30 cursor-not-allowed"
                     }`}
-                    disabled={!replyText.trim()}
+                    disabled={!replyText.trim() || submittingReply}
                   >
-                    Reply
+                    {submittingReply ? "…" : "Reply"}
                   </button>
                 </div>
               </div>

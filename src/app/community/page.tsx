@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { posts, FORUM_TAGS } from "./posts";
+import { adminDb } from "@/lib/firebase-admin";
+import { FORUM_TAGS, formatRelativeTime, type ForumPost } from "./posts";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Community | Mully Reserve",
@@ -14,7 +17,58 @@ export const metadata: Metadata = {
   },
 };
 
-export default function CommunityPage() {
+async function getPosts(): Promise<ForumPost[]> {
+  try {
+    const snapshot = await adminDb
+      .collection("communityPosts")
+      .orderBy("createdAt", "desc")
+      .limit(50)
+      .get();
+
+    return await Promise.all(
+      snapshot.docs.map(async (doc) => {
+        const d = doc.data();
+        const commentsSnap = await doc.ref
+          .collection("comments")
+          .orderBy("createdAt", "asc")
+          .get();
+        const comments = commentsSnap.docs.map((c) => {
+          const cd = c.data();
+          return {
+            id: c.id,
+            author: cd.author as string,
+            avatar: cd.avatar as string,
+            timestamp: cd.createdAt
+              ? formatRelativeTime((cd.createdAt as { toDate(): Date }).toDate())
+              : "just now",
+            body: cd.body as string,
+            likes: (cd.likes as number) || 0,
+          };
+        });
+        return {
+          id: doc.id,
+          author: d.author as string,
+          avatar: d.avatar as string,
+          timestamp: d.createdAt
+            ? formatRelativeTime((d.createdAt as { toDate(): Date }).toDate())
+            : "just now",
+          title: d.title as string,
+          body: d.body as string,
+          likes: (d.likes as number) || 0,
+          comments,
+          tag: d.tag as string,
+          images: (d.images as string[]) || [],
+        };
+      })
+    );
+  } catch {
+    return [];
+  }
+}
+
+export default async function CommunityPage() {
+  const posts = await getPosts();
+
   return (
     <div className="min-h-screen bg-bone">
       {/* Header */}
@@ -59,71 +113,78 @@ export default function CommunityPage() {
           </nav>
 
           {/* Post list — server-rendered for SEO */}
-          <div className="space-y-6">
-            {posts.map((post) => (
-              <article
-                key={post.id}
-                className="bg-cream rounded-xl border border-taupe/15 hover:border-taupe/30 overflow-hidden tile-hover"
-              >
-                <Link href={`/community/post/${post.id}`} className="block p-6">
-                  <div className="flex items-start gap-4">
-                    {/* Avatar */}
-                    <div className="w-10 h-10 rounded-full bg-forest/10 flex items-center justify-center shrink-0">
-                      <span className="text-xs font-medium text-forest">{post.avatar}</span>
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      {/* Meta */}
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <span className="text-sm font-medium text-obsidian">{post.author}</span>
-                        <span className="text-xs text-charcoal/30">&middot;</span>
-                        <span className="text-xs text-charcoal/35">{post.timestamp}</span>
-                        <span className="text-xs text-sage bg-sage/10 px-2 py-0.5 rounded ml-auto">{post.tag}</span>
+          {posts.length === 0 ? (
+            <div className="text-center py-16 bg-cream rounded-2xl border border-taupe/15">
+              <p className="text-sm text-charcoal/40 mb-2">No posts yet.</p>
+              <p className="text-xs text-charcoal/30">Be the first to join and share something.</p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {posts.map((post) => (
+                <article
+                  key={post.id}
+                  className="bg-cream rounded-xl border border-taupe/15 hover:border-taupe/30 overflow-hidden tile-hover"
+                >
+                  <Link href={`/community/post/${post.id}`} className="block p-6">
+                    <div className="flex items-start gap-4">
+                      {/* Avatar */}
+                      <div className="w-10 h-10 rounded-full bg-forest/10 flex items-center justify-center shrink-0">
+                        <span className="text-xs font-medium text-forest">{post.avatar}</span>
                       </div>
 
-                      {/* Title */}
-                      <h2 className="text-base font-medium text-obsidian mb-2 leading-snug">
-                        {post.title}
-                      </h2>
-
-                      {/* Body preview */}
-                      <p className="text-sm text-charcoal/55 leading-relaxed line-clamp-2">
-                        {post.body}
-                      </p>
-
-                      {/* Images */}
-                      {post.images && post.images.length > 0 && (
-                        <div className={`mt-3 grid gap-2 ${post.images.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
-                          {post.images.map((src, i) => (
-                            <div key={i} className="relative aspect-[3/2] rounded-lg overflow-hidden bg-bone border border-taupe/15">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={src} alt={`${post.title} photo ${i + 1}`} className="w-full h-full object-cover" />
-                            </div>
-                          ))}
+                      <div className="flex-1 min-w-0">
+                        {/* Meta */}
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className="text-sm font-medium text-obsidian">{post.author}</span>
+                          <span className="text-xs text-charcoal/30">&middot;</span>
+                          <span className="text-xs text-charcoal/35">{post.timestamp}</span>
+                          <span className="text-xs text-sage bg-sage/10 px-2 py-0.5 rounded ml-auto">{post.tag}</span>
                         </div>
-                      )}
 
-                      {/* Stats */}
-                      <div className="flex items-center gap-5 mt-4 text-xs text-charcoal/40">
-                        <span className="flex items-center gap-1.5">
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M6.633 10.5c.806 0 1.533-.446 2.031-1.08a9.041 9.041 0 012.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 00.322-1.672V3.18a2.055 2.055 0 01.357-1.093A2.78 2.78 0 0115.455 1c1.725 0 2.295 1.467 2.295 2.913v2.437c0 .532-.065 1.06-.218 1.551l-1.474 4.74a3.375 3.375 0 00.851 3.421l.426.388M6.633 10.5H4.869a2.376 2.376 0 00-2.344 2.752l.88 5.749A2.376 2.376 0 005.749 21h1.102M6.633 10.5v10.5" />
-                          </svg>
-                          {post.likes}
-                        </span>
-                        <span className="flex items-center gap-1.5">
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 01-.923 1.785A5.969 5.969 0 006 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337z" />
-                          </svg>
-                          {post.comments.length} {post.comments.length === 1 ? "comment" : "comments"}
-                        </span>
+                        {/* Title */}
+                        <h2 className="text-base font-medium text-obsidian mb-2 leading-snug">
+                          {post.title}
+                        </h2>
+
+                        {/* Body preview */}
+                        <p className="text-sm text-charcoal/55 leading-relaxed line-clamp-2">
+                          {post.body}
+                        </p>
+
+                        {/* Images */}
+                        {post.images && post.images.length > 0 && (
+                          <div className={`mt-3 grid gap-2 ${post.images.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
+                            {post.images.map((src, i) => (
+                              <div key={i} className="relative aspect-[3/2] rounded-lg overflow-hidden bg-bone border border-taupe/15">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={src} alt={`${post.title} photo ${i + 1}`} className="w-full h-full object-cover" />
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Stats */}
+                        <div className="flex items-center gap-5 mt-4 text-xs text-charcoal/40">
+                          <span className="flex items-center gap-1.5">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M6.633 10.5c.806 0 1.533-.446 2.031-1.08a9.041 9.041 0 012.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 00.322-1.672V3.18a2.055 2.055 0 01.357-1.093A2.78 2.78 0 0115.455 1c1.725 0 2.295 1.467 2.295 2.913v2.437c0 .532-.065 1.06-.218 1.551l-1.474 4.74a3.375 3.375 0 00.851 3.421l.426.388M6.633 10.5H4.869a2.376 2.376 0 00-2.344 2.752l.88 5.749A2.376 2.376 0 005.749 21h1.102M6.633 10.5v10.5" />
+                            </svg>
+                            {post.likes}
+                          </span>
+                          <span className="flex items-center gap-1.5">
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 01-.923 1.785A5.969 5.969 0 006 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337z" />
+                            </svg>
+                            {post.comments.length} {post.comments.length === 1 ? "comment" : "comments"}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </Link>
-              </article>
-            ))}
-          </div>
+                  </Link>
+                </article>
+              ))}
+            </div>
+          )}
 
           {/* CTA */}
           <div className="mt-12 text-center bg-forest rounded-2xl p-8 md:p-10 relative overflow-hidden">
