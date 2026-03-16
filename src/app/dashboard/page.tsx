@@ -9,6 +9,7 @@ import { useMembership } from "../context/MembershipContext";
 import { SlideCart } from "../components/SlideCart";
 import { UpgradeModal } from "../components/UpgradeModal";
 import { FORUM_TAGS, type ForumPost, type ForumComment } from "../community/posts";
+import { uploadCommunityImage } from "@/lib/firebase";
 import type { User as FirebaseUser } from "firebase/auth";
 import { submitRegistryApplication } from "@/lib/registry";
 import { trackEvent } from "@/lib/tracking";
@@ -1144,7 +1145,7 @@ function CommunityTab() {
   const [activeTag, setActiveTag] = useState("All");
   const [showCompose, setShowCompose] = useState(false);
   const [showSignUp, setShowSignUp] = useState(false);
-  const [composeImages, setComposeImages] = useState<string[]>([]);
+  const [composeImages, setComposeImages] = useState<{ url: string; file: File }[]>([]);
   const [composeTitle, setComposeTitle] = useState("");
   const [composeBody, setComposeBody] = useState("");
   const [composeTag, setComposeTag] = useState("General");
@@ -1169,10 +1170,10 @@ function CommunityTab() {
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
-    const newImages: string[] = [];
+    const newImages: { url: string; file: File }[] = [];
     Array.from(files).forEach((file) => {
       if (file.type.startsWith("image/")) {
-        newImages.push(URL.createObjectURL(file));
+        newImages.push({ url: URL.createObjectURL(file), file });
       }
     });
     setComposeImages((prev) => [...prev, ...newImages].slice(0, 4));
@@ -1181,8 +1182,7 @@ function CommunityTab() {
 
   const removeComposeImage = (index: number) => {
     setComposeImages((prev) => {
-      const removed = prev[index];
-      URL.revokeObjectURL(removed);
+      URL.revokeObjectURL(prev[index].url);
       return prev.filter((_, i) => i !== index);
     });
   };
@@ -1191,6 +1191,11 @@ function CommunityTab() {
     if (!user || !composeTitle.trim() || !composeBody.trim()) return;
     setPublishing(true);
     try {
+      // Upload images to Firebase Storage first
+      const imageUrls = await Promise.all(
+        composeImages.map(({ file }) => uploadCommunityImage(file))
+      );
+
       const token = await user.getIdToken();
       const avatar = getInitials(username || user.email || "?");
       const res = await fetch("/api/community/posts", {
@@ -1205,11 +1210,13 @@ function CommunityTab() {
           tag: composeTag,
           author: username || user.email || "Member",
           avatar,
-          images: [],
+          images: imageUrls,
         }),
       });
       if (res.ok) {
         const { post } = await res.json();
+        // Revoke blob URLs
+        composeImages.forEach(({ url }) => URL.revokeObjectURL(url));
         setPosts((prev) => [post, ...prev]);
         setComposeTitle("");
         setComposeBody("");
@@ -1264,10 +1271,10 @@ function CommunityTab() {
             {/* Image previews */}
             {composeImages.length > 0 && (
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
-                {composeImages.map((src, i) => (
+                {composeImages.map(({ url }, i) => (
                   <div key={i} className="relative aspect-[3/2] rounded-lg overflow-hidden bg-bone border border-taupe/20 group">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={src} alt={`Upload ${i + 1}`} className="w-full h-full object-cover" />
+                    <img src={url} alt={`Upload ${i + 1}`} className="w-full h-full object-cover" />
                     <button
                       onClick={() => removeComposeImage(i)}
                       className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-obsidian/70 text-bone flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-pointer"
@@ -1376,7 +1383,14 @@ function CommunityTab() {
         ) : (
           <div className="space-y-4">
             {posts.map((post) => (
-              <PostCard key={post.id} post={post} isSignedIn={isSignedIn} user={user} />
+              <PostCard
+                key={post.id}
+                post={post}
+                isSignedIn={isSignedIn}
+                user={user}
+                onDelete={(id) => setPosts((prev) => prev.filter((p) => p.id !== id))}
+                onUpdate={(updated) => setPosts((prev) => prev.map((p) => p.id === updated.id ? updated : p))}
+              />
             ))}
           </div>
         )}
@@ -1466,7 +1480,21 @@ function SignUpModal({ onClose }: { onClose: () => void }) {
    POST CARD — Interactive likes & comments
    ═══════════════════════════════════════════ */
 
-function PostCard({ post, isSignedIn, user }: { post: ForumPost; isSignedIn: boolean; user: FirebaseUser | null }) {
+function PostCard({
+  post,
+  isSignedIn,
+  user,
+  onDelete,
+  onUpdate,
+}: {
+  post: ForumPost;
+  isSignedIn: boolean;
+  user: FirebaseUser | null;
+  onDelete: (id: string) => void;
+  onUpdate: (updated: ForumPost) => void;
+}) {
+  const isAuthor = !!user && user.uid === post.authorId;
+
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(post.likes);
   const [showComments, setShowComments] = useState(false);
@@ -1480,6 +1508,13 @@ function PostCard({ post, isSignedIn, user }: { post: ForumPost; isSignedIn: boo
   const [showShareMenu, setShowShareMenu] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showSignUp, setShowSignUp] = useState(false);
+  const [showPostMenu, setShowPostMenu] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState(post.title);
+  const [editBody, setEditBody] = useState(post.body);
+  const [editTag, setEditTag] = useState(post.tag);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [deletingPost, setDeletingPost] = useState(false);
 
   const requireAuth = (action: () => void) => {
     if (!isSignedIn) {
@@ -1580,6 +1615,49 @@ function PostCard({ post, isSignedIn, user }: { post: ForumPost; isSignedIn: boo
     }
   };
 
+  const handleSaveEdit = async () => {
+    if (!user || !editTitle.trim() || !editBody.trim()) return;
+    setSavingEdit(true);
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch(`/api/community/posts/${post.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ title: editTitle, body: editBody, tag: editTag }),
+      });
+      if (res.ok) {
+        const { post: updated } = await res.json();
+        onUpdate({ ...updated, comments: localComments });
+        setIsEditing(false);
+      }
+    } catch {
+      // silent
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!user) return;
+    setDeletingPost(true);
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch(`/api/community/posts/${post.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) onDelete(post.id);
+    } catch {
+      // silent
+    } finally {
+      setDeletingPost(false);
+      setShowPostMenu(false);
+    }
+  };
+
   const handleReply = async () => {
     if (!user || !replyText.trim()) return;
     setSubmittingReply(true);
@@ -1628,32 +1706,123 @@ function PostCard({ post, isSignedIn, user }: { post: ForumPost; isSignedIn: boo
               <span className="text-xs text-sage bg-sage/10 px-2 py-0.5 rounded ml-auto">
                 {post.tag}
               </span>
+              {/* Author kebab menu */}
+              {isAuthor && (
+                <div className="relative shrink-0">
+                  <button
+                    onClick={() => setShowPostMenu(!showPostMenu)}
+                    className="w-6 h-6 flex items-center justify-center rounded text-charcoal/30 hover:text-charcoal/60 hover:bg-taupe/10 transition-colors duration-200 cursor-pointer"
+                    aria-label="Post options"
+                  >
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 6a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm0 7.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3zm0 7.5a1.5 1.5 0 110-3 1.5 1.5 0 010 3z" />
+                    </svg>
+                  </button>
+                  {showPostMenu && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setShowPostMenu(false)} />
+                      <div className="absolute right-0 top-full mt-1 z-50 w-36 bg-bone rounded-xl border border-taupe/20 shadow-lg overflow-hidden">
+                        <button
+                          onClick={() => { setIsEditing(true); setShowPostMenu(false); }}
+                          className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-charcoal/70 hover:bg-cream transition-colors duration-200 cursor-pointer"
+                        >
+                          <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125" />
+                          </svg>
+                          Edit post
+                        </button>
+                        <button
+                          onClick={handleDelete}
+                          disabled={deletingPost}
+                          className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-red-500/80 hover:bg-red-50 transition-colors duration-200 cursor-pointer disabled:opacity-50"
+                        >
+                          <svg className="w-3.5 h-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                          </svg>
+                          {deletingPost ? "Deleting…" : "Delete post"}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
 
-            {/* Title */}
-            <h3 className="text-base font-medium text-obsidian mb-2 leading-snug">
-              {post.title}
-            </h3>
-
-            {/* Body */}
-            <p className="text-sm text-charcoal/55 leading-relaxed mb-4">
-              {post.body}
-            </p>
-
-            {/* Images */}
-            {post.images && post.images.length > 0 && (
-              <div className={`mb-4 grid gap-2 ${post.images.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
-                {post.images.map((src, i) => (
-                  <div key={i} className="relative aspect-[3/2] rounded-lg overflow-hidden bg-cream border border-taupe/15">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={src}
-                      alt={`${post.title} photo ${i + 1}`}
-                      className="w-full h-full object-cover"
-                    />
+            {isEditing ? (
+              /* ── Inline edit form ── */
+              <div className="mb-3">
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  className="w-full h-10 px-3 rounded-lg bg-bone border border-taupe/30 text-obsidian text-sm placeholder:text-charcoal/30 focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300 mb-2"
+                />
+                <textarea
+                  value={editBody}
+                  onChange={(e) => setEditBody(e.target.value)}
+                  rows={3}
+                  className="w-full px-3 py-2 rounded-lg bg-bone border border-taupe/30 text-obsidian text-sm placeholder:text-charcoal/30 focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300 resize-none mb-2"
+                />
+                <div className="flex items-center justify-between">
+                  <select
+                    value={editTag}
+                    onChange={(e) => setEditTag(e.target.value)}
+                    className="h-8 px-2 rounded-lg bg-bone border border-taupe/30 text-xs text-charcoal/60 focus:border-forest/40 transition-all duration-300"
+                  >
+                    <option>General</option>
+                    <option>Gear Talk</option>
+                    <option>Guest Play</option>
+                    <option>Events</option>
+                  </select>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setIsEditing(false)}
+                      className="h-8 px-3 rounded-lg text-xs text-charcoal/50 hover:text-charcoal/70 border border-taupe/20 hover:border-taupe/40 transition-all duration-200 cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleSaveEdit}
+                      disabled={savingEdit || !editTitle.trim() || !editBody.trim()}
+                      className={`h-8 px-4 rounded-lg text-xs font-medium tracking-wider uppercase transition-all duration-200 ${
+                        savingEdit || !editTitle.trim() || !editBody.trim()
+                          ? "bg-taupe/20 text-charcoal/30 cursor-not-allowed"
+                          : "bg-forest text-bone hover:bg-forest-dark cursor-pointer"
+                      }`}
+                    >
+                      {savingEdit ? "Saving…" : "Save"}
+                    </button>
                   </div>
-                ))}
+                </div>
               </div>
+            ) : (
+              <>
+                {/* Title */}
+                <h3 className="text-base font-medium text-obsidian mb-2 leading-snug">
+                  {post.title}
+                </h3>
+
+                {/* Body */}
+                <p className="text-sm text-charcoal/55 leading-relaxed mb-4">
+                  {post.body}
+                </p>
+
+                {/* Images */}
+                {post.images && post.images.length > 0 && (
+                  <div className={`mb-4 grid gap-2 ${post.images.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
+                    {post.images.map((src, i) => (
+                      <div key={i} className="relative aspect-[3/2] rounded-lg overflow-hidden bg-cream border border-taupe/15">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={src}
+                          alt={`${post.title} photo ${i + 1}`}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
 
             {/* Actions */}

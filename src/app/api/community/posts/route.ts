@@ -49,6 +49,7 @@ export async function GET(req: NextRequest) {
         });
         return {
           id: doc.id,
+          authorId: d.authorId as string,
           author: d.author as string,
           avatar: d.avatar as string,
           timestamp: d.createdAt
@@ -104,6 +105,7 @@ export async function POST(req: NextRequest) {
       {
         post: {
           id: ref.id,
+          authorId: uid,
           author: (author as string) || "Anonymous",
           avatar: (avatar as string) || "?",
           timestamp: "just now",

@@ -17,6 +17,12 @@ import {
   updateDoc,
   serverTimestamp,
 } from "firebase/firestore";
+import {
+  getStorage,
+  ref as storageRef,
+  uploadBytes,
+  getDownloadURL,
+} from "firebase/storage";
 import type { User } from "firebase/auth";
 
 /* ═══════════════════════════════════════════
@@ -44,6 +50,21 @@ export const auth = isBrowser
 export const db = isBrowser
   ? getFirestore(app)
   : (null as unknown as ReturnType<typeof getFirestore>);
+export const storage = isBrowser
+  ? getStorage(app)
+  : (null as unknown as ReturnType<typeof getStorage>);
+
+/**
+ * Uploads an image File to Firebase Storage under community/posts/
+ * and returns the public download URL.
+ */
+export async function uploadCommunityImage(file: File): Promise<string> {
+  const ext = file.name.split(".").pop() ?? "jpg";
+  const path = `community/posts/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+  const ref = storageRef(storage, path);
+  await uploadBytes(ref, file);
+  return getDownloadURL(ref);
+}
 
 /* ═══════════════════════════════════════════
    USER DOCUMENT SCHEMA

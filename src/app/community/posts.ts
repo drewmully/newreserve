@@ -15,6 +15,7 @@ export interface ForumComment {
 
 export interface ForumPost {
   id: string;
+  authorId?: string;
   author: string;
   avatar: string;
   timestamp: string;
