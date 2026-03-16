@@ -22,6 +22,7 @@
 import { initializeApp, getApps, cert, type ServiceAccount } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
+import { getStorage } from "firebase-admin/storage";
 
 function resolveCredential() {
   // ── Strategy 1: base64-encoded service account JSON ──────────────────────
@@ -79,3 +80,4 @@ const adminApp = getAdminApp();
 
 export const adminDb = getFirestore(adminApp);
 export const adminAuth = getAuth(adminApp);
+export const adminStorage = getStorage(adminApp);

@@ -9,7 +9,6 @@ import { useMembership } from "../context/MembershipContext";
 import { SlideCart } from "../components/SlideCart";
 import { UpgradeModal } from "../components/UpgradeModal";
 import { FORUM_TAGS, type ForumPost, type ForumComment } from "../community/posts";
-import { uploadCommunityImage } from "@/lib/firebase";
 import type { User as FirebaseUser } from "firebase/auth";
 import { submitRegistryApplication } from "@/lib/registry";
 import { trackEvent } from "@/lib/tracking";
@@ -1191,12 +1190,22 @@ function CommunityTab() {
     if (!user || !composeTitle.trim() || !composeBody.trim()) return;
     setPublishing(true);
     try {
-      // Upload images to Firebase Storage first
-      const imageUrls = await Promise.all(
-        composeImages.map(({ file }) => uploadCommunityImage(file))
-      );
-
       const token = await user.getIdToken();
+
+      // Upload images server-side (avoids CORS issues with Firebase Storage)
+      const imageUrls = await Promise.all(
+        composeImages.map(async ({ file }) => {
+          const fd = new FormData();
+          fd.append("file", file);
+          const r = await fetch("/api/community/upload", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${token}` },
+            body: fd,
+          });
+          const { url } = await r.json();
+          return url as string;
+        })
+      );
       const avatar = getInitials(username || user.email || "?");
       const res = await fetch("/api/community/posts", {
         method: "POST",
