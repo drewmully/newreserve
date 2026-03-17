@@ -16,7 +16,10 @@
       "Bash(node:*)",
       "Bash(rm:*)",
       "Bash(npm install:*)",
-      "WebFetch(domain:mullybox-store.myshopify.com)"
+      "WebFetch(domain:mullybox-store.myshopify.com)",
+      "Bash(claude config:*)",
+      "Bash(cmd.exe /c \"echo %ANTHROPIC_API_KEY%\" 2>/dev/null)",
+      "Bash(powershell.exe -Command \"[System.Environment]::GetEnvironmentVariable\\('ANTHROPIC_API_KEY', 'User'\\); [System.Environment]::GetEnvironmentVariable\\('ANTHROPIC_API_KEY', 'Machine'\\)\" 2>/dev/null)"
     ]
   }
 }
