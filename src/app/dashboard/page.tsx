@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useRef, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ShopGrid } from "../shop/components/ShopClient";
 import { getCollectionProducts, type ShopifyProduct } from "@/lib/shopify";
@@ -19,9 +19,15 @@ import { trackEvent } from "@/lib/tracking";
 
 type Tab = "shop" | "drops" | "community" | "club" | "benefits";
 
-export default function DashboardPage() {
+const VALID_TABS: Tab[] = ["shop", "drops", "community", "club", "benefits"];
+
+function DashboardContent() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<Tab>("shop");
+  const searchParams = useSearchParams();
+  const initialTab = VALID_TABS.includes(searchParams.get("tab") as Tab)
+    ? (searchParams.get("tab") as Tab)
+    : "shop";
+  const [activeTab, setActiveTab] = useState<Tab>(initialTab);
   const {
     isSignedIn,
     authLoading,
@@ -1128,6 +1134,14 @@ function ClubTab() {
   );
 }
 
+export default function DashboardPage() {
+  return (
+    <Suspense>
+      <DashboardContent />
+    </Suspense>
+  );
+}
+
 /* ═══════════════════════════════════════════
    COMMUNITY TAB — Forum
    (Post data imported from ../community/posts)
@@ -1830,14 +1844,20 @@ function PostCard({
             ) : (
               <>
                 {/* Title */}
-                <h3 className="text-base font-medium text-obsidian mb-2 leading-snug">
+                <Link
+                  href={`/community/post/${post.id}`}
+                  className="block text-base font-medium text-obsidian mb-2 leading-snug hover:text-forest transition-colors duration-200"
+                >
                   {post.title}
-                </h3>
+                </Link>
 
                 {/* Body */}
-                <p className="text-sm text-charcoal/55 leading-relaxed mb-4">
+                <Link
+                  href={`/community/post/${post.id}`}
+                  className="block text-sm text-charcoal/55 leading-relaxed mb-4 hover:text-charcoal/70 transition-colors duration-200"
+                >
                   {post.body}
-                </p>
+                </Link>
 
                 {/* Images */}
                 {post.images && post.images.length > 0 && (
