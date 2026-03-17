@@ -1519,6 +1519,7 @@ function PostCard({
   onDelete: (id: string) => void;
   onUpdate: (updated: ForumPost) => void;
 }) {
+  const router = useRouter();
   const isAuthor = !!user && user.uid === post.authorId;
 
   const [liked, setLiked] = useState(false);
@@ -1735,7 +1736,10 @@ function PostCard({
   };
 
   return (
-    <article className="bg-cream rounded-xl border border-taupe/15 hover:border-taupe/30 transition-colors duration-300 overflow-hidden">
+    <article
+      onClick={() => router.push(`/community/post/${post.id}`)}
+      className="bg-cream rounded-xl border border-taupe/15 hover:border-forest/25 hover:shadow-md hover:-translate-y-0.5 transition-all duration-300 overflow-hidden cursor-pointer"
+    >
       <div className="p-6">
         <div className="flex items-start gap-4">
           {/* Avatar */}
@@ -1756,7 +1760,7 @@ function PostCard({
               {isAuthor && (
                 <div className="relative shrink-0">
                   <button
-                    onClick={() => setShowPostMenu(!showPostMenu)}
+                    onClick={(e) => { e.stopPropagation(); setShowPostMenu(!showPostMenu); }}
                     className="w-6 h-6 flex items-center justify-center rounded text-charcoal/30 hover:text-charcoal/60 hover:bg-taupe/10 transition-colors duration-200 cursor-pointer"
                     aria-label="Post options"
                   >
@@ -1767,7 +1771,7 @@ function PostCard({
                   {showPostMenu && (
                     <>
                       <div className="fixed inset-0 z-40" onClick={() => setShowPostMenu(false)} />
-                      <div className="absolute right-0 top-full mt-1 z-50 w-36 bg-bone rounded-xl border border-taupe/20 shadow-lg overflow-hidden">
+                      <div className="absolute right-0 top-full mt-1 z-50 w-36 bg-bone rounded-xl border border-taupe/20 shadow-lg overflow-hidden" onClick={(e) => e.stopPropagation()}>
                         <button
                           onClick={() => { setIsEditing(true); setShowPostMenu(false); }}
                           className="w-full flex items-center gap-2.5 px-3 py-2.5 text-sm text-charcoal/70 hover:bg-cream transition-colors duration-200 cursor-pointer"
@@ -1796,7 +1800,7 @@ function PostCard({
 
             {isEditing ? (
               /* ── Inline edit form ── */
-              <div className="mb-3">
+              <div className="mb-3" onClick={(e) => e.stopPropagation()}>
                 <input
                   type="text"
                   value={editTitle}
@@ -1844,20 +1848,14 @@ function PostCard({
             ) : (
               <>
                 {/* Title */}
-                <Link
-                  href={`/community/post/${post.id}`}
-                  className="block text-base font-medium text-obsidian mb-2 leading-snug hover:text-forest transition-colors duration-200"
-                >
+                <h3 className="text-base font-medium text-obsidian mb-2 leading-snug">
                   {post.title}
-                </Link>
+                </h3>
 
                 {/* Body */}
-                <Link
-                  href={`/community/post/${post.id}`}
-                  className="block text-sm text-charcoal/55 leading-relaxed mb-4 hover:text-charcoal/70 transition-colors duration-200"
-                >
+                <p className="text-sm text-charcoal/55 leading-relaxed mb-4">
                   {post.body}
-                </Link>
+                </p>
 
                 {/* Images */}
                 {post.images && post.images.length > 0 && (
@@ -1878,7 +1876,7 @@ function PostCard({
             )}
 
             {/* Actions */}
-            <div className="flex items-center gap-5">
+            <div className="flex items-center gap-5" onClick={(e) => e.stopPropagation()}>
               {/* Like button */}
               <button
                 onClick={() => requireAuth(toggleLike)}
@@ -2015,7 +2013,7 @@ function PostCard({
 
       {/* Comment thread */}
       {showComments && (
-        <div className="border-t border-taupe/15 bg-bone/50 animate-comment-reveal">
+        <div className="border-t border-taupe/15 bg-bone/50 animate-comment-reveal" onClick={(e) => e.stopPropagation()}>
           <div className="px-6 py-4 space-y-4">
             {localComments.map((comment) => (
               <div key={comment.id} className="flex items-start gap-3">
