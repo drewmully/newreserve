@@ -6,7 +6,7 @@ import {
   LogoLink,
 } from "./components/ClientComponents";
 import { EmailCTA } from "./components/EmailCTA";
-
+ 
 export default function Home() {
   return (
     <div className="min-h-screen bg-bone">
