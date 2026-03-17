@@ -42,6 +42,7 @@ export async function GET(req: NextRequest) {
           const cd = c.data();
           return {
             id: c.id,
+            authorId: cd.authorId as string,
             author: cd.author as string,
             avatar: cd.avatar as string,
             timestamp: cd.createdAt

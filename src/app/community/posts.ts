@@ -6,6 +6,7 @@
 
 export interface ForumComment {
   id: string;
+  authorId?: string;
   author: string;
   avatar: string;
   timestamp: string;

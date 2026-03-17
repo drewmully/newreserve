@@ -1527,6 +1527,7 @@ function PostCard({
   const [editTag, setEditTag] = useState(post.tag);
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingPost, setDeletingPost] = useState(false);
+  const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
 
   const requireAuth = (action: () => void) => {
     if (!isSignedIn) {
@@ -1697,6 +1698,25 @@ function PostCard({
       // silent
     } finally {
       setSubmittingReply(false);
+    }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    if (!user) return;
+    setDeletingCommentId(commentId);
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch(`/api/community/posts/${post.id}/comments/${commentId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        setLocalComments((prev) => prev.filter((c) => c.id !== commentId));
+      }
+    } catch {
+      // silent
+    } finally {
+      setDeletingCommentId(null);
     }
   };
 
@@ -1988,24 +2008,38 @@ function PostCard({
                     <span className="text-[10px] text-charcoal/30">{comment.timestamp}</span>
                   </div>
                   <p className="text-sm text-charcoal/60 leading-relaxed">{comment.body}</p>
-                  <button
-                    onClick={() => requireAuth(() => toggleCommentLike(comment.id))}
-                    className={`flex items-center gap-1 mt-1.5 text-[11px] transition-colors duration-300 cursor-pointer ${
-                      commentLikes[comment.id] ? "text-forest" : "text-charcoal/30 hover:text-forest"
-                    }`}
-                  >
-                    {commentLikes[comment.id] ? (
-                      <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M7.493 18.75c-.425 0-.82-.236-.975-.632A7.48 7.48 0 016 15.375c0-1.75.599-3.358 1.602-4.634.151-.192.373-.309.6-.397.473-.183.89-.514 1.212-.924a9.042 9.042 0 012.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 00.322-1.672V3.18a2.055 2.055 0 01.357-1.093A2.78 2.78 0 0115.455 1c1.725 0 2.295 1.467 2.295 2.913V6.35c0 .532-.065 1.06-.218 1.551l-1.474 4.74a.75.75 0 00.213.855l.426.388a.75.75 0 01-.212 1.257l-.89.388a3.75 3.75 0 00-2.093 2.833l-.2 1.14a.75.75 0 01-.738.627H7.493z" />
-                        <path d="M3.61 14.096c-.106 0-.21.016-.311.048a.75.75 0 00-.524.721v5.385a.75.75 0 00.75.75h1.225a.75.75 0 00.75-.75V14.846a.75.75 0 00-.75-.75H3.61z" />
-                      </svg>
-                    ) : (
-                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6.633 10.5c.806 0 1.533-.446 2.031-1.08a9.041 9.041 0 012.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 00.322-1.672V3.18a2.055 2.055 0 01.357-1.093A2.78 2.78 0 0115.455 1c1.725 0 2.295 1.467 2.295 2.913v2.437c0 .532-.065 1.06-.218 1.551l-1.474 4.74a3.375 3.375 0 00.851 3.421l.426.388M6.633 10.5H4.869a2.376 2.376 0 00-2.344 2.752l.88 5.749A2.376 2.376 0 005.749 21h1.102M6.633 10.5v10.5" />
-                      </svg>
+                  <div className="flex items-center gap-3 mt-1.5">
+                    <button
+                      onClick={() => requireAuth(() => toggleCommentLike(comment.id))}
+                      className={`flex items-center gap-1 text-[11px] transition-colors duration-300 cursor-pointer ${
+                        commentLikes[comment.id] ? "text-forest" : "text-charcoal/30 hover:text-forest"
+                      }`}
+                    >
+                      {commentLikes[comment.id] ? (
+                        <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M7.493 18.75c-.425 0-.82-.236-.975-.632A7.48 7.48 0 016 15.375c0-1.75.599-3.358 1.602-4.634.151-.192.373-.309.6-.397.473-.183.89-.514 1.212-.924a9.042 9.042 0 012.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 00.322-1.672V3.18a2.055 2.055 0 01.357-1.093A2.78 2.78 0 0115.455 1c1.725 0 2.295 1.467 2.295 2.913V6.35c0 .532-.065 1.06-.218 1.551l-1.474 4.74a.75.75 0 00.213.855l.426.388a.75.75 0 01-.212 1.257l-.89.388a3.75 3.75 0 00-2.093 2.833l-.2 1.14a.75.75 0 01-.738.627H7.493z" />
+                          <path d="M3.61 14.096c-.106 0-.21.016-.311.048a.75.75 0 00-.524.721v5.385a.75.75 0 00.75.75h1.225a.75.75 0 00.75-.75V14.846a.75.75 0 00-.75-.75H3.61z" />
+                        </svg>
+                      ) : (
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6.633 10.5c.806 0 1.533-.446 2.031-1.08a9.041 9.041 0 012.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 00.322-1.672V3.18a2.055 2.055 0 01.357-1.093A2.78 2.78 0 0115.455 1c1.725 0 2.295 1.467 2.295 2.913v2.437c0 .532-.065 1.06-.218 1.551l-1.474 4.74a3.375 3.375 0 00.851 3.421l.426.388M6.633 10.5H4.869a2.376 2.376 0 00-2.344 2.752l.88 5.749A2.376 2.376 0 005.749 21h1.102M6.633 10.5v10.5" />
+                        </svg>
+                      )}
+                      <span>{commentLikeCounts[comment.id]}</span>
+                    </button>
+                    {user && user.uid === comment.authorId && (
+                      <button
+                        onClick={() => handleDeleteComment(comment.id)}
+                        disabled={deletingCommentId === comment.id}
+                        className="flex items-center gap-1 text-[11px] text-charcoal/30 hover:text-red-500 transition-colors duration-300 cursor-pointer disabled:opacity-50"
+                      >
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                        </svg>
+                        {deletingCommentId === comment.id ? "..." : "Delete"}
+                      </button>
                     )}
-                    <span>{commentLikeCounts[comment.id]}</span>
-                  </button>
+                  </div>
                 </div>
               </div>
             ))}

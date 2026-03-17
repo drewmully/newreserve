@@ -31,6 +31,7 @@ export async function GET(
       const d = doc.data();
       return {
         id: doc.id,
+        authorId: d.authorId as string,
         author: d.author as string,
         avatar: d.avatar as string,
         timestamp: d.createdAt
@@ -88,6 +89,7 @@ export async function POST(
       {
         comment: {
           id: commentRef.id,
+          authorId: uid,
           author: (author as string) || "Anonymous",
           avatar: (avatar as string) || "?",
           timestamp: "just now",
