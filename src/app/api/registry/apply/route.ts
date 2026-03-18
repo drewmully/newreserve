@@ -185,7 +185,7 @@ export async function POST(req: NextRequest) {
 
   // Build magic link URLs
   const baseUrl =
-    process.env.NEXT_PUBLIC_APP_URL ??
+    process.env.APP_URL ??
     req.nextUrl.origin;
 
   const approveToken = createReviewToken(uid, "approve");
