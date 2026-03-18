@@ -200,7 +200,7 @@ export async function POST(req: NextRequest) {
   const { error: emailError } = await resend.emails.send({
     from: "Mullybox Club Registry <noreply@mymully.com>",
     to: ADMIN_EMAIL,
-    subject: `Nueva solicitud al Club Registry — ${String(metadata.club_name ?? "Sin nombre")}`,
+    subject: `New Club Registry Request — ${String(metadata.club_name ?? "Unknown")}`,
     html: buildReviewEmailHtml(approveUrl, rejectUrl, metadata, userEmail),
   });
 
