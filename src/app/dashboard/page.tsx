@@ -10,7 +10,6 @@ import { SlideCart } from "../components/SlideCart";
 import { UpgradeModal } from "../components/UpgradeModal";
 import { FORUM_TAGS, type ForumPost, type ForumComment } from "../community/posts";
 import type { User as FirebaseUser } from "firebase/auth";
-import { submitRegistryApplication } from "@/lib/registry";
 import { trackEvent } from "@/lib/tracking";
 
 /* ═══════════════════════════════════════════
@@ -765,18 +764,29 @@ function ClubTab() {
   const filteredClubs = SAMPLE_CLUBS.filter((c) => c.state === selectedState);
 
   const handleSubmitApplication = async () => {
-    if (!user?.uid) return;
+    if (!user) return;
     setSubmitting(true);
     setSubmitError(null);
     try {
-      await submitRegistryApplication(user.uid, {
-        club_name: formData.clubName,
-        city: formData.city,
-        state: formData.state,
-        holes: Number(formData.holes),
-        guest_policy: formData.guestPolicy,
-        submitted_by_email: user.email ?? "",
+      const idToken = await user.getIdToken();
+      const res = await fetch("/api/registry/apply", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          metadata: {
+            club_name: formData.clubName,
+            city: formData.city,
+            state: formData.state,
+            holes: Number(formData.holes),
+            guest_policy: formData.guestPolicy,
+            submitted_by_email: user.email ?? "",
+          },
+        }),
       });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setClubStatus("pending");
       setShowForm(false);
       void trackEvent("registry_applied", {
@@ -786,7 +796,7 @@ function ClubTab() {
         },
       });
     } catch (err) {
-      console.error("[ClubTab] submitRegistryApplication failed:", err);
+      console.error("[ClubTab] registry/apply failed:", err);
       setSubmitError("No se pudo enviar la solicitud. Intenta nuevamente.");
     } finally {
       setSubmitting(false);
