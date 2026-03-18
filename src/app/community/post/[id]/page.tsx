@@ -48,6 +48,7 @@ async function getPost(id: string): Promise<ForumPost | null> {
       comments,
       tag: d.tag as string,
       images: (d.images as string[]) || [],
+      videos: (d.videos as string[]) || [],
     };
   } catch {
     return null;
