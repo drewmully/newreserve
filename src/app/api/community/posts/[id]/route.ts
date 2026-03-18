@@ -35,7 +35,7 @@ export async function PUT(
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const { title, body, tag, images } = await req.json();
+    const { title, body, tag, images, videos } = await req.json();
     if (!title?.trim() || !body?.trim()) {
       return NextResponse.json(
         { error: "Title and body are required" },
@@ -50,6 +50,7 @@ export async function PUT(
       updatedAt: FieldValue.serverTimestamp(),
     };
     if (images !== undefined) updates.images = images;
+    if (videos !== undefined) updates.videos = videos;
 
     await postRef.update(updates);
 
@@ -71,6 +72,7 @@ export async function PUT(
         comments: [],
         tag: d.tag as string,
         images: (d.images as string[]) || [],
+        videos: (d.videos as string[]) || [],
       },
     });
   } catch (err) {

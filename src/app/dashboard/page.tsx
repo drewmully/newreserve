@@ -1159,6 +1159,7 @@ function CommunityTab() {
   const [showCompose, setShowCompose] = useState(false);
   const [showSignUp, setShowSignUp] = useState(false);
   const [composeImages, setComposeImages] = useState<{ url: string; file: File }[]>([]);
+  const [composeVideos, setComposeVideos] = useState<{ url: string; file: File }[]>([]);
   const [composeTitle, setComposeTitle] = useState("");
   const [composeBody, setComposeBody] = useState("");
   const [composeTag, setComposeTag] = useState("General");
@@ -1166,6 +1167,7 @@ function CommunityTab() {
   const [posts, setPosts] = useState<ForumPost[]>([]);
   const [loading, setLoading] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -1200,29 +1202,55 @@ function CommunityTab() {
     });
   };
 
+  const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    const newVideos: { url: string; file: File }[] = [];
+    Array.from(files).forEach((file) => {
+      if (file.type.startsWith("video/")) {
+        newVideos.push({ url: URL.createObjectURL(file), file });
+      }
+    });
+    setComposeVideos((prev) => [...prev, ...newVideos].slice(0, 2));
+    if (videoInputRef.current) videoInputRef.current.value = "";
+  };
+
+  const removeComposeVideo = (index: number) => {
+    setComposeVideos((prev) => {
+      URL.revokeObjectURL(prev[index].url);
+      return prev.filter((_, i) => i !== index);
+    });
+  };
+
   const handlePublish = async () => {
     if (!user || !composeTitle.trim() || !composeBody.trim()) return;
     setPublishing(true);
     try {
       const token = await user.getIdToken();
 
-      // Upload images server-side (avoids CORS issues with Firebase Storage)
-      const imageUrls = (
-        await Promise.all(
-          composeImages.map(async ({ file }) => {
-            const fd = new FormData();
-            fd.append("file", file);
-            const r = await fetch("/api/community/upload", {
-              method: "POST",
-              headers: { Authorization: `Bearer ${token}` },
-              body: fd,
-            });
-            if (!r.ok) return null;
-            const { url } = await r.json();
-            return (url as string) || null;
-          })
-        )
-      ).filter((u): u is string => !!u);
+      // Upload images and videos server-side (avoids CORS issues with Firebase Storage)
+      const uploadFile = async (file: File) => {
+        const fd = new FormData();
+        fd.append("file", file);
+        const r = await fetch("/api/community/upload", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: fd,
+        });
+        if (!r.ok) return null;
+        const { url } = await r.json();
+        return (url as string) || null;
+      };
+
+      const [imageUrls, videoUrls] = await Promise.all([
+        Promise.all(composeImages.map(({ file }) => uploadFile(file))).then(
+          (urls) => urls.filter((u): u is string => !!u)
+        ),
+        Promise.all(composeVideos.map(({ file }) => uploadFile(file))).then(
+          (urls) => urls.filter((u): u is string => !!u)
+        ),
+      ]);
+
       const avatar = getInitials(username || user.email || "?");
       const res = await fetch("/api/community/posts", {
         method: "POST",
@@ -1237,17 +1265,20 @@ function CommunityTab() {
           author: username || user.email || "Member",
           avatar,
           images: imageUrls,
+          videos: videoUrls,
         }),
       });
       if (res.ok) {
         const { post } = await res.json();
         // Revoke blob URLs
         composeImages.forEach(({ url }) => URL.revokeObjectURL(url));
+        composeVideos.forEach(({ url }) => URL.revokeObjectURL(url));
         setPosts((prev) => [post, ...prev]);
         setComposeTitle("");
         setComposeBody("");
         setComposeTag("General");
         setComposeImages([]);
+        setComposeVideos([]);
         setShowCompose(false);
       }
     } catch {
@@ -1315,6 +1346,27 @@ function CommunityTab() {
               </div>
             )}
 
+            {/* Video previews */}
+            {composeVideos.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
+                {composeVideos.map(({ url }, i) => (
+                  <div key={i} className="relative rounded-lg overflow-hidden bg-bone border border-taupe/20 group">
+                    {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                    <video src={url} controls className="w-full max-h-48 object-contain" />
+                    <button
+                      onClick={() => removeComposeVideo(i)}
+                      className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-obsidian/70 text-bone flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-pointer"
+                      aria-label="Remove video"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <select
@@ -1350,6 +1402,30 @@ function CommunityTab() {
                     <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5a1.5 1.5 0 001.5-1.5V5.25a1.5 1.5 0 00-1.5-1.5H3.75a1.5 1.5 0 00-1.5 1.5v14.25a1.5 1.5 0 001.5 1.5zm14.47-11.47a.75.75 0 11-1.06-1.06.75.75 0 011.06 1.06z" />
                   </svg>
                   <span>Photo{composeImages.length > 0 ? ` (${composeImages.length}/4)` : ""}</span>
+                </button>
+
+                {/* Video upload */}
+                <input
+                  ref={videoInputRef}
+                  type="file"
+                  accept="video/*"
+                  multiple
+                  onChange={handleVideoUpload}
+                  className="hidden"
+                />
+                <button
+                  onClick={() => videoInputRef.current?.click()}
+                  disabled={composeVideos.length >= 2}
+                  className={`flex items-center gap-1.5 h-9 px-3 rounded-lg border text-xs transition-all duration-300 cursor-pointer ${
+                    composeVideos.length >= 2
+                      ? "border-taupe/20 text-charcoal/25 cursor-not-allowed"
+                      : "border-taupe/30 text-charcoal/50 hover:border-forest/30 hover:text-forest"
+                  }`}
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9A2.25 2.25 0 0013.5 5.25h-9A2.25 2.25 0 002.25 7.5v9A2.25 2.25 0 004.5 18.75z" />
+                  </svg>
+                  <span>Video{composeVideos.length > 0 ? ` (${composeVideos.length}/2)` : ""}</span>
                 </button>
               </div>
               <button
@@ -1867,6 +1943,22 @@ function PostCard({
                           src={src}
                           alt={`${post.title} photo ${i + 1}`}
                           className="w-full h-full object-cover"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Videos */}
+                {post.videos && post.videos.length > 0 && (
+                  <div className={`mb-4 grid gap-2 ${post.videos.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
+                    {post.videos.map((src, i) => (
+                      <div key={i} className="rounded-lg overflow-hidden bg-cream border border-taupe/15">
+                        {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                        <video
+                          src={src}
+                          controls
+                          className="w-full max-h-64 object-contain"
                         />
                       </div>
                     ))}

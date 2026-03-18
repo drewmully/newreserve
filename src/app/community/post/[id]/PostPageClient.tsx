@@ -80,6 +80,18 @@ export default function PostPageClient({ post }: { post: ForumPost }) {
               </div>
             )}
 
+            {/* Videos */}
+            {post.videos && post.videos.length > 0 && (
+              <div className={`mb-6 grid gap-3 ${post.videos.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
+                {post.videos.map((src, i) => (
+                  <div key={i} className="rounded-xl overflow-hidden bg-cream border border-taupe/15">
+                    {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                    <video src={src} controls className="w-full max-h-80 object-contain" />
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* Stats */}
             <div className="flex items-center gap-6 py-4 border-t border-b border-taupe/15 mb-8 text-sm text-charcoal/50">
               <span className="flex items-center gap-2">

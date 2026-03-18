@@ -66,6 +66,7 @@ export async function GET(req: NextRequest) {
           comments,
           tag: d.tag as string,
           images: (d.images as string[]) || [],
+          videos: (d.videos as string[]) || [],
         };
       })
     );
@@ -84,7 +85,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { title, body, tag, author, avatar, images } = await req.json();
+    const { title, body, tag, author, avatar, images, videos } = await req.json();
     if (!title?.trim() || !body?.trim()) {
       return NextResponse.json(
         { error: "Title and body are required" },
@@ -100,6 +101,7 @@ export async function POST(req: NextRequest) {
       body: (body as string).trim(),
       tag: (tag as string) || "General",
       images: (images as string[]) || [],
+      videos: (videos as string[]) || [],
       likes: 0,
       likedBy: [],
       commentCount: 0,
@@ -120,6 +122,7 @@ export async function POST(req: NextRequest) {
           comments: [],
           tag: (tag as string) || "General",
           images: (images as string[]) || [],
+          videos: (videos as string[]) || [],
         },
       },
       { status: 201 }

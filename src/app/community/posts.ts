@@ -26,6 +26,7 @@ export interface ForumPost {
   comments: ForumComment[];
   tag: string;
   images?: string[];
+  videos?: string[];
 }
 
 export const FORUM_TAGS = ["All", "General", "Gear Talk", "Guest Play", "Events"];
