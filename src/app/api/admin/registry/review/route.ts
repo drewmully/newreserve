@@ -4,7 +4,7 @@ import { verifyReviewToken } from "@/lib/registry-tokens";
 
 function htmlPage(title: string, message: string, color: string): NextResponse {
   const html = `<!DOCTYPE html>
-<html lang="es">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -75,7 +75,7 @@ function htmlPage(title: string, message: string, color: string): NextResponse {
     <div class="icon">${color === "#1a7a1a" ? "✓" : "✕"}</div>
     <h1>${title}</h1>
     <p>${message}</p>
-    <div class="badge">${color === "#1a7a1a" ? "Aprobado" : "Rechazado"}</div>
+    <div class="badge">${color === "#1a7a1a" ? "Approved" : "Rejected"}</div>
     <p class="footer">Mullybox · Club Registry Admin</p>
   </div>
 </body>
@@ -91,8 +91,8 @@ export async function GET(req: NextRequest) {
 
   if (!token) {
     return htmlPage(
-      "Link inválido",
-      "No se encontró un token en la URL.",
+      "Invalid link",
+      "No token was found in the URL.",
       "#c0392b"
     );
   }
@@ -100,8 +100,8 @@ export async function GET(req: NextRequest) {
   const payload = verifyReviewToken(token);
   if (!payload) {
     return htmlPage(
-      "Link expirado o inválido",
-      "Este link de revisión ya no es válido. Puede haber expirado (7 días) o haber sido alterado.",
+      "Expired or invalid link",
+      "This review link is no longer valid. It may have expired (7 days) or been tampered with.",
       "#c0392b"
     );
   }
@@ -114,8 +114,8 @@ export async function GET(req: NextRequest) {
 
   if (!snap.exists) {
     return htmlPage(
-      "Solicitud no encontrada",
-      "No se encontró una solicitud activa para este usuario.",
+      "Application not found",
+      "No active application was found for this user.",
       "#c0392b"
     );
   }
@@ -125,8 +125,8 @@ export async function GET(req: NextRequest) {
   // Idempotent — already processed
   if (current === "approved" || current === "rejected") {
     return htmlPage(
-      "Solicitud ya procesada",
-      `Esta solicitud ya fue ${current === "approved" ? "aprobada" : "rechazada"} anteriormente.`,
+      "Application already processed",
+      `This application was already ${current === "approved" ? "approved" : "rejected"}.`,
       current === "approved" ? "#1a7a1a" : "#c0392b"
     );
   }
@@ -135,15 +135,15 @@ export async function GET(req: NextRequest) {
 
   if (action === "approve") {
     return htmlPage(
-      "Solicitud aprobada",
-      "El miembro ahora tiene acceso completo al Club Registry privado.",
+      "Application approved",
+      "The member now has full access to the private Club Registry.",
       "#1a7a1a"
     );
   }
 
   return htmlPage(
-    "Solicitud rechazada",
-    "La solicitud fue rechazada. El miembro no tendrá acceso al Club Registry.",
+    "Application rejected",
+    "The application has been rejected. The member will not have access to the Club Registry.",
     "#c0392b"
   );
 }
