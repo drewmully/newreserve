@@ -163,7 +163,7 @@ function DashboardContent() {
           {activeTab === "drops" && (isPaid ? <DropsTab /> : <GatedTab type="drops" onUpgrade={() => setUpgradeOpen(true)} />)}
           {activeTab === "community" && <CommunityTab />}
           {activeTab === "club" && (isPaid ? <ClubTab /> : <GatedTab type="club" onUpgrade={() => setUpgradeOpen(true)} />)}
-          {activeTab === "benefits" && (isPaid ? <BenefitsTab /> : <GatedTab type="benefits" onUpgrade={() => setUpgradeOpen(true)} />)}
+          {activeTab === "benefits" && (isPaid ? <BenefitsTab onUpgrade={() => setUpgradeOpen(true)} /> : <GatedTab type="benefits" onUpgrade={() => setUpgradeOpen(true)} />)}
         </div>
       </main>
 
@@ -640,7 +640,7 @@ interface BenefitEntry {
   };
 }
 
-function BenefitsTab() {
+function BenefitsTab({ onUpgrade }: { onUpgrade: () => void }) {
   const { tier, tierLabel } = useMembership();
   const isFree = tier === "free";
   const isPaid = tier === "access" || tier === "member" || tier === "black";
@@ -819,6 +819,7 @@ function BenefitsTab() {
             const isEnabled = enabledBenefits.has(benefit.title);
             const isLocked = benefit.status === "Locked" || benefit.status === "Upgrade";
             const isComingSoon = benefit.status === "Coming Soon";
+            const shouldOpenUpgradeModal = isLocked && benefit.action.label === "Upgrade to Member";
 
             return (
               <div
@@ -883,6 +884,13 @@ function BenefitsTab() {
                       <span className="inline-flex h-9 px-4 rounded-lg bg-taupe/10 text-charcoal/30 text-xs font-medium tracking-wide items-center whitespace-nowrap">
                         {benefit.action.label}
                       </span>
+                    ) : shouldOpenUpgradeModal ? (
+                      <button
+                        onClick={onUpgrade}
+                        className="inline-flex h-9 px-4 rounded-lg border border-forest/20 text-forest text-xs font-medium tracking-wide uppercase hover:bg-forest/5 transition-colors duration-200 items-center whitespace-nowrap"
+                      >
+                        {benefit.action.label}
+                      </button>
                     ) : (
                       <a
                         href="/onboarding"
