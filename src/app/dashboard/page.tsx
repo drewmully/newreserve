@@ -509,14 +509,37 @@ function DropsTab() {
 }
 
 /* ═══════════════════════════════════════════
-   BENEFITS TAB — SkyMiles-style perks
+   BENEFITS TAB — Delta Medallion-style interactive perks
    ═══════════════════════════════════════════ */
+
+type BenefitCategory = "All" | "Coaching" | "Travel" | "Entertainment" | "Other";
+
+interface BenefitEntry {
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
+  description: string;
+  category: BenefitCategory;
+  status: "Active" | "Locked" | "Coming Soon" | "Launch Promo" | "Upgrade";
+  action: {
+    type: "toggle" | "link" | "auto" | "coming-soon";
+    label: string;
+    href?: string;
+  };
+}
 
 function BenefitsTab() {
   const { tier, tierLabel } = useMembership();
   const isFree = tier === "free";
   const isPaid = tier === "access" || tier === "member" || tier === "black";
   const isMemberPlus = tier === "member" || tier === "black";
+  const [activeCategory, setActiveCategory] = useState<BenefitCategory>("All");
+  const [enabledBenefits, setEnabledBenefits] = useState<Set<string>>(new Set());
+  const [conciergeOpen, setConciergeOpen] = useState(false);
+  const [conciergeForm, setConciergeForm] = useState({ subject: "", message: "" });
+  const [conciergeSent, setConciergeSent] = useState(false);
+
+  const categories: BenefitCategory[] = ["All", "Coaching", "Travel", "Entertainment", "Other"];
 
   const tierPricing: Record<string, string> = {
     free: "Complimentary",
@@ -524,6 +547,111 @@ function BenefitsTab() {
     member: "$249/quarter",
     black: "By Invitation",
   };
+
+  const toggleBenefit = (title: string) => {
+    setEnabledBenefits((prev) => {
+      const next = new Set(prev);
+      if (next.has(title)) next.delete(title);
+      else next.add(title);
+      return next;
+    });
+  };
+
+  const handleConciergeSend = () => {
+    if (!conciergeForm.subject.trim() || !conciergeForm.message.trim()) return;
+    setConciergeSent(true);
+    setTimeout(() => {
+      setConciergeOpen(false);
+      setConciergeSent(false);
+      setConciergeForm({ subject: "", message: "" });
+    }, 2500);
+  };
+
+  const benefits: BenefitEntry[] = [
+    {
+      icon: <CoachingBenefitIcon />,
+      title: "V1+ Virtual Coaching",
+      subtitle: "Normally $59.95 — Free with membership",
+      description: "Connect with a virtual golf coach through V1+. Get swing analysis, personalized drills, and video feedback from PGA-certified instructors.",
+      category: "Coaching",
+      status: isPaid ? "Active" : "Locked",
+      action: { type: "toggle", label: isPaid ? "Turn On" : "Upgrade to Access" },
+    },
+    {
+      icon: <ConciergeBenefitIcon />,
+      title: "Concierge Support",
+      subtitle: "Your personal Reserve concierge",
+      description: "Need help with anything? Submit a request and our team will assist — from tee time bookings and travel planning to gifting and product sourcing.",
+      category: "Other",
+      status: isMemberPlus ? "Active" : "Locked",
+      action: { type: "link", label: isMemberPlus ? "Send a Request" : "Upgrade to Member", href: "#concierge" },
+    },
+    {
+      icon: <ShippingBenefitIcon />,
+      title: "Free 2-Day Shipping",
+      subtitle: "No minimums, no codes needed",
+      description: "Complimentary 2-day shipping on every Pro Shop order. Applied automatically at checkout for all paid members.",
+      category: "Travel",
+      status: isPaid ? "Active" : "Launch Promo",
+      action: { type: "auto", label: isPaid ? "Auto-Applied at Checkout" : "Free During Launch" },
+    },
+    {
+      icon: <PricingBenefitIcon />,
+      title: "Reserve Pricing",
+      subtitle: "Save $250+ per year",
+      description: "Members-only pricing on all products across gear, apparel, and accessories. Discounts applied automatically when signed in.",
+      category: "Other",
+      status: isPaid ? "Active" : "Locked",
+      action: { type: "auto", label: isPaid ? "Auto-Applied When Signed In" : "Upgrade to Access" },
+    },
+    {
+      icon: <DropBenefitIcon />,
+      title: "Priority Drop Access",
+      subtitle: "48-hour early access to limited releases",
+      description: "Get first access to limited drops before they go live to Access members. Never miss a release again.",
+      category: "Other",
+      status: isMemberPlus ? "Active" : isPaid ? "Upgrade" : "Locked",
+      action: { type: "auto", label: isMemberPlus ? "Active on All Drops" : "Upgrade to Member" },
+    },
+    {
+      icon: <EventBenefitIcon />,
+      title: "Invite-Only Events",
+      subtitle: "Member-exclusive outings & experiences",
+      description: "Access to member-only outings, demo days, partner experiences, and exclusive golf events throughout the year.",
+      category: "Entertainment",
+      status: isMemberPlus ? "Active" : "Locked",
+      action: { type: "link", label: isMemberPlus ? "View Upcoming Events" : "Upgrade to Member", href: "/dashboard" },
+    },
+    {
+      icon: <HandicapBenefitIcon />,
+      title: "Official USGA Handicap",
+      subtitle: "Track your handicap officially",
+      description: "Track your handicap through Mully Reserve. Post scores from any course and maintain your official index.",
+      category: "Coaching",
+      status: "Coming Soon",
+      action: { type: "coming-soon", label: "Coming Soon" },
+    },
+    {
+      icon: <TravelBenefitIcon />,
+      title: "Golf Trip Planning",
+      subtitle: "Curated member travel packages",
+      description: "Access curated travel packages to premier golf destinations. Exclusive member rates and concierge-planned itineraries.",
+      category: "Travel",
+      status: "Coming Soon",
+      action: { type: "coming-soon", label: "Coming Soon" },
+    },
+    {
+      icon: <EntertainmentBenefitIcon />,
+      title: "Partner Perks & Discounts",
+      subtitle: "Exclusive offers from premium brands",
+      description: "Enjoy member-only discounts and perks from our partner network — top courses, resorts, simulators, and lifestyle brands.",
+      category: "Entertainment",
+      status: "Coming Soon",
+      action: { type: "coming-soon", label: "Coming Soon" },
+    },
+  ];
+
+  const filtered = activeCategory === "All" ? benefits : benefits.filter((b) => b.category === activeCategory);
 
   return (
     <div className="px-6 md:px-12">
@@ -535,7 +663,7 @@ function BenefitsTab() {
             backgroundSize: "24px 24px",
           }} />
           <div className="relative">
-            <p className={`text-xs tracking-[0.3em] uppercase font-medium mb-2 ${isFree ? "text-sage" : "text-sage"}`}>Your Tier</p>
+            <p className={`text-xs tracking-[0.3em] uppercase font-medium mb-2 text-sage`}>Your Tier</p>
             <h2 className={`font-serif text-3xl mb-2 ${isFree ? "text-obsidian" : "text-bone"}`}>{tierLabel}</h2>
             <p className={`text-sm ${isFree ? "text-charcoal/50" : "text-bone/50"}`}>
               Member since February 2026 &middot; {tierPricing[tier]}
@@ -553,49 +681,174 @@ function BenefitsTab() {
           )}
         </div>
 
-        {/* Benefit categories */}
+        {/* Category filter bar */}
         <div className="mb-8">
-          <h3 className="font-serif text-2xl text-obsidian mb-6">Your Benefits</h3>
+          <h3 className="font-serif text-2xl text-obsidian mb-5">Your Benefits</h3>
+          <div className="flex flex-wrap gap-2">
+            {categories.map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setActiveCategory(cat)}
+                className={`px-4 py-2 rounded-full text-sm font-medium tracking-wide transition-all duration-200 ${
+                  activeCategory === cat
+                    ? "bg-forest text-bone shadow-sm"
+                    : "bg-cream border border-taupe/20 text-charcoal/60 hover:border-forest/30 hover:text-forest"
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-5">
-          <BenefitTile
-            icon={<PricingBenefitIcon />}
-            title="Reserve Pricing"
-            description={isPaid ? "Members-only pricing on all products. Save an average of $250+ per year across gear, apparel, and accessories." : "Browse Reserve pricing to see what members save. Upgrade to unlock members-only pricing."}
-            status={isPaid ? "Active" : "Locked"}
-          />
-          <BenefitTile
-            icon={<ShippingBenefitIcon />}
-            title="Free 2-Day Shipping"
-            description={isPaid ? "Complimentary 2-day shipping on all Pro Shop orders. No minimums." : "Free priority shipping during our launch party! Normally a paid member benefit."}
-            status={isPaid ? "Active" : "Launch Promo"}
-          />
-          <BenefitTile
-            icon={<DropBenefitIcon />}
-            title="Priority Drop Access"
-            description={isMemberPlus ? "48-hour early access to limited releases before they go live to Access members." : "Upgrade to Reserve Member for 48-hour early access to limited releases."}
-            status={isMemberPlus ? "Active" : isPaid ? "Upgrade" : "Locked"}
-          />
-          <BenefitTile
-            icon={<ConciergeBenefitIcon />}
-            title="Concierge Support"
-            description={isMemberPlus ? "Dedicated concierge for booking, styling advice, and product recommendations." : "Dedicated concierge support. Available with Reserve Member tier."}
-            status={isMemberPlus ? "Active" : "Locked"}
-          />
-          <BenefitTile
-            icon={<EventBenefitIcon />}
-            title="Invite-Only Events"
-            description={isMemberPlus ? "Access to member-only outings, demo days, and partner experiences." : "Exclusive events for Reserve Member and above."}
-            status={isMemberPlus ? "Active" : "Locked"}
-          />
-          <BenefitTile
-            icon={<HandicapBenefitIcon />}
-            title="Official USGA Handicap"
-            description="Track your handicap officially through Mully Reserve. Post scores from any course."
-            status="Coming Soon"
-          />
+        {/* Benefits table */}
+        <div className="space-y-4">
+          {filtered.map((benefit) => {
+            const isEnabled = enabledBenefits.has(benefit.title);
+            const isLocked = benefit.status === "Locked" || benefit.status === "Upgrade";
+            const isComingSoon = benefit.status === "Coming Soon";
+
+            return (
+              <div
+                key={benefit.title}
+                className={`bg-cream rounded-xl border border-taupe/15 p-5 md:p-6 transition-all duration-200 ${
+                  isLocked ? "opacity-60" : isComingSoon ? "opacity-50" : "tile-hover"
+                }`}
+              >
+                <div className="flex items-start gap-4">
+                  {/* Icon */}
+                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${isLocked ? "bg-taupe/10" : "bg-forest/8"}`}>
+                    {benefit.icon}
+                  </div>
+
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 mb-1">
+                      <h4 className="text-sm font-semibold text-obsidian">{benefit.title}</h4>
+                      <span className={`text-[10px] tracking-wider uppercase font-medium px-2 py-0.5 rounded-full w-fit ${
+                        benefit.status === "Active"
+                          ? "bg-forest/10 text-forest"
+                          : benefit.status === "Launch Promo"
+                            ? "bg-forest/10 text-forest"
+                            : "bg-taupe/20 text-charcoal/40"
+                      }`}>
+                        {benefit.status}
+                      </span>
+                    </div>
+                    <p className="text-xs font-medium text-forest/70 mb-1">{benefit.subtitle}</p>
+                    <p className="text-xs text-charcoal/50 leading-relaxed">{benefit.description}</p>
+                  </div>
+
+                  {/* Action button */}
+                  <div className="shrink-0 self-center">
+                    {benefit.action.type === "toggle" && !isLocked ? (
+                      <button
+                        onClick={() => toggleBenefit(benefit.title)}
+                        className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-200 ${
+                          isEnabled ? "bg-forest" : "bg-taupe/30"
+                        }`}
+                      >
+                        <span className={`inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                          isEnabled ? "translate-x-6" : "translate-x-1"
+                        }`} />
+                      </button>
+                    ) : benefit.action.type === "link" && !isLocked ? (
+                      <button
+                        onClick={() => {
+                          if (benefit.title === "Concierge Support") {
+                            setConciergeOpen(true);
+                          }
+                        }}
+                        className="inline-flex h-9 px-4 rounded-lg bg-forest text-bone text-xs font-medium tracking-wide uppercase hover:bg-forest-dark transition-colors duration-200 items-center whitespace-nowrap"
+                      >
+                        {benefit.action.label}
+                      </button>
+                    ) : benefit.action.type === "auto" && !isLocked ? (
+                      <span className="inline-flex h-9 px-4 rounded-lg bg-forest/8 text-forest text-xs font-medium tracking-wide items-center whitespace-nowrap">
+                        {benefit.action.label}
+                      </span>
+                    ) : benefit.action.type === "coming-soon" ? (
+                      <span className="inline-flex h-9 px-4 rounded-lg bg-taupe/10 text-charcoal/30 text-xs font-medium tracking-wide items-center whitespace-nowrap">
+                        {benefit.action.label}
+                      </span>
+                    ) : (
+                      <a
+                        href="/onboarding"
+                        className="inline-flex h-9 px-4 rounded-lg border border-forest/20 text-forest text-xs font-medium tracking-wide uppercase hover:bg-forest/5 transition-colors duration-200 items-center whitespace-nowrap"
+                      >
+                        {benefit.action.label}
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
+
+        {/* Concierge Message Modal */}
+        {conciergeOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div className="absolute inset-0 bg-obsidian/50 backdrop-blur-sm" onClick={() => { setConciergeOpen(false); setConciergeSent(false); }} />
+            <div className="relative bg-bone rounded-2xl shadow-2xl w-full max-w-lg mx-4 p-8 animate-fade-up">
+              <button
+                onClick={() => { setConciergeOpen(false); setConciergeSent(false); }}
+                className="absolute top-4 right-4 text-charcoal/30 hover:text-charcoal transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+
+              {conciergeSent ? (
+                <div className="text-center py-6">
+                  <div className="w-14 h-14 rounded-full bg-forest/10 flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-7 h-7 text-forest" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <h3 className="font-serif text-xl text-obsidian mb-2">Message Sent</h3>
+                  <p className="text-sm text-charcoal/50">Our concierge team will get back to you within 24 hours.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="mb-6">
+                    <h3 className="font-serif text-xl text-obsidian mb-1">Concierge Request</h3>
+                    <p className="text-sm text-charcoal/50">We&apos;ll help with anything — tee times, travel, gear sourcing, gifting, and more.</p>
+                  </div>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-xs font-medium text-charcoal/60 uppercase tracking-wider mb-1.5">Subject</label>
+                      <input
+                        type="text"
+                        value={conciergeForm.subject}
+                        onChange={(e) => setConciergeForm((f) => ({ ...f, subject: e.target.value }))}
+                        placeholder="e.g., Book a tee time at Pinehurst"
+                        className="w-full h-10 px-4 rounded-lg border border-taupe/20 bg-cream text-sm text-obsidian placeholder:text-charcoal/30 focus:outline-none focus:border-forest/40 transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-charcoal/60 uppercase tracking-wider mb-1.5">Message</label>
+                      <textarea
+                        value={conciergeForm.message}
+                        onChange={(e) => setConciergeForm((f) => ({ ...f, message: e.target.value }))}
+                        placeholder="Tell us how we can help..."
+                        rows={4}
+                        className="w-full px-4 py-3 rounded-lg border border-taupe/20 bg-cream text-sm text-obsidian placeholder:text-charcoal/30 focus:outline-none focus:border-forest/40 transition-colors resize-none"
+                      />
+                    </div>
+                    <button
+                      onClick={handleConciergeSend}
+                      className="w-full h-11 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300"
+                    >
+                      Send Request
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1595,50 +1848,6 @@ function PostCard({ post, isSignedIn }: { post: ForumPost; isSignedIn: boolean }
 }
 
 /* ═══════════════════════════════════════════
-   SHARED COMPONENTS
-   ═══════════════════════════════════════════ */
-
-function BenefitTile({
-  icon,
-  title,
-  description,
-  status,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  description: string;
-  status: string;
-}) {
-  const statusStyle =
-    status === "Active"
-      ? "bg-forest/10 text-forest"
-      : status === "Launch Promo"
-        ? "bg-forest/10 text-forest"
-        : status === "Locked" || status === "Upgrade"
-          ? "bg-taupe/20 text-charcoal/40"
-          : "bg-taupe/20 text-charcoal/40";
-
-  const isLocked = status === "Locked" || status === "Upgrade";
-
-  return (
-    <div className={`bg-cream rounded-xl border border-taupe/15 p-6 flex gap-4 ${isLocked ? "opacity-70" : "tile-hover"}`}>
-      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isLocked ? "bg-taupe/10" : "bg-forest/8"}`}>
-        {icon}
-      </div>
-      <div className="flex-1">
-        <div className="flex items-center gap-2 mb-1">
-          <h4 className="text-sm font-medium text-obsidian">{title}</h4>
-          <span className={`text-[10px] tracking-wider uppercase font-medium px-2 py-0.5 rounded-full ${statusStyle}`}>
-            {status}
-          </span>
-        </div>
-        <p className="text-xs text-charcoal/50 leading-relaxed">{description}</p>
-      </div>
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════════
    BENEFIT ICONS
    ═══════════════════════════════════════════ */
 
@@ -1687,6 +1896,30 @@ function HandicapBenefitIcon() {
   return (
     <svg className="w-5 h-5 text-forest" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+    </svg>
+  );
+}
+
+function CoachingBenefitIcon() {
+  return (
+    <svg className="w-5 h-5 text-forest" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.438 60.438 0 00-.491 6.347A48.62 48.62 0 0112 20.904a48.62 48.62 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.636 50.636 0 00-2.658-.813A59.906 59.906 0 0112 3.493a59.903 59.903 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.717 50.717 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5" />
+    </svg>
+  );
+}
+
+function TravelBenefitIcon() {
+  return (
+    <svg className="w-5 h-5 text-forest" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" />
+    </svg>
+  );
+}
+
+function EntertainmentBenefitIcon() {
+  return (
+    <svg className="w-5 h-5 text-forest" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
     </svg>
   );
 }
