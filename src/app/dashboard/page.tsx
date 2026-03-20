@@ -654,6 +654,7 @@ function BenefitsTab({ onUpgrade }: { onUpgrade: () => void }) {
   const [conciergeError, setConciergeError] = useState<string | null>(null);
   const [coachingSyncing, setCoachingSyncing] = useState(false);
   const [coachingError, setCoachingError] = useState<string | null>(null);
+  const [benefitToast, setBenefitToast] = useState<string | null>(null);
 
   const categories: BenefitCategory[] = ["All", "Coaching", "Travel", "Entertainment", "Other"];
 
@@ -697,6 +698,16 @@ function BenefitsTab({ onUpgrade }: { onUpgrade: () => void }) {
     [user]
   );
 
+  const showBenefitToast = useCallback((message: string) => {
+    setBenefitToast(message);
+  }, []);
+
+  useEffect(() => {
+    if (!benefitToast) return;
+    const timer = setTimeout(() => setBenefitToast(null), 2800);
+    return () => clearTimeout(timer);
+  }, [benefitToast]);
+
   const toggleBenefit = async (title: string) => {
     const wasEnabled = enabledBenefits.has(title);
     const nextEnabled = !wasEnabled;
@@ -719,6 +730,11 @@ function BenefitsTab({ onUpgrade }: { onUpgrade: () => void }) {
         enabled: nextEnabled,
         source: "dashboard_benefits",
       });
+      showBenefitToast(
+        nextEnabled
+          ? "V1+ Virtual Coaching is now enabled."
+          : "V1+ Virtual Coaching has been turned off."
+      );
     } catch (err) {
       console.error("[Benefits] coaching toggle sync failed:", err);
       setEnabledBenefits((prev) => {
@@ -753,6 +769,7 @@ function BenefitsTab({ onUpgrade }: { onUpgrade: () => void }) {
         source: "dashboard_benefits",
       });
 
+      showBenefitToast("Concierge Support request submitted successfully.");
       setConciergeSent(true);
       setTimeout(() => {
         setConciergeOpen(false);
@@ -1068,6 +1085,13 @@ function BenefitsTab({ onUpgrade }: { onUpgrade: () => void }) {
                   </div>
                 </>
               )}
+            </div>
+          </div>
+        )}
+        {benefitToast && (
+          <div className="fixed bottom-6 right-6 z-[70] pointer-events-none">
+            <div className="max-w-xs rounded-xl border border-forest/20 bg-bone px-4 py-3 shadow-xl animate-fade-up">
+              <p className="text-xs font-medium tracking-wide text-forest">{benefitToast}</p>
             </div>
           </div>
         )}
