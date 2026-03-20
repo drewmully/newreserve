@@ -1089,9 +1089,19 @@ function BenefitsTab({ onUpgrade }: { onUpgrade: () => void }) {
           </div>
         )}
         {benefitToast && (
-          <div className="fixed bottom-6 right-6 z-[70] pointer-events-none">
-            <div className="max-w-xs rounded-xl border border-forest/20 bg-bone px-4 py-3 shadow-xl animate-fade-up">
-              <p className="text-xs font-medium tracking-wide text-forest">{benefitToast}</p>
+          <div className="fixed inset-0 z-[70] pointer-events-none flex items-center justify-center px-6">
+            <div className="relative w-full max-w-md rounded-2xl border border-sage/40 bg-gradient-to-br from-forest to-forest-dark text-bone shadow-[0_30px_80px_-24px_rgba(23,74,54,0.9)] animate-fade-up overflow-hidden">
+              <div className="absolute -top-10 -left-10 w-28 h-28 rounded-full bg-sage/30 blur-2xl" aria-hidden="true" />
+              <div className="absolute -bottom-12 -right-10 w-32 h-32 rounded-full bg-bone/15 blur-2xl" aria-hidden="true" />
+              <div className="relative p-6 md:p-7 text-center">
+                <div className="mx-auto mb-3 w-12 h-12 rounded-full bg-bone/15 border border-bone/30 flex items-center justify-center">
+                  <svg className="w-6 h-6 text-bone" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <p className="text-[11px] uppercase tracking-[0.24em] text-bone/70 mb-1">Benefits Updated</p>
+                <p className="text-base md:text-lg font-semibold leading-snug text-bone">{benefitToast}</p>
+              </div>
             </div>
           </div>
         )}
