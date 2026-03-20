@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, Suspense } from "react";
+import { useState, useRef, useEffect, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ShopGrid } from "../shop/components/ShopClient";
@@ -641,7 +641,7 @@ interface BenefitEntry {
 }
 
 function BenefitsTab({ onUpgrade }: { onUpgrade: () => void }) {
-  const { tier, tierLabel } = useMembership();
+  const { user, tier, tierLabel } = useMembership();
   const isFree = tier === "free";
   const isPaid = tier === "access" || tier === "member" || tier === "black";
   const isMemberPlus = tier === "member" || tier === "black";
@@ -650,6 +650,10 @@ function BenefitsTab({ onUpgrade }: { onUpgrade: () => void }) {
   const [conciergeOpen, setConciergeOpen] = useState(false);
   const [conciergeForm, setConciergeForm] = useState({ subject: "", message: "" });
   const [conciergeSent, setConciergeSent] = useState(false);
+  const [conciergeSubmitting, setConciergeSubmitting] = useState(false);
+  const [conciergeError, setConciergeError] = useState<string | null>(null);
+  const [coachingSyncing, setCoachingSyncing] = useState(false);
+  const [coachingError, setCoachingError] = useState<string | null>(null);
 
   const categories: BenefitCategory[] = ["All", "Coaching", "Travel", "Entertainment", "Other"];
 
@@ -660,23 +664,103 @@ function BenefitsTab({ onUpgrade }: { onUpgrade: () => void }) {
     black: "By Invitation",
   };
 
-  const toggleBenefit = (title: string) => {
+  const postBenefitInteraction = useCallback(
+    async (payload: {
+      benefit: "v1_virtual_coaching" | "concierge_support";
+      action: "toggle" | "request";
+      enabled?: boolean;
+      subject?: string;
+      message?: string;
+      source?: string;
+    }) => {
+      if (!user) {
+        throw new Error("You must be signed in.");
+      }
+      const idToken = await user.getIdToken();
+      const res = await fetch("/api/benefits/interaction", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        let errorMessage = `HTTP ${res.status}`;
+        try {
+          const data = (await res.json()) as { error?: string };
+          if (data?.error) errorMessage = data.error;
+        } catch {}
+        throw new Error(errorMessage);
+      }
+    },
+    [user]
+  );
+
+  const toggleBenefit = async (title: string) => {
+    const wasEnabled = enabledBenefits.has(title);
+    const nextEnabled = !wasEnabled;
+
     setEnabledBenefits((prev) => {
       const next = new Set(prev);
       if (next.has(title)) next.delete(title);
       else next.add(title);
       return next;
     });
+
+    if (title !== "V1+ Virtual Coaching") return;
+
+    setCoachingError(null);
+    setCoachingSyncing(true);
+    try {
+      await postBenefitInteraction({
+        benefit: "v1_virtual_coaching",
+        action: "toggle",
+        enabled: nextEnabled,
+        source: "dashboard_benefits",
+      });
+    } catch (err) {
+      console.error("[Benefits] coaching toggle sync failed:", err);
+      setEnabledBenefits((prev) => {
+        const rollback = new Set(prev);
+        if (nextEnabled) rollback.delete(title);
+        else rollback.add(title);
+        return rollback;
+      });
+      setCoachingError("Could not sync V1+ coaching. Please try again.");
+    } finally {
+      setCoachingSyncing(false);
+    }
   };
 
-  const handleConciergeSend = () => {
-    if (!conciergeForm.subject.trim() || !conciergeForm.message.trim()) return;
-    setConciergeSent(true);
-    setTimeout(() => {
-      setConciergeOpen(false);
-      setConciergeSent(false);
-      setConciergeForm({ subject: "", message: "" });
-    }, 2500);
+  const handleConciergeSend = async () => {
+    const subject = conciergeForm.subject.trim();
+    const message = conciergeForm.message.trim();
+    if (!subject || !message) return;
+
+    setConciergeError(null);
+    setConciergeSubmitting(true);
+    try {
+      await postBenefitInteraction({
+        benefit: "concierge_support",
+        action: "request",
+        subject,
+        message,
+        source: "dashboard_benefits",
+      });
+
+      setConciergeSent(true);
+      setTimeout(() => {
+        setConciergeOpen(false);
+        setConciergeSent(false);
+        setConciergeForm({ subject: "", message: "" });
+      }, 2500);
+    } catch (err) {
+      console.error("[Benefits] concierge request failed:", err);
+      setConciergeError("Could not send your request. Please try again.");
+    } finally {
+      setConciergeSubmitting(false);
+    }
   };
 
   const benefits: BenefitEntry[] = [
@@ -850,16 +934,20 @@ function BenefitsTab({ onUpgrade }: { onUpgrade: () => void }) {
                     </div>
                     <p className="text-xs font-medium text-forest/70 mb-1">{benefit.subtitle}</p>
                     <p className="text-xs text-charcoal/50 leading-relaxed">{benefit.description}</p>
+                    {benefit.title === "V1+ Virtual Coaching" && coachingError && (
+                      <p className="text-[11px] text-ember mt-2">{coachingError}</p>
+                    )}
                   </div>
 
                   {/* Action button */}
                   <div className="shrink-0 self-center">
                     {benefit.action.type === "toggle" && !isLocked ? (
                       <button
-                        onClick={() => toggleBenefit(benefit.title)}
+                        onClick={() => void toggleBenefit(benefit.title)}
+                        disabled={benefit.title === "V1+ Virtual Coaching" && coachingSyncing}
                         className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-200 ${
                           isEnabled ? "bg-forest" : "bg-taupe/30"
-                        }`}
+                        } ${benefit.title === "V1+ Virtual Coaching" && coachingSyncing ? "opacity-60 cursor-not-allowed" : ""}`}
                       >
                         <span className={`inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${
                           isEnabled ? "translate-x-6" : "translate-x-1"
@@ -958,11 +1046,17 @@ function BenefitsTab({ onUpgrade }: { onUpgrade: () => void }) {
                       />
                     </div>
                     <button
-                      onClick={handleConciergeSend}
-                      className="w-full h-11 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300"
+                      onClick={() => void handleConciergeSend()}
+                      disabled={conciergeSubmitting}
+                      className={`w-full h-11 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase transition-colors duration-300 ${
+                        conciergeSubmitting ? "opacity-60 cursor-not-allowed" : "hover:bg-forest-dark"
+                      }`}
                     >
-                      Send Request
+                      {conciergeSubmitting ? "Sending..." : "Send Request"}
                     </button>
+                    {conciergeError && (
+                      <p className="text-[11px] text-ember">{conciergeError}</p>
+                    )}
                   </div>
                 </>
               )}
