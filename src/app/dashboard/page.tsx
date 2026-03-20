@@ -727,7 +727,11 @@ function BenefitsTab({ onUpgrade }: { onUpgrade: () => void }) {
         else rollback.add(title);
         return rollback;
       });
-      setCoachingError("Could not sync V1+ coaching. Please try again.");
+      setCoachingError(
+        err instanceof Error && err.message
+          ? err.message
+          : "Could not sync V1+ coaching. Please try again."
+      );
     } finally {
       setCoachingSyncing(false);
     }
@@ -757,7 +761,11 @@ function BenefitsTab({ onUpgrade }: { onUpgrade: () => void }) {
       }, 2500);
     } catch (err) {
       console.error("[Benefits] concierge request failed:", err);
-      setConciergeError("Could not send your request. Please try again.");
+      setConciergeError(
+        err instanceof Error && err.message
+          ? err.message
+          : "Could not send your request. Please try again."
+      );
     } finally {
       setConciergeSubmitting(false);
     }

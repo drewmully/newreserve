@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { Resend } from "resend";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
+import { getLoopRawSubscriptions } from "@/app/api/_lib/loopAdmin";
 
 type MemberTier = "free" | "access" | "member" | "black";
 type BenefitKey = "v1_virtual_coaching" | "concierge_support";
@@ -27,6 +28,19 @@ const BENEFIT_ALLOWED_TIERS: Record<BenefitKey, MemberTier[]> = {
   concierge_support: ["member", "black"],
 };
 
+const LOOP_VARIANT_TIER: Record<string, MemberTier> = {
+  "47601025482944": "access",
+  "47601025122496": "member",
+  "47601025679552": "member",
+};
+
+const TIER_RANK: Record<MemberTier, number> = {
+  free: 0,
+  access: 1,
+  member: 2,
+  black: 3,
+};
+
 async function verifyAuth(req: NextRequest): Promise<string | null> {
   const header = req.headers.get("Authorization");
   if (!header?.startsWith("Bearer ")) return null;
@@ -41,6 +55,63 @@ async function verifyAuth(req: NextRequest): Promise<string | null> {
 function normalizeTier(raw: unknown): MemberTier {
   if (raw === "access" || raw === "member" || raw === "black") return raw;
   return "free";
+}
+
+function resolveTierFromLoopSubs(subs: Array<Record<string, unknown>>): MemberTier | null {
+  let resolved: MemberTier | null = null;
+
+  for (const sub of subs) {
+    if (String(sub.status ?? "").toUpperCase() !== "ACTIVE") continue;
+
+    const candidates: string[] = [];
+    const topLevelVariant = sub.shopify_variant_id ?? sub.variant_id;
+    if (topLevelVariant != null) candidates.push(String(topLevelVariant));
+
+    const lines = Array.isArray(sub.lines) ? (sub.lines as Array<Record<string, unknown>>) : [];
+    for (const line of lines) {
+      const lineVariant =
+        line.variantShopifyId ?? line.shopify_variant_id ?? line.variant_id;
+      if (lineVariant != null) candidates.push(String(lineVariant));
+    }
+
+    for (const variantId of candidates) {
+      const tier = LOOP_VARIANT_TIER[variantId];
+      if (!tier) continue;
+      if (!resolved || TIER_RANK[tier] > TIER_RANK[resolved]) {
+        resolved = tier;
+      }
+    }
+  }
+
+  return resolved;
+}
+
+async function inferTierFromSubscriptions(input: {
+  email: string;
+  userData: Record<string, unknown>;
+}): Promise<MemberTier | null> {
+  if (input.email) {
+    try {
+      const loopSubs = await getLoopRawSubscriptions(input.email);
+      const resolved = resolveTierFromLoopSubs(loopSubs as Array<Record<string, unknown>>);
+      if (resolved) return resolved;
+
+      // Active sub but unknown variant mapping: still treat as paid Access.
+      const hasActive = loopSubs.some(
+        (sub) => String((sub as Record<string, unknown>).status ?? "").toUpperCase() === "ACTIVE"
+      );
+      if (hasActive) return "access";
+    } catch (err) {
+      console.error("[benefits/interaction] Loop tier inference failed:", err);
+    }
+  }
+
+  const subscriptions =
+    (input.userData.subscriptions as Record<string, unknown> | undefined) ?? {};
+  const cachedStatus = String(subscriptions.status ?? "").toLowerCase();
+  const cachedActive =
+    subscriptions.mullybox_active === true || cachedStatus === "active";
+  return cachedActive ? "access" : null;
 }
 
 function buildEmailHtml(input: {
@@ -186,10 +257,30 @@ export async function POST(req: NextRequest) {
   }
 
   const userData = userSnap.data()!;
-  const tier = normalizeTier(userData.tier);
+  let tier = normalizeTier(userData.tier);
   const email = String(userData.email ?? "");
 
-  const allowed = BENEFIT_ALLOWED_TIERS[body.benefit].includes(tier);
+  let allowed = BENEFIT_ALLOWED_TIERS[body.benefit].includes(tier);
+  if (!allowed) {
+    const inferredTier = await inferTierFromSubscriptions({
+      email,
+      userData: userData as Record<string, unknown>,
+    });
+    if (inferredTier) {
+      tier = inferredTier;
+      allowed = BENEFIT_ALLOWED_TIERS[body.benefit].includes(tier);
+
+      const storedTier = normalizeTier(userData.tier);
+      if (inferredTier !== storedTier) {
+        try {
+          await userRef.set({ tier: inferredTier }, { merge: true });
+        } catch (err) {
+          console.error("[benefits/interaction] tier cache update failed:", err);
+        }
+      }
+    }
+  }
+
   if (!allowed) {
     return NextResponse.json({ error: "Tier not allowed for this benefit" }, { status: 403 });
   }
