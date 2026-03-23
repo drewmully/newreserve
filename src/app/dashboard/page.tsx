@@ -519,7 +519,6 @@ function ShopTab() {
           brands={brands}
           collections={collections}
           sourceContext="dashboard-shop"
-          proShopHandle={PRO_SHOP_COLLECTION_HANDLE}
           privateReleasesHandle={PRIVATE_RELEASES_COLLECTION_HANDLE}
         />
       </div>

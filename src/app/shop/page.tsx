@@ -76,7 +76,6 @@ export default async function ShopPage() {
               knownCollections.length > 0 ? knownCollections : collections
             }
             sourceContext="public-shop"
-            proShopHandle={PRO_SHOP_COLLECTION_HANDLE}
             privateReleasesHandle={PRIVATE_RELEASES_COLLECTION_HANDLE}
           />
         </div>

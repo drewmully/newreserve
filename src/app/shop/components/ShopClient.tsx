@@ -24,7 +24,6 @@ interface ShopGridProps {
   brands: readonly string[];
   collections: readonly string[];
   sourceContext?: "public-shop" | "dashboard-shop";
-  proShopHandle?: string;
   privateReleasesHandle?: string;
 }
 
@@ -33,33 +32,16 @@ export function ShopGrid({
   brands,
   collections,
   sourceContext = "public-shop",
-  proShopHandle = "reserve-pro-shop",
   privateReleasesHandle = "private-releases",
 }: ShopGridProps) {
   const [view, setView] = useState<"brand" | "collection">("brand");
-  const [catalogFilter, setCatalogFilter] = useState<
-    "all" | "pro-shop" | "private-releases"
-  >("all");
   const [modalInfo, setModalInfo] = useState<{
     name: string;
     description: string;
     image: string;
   } | null>(null);
 
-  const proShopCount = products.filter((p) =>
-    (p.sourceCollections ?? []).includes(proShopHandle)
-  ).length;
-  const privateReleasesCount = products.filter((p) =>
-    (p.sourceCollections ?? []).includes(privateReleasesHandle)
-  ).length;
-
-  const filteredProducts = products.filter((product) => {
-    if (catalogFilter === "all") return true;
-    if (catalogFilter === "pro-shop") {
-      return (product.sourceCollections ?? []).includes(proShopHandle);
-    }
-    return (product.sourceCollections ?? []).includes(privateReleasesHandle);
-  });
+  const filteredProducts = products;
 
   const activeBrands = brands.filter((brand) =>
     filteredProducts.some((product) => product.brand === brand)
@@ -91,34 +73,6 @@ export function ShopGrid({
 
   return (
     <>
-      {/* Catalog filter */}
-      <div className="flex flex-wrap items-center justify-center gap-2 mb-4">
-        {[
-          { key: "all", label: `All (${products.length})` },
-          { key: "pro-shop", label: `Pro Shop (${proShopCount})` },
-          {
-            key: "private-releases",
-            label: `Private Releases (${privateReleasesCount})`,
-          },
-        ].map((option) => (
-          <button
-            key={option.key}
-            onClick={() =>
-              setCatalogFilter(
-                option.key as "all" | "pro-shop" | "private-releases"
-              )
-            }
-            className={`px-3 py-1.5 rounded-full text-[11px] tracking-[0.12em] uppercase border transition-colors duration-200 cursor-pointer ${
-              catalogFilter === option.key
-                ? "border-forest bg-forest text-bone"
-                : "border-taupe/35 text-charcoal/55 hover:border-forest/40 hover:text-forest"
-            }`}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
-
       {/* Grouping control */}
       <div className="flex items-center justify-center gap-2 mb-2">
         {(["brand", "collection"] as const).map((mode) => (
