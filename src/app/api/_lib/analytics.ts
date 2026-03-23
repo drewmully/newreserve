@@ -13,10 +13,12 @@
  *                 GOOGLE_ADS_LABEL_PAGE_VIEW        (page_view events)
  *                 GOOGLE_ADS_LABEL_CHECKOUT_INIT    (initiate_checkout, checkout_clicked)
  *                 GOOGLE_ADS_LABEL_FUNNEL_CONVERSION (purchase events)
- *   PostHog:      POSTHOG_PROJECT_API_KEY  (POSTHOG_HOST defaults to app.posthog.com)
+ *   PostHog:      POSTHOG_PROJECT_API_KEY or NEXT_PUBLIC_POSTHOG_KEY
+ *                 POSTHOG_HOST or NEXT_PUBLIC_POSTHOG_HOST
  */
 
 import crypto from "crypto";
+import { PostHog } from "posthog-node";
 
 export interface AnalyticsEvent {
   event_name: string;
@@ -181,19 +183,23 @@ async function fireGoogleAds(event: AnalyticsEvent): Promise<void> {
 // ─── PostHog capture API ─────────────────────────────────────────────────────
 
 async function firePostHog(event: AnalyticsEvent): Promise<void> {
-  const apiKey = process.env.POSTHOG_PROJECT_API_KEY;
+  const apiKey =
+    process.env.POSTHOG_PROJECT_API_KEY ??
+    process.env.NEXT_PUBLIC_POSTHOG_KEY;
   if (!apiKey) return;
 
-  const host = process.env.POSTHOG_HOST ?? "https://app.posthog.com";
+  const host =
+    process.env.POSTHOG_HOST ??
+    process.env.NEXT_PUBLIC_POSTHOG_HOST ??
+    "https://us.i.posthog.com";
   const distinctId = event.user_id ?? event.email ?? "anonymous";
 
-  await fetch(`${host}/capture/`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      api_key: apiKey,
+  const posthog = new PostHog(apiKey, { host });
+
+  try {
+    posthog.capture({
+      distinctId,
       event: event.event_name,
-      distinct_id: distinctId,
       properties: {
         ...(event.properties ?? {}),
         $ip: event.ip,
@@ -202,10 +208,13 @@ async function firePostHog(event: AnalyticsEvent): Promise<void> {
         segments: event.segments,
       },
       timestamp: event.timestamp
-        ? new Date(event.timestamp * 1000).toISOString()
-        : new Date().toISOString(),
-    }),
-  });
+        ? new Date(event.timestamp * 1000)
+        : new Date(),
+    });
+  } finally {
+    // Ensure pending events are flushed before the request lifecycle ends.
+    await posthog.shutdown();
+  }
 }
 
 // ─── Public dispatcher ───────────────────────────────────────────────────────
