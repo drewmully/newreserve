@@ -13,6 +13,8 @@ export interface Product {
   sizing: string;
   /** Shopify variant GID — populated when data comes from the Storefront API */
   variantId?: string;
+  /** Shopify collection handles this product belongs to, if available */
+  sourceCollections?: string[];
 }
 
 export const BRANDS = [

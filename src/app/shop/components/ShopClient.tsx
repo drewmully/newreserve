@@ -23,56 +23,136 @@ interface ShopGridProps {
   products: Product[];
   brands: readonly string[];
   collections: readonly string[];
+  sourceContext?: "public-shop" | "dashboard-shop";
+  proShopHandle?: string;
+  privateReleasesHandle?: string;
 }
 
-export function ShopGrid({ products, brands, collections }: ShopGridProps) {
+export function ShopGrid({
+  products,
+  brands,
+  collections,
+  sourceContext = "public-shop",
+  proShopHandle = "reserve-pro-shop",
+  privateReleasesHandle = "private-releases",
+}: ShopGridProps) {
   const [view, setView] = useState<"brand" | "collection">("brand");
+  const [catalogFilter, setCatalogFilter] = useState<
+    "all" | "pro-shop" | "private-releases"
+  >("all");
   const [modalInfo, setModalInfo] = useState<{
     name: string;
     description: string;
     image: string;
   } | null>(null);
 
+  const proShopCount = products.filter((p) =>
+    (p.sourceCollections ?? []).includes(proShopHandle)
+  ).length;
+  const privateReleasesCount = products.filter((p) =>
+    (p.sourceCollections ?? []).includes(privateReleasesHandle)
+  ).length;
+
+  const filteredProducts = products.filter((product) => {
+    if (catalogFilter === "all") return true;
+    if (catalogFilter === "pro-shop") {
+      return (product.sourceCollections ?? []).includes(proShopHandle);
+    }
+    return (product.sourceCollections ?? []).includes(privateReleasesHandle);
+  });
+
+  const activeBrands = brands.filter((brand) =>
+    filteredProducts.some((product) => product.brand === brand)
+  );
+  const activeCollections = collections.filter((collection) =>
+    filteredProducts.some((product) => product.collection === collection)
+  );
+
+  const fallbackBrands = [
+    ...new Set(filteredProducts.map((product) => product.brand)),
+  ];
+  const fallbackCollections = [
+    ...new Set(filteredProducts.map((product) => product.collection)),
+  ];
+
   const grouped =
     view === "brand"
-      ? brands.map((b) => ({
+      ? (activeBrands.length > 0 ? activeBrands : fallbackBrands).map((b) => ({
           label: b,
-          items: products.filter((p) => p.brand === b),
+          items: filteredProducts.filter((p) => p.brand === b),
         }))
-      : collections.map((c) => ({
+      : (activeCollections.length > 0
+          ? activeCollections
+          : fallbackCollections
+        ).map((c) => ({
           label: c,
-          items: products.filter((p) => p.collection === c),
+          items: filteredProducts.filter((p) => p.collection === c),
         }));
 
   return (
     <>
-      {/* Toggle — subtle pill switch */}
-      <div className="flex items-center justify-center gap-3 mb-10">
-        <span className={`text-xs tracking-wider uppercase transition-colors duration-300 ${view === "brand" ? "text-obsidian font-medium" : "text-charcoal/30"}`}>
-          Brand
-        </span>
-        <button
-          onClick={() => setView(view === "brand" ? "collection" : "brand")}
-          className="relative w-10 h-[22px] rounded-full bg-taupe/25 transition-colors duration-300 cursor-pointer"
-          aria-label="Toggle between brand and collection view"
-        >
-          <span
-            className="absolute top-[3px] w-4 h-4 rounded-full bg-forest shadow-sm transition-all duration-300"
-            style={{ left: view === "brand" ? "3px" : "calc(100% - 19px)" }}
-          />
-        </button>
-        <span className={`text-xs tracking-wider uppercase transition-colors duration-300 ${view === "collection" ? "text-obsidian font-medium" : "text-charcoal/30"}`}>
-          Collection
-        </span>
+      {/* Catalog filter */}
+      <div className="flex flex-wrap items-center justify-center gap-2 mb-4">
+        {[
+          { key: "all", label: `All (${products.length})` },
+          { key: "pro-shop", label: `Pro Shop (${proShopCount})` },
+          {
+            key: "private-releases",
+            label: `Private Releases (${privateReleasesCount})`,
+          },
+        ].map((option) => (
+          <button
+            key={option.key}
+            onClick={() =>
+              setCatalogFilter(
+                option.key as "all" | "pro-shop" | "private-releases"
+              )
+            }
+            className={`px-3 py-1.5 rounded-full text-[11px] tracking-[0.12em] uppercase border transition-colors duration-200 cursor-pointer ${
+              catalogFilter === option.key
+                ? "border-forest bg-forest text-bone"
+                : "border-taupe/35 text-charcoal/55 hover:border-forest/40 hover:text-forest"
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
       </div>
 
-      {/* Flat grid — separator cards inline with products */}
+      {/* Grouping control */}
+      <div className="flex items-center justify-center gap-2 mb-2">
+        {(["brand", "collection"] as const).map((mode) => (
+          <button
+            key={mode}
+            onClick={() => setView(mode)}
+            className={`px-4 py-2 rounded-full text-xs tracking-wider uppercase transition-colors duration-200 cursor-pointer ${
+              view === mode
+                ? "bg-forest text-bone"
+                : "bg-taupe/20 text-charcoal/45 hover:text-forest"
+            }`}
+          >
+            {mode === "brand" ? "Brand" : "Collection"}
+          </button>
+        ))}
+      </div>
+      <p className="text-center text-[11px] text-charcoal/40 mb-8">
+        Organize products by {view === "brand" ? "brand" : "collection"}.
+      </p>
+
+      {grouped.length === 0 && (
+        <div className="mb-10 text-center text-sm text-charcoal/50">
+          No products found for this filter.
+        </div>
+      )}
+
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-4">
         {grouped.map((group) => (
           <SeparatorAndProducts
             key={group.label}
             group={group}
             view={view}
+            sourceContext={sourceContext}
+            privateReleasesHandle={privateReleasesHandle}
             onCardClick={(label) => {
               const info =
                 view === "brand"
@@ -95,10 +175,14 @@ export function ShopGrid({ products, brands, collections }: ShopGridProps) {
 function SeparatorAndProducts({
   group,
   view,
+  sourceContext,
+  privateReleasesHandle,
   onCardClick,
 }: {
   group: { label: string; items: Product[] };
   view: "brand" | "collection";
+  sourceContext: "public-shop" | "dashboard-shop";
+  privateReleasesHandle: string;
   onCardClick: (label: string) => void;
 }) {
   const info =
@@ -143,7 +227,12 @@ function SeparatorAndProducts({
 
       {/* Product tiles */}
       {group.items.map((product) => (
-        <ProductTile key={product.slug} product={product} />
+        <ProductTile
+          key={product.slug}
+          product={product}
+          sourceContext={sourceContext}
+          privateReleasesHandle={privateReleasesHandle}
+        />
       ))}
     </>
   );
@@ -227,11 +316,26 @@ function InfoModal({
 
 /* ─── PRODUCT TILE ─── */
 
-function ProductTile({ product }: { product: Product }) {
+function ProductTile({
+  product,
+  sourceContext,
+  privateReleasesHandle,
+}: {
+  product: Product;
+  sourceContext: "public-shop" | "dashboard-shop";
+  privateReleasesHandle: string;
+}) {
   const ctx = useMembershipSafe();
   const [justAdded, setJustAdded] = useState(false);
   const tier = ctx?.tier ?? "free";
   const isPaid = tier !== "free";
+  const productHref =
+    sourceContext === "dashboard-shop"
+      ? `/shop/${product.slug}?from=dashboard`
+      : `/shop/${product.slug}`;
+  const isPrivateRelease = (product.sourceCollections ?? []).includes(
+    privateReleasesHandle
+  );
 
   const handleQuickAdd = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -255,10 +359,15 @@ function ProductTile({ product }: { product: Product }) {
 
   return (
     <Link
-      href={`/shop/${product.slug}`}
+      href={productHref}
       className="group block product-tile-hover"
     >
       <div className="aspect-[3/4] bg-cream rounded-lg overflow-hidden mb-3 relative product-img-wrap">
+        {isPrivateRelease && (
+          <span className="absolute top-2 left-2 z-10 px-2 py-1 rounded bg-obsidian/80 text-bone text-[10px] tracking-[0.12em] uppercase">
+            Private
+          </span>
+        )}
         {hasImages ? (
           <>
             {/* Primary image */}
@@ -596,10 +705,16 @@ export function AddToCartButton({
    BACK LINK
    ═══════════════════════════════════════════ */
 
-export function BackLink({ children }: { children: ReactNode }) {
+export function BackLink({
+  children,
+  href = "/shop",
+}: {
+  children: ReactNode;
+  href?: string;
+}) {
   return (
     <Link
-      href="/shop"
+      href={href}
       className="inline-flex items-center gap-2 text-sm text-charcoal/50 hover:text-forest transition-colors duration-300 mb-8 md:mb-12"
     >
       <svg

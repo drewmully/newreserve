@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { getCollectionProducts } from "@/lib/shopify";
+import {
+  getCollectionProducts,
+  mergeCollectionProductsBySlug,
+  PRIVATE_RELEASES_COLLECTION_HANDLE,
+  PRO_SHOP_COLLECTION_HANDLE,
+} from "@/lib/shopify";
 import { BRAND_INFO, COLLECTION_INFO } from "./products";
 import { ShopGrid } from "./components/ShopClient";
 import { ShopHeader } from "../components/ShopHeader";
@@ -15,26 +20,38 @@ export const metadata: Metadata = {
 export const revalidate = 3600;
 
 export default async function ShopPage() {
-  // Fetch from both collections; merge + deduplicate by slug
-  const products: Awaited<ReturnType<typeof getCollectionProducts>> = [];
+  // Fetch collections independently so one failure doesn't hide the other.
+  const catalogCollections = [
+    { label: "pro-shop", handle: PRO_SHOP_COLLECTION_HANDLE },
+    { label: "private-releases", handle: PRIVATE_RELEASES_COLLECTION_HANDLE },
+  ] as const;
 
-  try {
-    const [proShop, privateReleases] = await Promise.all([
-      getCollectionProducts("reserve-pro-shop"),
-      getCollectionProducts("private-releases"),
-    ]);
+  const settled = await Promise.allSettled(
+    catalogCollections.map(({ handle }) => getCollectionProducts(handle))
+  );
 
-    const seen = new Set<string>();
-    for (const p of [...proShop, ...privateReleases]) {
-      if (!seen.has(p.slug)) {
-        seen.add(p.slug);
-        products.push(p);
-      }
+  const successfulCollections: Array<{
+    handle: string;
+    products: Awaited<ReturnType<typeof getCollectionProducts>>;
+  }> = [];
+
+  settled.forEach((result, index) => {
+    const entry = catalogCollections[index];
+    if (result.status === "fulfilled") {
+      successfulCollections.push({
+        handle: entry.handle,
+        products: result.value,
+      });
+      return;
     }
-  } catch (err) {
-    console.error("[ShopPage] Shopify fetch failed:", err);
-    // Render empty grid rather than 500
-  }
+
+    console.error(
+      `[ShopPage] Shopify collection "${entry.label}" failed:`,
+      result.reason
+    );
+  });
+
+  const products = mergeCollectionProductsBySlug(successfulCollections);
 
   // Derive filter lists from live products
   const brands = [...new Set(products.map((p) => p.brand))];
@@ -58,6 +75,9 @@ export default async function ShopPage() {
             collections={
               knownCollections.length > 0 ? knownCollections : collections
             }
+            sourceContext="public-shop"
+            proShopHandle={PRO_SHOP_COLLECTION_HANDLE}
+            privateReleasesHandle={PRIVATE_RELEASES_COLLECTION_HANDLE}
           />
         </div>
       </main>

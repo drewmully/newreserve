@@ -4,7 +4,13 @@ import { useState, useRef, useEffect, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { ShopGrid } from "../shop/components/ShopClient";
-import { getCollectionProducts, type ShopifyProduct } from "@/lib/shopify";
+import {
+  getCollectionProducts,
+  mergeCollectionProductsBySlug,
+  PRIVATE_RELEASES_COLLECTION_HANDLE,
+  PRO_SHOP_COLLECTION_HANDLE,
+  type ShopifyProduct,
+} from "@/lib/shopify";
 import { useMembership } from "../context/MembershipContext";
 import { SlideCart } from "../components/SlideCart";
 import { UpgradeModal } from "../components/UpgradeModal";
@@ -401,29 +407,63 @@ function ShopTab() {
   const [shopProducts, setShopProducts] = useState<ShopifyProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [partialWarning, setPartialWarning] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(false);
+    setPartialWarning(null);
 
     async function load() {
+      const catalogCollections = [
+        { label: "Pro Shop", handle: PRO_SHOP_COLLECTION_HANDLE },
+        { label: "Private Releases", handle: PRIVATE_RELEASES_COLLECTION_HANDLE },
+      ] as const;
+
       try {
-        const [proShop, privateReleases] = await Promise.all([
-          getCollectionProducts("reserve-pro-shop"),
-          getCollectionProducts("private-releases"),
-        ]);
+        const settled = await Promise.allSettled(
+          catalogCollections.map(({ handle }) => getCollectionProducts(handle))
+        );
+
         if (cancelled) return;
-        const seen = new Set<string>();
-        const merged: ShopifyProduct[] = [];
-        for (const p of [...proShop, ...privateReleases]) {
-          if (!seen.has(p.slug)) {
-            seen.add(p.slug);
-            merged.push(p);
+
+        const successfulCollections: Array<{
+          handle: string;
+          products: ShopifyProduct[];
+        }> = [];
+        const failedLabels: string[] = [];
+
+        settled.forEach((result, index) => {
+          const entry = catalogCollections[index];
+          if (result.status === "fulfilled") {
+            successfulCollections.push({
+              handle: entry.handle,
+              products: result.value,
+            });
+          } else {
+            failedLabels.push(entry.label);
+            console.error(
+              `[Dashboard ShopTab] failed to load "${entry.label}" (${entry.handle}):`,
+              result.reason
+            );
           }
-        }
+        });
+
+        const merged = mergeCollectionProductsBySlug(successfulCollections);
         setShopProducts(merged);
-      } catch {
+
+        if (failedLabels.length > 0 && merged.length > 0) {
+          setPartialWarning(
+            `Some catalog collections could not be loaded (${failedLabels.join(", ")}).`
+          );
+        }
+
+        if (merged.length === 0) {
+          setError(true);
+        }
+      } catch (err) {
+        console.error("[Dashboard ShopTab] unexpected load error:", err);
         if (!cancelled) setError(true);
       } finally {
         if (!cancelled) setLoading(false);
@@ -471,10 +511,16 @@ function ShopTab() {
   return (
     <div className="px-6 md:px-12">
       <div className="max-w-7xl mx-auto">
+        {partialWarning && (
+          <p className="mb-4 text-xs text-charcoal/45">{partialWarning}</p>
+        )}
         <ShopGrid
           products={shopProducts}
           brands={brands}
           collections={collections}
+          sourceContext="dashboard-shop"
+          proShopHandle={PRO_SHOP_COLLECTION_HANDLE}
+          privateReleasesHandle={PRIVATE_RELEASES_COLLECTION_HANDLE}
         />
       </div>
     </div>

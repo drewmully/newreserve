@@ -1,7 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getProductByHandle, getCollectionProducts } from "@/lib/shopify";
+import {
+  getCollectionProducts,
+  getProductByHandle,
+  mergeCollectionProductsBySlug,
+  PRIVATE_RELEASES_COLLECTION_HANDLE,
+  PRO_SHOP_COLLECTION_HANDLE,
+} from "@/lib/shopify";
 import {
   ProductImageGallery,
   Accordion,
@@ -15,22 +21,38 @@ export const revalidate = 3600;
 
 interface Props {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ from?: string }>;
 }
 
 export async function generateStaticParams() {
   try {
-    const [proShop, privateReleases] = await Promise.all([
-      getCollectionProducts("reserve-pro-shop"),
-      getCollectionProducts("private-releases"),
+    const [proShop, privateReleases] = await Promise.allSettled([
+      getCollectionProducts(PRO_SHOP_COLLECTION_HANDLE),
+      getCollectionProducts(PRIVATE_RELEASES_COLLECTION_HANDLE),
     ]);
-    const seen = new Set<string>();
-    return [...proShop, ...privateReleases]
-      .filter((p) => {
-        if (seen.has(p.slug)) return false;
-        seen.add(p.slug);
-        return true;
-      })
-      .map((p) => ({ slug: p.slug }));
+
+    const successfulCollections: Array<{
+      handle: string;
+      products: Awaited<ReturnType<typeof getCollectionProducts>>;
+    }> = [];
+
+    if (proShop.status === "fulfilled") {
+      successfulCollections.push({
+        handle: PRO_SHOP_COLLECTION_HANDLE,
+        products: proShop.value,
+      });
+    }
+
+    if (privateReleases.status === "fulfilled") {
+      successfulCollections.push({
+        handle: PRIVATE_RELEASES_COLLECTION_HANDLE,
+        products: privateReleases.value,
+      });
+    }
+
+    return mergeCollectionProductsBySlug(successfulCollections).map((p) => ({
+      slug: p.slug,
+    }));
   } catch {
     // Shopify unavailable at build time — pages generated on demand
     return [];
@@ -51,8 +73,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   }
 }
 
-export default async function ProductPage({ params }: Props) {
+export default async function ProductPage({ params, searchParams }: Props) {
   const { slug } = await params;
+  const { from } = await searchParams;
+  const backHref = from === "dashboard" ? "/dashboard?tab=shop" : "/shop";
   let product;
   try {
     product = await getProductByHandle(slug);
@@ -72,16 +96,16 @@ export default async function ProductPage({ params }: Props) {
 
   return (
     <div className="min-h-screen bg-bone">
-      {/* ─── HEADER ─── */}
+      {/* HEADER */}
       <ShopHeader />
 
-      {/* ─── PRODUCT DETAIL ─── */}
+      {/* PRODUCT DETAIL */}
       <main className="pt-28 pb-24 px-6 md:px-12">
         <div className="max-w-6xl mx-auto">
-          <BackLink>Back to Shop</BackLink>
+          <BackLink href={backHref}>Back to Shop</BackLink>
 
           <div className="grid md:grid-cols-2 gap-8 md:gap-14 lg:gap-20">
-            {/* Left — Images */}
+            {/* Left - Images */}
             <div>
               <ProductImageGallery
                 images={product.images}
@@ -89,7 +113,7 @@ export default async function ProductPage({ params }: Props) {
               />
             </div>
 
-            {/* Right — Details */}
+            {/* Right - Details */}
             <div className="flex flex-col">
               <p className="text-xs tracking-[0.25em] uppercase text-sage font-medium mb-2">
                 {product.brand}
@@ -134,7 +158,7 @@ export default async function ProductPage({ params }: Props) {
         </div>
       </main>
 
-      {/* ─── FOOTER ─── */}
+      {/* FOOTER */}
       <footer className="py-10 px-6 md:px-12 bg-forest">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <span className="flex items-center gap-2 text-bone">

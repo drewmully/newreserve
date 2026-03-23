@@ -10,6 +10,13 @@
  *   private-releases   — exclusive member drops
  */
 
+export const PRO_SHOP_COLLECTION_HANDLE =
+  process.env.NEXT_PUBLIC_SHOPIFY_PRO_SHOP_COLLECTION_HANDLE ??
+  "reserve-pro-shop";
+export const PRIVATE_RELEASES_COLLECTION_HANDLE =
+  process.env.NEXT_PUBLIC_SHOPIFY_PRIVATE_RELEASES_COLLECTION_HANDLE ??
+  "private-releases";
+
 function requireEnv(name: string, value: string | undefined): string {
   if (!value) {
     throw new Error(
@@ -85,6 +92,8 @@ export interface ShopifyProduct {
   sizing: string;
   /** First variant GID — required for cart mutations. Undefined if Shopify returned no variants. */
   variantId: string | undefined;
+  /** Shopify collection handles this product belongs to (filled when merging collection queries). */
+  sourceCollections?: string[];
 }
 
 export interface CartLineInput {
@@ -126,6 +135,11 @@ export interface ShopifyCart {
   lines: ShopifyCartLine[];
   totalAmount: number;
   currency: string;
+}
+
+interface CollectionProductsGroup {
+  handle: string;
+  products: ShopifyProduct[];
 }
 
 // ─── Raw GQL shapes ───────────────────────────────────────────────────────────
@@ -305,6 +319,38 @@ export async function getProductByHandle(
   );
 
   return data.product ? mapProduct(data.product) : null;
+}
+
+/**
+ * Merge product lists coming from multiple collection handles.
+ * Deduplicates by slug and keeps track of source collection handles.
+ */
+export function mergeCollectionProductsBySlug(
+  groups: CollectionProductsGroup[]
+): ShopifyProduct[] {
+  const bySlug = new Map<string, ShopifyProduct>();
+
+  for (const group of groups) {
+    for (const product of group.products) {
+      const existing = bySlug.get(product.slug);
+      if (!existing) {
+        bySlug.set(product.slug, {
+          ...product,
+          sourceCollections: [group.handle],
+        });
+        continue;
+      }
+
+      bySlug.set(product.slug, {
+        ...existing,
+        sourceCollections: Array.from(
+          new Set([...(existing.sourceCollections ?? []), group.handle])
+        ),
+      });
+    }
+  }
+
+  return Array.from(bySlug.values());
 }
 
 // ─── Cart mutations ───────────────────────────────────────────────────────────
