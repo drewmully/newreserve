@@ -5,18 +5,28 @@ import { useMembership } from "../context/MembershipContext";
 
 interface AuthAwareSignInProps {
   className?: string;
+  dashboardHref?: string;
+  signInHref?: string;
+  dashboardLabel?: string;
+  signInLabel?: string;
 }
 
-export function AuthAwareSignIn({ className }: AuthAwareSignInProps) {
+export function AuthAwareSignIn({
+  className,
+  dashboardHref = "/dashboard",
+  signInHref = "/login",
+  dashboardLabel = "Dashboard",
+  signInLabel = "Sign In",
+}: AuthAwareSignInProps) {
   const { isSignedIn, authLoading } = useMembership();
 
-  if (authLoading || isSignedIn) {
+  if (authLoading) {
     return null;
   }
 
   return (
-    <Link href="/login" className={className}>
-      Sign In
+    <Link href={isSignedIn ? dashboardHref : signInHref} className={className}>
+      {isSignedIn ? dashboardLabel : signInLabel}
     </Link>
   );
 }

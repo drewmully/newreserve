@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AuthAwareSignIn } from "../components/AuthAwareSignIn";
 
 const BENEFITS = [
   {
@@ -47,9 +48,7 @@ export default function AffiliatesPage() {
             </svg>
             <span className="font-serif text-xl font-bold tracking-wide">mully.</span>
           </Link>
-          <Link href="/login" className="text-sm tracking-wider uppercase text-forest font-medium hover:text-forest-dark transition-colors duration-300">
-            Sign In
-          </Link>
+          <AuthAwareSignIn className="text-sm tracking-wider uppercase text-forest font-medium hover:text-forest-dark transition-colors duration-300" />
         </div>
       </header>
 
