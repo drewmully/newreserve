@@ -71,6 +71,17 @@ export async function uploadCommunityImage(file: File): Promise<string> {
    ═══════════════════════════════════════════ */
 
 export interface UserDocument {
+  onboarding_profile?: {
+    birth_month: string;
+    birth_day: string;
+    birth_year: string;
+    birthdate_iso: string | null;
+    handicap: string;
+    private_club_member: boolean | null;
+    club_name: string;
+    vibe_check: string;
+    selected_tier: "free" | "access" | "member" | "";
+  };
   email: string;
   created_at: unknown; // Firestore Timestamp (FieldValue on write, Timestamp on read)
   last_login: unknown;
@@ -110,6 +121,17 @@ const USER_DEFAULTS: Omit<
   UserDocument,
   "email" | "created_at" | "last_login" | "updated_at"
 > = {
+  onboarding_profile: {
+    birth_month: "",
+    birth_day: "",
+    birth_year: "",
+    birthdate_iso: null,
+    handicap: "",
+    private_club_member: null,
+    club_name: "",
+    vibe_check: "",
+    selected_tier: "",
+  },
   username: "",
   onboarding_completed: false,
   shopify_customer_id: null,

@@ -118,6 +118,79 @@ export const EMPTY_FIT: FitProfile = {
   shoeSize: "",
 };
 
+export interface OnboardingProfile {
+  birthMonth: string;
+  birthDay: string;
+  birthYear: string;
+  handicap: string;
+  privateClub: boolean | null;
+  clubName: string;
+  vibeCheck: string;
+  selectedTier: "free" | "access" | "member" | "";
+}
+
+export const EMPTY_ONBOARDING_PROFILE: OnboardingProfile = {
+  birthMonth: "",
+  birthDay: "",
+  birthYear: "",
+  handicap: "",
+  privateClub: null,
+  clubName: "",
+  vibeCheck: "",
+  selectedTier: "",
+};
+
+function formatBirthdateIso(
+  birthYear: string,
+  birthMonth: string,
+  birthDay: string
+): string | null {
+  const year = Number(birthYear);
+  const month = Number(birthMonth);
+  const day = Number(birthDay);
+  if (!year || !month || !day) return null;
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  return `${birthYear.padStart(4, "0")}-${birthMonth.padStart(2, "0")}-${birthDay.padStart(2, "0")}`;
+}
+
+function toFirestoreOnboardingProfile(profile: OnboardingProfile) {
+  return {
+    birth_month: profile.birthMonth,
+    birth_day: profile.birthDay,
+    birth_year: profile.birthYear,
+    birthdate_iso: formatBirthdateIso(profile.birthYear, profile.birthMonth, profile.birthDay),
+    handicap: profile.handicap,
+    private_club_member: profile.privateClub,
+    club_name: profile.clubName,
+    vibe_check: profile.vibeCheck,
+    selected_tier: profile.selectedTier,
+  };
+}
+
+function fromFirestoreOnboardingProfile(value: unknown): OnboardingProfile | null {
+  if (!value || typeof value !== "object") return null;
+  const map = value as Record<string, unknown>;
+  const privateClubRaw = map.private_club_member;
+
+  return {
+    birthMonth: typeof map.birth_month === "string" ? map.birth_month : "",
+    birthDay: typeof map.birth_day === "string" ? map.birth_day : "",
+    birthYear: typeof map.birth_year === "string" ? map.birth_year : "",
+    handicap: typeof map.handicap === "string" ? map.handicap : "",
+    privateClub:
+      privateClubRaw === true ? true : privateClubRaw === false ? false : null,
+    clubName: typeof map.club_name === "string" ? map.club_name : "",
+    vibeCheck: typeof map.vibe_check === "string" ? map.vibe_check : "",
+    selectedTier:
+      map.selected_tier === "free" ||
+      map.selected_tier === "access" ||
+      map.selected_tier === "member"
+        ? map.selected_tier
+        : "",
+  };
+}
+
 interface MembershipContextValue {
   // Auth
   user: FirebaseUser | null;
@@ -171,7 +244,12 @@ interface MembershipContextValue {
 
   // Onboarding
   onboardingCompleted: boolean;
-  completeOnboarding: (data: { username: string }) => Promise<void>;
+  onboardingProfile: OnboardingProfile;
+  completeOnboarding: (data: {
+    username: string;
+    onboardingProfile: OnboardingProfile;
+    fitProfile?: FitProfile;
+  }) => Promise<void>;
   saveUsername: (username: string) => Promise<void>;
 
   // Data refreshers
@@ -219,6 +297,8 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
 
   // ── Onboarding ────────────────────────────────────────────────────────────
   const [onboardingCompleted, setOnboardingCompleted] = useState(false);
+  const [onboardingProfile, setOnboardingProfileState] =
+    useState<OnboardingProfile>(EMPTY_ONBOARDING_PROFILE);
 
   // ── Messaging preferences ─────────────────────────────────────────────────
   const [messagingPreferences, setMessagingPreferences] = useState({ email_marketing: true, sms_marketing: false });
@@ -435,6 +515,14 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
           if (profile.fit_profile && typeof profile.fit_profile === "object") {
             setFitProfileState({ ...EMPTY_FIT, ...profile.fit_profile });
           }
+          const parsedOnboardingProfile = fromFirestoreOnboardingProfile(
+            profile.onboarding_profile
+          );
+          if (parsedOnboardingProfile) {
+            setOnboardingProfileState(parsedOnboardingProfile);
+          } else {
+            setOnboardingProfileState(EMPTY_ONBOARDING_PROFILE);
+          }
           if (profile.tier && ["free", "access", "member", "black"].includes(profile.tier)) {
             setTier(profile.tier as MemberTier);
           }
@@ -493,6 +581,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
         setStoreCredit(null);
         setSubscriptions(null);
         setOnboardingCompleted(false);
+        setOnboardingProfileState(EMPTY_ONBOARDING_PROFILE);
         setMessagingPreferences({ email_marketing: true, sms_marketing: false });
         setClubStatus("none");
         setInterestedClubs([]);
@@ -643,16 +732,55 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
   /* ── Onboarding ── */
 
   const completeOnboarding = useCallback(
-    async (data: { username: string }) => {
+    async (data: {
+      username: string;
+      onboardingProfile: OnboardingProfile;
+      fitProfile?: FitProfile;
+    }) => {
+      const normalizedOnboardingProfile: OnboardingProfile = {
+        birthMonth: data.onboardingProfile.birthMonth,
+        birthDay: data.onboardingProfile.birthDay,
+        birthYear: data.onboardingProfile.birthYear,
+        handicap: data.onboardingProfile.handicap,
+        privateClub:
+          data.onboardingProfile.privateClub === true
+            ? true
+            : data.onboardingProfile.privateClub === false
+              ? false
+              : null,
+        clubName: data.onboardingProfile.clubName,
+        vibeCheck: data.onboardingProfile.vibeCheck,
+        selectedTier:
+          data.onboardingProfile.selectedTier === "free" ||
+          data.onboardingProfile.selectedTier === "access" ||
+          data.onboardingProfile.selectedTier === "member"
+            ? data.onboardingProfile.selectedTier
+            : "",
+      };
+      const normalizedFitProfile = data.fitProfile
+        ? { ...EMPTY_FIT, ...data.fitProfile }
+        : undefined;
+
       setUsername(data.username);
       setOnboardingCompleted(true);
+      setOnboardingProfileState(normalizedOnboardingProfile);
+      if (normalizedFitProfile) {
+        setFitProfileState(normalizedFitProfile);
+      }
       if (user?.uid) {
         try {
-          await updateDoc(doc(db, "users", user.uid), {
+          const updates: Record<string, unknown> = {
             username: data.username,
             onboarding_completed: true,
+            onboarding_profile: toFirestoreOnboardingProfile(
+              normalizedOnboardingProfile
+            ),
             updated_at: serverTimestamp(),
-          });
+          };
+          if (normalizedFitProfile) {
+            updates.fit_profile = normalizedFitProfile;
+          }
+          await updateDoc(doc(db, "users", user.uid), updates);
         } catch (err) {
           console.error("[Onboarding] Firestore persist failed:", err);
         }
@@ -822,6 +950,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
 
         // Onboarding
         onboardingCompleted,
+        onboardingProfile,
         completeOnboarding,
         saveUsername,
 

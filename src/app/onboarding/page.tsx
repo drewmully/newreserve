@@ -83,7 +83,16 @@ function daysInMonth(month: number, year: number): number {
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const { email, setEmail, username, setUsername, setTier, setFitProfile, authLoading, isSignedIn, completeOnboarding } = useMembership();
+  const {
+    email,
+    setEmail,
+    username,
+    setUsername,
+    setTier,
+    completeOnboarding,
+    authLoading,
+    isSignedIn,
+  } = useMembership();
 
   useEffect(() => {
     if (!authLoading && !isSignedIn) {
@@ -92,11 +101,30 @@ export default function OnboardingPage() {
   }, [authLoading, isSignedIn, router]);
 
   async function handleComplete(newTier: "free" | "access" | "member") {
-    await completeOnboarding({ username });
+    const nextFitProfile = {
+      shirtSize,
+      gloveHand,
+      gloveSize,
+      waistSize,
+      pantsInseam,
+      shortsInseam,
+      shoeSize,
+    };
+    await completeOnboarding({
+      username,
+      onboardingProfile: {
+        birthMonth,
+        birthDay,
+        birthYear,
+        handicap,
+        privateClub,
+        clubName: privateClub === true ? clubName : "",
+        vibeCheck,
+        selectedTier: newTier,
+      },
+      fitProfile: newTier === "member" ? nextFitProfile : undefined,
+    });
     setTier(newTier);
-    if (newTier === "member") {
-      void setFitProfile({ shirtSize, gloveHand, gloveSize, waistSize, pantsInseam, shortsInseam, shoeSize });
-    }
     router.push("/dashboard");
   }
   const [step, setStep] = useState(1);
