@@ -71,7 +71,7 @@ export default function AffiliatesPage() {
             </p>
             <div className="mt-7 flex flex-wrap gap-3">
               <a
-                href="mailto:Info@MyMully.com?subject=Affiliate%20Application"
+                href="mailto:info@Mullybox.com?subject=Affiliate%20Application"
                 className="inline-flex items-center justify-center h-11 px-7 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 btn-press"
               >
                 Apply via Email

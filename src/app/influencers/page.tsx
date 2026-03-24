@@ -58,7 +58,7 @@ export default function InfluencersPage() {
             </p>
             <div className="mt-7 flex flex-wrap gap-3">
               <a
-                href="mailto:Info@MyMully.com?subject=Influencer%20Partnership"
+                href="mailto:info@Mullybox.com?subject=Influencer%20Partnership"
                 className="inline-flex items-center justify-center h-11 px-7 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 btn-press"
               >
                 Apply via Email
