@@ -6,6 +6,7 @@ import {
   CATEGORY_COLORS,
   getBlogPostBySlug,
 } from "../posts";
+import { AuthAwareSignIn } from "../../components/AuthAwareSignIn";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -56,9 +57,7 @@ export default async function BlogPostPage({ params }: Props) {
             <svg viewBox="0 0 1002 540" fill="currentColor" className="h-4 w-auto" aria-hidden="true"><path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" /></svg>
             <span className="font-serif text-xl font-bold tracking-wide">mully.</span>
           </Link>
-          <Link href="/blog" className="text-sm tracking-wider uppercase text-forest font-medium hover:text-forest-dark transition-colors duration-300">
-            Journal
-          </Link>
+          <AuthAwareSignIn className="text-sm tracking-wider uppercase text-forest font-medium hover:text-forest-dark transition-colors duration-300" />
         </div>
       </header>
 

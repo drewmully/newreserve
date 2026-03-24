@@ -4,6 +4,7 @@ import {
   CATEGORY_COLORS,
   FEATURED_POST,
 } from "./posts";
+import { AuthAwareSignIn } from "../components/AuthAwareSignIn";
 
 export default function BlogPage() {
   return (
@@ -14,9 +15,7 @@ export default function BlogPage() {
             <svg viewBox="0 0 1002 540" fill="currentColor" className="h-4 w-auto" aria-hidden="true"><path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" /></svg>
             <span className="font-serif text-xl font-bold tracking-wide">mully.</span>
           </Link>
-          <Link href="/login" className="text-sm tracking-wider uppercase text-forest font-medium hover:text-forest-dark transition-colors duration-300">
-            Sign In
-          </Link>
+          <AuthAwareSignIn className="text-sm tracking-wider uppercase text-forest font-medium hover:text-forest-dark transition-colors duration-300" />
         </div>
       </header>
 
