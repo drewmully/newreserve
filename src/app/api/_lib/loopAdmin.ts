@@ -12,6 +12,11 @@
 
 const BASE_URL =
   process.env.LOOP_API_BASE_URL ?? "https://api.loopsubscriptions.com/admin/2023-10";
+const LOOP_MANAGE_URL_FALLBACK =
+  "https://mullybox-store.myshopify.com/a/loop_subscriptions/auth";
+const LOOP_CUSTOMER_ID_PLACEHOLDER = "{customer_id}";
+const LOOP_CUSTOMER_ID_PLACEHOLDER_ENCODED =
+  encodeURIComponent(LOOP_CUSTOMER_ID_PLACEHOLDER);
 
 function getLoopHeaders(): Record<string, string> {
   const token = process.env.LOOP_ADMIN_API_TOKEN;
@@ -139,14 +144,25 @@ export const reactivateLoopSubscription = (id: string) =>
  */
 export function getLoopManageSubscriptionUrl(customerId: string): string {
   const template =
-    process.env.LOOP_MANAGE_SUBSCRIPTION_URL ??
-    "https://mullybox-store.myshopify.com/a/loop_subscriptions/auth";
+    process.env.LOOP_MANAGE_SUBSCRIPTION_URL ?? LOOP_MANAGE_URL_FALLBACK;
+  const safeCustomerId = customerId.trim();
+  const encodedCustomerId = encodeURIComponent(safeCustomerId);
 
-  if (!template.includes("{customer_id}")) {
-    return template;
+  if (!safeCustomerId) {
+    return LOOP_MANAGE_URL_FALLBACK;
   }
 
-  return template.replace("{customer_id}", encodeURIComponent(customerId));
+  if (template.includes(LOOP_CUSTOMER_ID_PLACEHOLDER)) {
+    return template.split(LOOP_CUSTOMER_ID_PLACEHOLDER).join(encodedCustomerId);
+  }
+
+  if (template.includes(LOOP_CUSTOMER_ID_PLACEHOLDER_ENCODED)) {
+    return template
+      .split(LOOP_CUSTOMER_ID_PLACEHOLDER_ENCODED)
+      .join(encodedCustomerId);
+  }
+
+  return template;
 }
 
 /**
