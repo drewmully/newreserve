@@ -137,11 +137,16 @@ export const reactivateLoopSubscription = (id: string) =>
  * Build the customer-specific subscription management URL.
  * Replaces the {customer_id} placeholder in LOOP_MANAGE_SUBSCRIPTION_URL.
  */
-export function getLoopManageSubscriptionUrl(_customerId: string): string {
-  return (
+export function getLoopManageSubscriptionUrl(customerId: string): string {
+  const template =
     process.env.LOOP_MANAGE_SUBSCRIPTION_URL ??
-    "https://mullybox-store.myshopify.com/a/loop_subscriptions/auth"
-  );
+    "https://mullybox-store.myshopify.com/a/loop_subscriptions/auth";
+
+  if (!template.includes("{customer_id}")) {
+    return template;
+  }
+
+  return template.replace("{customer_id}", encodeURIComponent(customerId));
 }
 
 /**

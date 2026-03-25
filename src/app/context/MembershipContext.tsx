@@ -28,16 +28,11 @@ import {
   type ShopifyCart,
 } from "@/lib/shopify";
 import { buildCheckoutOriginAttributes } from "@/lib/shopifyCheckoutOrigin";
+import { resolveMemberTierFromVariantId } from "@/lib/membershipConfig";
 
 /* ═══════════════════════════════════════════
    TIER RESOLUTION FROM LOOP SUBSCRIPTIONS
    ═══════════════════════════════════════════ */
-
-const LOOP_VARIANT_TIER: Record<string, MemberTier> = {
-  "47601025482944": "access",  // Reserve Access
-  "47601025122496": "member",  // Reserve Member
-  "47601025679552": "member",  // Back 9 Legacy
-};
 
 function resolveTierFromLoopSubs(
   subs: Array<Record<string, unknown>>
@@ -47,7 +42,7 @@ function resolveTierFromLoopSubs(
     const lines = sub.lines as Array<Record<string, unknown>> | undefined;
     const variantShopifyId = lines?.[0]?.variantShopifyId;
     if (variantShopifyId != null) {
-      const tier = LOOP_VARIANT_TIER[String(variantShopifyId)];
+      const tier = resolveMemberTierFromVariantId(variantShopifyId);
       if (tier) return tier;
     }
   }

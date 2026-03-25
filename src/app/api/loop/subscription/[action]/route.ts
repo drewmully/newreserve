@@ -20,6 +20,10 @@ import {
   changeLoopSubscriptionPlan,
   reactivateLoopSubscription,
 } from "@/app/api/_lib/loopAdmin";
+import {
+  isSupportedSellingPlanId,
+  normalizeShopifyNumericId,
+} from "@/lib/membershipConfig";
 
 async function verifyFirebaseBearer(request: NextRequest): Promise<string> {
   const header = request.headers.get("Authorization") ?? "";
@@ -67,9 +71,13 @@ export async function POST(
     // body is optional
   }
 
+  const sellingPlanShopifyId =
+    action === "change-plan"
+      ? normalizeShopifyNumericId(body.sellingPlanShopifyId)
+      : null;
+
   if (action === "change-plan") {
-    const planId = body.sellingPlanShopifyId;
-    if (typeof planId !== "number" || !Number.isFinite(planId) || planId <= 0) {
+    if (!sellingPlanShopifyId || !isSupportedSellingPlanId(sellingPlanShopifyId)) {
       return NextResponse.json({ error: "Invalid sellingPlanShopifyId" }, { status: 400 });
     }
   }
@@ -89,7 +97,6 @@ export async function POST(
     return NextResponse.json({ error: "No matching subscription found" }, { status: 404 });
   }
   const subscriptionId = sub.id;
-  const sellingPlanShopifyId = body.sellingPlanShopifyId as number | undefined;
   const cancelReason = body.reason as string | undefined;
 
   try {

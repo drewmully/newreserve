@@ -18,6 +18,7 @@ import {
   aggregateKpiDaily,
 } from "@/app/api/_lib/kpiReporting";
 import { adminDb } from "@/lib/firebase-admin";
+import { resolveMemberTierFromVariantId } from "@/lib/membershipConfig";
 
 // ─── HMAC verification ────────────────────────────────────────────────────────
 
@@ -75,20 +76,12 @@ async function isDuplicateWebhook(request: NextRequest): Promise<boolean> {
 
 type MemberTier = "free" | "access" | "member" | "black";
 
-// Maps Shopify variant IDs to member tiers
-const VARIANT_TIER_MAP: Record<number, MemberTier> = {
-  47601025482944: "access",  // Reserve Access — $99/year
-  47601025122496: "member",  // Reserve Member — $249/quarter
-  47601025679552: "member",  // Back 9 Legacy
-};
-
 function resolveTierFromLineItems(
   lineItems: { variant_id: number | null }[]
 ): MemberTier | null {
   for (const item of lineItems) {
-    if (item.variant_id && VARIANT_TIER_MAP[item.variant_id]) {
-      return VARIANT_TIER_MAP[item.variant_id];
-    }
+    const tier = resolveMemberTierFromVariantId(item.variant_id);
+    if (tier) return tier;
   }
   return null;
 }

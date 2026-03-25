@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMembership, type FitProfile, type StoreCreditState, type SubscriptionsState } from "../context/MembershipContext";
 import { trackEvent } from "@/lib/tracking";
+import { LOOP_CHANGE_PLAN_OPTIONS } from "@/lib/membershipConfig";
 
 interface OrderLineItem {
   name: string;
@@ -708,10 +709,7 @@ function SubscriptionSection({
 
 type SubView = "main" | "change-plan" | "cancel";
 
-const PLAN_OPTIONS = [
-  { label: "Reserve Access", price: "$99/year", sellingPlanShopifyId: 3241443520 },
-  { label: "Reserve Member", price: "$249/quarter", sellingPlanShopifyId: 3241476288 },
-];
+const PLAN_OPTIONS = LOOP_CHANGE_PLAN_OPTIONS;
 
 function SubscriptionManagerModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { user } = useMembership();

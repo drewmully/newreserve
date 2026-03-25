@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useEffect, useCallback } from "react";
 import { buildCheckoutOriginAttributes } from "@/lib/shopifyCheckoutOrigin";
+import { SHOPIFY_MEMBERSHIP_PLANS } from "@/lib/membershipConfig";
 
 /* ═══════════════════════════════════════════
    UPGRADE MODAL
-   Plan selection → Fit profile (Reserve Member)
+   Plan selection only (checkout-first flow)
    ═══════════════════════════════════════════ */
 
 type MemberTier = "free" | "access" | "member" | "black";
@@ -17,31 +18,8 @@ interface UpgradeModalProps {
   onSelectPlan: (tier: MemberTier) => void;
 }
 
-/* ── Sizing options ── */
-
-const SHIRT_SIZES = ["S", "M", "L", "XL", "XXL"];
-const GLOVE_HANDS = ["Left", "Right"];
-const GLOVE_SIZES = ["S", "M", "ML", "L", "XL"];
-const WAIST_SIZES = ["28", "30", "32", "34", "36", "38", "40"];
-const SHOE_SIZES = ["7", "7.5", "8", "8.5", "9", "9.5", "10", "10.5", "11", "11.5", "12", "13"];
-const PANTS_INSEAMS = ["28\"", "30\"", "32\"", "34\""];
-const SHORTS_INSEAMS = ["7\"", "9\"", "10\""];
-
-export function UpgradeModal({ open, onClose, currentTier, onSelectPlan }: UpgradeModalProps) {
-  // 0 = plan picker, 1 = fit: tops + glove, 2 = fit: bottoms + shoes
-  const [fitStep, setFitStep] = useState(0);
-
-  // Fit form state
-  const [shirtSize, setShirtSize] = useState("");
-  const [gloveHand, setGloveHand] = useState("");
-  const [gloveSize, setGloveSize] = useState("");
-  const [waistSize, setWaistSize] = useState("");
-  const [shoeSize, setShoeSize] = useState("");
-  const [pantsInseam, setPantsInseam] = useState("");
-  const [shortsInseam, setShortsInseam] = useState("");
-
+export function UpgradeModal({ open, onClose, currentTier }: UpgradeModalProps) {
   const handleClose = useCallback(() => {
-    setFitStep(0);
     onClose();
   }, [onClose]);
 
@@ -68,12 +46,12 @@ export function UpgradeModal({ open, onClose, currentTier, onSelectPlan }: Upgra
 
   const PLANS = {
     access: {
-      merchandiseId: "gid://shopify/ProductVariant/47601025482944",
-      sellingPlanId: "gid://shopify/SellingPlan/3241443520",
+      merchandiseId: SHOPIFY_MEMBERSHIP_PLANS.access.merchandiseId,
+      sellingPlanId: SHOPIFY_MEMBERSHIP_PLANS.access.sellingPlanGid,
     },
     member: {
-      merchandiseId: "gid://shopify/ProductVariant/47601025122496",
-      sellingPlanId: "gid://shopify/SellingPlan/3241476288",
+      merchandiseId: SHOPIFY_MEMBERSHIP_PLANS.member.merchandiseId,
+      sellingPlanId: SHOPIFY_MEMBERSHIP_PLANS.member.sellingPlanGid,
     },
   };
 
@@ -149,11 +127,6 @@ export function UpgradeModal({ open, onClose, currentTier, onSelectPlan }: Upgra
     );
   }
 
-  function finishMember() {
-    onSelectPlan("member");
-    onClose();
-  }
-
   const showAccessCard = currentTier === "free";
   const showMemberCard = currentTier !== "member" && currentTier !== "black";
 
@@ -180,8 +153,7 @@ export function UpgradeModal({ open, onClose, currentTier, onSelectPlan }: Upgra
           </button>
 
           {/* ════════ PLAN SELECTION ════════ */}
-          {fitStep === 0 && (
-            <div className="p-6 sm:p-8">
+          <div className="p-6 sm:p-8">
               <span className="inline-flex items-center gap-2 text-xs tracking-[0.3em] uppercase text-sage font-medium mb-4">
                 <span className="w-6 h-px bg-sage/50" />
                 Upgrade
@@ -240,7 +212,7 @@ export function UpgradeModal({ open, onClose, currentTier, onSelectPlan }: Upgra
                           <span className="text-bone/45 text-sm ml-1">/quarter</span>
                         </div>
                         <p className="text-xs text-bone/40 mb-4">
-                          Includes a personalized fit profile for curated drops and member boxes.
+                          Includes fit-profile powered curation for drops and member boxes.
                         </p>
                         <div className="border-t border-bone/10 pt-4">
                           <ul className="space-y-2 mb-5">
@@ -287,119 +259,9 @@ export function UpgradeModal({ open, onClose, currentTier, onSelectPlan }: Upgra
               </div>
 
               <p className="text-center text-xs text-charcoal/35 mt-6 leading-relaxed">
-                Cancel or change plans anytime. Member boxes and fit profiles are currently available in menswear only.
+                Cancel or change plans anytime. Complete your fit profile in onboarding or from your Account page.
               </p>
-            </div>
-          )}
-
-          {/* ════════ FIT 1/2: Tops & Glove ════════ */}
-          {fitStep === 1 && (
-            <div className="p-6 sm:p-8 animate-substep-in">
-              {/* Progress dots */}
-              <FitDots current={1} />
-
-              <h2 className="font-serif text-2xl sm:text-3xl text-obsidian leading-tight mb-2">
-                Tops &amp; glove.
-              </h2>
-              <p className="text-sm text-charcoal/45 mb-8">
-                So we can get your fit right from day one.
-              </p>
-
-              {/* Shirt */}
-              <div className="mb-8">
-                <h3 className="text-sm font-medium text-obsidian mb-3">Shirt size</h3>
-                <div className="flex flex-wrap gap-2">
-                  {SHIRT_SIZES.map((s) => (
-                    <PillButton key={s} label={s} active={shirtSize === s} onClick={() => setShirtSize(shirtSize === s ? "" : s)} />
-                  ))}
-                </div>
-              </div>
-
-              {/* Glove */}
-              <div className="mb-10">
-                <h3 className="text-sm font-medium text-obsidian mb-3">Glove</h3>
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {GLOVE_HANDS.map((h) => (
-                    <PillButton key={h} label={h} active={gloveHand === h} onClick={() => setGloveHand(gloveHand === h ? "" : h)} />
-                  ))}
-                </div>
-                {gloveHand && (
-                  <div className="flex flex-wrap gap-2 animate-fade-up">
-                    {GLOVE_SIZES.map((s) => (
-                      <PillButton key={s} label={s} active={gloveSize === s} onClick={() => setGloveSize(gloveSize === s ? "" : s)} />
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <FitNav
-                onBack={() => setFitStep(0)}
-                onSkip={finishMember}
-                onNext={() => setFitStep(2)}
-              />
-            </div>
-          )}
-
-          {/* ════════ FIT 2/2: Bottoms & Shoes ════════ */}
-          {fitStep === 2 && (
-            <div className="p-6 sm:p-8 animate-substep-in">
-              <FitDots current={2} />
-
-              <h2 className="font-serif text-2xl sm:text-3xl text-obsidian leading-tight mb-2">
-                Bottoms &amp; shoes.
-              </h2>
-              <p className="text-sm text-charcoal/45 mb-8">
-                Almost there. Just a few more to lock in your profile.
-              </p>
-
-              {/* Waist */}
-              <div className="mb-8">
-                <h3 className="text-sm font-medium text-obsidian mb-3">Waist</h3>
-                <div className="flex flex-wrap gap-2">
-                  {WAIST_SIZES.map((s) => (
-                    <PillButton key={s} label={s} active={waistSize === s} onClick={() => setWaistSize(waistSize === s ? "" : s)} />
-                  ))}
-                </div>
-              </div>
-
-              {/* Pants Inseam */}
-              <div className="mb-8">
-                <h3 className="text-sm font-medium text-obsidian mb-3">Pants inseam</h3>
-                <div className="flex flex-wrap gap-2">
-                  {PANTS_INSEAMS.map((s) => (
-                    <PillButton key={s} label={s} active={pantsInseam === s} onClick={() => setPantsInseam(pantsInseam === s ? "" : s)} />
-                  ))}
-                </div>
-              </div>
-
-              {/* Shorts Inseam */}
-              <div className="mb-8">
-                <h3 className="text-sm font-medium text-obsidian mb-3">Shorts inseam</h3>
-                <div className="flex flex-wrap gap-2">
-                  {SHORTS_INSEAMS.map((s) => (
-                    <PillButton key={s} label={s} active={shortsInseam === s} onClick={() => setShortsInseam(shortsInseam === s ? "" : s)} />
-                  ))}
-                </div>
-              </div>
-
-              {/* Shoe */}
-              <div className="mb-10">
-                <h3 className="text-sm font-medium text-obsidian mb-3">Shoe size</h3>
-                <div className="flex flex-wrap gap-2">
-                  {SHOE_SIZES.map((s) => (
-                    <PillButton key={s} label={s} active={shoeSize === s} onClick={() => setShoeSize(shoeSize === s ? "" : s)} />
-                  ))}
-                </div>
-              </div>
-
-              <FitNav
-                onBack={() => setFitStep(1)}
-                onSkip={finishMember}
-                onNext={finishMember}
-                isLast
-              />
-            </div>
-          )}
+          </div>
         </div>
       </div>
     </div>

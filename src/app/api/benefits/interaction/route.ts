@@ -3,6 +3,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { Resend } from "resend";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { getLoopRawSubscriptions } from "@/app/api/_lib/loopAdmin";
+import { resolveMemberTierFromVariantId } from "@/lib/membershipConfig";
 
 type MemberTier = "free" | "access" | "member" | "black";
 type BenefitKey = "v1_virtual_coaching" | "concierge_support";
@@ -26,12 +27,6 @@ const ADMIN_EMAIL = "info@mullybox.com";
 const BENEFIT_ALLOWED_TIERS: Record<BenefitKey, MemberTier[]> = {
   v1_virtual_coaching: ["access", "member", "black"],
   concierge_support: ["member", "black"],
-};
-
-const LOOP_VARIANT_TIER: Record<string, MemberTier> = {
-  "47601025482944": "access",
-  "47601025122496": "member",
-  "47601025679552": "member",
 };
 
 const TIER_RANK: Record<MemberTier, number> = {
@@ -75,7 +70,7 @@ function resolveTierFromLoopSubs(subs: Array<Record<string, unknown>>): MemberTi
     }
 
     for (const variantId of candidates) {
-      const tier = LOOP_VARIANT_TIER[variantId];
+      const tier = resolveMemberTierFromVariantId(variantId);
       if (!tier) continue;
       if (!resolved || TIER_RANK[tier] > TIER_RANK[resolved]) {
         resolved = tier;
