@@ -29,6 +29,10 @@ import {
 } from "@/lib/shopify";
 import { buildCheckoutOriginAttributes } from "@/lib/shopifyCheckoutOrigin";
 import { resolveMemberTierFromVariantId } from "@/lib/membershipConfig";
+import {
+  buildCompleteOnboardingUpdatePayload,
+  fromFirestoreOnboardingProfile,
+} from "@/lib/onboardingProfile";
 
 /* ═══════════════════════════════════════════
    TIER RESOLUTION FROM LOOP SUBSCRIPTIONS
@@ -134,57 +138,6 @@ export const EMPTY_ONBOARDING_PROFILE: OnboardingProfile = {
   vibeCheck: "",
   selectedTier: "",
 };
-
-function formatBirthdateIso(
-  birthYear: string,
-  birthMonth: string,
-  birthDay: string
-): string | null {
-  const year = Number(birthYear);
-  const month = Number(birthMonth);
-  const day = Number(birthDay);
-  if (!year || !month || !day) return null;
-  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null;
-  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
-  return `${birthYear.padStart(4, "0")}-${birthMonth.padStart(2, "0")}-${birthDay.padStart(2, "0")}`;
-}
-
-function toFirestoreOnboardingProfile(profile: OnboardingProfile) {
-  return {
-    birth_month: profile.birthMonth,
-    birth_day: profile.birthDay,
-    birth_year: profile.birthYear,
-    birthdate_iso: formatBirthdateIso(profile.birthYear, profile.birthMonth, profile.birthDay),
-    handicap: profile.handicap,
-    private_club_member: profile.privateClub,
-    club_name: profile.clubName,
-    vibe_check: profile.vibeCheck,
-    selected_tier: profile.selectedTier,
-  };
-}
-
-function fromFirestoreOnboardingProfile(value: unknown): OnboardingProfile | null {
-  if (!value || typeof value !== "object") return null;
-  const map = value as Record<string, unknown>;
-  const privateClubRaw = map.private_club_member;
-
-  return {
-    birthMonth: typeof map.birth_month === "string" ? map.birth_month : "",
-    birthDay: typeof map.birth_day === "string" ? map.birth_day : "",
-    birthYear: typeof map.birth_year === "string" ? map.birth_year : "",
-    handicap: typeof map.handicap === "string" ? map.handicap : "",
-    privateClub:
-      privateClubRaw === true ? true : privateClubRaw === false ? false : null,
-    clubName: typeof map.club_name === "string" ? map.club_name : "",
-    vibeCheck: typeof map.vibe_check === "string" ? map.vibe_check : "",
-    selectedTier:
-      map.selected_tier === "free" ||
-      map.selected_tier === "access" ||
-      map.selected_tier === "member"
-        ? map.selected_tier
-        : "",
-  };
-}
 
 interface MembershipContextValue {
   // Auth
@@ -732,29 +685,14 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
       onboardingProfile: OnboardingProfile;
       fitProfile?: FitProfile;
     }) => {
-      const normalizedOnboardingProfile: OnboardingProfile = {
-        birthMonth: data.onboardingProfile.birthMonth,
-        birthDay: data.onboardingProfile.birthDay,
-        birthYear: data.onboardingProfile.birthYear,
-        handicap: data.onboardingProfile.handicap,
-        privateClub:
-          data.onboardingProfile.privateClub === true
-            ? true
-            : data.onboardingProfile.privateClub === false
-              ? false
-              : null,
-        clubName: data.onboardingProfile.clubName,
-        vibeCheck: data.onboardingProfile.vibeCheck,
-        selectedTier:
-          data.onboardingProfile.selectedTier === "free" ||
-          data.onboardingProfile.selectedTier === "access" ||
-          data.onboardingProfile.selectedTier === "member"
-            ? data.onboardingProfile.selectedTier
-            : "",
-      };
-      const normalizedFitProfile = data.fitProfile
-        ? { ...EMPTY_FIT, ...data.fitProfile }
-        : undefined;
+      const { normalizedOnboardingProfile, normalizedFitProfile, updates } =
+        buildCompleteOnboardingUpdatePayload({
+          username: data.username,
+          onboardingProfile: data.onboardingProfile,
+          fitProfile: data.fitProfile,
+          emptyFitProfile: EMPTY_FIT,
+          updatedAt: serverTimestamp(),
+        });
 
       setUsername(data.username);
       setOnboardingCompleted(true);
@@ -764,17 +702,6 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
       }
       if (user?.uid) {
         try {
-          const updates: Record<string, unknown> = {
-            username: data.username,
-            onboarding_completed: true,
-            onboarding_profile: toFirestoreOnboardingProfile(
-              normalizedOnboardingProfile
-            ),
-            updated_at: serverTimestamp(),
-          };
-          if (normalizedFitProfile) {
-            updates.fit_profile = normalizedFitProfile;
-          }
           await updateDoc(doc(db, "users", user.uid), updates);
         } catch (err) {
           console.error("[Onboarding] Firestore persist failed:", err);
