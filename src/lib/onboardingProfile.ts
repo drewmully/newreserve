@@ -127,7 +127,7 @@ export function fromFirestoreOnboardingProfile(
   };
 }
 
-export function normalizeFitProfile<T extends Record<string, string>>(
+export function normalizeFitProfile<T extends object>(
   fitProfile: Partial<T> | undefined,
   emptyFitProfile: T
 ): T | undefined {
@@ -136,7 +136,7 @@ export function normalizeFitProfile<T extends Record<string, string>>(
 }
 
 export function buildCompleteOnboardingUpdatePayload<
-  TFitProfile extends Record<string, string>
+  TFitProfile extends object
 >(input: {
   username: string;
   onboardingProfile: OnboardingProfileInput;
