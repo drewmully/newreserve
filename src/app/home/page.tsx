@@ -444,33 +444,7 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-bone">
       {/* ─── TOP BAR ─── */}
-      <nav className="fixed top-0 left-0 right-0 z-50 bg-bone border-b border-taupe/15">
-        <div className="max-w-7xl mx-auto px-6 md:px-12">
-          <div className="flex items-center gap-3 overflow-x-auto py-3 scrollbar-hide">
-            {quickNavItems.map((item) => {
-              const isActive = item.href === "/home";
-              return (
-                <Link
-                  key={item.label}
-                  href={item.href}
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-full border transition-all duration-300 btn-press whitespace-nowrap ${
-                    isActive
-                      ? "border-forest/40 bg-forest text-bone shadow-sm"
-                      : "border-taupe/25 text-charcoal/70 hover:text-forest hover:border-forest/30 hover:bg-forest/5"
-                  }`}
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
-                  </svg>
-                  <span className="text-xs font-medium tracking-wide">{item.label}</span>
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      </nav>
-
-      <header className="fixed top-16 left-0 right-0 z-40 bg-bone/90 backdrop-blur-md border-b border-taupe/20 header-grass">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-bone/90 backdrop-blur-md border-b border-taupe/20 header-grass">
         <div className="max-w-7xl mx-auto px-6 md:px-12 flex items-center justify-between h-16">
           <Link href="/home" className="flex items-center gap-2 text-forest">
             <svg viewBox="0 0 1002 540" fill="currentColor" className="h-5 w-auto" aria-hidden="true"><path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" /></svg>
@@ -499,6 +473,32 @@ export default function HomePage() {
           </div>
         </div>
       </header>
+
+      <nav className="fixed top-16 left-0 right-0 z-40 bg-bone/90 backdrop-blur-md border-b border-taupe/15">
+        <div className="max-w-7xl mx-auto px-6 md:px-12">
+          <div className="flex items-center gap-3 overflow-x-auto py-3 scrollbar-hide">
+            {quickNavItems.map((item) => {
+              const isActive = item.href === "/home";
+              return (
+                <Link
+                  key={item.label}
+                  href={item.href}
+                  className={`flex items-center gap-2 px-5 py-2.5 rounded-full border transition-all duration-300 btn-press whitespace-nowrap ${
+                    isActive
+                      ? "border-forest/40 bg-forest text-bone shadow-sm"
+                      : "border-taupe/25 text-charcoal/70 hover:text-forest hover:border-forest/30 hover:bg-forest/5"
+                  }`}
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
+                  </svg>
+                  <span className="text-xs font-medium tracking-wide">{item.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      </nav>
 
       <main className="pt-36 pb-32 md:pb-24">
         {/* ═══════════════════════════════════════════
