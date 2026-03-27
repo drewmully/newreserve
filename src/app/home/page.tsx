@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { useMembership } from "../context/MembershipContext";
 import { SlideCart } from "../components/SlideCart";
 import { UpgradeModal } from "../components/UpgradeModal";
@@ -14,7 +15,7 @@ import {
   PRIVATE_RELEASES_COLLECTION_HANDLE,
   type ShopifyProduct,
 } from "@/lib/shopify";
-import { posts as communityPosts, type ForumPost } from "../community/posts";
+import { posts as communityPosts } from "../community/posts";
 
 /* ═══════════════════════════════════════════
    HOME — The Clubhouse
@@ -88,22 +89,17 @@ function getSeasonalEditorial(): EditorialCard {
 }
 
 /* ── Weather Helpers ── */
-function computeGolfScore(temp: number, wind: number, humidity: number, uvIndex: number): number {
-  let score = 10;
-  // Temperature (ideal 65-80°F)
-  if (temp < 50) score -= 3;
-  else if (temp < 60) score -= 1.5;
-  else if (temp > 90) score -= 2.5;
-  else if (temp > 85) score -= 1;
-  // Wind (ideal < 10mph)
-  if (wind > 25) score -= 3;
-  else if (wind > 15) score -= 1.5;
-  else if (wind > 10) score -= 0.5;
-  // Humidity
-  if (humidity > 85) score -= 1;
-  // UV
-  if (uvIndex > 8) score -= 0.5;
-  return Math.max(1, Math.min(10, Math.round(score)));
+function getNextDropDate(): Date {
+  const configuredDate = process.env.NEXT_PUBLIC_HOME_DROP_DATE;
+  if (configuredDate) {
+    const parsed = new Date(configuredDate);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+
+  const fallback = new Date();
+  fallback.setDate(fallback.getDate() + 14);
+  fallback.setHours(16, 0, 0, 0);
+  return fallback;
 }
 
 function getWeatherEmoji(condition: string): string {
@@ -210,6 +206,18 @@ export default function HomePage() {
 
   useEffect(() => {
     let cancelled = false;
+    const DEFAULT_WEATHER_COORDS = { lat: 40.7128, lon: -74.006 }; // New York City
+
+    async function fetchWeatherAt(lat: number, lon: number) {
+      const res = await fetch(`/api/weather?lat=${lat}&lon=${lon}`);
+      if (!res.ok) throw new Error("Weather API failed");
+      const data = await res.json();
+      if (!cancelled) {
+        setWeather(data);
+        setWeatherError(false);
+        setWeatherLoading(false);
+      }
+    }
 
     async function fetchWeather() {
       try {
@@ -218,20 +226,16 @@ export default function HomePage() {
           if (!navigator.geolocation) reject(new Error("No geolocation"));
           navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
         });
-
-        const { latitude, longitude } = pos.coords;
-        const res = await fetch(`/api/weather?lat=${latitude}&lon=${longitude}`);
-        if (!res.ok) throw new Error("Weather API failed");
-        const data = await res.json();
-        if (!cancelled) {
-          setWeather(data);
-          setWeatherLoading(false);
-        }
+        await fetchWeatherAt(pos.coords.latitude, pos.coords.longitude);
       } catch {
-        // Fallback: use a default location or show graceful error
-        if (!cancelled) {
-          setWeatherError(true);
-          setWeatherLoading(false);
+        try {
+          // Fallback: still show conditions with a default location
+          await fetchWeatherAt(DEFAULT_WEATHER_COORDS.lat, DEFAULT_WEATHER_COORDS.lon);
+        } catch {
+          if (!cancelled) {
+            setWeatherError(true);
+            setWeatherLoading(false);
+          }
         }
       }
     }
@@ -277,23 +281,24 @@ export default function HomePage() {
   const [badgePop, setBadgePop] = useState(false);
   const prevCartCount = useRef(cartCount);
   useEffect(() => {
-    if (cartCount > prevCartCount.current) {
+    const previousCount = prevCartCount.current;
+    prevCartCount.current = cartCount;
+    if (cartCount > previousCount) {
       setBadgePop(true);
       const t = setTimeout(() => setBadgePop(false), 400);
       return () => clearTimeout(t);
     }
-    prevCartCount.current = cartCount;
   }, [cartCount]);
 
   // ── Countdown state ──
   const [countdown, setCountdown] = useState("");
-  const DROP_DATE = new Date("2025-08-01T12:00:00Z"); // Placeholder
-  const dropActive = DROP_DATE.getTime() > Date.now();
+  const [dropDate] = useState(() => getNextDropDate());
+  const dropActive = dropDate.getTime() > Date.now();
 
   useEffect(() => {
     if (!dropActive) return;
     const tick = () => {
-      const diff = DROP_DATE.getTime() - Date.now();
+      const diff = dropDate.getTime() - Date.now();
       if (diff <= 0) { setCountdown("LIVE NOW"); return; }
       const d = Math.floor(diff / 86400000);
       const h = Math.floor((diff % 86400000) / 3600000);
@@ -304,8 +309,7 @@ export default function HomePage() {
     tick();
     const interval = setInterval(tick, 1000);
     return () => clearInterval(interval);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dropActive]);
+  }, [dropActive, dropDate]);
 
   // ── Curated products (personalized selection) ──
   const curatedProducts = getCuratedProducts(products, fitProfile?.shirtSize, onboardingProfile?.vibeCheck);
@@ -603,9 +607,12 @@ export default function HomePage() {
                       </div>
                       <div className="aspect-square bg-bone-dark overflow-hidden product-img-wrap">
                         {staffPick.images[0] && (
-                          <img
+                          <Image
                             src={staffPick.images[0]}
                             alt={staffPick.name}
+                            width={720}
+                            height={720}
+                            sizes="(min-width: 768px) 18rem, 16rem"
                             className="w-full h-full object-cover product-img-primary"
                           />
                         )}
@@ -653,16 +660,23 @@ export default function HomePage() {
                     <Link href={`/shop/${product.slug}`} className="block rounded-2xl overflow-hidden bg-cream group product-tile-hover border border-taupe/15">
                       <div className="aspect-square bg-bone-dark overflow-hidden product-img-wrap">
                         {product.images[0] && (
-                          <img
+                          <Image
                             src={product.images[0]}
                             alt={product.name}
+                            width={720}
+                            height={720}
+                            sizes="(min-width: 768px) 16rem, 14rem"
                             className="w-full h-full object-cover product-img-primary"
                           />
                         )}
                         {product.images[1] && (
-                          <img
+                          <Image
                             src={product.images[1]}
                             alt=""
+                            width={720}
+                            height={720}
+                            sizes="(min-width: 768px) 16rem, 14rem"
+                            aria-hidden="true"
                             className="w-full h-full object-cover product-img-secondary"
                           />
                         )}
@@ -930,7 +944,7 @@ export default function HomePage() {
         open={upgradeOpen}
         onClose={() => setUpgradeOpen(false)}
         currentTier={tier}
-        onSelectPlan={(t) => {}}
+        onSelectPlan={() => {}}
       />
     </div>
   );
@@ -947,8 +961,49 @@ function getCuratedProducts(
 ): ShopifyProduct[] {
   if (products.length === 0) return [];
 
-  // Simple recommendation: shuffle and take 4
-  // In a real implementation, filter by fit profile, exclude past purchases, seasonal logic
-  const shuffled = [...products].sort(() => 0.5 - Math.random());
-  return shuffled.slice(0, 4);
+  const normalizedSize = shirtSize?.trim().toLowerCase();
+  const normalizedVibe = vibeCheck?.trim().toLowerCase();
+
+  const vibeKeywords: Record<string, string[]> = {
+    classic: ["polo", "traditional", "core", "staple"],
+    modern: ["tech", "performance", "lightweight", "stretch"],
+    street: ["oversized", "graphic", "drop", "layer"],
+    bold: ["statement", "color", "limited", "premium"],
+  };
+
+  const scoreProduct = (product: ShopifyProduct) => {
+    const searchText = [
+      product.name,
+      product.brand,
+      product.collection,
+      product.description,
+      product.whyWeLikeIt,
+      product.sizing,
+    ]
+      .join(" ")
+      .toLowerCase();
+
+    let score = 0;
+
+    if (normalizedSize && product.sizing.toLowerCase().includes(normalizedSize)) {
+      score += 3;
+    }
+
+    if (normalizedVibe) {
+      if (searchText.includes(normalizedVibe)) score += 4;
+      for (const keyword of vibeKeywords[normalizedVibe] ?? []) {
+        if (searchText.includes(keyword)) score += 1;
+      }
+    }
+
+    return score;
+  };
+
+  return [...products]
+    .sort((a, b) => {
+      const diff = scoreProduct(b) - scoreProduct(a);
+      if (diff !== 0) return diff;
+      return a.slug.localeCompare(b.slug);
+    })
+    .slice(0, 4);
 }
