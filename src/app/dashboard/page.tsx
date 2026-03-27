@@ -26,6 +26,15 @@ import { formatExclusiveDropLabel, getExclusiveDropDate } from "@/lib/dropConfig
 type Tab = "shop" | "drops" | "community" | "club" | "benefits";
 
 const VALID_TABS: Tab[] = ["shop", "drops", "community", "club", "benefits"];
+const HOME_ICON = "M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25";
+const ACCOUNT_ICON = "M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z";
+const DASHBOARD_TAB_PILLS: ReadonlyArray<{ key: Tab; label: string; icon: string }> = [
+  { key: "shop", label: "Shop", icon: "M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" },
+  { key: "drops", label: "Drops", icon: "M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" },
+  { key: "community", label: "Community", icon: "M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 01-.825-.242m9.345-8.334a2.126 2.126 0 00-.476-.095 48.64 48.64 0 00-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0011.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155" },
+  { key: "club", label: "Club", icon: "M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0012 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75z" },
+  { key: "benefits", label: "Benefits", icon: "M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" },
+];
 
 function DashboardContent() {
   const router = useRouter();
@@ -141,34 +150,41 @@ function DashboardContent() {
       {/* ─── TAB BAR ─── */}
       <nav className="fixed top-16 left-0 right-0 z-40 bg-bone/90 backdrop-blur-md border-b border-taupe/15">
         <div className="max-w-7xl mx-auto px-6 md:px-12">
-          <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide">
+          <div className="flex items-center gap-3 overflow-x-auto py-3 scrollbar-hide">
             <Link
               href="/home"
-              className="px-5 py-3.5 text-sm tracking-wider uppercase font-medium transition-all duration-300 border-b-2 whitespace-nowrap border-transparent text-charcoal/40 hover:text-charcoal/60"
+              className="flex items-center gap-2 px-5 py-2.5 rounded-full border border-taupe/25 text-charcoal/70 hover:text-forest hover:border-forest/30 hover:bg-forest/5 transition-all duration-300 btn-press whitespace-nowrap"
             >
-              Home
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d={HOME_ICON} />
+              </svg>
+              <span className="text-xs font-medium tracking-wide">Home</span>
             </Link>
-            {(
-              [
-                { key: "shop", label: "Shop" },
-                { key: "drops", label: "Drops" },
-                { key: "community", label: "Community" },
-                { key: "club", label: "Club" },
-                { key: "benefits", label: "Benefits" },
-              ] as const
-            ).map(({ key, label }) => (
+            {DASHBOARD_TAB_PILLS.map(({ key, label, icon }) => (
               <button
                 key={key}
                 onClick={() => handleTabChange(key)}
-                className={`px-5 py-3.5 text-sm tracking-wider uppercase font-medium transition-all duration-300 border-b-2 whitespace-nowrap cursor-pointer ${
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-full border transition-all duration-300 btn-press whitespace-nowrap cursor-pointer ${
                   activeTab === key
-                    ? "border-forest text-forest"
-                    : "border-transparent text-charcoal/40 hover:text-charcoal/60"
+                    ? "border-forest/40 bg-forest text-bone shadow-sm"
+                    : "border-taupe/25 text-charcoal/70 hover:text-forest hover:border-forest/30 hover:bg-forest/5"
                 }`}
               >
-                {label}
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d={icon} />
+                </svg>
+                <span className="text-xs font-medium tracking-wide">{label}</span>
               </button>
             ))}
+            <Link
+              href="/account"
+              className="flex items-center gap-2 px-5 py-2.5 rounded-full border border-taupe/25 text-charcoal/70 hover:text-forest hover:border-forest/30 hover:bg-forest/5 transition-all duration-300 btn-press whitespace-nowrap"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d={ACCOUNT_ICON} />
+              </svg>
+              <span className="text-xs font-medium tracking-wide">Account</span>
+            </Link>
           </div>
         </div>
       </nav>
