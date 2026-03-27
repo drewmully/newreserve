@@ -589,6 +589,24 @@ select:focus {
 }
 
 /* ─── Policy prose styling ─── */
+/* ─── SCROLLBAR HIDE UTILITY ─── */
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* ─── SAFE AREA (mobile bottom bar) ─── */
+
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ─── Policy prose styling ─── */
+
 .policy-prose {
   font-size: 0.875rem;
   line-height: 1.75;

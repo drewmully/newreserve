@@ -85,7 +85,7 @@ export default function LoginPage() {
   /* ── Redirect once authenticated ── */
   useEffect(() => {
     if (!authLoading && isSignedIn) {
-      router.replace(onboardingCompleted ? "/dashboard" : "/onboarding");
+      router.replace(onboardingCompleted ? "/home" : "/onboarding");
     }
   }, [authLoading, isSignedIn, onboardingCompleted, router]);
 

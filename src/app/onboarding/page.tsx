@@ -125,7 +125,7 @@ export default function OnboardingPage() {
       fitProfile: newTier === "member" ? nextFitProfile : undefined,
     });
     setTier(newTier);
-    router.push("/dashboard");
+    router.push("/home");
   }
   const [step, setStep] = useState(1);
 

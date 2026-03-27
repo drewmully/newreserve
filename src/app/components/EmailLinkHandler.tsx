@@ -47,7 +47,7 @@ export function EmailLinkHandler() {
 
     withRetry(() => confirmOTPSignIn(email, window.location.href))
       .then(() => {
-        router.replace("/dashboard");
+        router.replace("/home");
       })
       .catch((err) => {
         console.error("[EmailLinkHandler] sign-in failed after all retries:", err);

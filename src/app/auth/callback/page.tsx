@@ -26,7 +26,7 @@ export default function AuthCallbackPage() {
   // Auto-redirect authenticated users to dashboard after 3 s
   useEffect(() => {
     if (!authLoading && isSignedIn) {
-      const timer = setTimeout(() => router.replace("/dashboard"), 3000);
+      const timer = setTimeout(() => router.replace("/home"), 3000);
       return () => clearTimeout(timer);
     }
   }, [authLoading, isSignedIn, router]);
@@ -63,7 +63,7 @@ export default function AuthCallbackPage() {
         </p>
 
         <Link
-          href="/dashboard"
+          href="/home"
           className="inline-flex items-center justify-center h-11 px-8 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300"
         >
           Go to Dashboard

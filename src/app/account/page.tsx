@@ -115,7 +115,7 @@ export default function AccountPage() {
         <div className="max-w-xl mx-auto">
           {/* ── Back link ── */}
           <Link
-            href="/dashboard"
+            href="/home"
             className="inline-flex items-center gap-1.5 text-xs text-charcoal/35 hover:text-forest transition-colors duration-300 mb-6"
           >
             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -212,7 +212,7 @@ function AccountHeader({ cartCount, onCartOpen }: { cartCount: number; onCartOpe
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-bone/90 backdrop-blur-md border-b border-taupe/15">
       <div className="max-w-7xl mx-auto px-5 md:px-12 flex items-center justify-between h-14">
-        <Link href="/dashboard" className="flex items-center gap-2 text-forest">
+        <Link href="/home" className="flex items-center gap-2 text-forest">
           <svg viewBox="0 0 1002 540" fill="currentColor" className="h-4.5 w-auto" aria-hidden="true"><path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" /></svg>
           <span className="font-serif text-xl font-bold tracking-wide">mully.</span>
         </Link>
@@ -231,7 +231,7 @@ function AccountHeader({ cartCount, onCartOpen }: { cartCount: number; onCartOpe
               </span>
             )}
           </button>
-          <Link href="/dashboard" className="text-forest hover:text-forest-dark transition-colors duration-300 p-1" aria-label="Dashboard">
+          <Link href="/home" className="text-forest hover:text-forest-dark transition-colors duration-300 p-1" aria-label="Dashboard">
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
             </svg>
@@ -1035,7 +1035,7 @@ function OrdersSection({ orders }: { orders: OrderSummary[] | null }) {
             Your history will appear here after your first purchase.
           </p>
           <Link
-            href="/dashboard"
+            href="/home"
             className="inline-flex items-center justify-center h-9 px-5 rounded-lg border border-taupe/20 text-xs font-medium tracking-wider uppercase text-charcoal/45 hover:border-forest/30 hover:text-forest transition-all duration-300"
           >
             Browse Shop
