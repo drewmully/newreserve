@@ -17,12 +17,6 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
-  async rewrites() {
-    return [
-      { source: "/drops", destination: "/dashboard?tab=drops" },
-      { source: "/benefits", destination: "/dashboard?tab=benefits" },
-    ];
-  },
   async headers() {
     return [
       {
