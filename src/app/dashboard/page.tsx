@@ -190,7 +190,7 @@ function DashboardContent() {
       </nav>
 
       {/* ─── LAUNCH BANNER ─── */}
-      <div className="fixed top-[7.25rem] left-0 right-0 z-30 bg-forest text-bone">
+      <div className="fixed top-[8.75rem] left-0 right-0 z-30 bg-forest text-bone">
         <div className="max-w-7xl mx-auto px-6 md:px-12 py-2.5 flex items-center justify-center gap-2">
           <svg className="w-4 h-4 text-sage shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z" />
@@ -202,7 +202,7 @@ function DashboardContent() {
       </div>
 
       {/* ─── TAB CONTENT ─── */}
-      <main className="pt-42 pb-24">
+      <main className="pt-48 pb-24">
         <div key={activeTab} className="animate-tab-in">
           {activeTab === "shop" && (isSignedIn ? <ShopTab /> : <GatedTab type="shop" onUpgrade={() => setUpgradeOpen(true)} />)}
           {activeTab === "drops" && (isPaid ? <DropsTab /> : <GatedTab type="drops" onUpgrade={() => setUpgradeOpen(true)} />)}
@@ -2174,39 +2174,60 @@ function PostCard({
   const toggleLike = async () => {
     if (!user) return;
     const wasLiked = liked;
-    setLiked(!wasLiked);
-    setLikeCount((prev) => (wasLiked ? prev - 1 : prev + 1));
+    const previousCount = likeCount;
+    const optimisticLiked = !wasLiked;
+    const optimisticCount = wasLiked ? previousCount - 1 : previousCount + 1;
+    setLiked(optimisticLiked);
+    setLikeCount(optimisticCount);
     try {
       const token = await user.getIdToken();
-      await fetch(`/api/community/posts/${post.id}/like`, {
+      const res = await fetch(`/api/community/posts/${post.id}/like`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (!res.ok) throw new Error("Failed to toggle like");
+      const data = (await res.json()) as { liked?: boolean };
+      if (typeof data.liked === "boolean" && data.liked !== optimisticLiked) {
+        setLiked(data.liked);
+        setLikeCount(data.liked ? previousCount + 1 : previousCount - 1);
+      }
     } catch {
       setLiked(wasLiked);
-      setLikeCount((prev) => (wasLiked ? prev + 1 : prev - 1));
+      setLikeCount(previousCount);
     }
   };
 
   const toggleCommentLike = async (commentId: string) => {
     if (!user) return;
     const wasLiked = commentLikes[commentId] || false;
-    setCommentLikes((prev) => ({ ...prev, [commentId]: !wasLiked }));
+    const previousCount = commentLikeCounts[commentId] || 0;
+    const optimisticLiked = !wasLiked;
+    const optimisticCount = wasLiked ? previousCount - 1 : previousCount + 1;
+    setCommentLikes((prev) => ({ ...prev, [commentId]: optimisticLiked }));
     setCommentLikeCounts((prev) => ({
       ...prev,
-      [commentId]: wasLiked ? (prev[commentId] || 0) - 1 : (prev[commentId] || 0) + 1,
+      [commentId]: optimisticCount,
     }));
     try {
       const token = await user.getIdToken();
-      await fetch(`/api/community/posts/${post.id}/comments/${commentId}/like`, {
+      const res = await fetch(`/api/community/posts/${post.id}/comments/${commentId}/like`, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (!res.ok) throw new Error("Failed to toggle comment like");
+      const data = (await res.json()) as { liked?: boolean };
+      if (typeof data.liked === "boolean" && data.liked !== optimisticLiked) {
+        setCommentLikes((prev) => ({ ...prev, [commentId]: data.liked! }));
+        setCommentLikeCounts((prev) => ({
+          ...prev,
+          [commentId]: data.liked ? previousCount + 1 : previousCount - 1,
+        }));
+      }
     } catch {
       setCommentLikes((prev) => ({ ...prev, [commentId]: wasLiked }));
       setCommentLikeCounts((prev) => ({
         ...prev,
-        [commentId]: wasLiked ? (prev[commentId] || 0) + 1 : (prev[commentId] || 0) - 1,
+        [commentId]: previousCount,
       }));
     }
   };
