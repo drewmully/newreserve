@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { adminDb } from "@/lib/firebase-admin";
 import { FORUM_TAGS, formatRelativeTime, type ForumPost } from "./posts";
+import { ensureCommunitySeedPosts } from "@/lib/communitySeed";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,8 @@ export const metadata: Metadata = {
 
 async function getPosts(): Promise<ForumPost[]> {
   try {
+    await ensureCommunitySeedPosts();
+
     const snapshot = await adminDb
       .collection("communityPosts")
       .orderBy("createdAt", "desc")
@@ -74,7 +77,7 @@ export default async function CommunityPage() {
       {/* Header */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-bone/90 backdrop-blur-md border-b border-taupe/20">
         <div className="max-w-7xl mx-auto px-6 md:px-12 flex items-center justify-between h-16">
-          <Link href="/" className="flex items-center gap-2 text-forest">
+          <Link href="/home" className="flex items-center gap-2 text-forest">
             <svg viewBox="0 0 1002 540" fill="currentColor" className="h-5 w-auto" aria-hidden="true"><path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" /></svg>
             <span className="font-serif text-2xl font-bold tracking-wide">mully.</span>
           </Link>

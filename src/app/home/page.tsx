@@ -15,7 +15,8 @@ import {
   PRIVATE_RELEASES_COLLECTION_HANDLE,
   type ShopifyProduct,
 } from "@/lib/shopify";
-import { posts as communityPosts } from "../community/posts";
+import { getExclusiveDropDate } from "@/lib/dropConfig";
+import type { ForumPost } from "../community/posts";
 
 /* ═══════════════════════════════════════════
    HOME — The Clubhouse
@@ -38,6 +39,7 @@ interface WeatherData {
 
 /* ── Golf Round Types ── */
 interface GolfRound {
+  id: string;
   date: string;
   course: string;
   score: number;
@@ -67,7 +69,7 @@ function getSeasonalEditorial(): EditorialCard {
       title: "Peak Season Essentials",
       subtitle: "The gear and apparel our team is reaching for every round this summer",
       cta: "Shop the Edit",
-      href: "/dashboard?tab=shop",
+      href: "/shop",
       gradient: "from-ember/90 via-ember to-forest",
     };
   } else if (month >= 8 && month <= 10) {
@@ -89,19 +91,6 @@ function getSeasonalEditorial(): EditorialCard {
 }
 
 /* ── Weather Helpers ── */
-function getNextDropDate(): Date {
-  const configuredDate = process.env.NEXT_PUBLIC_HOME_DROP_DATE;
-  if (configuredDate) {
-    const parsed = new Date(configuredDate);
-    if (!Number.isNaN(parsed.getTime())) return parsed;
-  }
-
-  const fallback = new Date();
-  fallback.setDate(fallback.getDate() + 14);
-  fallback.setHours(16, 0, 0, 0);
-  return fallback;
-}
-
 function getWeatherEmoji(condition: string): string {
   const c = condition.toLowerCase();
   if (c.includes("clear") || c.includes("sunny")) return "☀️";
@@ -272,7 +261,52 @@ export default function HomePage() {
   }, []);
 
   // ── Golf stats state (mock for now — will be Firestore later) ──
-  const [golfRounds] = useState<GolfRound[]>([]);
+  const [golfRounds, setGolfRounds] = useState<GolfRound[]>([]);
+  const [roundsLoading, setRoundsLoading] = useState(true);
+  const [logRoundOpen, setLogRoundOpen] = useState(false);
+  const [roundCourse, setRoundCourse] = useState("");
+  const [roundDate, setRoundDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [roundScore, setRoundScore] = useState("");
+  const [roundSaving, setRoundSaving] = useState(false);
+  const [roundError, setRoundError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadGolfRounds() {
+      if (!isSignedIn || !user) {
+        if (!cancelled) {
+          setGolfRounds([]);
+          setRoundsLoading(false);
+        }
+        return;
+      }
+
+      try {
+        setRoundsLoading(true);
+        const token = await user.getIdToken();
+        const res = await fetch("/api/golf/rounds", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) throw new Error(`Golf rounds API failed (${res.status})`);
+        const data = (await res.json()) as { rounds?: GolfRound[] };
+        if (!cancelled) {
+          setGolfRounds(data.rounds ?? []);
+          setRoundsLoading(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setGolfRounds([]);
+          setRoundsLoading(false);
+        }
+      }
+    }
+
+    void loadGolfRounds();
+    return () => {
+      cancelled = true;
+    };
+  }, [isSignedIn, user]);
 
   // ── Upgrade modal ──
   const [upgradeOpen, setUpgradeOpen] = useState(false);
@@ -292,7 +326,7 @@ export default function HomePage() {
 
   // ── Countdown state ──
   const [countdown, setCountdown] = useState("");
-  const [dropDate] = useState(() => getNextDropDate());
+  const [dropDate] = useState(() => getExclusiveDropDate());
   const dropActive = dropDate.getTime() > Date.now();
 
   useEffect(() => {
@@ -316,10 +350,79 @@ export default function HomePage() {
   const staffPick = products.length > 0 ? products[Math.floor(products.length * 0.3)] : null;
 
   // ── Community posts (top 3) ──
-  const topPosts = [...communityPosts].sort((a, b) => b.likes - a.likes).slice(0, 3);
+  const [topPosts, setTopPosts] = useState<ForumPost[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/community/posts")
+      .then((res) => res.json())
+      .then((data: { posts?: ForumPost[] }) => {
+        if (cancelled) return;
+        const sorted = [...(data.posts ?? [])]
+          .sort((a, b) => b.likes - a.likes)
+          .slice(0, 3);
+        setTopPosts(sorted);
+      })
+      .catch(() => {
+        if (!cancelled) setTopPosts([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // ── Seasonal editorial ──
   const editorial = getSeasonalEditorial();
+
+  const handleLogRound = async () => {
+    if (!user) {
+      setRoundError("You need to be signed in to log a round.");
+      return;
+    }
+
+    const course = roundCourse.trim();
+    const score = Number(roundScore);
+    if (!course || !roundDate || !Number.isFinite(score)) {
+      setRoundError("Add course, date, and score before saving.");
+      return;
+    }
+
+    setRoundError(null);
+    setRoundSaving(true);
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch("/api/golf/rounds", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          date: roundDate,
+          course,
+          score,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = (await res.json()) as { error?: string };
+        throw new Error(data.error ?? `HTTP ${res.status}`);
+      }
+
+      const data = (await res.json()) as { round: GolfRound };
+      setGolfRounds((prev) =>
+        [data.round, ...prev].sort((a, b) => b.date.localeCompare(a.date))
+      );
+      setRoundCourse("");
+      setRoundDate(new Date().toISOString().slice(0, 10));
+      setRoundScore("");
+      setLogRoundOpen(false);
+    } catch (err) {
+      setRoundError(err instanceof Error ? err.message : "Could not save your round.");
+    } finally {
+      setRoundSaving(false);
+    }
+  };
 
   if (authLoading) {
     return (
@@ -508,10 +611,10 @@ export default function HomePage() {
           <ScrollReveal delay={0.05}>
             <div className="flex items-center gap-3">
               {[
-                { label: "Shop", href: "/dashboard?tab=shop", icon: "M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" },
-                { label: "Drops", href: "/dashboard?tab=drops", icon: "M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" },
-                { label: "Community", href: "/dashboard?tab=community", icon: "M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 01-.825-.242m9.345-8.334a2.126 2.126 0 00-.476-.095 48.64 48.64 0 00-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0011.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155" },
-                { label: "Benefits", href: "/dashboard?tab=benefits", icon: "M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" },
+                { label: "Shop", href: "/shop", icon: "M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" },
+                { label: "Drops", href: "/drops", icon: "M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" },
+                { label: "Community", href: "/community", icon: "M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 01-.825-.242m9.345-8.334a2.126 2.126 0 00-.476-.095 48.64 48.64 0 00-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0011.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155" },
+                { label: "Benefits", href: "/benefits", icon: "M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" },
                 { label: "Account", href: "/account", icon: "M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" },
               ].map((item) => (
                 <Link
@@ -559,7 +662,7 @@ export default function HomePage() {
                   </div>
                   <div className="mt-5 flex items-center gap-3">
                     <Link
-                      href="/dashboard?tab=drops"
+                      href="/drops"
                       className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-bone text-forest text-xs font-medium tracking-wide hover:bg-cream transition-colors btn-press"
                     >
                       {countdown === "LIVE NOW" ? "Shop Now" : "View Drops"}
@@ -585,7 +688,7 @@ export default function HomePage() {
                 <h2 className="font-serif text-2xl md:text-3xl text-obsidian">The Caddie&apos;s Pick</h2>
               </div>
               <Link
-                href="/dashboard?tab=shop"
+                href="/shop"
                 className="text-xs text-forest font-medium tracking-wide hover:text-forest-dark transition-colors link-hover-underline"
               >
                 View All
@@ -724,11 +827,13 @@ export default function HomePage() {
                   {/* Rounds This Month */}
                   <div className="bg-white/8 rounded-xl p-4 text-center">
                     <p className="font-serif text-4xl md:text-5xl font-bold text-bone">
-                      {golfRounds.filter(r => {
-                        const d = new Date(r.date);
-                        const now = new Date();
-                        return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-                      }).length || "0"}
+                      {roundsLoading
+                        ? "…"
+                        : golfRounds.filter((r) => {
+                            const d = new Date(r.date);
+                            const now = new Date();
+                            return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+                          }).length || "0"}
                     </p>
                     <p className="text-[10px] tracking-[0.2em] uppercase text-bone/40 mt-1">Rounds This Month</p>
                   </div>
@@ -736,7 +841,7 @@ export default function HomePage() {
                   {/* Best Score */}
                   <div className="bg-white/8 rounded-xl p-4 text-center">
                     <p className="font-serif text-4xl md:text-5xl font-bold text-bone">
-                      {golfRounds.length > 0 ? Math.min(...golfRounds.map(r => r.score)) : "—"}
+                      {roundsLoading ? "…" : golfRounds.length > 0 ? Math.min(...golfRounds.map((r) => r.score)) : "—"}
                     </p>
                     <p className="text-[10px] tracking-[0.2em] uppercase text-bone/40 mt-1">Best Score</p>
                   </div>
@@ -744,7 +849,7 @@ export default function HomePage() {
                   {/* Total Rounds */}
                   <div className="bg-white/8 rounded-xl p-4 text-center">
                     <p className="font-serif text-4xl md:text-5xl font-bold text-bone">
-                      {golfRounds.length || "0"}
+                      {roundsLoading ? "…" : golfRounds.length || "0"}
                     </p>
                     <p className="text-[10px] tracking-[0.2em] uppercase text-bone/40 mt-1">Total Rounds</p>
                   </div>
@@ -777,7 +882,10 @@ export default function HomePage() {
                 <div className="mt-5">
                   <button
                     className="text-xs text-bone/70 border border-bone/20 rounded-full px-5 py-2 hover:bg-bone/10 transition-colors btn-press cursor-pointer"
-                    onClick={() => {/* TODO: Open log round modal */}}
+                    onClick={() => {
+                      setRoundError(null);
+                      setLogRoundOpen(true);
+                    }}
                   >
                     + Log a Round
                   </button>
@@ -798,7 +906,7 @@ export default function HomePage() {
                 <h2 className="font-serif text-2xl md:text-3xl text-obsidian">The 19th Hole</h2>
               </div>
               <Link
-                href="/dashboard?tab=community"
+                href="/community"
                 className="text-xs text-forest font-medium tracking-wide hover:text-forest-dark transition-colors link-hover-underline"
               >
                 View All
@@ -850,7 +958,7 @@ export default function HomePage() {
 
             <div className="mt-4 text-center">
               <Link
-                href="/dashboard?tab=community"
+                href="/community"
                 className="inline-flex items-center gap-2 text-xs text-forest font-medium hover:text-forest-dark transition-colors btn-press"
               >
                 Start a conversation
@@ -912,14 +1020,97 @@ export default function HomePage() {
         )}
       </main>
 
+      {logRoundOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center px-6">
+          <div
+            className="absolute inset-0 bg-obsidian/50 backdrop-blur-sm"
+            onClick={() => {
+              if (!roundSaving) setLogRoundOpen(false);
+            }}
+          />
+          <div className="relative w-full max-w-md rounded-2xl border border-taupe/20 bg-bone p-6 md:p-7 shadow-2xl animate-fade-up">
+            <button
+              onClick={() => {
+                if (!roundSaving) setLogRoundOpen(false);
+              }}
+              className="absolute right-4 top-4 text-charcoal/35 hover:text-charcoal transition-colors"
+              aria-label="Close log round form"
+            >
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <p className="text-[10px] tracking-[0.3em] uppercase text-sage font-medium mb-2">The Scorecard</p>
+            <h3 className="font-serif text-2xl text-obsidian mb-5">Log a Round</h3>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[11px] tracking-[0.18em] uppercase text-charcoal/45 mb-1.5">Course</label>
+                <input
+                  type="text"
+                  value={roundCourse}
+                  onChange={(e) => setRoundCourse(e.target.value)}
+                  placeholder="e.g. Oakland Hills South"
+                  className="w-full h-11 px-3 rounded-lg border border-taupe/25 bg-cream text-sm text-obsidian placeholder:text-charcoal/35 focus:outline-none focus:border-forest/40 transition-colors"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] tracking-[0.18em] uppercase text-charcoal/45 mb-1.5">Date</label>
+                  <input
+                    type="date"
+                    value={roundDate}
+                    onChange={(e) => setRoundDate(e.target.value)}
+                    className="w-full h-11 px-3 rounded-lg border border-taupe/25 bg-cream text-sm text-obsidian focus:outline-none focus:border-forest/40 transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] tracking-[0.18em] uppercase text-charcoal/45 mb-1.5">Score</label>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={40}
+                    max={200}
+                    value={roundScore}
+                    onChange={(e) => setRoundScore(e.target.value)}
+                    placeholder="78"
+                    className="w-full h-11 px-3 rounded-lg border border-taupe/25 bg-cream text-sm text-obsidian placeholder:text-charcoal/35 focus:outline-none focus:border-forest/40 transition-colors"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {roundError && <p className="mt-3 text-xs text-ember">{roundError}</p>}
+
+            <div className="mt-5 flex items-center justify-end gap-2.5">
+              <button
+                onClick={() => setLogRoundOpen(false)}
+                disabled={roundSaving}
+                className="h-10 px-4 rounded-lg border border-taupe/25 text-xs font-medium tracking-wide text-charcoal/55 hover:text-charcoal hover:border-taupe/40 transition-colors disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void handleLogRound()}
+                disabled={roundSaving}
+                className="h-10 px-5 rounded-lg bg-forest text-bone text-xs font-medium tracking-wide uppercase hover:bg-forest-dark transition-colors disabled:opacity-60"
+              >
+                {roundSaving ? "Saving..." : "Save Round"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ─── MOBILE QUICK ACTIONS — Sticky Bottom Bar ─── */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 bg-bone/95 backdrop-blur-md border-t border-taupe/20 md:hidden safe-area-bottom">
         <div className="flex items-center justify-around py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
           {[
             { label: "Home", href: "/home", icon: "M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25", active: true },
-            { label: "Shop", href: "/dashboard?tab=shop", icon: "M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z", active: false },
-            { label: "Drops", href: "/dashboard?tab=drops", icon: "M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z", active: false },
-            { label: "Community", href: "/dashboard?tab=community", icon: "M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 01-.825-.242m9.345-8.334a2.126 2.126 0 00-.476-.095 48.64 48.64 0 00-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0011.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155", active: false },
+            { label: "Shop", href: "/shop", icon: "M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z", active: false },
+            { label: "Drops", href: "/drops", icon: "M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z", active: false },
+            { label: "Community", href: "/community", icon: "M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 01-.825-.242m9.345-8.334a2.126 2.126 0 00-.476-.095 48.64 48.64 0 00-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0011.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155", active: false },
             { label: "Account", href: "/account", icon: "M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z", active: false },
           ].map((item) => (
             <Link

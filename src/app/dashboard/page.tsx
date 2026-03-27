@@ -17,6 +17,7 @@ import { UpgradeModal } from "../components/UpgradeModal";
 import { FORUM_TAGS, type ForumPost, type ForumComment } from "../community/posts";
 import type { User as FirebaseUser } from "firebase/auth";
 import { trackEvent } from "@/lib/tracking";
+import { formatExclusiveDropLabel, getExclusiveDropDate } from "@/lib/dropConfig";
 
 /* ═══════════════════════════════════════════
    DASHBOARD — Shop · Community · Club · Benefits
@@ -29,10 +30,11 @@ const VALID_TABS: Tab[] = ["shop", "drops", "community", "club", "benefits"];
 function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const initialTab = VALID_TABS.includes(searchParams.get("tab") as Tab)
-    ? (searchParams.get("tab") as Tab)
+  const tabParam = searchParams.get("tab");
+  const parsedTab = VALID_TABS.includes(tabParam as Tab)
+    ? (tabParam as Tab)
     : "shop";
-  const [activeTab, setActiveTab] = useState<Tab>(initialTab);
+  const [activeTab, setActiveTab] = useState<Tab>(parsedTab);
   const {
     isSignedIn,
     authLoading,
@@ -45,6 +47,20 @@ function DashboardContent() {
   } = useMembership();
   const isPaid = tier === "access" || tier === "member" || tier === "black";
   const [upgradeOpen, setUpgradeOpen] = useState(false);
+
+  useEffect(() => {
+    if (parsedTab !== activeTab) {
+      setActiveTab(parsedTab);
+    }
+  }, [activeTab, parsedTab]);
+
+  const handleTabChange = useCallback(
+    (nextTab: Tab) => {
+      setActiveTab(nextTab);
+      router.replace(`/dashboard?tab=${nextTab}`, { scroll: false });
+    },
+    [router]
+  );
 
   // Auth guard
   useEffect(() => {
@@ -66,12 +82,13 @@ function DashboardContent() {
   const [badgePop, setBadgePop] = useState(false);
   const prevCartCount = useRef(cartCount);
   useEffect(() => {
-    if (cartCount > prevCartCount.current) {
+    const previousCount = prevCartCount.current;
+    prevCartCount.current = cartCount;
+    if (cartCount > previousCount) {
       setBadgePop(true);
       const t = setTimeout(() => setBadgePop(false), 400);
       return () => clearTimeout(t);
     }
-    prevCartCount.current = cartCount;
   }, [cartCount]);
 
   if (authLoading) {
@@ -87,7 +104,7 @@ function DashboardContent() {
       {/* ─── TOP BAR ─── */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-bone/90 backdrop-blur-md border-b border-taupe/20">
         <div className="max-w-7xl mx-auto px-6 md:px-12 flex items-center justify-between h-16">
-          <Link href="/dashboard" className="flex items-center gap-2 text-forest">
+          <Link href="/home" className="flex items-center gap-2 text-forest">
             <svg viewBox="0 0 1002 540" fill="currentColor" className="h-5 w-auto" aria-hidden="true"><path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" /></svg>
             <span className="font-serif text-2xl font-bold tracking-wide">mully.</span>
           </Link>
@@ -125,6 +142,12 @@ function DashboardContent() {
       <nav className="fixed top-16 left-0 right-0 z-40 bg-bone/90 backdrop-blur-md border-b border-taupe/15">
         <div className="max-w-7xl mx-auto px-6 md:px-12">
           <div className="flex items-center gap-1 overflow-x-auto scrollbar-hide">
+            <Link
+              href="/home"
+              className="px-5 py-3.5 text-sm tracking-wider uppercase font-medium transition-all duration-300 border-b-2 whitespace-nowrap border-transparent text-charcoal/40 hover:text-charcoal/60"
+            >
+              Home
+            </Link>
             {(
               [
                 { key: "shop", label: "Shop" },
@@ -136,7 +159,7 @@ function DashboardContent() {
             ).map(({ key, label }) => (
               <button
                 key={key}
-                onClick={() => setActiveTab(key)}
+                onClick={() => handleTabChange(key)}
                 className={`px-5 py-3.5 text-sm tracking-wider uppercase font-medium transition-all duration-300 border-b-2 whitespace-nowrap cursor-pointer ${
                   activeTab === key
                     ? "border-forest text-forest"
@@ -530,7 +553,7 @@ function ShopTab() {
    DROPS TAB — Limited / member-exclusive releases
    ═══════════════════════════════════════════ */
 
-const DROP_DATE = new Date("2026-05-15T21:00:00-04:00"); // Fri 5/15 9 PM EST (EDT in May)
+const DROP_DATE = getExclusiveDropDate();
 
 function useCountdown(target: Date) {
   const [now, setNow] = useState(() => new Date());
@@ -548,6 +571,7 @@ function useCountdown(target: Date) {
 
 function DropsTab() {
   const { days, hours, minutes, seconds, isLive } = useCountdown(DROP_DATE);
+  const dropDateLabel = formatExclusiveDropLabel(DROP_DATE);
 
   return (
     <div className="px-6 md:px-12">
@@ -591,7 +615,7 @@ function DropsTab() {
             {!isLive ? (
               <>
                 <p className="text-[10px] tracking-[0.3em] uppercase text-bone/40 font-medium mb-3">
-                  Goes live Friday, May 15 at 9 PM EST
+                  Goes live {dropDateLabel}
                 </p>
                 <div className="grid grid-cols-4 gap-3 max-w-sm">
                   {[
@@ -886,7 +910,7 @@ function BenefitsTab({ onUpgrade }: { onUpgrade: () => void }) {
       description: "Access to member-only outings, demo days, partner experiences, and exclusive golf events throughout the year.",
       category: "Entertainment",
       status: isMemberPlus ? "Active" : "Locked",
-      action: { type: "link", label: isMemberPlus ? "View Upcoming Events" : "Upgrade to Member", href: "/dashboard" },
+      action: { type: "link", label: isMemberPlus ? "View Upcoming Events" : "Upgrade to Member", href: "/home" },
     },
     {
       icon: <HandicapBenefitIcon />,

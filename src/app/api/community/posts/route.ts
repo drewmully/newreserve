@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminDb, adminAuth } from "@/lib/firebase-admin";
 import { formatRelativeTime } from "@/app/community/posts";
+import { ensureCommunitySeedPosts } from "@/lib/communitySeed";
 
 async function verifyAuth(req: NextRequest): Promise<string | null> {
   const header = req.headers.get("Authorization");
@@ -16,6 +17,8 @@ async function verifyAuth(req: NextRequest): Promise<string | null> {
 
 export async function GET(req: NextRequest) {
   try {
+    await ensureCommunitySeedPosts();
+
     const { searchParams } = new URL(req.url);
     const tag = searchParams.get("tag");
 
