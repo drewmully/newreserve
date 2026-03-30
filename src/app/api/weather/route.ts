@@ -131,6 +131,7 @@ export async function GET(request: NextRequest) {
       sys: { sunrise: number; sunset: number };
       timezone: number;
     };
+    const primaryCondition = weather.weather?.[0];
     let uvIndex = 0;
     if (uvRes?.ok) {
       const uvData = await uvRes.json();
@@ -148,10 +149,10 @@ export async function GET(request: NextRequest) {
     const data: WeatherSuccess = {
       temp: Math.round(weather.main.temp),
       feelsLike: Math.round(weather.main.feels_like),
-      condition: weather.weather[0]?.description
-        ? weather.weather[0].description.replace(/\b\w/g, (c: string) => c.toUpperCase())
+      condition: primaryCondition?.description
+        ? primaryCondition.description.replace(/\b\w/g, (c: string) => c.toUpperCase())
         : "Unknown",
-      icon: weather.weather[0]?.icon ?? "01d",
+      icon: primaryCondition?.icon ?? "01d",
       windSpeed: Math.round(weather.wind.speed),
       humidity: weather.main.humidity,
       uvIndex,
