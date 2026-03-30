@@ -2,6 +2,22 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
+## Environment Variables
+
+Create a local `.env.local` before running the app with:
+
+```bash
+OPENWEATHER_API_KEY=your_openweather_api_key
+```
+
+For production, add the same variable in your Vercel project settings:
+
+- `Settings` -> `Environment Variables`
+- Name: `OPENWEATHER_API_KEY`
+- Environments: at least `Production` and usually `Preview` too
+
+Keep this key server-side only. Do not expose it as `NEXT_PUBLIC_*`.
+
 First, run the development server:
 
 ```bash
