@@ -193,9 +193,10 @@ export async function POST(request: NextRequest) {
       status: "submitted",
     });
   } catch (err) {
-    console.error("[returns/create]", err);
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[returns/create]", message);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: message },
       { status: 500 }
     );
   }
