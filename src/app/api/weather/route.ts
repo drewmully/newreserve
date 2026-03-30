@@ -9,10 +9,40 @@ import { NextRequest, NextResponse } from "next/server";
  * Caches responses for 30 minutes to stay within free-tier limits.
  */
 
-const API_KEY = process.env.OPENWEATHER_API_KEY;
+const API_KEY = process.env.OPENWEATHER_API_KEY?.trim();
 
 // In-memory cache (per serverless instance)
 const cache = new Map<string, { data: unknown; expires: number }>();
+
+type WeatherSuccess = {
+  temp: number;
+  feelsLike: number;
+  condition: string;
+  icon: string;
+  windSpeed: number;
+  humidity: number;
+  uvIndex: number;
+  sunrise: string;
+  sunset: string;
+  golfScore: number;
+};
+
+function parseCoordinate(value: string | null): number | null {
+  if (!value) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+async function getJsonBody(response: Response) {
+  const text = await response.text();
+  if (!text) return null;
+
+  try {
+    return JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    return { raw: text };
+  }
+}
 
 function computeGolfScore(temp: number, wind: number, humidity: number, uvIndex: number): number {
   let score = 10;
@@ -39,10 +69,10 @@ function formatTime(unix: number, timezoneOffset: number): string {
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const lat = searchParams.get("lat");
-  const lon = searchParams.get("lon");
+  const lat = parseCoordinate(searchParams.get("lat"));
+  const lon = parseCoordinate(searchParams.get("lon"));
 
-  if (!lat || !lon) {
+  if (lat === null || lon === null) {
     return NextResponse.json({ error: "lat and lon required" }, { status: 400 });
   }
 
@@ -63,7 +93,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Check cache
-  const cacheKey = `${parseFloat(lat).toFixed(2)},${parseFloat(lon).toFixed(2)}`;
+  const cacheKey = `${lat.toFixed(2)},${lon.toFixed(2)}`;
   const cached = cache.get(cacheKey);
   if (cached && cached.expires > Date.now()) {
     return NextResponse.json(cached.data);
@@ -81,17 +111,41 @@ export async function GET(request: NextRequest) {
     ]);
 
     if (!weatherRes.ok) {
-      throw new Error(`OpenWeatherMap returned ${weatherRes.status}`);
+      const errorBody = await getJsonBody(weatherRes);
+      console.error("[Weather API] OpenWeather current weather failed", {
+        status: weatherRes.status,
+        lat,
+        lon,
+        body: errorBody,
+      });
+      return NextResponse.json(
+        { error: "Weather upstream request failed", code: "weather_upstream_failed" },
+        { status: 502 }
+      );
     }
 
-    const weather = await weatherRes.json();
+    const weather = (await weatherRes.json()) as {
+      main: { temp: number; feels_like: number; humidity: number };
+      weather?: Array<{ description?: string; icon?: string }>;
+      wind: { speed: number };
+      sys: { sunrise: number; sunset: number };
+      timezone: number;
+    };
     let uvIndex = 0;
     if (uvRes?.ok) {
       const uvData = await uvRes.json();
       uvIndex = Math.round(uvData.value ?? 0);
+    } else if (uvRes) {
+      const uvErrorBody = await getJsonBody(uvRes);
+      console.warn("[Weather API] OpenWeather UV request failed", {
+        status: uvRes.status,
+        lat,
+        lon,
+        body: uvErrorBody,
+      });
     }
 
-    const data = {
+    const data: WeatherSuccess = {
       temp: Math.round(weather.main.temp),
       feelsLike: Math.round(weather.main.feels_like),
       condition: weather.weather[0]?.description
@@ -117,6 +171,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(data);
   } catch (err) {
     console.error("[Weather API]", err);
-    return NextResponse.json({ error: "Failed to fetch weather" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to fetch weather", code: "weather_internal_error" },
+      { status: 500 }
+    );
   }
 }

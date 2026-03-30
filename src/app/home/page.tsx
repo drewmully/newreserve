@@ -37,6 +37,8 @@ interface WeatherData {
   golfScore: number;
 }
 
+type WeatherErrorState = "none" | "service";
+
 /* ── Golf Round Types ── */
 interface GolfRound {
   id: string;
@@ -191,7 +193,7 @@ export default function HomePage() {
   // ── Weather state ──
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(true);
-  const [weatherError, setWeatherError] = useState(false);
+  const [weatherError, setWeatherError] = useState<WeatherErrorState>("none");
 
   useEffect(() => {
     let cancelled = false;
@@ -203,7 +205,7 @@ export default function HomePage() {
       const data = await res.json();
       if (!cancelled) {
         setWeather(data);
-        setWeatherError(false);
+        setWeatherError("none");
         setWeatherLoading(false);
       }
     }
@@ -220,9 +222,10 @@ export default function HomePage() {
         try {
           // Fallback: still show conditions with a default location
           await fetchWeatherAt(DEFAULT_WEATHER_COORDS.lat, DEFAULT_WEATHER_COORDS.lon);
-        } catch {
+        } catch (error) {
+          console.error("[Home weather] Unable to load weather data", error);
           if (!cancelled) {
-            setWeatherError(true);
+            setWeatherError("service");
             setWeatherLoading(false);
           }
         }
@@ -555,7 +558,7 @@ export default function HomePage() {
         <section className="px-6 md:px-12 max-w-6xl mx-auto mb-10">
           <ScrollReveal>
             <div className="relative overflow-hidden rounded-2xl">
-              {weather && !weatherError ? (
+              {weather && weatherError === "none" ? (
                 <div className="bg-gradient-to-br from-forest via-forest-light to-sage/70 p-6 md:p-8 text-bone">
                   <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
                     {/* Left: Weather info */}
@@ -636,13 +639,13 @@ export default function HomePage() {
                 <div className="bg-gradient-to-br from-forest via-forest-light to-sage/70 p-8 text-bone">
                   <p className="text-xs tracking-[0.3em] uppercase text-bone/50 font-medium mb-2">Course Conditions</p>
                   <p className="text-sm text-bone/70">
-                    Enable location access to see today&apos;s golf conditions and your personalized Golf-ability Score.
+                    Live weather is temporarily unavailable. Try again in a moment.
                   </p>
                   <button
                     onClick={() => window.location.reload()}
                     className="mt-3 text-xs text-bone/90 border border-bone/30 rounded-full px-4 py-1.5 hover:bg-bone/10 transition-colors btn-press cursor-pointer"
                   >
-                    Enable Location
+                    Retry
                   </button>
                 </div>
               )}
