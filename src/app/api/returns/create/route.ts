@@ -145,7 +145,12 @@ export async function POST(request: NextRequest) {
         return: {
           id: string;
           status: string;
-          reverseFulfillmentOrders: { nodes: Array<{ id: string }> };
+          reverseFulfillmentOrders: {
+            nodes: Array<{
+              id: string;
+              lineItems: { nodes: Array<{ id: string; totalQuantity: number }> };
+            }>;
+          };
         } | null;
         userErrors: Array<{ field: string; message: string }>;
       };
@@ -156,7 +161,12 @@ export async function POST(request: NextRequest) {
             id
             status
             reverseFulfillmentOrders(first: 1) {
-              nodes { id }
+              nodes {
+                id
+                lineItems(first: 50) {
+                  nodes { id totalQuantity }
+                }
+              }
             }
           }
           userErrors { field message }
@@ -183,49 +193,71 @@ export async function POST(request: NextRequest) {
 
     const shopifyReturn = returnData.returnCreate.return!;
     const returnId = shopifyReturn.id;
-    const reverseFulfillmentOrderId = shopifyReturn.reverseFulfillmentOrders.nodes[0]?.id;
+    const rfo = shopifyReturn.reverseFulfillmentOrders.nodes[0];
 
-    // 3. Generate return shipping label via Shopify
-    //    Requires Return rules to be enabled in Shopify Admin → Settings → Policies
+    // 3. Create reverse delivery (attaches to the return for tracking/label purposes)
+    //    Note: Shopify does not auto-generate carrier labels via this API.
+    //    A label file (labelInput.fileUrl) must come from a shipping service
+    //    (EasyPost, ShipStation, etc.) and be attached here.
+    //    For now we create the delivery record so the email notification fires,
+    //    and labelUrl will be undefined until a shipping service is integrated.
     let labelUrl: string | undefined;
 
-    if (reverseFulfillmentOrderId) {
+    if (rfo) {
       try {
-        const labelData = await shopifyGraphQL<{
+        const rfoLineItems = rfo.lineItems.nodes.map((li) => ({
+          reverseFulfillmentOrderLineItemId: li.id,
+          quantity: li.totalQuantity,
+        }));
+
+        const deliveryData = await shopifyGraphQL<{
           reverseDeliveryCreateWithShipping: {
             reverseDelivery: {
               id: string;
-              label: { url: string } | null;
+              deliverable: {
+                label?: { publicFileUrl?: string };
+                tracking?: { number?: string; url?: string };
+              } | null;
             } | null;
             userErrors: Array<{ field: string; message: string }>;
           };
         }>(
-          `mutation CreateReturnLabel($reverseFulfillmentOrderId: ID!) {
+          `mutation CreateReverseDelivery(
+            $reverseFulfillmentOrderId: ID!
+            $reverseDeliveryLineItems: [ReverseDeliveryLineItemInput!]!
+          ) {
             reverseDeliveryCreateWithShipping(
               reverseFulfillmentOrderId: $reverseFulfillmentOrderId
+              reverseDeliveryLineItems: $reverseDeliveryLineItems
+              notifyCustomer: true
             ) {
               reverseDelivery {
                 id
-                label { url }
+                deliverable {
+                  ... on ReverseDeliveryShippingDeliverable {
+                    label { publicFileUrl }
+                    tracking { number url }
+                  }
+                }
               }
               userErrors { field message }
             }
           }`,
-          { reverseFulfillmentOrderId }
+          {
+            reverseFulfillmentOrderId: rfo.id,
+            reverseDeliveryLineItems: rfoLineItems,
+          }
         );
 
-        const labelErrors = labelData.reverseDeliveryCreateWithShipping.userErrors;
-        if (labelErrors.length) {
-          console.error("[returns/create] Label userErrors:", labelErrors);
-          labelUrl = `DEBUG_LABEL_ERRORS: ${JSON.stringify(labelErrors)}`;
+        const deliveryErrors = deliveryData.reverseDeliveryCreateWithShipping.userErrors;
+        if (deliveryErrors.length) {
+          console.error("[returns/create] Delivery userErrors:", deliveryErrors);
         } else {
-          labelUrl = labelData.reverseDeliveryCreateWithShipping.reverseDelivery?.label?.url
-            ?? "DEBUG_NO_LABEL_URL_IN_RESPONSE";
+          const deliverable = deliveryData.reverseDeliveryCreateWithShipping.reverseDelivery?.deliverable;
+          labelUrl = deliverable?.label?.publicFileUrl;
         }
-      } catch (labelErr) {
-        const msg = labelErr instanceof Error ? labelErr.message : String(labelErr);
-        console.error("[returns/create] Label generation failed:", msg);
-        labelUrl = `DEBUG_LABEL_EXCEPTION: ${msg}`;
+      } catch (deliveryErr) {
+        console.error("[returns/create] Reverse delivery failed:", deliveryErr);
       }
     }
 
