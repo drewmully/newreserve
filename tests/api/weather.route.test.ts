@@ -28,6 +28,11 @@ describe("GET /api/weather", () => {
       feelsLike: 70,
       condition: "Partly Cloudy",
       golfScore: 9,
+      locationName: "New York",
+      locationCountry: "US",
+      requestedLat: 40.7128,
+      requestedLon: -74.006,
+      dataSource: "mock",
     });
   });
 
@@ -42,8 +47,9 @@ describe("GET /api/weather", () => {
             main: { temp: 74.4, feels_like: 75.2, humidity: 51 },
             weather: [{ description: "clear sky", icon: "01d" }],
             wind: { speed: 9.6 },
-            sys: { sunrise: 1711789320, sunset: 1711834500 },
+            sys: { sunrise: 1711789320, sunset: 1711834500, country: "US" },
             timezone: -14400,
+            name: "New York",
           }),
           { status: 200, headers: { "Content-Type": "application/json" } }
         )
@@ -71,6 +77,11 @@ describe("GET /api/weather", () => {
       windSpeed: 10,
       humidity: 51,
       uvIndex: 0,
+      locationName: "New York",
+      locationCountry: "US",
+      requestedLat: 40.7128,
+      requestedLon: -74.006,
+      dataSource: "live",
     });
   });
 

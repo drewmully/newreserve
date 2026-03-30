@@ -25,6 +25,11 @@ type WeatherSuccess = {
   sunrise: string;
   sunset: string;
   golfScore: number;
+  locationName: string;
+  locationCountry: string | null;
+  requestedLat: number;
+  requestedLon: number;
+  dataSource: "live" | "mock";
 };
 
 function parseCoordinate(value: string | null): number | null {
@@ -89,6 +94,11 @@ export async function GET(request: NextRequest) {
       sunrise: "6:42 AM",
       sunset: "8:15 PM",
       golfScore: 9,
+      locationName: "New York",
+      locationCountry: "US",
+      requestedLat: lat,
+      requestedLon: lon,
+      dataSource: "mock",
     });
   }
 
@@ -128,8 +138,9 @@ export async function GET(request: NextRequest) {
       main: { temp: number; feels_like: number; humidity: number };
       weather?: Array<{ description?: string; icon?: string }>;
       wind: { speed: number };
-      sys: { sunrise: number; sunset: number };
+      sys: { sunrise: number; sunset: number; country?: string };
       timezone: number;
+      name?: string;
     };
     const primaryCondition = weather.weather?.[0];
     let uvIndex = 0;
@@ -164,6 +175,11 @@ export async function GET(request: NextRequest) {
         weather.main.humidity,
         uvIndex
       ),
+      locationName: weather.name?.trim() || "Unknown area",
+      locationCountry: weather.sys.country ?? null,
+      requestedLat: lat,
+      requestedLon: lon,
+      dataSource: "live",
     };
 
     // Cache for 30 minutes

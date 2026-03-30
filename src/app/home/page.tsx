@@ -35,9 +35,15 @@ interface WeatherData {
   sunrise: string;
   sunset: string;
   golfScore: number;
+  locationName: string;
+  locationCountry: string | null;
+  requestedLat: number;
+  requestedLon: number;
+  dataSource: "live" | "mock";
 }
 
 type WeatherErrorState = "none" | "service";
+type WeatherLocationSource = "device" | "fallback";
 
 /* ── Golf Round Types ── */
 interface GolfRound {
@@ -194,18 +200,20 @@ export default function HomePage() {
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(true);
   const [weatherError, setWeatherError] = useState<WeatherErrorState>("none");
+  const [weatherLocationSource, setWeatherLocationSource] = useState<WeatherLocationSource | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     const DEFAULT_WEATHER_COORDS = { lat: 40.7128, lon: -74.006 }; // New York City
 
-    async function fetchWeatherAt(lat: number, lon: number) {
+    async function fetchWeatherAt(lat: number, lon: number, locationSource: WeatherLocationSource) {
       const res = await fetch(`/api/weather?lat=${lat}&lon=${lon}`);
       if (!res.ok) throw new Error("Weather API failed");
       const data = await res.json();
       if (!cancelled) {
         setWeather(data);
         setWeatherError("none");
+        setWeatherLocationSource(locationSource);
         setWeatherLoading(false);
       }
     }
@@ -217,11 +225,11 @@ export default function HomePage() {
           if (!navigator.geolocation) reject(new Error("No geolocation"));
           navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
         });
-        await fetchWeatherAt(pos.coords.latitude, pos.coords.longitude);
+        await fetchWeatherAt(pos.coords.latitude, pos.coords.longitude, "device");
       } catch {
         try {
           // Fallback: still show conditions with a default location
-          await fetchWeatherAt(DEFAULT_WEATHER_COORDS.lat, DEFAULT_WEATHER_COORDS.lon);
+          await fetchWeatherAt(DEFAULT_WEATHER_COORDS.lat, DEFAULT_WEATHER_COORDS.lon, "fallback");
         } catch (error) {
           console.error("[Home weather] Unable to load weather data", error);
           if (!cancelled) {
@@ -564,13 +572,21 @@ export default function HomePage() {
                     {/* Left: Weather info */}
                     <div className="flex-1">
                       <p className="text-xs tracking-[0.3em] uppercase text-bone/50 font-medium mb-3">
-                        {onboardingProfile?.clubName ? onboardingProfile.clubName : "Your Area"} — Today
+                        {weather.dataSource === "live" ? "Live weather" : "Demo weather"} — Today
                       </p>
                       <div className="flex items-center gap-4 mb-4">
                         <span className="text-5xl">{getWeatherEmoji(weather.condition)}</span>
                         <div>
                           <p className="font-serif text-4xl md:text-5xl font-bold">{weather.temp}°F</p>
                           <p className="text-sm text-bone/60">{weather.condition} · Feels like {weather.feelsLike}°F</p>
+                          <p className="mt-1 text-xs text-bone/50">
+                            {weather.locationName}
+                            {weather.locationCountry ? `, ${weather.locationCountry}` : ""}
+                            {weatherLocationSource === "fallback" ? " · fallback location" : " · browser location"}
+                          </p>
+                          <p className="text-xs text-bone/40">
+                            {weather.requestedLat.toFixed(2)}, {weather.requestedLon.toFixed(2)}
+                          </p>
                         </div>
                       </div>
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
