@@ -152,32 +152,18 @@ export default function ReturnsPage() {
     setError("");
 
     try {
-      /*
-       * TODO (Leo): Wire to POST /api/returns/create
-       *
-       * const res = await fetch("/api/returns/create", {
-       *   method: "POST",
-       *   headers: { "Content-Type": "application/json" },
-       *   body: JSON.stringify({
-       *     orderId: order.orderId,
-       *     items: selectedItems,
-       *     customerEmail: email,
-       *   }),
-       * });
-       * if (!res.ok) throw new Error("Failed to submit return");
-       * const data: ReturnConfirmation = await res.json();
-       * setConfirmation(data);
-       */
-
-      // Demo: simulate API delay
-      await new Promise((r) => setTimeout(r, 1000));
-      setConfirmation({
-        returnId: "RET-" + Math.random().toString(36).substring(2, 8).toUpperCase(),
-        creditAmount: creditTotal(),
-        labelUrl: tier === "member" || tier === "black" ? "https://example.com/label.pdf" : undefined,
-        labelTrackingNumber: tier === "member" || tier === "black" ? "1Z999AA10123456784" : undefined,
+      const res = await fetch("/api/returns/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId: order.orderId,
+          items: Array.from(selections.values()),
+          customerEmail: email,
+        }),
       });
-
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to submit return");
+      setConfirmation(data as ReturnConfirmation);
       setStep(4);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
