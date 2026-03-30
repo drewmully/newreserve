@@ -14,14 +14,6 @@ function adminHeaders() {
 }
 
 
-const REASON_MAP: Record<string, string> = {
-  "Wrong size": "SIZE_TOO_SMALL",
-  "Didn't like the fit": "UNWANTED",
-  "Not as described": "WRONG_ITEM",
-  "Damaged or defective": "DEFECTIVE",
-  "Changed my mind": "UNWANTED",
-  Other: "OTHER",
-};
 
 interface ReturnItem {
   lineItemId: string;
@@ -54,9 +46,8 @@ export async function POST(request: NextRequest) {
         body: JSON.stringify({
           return: {
             return_line_items: items.map((item) => ({
-              line_item_id: item.lineItemId,
+              line_item_id: Number(item.lineItemId),
               quantity: item.quantity,
-              return_reason: REASON_MAP[item.reason] ?? "OTHER",
             })),
             notify_customer: true,
           },
@@ -66,8 +57,11 @@ export async function POST(request: NextRequest) {
 
     if (!returnRes.ok) {
       const errText = await returnRes.text();
-      console.error("[returns/create] Shopify return error:", errText);
-      throw new Error(`Failed to create return: ${returnRes.status}`);
+      console.error("[returns/create] Shopify return error:", returnRes.status, errText);
+      return NextResponse.json(
+        { error: `Shopify error ${returnRes.status}`, detail: errText },
+        { status: 502 }
+      );
     }
 
     const returnJson = (await returnRes.json()) as {
