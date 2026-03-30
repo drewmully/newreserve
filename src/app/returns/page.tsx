@@ -60,59 +60,6 @@ const RETURN_REASONS = [
 ];
 
 /* ── Placeholder data for demo (remove when API is wired) ── */
-const DEMO_ORDER: OrderData = {
-  orderId: "gid://shopify/Order/12345",
-  orderName: "#1042",
-  orderDate: "February 18, 2026",
-  items: [
-    {
-      lineItemId: "li_1",
-      sku: "GV-TW-NAV-L",
-      title: "Greyson Tate Vest",
-      variantTitle: "Navy / L",
-      quantity: 1,
-      returnableQty: 1,
-      price: 168.00,
-      image: "https://cdn.shopify.com/s/files/1/placeholder/vest.jpg",
-      isChildSku: false,
-    },
-    {
-      lineItemId: "li_2",
-      sku: "BD-TP-WHT-M",
-      title: "Birds of Condor Trophy Polo",
-      variantTitle: "White / M",
-      quantity: 2,
-      returnableQty: 2,
-      price: 98.00,
-      image: "https://cdn.shopify.com/s/files/1/placeholder/polo.jpg",
-      isChildSku: false,
-    },
-    {
-      lineItemId: "li_3",
-      sku: "MH-CL-BLK",
-      title: "Mully Heritage Cap",
-      variantTitle: "Black",
-      quantity: 1,
-      returnableQty: 0,
-      price: 42.00,
-      image: "https://cdn.shopify.com/s/files/1/placeholder/cap.jpg",
-      isChildSku: false,
-      alreadyReturned: true,
-    },
-    {
-      lineItemId: "li_4",
-      sku: "JL-QZ-GRN-M",
-      title: "Johnnie-O Sully Quarter-Zip",
-      variantTitle: "Pine / M",
-      quantity: 1,
-      returnableQty: 1,
-      price: 135.00,
-      image: "https://cdn.shopify.com/s/files/1/placeholder/quarterzip.jpg",
-      isChildSku: true,
-      parentSku: "JL-BUNDLE-M",
-    },
-  ],
-};
 
 export default function ReturnsPage() {
   const [step, setStep] = useState(1);
@@ -136,25 +83,16 @@ export default function ReturnsPage() {
     setError("");
 
     try {
-      /*
-       * TODO (Leo): Wire to POST /api/returns/lookup
-       *
-       * const res = await fetch("/api/returns/lookup", {
-       *   method: "POST",
-       *   headers: { "Content-Type": "application/json" },
-       *   body: JSON.stringify({ orderNumber: orderNumber.trim(), email: email.trim() }),
-       * });
-       * if (!res.ok) {
-       *   const data = await res.json();
-       *   throw new Error(data.error || "Order not found");
-       * }
-       * const data: OrderData = await res.json();
-       * setOrder(data);
-       */
-
-      // Demo: simulate API delay then use placeholder
-      await new Promise((r) => setTimeout(r, 800));
-      setOrder(DEMO_ORDER);
+      const res = await fetch("/api/returns/lookup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderNumber: orderNumber.trim(), email: email.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Order not found");
+      }
+      setOrder(data as OrderData);
       setStep(2);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
