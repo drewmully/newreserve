@@ -31,7 +31,7 @@ interface WeatherData {
   icon: string;
   windSpeed: number;
   humidity: number;
-  uvIndex: number;
+  uvIndex: number | null;
   sunrise: string;
   sunset: string;
   golfScore: number;
@@ -40,10 +40,11 @@ interface WeatherData {
   requestedLat: number;
   requestedLon: number;
   dataSource: "live" | "mock";
+  locationSource: "query" | "vercel-ip" | "default";
+  golfSummary: string;
 }
 
 type WeatherErrorState = "none" | "service";
-type WeatherLocationSource = "device" | "fallback";
 
 /* ── Golf Round Types ── */
 interface GolfRound {
@@ -200,36 +201,34 @@ export default function HomePage() {
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [weatherLoading, setWeatherLoading] = useState(true);
   const [weatherError, setWeatherError] = useState<WeatherErrorState>("none");
-  const [weatherLocationSource, setWeatherLocationSource] = useState<WeatherLocationSource | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    const DEFAULT_WEATHER_COORDS = { lat: 40.7128, lon: -74.006 }; // New York City
 
-    async function fetchWeatherAt(lat: number, lon: number, locationSource: WeatherLocationSource) {
-      const res = await fetch(`/api/weather?lat=${lat}&lon=${lon}`);
+    async function fetchWeather(url: string) {
+      const res = await fetch(url);
       if (!res.ok) throw new Error("Weather API failed");
       const data = await res.json();
       if (!cancelled) {
         setWeather(data);
         setWeatherError("none");
-        setWeatherLocationSource(locationSource);
         setWeatherLoading(false);
       }
     }
 
-    async function fetchWeather() {
+    async function loadWeather() {
       try {
         // Try geolocation first
         const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
           if (!navigator.geolocation) reject(new Error("No geolocation"));
           navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
         });
-        await fetchWeatherAt(pos.coords.latitude, pos.coords.longitude, "device");
+        await fetchWeather(`/api/weather?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`);
       } catch {
         try {
-          // Fallback: still show conditions with a default location
-          await fetchWeatherAt(DEFAULT_WEATHER_COORDS.lat, DEFAULT_WEATHER_COORDS.lon, "fallback");
+          // If browser geolocation is unavailable, let the server resolve IP-based
+          // coordinates on Vercel and only fall back to New York as a last resort.
+          await fetchWeather("/api/weather");
         } catch (error) {
           console.error("[Home weather] Unable to load weather data", error);
           if (!cancelled) {
@@ -240,7 +239,7 @@ export default function HomePage() {
       }
     }
 
-    if (isSignedIn) fetchWeather();
+    if (isSignedIn) loadWeather();
     return () => { cancelled = true; };
   }, [isSignedIn]);
 
@@ -582,7 +581,11 @@ export default function HomePage() {
                           <p className="mt-1 text-xs text-bone/50">
                             {weather.locationName}
                             {weather.locationCountry ? `, ${weather.locationCountry}` : ""}
-                            {weatherLocationSource === "fallback" ? " · fallback location" : " · browser location"}
+                            {weather.locationSource === "query"
+                              ? " · browser location"
+                              : weather.locationSource === "vercel-ip"
+                                ? " · approximate IP location"
+                                : " · default location"}
                           </p>
                           <p className="text-xs text-bone/40">
                             {weather.requestedLat.toFixed(2)}, {weather.requestedLon.toFixed(2)}
@@ -607,7 +610,7 @@ export default function HomePage() {
                           <p className="text-sm font-medium">{weather.sunset}</p>
                         </div>
                       </div>
-                      {weather.uvIndex > 5 && (
+                      {weather.uvIndex !== null && weather.uvIndex > 5 && (
                         <p className="mt-3 text-xs text-bone/60 flex items-center gap-1.5">
                           <svg className="w-3.5 h-3.5 text-ember" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
@@ -640,6 +643,9 @@ export default function HomePage() {
                       </div>
                       <p className={`text-sm font-medium mt-2 ${getGolfScoreColor(weather.golfScore)}`}>
                         {getGolfScoreLabel(weather.golfScore)}
+                      </p>
+                      <p className="mt-2 max-w-[13rem] text-center text-xs text-bone/60">
+                        {weather.golfSummary}
                       </p>
                     </div>
                   </div>
