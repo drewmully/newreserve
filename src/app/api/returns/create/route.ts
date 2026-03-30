@@ -252,12 +252,15 @@ export async function POST(request: NextRequest) {
         const deliveryErrors = deliveryData.reverseDeliveryCreateWithShipping.userErrors;
         if (deliveryErrors.length) {
           console.error("[returns/create] Delivery userErrors:", deliveryErrors);
+          labelUrl = `DEBUG_DELIVERY_ERRORS: ${JSON.stringify(deliveryErrors)}`;
         } else {
           const deliverable = deliveryData.reverseDeliveryCreateWithShipping.reverseDelivery?.deliverable;
-          labelUrl = deliverable?.label?.publicFileUrl;
+          labelUrl = deliverable?.label?.publicFileUrl ?? "DEBUG_NO_LABEL_IN_RESPONSE";
         }
       } catch (deliveryErr) {
-        console.error("[returns/create] Reverse delivery failed:", deliveryErr);
+        const msg = deliveryErr instanceof Error ? deliveryErr.message : String(deliveryErr);
+        console.error("[returns/create] Reverse delivery failed:", msg);
+        labelUrl = `DEBUG_DELIVERY_EXCEPTION: ${msg}`;
       }
     }
 
