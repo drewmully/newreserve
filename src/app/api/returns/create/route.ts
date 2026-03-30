@@ -216,13 +216,16 @@ export async function POST(request: NextRequest) {
 
         const labelErrors = labelData.reverseDeliveryCreateWithShipping.userErrors;
         if (labelErrors.length) {
-          console.error("[returns/create] Label errors:", labelErrors);
+          console.error("[returns/create] Label userErrors:", labelErrors);
+          labelUrl = `DEBUG_LABEL_ERRORS: ${JSON.stringify(labelErrors)}`;
         } else {
-          labelUrl = labelData.reverseDeliveryCreateWithShipping.reverseDelivery?.label?.url;
+          labelUrl = labelData.reverseDeliveryCreateWithShipping.reverseDelivery?.label?.url
+            ?? "DEBUG_NO_LABEL_URL_IN_RESPONSE";
         }
       } catch (labelErr) {
-        // Label generation failed — log but don't block the return
-        console.error("[returns/create] Label generation failed:", labelErr);
+        const msg = labelErr instanceof Error ? labelErr.message : String(labelErr);
+        console.error("[returns/create] Label generation failed:", msg);
+        labelUrl = `DEBUG_LABEL_EXCEPTION: ${msg}`;
       }
     }
 
