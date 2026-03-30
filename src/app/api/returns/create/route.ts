@@ -144,36 +144,36 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 2. Create return via GraphQL returnCreate mutation
+    // 2. Create return via GraphQL returnRequest mutation (REQUESTED state)
+    //    returnRequest → REQUESTED state (customer-initiated, requires merchant approval)
+    //    returnCreate  → OPEN state (merchant-initiated, already approved)
     const returnData = await shopifyGraphQL<{
-      returnCreate: {
+      returnRequest: {
         return: { id: string; status: string } | null;
         userErrors: Array<{ field: string; message: string }>;
       };
     }>(
-      `mutation returnCreate($returnInput: ReturnInput!) {
-        returnCreate(returnInput: $returnInput) {
+      `mutation returnRequest($input: ReturnRequestInput!) {
+        returnRequest(input: $input) {
           return { id status }
           userErrors { field message }
         }
       }`,
       {
-        returnInput: {
+        input: {
           orderId: orderGid,
           returnLineItems: items.map((item) => ({
             fulfillmentLineItemId: lineItemMap[item.lineItemId].fulfillmentLineItemId,
             quantity: item.quantity,
             returnReason: REASON_MAP[item.reason] ?? "OTHER",
-            returnReasonNote: item.reason,
           })),
-          notifyCustomer: true,
         },
       }
     );
 
-    const userErrors = returnData.returnCreate.userErrors;
+    const userErrors = returnData.returnRequest.userErrors;
     if (userErrors.length) {
-      console.error("[returns/create] returnCreate errors:", userErrors);
+      console.error("[returns/create] returnRequest errors:", userErrors);
       return NextResponse.json(
         { error: userErrors[0].message },
         { status: 422 }
@@ -185,7 +185,7 @@ export async function POST(request: NextRequest) {
       return sum + lineItemMap[item.lineItemId].unitPrice * item.quantity;
     }, 0);
 
-    const returnId = returnData.returnCreate.return!.id;
+    const returnId = returnData.returnRequest.return!.id;
 
     return NextResponse.json({
       returnId,
