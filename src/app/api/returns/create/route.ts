@@ -13,7 +13,37 @@ function adminHeaders() {
   };
 }
 
+async function shopifyGraphQL<T>(
+  query: string,
+  variables?: Record<string, unknown>
+): Promise<T> {
+  const res = await fetch(
+    `https://${STORE_DOMAIN}/admin/api/${API_VERSION}/graphql.json`,
+    {
+      method: "POST",
+      headers: adminHeaders(),
+      body: JSON.stringify({ query, variables }),
+    }
+  );
+  if (!res.ok)
+    throw new Error(`Shopify GraphQL error ${res.status}: ${await res.text()}`);
+  const json = (await res.json()) as {
+    data: T;
+    errors?: { message: string }[];
+  };
+  if (json.errors?.length)
+    throw new Error(`GraphQL errors: ${JSON.stringify(json.errors)}`);
+  return json.data;
+}
 
+const REASON_MAP: Record<string, string> = {
+  "Wrong size": "SIZE_TOO_SMALL",
+  "Didn't like the fit": "UNWANTED",
+  "Not as described": "WRONG_ITEM",
+  "Damaged or defective": "DEFECTIVE",
+  "Changed my mind": "UNWANTED",
+  Other: "OTHER",
+};
 
 interface ReturnItem {
   lineItemId: string;
@@ -37,65 +67,129 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 1. Create return in Shopify Admin REST
-    const returnRes = await fetch(
-      `https://${STORE_DOMAIN}/admin/api/${API_VERSION}/orders/${orderId}/returns.json`,
-      {
-        method: "POST",
-        headers: adminHeaders(),
-        body: JSON.stringify({
-          return: {
-            return_line_items: items.map((item) => ({
-              line_item_id: Number(item.lineItemId),
-              quantity: item.quantity,
-            })),
-            notify_customer: true,
-          },
-        }),
-      }
+    const orderGid = `gid://shopify/Order/${orderId}`;
+
+    // 1. Fetch fulfillment line items to map lineItemId → fulfillmentLineItemId
+    //    We also grab the unit price here to calculate credit server-side.
+    const fulfillmentsData = await shopifyGraphQL<{
+      order: {
+        fulfillments: Array<{
+          fulfillmentLineItems: {
+            nodes: Array<{
+              id: string;
+              quantity: number;
+              lineItem: {
+                id: string;
+                originalUnitPriceSet: {
+                  shopMoney: { amount: string };
+                };
+              };
+            }>;
+          };
+        }>;
+      } | null;
+    }>(
+      `query GetFulfillmentLineItems($orderId: ID!) {
+        order(id: $orderId) {
+          fulfillments(first: 10) {
+            fulfillmentLineItems(first: 50) {
+              nodes {
+                id
+                quantity
+                lineItem {
+                  id
+                  originalUnitPriceSet {
+                    shopMoney { amount }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }`,
+      { orderId: orderGid }
     );
 
-    if (!returnRes.ok) {
-      const errText = await returnRes.text();
-      console.error("[returns/create] Shopify return error:", returnRes.status, errText);
+    if (!fulfillmentsData.order) {
+      return NextResponse.json({ error: "Order not found." }, { status: 404 });
+    }
+
+    // Build map: numeric lineItemId → { fulfillmentLineItemGid, unitPrice }
+    const lineItemMap: Record<
+      string,
+      { fulfillmentLineItemId: string; unitPrice: number }
+    > = {};
+
+    for (const fulfillment of fulfillmentsData.order.fulfillments) {
+      for (const fli of fulfillment.fulfillmentLineItems.nodes) {
+        const numericId = fli.lineItem.id.split("/").pop()!;
+        lineItemMap[numericId] = {
+          fulfillmentLineItemId: fli.id,
+          unitPrice: parseFloat(
+            fli.lineItem.originalUnitPriceSet.shopMoney.amount
+          ),
+        };
+      }
+    }
+
+    // Validate all selected items have a fulfillment line item
+    const missing = items.filter((item) => !lineItemMap[item.lineItemId]);
+    if (missing.length) {
       return NextResponse.json(
-        { error: `Shopify error ${returnRes.status}`, detail: errText },
-        { status: 502 }
+        {
+          error:
+            "Some items are not yet fulfilled and cannot be returned. Please contact support.",
+        },
+        { status: 422 }
       );
     }
 
-    const returnJson = (await returnRes.json()) as {
-      return: { id: number };
-    };
-    const returnId = String(returnJson.return.id);
-
-    // 2. Fetch order line item prices to calculate credit amount
-    const orderRes = await fetch(
-      `https://${STORE_DOMAIN}/admin/api/${API_VERSION}/orders/${orderId}.json?fields=line_items`,
-      { headers: adminHeaders() }
+    // 2. Create return via GraphQL returnCreate mutation
+    const returnData = await shopifyGraphQL<{
+      returnCreate: {
+        return: { id: string; status: string } | null;
+        userErrors: Array<{ field: string; message: string }>;
+      };
+    }>(
+      `mutation returnCreate($returnInput: ReturnInput!) {
+        returnCreate(returnInput: $returnInput) {
+          return { id status }
+          userErrors { field message }
+        }
+      }`,
+      {
+        returnInput: {
+          orderId: orderGid,
+          returnLineItems: items.map((item) => ({
+            fulfillmentLineItemId: lineItemMap[item.lineItemId].fulfillmentLineItemId,
+            quantity: item.quantity,
+            returnReason: REASON_MAP[item.reason] ?? "OTHER",
+            returnReasonNote: item.reason,
+          })),
+          notifyCustomer: true,
+        },
+      }
     );
-    if (!orderRes.ok)
-      throw new Error(`Failed to fetch order: ${orderRes.status}`);
 
-    const orderJson = (await orderRes.json()) as {
-      order: { line_items: Array<{ id: number; price: string }> };
-    };
-
-    const priceById: Record<string, number> = {};
-    for (const li of orderJson.order.line_items) {
-      priceById[String(li.id)] = parseFloat(li.price);
+    const userErrors = returnData.returnCreate.userErrors;
+    if (userErrors.length) {
+      console.error("[returns/create] returnCreate errors:", userErrors);
+      return NextResponse.json(
+        { error: userErrors[0].message },
+        { status: 422 }
+      );
     }
 
-    const creditAmount = items.reduce((sum, item) => {
-      return sum + (priceById[item.lineItemId] ?? 0) * item.quantity;
+    // 3. Calculate estimated credit from server-side prices
+    const estimatedCreditAmount = items.reduce((sum, item) => {
+      return sum + lineItemMap[item.lineItemId].unitPrice * item.quantity;
     }, 0);
 
-    // Store credit is NOT issued here.
-    // It will be issued manually by staff via Shopify admin once the
-    // physical items are received and inspected.
+    const returnId = returnData.returnCreate.return!.id;
+
     return NextResponse.json({
       returnId,
-      estimatedCreditAmount: creditAmount,
+      estimatedCreditAmount,
       status: "submitted",
     });
   } catch (err) {
