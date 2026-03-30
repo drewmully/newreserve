@@ -45,6 +45,14 @@ const REASON_MAP: Record<string, string> = {
   Other: "OTHER",
 };
 
+// Tier-based shipping cost fallback until Shopify Return rules are enabled.
+// Once Return rules are configured, replace this with a Shopify API call.
+function shippingCostByTier(tier: string): number {
+  if (tier === "member" || tier === "black") return 0;
+  if (tier === "access") return 5.95;
+  return 9.95;
+}
+
 interface ReturnItem {
   lineItemId: string;
   quantity: number;
@@ -54,10 +62,11 @@ interface ReturnItem {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { orderId, items, customerEmail } = body as {
+    const { orderId, items, customerEmail, membershipTier } = body as {
       orderId: string;
       items: ReturnItem[];
       customerEmail: string;
+      membershipTier: string;
     };
 
     if (!orderId || !items?.length || !customerEmail) {
@@ -69,8 +78,7 @@ export async function POST(request: NextRequest) {
 
     const orderGid = `gid://shopify/Order/${orderId}`;
 
-    // 1. Fetch fulfillment line items to map lineItemId → fulfillmentLineItemId
-    //    We also grab the unit price here to calculate credit server-side.
+    // 1. Fetch fulfillment line items to map lineItemId → fulfillmentLineItemId + price
     const fulfillmentsData = await shopifyGraphQL<{
       order: {
         fulfillments: Array<{
@@ -80,9 +88,7 @@ export async function POST(request: NextRequest) {
               quantity: number;
               lineItem: {
                 id: string;
-                originalUnitPriceSet: {
-                  shopMoney: { amount: string };
-                };
+                originalUnitPriceSet: { shopMoney: { amount: string } };
               };
             }>;
           };
@@ -98,9 +104,7 @@ export async function POST(request: NextRequest) {
                 quantity
                 lineItem {
                   id
-                  originalUnitPriceSet {
-                    shopMoney { amount }
-                  }
+                  originalUnitPriceSet { shopMoney { amount } }
                 }
               }
             }
@@ -114,90 +118,133 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Order not found." }, { status: 404 });
     }
 
-    // Build map: numeric lineItemId → { fulfillmentLineItemGid, unitPrice }
-    const lineItemMap: Record<
-      string,
-      { fulfillmentLineItemId: string; unitPrice: number }
-    > = {};
-
+    const lineItemMap: Record<string, { fulfillmentLineItemId: string; unitPrice: number }> = {};
     for (const fulfillment of fulfillmentsData.order.fulfillments) {
       for (const fli of fulfillment.fulfillmentLineItems.nodes) {
         const numericId = fli.lineItem.id.split("/").pop()!;
         lineItemMap[numericId] = {
           fulfillmentLineItemId: fli.id,
-          unitPrice: parseFloat(
-            fli.lineItem.originalUnitPriceSet.shopMoney.amount
-          ),
+          unitPrice: parseFloat(fli.lineItem.originalUnitPriceSet.shopMoney.amount),
         };
       }
     }
 
-    // Validate all selected items have a fulfillment line item
     const missing = items.filter((item) => !lineItemMap[item.lineItemId]);
     if (missing.length) {
       return NextResponse.json(
-        {
-          error:
-            "Some items are not yet fulfilled and cannot be returned. Please contact support.",
-        },
+        { error: "Some items are not yet fulfilled and cannot be returned." },
         { status: 422 }
       );
     }
 
-    // 2. Create return via GraphQL returnRequest mutation (REQUESTED state)
-    //    returnRequest → REQUESTED state (customer-initiated, requires merchant approval)
-    //    returnCreate  → OPEN state (merchant-initiated, already approved)
+    // 2. Create return in OPEN state (required for label generation)
+    //    returnCreate → OPEN (label can be generated immediately)
+    //    returnRequest → REQUESTED (requires merchant approval before label)
     const returnData = await shopifyGraphQL<{
-      returnRequest: {
-        return: { id: string; status: string } | null;
+      returnCreate: {
+        return: {
+          id: string;
+          status: string;
+          reverseFulfillmentOrders: { nodes: Array<{ id: string }> };
+        } | null;
         userErrors: Array<{ field: string; message: string }>;
       };
     }>(
-      `mutation returnRequest($input: ReturnRequestInput!) {
-        returnRequest(input: $input) {
-          return { id status }
+      `mutation returnCreate($returnInput: ReturnInput!) {
+        returnCreate(returnInput: $returnInput) {
+          return {
+            id
+            status
+            reverseFulfillmentOrders(first: 1) {
+              nodes { id }
+            }
+          }
           userErrors { field message }
         }
       }`,
       {
-        input: {
+        returnInput: {
           orderId: orderGid,
           returnLineItems: items.map((item) => ({
             fulfillmentLineItemId: lineItemMap[item.lineItemId].fulfillmentLineItemId,
             quantity: item.quantity,
             returnReason: REASON_MAP[item.reason] ?? "OTHER",
           })),
+          notifyCustomer: true,
         },
       }
     );
 
-    const userErrors = returnData.returnRequest.userErrors;
+    const userErrors = returnData.returnCreate.userErrors;
     if (userErrors.length) {
-      console.error("[returns/create] returnRequest errors:", userErrors);
-      return NextResponse.json(
-        { error: userErrors[0].message },
-        { status: 422 }
-      );
+      console.error("[returns/create] returnCreate errors:", userErrors);
+      return NextResponse.json({ error: userErrors[0].message }, { status: 422 });
     }
 
-    // 3. Calculate estimated credit from server-side prices
-    const estimatedCreditAmount = items.reduce((sum, item) => {
+    const shopifyReturn = returnData.returnCreate.return!;
+    const returnId = shopifyReturn.id;
+    const reverseFulfillmentOrderId = shopifyReturn.reverseFulfillmentOrders.nodes[0]?.id;
+
+    // 3. Generate return shipping label via Shopify
+    //    Requires Return rules to be enabled in Shopify Admin → Settings → Policies
+    let labelUrl: string | undefined;
+
+    if (reverseFulfillmentOrderId) {
+      try {
+        const labelData = await shopifyGraphQL<{
+          reverseDeliveryCreateWithShipping: {
+            reverseDelivery: {
+              id: string;
+              label: { url: string } | null;
+            } | null;
+            userErrors: Array<{ field: string; message: string }>;
+          };
+        }>(
+          `mutation CreateReturnLabel($reverseFulfillmentOrderId: ID!) {
+            reverseDeliveryCreateWithShipping(
+              reverseFulfillmentOrderId: $reverseFulfillmentOrderId
+            ) {
+              reverseDelivery {
+                id
+                label { url }
+              }
+              userErrors { field message }
+            }
+          }`,
+          { reverseFulfillmentOrderId }
+        );
+
+        const labelErrors = labelData.reverseDeliveryCreateWithShipping.userErrors;
+        if (labelErrors.length) {
+          console.error("[returns/create] Label errors:", labelErrors);
+        } else {
+          labelUrl = labelData.reverseDeliveryCreateWithShipping.reverseDelivery?.label?.url;
+        }
+      } catch (labelErr) {
+        // Label generation failed — log but don't block the return
+        console.error("[returns/create] Label generation failed:", labelErr);
+      }
+    }
+
+    // 4. Calculate amounts
+    const itemsCreditAmount = items.reduce((sum, item) => {
       return sum + lineItemMap[item.lineItemId].unitPrice * item.quantity;
     }, 0);
 
-    const returnId = returnData.returnRequest.return!.id;
+    const shippingCost = shippingCostByTier(membershipTier ?? "free");
+    const estimatedCreditAmount = Math.max(0, itemsCreditAmount - shippingCost);
 
     return NextResponse.json({
       returnId,
+      itemsCreditAmount,
+      shippingCost,
       estimatedCreditAmount,
+      labelUrl,
       status: "submitted",
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error("[returns/create]", message);
-    return NextResponse.json(
-      { error: message },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
