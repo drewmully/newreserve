@@ -45,7 +45,7 @@ interface SelectedItem {
 
 interface ReturnConfirmation {
   returnId: string;
-  creditAmount: number;
+  estimatedCreditAmount: number;
   labelUrl?: string;
   labelTrackingNumber?: string;
 }
@@ -229,7 +229,7 @@ export default function ReturnsPage() {
                 </h1>
                 <p className="text-sm text-charcoal/60 max-w-md mx-auto leading-relaxed">
                   Enter your order details below and we&rsquo;ll pull up your items.
-                  Returns are issued as store credit to your Mully Pro Shop account.
+                  Once we receive and inspect your return, store credit will be applied to your account.
                 </p>
               </div>
 
@@ -509,11 +509,11 @@ export default function ReturnsPage() {
               {/* Store credit policy */}
               <div className="rounded-xl bg-forest/5 border border-forest/10 p-5 mb-6">
                 <p className="text-xs text-charcoal/50 leading-relaxed mb-3">
-                  Returns are issued as <strong className="text-charcoal/70">store credit</strong> to your Mully Pro Shop account at equal value of the item(s).
-                  Credit is typically available within 5&ndash;7 business days of receiving your return.
+                  Once we receive and inspect your items, store credit will be applied to your Mully Pro Shop account.
+                  You&rsquo;ll receive an email confirmation when it&rsquo;s ready to use.
                 </p>
                 <div className="flex items-center justify-between pt-3 border-t border-forest/10">
-                  <span className="text-sm font-medium text-charcoal/60">Total store credit</span>
+                  <span className="text-sm font-medium text-charcoal/60">Estimated store credit</span>
                   <span className="text-xl font-serif font-bold text-forest">${creditTotal().toFixed(2)}</span>
                 </div>
               </div>
@@ -572,11 +572,13 @@ export default function ReturnsPage() {
                 We&rsquo;ll send a confirmation to <span className="text-charcoal/70">{email}</span>
               </p>
 
-              {/* Credit amount */}
+              {/* Estimated credit amount */}
               <div className="rounded-xl bg-forest/5 border border-forest/10 p-6 mb-6 max-w-sm mx-auto">
-                <p className="text-xs tracking-wide uppercase text-sage font-medium mb-2">Store Credit</p>
-                <p className="text-3xl font-serif font-bold text-forest">${confirmation.creditAmount.toFixed(2)}</p>
-                <p className="text-xs text-charcoal/40 mt-1">Available within 5&ndash;7 business days</p>
+                <p className="text-xs tracking-wide uppercase text-sage font-medium mb-2">Estimated Store Credit</p>
+                <p className="text-3xl font-serif font-bold text-forest">${confirmation.estimatedCreditAmount.toFixed(2)}</p>
+                <p className="text-xs text-charcoal/40 mt-2 leading-relaxed">
+                  Credit will be applied once we receive and inspect your items. You&rsquo;ll get an email when it&rsquo;s ready.
+                </p>
               </div>
 
               {/* Return label (if available) */}

@@ -13,28 +13,6 @@ function adminHeaders() {
   };
 }
 
-async function shopifyGraphQL<T>(
-  query: string,
-  variables?: Record<string, unknown>
-): Promise<T> {
-  const res = await fetch(
-    `https://${STORE_DOMAIN}/admin/api/${API_VERSION}/graphql.json`,
-    {
-      method: "POST",
-      headers: adminHeaders(),
-      body: JSON.stringify({ query, variables }),
-    }
-  );
-  if (!res.ok)
-    throw new Error(`Shopify GraphQL error ${res.status}: ${await res.text()}`);
-  const json = (await res.json()) as {
-    data: T;
-    errors?: { message: string }[];
-  };
-  if (json.errors?.length)
-    throw new Error(`GraphQL errors: ${JSON.stringify(json.errors)}`);
-  return json.data;
-}
 
 const REASON_MAP: Record<string, string> = {
   "Wrong size": "SIZE_TOO_SMALL",
@@ -118,58 +96,12 @@ export async function POST(request: NextRequest) {
       return sum + (priceById[item.lineItemId] ?? 0) * item.quantity;
     }, 0);
 
-    // 3. Resolve customer GID by email
-    const customerData = await shopifyGraphQL<{
-      customers: { nodes: Array<{ id: string }> };
-    }>(
-      `query($q: String!) {
-        customers(first: 1, query: $q) {
-          nodes { id }
-        }
-      }`,
-      { q: `email:${customerEmail}` }
-    );
-
-    const customerGid = customerData.customers.nodes[0]?.id;
-    if (!customerGid)
-      throw new Error(`Customer not found for email: ${customerEmail}`);
-
-    // 4. Issue native store credit (Shopify Plus)
-    const creditData = await shopifyGraphQL<{
-      customerCreditAccountCreditAdd: {
-        creditAccount: { balance: { amount: string; currencyCode: string } } | null;
-        userErrors: Array<{ field: string; message: string }>;
-      };
-    }>(
-      `mutation AddCredit($id: ID!, $credit: CustomerCreditAccountCreditInput!) {
-        customerCreditAccountCreditAdd(customerId: $id, creditInput: $credit) {
-          creditAccount {
-            balance { amount currencyCode }
-          }
-          userErrors { field message }
-        }
-      }`,
-      {
-        id: customerGid,
-        credit: {
-          amount: {
-            amount: creditAmount.toFixed(2),
-            currencyCode: "USD",
-          },
-        },
-      }
-    );
-
-    const userErrors =
-      creditData.customerCreditAccountCreditAdd.userErrors;
-    if (userErrors.length) {
-      console.error("[returns/create] Store credit errors:", userErrors);
-      throw new Error(`Store credit failed: ${userErrors[0].message}`);
-    }
-
+    // Store credit is NOT issued here.
+    // It will be issued manually by staff via Shopify admin once the
+    // physical items are received and inspected.
     return NextResponse.json({
       returnId,
-      creditAmount,
+      estimatedCreditAmount: creditAmount,
       status: "submitted",
     });
   } catch (err) {
