@@ -25,14 +25,19 @@ async function shopifyGraphQL<T>(
       body: JSON.stringify({ query, variables }),
     }
   );
-  if (!res.ok)
-    throw new Error(`Shopify GraphQL error ${res.status}: ${await res.text()}`);
+  if (!res.ok) {
+    const text = await res.text();
+    console.error("[returns/create] Shopify HTTP error", res.status, text);
+    throw new Error(`Shopify GraphQL error ${res.status}: ${text}`);
+  }
   const json = (await res.json()) as {
     data: T;
     errors?: { message: string }[];
   };
-  if (json.errors?.length)
+  if (json.errors?.length) {
+    console.error("[returns/create] GraphQL errors:", json.errors);
     throw new Error(`GraphQL errors: ${JSON.stringify(json.errors)}`);
+  }
   return json.data;
 }
 
@@ -45,8 +50,8 @@ const REASON_MAP: Record<string, string> = {
   Other: "OTHER",
 };
 
-// Tier-based shipping cost fallback until Shopify Return rules are enabled.
-// Once Return rules are configured, replace this with a Shopify API call.
+// Tier-based shipping cost.
+// TODO: replace with real carrier rate once Shopify Shipping or EasyPost is integrated.
 function shippingCostByTier(tier: string): number {
   if (tier === "member" || tier === "black") return 0;
   if (tier === "access") return 5.95;
@@ -77,6 +82,7 @@ export async function POST(request: NextRequest) {
     }
 
     const orderGid = `gid://shopify/Order/${orderId}`;
+    console.log("[returns/create] Starting return request for order", orderGid);
 
     // 1. Fetch fulfillment line items to map lineItemId → fulfillmentLineItemId + price
     const fulfillmentsData = await shopifyGraphQL<{
@@ -115,6 +121,7 @@ export async function POST(request: NextRequest) {
     );
 
     if (!fulfillmentsData.order) {
+      console.error("[returns/create] Order not found:", orderGid);
       return NextResponse.json({ error: "Order not found." }, { status: 404 });
     }
 
@@ -129,142 +136,69 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    console.log("[returns/create] Fulfillment line item map built:", Object.keys(lineItemMap).length, "items");
+
     const missing = items.filter((item) => !lineItemMap[item.lineItemId]);
     if (missing.length) {
+      console.error("[returns/create] Items not yet fulfilled:", missing.map((i) => i.lineItemId));
       return NextResponse.json(
         { error: "Some items are not yet fulfilled and cannot be returned." },
         { status: 422 }
       );
     }
 
-    // 2. Create return in OPEN state (required for label generation)
-    //    returnCreate → OPEN (label can be generated immediately)
-    //    returnRequest → REQUESTED (requires merchant approval before label)
-    const returnData = await shopifyGraphQL<{
-      returnCreate: {
+    // 2. Submit return request via returnRequest mutation.
+    //
+    //    We use returnRequest (→ REQUESTED state) instead of returnCreate (→ OPEN).
+    //    This is Shopify's correct customer-initiated returns flow:
+    //      - REQUESTED: awaiting merchant review in Shopify Admin
+    //      - On approval: returnApproveRequest with notifyCustomer:true → sends "return approved" email
+    //      - Merchant generates label via Shopify Shipping in Admin → sends label email automatically
+    //
+    //    Note: returnRequest itself does NOT trigger any Shopify email to the customer.
+    //    The notification chain starts when the merchant approves from the Admin.
+    //    notifyCustomer on returnCreate was deprecated in API version 2024-10.
+    const returnRequestData = await shopifyGraphQL<{
+      returnRequest: {
         return: {
           id: string;
           status: string;
-          reverseFulfillmentOrders: {
-            nodes: Array<{
-              id: string;
-              lineItems: { nodes: Array<{ id: string; totalQuantity: number }> };
-            }>;
-          };
         } | null;
-        userErrors: Array<{ field: string; message: string }>;
+        userErrors: Array<{ field: string[]; message: string }>;
       };
     }>(
-      `mutation returnCreate($returnInput: ReturnInput!) {
-        returnCreate(returnInput: $returnInput) {
+      `mutation ReturnRequest($input: ReturnRequestInput!) {
+        returnRequest(input: $input) {
           return {
             id
             status
-            reverseFulfillmentOrders(first: 1) {
-              nodes {
-                id
-                lineItems(first: 50) {
-                  nodes { id totalQuantity }
-                }
-              }
-            }
           }
           userErrors { field message }
         }
       }`,
       {
-        returnInput: {
+        input: {
           orderId: orderGid,
           returnLineItems: items.map((item) => ({
             fulfillmentLineItemId: lineItemMap[item.lineItemId].fulfillmentLineItemId,
             quantity: item.quantity,
             returnReason: REASON_MAP[item.reason] ?? "OTHER",
+            customerNote: item.reason,
           })),
-          notifyCustomer: true,
         },
       }
     );
 
-    const userErrors = returnData.returnCreate.userErrors;
+    const userErrors = returnRequestData.returnRequest.userErrors;
     if (userErrors.length) {
-      console.error("[returns/create] returnCreate errors:", userErrors);
+      console.error("[returns/create] returnRequest userErrors:", userErrors);
       return NextResponse.json({ error: userErrors[0].message }, { status: 422 });
     }
 
-    const shopifyReturn = returnData.returnCreate.return!;
-    const returnId = shopifyReturn.id;
-    const rfo = shopifyReturn.reverseFulfillmentOrders.nodes[0];
+    const shopifyReturn = returnRequestData.returnRequest.return!;
+    console.log("[returns/create] Return created successfully:", shopifyReturn.id, "status:", shopifyReturn.status);
 
-    // 3. Create reverse delivery (attaches to the return for tracking/label purposes)
-    //    Note: Shopify does not auto-generate carrier labels via this API.
-    //    A label file (labelInput.fileUrl) must come from a shipping service
-    //    (EasyPost, ShipStation, etc.) and be attached here.
-    //    For now we create the delivery record so the email notification fires,
-    //    and labelUrl will be undefined until a shipping service is integrated.
-    let labelUrl: string | undefined;
-
-    if (rfo) {
-      try {
-        const rfoLineItems = rfo.lineItems.nodes.map((li) => ({
-          reverseFulfillmentOrderLineItemId: li.id,
-          quantity: li.totalQuantity,
-        }));
-
-        const deliveryData = await shopifyGraphQL<{
-          reverseDeliveryCreateWithShipping: {
-            reverseDelivery: {
-              id: string;
-              deliverable: {
-                label?: { publicFileUrl?: string };
-                tracking?: { number?: string; url?: string };
-              } | null;
-            } | null;
-            userErrors: Array<{ field: string; message: string }>;
-          };
-        }>(
-          `mutation CreateReverseDelivery(
-            $reverseFulfillmentOrderId: ID!
-            $reverseDeliveryLineItems: [ReverseDeliveryLineItemInput!]!
-          ) {
-            reverseDeliveryCreateWithShipping(
-              reverseFulfillmentOrderId: $reverseFulfillmentOrderId
-              reverseDeliveryLineItems: $reverseDeliveryLineItems
-              notifyCustomer: true
-            ) {
-              reverseDelivery {
-                id
-                deliverable {
-                  ... on ReverseDeliveryShippingDeliverable {
-                    label { publicFileUrl }
-                    tracking { number url }
-                  }
-                }
-              }
-              userErrors { field message }
-            }
-          }`,
-          {
-            reverseFulfillmentOrderId: rfo.id,
-            reverseDeliveryLineItems: rfoLineItems,
-          }
-        );
-
-        const deliveryErrors = deliveryData.reverseDeliveryCreateWithShipping.userErrors;
-        if (deliveryErrors.length) {
-          console.error("[returns/create] Delivery userErrors:", deliveryErrors);
-          labelUrl = `DEBUG_DELIVERY_ERRORS: ${JSON.stringify(deliveryErrors)}`;
-        } else {
-          const deliverable = deliveryData.reverseDeliveryCreateWithShipping.reverseDelivery?.deliverable;
-          labelUrl = deliverable?.label?.publicFileUrl ?? "DEBUG_NO_LABEL_IN_RESPONSE";
-        }
-      } catch (deliveryErr) {
-        const msg = deliveryErr instanceof Error ? deliveryErr.message : String(deliveryErr);
-        console.error("[returns/create] Reverse delivery failed:", msg);
-        labelUrl = `DEBUG_DELIVERY_EXCEPTION: ${msg}`;
-      }
-    }
-
-    // 4. Calculate amounts
+    // 3. Calculate credit amounts
     const itemsCreditAmount = items.reduce((sum, item) => {
       return sum + lineItemMap[item.lineItemId].unitPrice * item.quantity;
     }, 0);
@@ -272,17 +206,19 @@ export async function POST(request: NextRequest) {
     const shippingCost = shippingCostByTier(membershipTier ?? "free");
     const estimatedCreditAmount = Math.max(0, itemsCreditAmount - shippingCost);
 
+    console.log("[returns/create] Credit breakdown — items:", itemsCreditAmount, "shipping:", shippingCost, "net:", estimatedCreditAmount);
+
     return NextResponse.json({
-      returnId,
+      returnId: shopifyReturn.id,
+      returnStatus: shopifyReturn.status,
       itemsCreditAmount,
       shippingCost,
       estimatedCreditAmount,
-      labelUrl,
       status: "submitted",
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error("[returns/create]", message);
+    console.error("[returns/create] Unhandled error:", message);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

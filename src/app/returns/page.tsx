@@ -45,10 +45,10 @@ interface SelectedItem {
 
 interface ReturnConfirmation {
   returnId: string;
+  returnStatus: string;
   itemsCreditAmount: number;
   shippingCost: number;
   estimatedCreditAmount: number;
-  labelUrl?: string;
 }
 
 const RETURN_REASONS = [
@@ -530,10 +530,10 @@ export default function ReturnsPage() {
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                       </svg>
-                      Generating label…
+                      Submitting…
                     </span>
                   ) : (
-                    "Get Return Label"
+                    "Submit Return"
                   )}
                 </button>
               </div>
@@ -552,39 +552,37 @@ export default function ReturnsPage() {
               </div>
 
               <h1 className="font-serif text-2xl md:text-3xl text-obsidian mb-2">
-                Your Return Label is Ready
+                Return Request Submitted
               </h1>
-              <p className="text-sm text-charcoal/50 mb-8">
-                A confirmation has been sent to <span className="text-charcoal/70">{email}</span>
+              <p className="text-sm text-charcoal/50 mb-8 max-w-sm mx-auto leading-relaxed">
+                We&rsquo;ve received your request. Once reviewed, you&rsquo;ll get an email at{" "}
+                <span className="text-charcoal/70">{email}</span>{" "}
+                with your prepaid return label.
               </p>
 
-              {/* Label download — primary action */}
-              {confirmation.labelUrl ? (
-                <a
-                  href={confirmation.labelUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2.5 px-8 py-4 rounded-xl bg-forest text-bone text-sm font-medium tracking-wide btn-press hover:bg-forest-light transition-colors duration-300 mb-8"
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m.75 12l3 3m0 0l3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-                  </svg>
-                  Download &amp; Print Return Label
-                </a>
-              ) : (
-                <div className="rounded-xl border border-taupe/20 bg-white p-5 mb-8 max-w-sm mx-auto text-left">
-                  <p className="text-xs tracking-wide uppercase text-charcoal/40 font-medium mb-2">Ship your return to</p>
-                  <p className="text-sm text-obsidian leading-relaxed">
-                    Mully Group, Inc.<br />
-                    555 Friendly St.<br />
-                    Pontiac, MI 48341
-                  </p>
-                </div>
-              )}
+              {/* What happens next */}
+              <div className="rounded-xl border border-taupe/20 bg-white p-5 mb-5 max-w-sm mx-auto text-left">
+                <p className="text-xs tracking-wide uppercase text-charcoal/40 font-medium mb-3">What happens next</p>
+                <ol className="space-y-2.5">
+                  {[
+                    "We review your return request",
+                    "You receive a prepaid shipping label via email",
+                    "Drop off your package at the carrier",
+                    "Store credit is applied once we inspect your items",
+                  ].map((step, i) => (
+                    <li key={i} className="flex items-start gap-3">
+                      <span className="w-5 h-5 rounded-full bg-forest/10 text-forest text-[10px] font-semibold flex items-center justify-center shrink-0 mt-0.5">
+                        {i + 1}
+                      </span>
+                      <span className="text-sm text-charcoal/60 leading-snug">{step}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
 
               {/* Credit breakdown */}
               <div className="rounded-xl bg-forest/5 border border-forest/10 p-5 mb-6 max-w-sm mx-auto text-left">
-                <p className="text-xs tracking-wide uppercase text-sage font-medium mb-3">Store Credit</p>
+                <p className="text-xs tracking-wide uppercase text-sage font-medium mb-3">Estimated Store Credit</p>
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-charcoal/60">Return value</span>
