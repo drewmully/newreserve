@@ -164,6 +164,7 @@ export default function PostPageClient({ post }: { post: ForumPost }) {
             <span className="font-serif text-xl font-bold tracking-wide">mully.</span>
           </span>
           <div className="flex items-center gap-8">
+            <Link href="/returns" className="text-sm text-bone/50 hover:text-bone transition-colors duration-300 link-hover-underline">Returns</Link>
             <Link href="/policies/terms" className="text-sm text-bone/50 hover:text-bone transition-colors duration-300 link-hover-underline">Terms</Link>
             <Link href="/policies/privacy" className="text-sm text-bone/50 hover:text-bone transition-colors duration-300 link-hover-underline">Privacy</Link>
             <Link href="/faq" className="text-sm text-bone/50 hover:text-bone transition-colors duration-300 link-hover-underline">FAQ</Link>
