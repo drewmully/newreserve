@@ -25,6 +25,7 @@ interface OrderSummary {
 }
 import { SlideCart } from "../components/SlideCart";
 import { UpgradeModal, PillButton, FIT_SHIRT_SIZES, FIT_GLOVE_HANDS, FIT_GLOVE_SIZES, FIT_WAIST_SIZES, FIT_SHOE_SIZES, FIT_PANTS_INSEAMS, FIT_SHORTS_INSEAMS } from "../components/UpgradeModal";
+import { ClubhouseNav, ClubhouseBottomNav } from "../components/ClubhouseNav";
 
 /* ═══════════════════════════════════════════
    ACCOUNT PAGE — Redesigned
@@ -43,8 +44,6 @@ export default function AccountPage() {
     tier,
     tierLabel,
     setTier,
-    cartCount,
-    setCartOpen,
     fitProfile,
     setFitProfile,
     signOut,
@@ -109,9 +108,9 @@ export default function AccountPage() {
 
   return (
     <div className="min-h-screen bg-bone">
-      <AccountHeader cartCount={cartCount} onCartOpen={() => setCartOpen(true)} />
+      <ClubhouseNav />
 
-      <main className="pt-24 pb-20 px-5 md:px-12">
+      <main className="pt-48 pb-20 px-5 md:px-12">
         <div className="max-w-xl mx-auto">
           {/* ── Back link ── */}
           <Link
@@ -193,6 +192,8 @@ export default function AccountPage() {
         </div>
       </footer>
 
+      <ClubhouseBottomNav />
+
       <UpgradeModal
         open={upgradeOpen}
         onClose={() => setUpgradeOpen(false)}
@@ -204,43 +205,6 @@ export default function AccountPage() {
   );
 }
 
-/* ═══════════════════════════════════════════
-   HEADER
-   ═══════════════════════════════════════════ */
-
-function AccountHeader({ cartCount, onCartOpen }: { cartCount: number; onCartOpen: () => void }) {
-  return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-bone/90 backdrop-blur-md border-b border-taupe/15">
-      <div className="max-w-7xl mx-auto px-5 md:px-12 flex items-center justify-between h-14">
-        <Link href="/home" className="flex items-center gap-2 text-forest">
-          <svg viewBox="0 0 1002 540" fill="currentColor" className="h-4.5 w-auto" aria-hidden="true"><path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" /></svg>
-          <span className="font-serif text-xl font-bold tracking-wide">mully.</span>
-        </Link>
-        <div className="flex items-center gap-4">
-          <button
-            onClick={onCartOpen}
-            className="relative text-forest hover:text-forest-dark transition-colors duration-300 cursor-pointer p-1"
-            aria-label="Cart"
-          >
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
-            </svg>
-            {cartCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-ember text-white text-[10px] font-medium flex items-center justify-center">
-                {cartCount}
-              </span>
-            )}
-          </button>
-          <Link href="/home" className="text-forest hover:text-forest-dark transition-colors duration-300 p-1" aria-label="Dashboard">
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
-            </svg>
-          </Link>
-        </div>
-      </div>
-    </header>
-  );
-}
 
 /* ═══════════════════════════════════════════
    SECTION LABEL
