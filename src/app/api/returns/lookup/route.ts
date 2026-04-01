@@ -52,6 +52,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Enforce 45-day return window
+    const orderAge = Date.now() - new Date(order.created_at).getTime();
+    const daysSinceOrder = orderAge / (1000 * 60 * 60 * 24);
+    if (daysSinceOrder > 45) {
+      return NextResponse.json(
+        { error: "This order is outside our return window. Please email info@Mullybox.com or start a concierge request for more assistance." },
+        { status: 422 }
+      );
+    }
+
     // Build a map of already-returned quantities from refunds
     const returnedQtyById: Record<string, number> = {};
     for (const refund of order.refunds ?? []) {
