@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import { db } from "../../../lib/firebase";
 import {
   FIT_SHIRT_SIZES, FIT_GLOVE_HANDS, FIT_GLOVE_SIZES,
   FIT_WAIST_SIZES, FIT_SHOE_SIZES, FIT_PANTS_INSEAMS, FIT_SHORTS_INSEAMS,
@@ -47,8 +49,11 @@ const BRAND_INTEREST = [
 export default function ReserveCardPage() {
   const [step, setStep] = useState(1);
   const [direction, setDirection] = useState<"forward" | "back">("forward");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Step 1: Welcome + gender
+  // Step 1: Welcome + email + gender
+  const [email, setEmail] = useState("");
+  const [emailTouched, setEmailTouched] = useState(false);
   const [gender, setGender] = useState("");
 
   // Step 2: Fit tops
@@ -91,6 +96,45 @@ export default function ReserveCardPage() {
         ? filtered.filter((b: string) => b !== brand)
         : [...filtered, brand];
     });
+  }
+
+  const emailIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+
+  async function handleConfirm() {
+    if (!selectedPlan || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      const docRef = doc(db, "reserve_card_submissions", email.trim().toLowerCase());
+      await setDoc(docRef, {
+        email: email.trim().toLowerCase(),
+        gender,
+        fit: {
+          shirt_size: shirtSize,
+          glove_hand: gloveHand,
+          glove_size: gloveSize,
+          waist_size: waistSize,
+          pants_inseam: pantsInseam,
+          shorts_inseam: shortsInseam,
+          shoe_size: shoeSize,
+        },
+        style: {
+          vibe: styleVibe,
+          color_preference: colorPref,
+          putter_type: putterType,
+          brand_interest: brands,
+        },
+        selected_plan: selectedPlan,
+        submitted_at: serverTimestamp(),
+        source: "reserve_card_qr",
+      }, { merge: true });
+      goTo(6);
+    } catch (err) {
+      console.error("Failed to save reserve card submission:", err);
+      // Still advance — don't block the member on a Firestore error
+      goTo(6);
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -139,6 +183,31 @@ export default function ReserveCardPage() {
                 We&rsquo;re updating the Reserve experience. Take a minute to confirm your sizing, tell us what you like, and choose the membership that fits.
               </p>
 
+              {/* Email */}
+              <div className="mb-8">
+                <label htmlFor="rc-email" className="block text-sm font-medium text-obsidian tracking-wide mb-3">
+                  Your email
+                </label>
+                <input
+                  id="rc-email"
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  onBlur={() => setEmailTouched(true)}
+                  className={`w-full h-12 px-4 rounded-xl border bg-cream text-obsidian text-sm placeholder:text-charcoal/30 outline-none transition-all duration-200 ${
+                    emailTouched && !emailIsValid
+                      ? "border-ember/60 focus:border-ember"
+                      : "border-taupe/25 focus:border-forest"
+                  }`}
+                />
+                {emailTouched && !emailIsValid && (
+                  <p className="mt-2 text-xs text-ember/80">Please enter a valid email address.</p>
+                )}
+              </div>
+
               {/* Gender */}
               <div className="mb-12">
                 <h3 className="text-sm font-medium text-obsidian tracking-wide mb-4">
@@ -164,9 +233,9 @@ export default function ReserveCardPage() {
               <div className="flex justify-end">
                 <button
                   onClick={() => goTo(2)}
-                  disabled={!gender}
+                  disabled={!emailIsValid || !gender}
                   className={`h-12 px-10 rounded-xl text-sm font-medium tracking-wider uppercase transition-all duration-300 btn-press ${
-                    gender
+                    emailIsValid && gender
                       ? "bg-forest text-bone hover:bg-forest-dark cursor-pointer"
                       : "bg-taupe/25 text-charcoal/30 cursor-not-allowed"
                   }`}
@@ -467,15 +536,15 @@ export default function ReserveCardPage() {
                   Back
                 </button>
                 <button
-                  onClick={() => goTo(6)}
-                  disabled={!selectedPlan}
+                  onClick={handleConfirm}
+                  disabled={!selectedPlan || isSubmitting}
                   className={`h-12 px-10 rounded-xl text-sm font-medium tracking-wider uppercase transition-all duration-300 btn-press ${
-                    selectedPlan
+                    selectedPlan && !isSubmitting
                       ? "bg-forest text-bone hover:bg-forest-dark cursor-pointer"
                       : "bg-taupe/25 text-charcoal/30 cursor-not-allowed"
                   }`}
                 >
-                  Confirm
+                  {isSubmitting ? "Saving…" : "Confirm"}
                 </button>
               </div>
             </div>
@@ -505,6 +574,12 @@ export default function ReserveCardPage() {
               <div className="bg-cream rounded-2xl p-6 border border-taupe/20 text-left mb-8">
                 <h3 className="text-xs tracking-[0.2em] uppercase text-sage font-medium mb-4">Summary</h3>
                 <div className="space-y-3 text-sm">
+                  {email && (
+                    <div className="flex justify-between">
+                      <span className="text-charcoal/50">Email</span>
+                      <span className="text-obsidian font-medium">{email.trim().toLowerCase()}</span>
+                    </div>
+                  )}
                   {gender && (
                     <div className="flex justify-between">
                       <span className="text-charcoal/50">Shopping for</span>
