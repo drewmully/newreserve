@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { doc, setDoc, serverTimestamp } from "firebase/firestore";
-import { db } from "../../../lib/firebase";
+import { db } from "../../lib/firebase";
 import {
   FIT_SHIRT_SIZES, FIT_GLOVE_HANDS, FIT_GLOVE_SIZES,
   FIT_WAIST_SIZES, FIT_SHOE_SIZES, FIT_PANTS_INSEAMS, FIT_SHORTS_INSEAMS,
