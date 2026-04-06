@@ -23,13 +23,13 @@ function isAuthorized(req: NextRequest): boolean {
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   if (!isAuthorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { id } = params;
+  const { id } = await params;
   const replyRef = adminDb.collection("email_replies").doc(id);
   const snap = await replyRef.get();
 
