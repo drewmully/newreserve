@@ -684,3 +684,76 @@ select:focus {
   color: #111111;
   font-weight: 600;
 }
+
+@keyframes quick-add-backdrop-in {
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+  }
+  to {
+    opacity: 1;
+    backdrop-filter: blur(14px);
+  }
+}
+
+@keyframes quick-add-backdrop-out {
+  from {
+    opacity: 1;
+    backdrop-filter: blur(14px);
+  }
+  to {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+  }
+}
+
+@keyframes quick-add-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.94);
+    filter: blur(10px);
+  }
+  65% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.01);
+    filter: blur(0px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0px);
+  }
+}
+
+@keyframes quick-add-panel-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0px);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+    filter: blur(6px);
+  }
+}
+
+.animate-quick-add-backdrop-in {
+  animation: quick-add-backdrop-in 0.22s ease-out forwards;
+}
+
+.animate-quick-add-backdrop-out {
+  animation: quick-add-backdrop-out 0.18s ease-in forwards;
+}
+
+.animate-quick-add-panel-in {
+  animation: quick-add-panel-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transform-origin: center bottom;
+  will-change: transform, opacity, filter;
+}
+
+.animate-quick-add-panel-out {
+  animation: quick-add-panel-out 0.2s ease-in forwards;
+  transform-origin: center bottom;
+  will-change: transform, opacity, filter;
+}
