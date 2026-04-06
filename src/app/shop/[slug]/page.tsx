@@ -100,7 +100,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
       <ShopHeader />
 
       {/* PRODUCT DETAIL */}
-      <main className="pt-28 pb-24 px-6 md:px-12">
+      <main className="shop-main pb-24 px-6 md:px-12">
         <div className="max-w-6xl mx-auto">
           <BackLink href={backHref}>Back to Shop</BackLink>
 

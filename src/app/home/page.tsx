@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
@@ -8,6 +8,7 @@ import { useMembership } from "../context/MembershipContext";
 import { SlideCart } from "../components/SlideCart";
 import { UpgradeModal } from "../components/UpgradeModal";
 import { ScrollReveal } from "../components/ClientComponents";
+import { ClubhouseNav, ClubhouseBottomNav } from "../components/ClubhouseNav";
 import {
   getCollectionProducts,
   mergeCollectionProductsBySlug,
@@ -52,6 +53,59 @@ interface GolfRound {
   date: string;
   course: string;
   score: number;
+  courseRating?: number;
+  slopeRating?: number;
+}
+
+/* ── USGA World Handicap System (WHS) Calculation ──
+   Score Differential = (113 / Slope Rating) x (Adjusted Gross Score - Course Rating)
+   Handicap Index = Average of best N differentials (per WHS lookup table)
+   When course rating/slope are not provided, uses standard defaults (72 / 113).
+*/
+
+const DEFAULT_COURSE_RATING = 72;
+const DEFAULT_SLOPE_RATING = 113;
+
+function calcScoreDifferential(score: number, courseRating: number, slopeRating: number): number {
+  return (113 / slopeRating) * (score - courseRating);
+}
+
+/** WHS lookup: how many of the lowest differentials to use and any adjustment */
+function getWHSParams(count: number): { use: number; adjustment: number } {
+  if (count <= 0) return { use: 0, adjustment: 0 };
+  if (count <= 3) return { use: 1, adjustment: -2.0 };
+  if (count === 4) return { use: 1, adjustment: -1.0 };
+  if (count === 5) return { use: 1, adjustment: 0 };
+  if (count === 6) return { use: 2, adjustment: -1.0 };
+  if (count <= 8) return { use: 2, adjustment: 0 };
+  if (count <= 11) return { use: 3, adjustment: 0 };
+  if (count <= 14) return { use: 4, adjustment: 0 };
+  if (count <= 16) return { use: 5, adjustment: 0 };
+  if (count <= 18) return { use: 6, adjustment: 0 };
+  if (count === 19) return { use: 7, adjustment: 0 };
+  return { use: 8, adjustment: 0 };
+}
+
+function calculateHandicapIndex(rounds: GolfRound[]): number | null {
+  if (rounds.length === 0) return null;
+
+  const differentials = rounds
+    .map((r) =>
+      calcScoreDifferential(
+        r.score,
+        r.courseRating ?? DEFAULT_COURSE_RATING,
+        r.slopeRating ?? DEFAULT_SLOPE_RATING,
+      )
+    )
+    .sort((a, b) => a - b);
+
+  const { use, adjustment } = getWHSParams(differentials.length);
+  if (use === 0) return null;
+
+  const best = differentials.slice(0, use);
+  const avg = best.reduce((s, d) => s + d, 0) / best.length;
+  // WHS caps at 54.0
+  return Math.min(54.0, Math.round((avg + adjustment) * 10) / 10);
 }
 
 /* ── Seasonal Editorial ── */
@@ -172,8 +226,6 @@ export default function HomePage() {
     storeCredit,
     onboardingProfile,
     fitProfile,
-    cartCount,
-    setCartOpen,
     addToCart,
     refreshStoreCredit,
     refreshSubscriptionStatus,
@@ -277,8 +329,11 @@ export default function HomePage() {
   const [roundCourse, setRoundCourse] = useState("");
   const [roundDate, setRoundDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [roundScore, setRoundScore] = useState("");
+  const [roundCourseRating, setRoundCourseRating] = useState("");
+  const [roundSlopeRating, setRoundSlopeRating] = useState("");
   const [roundSaving, setRoundSaving] = useState(false);
   const [roundError, setRoundError] = useState<string | null>(null);
+  const [roundsHistoryOpen, setRoundsHistoryOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -321,19 +376,6 @@ export default function HomePage() {
   // ── Upgrade modal ──
   const [upgradeOpen, setUpgradeOpen] = useState(false);
 
-  // ── Cart badge ──
-  const [badgePop, setBadgePop] = useState(false);
-  const prevCartCount = useRef(cartCount);
-  useEffect(() => {
-    const previousCount = prevCartCount.current;
-    prevCartCount.current = cartCount;
-    if (cartCount > previousCount) {
-      setBadgePop(true);
-      const t = setTimeout(() => setBadgePop(false), 400);
-      return () => clearTimeout(t);
-    }
-  }, [cartCount]);
-
   // ── Countdown state ──
   const [countdown, setCountdown] = useState("");
   const [dropDate] = useState(() => getExclusiveDropDate());
@@ -359,6 +401,9 @@ export default function HomePage() {
   const curatedProducts = getCuratedProducts(products, fitProfile?.shirtSize, onboardingProfile?.vibeCheck);
   const staffPick = products.length > 0 ? products[Math.floor(products.length * 0.3)] : null;
 
+  // ── WHS Handicap Index ──
+  const calculatedHandicap = calculateHandicapIndex(golfRounds);
+
   // ── Community posts (top 3) ──
   const [topPosts, setTopPosts] = useState<ForumPost[]>([]);
   useEffect(() => {
@@ -383,16 +428,6 @@ export default function HomePage() {
 
   // ── Seasonal editorial ──
   const editorial = getSeasonalEditorial();
-  const quickNavItems = [
-    { label: "Home", href: "/home", icon: "M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" },
-    { label: "Shop", href: "/dashboard?tab=shop", icon: "M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" },
-    { label: "Drops", href: "/dashboard?tab=drops", icon: "M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" },
-    { label: "Community", href: "/dashboard?tab=community", icon: "M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 01-.825-.242m9.345-8.334a2.126 2.126 0 00-.476-.095 48.64 48.64 0 00-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0011.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155" },
-    { label: "Club", href: "/dashboard?tab=club", icon: "M12 21v-8.25M15.75 21v-8.25M8.25 21v-8.25M3 9l9-6 9 6m-1.5 12V10.332A48.36 48.36 0 0012 9.75c-2.551 0-5.056.2-7.5.582V21M3 21h18M12 6.75h.008v.008H12V6.75z" },
-    { label: "Benefits", href: "/dashboard?tab=benefits", icon: "M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" },
-    { label: "Account", href: "/account", icon: "M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" },
-  ] as const;
-
   const handleLogRound = async () => {
     if (!user) {
       setRoundError("You need to be signed in to log a round.");
@@ -420,6 +455,8 @@ export default function HomePage() {
           date: roundDate,
           course,
           score,
+          courseRating: roundCourseRating ? Number(roundCourseRating) : undefined,
+          slopeRating: roundSlopeRating ? Number(roundSlopeRating) : undefined,
         }),
       });
 
@@ -435,6 +472,8 @@ export default function HomePage() {
       setRoundCourse("");
       setRoundDate(new Date().toISOString().slice(0, 10));
       setRoundScore("");
+      setRoundCourseRating("");
+      setRoundSlopeRating("");
       setLogRoundOpen(false);
     } catch (err) {
       setRoundError(err instanceof Error ? err.message : "Could not save your round.");
@@ -453,73 +492,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-bone">
-      {/* ─── TOP BAR ─── */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-bone/90 backdrop-blur-md border-b border-taupe/20">
-        <div className="max-w-7xl mx-auto px-6 md:px-12 flex items-center justify-between h-16">
-          <Link href="/home" className="flex items-center gap-2 text-forest">
-            <svg viewBox="0 0 1002 540" fill="currentColor" className="h-5 w-auto" aria-hidden="true"><path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" /></svg>
-            <span className="font-serif text-2xl font-bold tracking-wide">mully.</span>
-          </Link>
-          <div className="flex items-center gap-5">
-            <button
-              onClick={() => setCartOpen(true)}
-              className="relative text-forest hover:text-forest-dark transition-colors duration-300 cursor-pointer"
-              aria-label="Cart"
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
-              </svg>
-              {cartCount > 0 && (
-                <span className={`absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-ember text-white text-[10px] font-medium flex items-center justify-center ${badgePop ? "animate-badge-pop" : ""}`}>
-                  {cartCount}
-                </span>
-              )}
-            </button>
-            <Link href="/account" className="text-forest hover:text-forest-dark transition-colors duration-300" aria-label="Account">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-              </svg>
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      <nav className="fixed top-16 left-0 right-0 z-40 bg-bone/90 backdrop-blur-md border-b border-taupe/15">
-        <div className="max-w-7xl mx-auto px-6 md:px-12">
-          <div className="flex items-center gap-3 overflow-x-auto py-3 scrollbar-hide">
-            {quickNavItems.map((item) => {
-              const isActive = item.href === "/home";
-              return (
-                <Link
-                  key={item.label}
-                  href={item.href}
-                  className={`flex items-center gap-2 px-5 py-2.5 rounded-full border transition-all duration-300 btn-press whitespace-nowrap ${
-                    isActive
-                      ? "border-forest/40 bg-forest text-bone shadow-sm"
-                      : "border-taupe/25 text-charcoal/70 hover:text-forest hover:border-forest/30 hover:bg-forest/5"
-                  }`}
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
-                  </svg>
-                  <span className="text-xs font-medium tracking-wide">{item.label}</span>
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      </nav>
-
-      <div className="fixed top-[8rem] left-0 right-0 z-30 bg-forest text-bone">
-        <div className="max-w-7xl mx-auto px-6 md:px-12 py-2.5 flex items-center justify-center gap-2">
-          <svg className="w-4 h-4 text-sage shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z" />
-          </svg>
-          <p className="text-xs tracking-wide text-center">
-            Tell your friends: we&rsquo;re having a launch party with <strong className="text-bone">free priority shipping</strong> for all.
-          </p>
-        </div>
-      </div>
+      <ClubhouseNav />
 
       <main className="pt-48 pb-32 md:pb-24">
         {/* ═══════════════════════════════════════════
@@ -752,25 +725,29 @@ export default function HomePage() {
                       <div className="absolute top-3 left-3 z-10 bg-ember text-bone text-[10px] font-bold tracking-wider uppercase px-2.5 py-1 rounded-full">
                         Staff Pick
                       </div>
-                      <div className="aspect-square bg-bone-dark overflow-hidden product-img-wrap">
-                        {staffPick.images[0] && (
-                          <Image
-                            src={staffPick.images[0]}
-                            alt={staffPick.name}
-                            width={720}
-                            height={720}
-                            sizes="(min-width: 768px) 18rem, 16rem"
-                            className="w-full h-full object-cover product-img-primary"
-                          />
-                        )}
-                      </div>
-                      <div className="p-4">
-                        <p className="text-[10px] tracking-[0.2em] uppercase text-sage font-medium">{staffPick.brand}</p>
-                        <p className="text-sm font-medium text-obsidian mt-0.5 line-clamp-1">{staffPick.name}</p>
-                        <p className="text-xs text-charcoal/50 mt-1 italic line-clamp-2">
-                          &ldquo;Our team is living in this right now.&rdquo;
-                        </p>
-                        <div className="flex items-center justify-between mt-3">
+                      <Link href={`/shop/${staffPick.slug}`} className="block">
+                        <div className="aspect-square bg-bone-dark overflow-hidden product-img-wrap">
+                          {staffPick.images[0] && (
+                            <Image
+                              src={staffPick.images[0]}
+                              alt={staffPick.name}
+                              width={720}
+                              height={720}
+                              sizes="(min-width: 768px) 18rem, 16rem"
+                              className="w-full h-full object-cover product-img-primary"
+                            />
+                          )}
+                        </div>
+                        <div className="p-4 pb-0">
+                          <p className="text-[10px] tracking-[0.2em] uppercase text-sage font-medium">{staffPick.brand}</p>
+                          <p className="text-sm font-medium text-obsidian mt-0.5 line-clamp-1">{staffPick.name}</p>
+                          <p className="text-xs text-charcoal/50 mt-1 italic line-clamp-2">
+                            &ldquo;Our team is living in this right now.&rdquo;
+                          </p>
+                        </div>
+                      </Link>
+                      <div className="px-4 pb-4 pt-3">
+                        <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             {isPaid && staffPick.price > staffPick.reservePrice && (
                               <span className="text-xs text-charcoal/40 line-through">${staffPick.price}</span>
@@ -860,12 +837,18 @@ export default function HomePage() {
                 <h2 className="font-serif text-2xl md:text-3xl text-bone mb-6">The Scorecard</h2>
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-                  {/* Handicap */}
+                  {/* Handicap — WHS calculated */}
                   <div className="bg-white/8 rounded-xl p-4 text-center">
                     <p className="font-serif text-4xl md:text-5xl font-bold text-bone">
-                      {onboardingProfile?.handicap || "—"}
+                      {roundsLoading
+                        ? "..."
+                        : calculatedHandicap !== null
+                          ? calculatedHandicap.toFixed(1)
+                          : onboardingProfile?.handicap || "—"}
                     </p>
-                    <p className="text-[10px] tracking-[0.2em] uppercase text-bone/40 mt-1">Handicap</p>
+                    <p className="text-[10px] tracking-[0.2em] uppercase text-bone/40 mt-1">
+                      Handicap{calculatedHandicap !== null ? " (approx.)" : ""}
+                    </p>
                   </div>
 
                   {/* Rounds This Month */}
@@ -923,7 +906,7 @@ export default function HomePage() {
                   ))}
                 </div>
 
-                <div className="mt-5">
+                <div className="mt-5 flex items-center gap-3">
                   <button
                     className="text-xs text-bone/70 border border-bone/20 rounded-full px-5 py-2 hover:bg-bone/10 transition-colors btn-press cursor-pointer"
                     onClick={() => {
@@ -933,6 +916,14 @@ export default function HomePage() {
                   >
                     + Log a Round
                   </button>
+                  {golfRounds.length > 0 && (
+                    <button
+                      className="text-xs text-bone/70 border border-bone/20 rounded-full px-5 py-2 hover:bg-bone/10 transition-colors btn-press cursor-pointer"
+                      onClick={() => setRoundsHistoryOpen(true)}
+                    >
+                      View Rounds
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -1217,6 +1208,38 @@ export default function HomePage() {
                   />
                 </div>
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] tracking-[0.18em] uppercase text-charcoal/45 mb-1.5">Course Rating <span className="normal-case text-charcoal/30">(opt.)</span></label>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.1"
+                    min={55}
+                    max={85}
+                    value={roundCourseRating}
+                    onChange={(e) => setRoundCourseRating(e.target.value)}
+                    placeholder="72.0"
+                    className="w-full h-11 px-3 rounded-lg border border-taupe/25 bg-cream text-sm text-obsidian placeholder:text-charcoal/35 focus:outline-none focus:border-forest/40 transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] tracking-[0.18em] uppercase text-charcoal/45 mb-1.5">Slope Rating <span className="normal-case text-charcoal/30">(opt.)</span></label>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={55}
+                    max={155}
+                    value={roundSlopeRating}
+                    onChange={(e) => setRoundSlopeRating(e.target.value)}
+                    placeholder="113"
+                    className="w-full h-11 px-3 rounded-lg border border-taupe/25 bg-cream text-sm text-obsidian placeholder:text-charcoal/35 focus:outline-none focus:border-forest/40 transition-colors"
+                  />
+                </div>
+              </div>
+              <p className="text-[10px] text-charcoal/35 mt-1">
+                Course &amp; slope ratings are optional. Defaults: 72 / 113. Check your scorecard for exact values for a more accurate handicap.
+              </p>
             </div>
 
             {roundError && <p className="mt-3 text-xs text-ember">{roundError}</p>}
@@ -1241,29 +1264,101 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* ─── MOBILE QUICK ACTIONS — Sticky Bottom Bar ─── */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-bone/95 backdrop-blur-md border-t border-taupe/20 md:hidden safe-area-bottom">
-        <div className="flex items-center justify-around py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-          {[
-            { label: "Home", href: "/home", icon: "M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25", active: true },
-            { label: "Shop", href: "/dashboard?tab=shop", icon: "M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z", active: false },
-            { label: "Drops", href: "/dashboard?tab=drops", icon: "M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z", active: false },
-            { label: "Community", href: "/dashboard?tab=community", icon: "M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193-.34.027-.68.052-1.02.072v3.091l-3-3c-1.354 0-2.694-.055-4.02-.163a2.115 2.115 0 01-.825-.242m9.345-8.334a2.126 2.126 0 00-.476-.095 48.64 48.64 0 00-8.048 0c-1.131.094-1.976 1.057-1.976 2.192v4.286c0 .837.46 1.58 1.155 1.951m9.345-8.334V6.637c0-1.621-1.152-3.026-2.76-3.235A48.455 48.455 0 0011.25 3c-2.115 0-4.198.137-6.24.402-1.608.209-2.76 1.614-2.76 3.235v6.226c0 1.621 1.152 3.026 2.76 3.235.577.075 1.157.14 1.74.194V21l4.155-4.155", active: false },
-            { label: "Account", href: "/account", icon: "M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z", active: false },
-          ].map((item) => (
-            <Link
-              key={item.label}
-              href={item.href}
-              className={`flex flex-col items-center gap-0.5 px-3 py-1 ${item.active ? "text-forest" : "text-charcoal/40"}`}
-            >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
-              </svg>
-              <span className="text-[10px] font-medium">{item.label}</span>
-            </Link>
-          ))}
+      {/* ─── ROUNDS HISTORY MODAL ─── */}
+      {roundsHistoryOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center px-4">
+          <div
+            className="absolute inset-0 bg-obsidian/50 backdrop-blur-sm"
+            onClick={() => setRoundsHistoryOpen(false)}
+          />
+          <div className="relative w-full max-w-2xl max-h-[80vh] rounded-2xl border border-taupe/20 bg-bone shadow-2xl animate-fade-up flex flex-col">
+            <div className="p-6 pb-0 flex items-start justify-between">
+              <div>
+                <p className="text-[10px] tracking-[0.3em] uppercase text-sage font-medium mb-2">The Scorecard</p>
+                <h3 className="font-serif text-2xl text-obsidian">Round History</h3>
+              </div>
+              <button
+                onClick={() => setRoundsHistoryOpen(false)}
+                className="text-charcoal/35 hover:text-charcoal transition-colors"
+                aria-label="Close round history"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Summary stats */}
+            <div className="px-6 pt-4 pb-3 grid grid-cols-3 gap-3">
+              <div className="bg-cream rounded-lg p-3 text-center">
+                <p className="font-serif text-2xl font-bold text-forest">
+                  {calculatedHandicap !== null ? calculatedHandicap.toFixed(1) : "—"}
+                </p>
+                <p className="text-[10px] tracking-[0.15em] uppercase text-charcoal/40 mt-0.5">Handicap (approx.)</p>
+              </div>
+              <div className="bg-cream rounded-lg p-3 text-center">
+                <p className="font-serif text-2xl font-bold text-forest">
+                  {golfRounds.length > 0 ? Math.min(...golfRounds.map((r) => r.score)) : "—"}
+                </p>
+                <p className="text-[10px] tracking-[0.15em] uppercase text-charcoal/40 mt-0.5">Best Score</p>
+              </div>
+              <div className="bg-cream rounded-lg p-3 text-center">
+                <p className="font-serif text-2xl font-bold text-forest">
+                  {golfRounds.length > 0
+                    ? Math.round(golfRounds.reduce((s, r) => s + r.score, 0) / golfRounds.length)
+                    : "—"}
+                </p>
+                <p className="text-[10px] tracking-[0.15em] uppercase text-charcoal/40 mt-0.5">Avg Score</p>
+              </div>
+            </div>
+
+            {/* Rounds table */}
+            <div className="px-6 pb-6 overflow-y-auto flex-1">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-taupe/15">
+                    <th className="py-2.5 text-[10px] tracking-[0.15em] uppercase text-charcoal/40 font-medium">Date</th>
+                    <th className="py-2.5 text-[10px] tracking-[0.15em] uppercase text-charcoal/40 font-medium">Course</th>
+                    <th className="py-2.5 text-[10px] tracking-[0.15em] uppercase text-charcoal/40 font-medium text-center">Score</th>
+                    <th className="py-2.5 text-[10px] tracking-[0.15em] uppercase text-charcoal/40 font-medium text-center">CR / SR</th>
+                    <th className="py-2.5 text-[10px] tracking-[0.15em] uppercase text-charcoal/40 font-medium text-center">Diff.</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...golfRounds]
+                    .sort((a, b) => b.date.localeCompare(a.date))
+                    .map((round) => {
+                      const cr = round.courseRating ?? DEFAULT_COURSE_RATING;
+                      const sr = round.slopeRating ?? DEFAULT_SLOPE_RATING;
+                      const diff = calcScoreDifferential(round.score, cr, sr);
+                      return (
+                        <tr key={round.id} className="border-b border-taupe/10 last:border-0">
+                          <td className="py-2.5 text-charcoal/70 whitespace-nowrap">
+                            {new Date(round.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" })}
+                          </td>
+                          <td className="py-2.5 text-obsidian font-medium truncate max-w-[10rem]">{round.course}</td>
+                          <td className="py-2.5 text-center font-semibold text-obsidian">{round.score}</td>
+                          <td className="py-2.5 text-center text-charcoal/50 text-xs">{cr} / {sr}</td>
+                          <td className={`py-2.5 text-center font-medium ${diff <= 0 ? "text-green-600" : diff <= 10 ? "text-sage" : "text-ember"}`}>
+                            {diff >= 0 ? "+" : ""}{diff.toFixed(1)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+              {golfRounds.length === 0 && (
+                <p className="text-center text-sm text-charcoal/40 py-8">No rounds recorded yet. Log your first round above.</p>
+              )}
+              <p className="mt-4 text-[10px] text-charcoal/35">
+                Handicap calculated using the USGA World Handicap System formula. Score Differential = (113 / Slope) x (Score - Course Rating). Uses the best {golfRounds.length > 0 ? getWHSParams(golfRounds.length).use : 0} of {golfRounds.length} differential{golfRounds.length !== 1 ? "s" : ""}. Marked as approximate — for an official GHIN handicap, register with the USGA.
+              </p>
+            </div>
+          </div>
         </div>
-      </nav>
+      )}
+
+      <ClubhouseBottomNav />
 
       {/* ─── SLIDE CART ─── */}
       <SlideCart />
