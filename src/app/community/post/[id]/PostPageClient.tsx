@@ -3,31 +3,16 @@
 import Link from "next/link";
 import { useMembership } from "@/app/context/MembershipContext";
 import type { ForumPost } from "../../posts";
+import { CommunityNav } from "../../CommunityNav";
 
 export default function PostPageClient({ post }: { post: ForumPost }) {
   const { isSignedIn } = useMembership();
 
   return (
     <div className="min-h-screen bg-bone">
-      {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-bone/90 backdrop-blur-md border-b border-taupe/20">
-        <div className="max-w-7xl mx-auto px-6 md:px-12 flex items-center justify-between h-16">
-          <Link href={isSignedIn ? "/home" : "/"} className="flex items-center gap-2 text-forest">
-            <svg viewBox="0 0 1002 540" fill="currentColor" className="h-5 w-auto" aria-hidden="true"><path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" /></svg>
-            <span className="font-serif text-2xl font-bold tracking-wide">mully.</span>
-          </Link>
-          {!isSignedIn && (
-            <Link
-              href="/onboarding"
-              className="h-9 px-5 rounded-lg bg-forest text-bone text-xs font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 flex items-center btn-press"
-            >
-              Join Free
-            </Link>
-          )}
-        </div>
-      </header>
+      <CommunityNav />
 
-      <main className="pt-28 pb-24 px-6 md:px-12">
+      <main className="community-main pb-24 px-6 md:px-12">
         <div className="max-w-3xl mx-auto">
           {/* Back — only for logged-in users */}
           {isSignedIn && (

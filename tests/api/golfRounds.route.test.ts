@@ -70,8 +70,24 @@ describe("golf rounds route", () => {
 
     const getMock = vi.fn().mockResolvedValue({
       docs: [
-        { id: "round-2", data: () => ({ date: "2026-03-28", course: "Oakland Hills", score: 79 }) },
-        { id: "round-1", data: () => ({ date: "2026-03-20", course: "Detroit Golf Club", score: 82 }) },
+        {
+          id: "round-2",
+          data: () => ({
+            date: "2026-03-28",
+            course: "Oakland Hills",
+            score: 79,
+            courseRating: 73.4,
+            slopeRating: 132,
+          }),
+        },
+        {
+          id: "round-1",
+          data: () => ({
+            date: "2026-03-20",
+            course: "Detroit Golf Club",
+            score: 82,
+          }),
+        },
       ],
     });
     const limitMock = vi.fn(() => ({ get: getMock }));
@@ -105,8 +121,20 @@ describe("golf rounds route", () => {
     expect(limitMock).toHaveBeenCalledWith(250);
     expect(json).toEqual({
       rounds: [
-        { id: "round-2", date: "2026-03-28", course: "Oakland Hills", score: 79 },
-        { id: "round-1", date: "2026-03-20", course: "Detroit Golf Club", score: 82 },
+        {
+          id: "round-2",
+          date: "2026-03-28",
+          course: "Oakland Hills",
+          score: 79,
+          courseRating: 73.4,
+          slopeRating: 132,
+        },
+        {
+          id: "round-1",
+          date: "2026-03-20",
+          course: "Detroit Golf Club",
+          score: 82,
+        },
       ],
     });
   });
@@ -124,7 +152,33 @@ describe("golf rounds route", () => {
 
     expect(res.status).toBe(400);
     expect(json).toEqual({
-      error: "Invalid payload. Expected date (YYYY-MM-DD), course, and score (40-200).",
+      error:
+        "Invalid payload. Expected date (YYYY-MM-DD), course, score (40-200), and optional course/slope ratings within range.",
+    });
+    expect(adminDbCollectionMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects out-of-range course and slope ratings", async () => {
+    verifyIdTokenMock.mockResolvedValue({ uid: "member-123" });
+
+    const { POST } = await loadRoute();
+    const res = await POST(
+      makeRequest("POST", {
+        body: {
+          date: "2026-03-30",
+          course: "Oakland Hills South",
+          score: 78,
+          courseRating: 90,
+          slopeRating: 20,
+        },
+      })
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(json).toEqual({
+      error:
+        "Invalid payload. Expected date (YYYY-MM-DD), course, score (40-200), and optional course/slope ratings within range.",
     });
     expect(adminDbCollectionMock).not.toHaveBeenCalled();
   });
@@ -156,7 +210,13 @@ describe("golf rounds route", () => {
     const { POST } = await loadRoute();
     const res = await POST(
       makeRequest("POST", {
-        body: { date: "2026-03-30", course: "Oakland Hills South", score: 78 },
+        body: {
+          date: "2026-03-30",
+          course: "Oakland Hills South",
+          score: 78,
+          courseRating: 72.6,
+          slopeRating: 129,
+        },
       })
     );
     const json = await res.json();
@@ -170,6 +230,8 @@ describe("golf rounds route", () => {
       date: "2026-03-30",
       course: "Oakland Hills South",
       score: 78,
+      courseRating: 72.6,
+      slopeRating: 129,
       playedAt: {
         kind: "timestamp",
         iso: "2026-03-30T12:00:00.000Z",
@@ -182,6 +244,8 @@ describe("golf rounds route", () => {
         date: "2026-03-30",
         course: "Oakland Hills South",
         score: 78,
+        courseRating: 72.6,
+        slopeRating: 129,
       },
     });
   });

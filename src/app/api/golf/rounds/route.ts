@@ -7,6 +7,8 @@ interface GolfRoundRecord {
   date: string;
   course: string;
   score: number;
+  courseRating?: number;
+  slopeRating?: number;
 }
 
 async function verifyFirebaseBearer(request: NextRequest): Promise<string> {
@@ -30,6 +32,22 @@ function parseRoundScore(value: unknown): number | null {
   if (typeof value !== "number" || !Number.isFinite(value)) return null;
   const integer = Math.round(value);
   if (integer < 40 || integer > 200) return null;
+  return integer;
+}
+
+function parseCourseRating(value: unknown): number | undefined | null {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  const rounded = Math.round(value * 10) / 10;
+  if (rounded < 55 || rounded > 85) return null;
+  return rounded;
+}
+
+function parseSlopeRating(value: unknown): number | undefined | null {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  const integer = Math.round(value);
+  if (integer < 55 || integer > 155) return null;
   return integer;
 }
 
@@ -57,6 +75,10 @@ export async function GET(request: NextRequest) {
         date: String(data.date ?? ""),
         course: String(data.course ?? ""),
         score: Number(data.score ?? 0),
+        courseRating:
+          typeof data.courseRating === "number" ? data.courseRating : undefined,
+        slopeRating:
+          typeof data.slopeRating === "number" ? data.slopeRating : undefined,
       };
     });
 
@@ -83,18 +105,28 @@ export async function POST(request: NextRequest) {
       date?: string;
       course?: string;
       score?: number;
+      courseRating?: number;
+      slopeRating?: number;
     };
 
     const date = normalizeRoundDate(body.date);
     const score = parseRoundScore(body.score);
+    const courseRating = parseCourseRating(body.courseRating);
+    const slopeRating = parseSlopeRating(body.slopeRating);
     const course =
       typeof body.course === "string" ? body.course.trim().slice(0, 120) : "";
 
-    if (!date || !course || score === null) {
+    if (
+      !date ||
+      !course ||
+      score === null ||
+      courseRating === null ||
+      slopeRating === null
+    ) {
       return NextResponse.json(
         {
           error:
-            "Invalid payload. Expected date (YYYY-MM-DD), course, and score (40-200).",
+            "Invalid payload. Expected date (YYYY-MM-DD), course, score (40-200), and optional course/slope ratings within range.",
         },
         { status: 400 }
       );
@@ -109,12 +141,23 @@ export async function POST(request: NextRequest) {
         date,
         course,
         score,
+        ...(courseRating !== undefined ? { courseRating } : {}),
+        ...(slopeRating !== undefined ? { slopeRating } : {}),
         playedAt,
         createdAt: FieldValue.serverTimestamp(),
       });
 
     return NextResponse.json(
-      { round: { id: ref.id, date, course, score } },
+      {
+        round: {
+          id: ref.id,
+          date,
+          course,
+          score,
+          ...(courseRating !== undefined ? { courseRating } : {}),
+          ...(slopeRating !== undefined ? { slopeRating } : {}),
+        },
+      },
       { status: 201 }
     );
   } catch (err) {

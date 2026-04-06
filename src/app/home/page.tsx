@@ -9,6 +9,7 @@ import { SlideCart } from "../components/SlideCart";
 import { UpgradeModal } from "../components/UpgradeModal";
 import { ScrollReveal } from "../components/ClientComponents";
 import { ClubhouseNav, ClubhouseBottomNav } from "../components/ClubhouseNav";
+import { QuickAddToCartButton } from "../components/QuickAddToCartButton";
 import {
   getCollectionProducts,
   mergeCollectionProductsBySlug,
@@ -18,6 +19,17 @@ import {
 } from "@/lib/shopify";
 import { getExclusiveDropDate } from "@/lib/dropConfig";
 import type { ForumPost } from "../community/posts";
+import {
+  calculateHandicapIndex,
+  getRoundCourseRating,
+  getRoundDifferential,
+  getRoundSlopeRating,
+  getWHSParams,
+  sortGolfRounds,
+  type GolfRound,
+  type GolfRoundSortKey,
+  type GolfRoundSortState,
+} from "@/lib/golfStats";
 
 /* ═══════════════════════════════════════════
    HOME — The Clubhouse
@@ -46,67 +58,6 @@ interface WeatherData {
 }
 
 type WeatherErrorState = "none" | "service";
-
-/* ── Golf Round Types ── */
-interface GolfRound {
-  id: string;
-  date: string;
-  course: string;
-  score: number;
-  courseRating?: number;
-  slopeRating?: number;
-}
-
-/* ── USGA World Handicap System (WHS) Calculation ──
-   Score Differential = (113 / Slope Rating) x (Adjusted Gross Score - Course Rating)
-   Handicap Index = Average of best N differentials (per WHS lookup table)
-   When course rating/slope are not provided, uses standard defaults (72 / 113).
-*/
-
-const DEFAULT_COURSE_RATING = 72;
-const DEFAULT_SLOPE_RATING = 113;
-
-function calcScoreDifferential(score: number, courseRating: number, slopeRating: number): number {
-  return (113 / slopeRating) * (score - courseRating);
-}
-
-/** WHS lookup: how many of the lowest differentials to use and any adjustment */
-function getWHSParams(count: number): { use: number; adjustment: number } {
-  if (count <= 0) return { use: 0, adjustment: 0 };
-  if (count <= 3) return { use: 1, adjustment: -2.0 };
-  if (count === 4) return { use: 1, adjustment: -1.0 };
-  if (count === 5) return { use: 1, adjustment: 0 };
-  if (count === 6) return { use: 2, adjustment: -1.0 };
-  if (count <= 8) return { use: 2, adjustment: 0 };
-  if (count <= 11) return { use: 3, adjustment: 0 };
-  if (count <= 14) return { use: 4, adjustment: 0 };
-  if (count <= 16) return { use: 5, adjustment: 0 };
-  if (count <= 18) return { use: 6, adjustment: 0 };
-  if (count === 19) return { use: 7, adjustment: 0 };
-  return { use: 8, adjustment: 0 };
-}
-
-function calculateHandicapIndex(rounds: GolfRound[]): number | null {
-  if (rounds.length === 0) return null;
-
-  const differentials = rounds
-    .map((r) =>
-      calcScoreDifferential(
-        r.score,
-        r.courseRating ?? DEFAULT_COURSE_RATING,
-        r.slopeRating ?? DEFAULT_SLOPE_RATING,
-      )
-    )
-    .sort((a, b) => a - b);
-
-  const { use, adjustment } = getWHSParams(differentials.length);
-  if (use === 0) return null;
-
-  const best = differentials.slice(0, use);
-  const avg = best.reduce((s, d) => s + d, 0) / best.length;
-  // WHS caps at 54.0
-  return Math.min(54.0, Math.round((avg + adjustment) * 10) / 10);
-}
 
 /* ── Seasonal Editorial ── */
 interface EditorialCard {
@@ -334,6 +285,10 @@ export default function HomePage() {
   const [roundSaving, setRoundSaving] = useState(false);
   const [roundError, setRoundError] = useState<string | null>(null);
   const [roundsHistoryOpen, setRoundsHistoryOpen] = useState(false);
+  const [roundSort, setRoundSort] = useState<GolfRoundSortState>({
+    key: "date",
+    direction: "desc",
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -403,6 +358,7 @@ export default function HomePage() {
 
   // ── WHS Handicap Index ──
   const calculatedHandicap = calculateHandicapIndex(golfRounds);
+  const sortedRounds = sortGolfRounds(golfRounds, roundSort);
 
   // ── Community posts (top 3) ──
   const [topPosts, setTopPosts] = useState<ForumPost[]>([]);
@@ -428,6 +384,14 @@ export default function HomePage() {
 
   // ── Seasonal editorial ──
   const editorial = getSeasonalEditorial();
+  const toggleRoundSort = (key: GolfRoundSortKey) => {
+    setRoundSort((current) => ({
+      key,
+      direction:
+        current.key === key && current.direction === "desc" ? "asc" : "desc",
+    }));
+  };
+
   const handleLogRound = async () => {
     if (!user) {
       setRoundError("You need to be signed in to log a round.");
@@ -756,22 +720,23 @@ export default function HomePage() {
                               ${isPaid ? staffPick.reservePrice : staffPick.price}
                             </span>
                           </div>
-                          <button
-                            onClick={() => addToCart({
-                              slug: staffPick.slug,
-                              name: staffPick.name,
-                              brand: staffPick.brand,
-                              price: isPaid ? staffPick.reservePrice : staffPick.price,
-                              variantId: staffPick.variantId,
-                              image: staffPick.images[0],
-                            })}
-                            className="w-8 h-8 rounded-full bg-forest text-bone flex items-center justify-center hover:bg-forest-dark transition-colors btn-press cursor-pointer"
-                            aria-label="Add to cart"
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                            </svg>
-                          </button>
+                          <QuickAddToCartButton
+                            product={staffPick}
+                            isPaid={isPaid}
+                            onAddToCart={addToCart}
+                            idleClassName="w-8 h-8 rounded-full bg-forest text-bone flex items-center justify-center hover:bg-forest-dark transition-colors btn-press cursor-pointer"
+                            addedClassName="w-8 h-8 rounded-full bg-sage text-bone flex items-center justify-center transition-colors btn-press cursor-pointer"
+                            idleContent={
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                              </svg>
+                            }
+                            addedContent={
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              </svg>
+                            }
+                          />
                         </div>
                       </div>
                     </div>
@@ -781,43 +746,66 @@ export default function HomePage() {
                 {/* Curated products */}
                 {curatedProducts.map((product) => (
                   <div key={product.slug} className="flex-shrink-0 w-56 md:w-64 snap-start">
-                    <Link href={`/shop/${product.slug}`} className="block rounded-2xl overflow-hidden bg-cream group product-tile-hover border border-taupe/15">
-                      <div className="aspect-square bg-bone-dark overflow-hidden product-img-wrap">
-                        {product.images[0] && (
-                          <Image
-                            src={product.images[0]}
-                            alt={product.name}
-                            width={720}
-                            height={720}
-                            sizes="(min-width: 768px) 16rem, 14rem"
-                            className="w-full h-full object-cover product-img-primary"
-                          />
-                        )}
-                        {product.images[1] && (
-                          <Image
-                            src={product.images[1]}
-                            alt=""
-                            width={720}
-                            height={720}
-                            sizes="(min-width: 768px) 16rem, 14rem"
-                            aria-hidden="true"
-                            className="w-full h-full object-cover product-img-secondary"
-                          />
-                        )}
-                      </div>
-                      <div className="p-4">
-                        <p className="text-[10px] tracking-[0.2em] uppercase text-sage font-medium">{product.brand}</p>
-                        <p className="text-sm font-medium text-obsidian mt-0.5 line-clamp-1">{product.name}</p>
-                        <div className="flex items-center gap-2 mt-2">
-                          {isPaid && product.price > product.reservePrice && (
-                            <span className="text-xs text-charcoal/40 line-through">${product.price}</span>
+                    <div className="rounded-2xl overflow-hidden bg-cream group product-tile-hover border border-taupe/15">
+                      <Link href={`/shop/${product.slug}`} className="block">
+                        <div className="aspect-square bg-bone-dark overflow-hidden product-img-wrap">
+                          {product.images[0] && (
+                            <Image
+                              src={product.images[0]}
+                              alt={product.name}
+                              width={720}
+                              height={720}
+                              sizes="(min-width: 768px) 16rem, 14rem"
+                              className="w-full h-full object-cover product-img-primary"
+                            />
                           )}
-                          <span className="text-sm font-semibold text-forest">
-                            ${isPaid ? product.reservePrice : product.price}
-                          </span>
+                          {product.images[1] && (
+                            <Image
+                              src={product.images[1]}
+                              alt=""
+                              width={720}
+                              height={720}
+                              sizes="(min-width: 768px) 16rem, 14rem"
+                              aria-hidden="true"
+                              className="w-full h-full object-cover product-img-secondary"
+                            />
+                          )}
+                        </div>
+                        <div className="p-4 pb-0">
+                          <p className="text-[10px] tracking-[0.2em] uppercase text-sage font-medium">{product.brand}</p>
+                          <p className="text-sm font-medium text-obsidian mt-0.5 line-clamp-1">{product.name}</p>
+                        </div>
+                      </Link>
+                      <div className="px-4 pb-4 pt-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2">
+                            {isPaid && product.price > product.reservePrice && (
+                              <span className="text-xs text-charcoal/40 line-through">${product.price}</span>
+                            )}
+                            <span className="text-sm font-semibold text-forest">
+                              ${isPaid ? product.reservePrice : product.price}
+                            </span>
+                          </div>
+                          <QuickAddToCartButton
+                            product={product}
+                            isPaid={isPaid}
+                            onAddToCart={addToCart}
+                            idleClassName="w-8 h-8 rounded-full bg-forest text-bone flex items-center justify-center hover:bg-forest-dark transition-colors btn-press cursor-pointer"
+                            addedClassName="w-8 h-8 rounded-full bg-sage text-bone flex items-center justify-center transition-colors btn-press cursor-pointer"
+                            idleContent={
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                              </svg>
+                            }
+                            addedContent={
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              </svg>
+                            }
+                          />
                         </div>
                       </div>
-                    </Link>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1317,20 +1305,78 @@ export default function HomePage() {
               <table className="w-full text-left text-sm">
                 <thead>
                   <tr className="border-b border-taupe/15">
-                    <th className="py-2.5 text-[10px] tracking-[0.15em] uppercase text-charcoal/40 font-medium">Date</th>
-                    <th className="py-2.5 text-[10px] tracking-[0.15em] uppercase text-charcoal/40 font-medium">Course</th>
-                    <th className="py-2.5 text-[10px] tracking-[0.15em] uppercase text-charcoal/40 font-medium text-center">Score</th>
-                    <th className="py-2.5 text-[10px] tracking-[0.15em] uppercase text-charcoal/40 font-medium text-center">CR / SR</th>
-                    <th className="py-2.5 text-[10px] tracking-[0.15em] uppercase text-charcoal/40 font-medium text-center">Diff.</th>
+                    <th
+                      aria-sort={roundSort.key === "date" ? (roundSort.direction === "asc" ? "ascending" : "descending") : "none"}
+                      className="py-2.5"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => toggleRoundSort("date")}
+                        className="inline-flex items-center gap-1 text-[10px] tracking-[0.15em] uppercase text-charcoal/40 font-medium hover:text-forest transition-colors"
+                      >
+                        Date
+                        <span>{roundSort.key === "date" ? (roundSort.direction === "asc" ? "↑" : "↓") : "↕"}</span>
+                      </button>
+                    </th>
+                    <th
+                      aria-sort={roundSort.key === "course" ? (roundSort.direction === "asc" ? "ascending" : "descending") : "none"}
+                      className="py-2.5"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => toggleRoundSort("course")}
+                        className="inline-flex items-center gap-1 text-[10px] tracking-[0.15em] uppercase text-charcoal/40 font-medium hover:text-forest transition-colors"
+                      >
+                        Course
+                        <span>{roundSort.key === "course" ? (roundSort.direction === "asc" ? "↑" : "↓") : "↕"}</span>
+                      </button>
+                    </th>
+                    <th
+                      aria-sort={roundSort.key === "score" ? (roundSort.direction === "asc" ? "ascending" : "descending") : "none"}
+                      className="py-2.5 text-center"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => toggleRoundSort("score")}
+                        className="inline-flex items-center justify-center gap-1 text-[10px] tracking-[0.15em] uppercase text-charcoal/40 font-medium hover:text-forest transition-colors"
+                      >
+                        Score
+                        <span>{roundSort.key === "score" ? (roundSort.direction === "asc" ? "↑" : "↓") : "↕"}</span>
+                      </button>
+                    </th>
+                    <th
+                      aria-sort={roundSort.key === "courseMetrics" ? (roundSort.direction === "asc" ? "ascending" : "descending") : "none"}
+                      className="py-2.5 text-center"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => toggleRoundSort("courseMetrics")}
+                        className="inline-flex items-center justify-center gap-1 text-[10px] tracking-[0.15em] uppercase text-charcoal/40 font-medium hover:text-forest transition-colors"
+                      >
+                        CR / SR
+                        <span>{roundSort.key === "courseMetrics" ? (roundSort.direction === "asc" ? "↑" : "↓") : "↕"}</span>
+                      </button>
+                    </th>
+                    <th
+                      aria-sort={roundSort.key === "differential" ? (roundSort.direction === "asc" ? "ascending" : "descending") : "none"}
+                      className="py-2.5 text-center"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => toggleRoundSort("differential")}
+                        className="inline-flex items-center justify-center gap-1 text-[10px] tracking-[0.15em] uppercase text-charcoal/40 font-medium hover:text-forest transition-colors"
+                      >
+                        Diff.
+                        <span>{roundSort.key === "differential" ? (roundSort.direction === "asc" ? "↑" : "↓") : "↕"}</span>
+                      </button>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {[...golfRounds]
-                    .sort((a, b) => b.date.localeCompare(a.date))
-                    .map((round) => {
-                      const cr = round.courseRating ?? DEFAULT_COURSE_RATING;
-                      const sr = round.slopeRating ?? DEFAULT_SLOPE_RATING;
-                      const diff = calcScoreDifferential(round.score, cr, sr);
+                  {sortedRounds.map((round) => {
+                      const cr = getRoundCourseRating(round);
+                      const sr = getRoundSlopeRating(round);
+                      const diff = getRoundDifferential(round);
                       return (
                         <tr key={round.id} className="border-b border-taupe/10 last:border-0">
                           <td className="py-2.5 text-charcoal/70 whitespace-nowrap">
