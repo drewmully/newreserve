@@ -299,24 +299,6 @@ function ProductTile({
     privateReleasesHandle
   );
 
-  const handleQuickAdd = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (ctx) {
-      void ctx.addToCart({
-        slug: product.slug,
-        name: product.name,
-        brand: product.brand,
-        price: isPaid ? product.reservePrice : product.price,
-        retailPrice: product.price,
-        variantId: product.variantId,
-        image: product.images?.[0],
-      });
-    }
-    setJustAdded(true);
-    setTimeout(() => setJustAdded(false), 1500);
-  };
-
   const hasImages = product.images && product.images.length > 0;
   const hasSecondImage = product.images && product.images.length > 1;
 
@@ -741,31 +723,6 @@ function AddToCartButtonInner({
             : "Add to Cart"}
       </button>
     </div>
-    <button
-      onClick={() => {
-        if (ctx && product) {
-          const isPaid = ctx.tier !== "free";
-          void ctx.addToCart({
-            slug: product.slug,
-            name: product.name,
-            brand: product.brand,
-            price: isPaid ? product.reservePrice : product.price,
-            retailPrice: product.price,
-            variantId: product.variantId,
-            image: product.images?.[0],
-          });
-        }
-        setAdded(true);
-        setTimeout(() => setAdded(false), 2000);
-      }}
-      className={`w-full h-13 rounded-xl text-sm font-medium tracking-wider uppercase transition-all duration-300 cursor-pointer btn-press ${
-        added
-          ? "bg-sage text-bone"
-          : "bg-forest text-bone hover:bg-forest-dark"
-      }`}
-    >
-      {added ? "Added to Cart" : "Add to Cart"}
-    </button>
   );
 }
 
