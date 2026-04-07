@@ -1,7 +1,5 @@
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 export const FROM = "Drew Amato <drew@reserve.mymully.com>";
 export const REPLY_TO = "drew@mail.mymully.com";
 
@@ -11,7 +9,16 @@ export interface PlainTextEmail {
   text: string;
 }
 
+function getResendClient(): Resend {
+  const apiKey = process.env.RESEND_API_KEY?.trim();
+  if (!apiKey) {
+    throw new Error("Missing required env var: RESEND_API_KEY");
+  }
+  return new Resend(apiKey);
+}
+
 export async function sendPlainText(email: PlainTextEmail): Promise<void> {
+  const resend = getResendClient();
   const { error } = await resend.emails.send({
     from: FROM,
     replyTo: REPLY_TO,
