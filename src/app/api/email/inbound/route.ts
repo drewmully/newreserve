@@ -98,18 +98,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  let payload: ResendInboundPayload;
+  let raw: unknown;
   try {
-    payload = await req.json();
+    raw = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
+
+  console.log("[email/inbound] raw payload:", JSON.stringify(raw));
+
+  // Resend may wrap the email in a `data` field
+  const payload = (
+    raw && typeof raw === "object" && "data" in raw ? (raw as { data: unknown }).data : raw
+  ) as ResendInboundPayload;
 
   const senderEmail = payload.from?.trim().toLowerCase();
   const rawText = payload.text ?? "";
 
   if (!senderEmail) {
-    return NextResponse.json({ error: "Missing from address" }, { status: 400 });
+    return NextResponse.json({ error: "Missing from address", payload: raw }, { status: 400 });
   }
 
   // 1. Find user by email
