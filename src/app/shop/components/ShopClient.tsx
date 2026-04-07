@@ -299,6 +299,24 @@ function ProductTile({
     privateReleasesHandle
   );
 
+  const handleQuickAdd = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (ctx) {
+      void ctx.addToCart({
+        slug: product.slug,
+        name: product.name,
+        brand: product.brand,
+        price: isPaid ? product.reservePrice : product.price,
+        retailPrice: product.price,
+        variantId: product.variantId,
+        image: product.images?.[0],
+      });
+    }
+    setJustAdded(true);
+    setTimeout(() => setJustAdded(false), 1500);
+  };
+
   const hasImages = product.images && product.images.length > 0;
   const hasSecondImage = product.images && product.images.length > 1;
 
@@ -374,7 +392,17 @@ function ProductTile({
         </h3>
         <div className="flex items-center gap-2">
           {isPaid ? (
-            <span className="text-sm text-forest font-medium">${product.reservePrice}</span>
+            <>
+              {product.price !== product.reservePrice && (
+                <span className="text-sm text-charcoal/40 line-through">${product.price}</span>
+              )}
+              <span className="text-sm text-forest font-medium">${product.reservePrice}</span>
+              {product.price !== product.reservePrice && (
+                <span className="text-[10px] tracking-wide uppercase text-forest bg-forest/10 px-1.5 py-0.5 rounded font-medium">
+                  Member Price
+                </span>
+              )}
+            </>
           ) : (
             <>
               <span className="text-sm text-charcoal/40 line-through">${product.price}</span>
@@ -694,6 +722,61 @@ export function AddToCartButton({
             ? "Added to Cart"
             : "Add to Cart"}
       </button>
+    </div>
+    <button
+      onClick={() => {
+        if (ctx && product) {
+          const isPaid = ctx.tier !== "free";
+          void ctx.addToCart({
+            slug: product.slug,
+            name: product.name,
+            brand: product.brand,
+            price: isPaid ? product.reservePrice : product.price,
+            retailPrice: product.price,
+            variantId: product.variantId,
+            image: product.images?.[0],
+          });
+        }
+        setAdded(true);
+        setTimeout(() => setAdded(false), 2000);
+      }}
+      className={`w-full h-13 rounded-xl text-sm font-medium tracking-wider uppercase transition-all duration-300 cursor-pointer btn-press ${
+        added
+          ? "bg-sage text-bone"
+          : "bg-forest text-bone hover:bg-forest-dark"
+      }`}
+    >
+      {added ? "Added to Cart" : "Add to Cart"}
+    </button>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   PRODUCT PRICE DISPLAY (tier-aware, for product detail page)
+   ═══════════════════════════════════════════ */
+
+export function ProductPriceDisplay({
+  price,
+  reservePrice,
+}: {
+  price: number;
+  reservePrice: number;
+}) {
+  const ctx = useMembershipSafe();
+  const isPaid = (ctx?.tier ?? "free") !== "free";
+  const hasDiscount = price !== reservePrice;
+
+  return (
+    <div className="flex items-center gap-3">
+      {hasDiscount && (
+        <span className="text-sm text-charcoal/40 line-through">${price}</span>
+      )}
+      <span className="font-serif text-2xl text-forest">${reservePrice}</span>
+      {hasDiscount && (
+        <span className={`text-[10px] tracking-wide uppercase px-2 py-1 rounded font-medium ${isPaid ? "text-forest bg-forest/10" : "text-sage bg-sage/10"}`}>
+          {isPaid ? "Member Price" : "Mill River Price"}
+        </span>
+      )}
     </div>
   );
 }

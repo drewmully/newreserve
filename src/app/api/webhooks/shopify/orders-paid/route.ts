@@ -19,6 +19,21 @@ import {
 } from "@/app/api/_lib/kpiReporting";
 import { adminDb } from "@/lib/firebase-admin";
 import { resolveMemberTierFromVariantId } from "@/lib/membershipConfig";
+import { startFlow, type EmailFlow } from "@/lib/email/sequences";
+
+async function triggerEmailFlow(
+  uid: string,
+  email: string,
+  firstName: string | null,
+  flow: EmailFlow
+): Promise<void> {
+  try {
+    await startFlow(uid, email, firstName, flow);
+    console.log(`[orders-paid] email flow=${flow} started for uid=${uid}`);
+  } catch (err) {
+    console.error("[orders-paid] email flow trigger failed:", err);
+  }
+}
 
 // ─── HMAC verification ────────────────────────────────────────────────────────
 
@@ -162,7 +177,7 @@ export async function POST(request: NextRequest) {
 
   const eventId = randomUUID();
 
-  // ── Update Firestore user tier ────────────────────────────────────────────
+  // ── Update Firestore user tier + trigger email flow ──────────────────────
   const tierUpdate = email
     ? (async () => {
         const tier = resolveTierFromLineItems(order.line_items);
@@ -175,11 +190,18 @@ export async function POST(request: NextRequest) {
             .get();
           if (!snap.empty) {
             const userDoc = snap.docs[0];
+            const uid = userDoc.id;
+            const userData = userDoc.data();
             const updates: Record<string, unknown> = { tier };
-            if (shopifyCustomerId && !userDoc.data().shopify_customer_id) {
+            if (shopifyCustomerId && !userData.shopify_customer_id) {
               updates.shopify_customer_id = shopifyCustomerId;
             }
             await userDoc.ref.update(updates);
+
+            // Trigger email flow for the new tier (access or member)
+            const emailFlow = tier === "member" || tier === "black" ? "member" : "access";
+            const firstName = (userData.username as string | undefined) ?? null;
+            await triggerEmailFlow(uid, email, firstName, emailFlow);
           }
         } catch (err) {
           console.error("[orders-paid] tier update failed:", err);
