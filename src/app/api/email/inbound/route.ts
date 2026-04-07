@@ -88,6 +88,7 @@ interface ResendInboundPayload {
   subject: string;
   text?: string;
   html?: string;
+  plain_text?: string;
   headers?: Record<string, string>;
 }
 
@@ -113,7 +114,7 @@ export async function POST(req: NextRequest) {
   ) as ResendInboundPayload;
 
   const senderEmail = payload.from?.trim().toLowerCase();
-  const rawText = payload.text ?? "";
+  const rawText = payload.text ?? payload.plain_text ?? "";
 
   if (!senderEmail) {
     return NextResponse.json({ error: "Missing from address", payload: raw }, { status: 400 });
