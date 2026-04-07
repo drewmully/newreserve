@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { ProductVariantSelector } from "./ProductVariantSelector";
 import {
@@ -59,6 +59,15 @@ export function QuickAddToCartButton({
   );
   const isVisible = open || closing;
 
+  const beginClose = useCallback(() => {
+    if (!isVisible || closing) return;
+    setClosing(true);
+    window.setTimeout(() => {
+      setClosing(false);
+      setOpen(false);
+    }, 220);
+  }, [closing, isVisible]);
+
   useEffect(() => {
     setSelection(getInitialVariantSelection(product));
   }, [product]);
@@ -92,7 +101,7 @@ export function QuickAddToCartButton({
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [isVisible]);
+  }, [beginClose, isVisible]);
 
   const selectedVariant =
     resolveVariantBySelection(product, selection) ??
@@ -110,15 +119,6 @@ export function QuickAddToCartButton({
   const flashAdded = () => {
     setAdded(true);
     window.setTimeout(() => setAdded(false), 1500);
-  };
-
-  const beginClose = () => {
-    if (!isVisible || closing) return;
-    setClosing(true);
-    window.setTimeout(() => {
-      setClosing(false);
-      setOpen(false);
-    }, 220);
   };
 
   const handleConfirm = async () => {

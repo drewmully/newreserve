@@ -618,15 +618,33 @@ export function AddToCartButton({
     variants?: Product["variants"];
   };
 }) {
+  const productResetKey = product
+    ? `${product.slug}:${product.variantId ?? "default"}`
+    : "empty";
+
+  return <AddToCartButtonInner key={productResetKey} product={product} />;
+}
+
+function AddToCartButtonInner({
+  product,
+}: {
+  product?: {
+    slug: string;
+    name: string;
+    brand: string;
+    reservePrice: number;
+    price: number;
+    variantId?: string;
+    images?: string[];
+    options?: Product["options"];
+    variants?: Product["variants"];
+  };
+}) {
   const [added, setAdded] = useState(false);
   const ctx = useMembershipSafe();
   const [selection, setSelection] = useState(() =>
     product ? getInitialVariantSelection(product) : {}
   );
-
-  useEffect(() => {
-    setSelection(product ? getInitialVariantSelection(product) : {});
-  }, [product]);
 
   const selectedVariant =
     product && resolveVariantBySelection(product, selection);
