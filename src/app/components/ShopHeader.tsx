@@ -3,20 +3,33 @@
 import Link from "next/link";
 import { useMembership } from "../context/MembershipContext";
 import { SlideCart } from "./SlideCart";
+import { ClubhouseNav, ClubhouseBottomNav } from "./ClubhouseNav";
 
 /**
  * Shared header for shop pages (/shop, /shop/[slug]).
- * In frontend-demo mode, always shows cart + account (simulating signed-in).
- * When backend is wired up, check auth state here to toggle Sign In vs account icons.
+ * Shows ClubhouseNav for signed-in users, simple header for guests.
+ * Injects a <style> tag to set the correct top padding on .shop-main.
  */
 export function ShopHeader() {
-  const { cartCount, setCartOpen, isSignedIn } = useMembership();
+  const { cartCount, setCartOpen, isSignedIn, authLoading } = useMembership();
+
+  if (!authLoading && isSignedIn) {
+    return (
+      <>
+        <style>{`.shop-main { padding-top: 12rem; }`}</style>
+        <ClubhouseNav />
+        <ClubhouseBottomNav />
+        <SlideCart />
+      </>
+    );
+  }
 
   return (
     <>
+      <style>{`.shop-main { padding-top: 6rem; }`}</style>
       <header className="fixed top-0 left-0 right-0 z-50 bg-bone/90 backdrop-blur-md border-b border-taupe/20">
         <div className="max-w-7xl mx-auto px-6 md:px-12 flex items-center justify-between h-16">
-          <Link href={isSignedIn ? "/dashboard" : "/"} className="flex items-center gap-2 text-forest">
+          <Link href={isSignedIn ? "/home" : "/"} className="flex items-center gap-2 text-forest">
             <svg viewBox="0 0 1002 540" fill="currentColor" className="h-5 w-auto" aria-hidden="true"><path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" /></svg>
             <span className="font-serif text-2xl font-bold tracking-wide">mully.</span>
           </Link>

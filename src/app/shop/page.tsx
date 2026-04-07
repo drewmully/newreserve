@@ -67,7 +67,7 @@ export default async function ShopPage() {
       <ShopHeader />
 
       {/* ─── PAGE CONTENT ─── */}
-      <main className="pt-24 pb-24 px-6 md:px-12">
+      <main className="shop-main pb-24 px-6 md:px-12">
         <div className="max-w-7xl mx-auto">
           <ShopGrid
             products={products}

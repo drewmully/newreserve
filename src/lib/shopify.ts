@@ -90,10 +90,31 @@ export interface ShopifyProduct {
   aboutBrand: string;
   whyWeLikeIt: string;
   sizing: string;
+  options: ShopifyProductOption[];
+  variants: ShopifyProductVariant[];
   /** First variant GID — required for cart mutations. Undefined if Shopify returned no variants. */
   variantId: string | undefined;
   /** Shopify collection handles this product belongs to (filled when merging collection queries). */
   sourceCollections?: string[];
+}
+
+export interface ShopifyProductOption {
+  name: string;
+  values: string[];
+}
+
+export interface ShopifySelectedOption {
+  name: string;
+  value: string;
+}
+
+export interface ShopifyProductVariant {
+  id: string;
+  title: string;
+  price: number;
+  reservePrice: number;
+  availableForSale: boolean;
+  selectedOptions: ShopifySelectedOption[];
 }
 
 export interface CartLineInput {
@@ -146,8 +167,11 @@ interface CollectionProductsGroup {
 
 interface RawVariant {
   id: string;
+  title: string;
   price: { amount: string; currencyCode: string };
   compareAtPrice: { amount: string; currencyCode: string } | null;
+  availableForSale: boolean;
+  selectedOptions: Array<{ name: string; value: string }>;
 }
 
 interface RawProduct {
@@ -156,6 +180,7 @@ interface RawProduct {
   vendor: string;
   productType: string;
   description: string;
+  options: Array<{ name: string; values: string[] }>;
   variants: { nodes: RawVariant[] };
   images: { nodes: Array<{ url: string }> };
   materialMeta: { value: string } | null;
@@ -188,27 +213,46 @@ interface RawCart {
 
 // ─── Mappers ──────────────────────────────────────────────────────────────────
 
-function mapProduct(raw: RawProduct): ShopifyProduct {
-  const variant = raw.variants.nodes[0];
-  const reservePrice = parseFloat(variant?.price.amount ?? "0");
-  const price = variant?.compareAtPrice
-    ? parseFloat(variant.compareAtPrice.amount)
+function mapVariant(raw: RawVariant): ShopifyProductVariant {
+  const reservePrice = parseFloat(raw.price.amount);
+  const price = raw.compareAtPrice
+    ? parseFloat(raw.compareAtPrice.amount)
     : reservePrice;
+
+  return {
+    id: raw.id,
+    title: raw.title,
+    price,
+    reservePrice,
+    availableForSale: raw.availableForSale,
+    selectedOptions: raw.selectedOptions,
+  };
+}
+
+function mapProduct(raw: RawProduct): ShopifyProduct {
+  const variants = raw.variants.nodes.map(mapVariant);
+  const defaultVariant =
+    variants.find((variant) => variant.availableForSale) ?? variants[0];
 
   return {
     slug: raw.handle,
     name: raw.title,
     brand: raw.vendor,
     collection: raw.productType || "Accessories",
-    price,
-    reservePrice,
+    price: defaultVariant?.price ?? 0,
+    reservePrice: defaultVariant?.reservePrice ?? 0,
     images: raw.images.nodes.map((img) => img.url),
     description: raw.description,
     material: raw.materialMeta?.value ?? "",
     aboutBrand: raw.aboutBrandMeta?.value ?? "",
     whyWeLikeIt: raw.whyWeLikeItMeta?.value ?? "",
     sizing: raw.sizingMeta?.value ?? "",
-    variantId: variant?.id,
+    options: raw.options.map((option) => ({
+      name: option.name,
+      values: option.values,
+    })),
+    variants,
+    variantId: defaultVariant?.id,
   };
 }
 
@@ -239,11 +283,21 @@ const PRODUCT_FIELDS = `
   vendor
   productType
   description
-  variants(first: 1) {
+  options {
+    name
+    values
+  }
+  variants(first: 50) {
     nodes {
       id
+      title
       price { amount currencyCode }
       compareAtPrice { amount currencyCode }
+      availableForSale
+      selectedOptions {
+        name
+        value
+      }
     }
   }
   images(first: 5) {

@@ -13,7 +13,7 @@ interface AuthAwareSignInProps {
 
 export function AuthAwareSignIn({
   className,
-  dashboardHref = "/dashboard",
+  dashboardHref = "/home",
   signInHref = "/login",
   dashboardLabel = "Dashboard",
   signInLabel = "Sign In",

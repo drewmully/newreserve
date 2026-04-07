@@ -22,7 +22,7 @@ const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
   : null;
 
-const ADMIN_EMAIL = "info@mullybox.com";
+const ADMIN_EMAIL = "info@Mullybox.com";
 
 const BENEFIT_ALLOWED_TIERS: Record<BenefitKey, MemberTier[]> = {
   v1_virtual_coaching: ["access", "member", "black"],

@@ -151,6 +151,40 @@ input:focus {
 
 /* ─── SUBTLE ANIMATIONS ─── */
 
+.clubhouse-radar-bg {
+  background-image:
+    radial-gradient(circle at center, rgba(110, 139, 116, 0.12) 0, rgba(110, 139, 116, 0.12) 1px, transparent 1px),
+    radial-gradient(circle at center, rgba(245, 241, 232, 0.06) 0, rgba(245, 241, 232, 0.06) 1px, transparent 1px),
+    radial-gradient(circle at center, rgba(110, 139, 116, 0.08) 0, transparent 62%);
+  background-size: 18px 18px, 140px 140px, 100% 100%;
+  background-position: 0 0, center, center;
+}
+
+.scorecard-grid {
+  background-image:
+    linear-gradient(to right, rgba(17, 17, 17, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(17, 17, 17, 0.05) 1px, transparent 1px);
+  background-size: 36px 36px;
+}
+
+@keyframes ribbon-slide {
+  from { background-position: 0 0; }
+  to { background-position: 140px 0; }
+}
+
+.wind-ribbon {
+  background-image: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.18) 28%,
+    rgba(255, 255, 255, 0) 50%,
+    rgba(255, 255, 255, 0.18) 72%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  background-size: 140px 100%;
+  animation: ribbon-slide 8s linear infinite;
+}
+
 @keyframes fade-up-in {
   from {
     opacity: 0;
@@ -589,6 +623,24 @@ select:focus {
 }
 
 /* ─── Policy prose styling ─── */
+/* ─── SCROLLBAR HIDE UTILITY ─── */
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* ─── SAFE AREA (mobile bottom bar) ─── */
+
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ─── Policy prose styling ─── */
+
 .policy-prose {
   font-size: 0.875rem;
   line-height: 1.75;
@@ -631,4 +683,77 @@ select:focus {
 .policy-prose strong {
   color: #111111;
   font-weight: 600;
+}
+
+@keyframes quick-add-backdrop-in {
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+  }
+  to {
+    opacity: 1;
+    backdrop-filter: blur(14px);
+  }
+}
+
+@keyframes quick-add-backdrop-out {
+  from {
+    opacity: 1;
+    backdrop-filter: blur(14px);
+  }
+  to {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+  }
+}
+
+@keyframes quick-add-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.94);
+    filter: blur(10px);
+  }
+  65% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.01);
+    filter: blur(0px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0px);
+  }
+}
+
+@keyframes quick-add-panel-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0px);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+    filter: blur(6px);
+  }
+}
+
+.animate-quick-add-backdrop-in {
+  animation: quick-add-backdrop-in 0.22s ease-out forwards;
+}
+
+.animate-quick-add-backdrop-out {
+  animation: quick-add-backdrop-out 0.18s ease-in forwards;
+}
+
+.animate-quick-add-panel-in {
+  animation: quick-add-panel-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transform-origin: center bottom;
+  will-change: transform, opacity, filter;
+}
+
+.animate-quick-add-panel-out {
+  animation: quick-add-panel-out 0.2s ease-in forwards;
+  transform-origin: center bottom;
+  will-change: transform, opacity, filter;
 }

@@ -5,6 +5,15 @@ import Link from "next/link";
 import type { Product } from "../products";
 import { BRAND_INFO, COLLECTION_INFO } from "../products";
 import { useMembership } from "../../context/MembershipContext";
+import { ProductVariantSelector } from "../../components/ProductVariantSelector";
+import { QuickAddToCartButton } from "../../components/QuickAddToCartButton";
+import {
+  formatVariantSummary,
+  getDefaultProductVariant,
+  getInitialVariantSelection,
+  hasVariantChoices,
+  resolveVariantBySelection,
+} from "@/lib/productVariants";
 
 /* Safe membership hook — returns null when used outside the provider (e.g. public /shop) */
 function useMembershipSafe() {
@@ -280,7 +289,6 @@ function ProductTile({
   privateReleasesHandle: string;
 }) {
   const ctx = useMembershipSafe();
-  const [justAdded, setJustAdded] = useState(false);
   const tier = ctx?.tier ?? "free";
   const isPaid = tier !== "free";
   const productHref =
@@ -290,24 +298,6 @@ function ProductTile({
   const isPrivateRelease = (product.sourceCollections ?? []).includes(
     privateReleasesHandle
   );
-
-  const handleQuickAdd = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (ctx) {
-      void ctx.addToCart({
-        slug: product.slug,
-        name: product.name,
-        brand: product.brand,
-        price: isPaid ? product.reservePrice : product.price,
-        retailPrice: product.price,
-        variantId: product.variantId,
-        image: product.images?.[0],
-      });
-    }
-    setJustAdded(true);
-    setTimeout(() => setJustAdded(false), 1500);
-  };
 
   const hasImages = product.images && product.images.length > 0;
   const hasSecondImage = product.images && product.images.length > 1;
@@ -354,25 +344,26 @@ function ProductTile({
         )}
 
         {/* Quick-add to cart */}
-        <button
-          onClick={handleQuickAdd}
-          className={`absolute bottom-3 right-3 w-9 h-9 rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer shadow-sm btn-press ${
-            justAdded
-              ? "bg-sage text-bone scale-110"
-              : "bg-forest text-bone opacity-0 group-hover:opacity-100 translate-y-1 group-hover:translate-y-0 hover:bg-forest-dark"
-          }`}
-          aria-label="Add to cart"
-        >
-          {justAdded ? (
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
-          ) : (
+        <QuickAddToCartButton
+          product={product}
+          isPaid={isPaid}
+          onAddToCart={async (item) => {
+            if (!ctx) return;
+            await ctx.addToCart(item);
+          }}
+          idleClassName="absolute bottom-3 right-3 w-9 h-9 rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer shadow-sm btn-press bg-forest text-bone opacity-0 group-hover:opacity-100 translate-y-1 group-hover:translate-y-0 hover:bg-forest-dark"
+          addedClassName="absolute bottom-3 right-3 w-9 h-9 rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer shadow-sm btn-press bg-sage text-bone scale-110"
+          idleContent={
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
             </svg>
-          )}
-        </button>
+          }
+          addedContent={
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          }
+        />
       </div>
       <div className="px-0.5">
         <p className="text-xs text-charcoal/40 tracking-wide uppercase mb-0.5">
@@ -633,37 +624,105 @@ export function AddToCartButton({
     price: number;
     variantId?: string;
     images?: string[];
+    options?: Product["options"];
+    variants?: Product["variants"];
+  };
+}) {
+  const productResetKey = product
+    ? `${product.slug}:${product.variantId ?? "default"}`
+    : "empty";
+
+  return <AddToCartButtonInner key={productResetKey} product={product} />;
+}
+
+function AddToCartButtonInner({
+  product,
+}: {
+  product?: {
+    slug: string;
+    name: string;
+    brand: string;
+    reservePrice: number;
+    price: number;
+    variantId?: string;
+    images?: string[];
+    options?: Product["options"];
+    variants?: Product["variants"];
   };
 }) {
   const [added, setAdded] = useState(false);
   const ctx = useMembershipSafe();
+  const [selection, setSelection] = useState(() =>
+    product ? getInitialVariantSelection(product) : {}
+  );
+
+  const selectedVariant =
+    product && resolveVariantBySelection(product, selection);
+  const defaultVariant =
+    product && (selectedVariant ?? getDefaultProductVariant(product));
+  const variantSummary =
+    product && hasVariantChoices(product)
+      ? formatVariantSummary(defaultVariant ?? null)
+      : "";
 
   return (
-    <button
-      onClick={() => {
-        if (ctx && product) {
-          const isPaid = ctx.tier !== "free";
-          void ctx.addToCart({
-            slug: product.slug,
-            name: product.name,
-            brand: product.brand,
-            price: isPaid ? product.reservePrice : product.price,
-            retailPrice: product.price,
-            variantId: product.variantId,
-            image: product.images?.[0],
-          });
-        }
-        setAdded(true);
-        setTimeout(() => setAdded(false), 2000);
-      }}
-      className={`w-full h-13 rounded-xl text-sm font-medium tracking-wider uppercase transition-all duration-300 cursor-pointer btn-press ${
-        added
-          ? "bg-sage text-bone"
-          : "bg-forest text-bone hover:bg-forest-dark"
-      }`}
-    >
-      {added ? "Added to Cart" : "Add to Cart"}
-    </button>
+    <div className="space-y-4">
+      {product && (
+        <ProductVariantSelector
+          product={product}
+          selection={selection}
+          onChange={(optionName, optionValue) =>
+            setSelection((current) => ({
+              ...current,
+              [optionName]: optionValue,
+            }))
+          }
+        />
+      )}
+
+      {variantSummary && (
+        <p className="text-xs text-charcoal/45">
+          Selected:{" "}
+          <span className="font-medium text-obsidian">{variantSummary}</span>
+        </p>
+      )}
+
+      <button
+        onClick={() => {
+          if (ctx && product) {
+            const isPaid = ctx.tier !== "free";
+            const variant =
+              resolveVariantBySelection(product, selection) ??
+              getDefaultProductVariant(product);
+
+            void ctx.addToCart({
+              slug: product.slug,
+              name: product.name,
+              brand: product.brand,
+              price: isPaid
+                ? variant?.reservePrice ?? product.reservePrice
+                : variant?.price ?? product.price,
+              variantId: variant?.id ?? product.variantId,
+              image: product.images?.[0],
+            });
+          }
+          setAdded(true);
+          setTimeout(() => setAdded(false), 2000);
+        }}
+        disabled={defaultVariant?.availableForSale === false}
+        className={`w-full h-13 rounded-xl text-sm font-medium tracking-wider uppercase transition-all duration-300 cursor-pointer btn-press disabled:cursor-not-allowed disabled:opacity-60 ${
+          added
+            ? "bg-sage text-bone"
+            : "bg-forest text-bone hover:bg-forest-dark"
+        }`}
+      >
+        {defaultVariant?.availableForSale === false
+          ? "Unavailable"
+          : added
+            ? "Added to Cart"
+            : "Add to Cart"}
+      </button>
+    </div>
   );
 }
 

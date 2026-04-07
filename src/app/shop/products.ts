@@ -1,3 +1,8 @@
+import type {
+  ShopifyProductOption,
+  ShopifyProductVariant,
+} from "@/lib/shopify";
+
 export interface Product {
   slug: string;
   name: string;
@@ -11,6 +16,8 @@ export interface Product {
   aboutBrand: string;
   whyWeLikeIt: string;
   sizing: string;
+  options?: ShopifyProductOption[];
+  variants?: ShopifyProductVariant[];
   /** Shopify variant GID — populated when data comes from the Storefront API */
   variantId?: string;
   /** Shopify collection handles this product belongs to, if available */
