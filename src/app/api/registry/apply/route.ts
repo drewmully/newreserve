@@ -5,7 +5,7 @@ import { adminDb, adminAuth } from "@/lib/firebase-admin";
 import { createReviewToken } from "@/lib/registry-tokens";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-const ADMIN_EMAIL = "santy@mullybox.com";
+const ADMIN_EMAIL = "info@Mullybox.com";
 
 async function verifyAuth(req: NextRequest): Promise<string | null> {
   const header = req.headers.get("Authorization");
