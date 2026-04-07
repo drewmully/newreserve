@@ -176,9 +176,21 @@ export function SlideCart() {
                     <p className="text-sm font-medium text-obsidian leading-snug mb-1">
                       {item.name}
                     </p>
-                    <p className="text-sm text-forest font-medium">
-                      ${item.price.toFixed(2)}
-                    </p>
+                    <div className="flex items-center gap-1.5">
+                      {isPaid && item.retailPrice && item.retailPrice !== item.price && (
+                        <span className="text-xs text-charcoal/40 line-through">
+                          ${item.retailPrice.toFixed(2)}
+                        </span>
+                      )}
+                      <p className="text-sm text-forest font-medium">
+                        ${item.price.toFixed(2)}
+                      </p>
+                      {isPaid && item.retailPrice && item.retailPrice !== item.price && (
+                        <span className="text-[9px] tracking-wide uppercase text-forest bg-forest/10 px-1 py-0.5 rounded font-medium">
+                          Member
+                        </span>
+                      )}
+                    </div>
 
                     {/* Quantity controls */}
                     <div className="flex items-center gap-2 mt-2">
@@ -256,7 +268,20 @@ export function SlideCart() {
                 <span className="text-charcoal/50">Shipping</span>
                 <span className="text-forest font-medium">Free</span>
               </div>
-              {!isPaid && (
+              {isPaid ? (
+                (() => {
+                  const savings = cart.reduce((sum, item) => {
+                    const retail = item.retailPrice ?? item.price;
+                    return sum + (retail - item.price) * item.quantity;
+                  }, 0);
+                  return savings > 0 ? (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-forest/80">Member savings</span>
+                      <span className="text-forest font-medium">-${savings.toFixed(2)}</span>
+                    </div>
+                  ) : null;
+                })()
+              ) : (
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-charcoal/50">Reserve savings</span>
                   <span className="text-charcoal/30 text-xs">

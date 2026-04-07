@@ -74,6 +74,8 @@ export interface CartItem {
   name: string;
   brand: string;
   price: number;
+  /** Original retail price — stored for member savings calculation */
+  retailPrice?: number;
   quantity: number;
   /** Shopify variant GID — required for Storefront cart mutations */
   variantId?: string;

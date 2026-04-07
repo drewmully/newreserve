@@ -13,6 +13,7 @@ import {
   Accordion,
   AddToCartButton,
   BackLink,
+  ProductPriceDisplay,
 } from "../components/ShopClient";
 import { ShopHeader } from "../../components/ShopHeader";
 
@@ -124,21 +125,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
 
               {/* Price */}
               <div className="mb-6 pb-6 border-b border-taupe/20">
-                <div className="flex items-center gap-3">
-                  {product.price !== product.reservePrice && (
-                    <span className="text-sm text-charcoal/40 line-through">
-                      ${product.price}
-                    </span>
-                  )}
-                  <span className="font-serif text-2xl text-forest">
-                    ${product.reservePrice}
-                  </span>
-                  {product.price !== product.reservePrice && (
-                    <span className="text-[10px] tracking-wide uppercase text-sage bg-sage/10 px-2 py-1 rounded font-medium">
-                      Mill River Price
-                    </span>
-                  )}
-                </div>
+                <ProductPriceDisplay price={product.price} reservePrice={product.reservePrice} />
               </div>
 
               {/* Short description */}
