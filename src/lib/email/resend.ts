@@ -3,7 +3,7 @@ import { Resend } from "resend";
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 export const FROM = "Drew Amato <drew@reserve.mymully.com>";
-export const REPLY_TO = "drew@reserve.mymully.com";
+export const REPLY_TO = "drew@mail.mymully.com";
 
 export interface PlainTextEmail {
   to: string;
