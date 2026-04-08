@@ -37,24 +37,6 @@ export async function GET(req: NextRequest) {
     const posts = await Promise.all(
       allDocs.map(async (doc) => {
         const d = doc.data();
-        const commentsSnap = await doc.ref
-          .collection("comments")
-          .orderBy("createdAt", "asc")
-          .get();
-        const comments = commentsSnap.docs.map((c) => {
-          const cd = c.data();
-          return {
-            id: c.id,
-            authorId: cd.authorId as string,
-            author: cd.author as string,
-            avatar: cd.avatar as string,
-            timestamp: cd.createdAt
-              ? formatRelativeTime((cd.createdAt as { toDate(): Date }).toDate())
-              : "just now",
-            body: cd.body as string,
-            likes: (cd.likes as number) || 0,
-          };
-        });
         return {
           id: doc.id,
           authorId: d.authorId as string,
@@ -66,7 +48,8 @@ export async function GET(req: NextRequest) {
           title: d.title as string,
           body: d.body as string,
           likes: (d.likes as number) || 0,
-          comments,
+          commentCount: (d.commentCount as number) || 0,
+          comments: [],
           tag: d.tag as string,
           images: (d.images as string[]) || [],
           videos: (d.videos as string[]) || [],
@@ -92,6 +75,12 @@ export async function POST(req: NextRequest) {
     if (!title?.trim() || !body?.trim()) {
       return NextResponse.json(
         { error: "Title and body are required" },
+        { status: 400 }
+      );
+    }
+    if (Array.isArray(videos) && videos.length > 0) {
+      return NextResponse.json(
+        { error: "Community posts currently support images only." },
         { status: 400 }
       );
     }
@@ -122,6 +111,7 @@ export async function POST(req: NextRequest) {
           title: (title as string).trim(),
           body: (body as string).trim(),
           likes: 0,
+          commentCount: 0,
           comments: [],
           tag: (tag as string) || "General",
           images: (images as string[]) || [],

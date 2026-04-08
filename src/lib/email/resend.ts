@@ -7,6 +7,7 @@ export interface PlainTextEmail {
   to: string;
   subject: string;
   text: string;
+  idempotencyKey?: string;
 }
 
 function getResendClient(): Resend {
@@ -17,16 +18,20 @@ function getResendClient(): Resend {
   return new Resend(apiKey);
 }
 
-export async function sendPlainText(email: PlainTextEmail): Promise<void> {
+export async function sendPlainText(email: PlainTextEmail): Promise<string | null> {
   const resend = getResendClient();
-  const { error } = await resend.emails.send({
-    from: FROM,
-    replyTo: REPLY_TO,
-    to: email.to,
-    subject: email.subject,
-    text: email.text,
-  });
+  const { data, error } = await resend.emails.send(
+    {
+      from: FROM,
+      replyTo: REPLY_TO,
+      to: email.to,
+      subject: email.subject,
+      text: email.text,
+    },
+    email.idempotencyKey ? { idempotencyKey: email.idempotencyKey } : undefined
+  );
   if (error) {
     throw new Error(`Resend error: ${JSON.stringify(error)}`);
   }
+  return data?.id ?? null;
 }

@@ -88,6 +88,8 @@ export interface CartItem {
 export interface StoreCreditState {
   balance_cents: number;
   currency: string;
+  source?: "shopify" | "cache";
+  isStale?: boolean;
 }
 
 export interface SubscriptionsState {
@@ -97,6 +99,8 @@ export interface SubscriptionsState {
   active_subscription_ids: string[];
   manage_url: string | null;
   next_unblock_url: string | null;
+  source?: "loop" | "cache";
+  isStale?: boolean;
 }
 
 export interface FitProfile {
@@ -231,7 +235,59 @@ const TIER_LABELS: Record<MemberTier, string> = {
   black: "Reserve Black",
 };
 
-const cartIdKey = (uid: string) => `mully_cart_id_${uid}`;
+const GUEST_CART_ID_KEY = "mully_cart_id_guest";
+const cartIdKey = (uid?: string | null) =>
+  uid ? `mully_cart_id_${uid}` : GUEST_CART_ID_KEY;
+
+const EMPTY_SUBSCRIPTIONS_STATE: SubscriptionsState = {
+  mullybox_active: false,
+  status: "none",
+  total_subscription_count: 0,
+  active_subscription_ids: [],
+  manage_url: null,
+  next_unblock_url: null,
+  source: "cache",
+  isStale: true,
+};
+
+function normalizeStoreCreditState(
+  value: Partial<StoreCreditState> | null | undefined,
+  source: "shopify" | "cache"
+): StoreCreditState | null {
+  if (!value) return null;
+  return {
+    balance_cents: Number(value.balance_cents ?? 0),
+    currency:
+      typeof value.currency === "string" && value.currency.trim()
+        ? value.currency
+        : "USD",
+    source,
+    isStale: source !== "shopify",
+  };
+}
+
+function normalizeSubscriptionsState(
+  value: Partial<SubscriptionsState> | null | undefined,
+  source: "loop" | "cache"
+): SubscriptionsState {
+  return {
+    ...EMPTY_SUBSCRIPTIONS_STATE,
+    ...(value ?? {}),
+    active_subscription_ids: Array.isArray(value?.active_subscription_ids)
+      ? value.active_subscription_ids.filter(
+          (id): id is string => typeof id === "string" && id.length > 0
+        )
+      : [],
+    manage_url:
+      typeof value?.manage_url === "string" ? value.manage_url : null,
+    next_unblock_url:
+      typeof value?.next_unblock_url === "string"
+        ? value.next_unblock_url
+        : null,
+    source,
+    isStale: source !== "loop",
+  };
+}
 
 export function MembershipProvider({ children }: { children: ReactNode }) {
   // ── Auth ──────────────────────────────────────────────────────────────────
@@ -344,6 +400,37 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
     } catch {}
   }, []);
 
+  const persistCartIdLocally = useCallback((uid: string | null, id: string) => {
+    try {
+      localStorage.setItem(cartIdKey(uid), id);
+    } catch {}
+  }, []);
+
+  const clearPersistedCartId = useCallback(
+    async (
+      uid: string | null,
+      {
+        clearFirestore = false,
+      }: {
+        clearFirestore?: boolean;
+      } = {}
+    ) => {
+      try {
+        localStorage.removeItem(cartIdKey(uid));
+      } catch {}
+
+      if (uid && clearFirestore) {
+        try {
+          await updateDoc(doc(db, "users", uid), {
+            "cart.cart_id": null,
+            "cart.updated_at": serverTimestamp(),
+          });
+        } catch {}
+      }
+    },
+    []
+  );
+
   /* ── bindCartBuyerIdentity ── */
   const bindCartBuyerIdentity = useCallback(
     async (cId: string, userEmail: string) => {
@@ -369,50 +456,94 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
 
   /* ── Cart rehydration on login ── */
   const rehydrateCart = useCallback(
-    async (uid: string, userEmail: string) => {
-      let savedId: string | null = null;
+    async (uid: string | null, userEmail?: string | null) => {
+      const candidates: Array<{
+        id: string;
+        source: "user_firestore" | "user_local" | "guest_local";
+      }> = [];
 
-      // 1) Firestore
-      try {
-        const snap = await getDoc(doc(db, "users", uid));
-        savedId = (snap.data()?.cart?.cart_id as string) ?? null;
-      } catch {}
-
-      // 2) localStorage fallback
-      if (!savedId) {
+      if (uid) {
         try {
-          savedId = localStorage.getItem(cartIdKey(uid));
+          const snap = await getDoc(doc(db, "users", uid));
+          const firestoreCartId = snap.data()?.cart?.cart_id;
+          if (typeof firestoreCartId === "string" && firestoreCartId.length > 0) {
+            candidates.push({ id: firestoreCartId, source: "user_firestore" });
+          }
+        } catch {}
+
+        try {
+          const userLocalCartId = localStorage.getItem(cartIdKey(uid));
+          if (userLocalCartId) {
+            candidates.push({ id: userLocalCartId, source: "user_local" });
+          }
         } catch {}
       }
 
-      if (!savedId) return;
-
-      // 3) Validate with Shopify
       try {
-        const sc = await getCart(savedId);
-        if (sc) {
+        const guestCartId = localStorage.getItem(cartIdKey(null));
+        if (guestCartId) {
+          candidates.push({ id: guestCartId, source: "guest_local" });
+        }
+      } catch {}
+
+      const deduped = candidates.filter(
+        (candidate, index, all) =>
+          all.findIndex((entry) => entry.id === candidate.id) === index
+      );
+
+      if (deduped.length === 0) return;
+
+      for (const candidate of deduped) {
+        try {
+          const sc = await getCart(candidate.id);
+          if (!sc) {
+            await clearPersistedCartId(
+              candidate.source === "guest_local" ? null : uid,
+              { clearFirestore: candidate.source === "user_firestore" }
+            );
+            continue;
+          }
+
           syncFromShopifyCart(sc);
+
+          let hydratedCart = sc;
           try {
-            const taggedCart = await cartAttributesUpdate(
+            hydratedCart = await cartAttributesUpdate(
               sc.id,
               getProjectCartAttributes()
             );
-            syncFromShopifyCart(taggedCart);
-            bindCartBuyerIdentity(taggedCart.id, userEmail);
+            syncFromShopifyCart(hydratedCart);
           } catch (err) {
             console.error("[Cart] origin attribute sync failed:", err);
-            bindCartBuyerIdentity(sc.id, userEmail);
           }
-        } else {
-          try {
-            localStorage.removeItem(cartIdKey(uid));
-          } catch {}
+
+          if (uid) {
+            await persistCartId(uid, hydratedCart.id);
+            if (candidate.source === "guest_local") {
+              await clearPersistedCartId(null);
+            }
+          } else {
+            persistCartIdLocally(null, hydratedCart.id);
+          }
+
+          if (userEmail) {
+            bindCartBuyerIdentity(hydratedCart.id, userEmail);
+          }
+
+          return;
+        } catch (err) {
+          console.error("[Cart] rehydrateCart failed:", err);
+          return;
         }
-      } catch (err) {
-        console.error("[Cart] rehydrateCart failed:", err);
       }
     },
-    [syncFromShopifyCart, bindCartBuyerIdentity]
+    [
+      bindCartBuyerIdentity,
+      clearPersistedCartId,
+      persistCartId,
+      persistCartIdLocally,
+      syncFromShopifyCart,
+    ]
   );
 
   /* ── Firebase auth listener ── */
@@ -447,20 +578,14 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
           // Pre-populate store credit & subscriptions from Firestore — avoids
           // a "null data" flash before the dashboard calls the refresh APIs.
           if (profile.store_credit) {
-            setStoreCredit({
-              balance_cents: profile.store_credit.balance_cents,
-              currency: profile.store_credit.currency,
-            });
+            setStoreCredit(
+              normalizeStoreCreditState(profile.store_credit, "cache")
+            );
           }
           if (profile.subscriptions) {
-            setSubscriptions({
-              mullybox_active: profile.subscriptions.mullybox_active,
-              status: profile.subscriptions.status,
-              total_subscription_count: profile.subscriptions.total_subscription_count,
-              active_subscription_ids: profile.subscriptions.active_subscription_ids,
-              manage_url: profile.subscriptions.manage_url,
-              next_unblock_url: profile.subscriptions.next_unblock_url,
-            });
+            setSubscriptions(
+              normalizeSubscriptionsState(profile.subscriptions, "cache")
+            );
           }
           if (profile.fit_profile && typeof profile.fit_profile === "object") {
             setFitProfileState({ ...EMPTY_FIT, ...profile.fit_profile });
@@ -550,6 +675,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
         identityBoundRef.current = null;
         loginTrackedUidRef.current = null;
         lastTrackedSubscriptionStateRef.current = null;
+        rehydrateCart(null).catch(console.error);
       }
 
       setAuthLoading(false);
@@ -618,7 +744,11 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
 
         syncFromShopifyCart(result);
 
-        if (user?.uid) await persistCartId(user.uid, result.id);
+        if (user?.uid) {
+          await persistCartId(user.uid, result.id);
+        } else {
+          persistCartIdLocally(null, result.id);
+        }
         if (user?.email) bindCartBuyerIdentity(result.id, user.email);
 
         void trackEvent("add_to_cart", {
@@ -635,7 +765,13 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
         // Optimistic update already applied; leave local state as-is
       }
     },
-    [user, syncFromShopifyCart, persistCartId, bindCartBuyerIdentity]
+    [
+      user,
+      syncFromShopifyCart,
+      persistCartId,
+      persistCartIdLocally,
+      bindCartBuyerIdentity,
+    ]
   );
 
   const removeFromCart = useCallback(
@@ -772,12 +908,24 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
       const res = await fetch("/api/shopify/store-credit", {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) {
-        const data = (await res.json()) as { store_credit: StoreCreditState };
-        setStoreCredit(data.store_credit);
+      if (!res.ok) {
+        setStoreCredit((prev) =>
+          prev ? { ...prev, source: prev.source ?? "cache", isStale: true } : prev
+        );
+        return;
       }
+      const data = (await res.json()) as {
+        store_credit: StoreCreditState;
+        source?: "shopify" | "cache";
+      };
+      setStoreCredit(
+        normalizeStoreCreditState(data.store_credit, data.source ?? "cache")
+      );
     } catch (err) {
       console.error("[StoreCredit] refresh failed:", err);
+      setStoreCredit((prev) =>
+        prev ? { ...prev, source: prev.source ?? "cache", isStale: true } : prev
+      );
     }
   }, [user]);
 
@@ -792,29 +940,43 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
       const res = await fetch("/api/loop/subscription-status", {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (res.ok) {
-        const data = (await res.json()) as { subscriptions: SubscriptionsState };
-        setSubscriptions(data.subscriptions);
+      if (!res.ok) {
+        setSubscriptions((prev) =>
+          prev ? { ...prev, source: prev.source ?? "cache", isStale: true } : prev
+        );
+        return;
+      }
+      const data = (await res.json()) as {
+        subscriptions: SubscriptionsState;
+        source?: "loop" | "cache";
+      };
+      const nextState = normalizeSubscriptionsState(
+        data.subscriptions,
+        data.source ?? "cache"
+      );
+      setSubscriptions(nextState);
 
-        const sig = [
-          data.subscriptions.status,
-          data.subscriptions.mullybox_active ? "1" : "0",
-          String(data.subscriptions.total_subscription_count),
-        ].join(":");
+      const sig = [
+        nextState.status,
+        nextState.mullybox_active ? "1" : "0",
+        String(nextState.total_subscription_count),
+      ].join(":");
 
-        if (lastTrackedSubscriptionStateRef.current !== sig) {
-          lastTrackedSubscriptionStateRef.current = sig;
-          void trackEvent("subscription_state", {
-            properties: {
-              status: data.subscriptions.status,
-              mullybox_active: data.subscriptions.mullybox_active,
-              total_subscription_count: data.subscriptions.total_subscription_count,
-            },
-          });
-        }
+      if (lastTrackedSubscriptionStateRef.current !== sig) {
+        lastTrackedSubscriptionStateRef.current = sig;
+        void trackEvent("subscription_state", {
+          properties: {
+            status: nextState.status,
+            mullybox_active: nextState.mullybox_active,
+            total_subscription_count: nextState.total_subscription_count,
+          },
+        });
       }
     } catch (err) {
       console.error("[SubscriptionStatus] refresh failed:", err);
+      setSubscriptions((prev) =>
+        prev ? { ...prev, source: prev.source ?? "cache", isStale: true } : prev
+      );
     }
   }, [user]);
 

@@ -42,6 +42,12 @@ export async function PUT(
         { status: 400 }
       );
     }
+    if (Array.isArray(videos) && videos.length > 0) {
+      return NextResponse.json(
+        { error: "Community posts currently support images only." },
+        { status: 400 }
+      );
+    }
 
     const updates: Record<string, unknown> = {
       title: (title as string).trim(),
@@ -69,6 +75,7 @@ export async function PUT(
         title: d.title as string,
         body: d.body as string,
         likes: (d.likes as number) || 0,
+        commentCount: (d.commentCount as number) || 0,
         comments: [],
         tag: d.tag as string,
         images: (d.images as string[]) || [],

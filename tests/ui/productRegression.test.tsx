@@ -2,7 +2,25 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
+vi.mock("@/app/context/MembershipContext", () => ({
+  useMembership: () => {
+    throw new Error("No membership provider");
+  },
+}));
+
 describe("product regression smoke tests", () => {
+  it("shows retail pricing to free users while still surfacing the member price", async () => {
+    const { ProductPriceDisplay } = await import(
+      "@/app/shop/components/ShopClient"
+    );
+
+    render(<ProductPriceDisplay price={38} reservePrice={28} />);
+
+    expect(screen.getByText("$38")).toBeInTheDocument();
+    expect(screen.getByText("Members pay $28")).toBeInTheDocument();
+    expect(screen.queryByText("Mill River Price")).not.toBeInTheDocument();
+  });
+
   it("keeps single-variant quick add working without opening the variant modal", async () => {
     const user = userEvent.setup();
     const addToCart = vi.fn().mockResolvedValue(undefined);

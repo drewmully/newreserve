@@ -11,10 +11,9 @@
  *  5. Generate AI draft via Claude
  *  6. Save draft to email_replies/{id} (update)
  *
- * Auth: Resend signs the webhook with a secret in the
- * `svix-signature` header. We verify using RESEND_WEBHOOK_SECRET.
- * If not configured, we fall back to checking INTERNAL_API_SECRET
- * (useful for local testing via curl).
+ * Auth: the raw request body is verified against Resend's
+ * Svix headers using RESEND_WEBHOOK_SECRET. Non-production
+ * local testing may fall back to INTERNAL_API_SECRET.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -60,27 +59,43 @@ function stripQuotedText(text: string): string {
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
 /**
- * Verify the request is genuinely from Resend.
+ * Verify the request body against Resend's Svix headers.
  *
- * Resend inbound webhooks include a `webhook-id`, `webhook-timestamp`,
- * and `webhook-signature` header (Svix standard). Full Svix verification
- * requires the `svix` npm package. For now we verify a shared secret
- * sent as a query param (?secret=...) — configure this in the Resend
- * inbound webhook URL setting.
- *
- * Replace with full Svix verification once `svix` is installed.
+ * Non-production local testing may still use bearer auth.
  */
-function isAuthorized(req: NextRequest): boolean {
+function verifyDevFallback(req: NextRequest): boolean {
+  if (process.env.NODE_ENV === "production") return false;
+
+  const devSecret = process.env.INTERNAL_API_SECRET;
+  if (!devSecret) return false;
+
+  const authHeader = req.headers.get("authorization");
+  return authHeader === `Bearer ${devSecret}`;
+}
+
+function verifyWebhookPayload(
+  req: NextRequest,
+  payload: string
+): ResendInboundPayload | { data: ResendInboundPayload } {
   const secret = process.env.RESEND_WEBHOOK_SECRET;
+
   if (!secret) {
-    // Dev fallback: accept if INTERNAL_API_SECRET matches
-    const devSecret = process.env.INTERNAL_API_SECRET;
-    if (!devSecret) return false;
-    const auth = req.headers.get("authorization");
-    return auth === `Bearer ${devSecret}`;
+    if (!verifyDevFallback(req)) {
+      throw new Error("Webhook secret not configured");
+    }
+
+    return JSON.parse(payload) as ResendInboundPayload | { data: ResendInboundPayload };
   }
-  const provided = req.nextUrl.searchParams.get("secret");
-  return provided === secret;
+
+  return resend.webhooks.verify({
+    payload,
+    headers: {
+      id: req.headers.get("svix-id") ?? "",
+      timestamp: req.headers.get("svix-timestamp") ?? "",
+      signature: req.headers.get("svix-signature") ?? "",
+    },
+    webhookSecret: secret,
+  }) as ResendInboundPayload | { data: ResendInboundPayload };
 }
 
 // ─── Resend inbound payload ───────────────────────────────────────────────────
@@ -105,18 +120,25 @@ async function fetchEmailBody(emailId: string): Promise<string> {
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
-  if (!isAuthorized(req)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  let rawPayload: string;
+  try {
+    rawPayload = await req.text();
+  } catch {
+    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
   let raw: unknown;
   try {
-    raw = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    raw = verifyWebhookPayload(req, rawPayload);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unauthorized";
+    const status =
+      message === "Webhook secret not configured" ? 500 : 401;
+    return NextResponse.json(
+      { error: status === 500 ? message : "Unauthorized" },
+      { status }
+    );
   }
-
-  console.log("[email/inbound] raw payload:", JSON.stringify(raw));
 
   // Resend may wrap the email in a `data` field
   const payload = (

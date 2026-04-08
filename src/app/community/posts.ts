@@ -23,6 +23,7 @@ export interface ForumPost {
   title: string;
   body: string;
   likes: number;
+  commentCount?: number;
   comments: ForumComment[];
   tag: string;
   images?: string[];

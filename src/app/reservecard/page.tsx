@@ -1,8 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
-import { db } from "../../lib/firebase";
 import {
   FIT_SHIRT_SIZES, FIT_GLOVE_HANDS, FIT_GLOVE_SIZES,
   FIT_WAIST_SIZES, FIT_SHOE_SIZES, FIT_PANTS_INSEAMS, FIT_SHORTS_INSEAMS,
@@ -50,6 +48,7 @@ export default function ReserveCardPage() {
   const [step, setStep] = useState(1);
   const [direction, setDirection] = useState<"forward" | "back">("forward");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Step 1: Welcome + email + gender
   const [email, setEmail] = useState("");
@@ -103,33 +102,48 @@ export default function ReserveCardPage() {
   async function handleConfirm() {
     if (!selectedPlan || isSubmitting) return;
     setIsSubmitting(true);
+    setSubmitError(null);
     try {
-      const docRef = doc(db, "reserve_card_submissions", email.trim().toLowerCase());
-      await setDoc(docRef, {
-        email: email.trim().toLowerCase(),
-        gender,
-        fit: {
-          shirt_size: shirtSize,
-          glove_hand: gloveHand,
-          glove_size: gloveSize,
-          waist_size: waistSize,
-          pants_inseam: pantsInseam,
-          shorts_inseam: shortsInseam,
-          shoe_size: shoeSize,
-        },
-        style: {
-          vibe: styleVibe,
-          color_preference: colorPref,
-          putter_type: putterType,
-          brand_interest: brands,
-        },
-        selected_plan: selectedPlan,
-        submitted_at: serverTimestamp(),
-        source: "reserve_card_qr",
-      }, { merge: true });
+      const res = await fetch("/api/reserve-card", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          gender,
+          fit: {
+            shirt_size: shirtSize,
+            glove_hand: gloveHand,
+            glove_size: gloveSize,
+            waist_size: waistSize,
+            pants_inseam: pantsInseam,
+            shorts_inseam: shortsInseam,
+            shoe_size: shoeSize,
+          },
+          style: {
+            vibe: styleVibe,
+            color_preference: colorPref,
+            putter_type: putterType,
+            brand_interest: brands,
+          },
+          selected_plan: selectedPlan,
+          source: "reserve_card_qr",
+        }),
+      });
+
+      if (!res.ok) {
+        const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error ?? "We couldn't save your details.");
+      }
+
       goTo(6);
     } catch (err) {
       console.error("Failed to save reserve card submission:", err);
+      setSubmitError(
+        err instanceof Error && err.message
+          ? err.message
+          : "We couldn't save your details. Please try again."
+      );
+      return;
       // Still advance — don't block the member on a Firestore error
       goTo(6);
     } finally {
@@ -523,6 +537,12 @@ export default function ReserveCardPage() {
                   </div>
                 </button>
               </div>
+
+              {submitError && (
+                <div className="mt-6 rounded-xl border border-ember/20 bg-ember/5 px-4 py-3">
+                  <p className="text-sm text-ember/80">{submitError}</p>
+                </div>
+              )}
 
               {/* Nav */}
               <div className="flex items-center justify-between mt-10">

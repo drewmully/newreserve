@@ -1651,7 +1651,6 @@ function CommunityTab() {
   const [showCompose, setShowCompose] = useState(false);
   const [showSignUp, setShowSignUp] = useState(false);
   const [composeImages, setComposeImages] = useState<{ url: string; file: File }[]>([]);
-  const [composeVideos, setComposeVideos] = useState<{ url: string; file: File }[]>([]);
   const [composeTitle, setComposeTitle] = useState("");
   const [composeBody, setComposeBody] = useState("");
   const [composeTag, setComposeTag] = useState("General");
@@ -1659,7 +1658,6 @@ function CommunityTab() {
   const [posts, setPosts] = useState<ForumPost[]>([]);
   const [loading, setLoading] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const videoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -1694,33 +1692,13 @@ function CommunityTab() {
     });
   };
 
-  const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
-    const newVideos: { url: string; file: File }[] = [];
-    Array.from(files).forEach((file) => {
-      if (file.type.startsWith("video/")) {
-        newVideos.push({ url: URL.createObjectURL(file), file });
-      }
-    });
-    setComposeVideos((prev) => [...prev, ...newVideos].slice(0, 2));
-    if (videoInputRef.current) videoInputRef.current.value = "";
-  };
-
-  const removeComposeVideo = (index: number) => {
-    setComposeVideos((prev) => {
-      URL.revokeObjectURL(prev[index].url);
-      return prev.filter((_, i) => i !== index);
-    });
-  };
-
   const handlePublish = async () => {
     if (!user || !composeTitle.trim() || !composeBody.trim()) return;
     setPublishing(true);
     try {
       const token = await user.getIdToken();
 
-      // Upload images and videos server-side (avoids CORS issues with Firebase Storage)
+      // Upload images server-side (avoids CORS issues with Firebase Storage)
       const uploadFile = async (file: File) => {
         const fd = new FormData();
         fd.append("file", file);
@@ -1734,14 +1712,9 @@ function CommunityTab() {
         return (url as string) || null;
       };
 
-      const [imageUrls, videoUrls] = await Promise.all([
-        Promise.all(composeImages.map(({ file }) => uploadFile(file))).then(
-          (urls) => urls.filter((u): u is string => !!u)
-        ),
-        Promise.all(composeVideos.map(({ file }) => uploadFile(file))).then(
-          (urls) => urls.filter((u): u is string => !!u)
-        ),
-      ]);
+      const imageUrls = await Promise.all(composeImages.map(({ file }) => uploadFile(file))).then(
+        (urls) => urls.filter((u): u is string => !!u)
+      );
 
       const avatar = getInitials(username || user.email || "?");
       const res = await fetch("/api/community/posts", {
@@ -1757,20 +1730,17 @@ function CommunityTab() {
           author: username || user.email || "Member",
           avatar,
           images: imageUrls,
-          videos: videoUrls,
         }),
       });
       if (res.ok) {
         const { post } = await res.json();
         // Revoke blob URLs
         composeImages.forEach(({ url }) => URL.revokeObjectURL(url));
-        composeVideos.forEach(({ url }) => URL.revokeObjectURL(url));
         setPosts((prev) => [post, ...prev]);
         setComposeTitle("");
         setComposeBody("");
         setComposeTag("General");
         setComposeImages([]);
-        setComposeVideos([]);
         setShowCompose(false);
       }
     } catch {
@@ -1839,26 +1809,6 @@ function CommunityTab() {
             )}
 
             {/* Video previews */}
-            {composeVideos.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
-                {composeVideos.map(({ url }, i) => (
-                  <div key={i} className="relative rounded-lg overflow-hidden bg-bone border border-taupe/20 group">
-                    {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-                    <video src={url} controls className="w-full max-h-48 object-contain" />
-                    <button
-                      onClick={() => removeComposeVideo(i)}
-                      className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-obsidian/70 text-bone flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-pointer"
-                      aria-label="Remove video"
-                    >
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <select
@@ -1896,29 +1846,6 @@ function CommunityTab() {
                   <span>Photo{composeImages.length > 0 ? ` (${composeImages.length}/4)` : ""}</span>
                 </button>
 
-                {/* Video upload */}
-                <input
-                  ref={videoInputRef}
-                  type="file"
-                  accept="video/*"
-                  multiple
-                  onChange={handleVideoUpload}
-                  className="hidden"
-                />
-                <button
-                  onClick={() => videoInputRef.current?.click()}
-                  disabled={composeVideos.length >= 2}
-                  className={`flex items-center gap-1.5 h-9 px-3 rounded-lg border text-xs transition-all duration-300 cursor-pointer ${
-                    composeVideos.length >= 2
-                      ? "border-taupe/20 text-charcoal/25 cursor-not-allowed"
-                      : "border-taupe/30 text-charcoal/50 hover:border-forest/30 hover:text-forest"
-                  }`}
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9A2.25 2.25 0 0013.5 5.25h-9A2.25 2.25 0 002.25 7.5v9A2.25 2.25 0 004.5 18.75z" />
-                  </svg>
-                  <span>Video{composeVideos.length > 0 ? ` (${composeVideos.length}/2)` : ""}</span>
-                </button>
               </div>
               <button
                 onClick={handlePublish}
@@ -2089,11 +2016,17 @@ function PostCard({
 }) {
   const router = useRouter();
   const isAuthor = !!user && user.uid === post.authorId;
+  const initialCommentCount = post.commentCount ?? post.comments.length;
 
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(post.likes);
   const [showComments, setShowComments] = useState(false);
   const [localComments, setLocalComments] = useState<ForumComment[]>(post.comments);
+  const [commentCount, setCommentCount] = useState(initialCommentCount);
+  const [commentsLoaded, setCommentsLoaded] = useState(
+    post.comments.length > 0 || initialCommentCount === 0
+  );
+  const [commentsLoading, setCommentsLoading] = useState(false);
   const [commentLikes, setCommentLikes] = useState<Record<string, boolean>>({});
   const [commentLikeCounts, setCommentLikeCounts] = useState<Record<string, number>>(
     () => Object.fromEntries(post.comments.map((c) => [c.id, c.likes]))
@@ -2111,6 +2044,39 @@ function PostCard({
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingPost, setDeletingPost] = useState(false);
   const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!showComments || commentsLoaded || commentsLoading || commentCount === 0) return;
+
+    let cancelled = false;
+
+    const loadComments = async () => {
+      setCommentsLoading(true);
+      try {
+        const res = await fetch(`/api/community/posts/${post.id}/comments`);
+        if (!res.ok) return;
+        const data = (await res.json()) as { comments?: ForumComment[] };
+        if (cancelled) return;
+        const nextComments = Array.isArray(data.comments) ? data.comments : [];
+        setLocalComments(nextComments);
+        setCommentCount(nextComments.length);
+        setCommentLikeCounts(
+          Object.fromEntries(nextComments.map((comment) => [comment.id, comment.likes]))
+        );
+        setCommentsLoaded(true);
+      } catch {
+        // silent
+      } finally {
+        if (!cancelled) setCommentsLoading(false);
+      }
+    };
+
+    void loadComments();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [commentCount, commentsLoaded, commentsLoading, post.id, showComments]);
 
   const requireAuth = (action: () => void) => {
     if (!isSignedIn) {
@@ -2247,7 +2213,11 @@ function PostCard({
       });
       if (res.ok) {
         const { post: updated } = await res.json();
-        onUpdate({ ...updated, comments: localComments });
+        onUpdate({
+          ...updated,
+          commentCount,
+          comments: commentsLoaded ? localComments : [],
+        });
         setIsEditing(false);
       }
     } catch {
@@ -2295,6 +2265,8 @@ function PostCard({
       if (res.ok) {
         const { comment } = await res.json();
         setLocalComments((prev) => [...prev, comment]);
+        setCommentCount((prev) => prev + 1);
+        setCommentsLoaded(true);
         setCommentLikeCounts((prev) => ({ ...prev, [comment.id]: 0 }));
         setReplyText("");
       }
@@ -2316,6 +2288,7 @@ function PostCard({
       });
       if (res.ok) {
         setLocalComments((prev) => prev.filter((c) => c.id !== commentId));
+        setCommentCount((prev) => Math.max(0, prev - 1));
       }
     } catch {
       // silent
@@ -2467,7 +2440,6 @@ function PostCard({
                   <div className={`mb-4 grid gap-2 ${post.videos.length === 1 ? "grid-cols-1" : "grid-cols-2"}`}>
                     {post.videos.map((src, i) => (
                       <div key={i} className="rounded-lg overflow-hidden bg-cream border border-taupe/15">
-                        {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
                         <video
                           src={src}
                           controls
@@ -2512,7 +2484,7 @@ function PostCard({
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 01-.923 1.785A5.969 5.969 0 006 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337z" />
                 </svg>
-                <span>{localComments.length}</span>
+                <span>{commentCount}</span>
               </button>
 
               {/* Share button */}
@@ -2620,6 +2592,9 @@ function PostCard({
       {showComments && (
         <div className="border-t border-taupe/15 bg-bone/50 animate-comment-reveal" onClick={(e) => e.stopPropagation()}>
           <div className="px-6 py-4 space-y-4">
+            {commentsLoading && (
+              <p className="text-sm text-charcoal/40">Loading comments…</p>
+            )}
             {localComments.map((comment) => (
               <div key={comment.id} className="flex items-start gap-3">
                 <div className="w-7 h-7 rounded-full bg-forest/8 flex items-center justify-center shrink-0 mt-0.5">

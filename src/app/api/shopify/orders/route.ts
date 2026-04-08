@@ -5,7 +5,7 @@
  * Requires:  Authorization: Bearer <Firebase ID token>
  *
  * Response:
- *   { orders: ShopifyOrderSummary[] }
+ *   { orders: ShopifyOrderSummary[], source: "shopify" | "no_customer" | "unavailable" }
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -53,15 +53,15 @@ export async function GET(request: NextRequest) {
 
   // ── No Shopify customer → return empty list ───────────────────────────────
   if (!shopifyCustomerId) {
-    return NextResponse.json({ orders: [] });
+    return NextResponse.json({ orders: [], source: "no_customer" });
   }
 
   // ── Fetch orders from Shopify ─────────────────────────────────────────────
   try {
     const orders = await getCustomerOrders(shopifyCustomerId, 10);
-    return NextResponse.json({ orders });
+    return NextResponse.json({ orders, source: "shopify" });
   } catch (err) {
     console.error("[shopify/orders] fetch failed:", err);
-    return NextResponse.json({ orders: [] });
+    return NextResponse.json({ orders: [], source: "unavailable" });
   }
 }

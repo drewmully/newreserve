@@ -4,8 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase";
-
-const ALLOWED_EMAILS = ["drew@mullybox.com", "leo@mullybox.com"];
+import { isAllowedAdminEmail } from "@/lib/adminEmailAllowlist";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -17,7 +16,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         router.replace("/login");
         return;
       }
-      if (ALLOWED_EMAILS.includes(user.email.toLowerCase())) {
+      if (isAllowedAdminEmail(user.email)) {
         setStatus("authorized");
       } else {
         setStatus("unauthorized");

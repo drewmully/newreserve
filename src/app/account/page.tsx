@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMembership, type FitProfile, type StoreCreditState, type SubscriptionsState } from "../context/MembershipContext";
@@ -22,6 +22,18 @@ interface OrderSummary {
   financial_status: string;
   fulfillment_status: string;
   line_items: OrderLineItem[];
+}
+
+interface OrdersState {
+  items: OrderSummary[];
+  source: "loading" | "shopify" | "no_customer" | "unavailable";
+}
+
+interface LoopSubscriptionRecord extends Record<string, unknown> {
+  id: string;
+  status: string;
+  price?: number;
+  nextBillingDateEpoch?: number;
 }
 import { SlideCart } from "../components/SlideCart";
 import { UpgradeModal, PillButton, FIT_SHIRT_SIZES, FIT_GLOVE_HANDS, FIT_GLOVE_SIZES, FIT_WAIST_SIZES, FIT_SHOE_SIZES, FIT_PANTS_INSEAMS, FIT_SHORTS_INSEAMS } from "../components/UpgradeModal";
@@ -55,7 +67,10 @@ export default function AccountPage() {
     saveMessagingPreferences,
   } = useMembership();
 
-  const [orders, setOrders] = useState<OrderSummary[] | null>(null);
+  const [orders, setOrders] = useState<OrdersState>({
+    items: [],
+    source: "loading",
+  });
 
   const [upgradeOpen, setUpgradeOpen] = useState(false);
 
@@ -84,15 +99,19 @@ export default function AccountPage() {
 
   useEffect(() => {
     if (!isSignedIn || !user) return;
+    setOrders({ items: [], source: "loading" });
     user.getIdToken().then((token) =>
       fetch("/api/shopify/orders", {
         headers: { Authorization: `Bearer ${token}` },
       })
-    ).then((res) => (res.ok ? res.json() : null))
-      .then((data: { orders: OrderSummary[] } | null) => {
-        setOrders(data?.orders ?? []);
+    ).then((res) => (res.ok ? res.json() : { orders: [], source: "unavailable" as const }))
+      .then((data: { orders: OrderSummary[]; source?: OrdersState["source"] }) => {
+        setOrders({
+          items: data.orders ?? [],
+          source: data.source ?? "shopify",
+        });
       })
-      .catch(() => setOrders([]));
+      .catch(() => setOrders({ items: [], source: "unavailable" }));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSignedIn]);
 
@@ -589,6 +608,7 @@ function SubscriptionSection({
 
   const isPaid = tier !== "free";
   const isActive = subscriptions?.status.toUpperCase() === "ACTIVE";
+  const isStale = subscriptions?.isStale === true;
 
   return (
     <section className="mb-8">
@@ -646,6 +666,12 @@ function SubscriptionSection({
                 )}
               </div>
 
+              {isStale && (
+                <p className={`text-xs leading-relaxed ${isPaid ? "text-bone/55" : "text-charcoal/40"}`}>
+                  Showing your last known membership state while Loop reconnects.
+                </p>
+              )}
+
               {/* Action button */}
               <button
                 onClick={() => setManageOpen(true)}
@@ -677,26 +703,61 @@ const PLAN_OPTIONS = LOOP_CHANGE_PLAN_OPTIONS;
 
 function SubscriptionManagerModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { user } = useMembership();
-  const [sub, setSub] = useState<Record<string, unknown> | null>(null);
+  const [subscriptions, setSubscriptions] = useState<LoopSubscriptionRecord[]>([]);
+  const [selectedSubscriptionId, setSelectedSubscriptionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState<SubView>("main");
   const [cancelReason, setCancelReason] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Load active subscription on open
+  const loadSubscriptions = useCallback(async (token?: string) => {
+    if (!user) return;
+    const idToken = token ?? await user.getIdToken();
+    const res = await fetch("/api/loop/subscription", {
+      headers: { Authorization: `Bearer ${idToken}` },
+    });
+
+    if (!res.ok) {
+      throw new Error("Subscription data is temporarily unavailable.");
+    }
+
+    const data = (await res.json()) as {
+      subscriptions?: LoopSubscriptionRecord[];
+      subscription?: LoopSubscriptionRecord | null;
+    };
+
+    const nextSubscriptions =
+      Array.isArray(data.subscriptions) && data.subscriptions.length > 0
+        ? data.subscriptions
+        : data.subscription
+          ? [data.subscription]
+          : [];
+
+    setSubscriptions(nextSubscriptions);
+    setSelectedSubscriptionId((current) => {
+      if (current && nextSubscriptions.some((subscription) => subscription.id === current)) {
+        return current;
+      }
+      return nextSubscriptions[0]?.id ?? null;
+    });
+  }, [user]);
+
   useEffect(() => {
     if (!open || !user) return;
     setLoading(true);
     setView("main");
     setCancelReason("");
-    user.getIdToken()
-      .then((token) =>
-        fetch("/api/loop/subscription", { headers: { Authorization: `Bearer ${token}` } })
-      )
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => { setSub(data?.subscription ?? null); setLoading(false); })
-      .catch(() => setLoading(false));
-  }, [open, user]);
+    setError(null);
+    loadSubscriptions()
+      .catch((err) => {
+        console.error("[SubManager] load failed:", err);
+        setSubscriptions([]);
+        setSelectedSubscriptionId(null);
+        setError("Subscription data is temporarily unavailable.");
+      })
+      .finally(() => setLoading(false));
+  }, [loadSubscriptions, open, user]);
 
   // Escape key
   useEffect(() => {
@@ -709,24 +770,28 @@ function SubscriptionManagerModal({ open, onClose }: { open: boolean; onClose: (
   async function callAction(path: string, body?: Record<string, unknown>) {
     if (!user) return;
     setActionLoading(true);
+    setError(null);
     try {
       const token = await user.getIdToken();
       const res = await fetch(path, {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: body ? JSON.stringify(body) : undefined,
+        body: JSON.stringify({
+          ...(body ?? {}),
+          ...(selectedSubscriptionId ? { subscriptionId: selectedSubscriptionId } : {}),
+        }),
       });
       if (!res.ok) {
-        console.error(`[SubManager] ${path} failed:`, await res.text());
+        const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+        const message = payload?.error ?? "Subscription action failed.";
+        console.error(`[SubManager] ${path} failed:`, message);
+        setError(message);
         return;
       }
-      // Refresh sub data
-      const refreshed = await fetch("/api/loop/subscription", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (refreshed.ok) setSub((await refreshed.json()).subscription ?? null);
+      await loadSubscriptions(token);
     } catch (err) {
       console.error(`[SubManager] ${path} error:`, err);
+      setError("Subscription action failed. Please try again.");
     } finally {
       setActionLoading(false);
     }
@@ -744,12 +809,19 @@ function SubscriptionManagerModal({ open, onClose }: { open: boolean; onClose: (
 
   if (!open) return null;
 
-  const status = (sub?.status as string) ?? "";
+  const sub =
+    subscriptions.find((subscription) => subscription.id === selectedSubscriptionId) ??
+    subscriptions[0] ??
+    null;
+  const status = sub?.status ?? "";
   const isActive = status === "ACTIVE";
   const isPaused = status === "PAUSED";
   const isCancelled = status === "CANCELLED";
-  const price = sub?.price as number | undefined;
-  const nextBillingEpoch = sub?.nextBillingDateEpoch as number | undefined;
+  const price = typeof sub?.price === "number" ? sub.price : undefined;
+  const nextBillingEpoch =
+    typeof sub?.nextBillingDateEpoch === "number"
+      ? sub.nextBillingDateEpoch
+      : undefined;
   const nextBilling = nextBillingEpoch
     ? new Date(nextBillingEpoch * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
     : null;
@@ -785,12 +857,39 @@ function SubscriptionManagerModal({ open, onClose }: { open: boolean; onClose: (
                   <div key={w} className={`h-4 w-${w} bg-taupe/15 rounded animate-pulse`} />
                 ))}
               </div>
+            ) : error ? (
+              <p className="text-sm text-ember/75 py-4">{error}</p>
             ) : !sub ? (
               <p className="text-sm text-charcoal/40 py-4">No subscription found.</p>
             ) : view === "main" ? (
               <div className="space-y-5">
+                {subscriptions.length > 1 && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-charcoal/40">Select the subscription you want to manage.</p>
+                    <div className="flex flex-wrap gap-2">
+                      {subscriptions.map((subscription, index) => (
+                        <button
+                          key={subscription.id}
+                          onClick={() => setSelectedSubscriptionId(subscription.id)}
+                          className={`rounded-full border px-3 py-1.5 text-[11px] tracking-wide transition-colors cursor-pointer ${
+                            subscription.id === sub.id
+                              ? "border-forest/35 bg-forest/5 text-forest"
+                              : "border-taupe/20 text-charcoal/45 hover:border-forest/25 hover:text-forest"
+                          }`}
+                        >
+                          {`Subscription ${index + 1} · ${subscription.status}`}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Details */}
                 <div className="rounded-xl bg-cream border border-taupe/12 divide-y divide-taupe/10">
+                  <div className="flex items-center justify-between px-4 py-3">
+                    <span className="text-xs text-charcoal/40">Subscription ID</span>
+                    <span className="text-xs text-charcoal/55">{sub.id}</span>
+                  </div>
                   <div className="flex items-center justify-between px-4 py-3">
                     <span className="text-xs text-charcoal/40">Status</span>
                     <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
@@ -925,10 +1024,17 @@ function WalletSection({ storeCredit }: { storeCredit: StoreCreditState | null }
             {storeCredit === null ? (
               <div className="h-5 w-20 rounded bg-taupe/15 animate-pulse" />
             ) : (
-              <p className="text-sm font-medium text-obsidian">
-                ${(storeCredit.balance_cents / 100).toFixed(2)}{" "}
-                <span className="text-xs text-charcoal/30 font-normal">{storeCredit.currency}</span>
-              </p>
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-obsidian">
+                  ${(storeCredit.balance_cents / 100).toFixed(2)}{" "}
+                  <span className="text-xs text-charcoal/30 font-normal">{storeCredit.currency}</span>
+                </p>
+                {storeCredit.isStale && (
+                  <p className="text-xs text-charcoal/40">
+                    Showing your last synced balance while Shopify reconnects.
+                  </p>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -969,8 +1075,8 @@ function OrderStatusBadge({ status }: { status: string }) {
   );
 }
 
-function OrdersSection({ orders }: { orders: OrderSummary[] | null }) {
-  if (orders === null) {
+function OrdersSection({ orders }: { orders: OrdersState }) {
+  if (orders.source === "loading") {
     return (
       <section className="mb-10">
         <SectionLabel>Orders</SectionLabel>
@@ -989,7 +1095,21 @@ function OrdersSection({ orders }: { orders: OrderSummary[] | null }) {
     );
   }
 
-  if (orders.length === 0) {
+  if (orders.source === "unavailable") {
+    return (
+      <section className="mb-10">
+        <SectionLabel>Orders</SectionLabel>
+        <div className="rounded-xl border border-taupe/12 bg-cream p-6 text-center">
+          <p className="text-sm text-charcoal/45 mb-1">Order history is temporarily unavailable</p>
+          <p className="text-xs text-charcoal/30">
+            We couldn&rsquo;t reach Shopify just now. Try again in a moment.
+          </p>
+        </div>
+      </section>
+    );
+  }
+
+  if (orders.items.length === 0) {
     return (
       <section className="mb-10">
         <SectionLabel>Orders</SectionLabel>
@@ -1013,7 +1133,7 @@ function OrdersSection({ orders }: { orders: OrderSummary[] | null }) {
     <section className="mb-10">
       <SectionLabel>Orders</SectionLabel>
       <div className="rounded-xl border border-taupe/12 bg-cream overflow-hidden">
-        {orders.map((order, i) => (
+        {orders.items.map((order, i) => (
           <div key={order.order_number}>
             {i > 0 && <div className="h-px bg-taupe/10 mx-5" />}
             <div className="px-5 py-4">

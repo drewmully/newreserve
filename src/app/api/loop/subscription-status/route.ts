@@ -11,22 +11,16 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
-import { resolveCustomerByEmail } from "@/app/api/_lib/shopifyAdmin";
 import {
   getLoopSubscriptionStatus,
   getLoopManageSubscriptionUrl,
   getLoopNextUnblockUrl,
 } from "@/app/api/_lib/loopAdmin";
-
-async function verifyFirebaseBearer(request: NextRequest): Promise<string> {
-  const header = request.headers.get("Authorization") ?? "";
-  const token = header.replace(/^Bearer\s+/i, "").trim();
-  if (!token) throw new Error("Missing Authorization header");
-  const decoded = await adminAuth.verifyIdToken(token, true);
-  return decoded.uid;
-}
+import {
+  getLoopUserContext,
+  verifyFirebaseBearer,
+} from "@/app/api/_lib/loopUserContext";
 
 const EMPTY_SUBSCRIPTIONS = {
   mullybox_active: false,
@@ -47,40 +41,25 @@ export async function GET(request: NextRequest) {
   }
 
   // Load user document
-  const userRef = adminDb.collection("users").doc(uid);
-  const userSnap = await userRef.get();
-  if (!userSnap.exists) {
+  const context = await getLoopUserContext(uid);
+  if (!context) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  const userData = userSnap.data()!;
-  let shopifyCustomerId: string | null =
-    userData.shopify_customer_id ?? null;
-
-  // Resolve Shopify customer ID if missing
-  if (!shopifyCustomerId && userData.email) {
-    try {
-      shopifyCustomerId = await resolveCustomerByEmail(userData.email as string);
-      if (shopifyCustomerId) {
-        await userRef.update({ shopify_customer_id: shopifyCustomerId });
-      }
-    } catch {
-      // Non-fatal
-    }
-  }
-
   // No Shopify customer: return cache
-  if (!shopifyCustomerId) {
+  if (!context.loopCustomerIdentifier) {
     return NextResponse.json({
-      subscriptions: userData.subscriptions ?? EMPTY_SUBSCRIPTIONS,
+      subscriptions: context.userData.subscriptions ?? EMPTY_SUBSCRIPTIONS,
       source: "cache",
     });
   }
 
   // Fetch live Loop status
   try {
-    const status = await getLoopSubscriptionStatus(shopifyCustomerId);
-    const manageUrl = getLoopManageSubscriptionUrl(shopifyCustomerId);
+    const status = await getLoopSubscriptionStatus(context.loopCustomerIdentifier);
+    const manageUrl = context.shopifyCustomerId
+      ? getLoopManageSubscriptionUrl(context.shopifyCustomerId)
+      : null;
     const nextUnblockUrl = getLoopNextUnblockUrl();
 
     const subscriptions = {
@@ -89,7 +68,7 @@ export async function GET(request: NextRequest) {
       next_unblock_url: nextUnblockUrl,
     };
 
-    await userRef.update({
+    await context.userRef.update({
       subscriptions: {
         ...subscriptions,
         last_checked: FieldValue.serverTimestamp(),
@@ -100,7 +79,7 @@ export async function GET(request: NextRequest) {
   } catch {
     // Loop unavailable: serve Firestore cache
     return NextResponse.json({
-      subscriptions: userData.subscriptions ?? EMPTY_SUBSCRIPTIONS,
+      subscriptions: context.userData.subscriptions ?? EMPTY_SUBSCRIPTIONS,
       source: "cache",
     });
   }

@@ -3,92 +3,206 @@
  *
  * Drew approves (and optionally edits) a draft reply.
  * Actions:
- *  1. Send the (edited) draft via Resend
- *  2. Execute AI tool calls (tag_member, log_feedback, create_task, etc.)
- *  3. Mark reply as sent
- *  4. Resume the member's drip sequence
+ *  1. Persist a durable sendAttemptId + approved draft
+ *  2. Send the reply via Resend using an idempotency key
+ *  3. Mark the reply as sent
+ *  4. Execute AI tool calls exactly once
+ *  5. Resume the member's drip sequence exactly once
  *
- * Body: { draft?: string }  — pass edited draft, or omit to use AI draft as-is
+ * Body: { draft?: string } - pass edited draft, or omit to use the stored draft
  *
- * Secured with INTERNAL_API_SECRET.
+ * Secured with a Firebase Admin-verified bearer token
+ * and server-side admin email allowlist.
  */
 
+import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { Timestamp } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase-admin";
 import { sendPlainText } from "@/lib/email/resend";
 import { resumeSequence } from "@/lib/email/sequences";
 import { executeToolCalls } from "@/lib/email/ai-reply";
+import { verifyAdminRequest } from "@/app/api/_lib/adminAuth";
 
-function isAuthorized(req: NextRequest): boolean {
-  const secret = process.env.INTERNAL_API_SECRET;
-  if (!secret) return false;
-  const auth = req.headers.get("authorization");
-  return auth === `Bearer ${secret}`;
+type ReplyRecord = Record<string, unknown>;
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function getStoredDraft(reply: ReplyRecord): string {
+  const candidates = [reply.approvedDraft, reply.finalDraft, reply.draft];
+  for (const candidate of candidates) {
+    if (isNonEmptyString(candidate)) {
+      return candidate.trim();
+    }
+  }
+  return "";
+}
+
+function shouldReplaySideEffect(reply: ReplyRecord, field: "toolCallsCompleted" | "sequenceResumed"): boolean {
+  if (reply.status === "sent" && reply[field] === undefined) {
+    return false;
+  }
+  return reply[field] !== true;
 }
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!isAuthorized(req)) {
+  if (!(await verifyAdminRequest(req))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { id } = await params;
   const replyRef = adminDb.collection("email_replies").doc(id);
-  const snap = await replyRef.get();
-
-  if (!snap.exists) {
-    return NextResponse.json({ error: "Reply not found" }, { status: 404 });
-  }
-
-  const reply = snap.data()!;
-
-  if (reply.status === "sent") {
-    return NextResponse.json({ error: "Already sent" }, { status: 409 });
-  }
 
   let body: { draft?: string } = {};
   try {
     body = await req.json();
   } catch {
-    // No body is fine — use AI draft
+    // No body is fine - use stored draft
   }
 
-  const textToSend = (body.draft ?? reply.draft ?? "").trim();
+  const requestedDraft = typeof body.draft === "string" ? body.draft.trim() : "";
 
-  if (!textToSend) {
-    return NextResponse.json({ error: "No draft content to send" }, { status: 400 });
+  let state: {
+    reply: ReplyRecord;
+    textToSend: string;
+    sendAttemptId: string;
+    alreadySent: boolean;
+  };
+
+  try {
+    state = await adminDb.runTransaction(async (tx) => {
+      const snap = await tx.get(replyRef);
+      if (!snap.exists) {
+        throw new Error("Reply not found");
+      }
+
+      const reply = (snap.data() ?? {}) as ReplyRecord;
+      const storedDraft = getStoredDraft(reply);
+      const textToSend = requestedDraft || storedDraft;
+
+      if (!textToSend) {
+        throw new Error("No draft content to send");
+      }
+
+      const existingAttemptId = isNonEmptyString(reply.sendAttemptId)
+        ? reply.sendAttemptId.trim()
+        : null;
+      const existingApprovedDraft = isNonEmptyString(reply.approvedDraft)
+        ? reply.approvedDraft.trim()
+        : "";
+
+      if (
+        existingAttemptId &&
+        requestedDraft &&
+        existingApprovedDraft &&
+        existingApprovedDraft !== requestedDraft
+      ) {
+        throw new Error("Reply is already in-flight with a different approved draft");
+      }
+
+      if (reply.status === "sent") {
+        return {
+          reply,
+          textToSend,
+          sendAttemptId: existingAttemptId ?? `${id}-sent`,
+          alreadySent: true,
+        };
+      }
+
+      const sendAttemptId = existingAttemptId ?? randomUUID();
+      tx.update(replyRef, {
+        approvedDraft: existingApprovedDraft || textToSend,
+        sendAttemptId,
+        toolCallsCompleted: reply.toolCallsCompleted === true,
+        sequenceResumed: reply.sequenceResumed === true,
+        updatedAt: Timestamp.now(),
+      });
+
+      return {
+        reply: {
+          ...reply,
+          approvedDraft: existingApprovedDraft || textToSend,
+          sendAttemptId,
+          toolCallsCompleted: reply.toolCallsCompleted === true,
+          sequenceResumed: reply.sequenceResumed === true,
+        },
+        textToSend,
+        sendAttemptId,
+        alreadySent: false,
+      };
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unable to approve reply";
+
+    if (message === "Reply not found") {
+      return NextResponse.json({ error: message }, { status: 404 });
+    }
+
+    if (message === "No draft content to send") {
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+
+    if (message.includes("different approved draft")) {
+      return NextResponse.json({ error: message }, { status: 409 });
+    }
+
+    throw error;
   }
 
-  // 1. Send the email
-  const subject = reply.subject?.startsWith("Re:")
-    ? reply.subject
-    : `Re: ${reply.subject ?? "Your message"}`;
+  const reply = state.reply;
+  const email = isNonEmptyString(reply.email) ? reply.email.trim() : "";
+  const uid = isNonEmptyString(reply.uid) ? reply.uid.trim() : "";
+  const subjectBase = isNonEmptyString(reply.subject)
+    ? reply.subject.trim()
+    : "Your message";
 
-  await sendPlainText({
-    to: reply.email,
-    subject,
-    text: textToSend,
-  });
-
-  // 2. Execute AI tool calls
-  const toolCalls = reply.toolCalls ?? [];
-  if (toolCalls.length > 0) {
-    await executeToolCalls(reply.uid, id, toolCalls);
+  if (!email || !uid) {
+    return NextResponse.json(
+      { error: "Reply is missing required delivery fields" },
+      { status: 400 }
+    );
   }
 
-  // 3. Mark as sent
-  await replyRef.update({
-    status: "sent",
-    sentAt: Timestamp.now(),
-    finalDraft: textToSend,
-  });
+  const subject = subjectBase.startsWith("Re:")
+    ? subjectBase
+    : `Re: ${subjectBase}`;
 
-  // 4. Resume the drip sequence
-  await resumeSequence(reply.uid);
+  if (!state.alreadySent) {
+    const providerMessageId = await sendPlainText({
+      to: email,
+      subject,
+      text: state.textToSend,
+      idempotencyKey: state.sendAttemptId,
+    });
 
-  console.log(`[email/replies] Approved and sent replyId=${id} uid=${reply.uid}`);
-  return NextResponse.json({ ok: true });
+    await replyRef.update({
+      status: "sent",
+      sentAt: Timestamp.now(),
+      finalDraft: state.textToSend,
+      approvedDraft: state.textToSend,
+      providerMessageId,
+    });
+  }
+
+  const toolCalls = Array.isArray(reply.toolCalls) ? reply.toolCalls : [];
+  if (shouldReplaySideEffect(reply, "toolCallsCompleted")) {
+    if (toolCalls.length > 0) {
+      await executeToolCalls(uid, id, toolCalls);
+    }
+    await replyRef.update({ toolCallsCompleted: true });
+  }
+
+  if (shouldReplaySideEffect(reply, "sequenceResumed")) {
+    await resumeSequence(uid);
+    await replyRef.update({ sequenceResumed: true });
+  }
+
+  console.log(`[email/replies] Approved and sent replyId=${id} uid=${uid}`);
+  return NextResponse.json({ ok: true, alreadySent: state.alreadySent });
 }

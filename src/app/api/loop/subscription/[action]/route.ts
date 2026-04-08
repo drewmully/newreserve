@@ -11,8 +11,8 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import {
+  type LoopSubscription,
   getLoopRawSubscriptions,
   pauseLoopSubscription,
   resumeLoopSubscription,
@@ -21,16 +21,26 @@ import {
   reactivateLoopSubscription,
 } from "@/app/api/_lib/loopAdmin";
 import {
+  getLoopUserContext,
+  verifyFirebaseBearer,
+} from "@/app/api/_lib/loopUserContext";
+import {
   isSupportedSellingPlanId,
   normalizeShopifyNumericId,
 } from "@/lib/membershipConfig";
 
-async function verifyFirebaseBearer(request: NextRequest): Promise<string> {
-  const header = request.headers.get("Authorization") ?? "";
-  const token = header.replace(/^Bearer\s+/i, "").trim();
-  if (!token) throw new Error("Missing Authorization header");
-  const decoded = await adminAuth.verifyIdToken(token, true);
-  return decoded.uid;
+function getMatchingSubscriptions(
+  subscriptions: LoopSubscription[],
+  action: string
+): LoopSubscription[] {
+  if (action === "reactivate") {
+    return subscriptions.filter((subscription) => subscription.status === "CANCELLED");
+  }
+
+  return subscriptions.filter(
+    (subscription) =>
+      subscription.status === "ACTIVE" || subscription.status === "PAUSED"
+  );
 }
 
 export async function POST(
@@ -44,13 +54,10 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const userSnap = await adminDb.collection("users").doc(uid).get();
-  if (!userSnap.exists) {
+  const context = await getLoopUserContext(uid);
+  if (!context) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
-
-  const email = userSnap.data()!.email as string | undefined;
-  if (!email) return NextResponse.json({ error: "No email on user" }, { status: 400 });
 
   const { action } = await params;
   const VALID_ACTIONS = new Set([
@@ -86,20 +93,50 @@ export async function POST(
     return NextResponse.json({ error: "Invalid cancel reason" }, { status: 400 });
   }
 
-  // For reactivate, match any status; for all others, require ACTIVE/PAUSED
-  const subs = await getLoopRawSubscriptions(email);
-  const sub =
-    action === "reactivate"
-      ? subs.find((s) => s.status === "CANCELLED")
-      : subs.find((s) => s.status === "ACTIVE" || s.status === "PAUSED");
-
-  if (!sub?.id) {
-    return NextResponse.json({ error: "No matching subscription found" }, { status: 404 });
+  if (
+    body.subscriptionId !== undefined &&
+    (typeof body.subscriptionId !== "string" || !body.subscriptionId.trim())
+  ) {
+    return NextResponse.json({ error: "Invalid subscriptionId" }, { status: 400 });
   }
-  const subscriptionId = sub.id;
-  const cancelReason = body.reason as string | undefined;
+
+  if (!context.loopCustomerIdentifier) {
+    return NextResponse.json({ error: "No Loop customer found" }, { status: 400 });
+  }
 
   try {
+    const subs = await getLoopRawSubscriptions(context.loopCustomerIdentifier);
+    const matchingSubscriptions = getMatchingSubscriptions(subs, action);
+    const requestedSubscriptionId =
+      typeof body.subscriptionId === "string" ? body.subscriptionId.trim() : null;
+
+    const sub = requestedSubscriptionId
+      ? matchingSubscriptions.find(
+          (subscription) => subscription.id === requestedSubscriptionId
+        ) ?? null
+      : matchingSubscriptions.length === 1
+        ? matchingSubscriptions[0]!
+        : null;
+
+    if (!sub?.id) {
+      if (!requestedSubscriptionId && matchingSubscriptions.length > 1) {
+        return NextResponse.json(
+          {
+            error: "Multiple matching subscriptions found",
+            subscriptionIds: matchingSubscriptions.map((subscription) => subscription.id),
+          },
+          { status: 409 }
+        );
+      }
+      return NextResponse.json(
+        { error: "No matching subscription found" },
+        { status: 404 }
+      );
+    }
+
+    const subscriptionId = sub.id;
+    const cancelReason = body.reason as string | undefined;
+
     switch (action) {
       case "pause":
         await pauseLoopSubscription(subscriptionId);

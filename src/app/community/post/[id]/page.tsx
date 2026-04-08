@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { adminDb } from "@/lib/firebase-admin";
 import { formatRelativeTime, type ForumPost } from "../../posts";
 import PostPageClient from "./PostPageClient";
+import { serializeJsonLd } from "@/lib/safeJsonLd";
 
 export const dynamic = "force-dynamic";
 
@@ -84,7 +85,7 @@ export default async function PostPage({ params }: Props) {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
+          __html: serializeJsonLd({
             "@context": "https://schema.org",
             "@type": "DiscussionForumPosting",
             "headline": post.title,
@@ -98,7 +99,7 @@ export default async function PostPage({ params }: Props) {
               "@type": "Comment",
               "text": c.body,
               "author": { "@type": "Person", "name": c.author },
-            })),
+              })),
           }),
         }}
       />
