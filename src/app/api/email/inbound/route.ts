@@ -19,9 +19,12 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { Timestamp } from "firebase-admin/firestore";
+import { Resend } from "resend";
 import { adminDb, adminAuth } from "@/lib/firebase-admin";
 import { pauseForReply, type EmailSequenceDoc } from "@/lib/email/sequences";
 import { generateReplyDraft, type MemberContext } from "@/lib/email/ai-reply";
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // ─── Quoted text stripping ────────────────────────────────────────────────────
 
@@ -94,24 +97,9 @@ interface ResendInboundPayload {
 }
 
 async function fetchEmailBody(emailId: string): Promise<string> {
-  const candidates = [
-    `https://api.resend.com/emails/${emailId}`,
-    `https://api.resend.com/inbound/emails/${emailId}`,
-    `https://api.resend.com/v1/emails/${emailId}`,
-    `https://api.resend.com/v1/inbound/emails/${emailId}`,
-  ];
-  for (const url of candidates) {
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` },
-    });
-    console.log(`[email/inbound] fetchEmailBody url=${url} status=${res.status}`);
-    if (res.ok) {
-      const data = await res.json() as { text?: string; html?: string };
-      console.log(`[email/inbound] fetchEmailBody success, text length=${data.text?.length ?? 0}`);
-      return data.text ?? "";
-    }
-  }
-  throw new Error(`Resend fetch failed: all endpoints returned non-200`);
+  const { data, error } = await resend.emails.receiving.get(emailId);
+  if (error || !data) throw new Error(`Resend receiving.get failed: ${JSON.stringify(error)}`);
+  return data.text ?? "";
 }
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
