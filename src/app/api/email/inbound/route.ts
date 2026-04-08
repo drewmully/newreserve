@@ -114,6 +114,7 @@ export async function POST(req: NextRequest) {
   ) as ResendInboundPayload;
 
   const senderEmail = payload.from?.trim().toLowerCase();
+  console.log("[email/inbound] text fields:", { text: payload.text, plain_text: payload.plain_text, keys: Object.keys(payload as object) });
   const rawText = payload.text ?? payload.plain_text ?? "";
 
   if (!senderEmail) {
@@ -147,6 +148,11 @@ export async function POST(req: NextRequest) {
 
   // 4. Strip quoted text and save the reply
   const replyText = stripQuotedText(rawText);
+
+  if (!replyText) {
+    console.warn(`[email/inbound] Empty reply text after stripping for uid=${uid}. rawText=${JSON.stringify(rawText)}`);
+    return NextResponse.json({ ok: true, note: "empty_reply" });
+  }
 
   const replyRef = adminDb.collection("email_replies").doc();
   await replyRef.set({
