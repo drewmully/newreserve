@@ -177,11 +177,6 @@ export async function POST(req: NextRequest) {
   // 4. Strip quoted text and save the reply
   const replyText = stripQuotedText(rawText);
 
-  if (!replyText) {
-    console.warn(`[email/inbound] Empty reply text after stripping for uid=${uid}. rawText=${JSON.stringify(rawText)}`);
-    return NextResponse.json({ ok: true, note: "empty_reply" });
-  }
-
   const replyRef = adminDb.collection("email_replies").doc();
   await replyRef.set({
     uid,
@@ -200,6 +195,11 @@ export async function POST(req: NextRequest) {
 
   // 5. Generate AI draft (non-blocking — catch errors so the webhook
   //    still returns 200 to Resend even if Claude is slow/unavailable)
+  if (!replyText) {
+    console.warn(`[email/inbound] Empty reply body for replyId=${replyRef.id} — skipping AI draft`);
+    return NextResponse.json({ ok: true, replyId: replyRef.id, note: "no_body" });
+  }
+
   try {
     const ctx: MemberContext = {
       uid,
