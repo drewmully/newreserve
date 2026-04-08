@@ -83,6 +83,7 @@ function isAuthorized(req: NextRequest): boolean {
 // ─── Resend inbound payload ───────────────────────────────────────────────────
 
 interface ResendInboundPayload {
+  email_id?: string;
   from: string;
   to: string | string[];
   subject: string;
@@ -90,6 +91,15 @@ interface ResendInboundPayload {
   html?: string;
   plain_text?: string;
   headers?: Record<string, string>;
+}
+
+async function fetchEmailBody(emailId: string): Promise<string> {
+  const res = await fetch(`https://api.resend.com/emails/${emailId}`, {
+    headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` },
+  });
+  if (!res.ok) throw new Error(`Resend fetch failed: ${res.status}`);
+  const data = await res.json() as { text?: string; html?: string };
+  return data.text ?? "";
 }
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
@@ -114,8 +124,15 @@ export async function POST(req: NextRequest) {
   ) as ResendInboundPayload;
 
   const senderEmail = payload.from?.trim().toLowerCase();
-  console.log("[email/inbound] text fields:", { text: payload.text, plain_text: payload.plain_text, keys: Object.keys(payload as object) });
-  const rawText = payload.text ?? payload.plain_text ?? "";
+
+  let rawText = payload.text ?? payload.plain_text ?? "";
+  if (!rawText && payload.email_id) {
+    try {
+      rawText = await fetchEmailBody(payload.email_id);
+    } catch (e) {
+      console.error("[email/inbound] Failed to fetch email body:", e);
+    }
+  }
 
   if (!senderEmail) {
     return NextResponse.json({ error: "Missing from address", payload: raw }, { status: 400 });
