@@ -19,7 +19,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { Timestamp } from "firebase-admin/firestore";
-import { adminDb } from "@/lib/firebase-admin";
+import { adminDb, adminAuth } from "@/lib/firebase-admin";
 import { pauseForReply, type EmailSequenceDoc } from "@/lib/email/sequences";
 import { generateReplyDraft, type MemberContext } from "@/lib/email/ai-reply";
 
@@ -120,22 +120,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing from address", payload: raw }, { status: 400 });
   }
 
-  // 1. Find user by email
-  const usersSnap = await adminDb
-    .collection("users")
-    .where("email", "==", senderEmail)
-    .limit(1)
-    .get();
-
-  if (usersSnap.empty) {
-    // Not a known user — log and ignore
+  // 1. Find user by email using Firebase Auth (always returns the real uid)
+  let uid: string;
+  let userData: Record<string, unknown>;
+  try {
+    const authUser = await adminAuth.getUserByEmail(senderEmail);
+    uid = authUser.uid;
+    const userSnap = await adminDb.collection("users").doc(uid).get();
+    userData = userSnap.data() ?? {};
+  } catch {
     console.warn(`[email/inbound] Unknown sender: ${senderEmail}`);
     return NextResponse.json({ ok: true, note: "unknown_sender" });
   }
-
-  const userDoc = usersSnap.docs[0];
-  const uid = userDoc.id;
-  const userData = userDoc.data();
 
   // 2. Load the sequence doc
   const seqSnap = await adminDb.collection("email_sequences").doc(uid).get();
