@@ -94,12 +94,23 @@ interface ResendInboundPayload {
 }
 
 async function fetchEmailBody(emailId: string): Promise<string> {
-  const res = await fetch(`https://api.resend.com/emails/${emailId}`, {
-    headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` },
-  });
-  if (!res.ok) throw new Error(`Resend fetch failed: ${res.status}`);
-  const data = await res.json() as { text?: string; html?: string };
-  return data.text ?? "";
+  // Retry up to 3 times with backoff — webhook may arrive before Resend indexes the email
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    if (attempt > 1) await new Promise(r => setTimeout(r, attempt * 1000));
+    const res = await fetch(`https://api.resend.com/emails/${emailId}`, {
+      headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` },
+    });
+    console.log(`[email/inbound] fetchEmailBody attempt=${attempt} status=${res.status}`);
+    if (res.ok) {
+      const data = await res.json() as { text?: string; html?: string };
+      return data.text ?? "";
+    }
+    if (res.status !== 404) {
+      const body = await res.text();
+      throw new Error(`Resend fetch failed: ${res.status} ${body}`);
+    }
+  }
+  throw new Error(`Resend fetch failed: 404 after 3 attempts`);
 }
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
