@@ -122,12 +122,12 @@ export async function POST(req: NextRequest) {
 
   // 1. Find user by email using Firebase Auth (always returns the real uid)
   let uid: string;
-  let userData: Record<string, unknown>;
+  let userData: Record<string, string | undefined>;
   try {
     const authUser = await adminAuth.getUserByEmail(senderEmail);
     uid = authUser.uid;
     const userSnap = await adminDb.collection("users").doc(uid).get();
-    userData = userSnap.data() ?? {};
+    userData = (userSnap.data() ?? {}) as Record<string, string | undefined>;
   } catch {
     console.warn(`[email/inbound] Unknown sender: ${senderEmail}`);
     return NextResponse.json({ ok: true, note: "unknown_sender" });
