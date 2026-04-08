@@ -35,6 +35,8 @@ export interface AiReplyResult {
 
 // ─── System prompt ────────────────────────────────────────────────────────────
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "reserve.mymully.com";
+
 function buildSystemPrompt(ctx: MemberContext): string {
   const tierLabel =
     ctx.tier === "member"
@@ -85,6 +87,8 @@ Benefits Portal: Free V1+ virtual coaching (PGA-certified, swing analysis, perso
 Curated Box (Reserve Members only): Quarterly box of premium golf gear tailored to member profile. Value always exceeds $249 membership cost. Profile refined each quarter from feedback.
 
 Concierge: Tee times, travel recommendations, gifting, sourcing limited gear. Submit via Benefits page.
+
+SITE URL: ${SITE_URL} — use this URL if you need to reference the site. Never invent or guess a URL.
 
 RESPONSE INSTRUCTIONS
 - Draft only the reply body. Do not include subject line or headers.
