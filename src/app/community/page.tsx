@@ -4,6 +4,7 @@ import { adminDb } from "@/lib/firebase-admin";
 import { FORUM_TAGS, formatRelativeTime, type ForumPost } from "./posts";
 import { ensureCommunitySeedPosts } from "@/lib/communitySeed";
 import { CommunityNav } from "./CommunityNav";
+import { serializeJsonLd } from "@/lib/safeJsonLd";
 
 export const dynamic = "force-dynamic";
 
@@ -32,23 +33,6 @@ async function getPosts(): Promise<ForumPost[]> {
     return await Promise.all(
       snapshot.docs.map(async (doc) => {
         const d = doc.data();
-        const commentsSnap = await doc.ref
-          .collection("comments")
-          .orderBy("createdAt", "asc")
-          .get();
-        const comments = commentsSnap.docs.map((c) => {
-          const cd = c.data();
-          return {
-            id: c.id,
-            author: cd.author as string,
-            avatar: cd.avatar as string,
-            timestamp: cd.createdAt
-              ? formatRelativeTime((cd.createdAt as { toDate(): Date }).toDate())
-              : "just now",
-            body: cd.body as string,
-            likes: (cd.likes as number) || 0,
-          };
-        });
         return {
           id: doc.id,
           author: d.author as string,
@@ -59,7 +43,8 @@ async function getPosts(): Promise<ForumPost[]> {
           title: d.title as string,
           body: d.body as string,
           likes: (d.likes as number) || 0,
-          comments,
+          commentCount: (d.commentCount as number) || 0,
+          comments: [],
           tag: d.tag as string,
           images: (d.images as string[]) || [],
         };
@@ -166,7 +151,7 @@ export default async function CommunityPage() {
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M12 20.25c4.97 0 9-3.694 9-8.25s-4.03-8.25-9-8.25S3 7.444 3 12c0 2.104.859 4.023 2.273 5.48.432.447.74 1.04.586 1.641a4.483 4.483 0 01-.923 1.785A5.969 5.969 0 006 21c1.282 0 2.47-.402 3.445-1.087.81.22 1.668.337 2.555.337z" />
                             </svg>
-                            {post.comments.length} {post.comments.length === 1 ? "comment" : "comments"}
+                            {(post.commentCount ?? post.comments.length)} {(post.commentCount ?? post.comments.length) === 1 ? "comment" : "comments"}
                           </span>
                         </div>
                       </div>
@@ -221,7 +206,7 @@ export default async function CommunityPage() {
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
-          __html: JSON.stringify({
+          __html: serializeJsonLd({
             "@context": "https://schema.org",
             "@type": "DiscussionForumPosting",
             "name": "Mully Reserve Community",
@@ -233,13 +218,8 @@ export default async function CommunityPage() {
               "author": { "@type": "Person", "name": post.author },
               "interactionStatistic": [
                 { "@type": "InteractionCounter", "interactionType": "https://schema.org/LikeAction", "userInteractionCount": post.likes },
-                { "@type": "InteractionCounter", "interactionType": "https://schema.org/CommentAction", "userInteractionCount": post.comments.length },
+                { "@type": "InteractionCounter", "interactionType": "https://schema.org/CommentAction", "userInteractionCount": post.commentCount ?? post.comments.length },
               ],
-              "comment": post.comments.map((c) => ({
-                "@type": "Comment",
-                "text": c.body,
-                "author": { "@type": "Person", "name": c.author },
-              })),
             })),
           }),
         }}

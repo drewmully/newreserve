@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { checkRateLimit } from "@/lib/rateLimit";
 
 const STORE_DOMAIN = process.env.SHOPIFY_STORE_DOMAIN!;
 const API_VERSION = process.env.SHOPIFY_ADMIN_API_VERSION ?? "2024-10";
@@ -11,6 +12,14 @@ function adminHeaders() {
     "Content-Type": "application/json",
     "X-Shopify-Access-Token": token,
   };
+}
+
+function getClientIp(request: NextRequest): string {
+  return (
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    request.headers.get("x-real-ip") ??
+    "unknown"
+  );
 }
 
 export async function POST(request: NextRequest) {
@@ -28,8 +37,55 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Strip leading # so both "#1042" and "1042" work
-    const normalized = String(orderNumber).replace(/^#/, "");
+    const normalizedEmail = String(email).trim().toLowerCase();
+    const normalized = String(orderNumber).replace(/^#/, "").trim();
+
+    if (
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail) ||
+      !/^\d{1,12}$/.test(normalized)
+    ) {
+      return NextResponse.json(
+        { error: "Order number and email are required." },
+        { status: 400 }
+      );
+    }
+
+    const clientIp = getClientIp(request);
+    const ipLimit = checkRateLimit("returns_lookup_ip", clientIp, {
+      maxHits: 10,
+      windowMs: 10 * 60 * 1000,
+    });
+    if (!ipLimit.allowed) {
+      return NextResponse.json(
+        { error: "Too many return lookups. Please try again later." },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(ipLimit.retryAfterSeconds),
+          },
+        }
+      );
+    }
+
+    const targetLimit = checkRateLimit(
+      "returns_lookup_target",
+      `${normalizedEmail}:${normalized}`,
+      {
+        maxHits: 5,
+        windowMs: 30 * 60 * 1000,
+      }
+    );
+    if (!targetLimit.allowed) {
+      return NextResponse.json(
+        { error: "Too many return lookups. Please try again later." },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(targetLimit.retryAfterSeconds),
+          },
+        }
+      );
+    }
 
     const url = `https://${STORE_DOMAIN}/admin/api/${API_VERSION}/orders.json?name=%23${normalized}&status=any`;
     const res = await fetch(url, { headers: adminHeaders() });
@@ -42,7 +98,7 @@ export async function POST(request: NextRequest) {
 
     // Verify email matches the order's customer
     const order = json.orders.find(
-      (o) => o.email?.toLowerCase() === email.toLowerCase().trim()
+      (o) => o.email?.toLowerCase() === normalizedEmail
     );
 
     if (!order) {

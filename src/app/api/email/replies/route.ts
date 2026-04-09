@@ -2,21 +2,16 @@
  * GET /api/email/replies
  *
  * Returns all replies pending Drew's approval, newest first.
- * Secured with INTERNAL_API_SECRET.
+ * Secured with a Firebase Admin-verified bearer token
+ * and server-side admin email allowlist.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebase-admin";
-
-function isAuthorized(req: NextRequest): boolean {
-  const secret = process.env.INTERNAL_API_SECRET;
-  if (!secret) return false;
-  const auth = req.headers.get("authorization");
-  return auth === `Bearer ${secret}`;
-}
+import { verifyAdminRequest } from "@/app/api/_lib/adminAuth";
 
 export async function GET(req: NextRequest) {
-  if (!isAuthorized(req)) {
+  if (!(await verifyAdminRequest(req))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

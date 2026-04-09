@@ -1,20 +1,15 @@
 /**
  * GET /api/loop/subscription
- * Returns the first ACTIVE Loop subscription for the authenticated user.
+ * Returns the authenticated user's actionable Loop subscriptions.
  * Requires: Authorization: Bearer <Firebase ID token>
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { getLoopRawSubscriptions } from "@/app/api/_lib/loopAdmin";
-
-async function verifyFirebaseBearer(request: NextRequest): Promise<string> {
-  const header = request.headers.get("Authorization") ?? "";
-  const token = header.replace(/^Bearer\s+/i, "").trim();
-  if (!token) throw new Error("Missing Authorization header");
-  const decoded = await adminAuth.verifyIdToken(token, true);
-  return decoded.uid;
-}
+import {
+  getLoopUserContext,
+  verifyFirebaseBearer,
+} from "@/app/api/_lib/loopUserContext";
 
 export async function GET(request: NextRequest) {
   let uid: string;
@@ -24,18 +19,26 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const userSnap = await adminDb.collection("users").doc(uid).get();
-  if (!userSnap.exists) {
+  const context = await getLoopUserContext(uid);
+  if (!context) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  const email = userSnap.data()!.email as string | undefined;
-  if (!email) return NextResponse.json({ subscription: null });
+  if (!context.loopCustomerIdentifier) {
+    return NextResponse.json({ subscription: null, subscriptions: [], source: "no_customer" });
+  }
 
   try {
-    const subs = await getLoopRawSubscriptions(email);
-    const sub = subs.find((s) => ["ACTIVE", "PAUSED", "CANCELLED"].includes(s.status)) ?? null;
-    return NextResponse.json({ subscription: sub });
+    const subscriptions = (await getLoopRawSubscriptions(
+      context.loopCustomerIdentifier
+    )).filter((sub) =>
+      ["ACTIVE", "PAUSED", "CANCELLED"].includes(String(sub.status))
+    );
+    return NextResponse.json({
+      subscription: subscriptions[0] ?? null,
+      subscriptions,
+      source: "loop",
+    });
   } catch (err) {
     console.error("[loop/subscription] GET failed:", err);
     return NextResponse.json({ error: "Loop API unavailable" }, { status: 502 });

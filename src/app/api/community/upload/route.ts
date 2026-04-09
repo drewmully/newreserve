@@ -25,6 +25,18 @@ export async function POST(req: NextRequest) {
     if (!file) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
+    if (!file.type.startsWith("image/")) {
+      return NextResponse.json(
+        { error: "Community uploads currently support images only." },
+        { status: 415 }
+      );
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      return NextResponse.json(
+        { error: "Images must be 8 MB or smaller." },
+        { status: 413 }
+      );
+    }
 
     const bucketName =
       process.env.FIREBASE_STORAGE_BUCKET ||
@@ -46,7 +58,7 @@ export async function POST(req: NextRequest) {
       method: "POST",
       headers: {
         Authorization: `Firebase ${idToken}`,
-        "Content-Type": file.type || "image/jpeg",
+        "Content-Type": file.type,
       },
       body: await file.arrayBuffer(),
     });

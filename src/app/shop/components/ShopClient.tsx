@@ -14,6 +14,10 @@ import {
   hasVariantChoices,
   resolveVariantBySelection,
 } from "@/lib/productVariants";
+import {
+  resolveTieredPrice,
+  resolveTieredPriceDisplay,
+} from "@/lib/productPricing";
 
 /* Safe membership hook — returns null when used outside the provider (e.g. public /shop) */
 function useMembershipSafe() {
@@ -301,6 +305,7 @@ function ProductTile({
 
   const hasImages = product.images && product.images.length > 0;
   const hasSecondImage = product.images && product.images.length > 1;
+  const pricing = resolveTieredPriceDisplay(product, isPaid);
 
   return (
     <Link
@@ -373,26 +378,23 @@ function ProductTile({
           {product.name}
         </h3>
         <div className="flex items-center gap-2">
-          {isPaid ? (
-            <>
-              {product.price !== product.reservePrice && (
-                <span className="text-sm text-charcoal/40 line-through">${product.price}</span>
-              )}
-              <span className="text-sm text-forest font-medium">${product.reservePrice}</span>
-              {product.price !== product.reservePrice && (
-                <span className="text-[10px] tracking-wide uppercase text-forest bg-forest/10 px-1.5 py-0.5 rounded font-medium">
-                  Member Price
-                </span>
-              )}
-            </>
-          ) : (
-            <>
-              <span className="text-sm text-charcoal/40 line-through">${product.price}</span>
-              <span className="text-sm text-forest font-medium">${product.reservePrice}</span>
-              <span className="text-[10px] tracking-wide uppercase text-sage bg-sage/10 px-1.5 py-0.5 rounded">
-                Mill River
-              </span>
-            </>
+          {pricing.compareAtPrice != null && (
+            <span className="text-sm text-charcoal/40 line-through">
+              ${pricing.compareAtPrice}
+            </span>
+          )}
+          <span className="text-sm text-forest font-medium">
+            ${pricing.activePrice}
+          </span>
+          {pricing.memberPrice != null && (
+            <span className="text-[10px] tracking-wide uppercase text-sage bg-sage/10 px-1.5 py-0.5 rounded font-medium">
+              Members pay ${pricing.memberPrice}
+            </span>
+          )}
+          {pricing.badgeLabel && pricing.memberPrice == null && (
+            <span className="text-[10px] tracking-wide uppercase text-forest bg-forest/10 px-1.5 py-0.5 rounded font-medium">
+              {pricing.badgeLabel}
+            </span>
           )}
         </div>
       </div>
@@ -699,9 +701,13 @@ function AddToCartButtonInner({
               slug: product.slug,
               name: product.name,
               brand: product.brand,
-              price: isPaid
-                ? variant?.reservePrice ?? product.reservePrice
-                : variant?.price ?? product.price,
+              price: resolveTieredPrice(
+                {
+                  price: variant?.price ?? product.price,
+                  reservePrice: variant?.reservePrice ?? product.reservePrice,
+                },
+                isPaid
+              ),
               variantId: variant?.id ?? product.variantId,
               image: product.images?.[0],
             });
@@ -739,17 +745,26 @@ export function ProductPriceDisplay({
 }) {
   const ctx = useMembershipSafe();
   const isPaid = (ctx?.tier ?? "free") !== "free";
-  const hasDiscount = price !== reservePrice;
+  const pricing = resolveTieredPriceDisplay({ price, reservePrice }, isPaid);
 
   return (
     <div className="flex items-center gap-3">
-      {hasDiscount && (
-        <span className="text-sm text-charcoal/40 line-through">${price}</span>
+      {pricing.compareAtPrice != null && (
+        <span className="text-sm text-charcoal/40 line-through">
+          ${pricing.compareAtPrice}
+        </span>
       )}
-      <span className="font-serif text-2xl text-forest">${reservePrice}</span>
-      {hasDiscount && (
-        <span className={`text-[10px] tracking-wide uppercase px-2 py-1 rounded font-medium ${isPaid ? "text-forest bg-forest/10" : "text-sage bg-sage/10"}`}>
-          {isPaid ? "Member Price" : "Mill River Price"}
+      <span className="font-serif text-2xl text-forest">
+        ${pricing.activePrice}
+      </span>
+      {pricing.memberPrice != null && (
+        <span className="text-[10px] tracking-wide uppercase px-2 py-1 rounded font-medium text-sage bg-sage/10">
+          Members pay ${pricing.memberPrice}
+        </span>
+      )}
+      {pricing.badgeLabel && pricing.memberPrice == null && (
+        <span className="text-[10px] tracking-wide uppercase px-2 py-1 rounded font-medium text-forest bg-forest/10">
+          {pricing.badgeLabel}
         </span>
       )}
     </div>

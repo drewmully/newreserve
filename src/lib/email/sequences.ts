@@ -104,12 +104,15 @@ function findNextScheduled(
 
 // ─── Skip condition checks ────────────────────────────────────────────────────
 
-async function checkSkip(uid: string, condition: SkipCondition): Promise<boolean> {
+export async function checkSkip(
+  uid: string,
+  condition: SkipCondition
+): Promise<boolean> {
   switch (condition) {
     case "has_community_post": {
       const snap = await adminDb
         .collection("communityPosts")
-        .where("author.uid", "==", uid)
+        .where("authorId", "==", uid)
         .limit(1)
         .get();
       return !snap.empty;
@@ -121,7 +124,7 @@ async function checkSkip(uid: string, condition: SkipCondition): Promise<boolean
     case "has_concierge_request": {
       const snap = await adminDb
         .collection("concierge_requests")
-        .where("userId", "==", uid)
+        .where("user_id", "==", uid)
         .limit(1)
         .get();
       return !snap.empty;
@@ -129,8 +132,8 @@ async function checkSkip(uid: string, condition: SkipCondition): Promise<boolean
     case "has_v1_activated": {
       const snap = await adminDb
         .collection("benefit_actions")
-        .where("userId", "==", uid)
-        .where("benefit", "==", "v1_coaching")
+        .where("user_id", "==", uid)
+        .where("benefit", "==", "v1_virtual_coaching")
         .limit(1)
         .get();
       return !snap.empty;

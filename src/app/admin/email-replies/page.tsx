@@ -8,12 +8,12 @@
  * allows editing the draft, then approving (sends + resumes drip)
  * or dismissing.
  *
- * Auth: uses INTERNAL_API_SECRET stored client-side in
- * NEXT_PUBLIC_INTERNAL_API_SECRET. This page is internal-only —
- * not linked from the public site.
+ * Auth: reads the queue through Firebase-authenticated
+ * admin API routes.
  */
 
 import { useEffect, useState, useCallback } from "react";
+import { useMembership } from "@/app/context/MembershipContext";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -56,22 +56,17 @@ function formatDate(ms: number | null): string {
   });
 }
 
-function apiHeaders(): HeadersInit {
-  const secret = process.env.NEXT_PUBLIC_INTERNAL_API_SECRET ?? "";
-  return {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${secret}`,
-  };
-}
 
 // ─── Reply Card ───────────────────────────────────────────────────────────────
 
 function ReplyCard({
   reply,
   onResolved,
+  getApiHeaders,
 }: {
   reply: Reply;
   onResolved: (id: string) => void;
+  getApiHeaders: () => Promise<HeadersInit>;
 }) {
   const [draft, setDraft] = useState(reply.draft ?? "");
   const [loading, setLoading] = useState<"approve" | "dismiss" | null>(null);
@@ -83,7 +78,7 @@ function ReplyCard({
     try {
       const res = await fetch(`/api/email/replies/${reply.id}/approve`, {
         method: "POST",
-        headers: apiHeaders(),
+        headers: await getApiHeaders(),
         body: JSON.stringify({ draft }),
       });
       if (!res.ok) {
@@ -104,7 +99,7 @@ function ReplyCard({
     try {
       const res = await fetch(`/api/email/replies/${reply.id}/reject`, {
         method: "POST",
-        headers: apiHeaders(),
+        headers: await getApiHeaders(),
         body: JSON.stringify({}),
       });
       if (!res.ok) {
@@ -225,16 +220,36 @@ function ReplyCard({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function EmailRepliesPage() {
+  const { authLoading, user } = useMembership();
   const [replies, setReplies] = useState<Reply[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const getApiHeaders = useCallback(async (): Promise<HeadersInit> => {
+    if (!user) {
+      throw new Error("Admin sign-in required");
+    }
+
+    const token = await user.getIdToken();
+    return {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    };
+  }, [user]);
+
   const load = useCallback(async () => {
+    if (authLoading) return;
+    if (!user) {
+      setLoading(false);
+      setReplies([]);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
       const res = await fetch("/api/email/replies", {
-        headers: apiHeaders(),
+        headers: await getApiHeaders(),
       });
       if (!res.ok) throw new Error("Failed to load replies");
       const data = await res.json();
@@ -244,10 +259,10 @@ export default function EmailRepliesPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [authLoading, getApiHeaders, user]);
 
   useEffect(() => {
-    load();
+    void load();
   }, [load]);
 
   function handleResolved(id: string) {
@@ -296,6 +311,7 @@ export default function EmailRepliesPage() {
               key={reply.id}
               reply={reply}
               onResolved={handleResolved}
+              getApiHeaders={getApiHeaders}
             />
           ))}
         </div>

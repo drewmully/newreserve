@@ -107,6 +107,7 @@ describe("product variant flows", () => {
 
   it("shows variant selectors on the PDP add-to-cart flow and sends the chosen variant", async () => {
     const user = userEvent.setup();
+    mocks.membershipState.tier = "member";
     mocks.membershipState.addToCart.mockClear();
 
     const { AddToCartButton } = await import(
@@ -133,6 +134,7 @@ describe("product variant flows", () => {
 
   it("opens a quick-add variant picker and submits the selected variant id", async () => {
     const user = userEvent.setup();
+    mocks.membershipState.tier = "member";
     mocks.addToCart.mockClear();
 
     const { QuickAddToCartButton } = await import(
@@ -172,6 +174,7 @@ describe("product variant flows", () => {
 
   it("renders the quick-add dialog in a body portal and keeps entry and exit animation classes", async () => {
     const user = userEvent.setup();
+    mocks.membershipState.tier = "member";
 
     const { QuickAddToCartButton } = await import(
       "@/app/components/QuickAddToCartButton"
@@ -217,4 +220,31 @@ describe("product variant flows", () => {
       expect(screen.queryByTestId("quick-add-dialog")).not.toBeInTheDocument()
     );
   }, 10000);
+
+  it("keeps PDP add-to-cart on the retail price for free users", async () => {
+    const user = userEvent.setup();
+    mocks.membershipState.tier = "free";
+    mocks.membershipState.addToCart.mockClear();
+
+    const { AddToCartButton } = await import(
+      "@/app/shop/components/ShopClient"
+    );
+
+    render(<AddToCartButton product={multiVariantProduct} />);
+
+    await user.click(screen.getByRole("button", { name: "Sand" }));
+    await user.click(screen.getByRole("button", { name: "L" }));
+    await user.click(screen.getByRole("button", { name: "Add to Cart" }));
+
+    await waitFor(() =>
+      expect(mocks.membershipState.addToCart).toHaveBeenCalledWith({
+        slug: "reserve-polo",
+        name: "Reserve Polo",
+        brand: "Greyson",
+        price: 124,
+        variantId: "gid://shopify/ProductVariant/4",
+        image: "https://cdn.shopify.com/s/files/test-polo.jpg",
+      })
+    );
+  });
 });

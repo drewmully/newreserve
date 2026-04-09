@@ -6,26 +6,21 @@
  *
  * Body: { note?: string }  — optional reason for the dismissal log
  *
- * Secured with INTERNAL_API_SECRET.
+ * Secured with a Firebase Admin-verified bearer token
+ * and server-side admin email allowlist.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { Timestamp } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase-admin";
 import { resumeSequence } from "@/lib/email/sequences";
-
-function isAuthorized(req: NextRequest): boolean {
-  const secret = process.env.INTERNAL_API_SECRET;
-  if (!secret) return false;
-  const auth = req.headers.get("authorization");
-  return auth === `Bearer ${secret}`;
-}
+import { verifyAdminRequest } from "@/app/api/_lib/adminAuth";
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!isAuthorized(req)) {
+  if (!(await verifyAdminRequest(req))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

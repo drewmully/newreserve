@@ -69,13 +69,27 @@ export async function trackEvent(
   } = payload;
 
   const currentUser = auth.currentUser;
-  const user_id = explicitUserId ?? currentUser?.uid;
+  let user_id = explicitUserId ?? currentUser?.uid;
   const email = explicitEmail ?? currentUser?.email ?? undefined;
 
   try {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+
+    if (currentUser) {
+      try {
+        headers.Authorization = `Bearer ${await currentUser.getIdToken()}`;
+      } catch {
+        if (!explicitUserId) {
+          user_id = undefined;
+        }
+      }
+    }
+
     await fetch("/api/analytics/track", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({
         event_name: eventName,
         user_id,

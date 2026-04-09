@@ -12,6 +12,7 @@ import {
   type ProductVariantSelection,
   type VariantBearingProduct,
 } from "@/lib/productVariants";
+import { resolveTieredPrice } from "@/lib/productPricing";
 
 interface QuickAddProduct extends VariantBearingProduct {
   slug: string;
@@ -110,9 +111,13 @@ export function QuickAddToCartButton({
   const buttonClassName = added ? addedClassName : idleClassName;
   const selectedPrice = useMemo(
     () =>
-      isPaid
-        ? selectedVariant?.reservePrice ?? product.reservePrice
-        : selectedVariant?.price ?? product.price,
+      resolveTieredPrice(
+        {
+          price: selectedVariant?.price ?? product.price,
+          reservePrice: selectedVariant?.reservePrice ?? product.reservePrice,
+        },
+        isPaid
+      ),
     [isPaid, product.price, product.reservePrice, selectedVariant]
   );
 
@@ -130,9 +135,13 @@ export function QuickAddToCartButton({
       slug: product.slug,
       name: product.name,
       brand: product.brand,
-      price: isPaid
-        ? variant?.reservePrice ?? product.reservePrice
-        : variant?.price ?? product.price,
+      price: resolveTieredPrice(
+        {
+          price: variant?.price ?? product.price,
+          reservePrice: variant?.reservePrice ?? product.reservePrice,
+        },
+        isPaid
+      ),
       variantId: variant?.id ?? product.variantId,
       image: product.images?.[0],
     });
