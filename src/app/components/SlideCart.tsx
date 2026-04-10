@@ -48,13 +48,17 @@ export function SlideCart() {
 
       try {
         const token = await user.getIdToken();
+        const cartItems = cart
+          .filter((item) => item.variantId)
+          .map((item) => ({ variantId: item.variantId!, quantity: item.quantity }));
+
         const res = await fetch("/api/shopify/checkout", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ checkoutUrl: baseUrl }),
+          body: JSON.stringify({ checkoutUrl: baseUrl, cartItems }),
         });
         if (res.ok) {
           const data = await res.json() as { checkoutUrl: string };
