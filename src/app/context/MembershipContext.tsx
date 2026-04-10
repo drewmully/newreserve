@@ -20,6 +20,7 @@ import { trackEvent } from "@/lib/tracking";
 import {
   cartCreate,
   cartAttributesUpdate,
+  cartDiscountCodesUpdate,
   cartLinesAdd,
   cartLinesRemove,
   cartLinesUpdate,
@@ -27,6 +28,8 @@ import {
   getCart,
   type ShopifyCart,
 } from "@/lib/shopify";
+
+const MEMBER_DISCOUNT_CODE = process.env.NEXT_PUBLIC_MEMBER_DISCOUNT_CODE ?? "";
 import { buildCheckoutOriginAttributes } from "@/lib/shopifyCheckoutOrigin";
 import { resolveMemberTierFromVariantId } from "@/lib/membershipConfig";
 import {
@@ -320,12 +323,16 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
   // stale-closure issues (no need to list them in useCallback deps).
   const cartRef = useRef<CartItem[]>([]);
   const cartIdRef = useRef<string | null>(null);
+  const tierRef = useRef<MemberTier>("free");
   useEffect(() => {
     cartRef.current = cart;
   }, [cart]);
   useEffect(() => {
     cartIdRef.current = cartId;
   }, [cartId]);
+  useEffect(() => {
+    tierRef.current = tier;
+  }, [tier]);
 
   // ── Guards ────────────────────────────────────────────────────────────────
   /** Last "cartId:email" pair that was successfully bound */
@@ -528,6 +535,15 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
 
           if (userEmail) {
             bindCartBuyerIdentity(hydratedCart.id, userEmail);
+          }
+
+          if (MEMBER_DISCOUNT_CODE && tierRef.current !== "free") {
+            try {
+              const discounted = await cartDiscountCodesUpdate(hydratedCart.id, [MEMBER_DISCOUNT_CODE]);
+              syncFromShopifyCart(discounted);
+            } catch (err) {
+              console.error("[Cart] member discount apply on rehydrate failed:", err);
+            }
           }
 
           return;
@@ -743,6 +759,15 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
         }
 
         syncFromShopifyCart(result);
+
+        if (MEMBER_DISCOUNT_CODE && tierRef.current !== "free") {
+          try {
+            const discounted = await cartDiscountCodesUpdate(result.id, [MEMBER_DISCOUNT_CODE]);
+            syncFromShopifyCart(discounted);
+          } catch (err) {
+            console.error("[Cart] member discount apply failed:", err);
+          }
+        }
 
         if (user?.uid) {
           await persistCartId(user.uid, result.id);

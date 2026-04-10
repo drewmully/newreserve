@@ -213,11 +213,11 @@ interface RawCart {
 
 // ─── Mappers ──────────────────────────────────────────────────────────────────
 
+const MEMBER_DISCOUNT = 0.15;
+
 function mapVariant(raw: RawVariant): ShopifyProductVariant {
-  const reservePrice = parseFloat(raw.price.amount);
-  const price = raw.compareAtPrice
-    ? parseFloat(raw.compareAtPrice.amount)
-    : reservePrice;
+  const price = parseFloat(raw.price.amount);
+  const reservePrice = Math.round(price * (1 - MEMBER_DISCOUNT) * 100) / 100;
 
   return {
     id: raw.id,
@@ -588,6 +588,35 @@ export async function updateCartBuyerIdentity(
   }
 
   return mapCart(data.cartBuyerIdentityUpdate.cart);
+}
+
+export async function cartDiscountCodesUpdate(
+  cartId: string,
+  discountCodes: string[]
+): Promise<ShopifyCart> {
+  const query = `
+    mutation CartDiscountCodesUpdate($cartId: ID!, $discountCodes: [String!]!) {
+      cartDiscountCodesUpdate(cartId: $cartId, discountCodes: $discountCodes) {
+        cart { ${CART_FIELDS} }
+        userErrors { field message }
+      }
+    }
+  `;
+
+  const data = await storefrontFetch<{
+    cartDiscountCodesUpdate: {
+      cart: RawCart | null;
+      userErrors: Array<{ field: string[]; message: string }>;
+    };
+  }>(query, { cartId, discountCodes });
+
+  if (!data.cartDiscountCodesUpdate.cart) {
+    throw new Error(
+      `cartDiscountCodesUpdate failed: ${JSON.stringify(data.cartDiscountCodesUpdate.userErrors)}`
+    );
+  }
+
+  return mapCart(data.cartDiscountCodesUpdate.cart);
 }
 
 export async function getCart(cartId: string): Promise<ShopifyCart | null> {
