@@ -57,16 +57,18 @@ async function createMemberDraftOrder(
     return {
       variant_id: numericId,
       quantity: item.quantity,
-      applied_discount: {
-        title: "Member Price",
-        value_type: "percentage",
-        value: (MEMBER_DISCOUNT_RATE * 100).toFixed(1),
-        description: "Reserve member benefit",
-      },
     };
   });
 
-  const body: Record<string, unknown> = { line_items: lineItems };
+  // Order-level discount — Shopify computes the amount, no per-line amount needed
+  const body: Record<string, unknown> = {
+    line_items: lineItems,
+    applied_discount: {
+      title: "Member Price",
+      value_type: "percentage",
+      value: (MEMBER_DISCOUNT_RATE * 100).toFixed(1),
+    },
+  };
   if (email) body.email = email;
 
   const res = await fetch(
