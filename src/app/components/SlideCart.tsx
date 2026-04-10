@@ -50,7 +50,11 @@ export function SlideCart() {
         const token = await user.getIdToken();
         const cartItems = cart
           .filter((item) => item.variantId)
-          .map((item) => ({ variantId: item.variantId!, quantity: item.quantity }));
+          .map((item) => ({
+            variantId: item.variantId!,
+            quantity: item.quantity,
+            retailPrice: item.retailPrice ?? item.price,
+          }));
 
         const res = await fetch("/api/shopify/checkout", {
           method: "POST",

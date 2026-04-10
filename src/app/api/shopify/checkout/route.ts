@@ -3,14 +3,16 @@
  *
  * Builds a Shopify checkout URL for the current user.
  * - Free tier: returns the Storefront cart's checkoutUrl as-is.
- * - Paid tier: creates a Shopify Draft Order with a 15% line-item discount
- *   so no discount code ever appears in the checkout UI.
+ * - Paid tier: creates a Shopify Draft Order with a 15% order-level discount.
+ *   The Shopify REST API requires `amount` (the calculated dollar value of the
+ *   discount) — without it the field is silently ignored.
  *
  * Body: {
- *   checkoutUrl: string,          // Storefront cart checkoutUrl (fallback)
+ *   checkoutUrl: string,
  *   cartItems: Array<{
- *     variantId: string,           // Shopify GID e.g. "gid://shopify/ProductVariant/123"
+ *     variantId: string,   // "gid://shopify/ProductVariant/123"
  *     quantity: number,
+ *     retailPrice: number, // full price — used to compute discount amount
  *   }>
  * }
  * Auth: Authorization: Bearer <Firebase ID token>
@@ -33,6 +35,7 @@ async function verifyFirebaseBearer(request: NextRequest): Promise<string> {
 interface CartItemInput {
   variantId: string;
   quantity: number;
+  retailPrice: number;
 }
 
 async function createMemberDraftOrder(
@@ -49,24 +52,28 @@ async function createMemberDraftOrder(
   const apiVersion = process.env.SHOPIFY_ADMIN_API_VERSION ?? "2024-10";
 
   const lineItems = cartItems.map((item) => {
-    // GID → numeric ID: "gid://shopify/ProductVariant/12345" → 12345
     const numericId = item.variantId.startsWith("gid://")
       ? parseInt(item.variantId.split("/").pop() ?? "0", 10)
       : parseInt(item.variantId, 10);
 
-    return {
-      variant_id: numericId,
-      quantity: item.quantity,
-    };
+    return { variant_id: numericId, quantity: item.quantity };
   });
 
-  // Order-level discount — Shopify computes the amount, no per-line amount needed
+  // Shopify requires `amount` = the calculated dollar value of the discount.
+  // Without it the applied_discount is silently ignored.
+  const totalDiscount = cartItems.reduce(
+    (sum, item) => sum + item.retailPrice * item.quantity * MEMBER_DISCOUNT_RATE,
+    0
+  );
+
   const body: Record<string, unknown> = {
     line_items: lineItems,
     applied_discount: {
       title: "Member Price",
+      description: "Reserve member benefit — 15% off",
       value_type: "percentage",
       value: (MEMBER_DISCOUNT_RATE * 100).toFixed(1),
+      amount: totalDiscount.toFixed(2),
     },
   };
   if (email) body.email = email;
@@ -84,7 +91,9 @@ async function createMemberDraftOrder(
   );
 
   if (!res.ok) {
-    throw new Error(`Draft order creation failed ${res.status}: ${await res.text()}`);
+    throw new Error(
+      `Draft order creation failed ${res.status}: ${await res.text()}`
+    );
   }
 
   const json = (await res.json()) as { draft_order: { invoice_url: string } };
@@ -113,7 +122,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  // Check tier in Firestore
   try {
     const userDoc = await adminDb.collection("users").doc(uid).get();
     const data = userDoc.data();
@@ -126,7 +134,6 @@ export async function POST(request: NextRequest) {
     }
   } catch (err) {
     console.error("[checkout] draft order failed, falling back:", err);
-    // Non-fatal: fall through to plain checkout URL
   }
 
   return NextResponse.json({ checkoutUrl });
