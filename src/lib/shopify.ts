@@ -146,6 +146,8 @@ export interface ShopifyCartLine {
   productName: string;
   brand: string;
   price: number;
+  /** Full retail price — always the Shopify variant price before any discount */
+  retailPrice: number;
   image?: string;
   quantity: number;
 }
@@ -213,7 +215,8 @@ interface RawCart {
 
 // ─── Mappers ──────────────────────────────────────────────────────────────────
 
-const MEMBER_DISCOUNT = 0.15;
+export const MEMBER_DISCOUNT_RATE = 0.15;
+const MEMBER_DISCOUNT = MEMBER_DISCOUNT_RATE;
 
 function mapVariant(raw: RawVariant): ShopifyProductVariant {
   const price = parseFloat(raw.price.amount);
@@ -262,16 +265,20 @@ function mapCart(raw: RawCart): ShopifyCart {
     checkoutUrl: raw.checkoutUrl,
     totalAmount: parseFloat(raw.cost.totalAmount.amount),
     currency: raw.cost.totalAmount.currencyCode,
-    lines: raw.lines.nodes.map((line) => ({
-      id: line.id,
-      variantId: line.merchandise.id,
-      productSlug: line.merchandise.product.handle,
-      productName: line.merchandise.product.title,
-      brand: line.merchandise.product.vendor,
-      price: parseFloat(line.merchandise.price.amount),
-      image: line.merchandise.product.images.nodes[0]?.url,
-      quantity: line.quantity,
-    })),
+    lines: raw.lines.nodes.map((line) => {
+      const retailPrice = parseFloat(line.merchandise.price.amount);
+      return {
+        id: line.id,
+        variantId: line.merchandise.id,
+        productSlug: line.merchandise.product.handle,
+        productName: line.merchandise.product.title,
+        brand: line.merchandise.product.vendor,
+        price: retailPrice,
+        retailPrice,
+        image: line.merchandise.product.images.nodes[0]?.url,
+        quantity: line.quantity,
+      };
+    }),
   };
 }
 

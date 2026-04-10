@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMembership } from "../context/MembershipContext";
 import { trackEvent } from "@/lib/tracking";
+import { MEMBER_DISCOUNT_RATE } from "@/lib/shopify";
 
 export function SlideCart() {
   const {
@@ -15,22 +16,61 @@ export function SlideCart() {
     cartCheckoutUrl,
     cartLoading,
     tier,
+    user,
   } = useMembership();
   const isPaid = tier !== "free";
 
-  const checkoutHref = useMemo(() => {
-    if (!cartCheckoutUrl) return null;
-    if (typeof window === "undefined") return cartCheckoutUrl;
+  const [checkoutHref, setCheckoutHref] = useState<string | null>(null);
 
-    try {
-      const checkout = new URL(cartCheckoutUrl);
-      checkout.searchParams.set("return_url", window.location.href);
-      return checkout.toString();
-    } catch {
-      const separator = cartCheckoutUrl.includes("?") ? "&" : "?";
-      return `${cartCheckoutUrl}${separator}return_url=${encodeURIComponent(window.location.href)}`;
+  useEffect(() => {
+    if (!cartCheckoutUrl) {
+      setCheckoutHref(null);
+      return;
     }
-  }, [cartCheckoutUrl]);
+
+    let cancelled = false;
+
+    const buildCheckoutUrl = async () => {
+      let baseUrl = cartCheckoutUrl;
+      try {
+        const url = new URL(baseUrl);
+        url.searchParams.set("return_url", window.location.href);
+        baseUrl = url.toString();
+      } catch {
+        const sep = baseUrl.includes("?") ? "&" : "?";
+        baseUrl = `${baseUrl}${sep}return_url=${encodeURIComponent(window.location.href)}`;
+      }
+
+      if (!user) {
+        if (!cancelled) setCheckoutHref(baseUrl);
+        return;
+      }
+
+      try {
+        const token = await user.getIdToken();
+        const res = await fetch("/api/shopify/checkout", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ checkoutUrl: baseUrl }),
+        });
+        if (res.ok) {
+          const data = await res.json() as { checkoutUrl: string };
+          if (!cancelled) setCheckoutHref(data.checkoutUrl);
+          return;
+        }
+      } catch {
+        // Fall through to plain URL
+      }
+
+      if (!cancelled) setCheckoutHref(baseUrl);
+    };
+
+    void buildCheckoutUrl();
+    return () => { cancelled = true; };
+  }, [cartCheckoutUrl, user]);
 
   useEffect(() => {
     if (!cartOpen) return;
@@ -177,18 +217,22 @@ export function SlideCart() {
                       {item.name}
                     </p>
                     <div className="flex items-center gap-1.5">
-                      {isPaid && item.retailPrice && item.retailPrice !== item.price && (
-                        <span className="text-xs text-charcoal/40 line-through">
-                          ${item.retailPrice.toFixed(2)}
-                        </span>
-                      )}
-                      <p className="text-sm text-forest font-medium">
-                        ${item.price.toFixed(2)}
-                      </p>
-                      {isPaid && item.retailPrice && item.retailPrice !== item.price && (
-                        <span className="text-[9px] tracking-wide uppercase text-forest bg-forest/10 px-1 py-0.5 rounded font-medium">
-                          Member
-                        </span>
+                      {isPaid && item.retailPrice ? (
+                        <>
+                          <span className="text-xs text-charcoal/40 line-through">
+                            ${item.retailPrice.toFixed(2)}
+                          </span>
+                          <p className="text-sm text-forest font-medium">
+                            ${(item.retailPrice * (1 - MEMBER_DISCOUNT_RATE)).toFixed(2)}
+                          </p>
+                          <span className="text-[9px] tracking-wide uppercase text-forest bg-forest/10 px-1 py-0.5 rounded font-medium">
+                            Member
+                          </span>
+                        </>
+                      ) : (
+                        <p className="text-sm text-forest font-medium">
+                          ${item.price.toFixed(2)}
+                        </p>
                       )}
                     </div>
 
@@ -272,7 +316,7 @@ export function SlideCart() {
                 (() => {
                   const savings = cart.reduce((sum, item) => {
                     const retail = item.retailPrice ?? item.price;
-                    return sum + (retail - item.price) * item.quantity;
+                    return sum + retail * MEMBER_DISCOUNT_RATE * item.quantity;
                   }, 0);
                   return savings > 0 ? (
                     <div className="flex items-center justify-between text-sm">
