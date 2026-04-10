@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { trackEvent } from "@/lib/tracking";
 import {
   FIT_SHIRT_SIZES, FIT_GLOVE_HANDS, FIT_GLOVE_SIZES,
   FIT_WAIST_SIZES, FIT_SHOE_SIZES, FIT_PANTS_INSEAMS, FIT_SHORTS_INSEAMS,
@@ -76,6 +77,20 @@ export default function ReserveCardPage() {
   const [selectedPlan, setSelectedPlan] = useState("");
 
   // Step 6: Confirmation (no state needed)
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    trackEvent("page_view", {
+      properties: {
+        page: "reserve_card",
+        referrer: document.referrer || null,
+        utm_source: params.get("utm_source"),
+        utm_medium: params.get("utm_medium"),
+        utm_campaign: params.get("utm_campaign"),
+        utm_content: params.get("utm_content"),
+      },
+    });
+  }, []);
 
   const animClass = direction === "forward" ? "animate-substep-in" : "animate-substep-back-in";
 
