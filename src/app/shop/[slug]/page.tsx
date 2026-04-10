@@ -16,13 +16,15 @@ import {
   ProductPriceDisplay,
 } from "../components/ShopClient";
 import { ShopHeader } from "../../components/ShopHeader";
+import { getVariantById, getVariantSelection } from "@/lib/productVariants";
+import { orderProductImagesBySelection } from "@/lib/shopDisplay";
 
 // Revalidate ISR every hour
 export const revalidate = 3600;
 
 interface Props {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ from?: string }>;
+  searchParams: Promise<{ from?: string; variant?: string }>;
 }
 
 export async function generateStaticParams() {
@@ -76,7 +78,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function ProductPage({ params, searchParams }: Props) {
   const { slug } = await params;
-  const { from } = await searchParams;
+  const { from, variant: requestedVariantId } = await searchParams;
   const backHref = from === "dashboard" ? "/dashboard?tab=shop" : "/shop";
   let product;
   try {
@@ -86,6 +88,16 @@ export default async function ProductPage({ params, searchParams }: Props) {
     notFound();
   }
   if (!product) notFound();
+
+  const preferredVariant = requestedVariantId
+    ? getVariantById(product, requestedVariantId)
+    : null;
+  const initialSelection = getVariantSelection(preferredVariant);
+  const orderedImages =
+    Object.keys(initialSelection).length > 0
+      ? orderProductImagesBySelection(product, initialSelection)
+      : product.images;
+  const initialPriceSource = preferredVariant ?? null;
 
   const accordionItems = [
     { title: "Description", content: product.description },
@@ -109,7 +121,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
             {/* Left - Images */}
             <div>
               <ProductImageGallery
-                images={product.images}
+                images={orderedImages}
                 name={product.name}
               />
             </div>
@@ -125,7 +137,12 @@ export default async function ProductPage({ params, searchParams }: Props) {
 
               {/* Price */}
               <div className="mb-6 pb-6 border-b border-taupe/20">
-                <ProductPriceDisplay price={product.price} reservePrice={product.reservePrice} />
+                <ProductPriceDisplay
+                  price={initialPriceSource?.price ?? product.price}
+                  reservePrice={
+                    initialPriceSource?.reservePrice ?? product.reservePrice
+                  }
+                />
               </div>
 
               {/* Short description */}
@@ -135,7 +152,14 @@ export default async function ProductPage({ params, searchParams }: Props) {
 
               {/* Add to cart */}
               <div className="mb-8">
-                <AddToCartButton product={product} />
+                <AddToCartButton
+                  product={{
+                    ...product,
+                    images: orderedImages,
+                    variantId: preferredVariant?.id ?? product.variantId,
+                    initialSelection,
+                  }}
+                />
               </div>
 
               {/* Accordions */}

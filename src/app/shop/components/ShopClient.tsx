@@ -18,6 +18,7 @@ import {
   resolveTieredPrice,
   resolveTieredPriceDisplay,
 } from "@/lib/productPricing";
+import { buildShopDisplayProducts } from "@/lib/shopDisplay";
 
 /* Safe membership hook — returns null when used outside the provider (e.g. public /shop) */
 function useMembershipSafe() {
@@ -54,7 +55,7 @@ export function ShopGrid({
     image: string;
   } | null>(null);
 
-  const filteredProducts = products;
+  const filteredProducts = buildShopDisplayProducts(products);
 
   const activeBrands = brands.filter((brand) =>
     filteredProducts.some((product) => product.brand === brand)
@@ -295,27 +296,49 @@ function ProductTile({
   const ctx = useMembershipSafe();
   const tier = ctx?.tier ?? "free";
   const isPaid = tier !== "free";
-  const productHref =
-    sourceContext === "dashboard-shop"
-      ? `/shop/${product.slug}?from=dashboard`
-      : `/shop/${product.slug}`;
+  const primaryImage = product.cardImage ?? product.images?.[0];
+  const secondaryImage = product.cardSecondaryImage ?? product.images?.[1];
+  const hrefParams = new URLSearchParams();
+
+  if (sourceContext === "dashboard-shop") {
+    hrefParams.set("from", "dashboard");
+  }
+
+  if (product.preferredVariantId) {
+    hrefParams.set("variant", product.preferredVariantId);
+  }
+
+  const productHref = `/shop/${product.slug}${
+    hrefParams.size > 0 ? `?${hrefParams.toString()}` : ""
+  }`;
   const isPrivateRelease = (product.sourceCollections ?? []).includes(
     privateReleasesHandle
   );
 
-  const hasImages = product.images && product.images.length > 0;
-  const hasSecondImage = product.images && product.images.length > 1;
+  const hasImages = Boolean(primaryImage);
+  const hasSecondImage = Boolean(
+    secondaryImage && secondaryImage !== primaryImage
+  );
   const pricing = resolveTieredPriceDisplay(product, isPaid);
 
   return (
     <Link
       href={productHref}
+      aria-label={
+        product.cardColor ? `${product.name}, ${product.cardColor}` : product.name
+      }
       className="group block product-tile-hover"
     >
-      <div className="aspect-[3/4] bg-cream rounded-lg overflow-hidden mb-3 relative product-img-wrap">
+      <div className="aspect-[3/4] bg-cream rounded-[1.1rem] overflow-hidden mb-3 relative product-img-wrap border border-white/65 shadow-[0_12px_38px_-20px_rgba(17,17,17,0.28)]">
+        <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.18),transparent_26%,rgba(17,17,17,0.08))] pointer-events-none z-[1]" />
         {isPrivateRelease && (
           <span className="absolute top-2 left-2 z-10 px-2 py-1 rounded bg-obsidian/80 text-bone text-[10px] tracking-[0.12em] uppercase">
             Private
+          </span>
+        )}
+        {product.cardColor && (
+          <span className="absolute top-2 right-2 z-10 inline-flex items-center rounded-full border border-white/70 bg-bone/92 px-2.5 py-1 text-[10px] tracking-[0.18em] uppercase text-obsidian/70 shadow-sm backdrop-blur-sm">
+            {product.cardColor}
           </span>
         )}
         {hasImages ? (
@@ -323,8 +346,12 @@ function ProductTile({
             {/* Primary image */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={product.images[0]}
-              alt={product.name}
+              src={primaryImage}
+              alt={
+                product.cardColor
+                  ? `${product.name} in ${product.cardColor}`
+                  : product.name
+              }
               className="w-full h-full object-cover product-img-primary"
               draggable={false}
             />
@@ -332,8 +359,12 @@ function ProductTile({
             {hasSecondImage && (
               /* eslint-disable-next-line @next/next/no-img-element */
               <img
-                src={product.images[1]}
-                alt={`${product.name} alternate view`}
+                src={secondaryImage}
+                alt={
+                  product.cardColor
+                    ? `${product.name} in ${product.cardColor}, alternate view`
+                    : `${product.name} alternate view`
+                }
                 className="w-full h-full object-cover product-img-secondary"
                 draggable={false}
                 loading="lazy"
@@ -350,6 +381,7 @@ function ProductTile({
 
         {/* Quick-add to cart */}
         <QuickAddToCartButton
+          key={product.displayKey ?? `${product.slug}:${product.variantId ?? "default"}`}
           product={product}
           isPaid={isPaid}
           onAddToCart={async (item) => {
@@ -377,6 +409,14 @@ function ProductTile({
         <h3 className="text-sm text-obsidian font-medium leading-snug mb-1.5 group-hover:text-forest transition-colors duration-300">
           {product.name}
         </h3>
+        {product.cardColor && (
+          <div className="mb-2 flex items-center gap-2">
+            <span className="inline-flex h-2.5 w-2.5 rounded-full bg-forest/18 ring-1 ring-forest/12" />
+            <span className="text-[11px] tracking-[0.16em] uppercase text-charcoal/45">
+              {product.cardColor}
+            </span>
+          </div>
+        )}
         <div className="flex items-center gap-2">
           {pricing.compareAtPrice != null && (
             <span className="text-sm text-charcoal/40 line-through">
@@ -628,10 +668,13 @@ export function AddToCartButton({
     images?: string[];
     options?: Product["options"];
     variants?: Product["variants"];
+    initialSelection?: Record<string, string>;
   };
 }) {
   const productResetKey = product
-    ? `${product.slug}:${product.variantId ?? "default"}`
+    ? `${product.slug}:${product.variantId ?? "default"}:${JSON.stringify(
+        product.initialSelection ?? {}
+      )}`
     : "empty";
 
   return <AddToCartButtonInner key={productResetKey} product={product} />;
@@ -650,12 +693,13 @@ function AddToCartButtonInner({
     images?: string[];
     options?: Product["options"];
     variants?: Product["variants"];
+    initialSelection?: Record<string, string>;
   };
 }) {
   const [added, setAdded] = useState(false);
   const ctx = useMembershipSafe();
   const [selection, setSelection] = useState(() =>
-    product ? getInitialVariantSelection(product) : {}
+    product ? getInitialVariantSelection(product, product.initialSelection) : {}
   );
 
   const selectedVariant =

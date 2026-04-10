@@ -85,6 +85,7 @@ export interface ShopifyProduct {
   /** Member / reserve price (Shopify variant price) */
   reservePrice: number;
   images: string[];
+  imageDetails?: ShopifyProductImage[];
   description: string;
   material: string;
   aboutBrand: string;
@@ -108,12 +109,19 @@ export interface ShopifySelectedOption {
   value: string;
 }
 
+export interface ShopifyProductImage {
+  url: string;
+  altText?: string | null;
+}
+
 export interface ShopifyProductVariant {
   id: string;
   title: string;
   price: number;
   reservePrice: number;
   availableForSale: boolean;
+  image?: string;
+  imageAltText?: string | null;
   selectedOptions: ShopifySelectedOption[];
 }
 
@@ -173,6 +181,7 @@ interface RawVariant {
   price: { amount: string; currencyCode: string };
   compareAtPrice: { amount: string; currencyCode: string } | null;
   availableForSale: boolean;
+  image: { url: string; altText?: string | null } | null;
   selectedOptions: Array<{ name: string; value: string }>;
 }
 
@@ -184,7 +193,7 @@ interface RawProduct {
   description: string;
   options: Array<{ name: string; values: string[] }>;
   variants: { nodes: RawVariant[] };
-  images: { nodes: Array<{ url: string }> };
+  images: { nodes: Array<{ url: string; altText?: string | null }> };
   materialMeta: { value: string } | null;
   aboutBrandMeta: { value: string } | null;
   whyWeLikeItMeta: { value: string } | null;
@@ -228,6 +237,8 @@ function mapVariant(raw: RawVariant): ShopifyProductVariant {
     price,
     reservePrice,
     availableForSale: raw.availableForSale,
+    image: raw.image?.url,
+    imageAltText: raw.image?.altText ?? null,
     selectedOptions: raw.selectedOptions,
   };
 }
@@ -245,6 +256,10 @@ function mapProduct(raw: RawProduct): ShopifyProduct {
     price: defaultVariant?.price ?? 0,
     reservePrice: defaultVariant?.reservePrice ?? 0,
     images: raw.images.nodes.map((img) => img.url),
+    imageDetails: raw.images.nodes.map((img) => ({
+      url: img.url,
+      altText: img.altText ?? null,
+    })),
     description: raw.description,
     material: raw.materialMeta?.value ?? "",
     aboutBrand: raw.aboutBrandMeta?.value ?? "",
@@ -301,6 +316,10 @@ const PRODUCT_FIELDS = `
       price { amount currencyCode }
       compareAtPrice { amount currencyCode }
       availableForSale
+      image {
+        url
+        altText
+      }
       selectedOptions {
         name
         value
@@ -308,7 +327,10 @@ const PRODUCT_FIELDS = `
     }
   }
   images(first: 5) {
-    nodes { url }
+    nodes {
+      url
+      altText
+    }
   }
   materialMeta: metafield(namespace: "custom", key: "material") { value }
   aboutBrandMeta: metafield(namespace: "custom", key: "about_brand") { value }

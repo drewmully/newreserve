@@ -247,4 +247,75 @@ describe("product variant flows", () => {
       })
     );
   });
+
+  it("respects a preferred initial color on the PDP add-to-cart flow", async () => {
+    const user = userEvent.setup();
+    mocks.membershipState.tier = "member";
+    mocks.membershipState.addToCart.mockClear();
+
+    const { AddToCartButton } = await import(
+      "@/app/shop/components/ShopClient"
+    );
+
+    render(
+      <AddToCartButton
+        product={{
+          ...multiVariantProduct,
+          initialSelection: { Color: "Sand" },
+        }}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "Add to Cart" }));
+
+    await waitFor(() =>
+      expect(mocks.membershipState.addToCart).toHaveBeenCalledWith({
+        slug: "reserve-polo",
+        name: "Reserve Polo",
+        brand: "Greyson",
+        price: 84,
+        variantId: "gid://shopify/ProductVariant/3",
+        image: "https://cdn.shopify.com/s/files/test-polo.jpg",
+      })
+    );
+  });
+
+  it("opens quick add with the preferred color preselected", async () => {
+    const user = userEvent.setup();
+    mocks.membershipState.tier = "member";
+    mocks.addToCart.mockClear();
+
+    const { QuickAddToCartButton } = await import(
+      "@/app/components/QuickAddToCartButton"
+    );
+
+    render(
+      <QuickAddToCartButton
+        product={{
+          ...multiVariantProduct,
+          initialSelection: { Color: "Sand" },
+        }}
+        isPaid
+        onAddToCart={mocks.addToCart}
+        idleClassName="quick-add-idle"
+        addedClassName="quick-add-added"
+        idleContent={<span>+</span>}
+        addedContent={<span>ok</span>}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "Add to cart" }));
+    await user.click(screen.getByRole("button", { name: "Add to Cart" }));
+
+    await waitFor(() =>
+      expect(mocks.addToCart).toHaveBeenCalledWith({
+        slug: "reserve-polo",
+        name: "Reserve Polo",
+        brand: "Greyson",
+        price: 84,
+        variantId: "gid://shopify/ProductVariant/3",
+        image: "https://cdn.shopify.com/s/files/test-polo.jpg",
+      })
+    );
+  });
 });
