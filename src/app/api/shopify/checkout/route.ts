@@ -123,10 +123,26 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const userDoc = await adminDb.collection("users").doc(uid).get();
-    const data = userDoc.data();
-    const tier = data?.tier as string | undefined;
-    const email = data?.email as string | undefined;
+    const userRef = adminDb.collection("users").doc(uid);
+    const userDoc = await userRef.get();
+    const data = userDoc.data() ?? {};
+
+    let tier = data.tier as string | undefined;
+    const email = data.email as string | undefined;
+
+    // Fallback: infer paid tier from cached subscription state if tier field missing
+    if (!tier || tier === "free") {
+      const subs = (data.subscriptions as Record<string, unknown> | undefined) ?? {};
+      const subActive =
+        subs.mullybox_active === true ||
+        String(subs.status ?? "").toLowerCase() === "active";
+      if (subActive) {
+        tier = "access";
+        // Cache it so future requests skip this fallback
+        await userRef.set({ tier: "access" }, { merge: true });
+        console.log("[checkout] tier inferred from subscription and cached");
+      }
+    }
 
     console.log("[checkout] uid:", uid, "tier:", tier, "cartItems:", cartItems.length);
 
@@ -139,10 +155,7 @@ export async function POST(request: NextRequest) {
     console.log("[checkout] skipping draft order — tier:", tier, "items:", cartItems.length);
   } catch (err) {
     console.error("[checkout] draft order failed:", err);
-    return NextResponse.json(
-      { error: String(err) },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 
   return NextResponse.json({ checkoutUrl });
