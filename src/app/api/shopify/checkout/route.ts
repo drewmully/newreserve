@@ -128,12 +128,21 @@ export async function POST(request: NextRequest) {
     const tier = data?.tier as string | undefined;
     const email = data?.email as string | undefined;
 
+    console.log("[checkout] uid:", uid, "tier:", tier, "cartItems:", cartItems.length);
+
     if (tier && tier !== "free" && cartItems.length > 0) {
       const invoiceUrl = await createMemberDraftOrder(cartItems, email);
+      console.log("[checkout] draft order invoice_url:", invoiceUrl);
       return NextResponse.json({ checkoutUrl: invoiceUrl });
     }
+
+    console.log("[checkout] skipping draft order — tier:", tier, "items:", cartItems.length);
   } catch (err) {
-    console.error("[checkout] draft order failed, falling back:", err);
+    console.error("[checkout] draft order failed:", err);
+    return NextResponse.json(
+      { error: String(err) },
+      { status: 500 }
+    );
   }
 
   return NextResponse.json({ checkoutUrl });

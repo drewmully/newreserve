@@ -56,6 +56,8 @@ export function SlideCart() {
             retailPrice: item.retailPrice ?? item.price,
           }));
 
+        console.log("[SlideCart] checkout cartItems:", cartItems);
+
         const res = await fetch("/api/shopify/checkout", {
           method: "POST",
           headers: {
@@ -65,10 +67,12 @@ export function SlideCart() {
           body: JSON.stringify({ checkoutUrl: baseUrl, cartItems }),
         });
         if (res.ok) {
-          const data = await res.json() as { checkoutUrl: string };
+          const data = await res.json() as { checkoutUrl: string; error?: string };
+          console.log("[SlideCart] checkout response:", data);
           if (!cancelled) setCheckoutHref(data.checkoutUrl);
           return;
         }
+        console.error("[SlideCart] checkout API error:", res.status, await res.text());
       } catch {
         // Fall through to plain URL
       }
