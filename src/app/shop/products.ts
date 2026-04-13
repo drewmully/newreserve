@@ -1,4 +1,5 @@
 import type {
+  ShopifyProductImage,
   ShopifyProductOption,
   ShopifyProductVariant,
 } from "@/lib/shopify";
@@ -11,6 +12,7 @@ export interface Product {
   price: number;
   reservePrice: number;
   images: string[];
+  imageDetails?: ShopifyProductImage[];
   description: string;
   material: string;
   aboutBrand: string;
@@ -22,6 +24,12 @@ export interface Product {
   variantId?: string;
   /** Shopify collection handles this product belongs to, if available */
   sourceCollections?: string[];
+  displayKey?: string;
+  cardColor?: string;
+  cardImage?: string;
+  cardSecondaryImage?: string;
+  initialSelection?: Record<string, string>;
+  preferredVariantId?: string;
 }
 
 export const BRANDS = [

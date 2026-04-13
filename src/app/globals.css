@@ -500,30 +500,42 @@ input:focus {
   position: relative;
 }
 .product-img-primary {
-  transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  transform: scale(1.01);
+  transition:
+    opacity 0.55s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.85s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .product-img-secondary {
   position: absolute;
   inset: 0;
   opacity: 0;
-  transition: opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  transform: scale(1.04);
+  transition:
+    opacity 0.55s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.9s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .group:hover .product-img-primary {
   opacity: 0;
+  transform: scale(1.045);
 }
 .group:hover .product-img-secondary {
   opacity: 1;
+  transform: scale(1.065);
 }
 
 /* ─── PRODUCT TILE LIFT ─── */
 
 .product-tile-hover {
   transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
-              box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+              box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+              filter 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .product-tile-hover:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 28px -6px rgba(31, 61, 43, 0.1);
+  transform: translateY(-5px);
+  box-shadow:
+    0 16px 42px -18px rgba(17, 17, 17, 0.26),
+    0 12px 28px -18px rgba(31, 61, 43, 0.22);
+  filter: saturate(1.02);
 }
 
 /* ─── BENEFIT / INFO TILE HOVER ─── */

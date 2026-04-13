@@ -53,6 +53,16 @@ export function getDefaultProductVariant(
   );
 }
 
+export function getVariantById(
+  product: VariantBearingProduct,
+  variantId: string
+): ShopifyProductVariant | null {
+  return (
+    getProductVariants(product).find((variant) => variant.id === variantId) ??
+    null
+  );
+}
+
 export function getProductOptionGroups(
   product: VariantBearingProduct
 ): ShopifyProductOption[] {
@@ -81,17 +91,54 @@ export function hasVariantChoices(product: VariantBearingProduct): boolean {
   return getProductOptionGroups(product).some((option) => option.values.length > 1);
 }
 
-export function getInitialVariantSelection(
-  product: VariantBearingProduct
+export function getVariantSelection(
+  variant: ShopifyProductVariant | null
 ): ProductVariantSelection {
   const selection: ProductVariantSelection = {};
-  const defaultVariant = getDefaultProductVariant(product);
 
-  for (const option of defaultVariant?.selectedOptions ?? []) {
+  for (const option of variant?.selectedOptions ?? []) {
     selection[option.name] = option.value;
   }
 
+  return selection;
+}
+
+export function getInitialVariantSelection(
+  product: VariantBearingProduct,
+  preferredSelection: ProductVariantSelection = {}
+): ProductVariantSelection {
+  const selection: ProductVariantSelection = {};
+  const variants = getProductVariants(product);
+
+  const preferredVariant =
+    Object.keys(preferredSelection).length === 0
+      ? null
+      : variants.find(
+          (variant) =>
+            variant.availableForSale &&
+            variant.selectedOptions.every((option) => {
+              const preferredValue = preferredSelection[option.name];
+              return !preferredValue || preferredValue === option.value;
+            })
+        ) ??
+        variants.find((variant) =>
+          variant.selectedOptions.every((option) => {
+            const preferredValue = preferredSelection[option.name];
+            return !preferredValue || preferredValue === option.value;
+          })
+        );
+
+  const defaultVariant = preferredVariant ?? getDefaultProductVariant(product);
+
+  Object.assign(selection, getVariantSelection(defaultVariant));
+
   for (const option of getProductOptionGroups(product)) {
+    const preferredValue = preferredSelection[option.name];
+    if (preferredValue && option.values.includes(preferredValue)) {
+      selection[option.name] = preferredValue;
+      continue;
+    }
+
     if (!selection[option.name] && option.values[0]) {
       selection[option.name] = option.values[0];
     }

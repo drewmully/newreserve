@@ -19,6 +19,7 @@ interface QuickAddProduct extends VariantBearingProduct {
   name: string;
   brand: string;
   images?: string[];
+  initialSelection?: ProductVariantSelection;
 }
 
 interface QuickAddToCartButtonProps {
@@ -53,10 +54,9 @@ export function QuickAddToCartButton({
 }: QuickAddToCartButtonProps) {
   const [added, setAdded] = useState(false);
   const [open, setOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
   const [closing, setClosing] = useState(false);
   const [selection, setSelection] = useState<ProductVariantSelection>(() =>
-    getInitialVariantSelection(product)
+    getInitialVariantSelection(product, product.initialSelection)
   );
   const isVisible = open || closing;
 
@@ -68,14 +68,6 @@ export function QuickAddToCartButton({
       setOpen(false);
     }, 220);
   }, [closing, isVisible]);
-
-  useEffect(() => {
-    setSelection(getInitialVariantSelection(product));
-  }, [product]);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     if (!isVisible) return;
@@ -150,7 +142,7 @@ export function QuickAddToCartButton({
     flashAdded();
   };
 
-  const modal = mounted && isVisible
+  const modal = typeof document !== "undefined" && isVisible
     ? createPortal(
         <div
           className="fixed inset-0 z-[110] flex items-center justify-center p-4 md:p-6"
