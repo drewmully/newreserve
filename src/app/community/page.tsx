@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { adminDb } from "@/lib/firebase-admin";
 import { FORUM_TAGS, formatRelativeTime, type ForumPost } from "./posts";
-import { ensureCommunitySeedPosts } from "@/lib/communitySeed";
 import { CommunityNav } from "./CommunityNav";
 import { serializeJsonLd } from "@/lib/safeJsonLd";
 
@@ -22,10 +21,9 @@ export const metadata: Metadata = {
 
 async function getPosts(): Promise<ForumPost[]> {
   try {
-    await ensureCommunitySeedPosts();
-
     const snapshot = await adminDb
       .collection("communityPosts")
+      .where("seeded", "==", false)
       .orderBy("createdAt", "desc")
       .limit(50)
       .get();

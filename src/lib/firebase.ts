@@ -156,7 +156,7 @@ const USER_DEFAULTS: Omit<
   segments: [],
   messaging_preferences: {
     email_marketing: true,
-    sms_marketing: false,
+    sms_marketing: true,
     push_notifications: false,
   },
 };

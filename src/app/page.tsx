@@ -107,7 +107,7 @@ export default function Home() {
           <div className="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-4">
             <StatCounter end={100} suffix="K+" label="Orders Shipped" />
             <StatCounter end={40} suffix="+" label="Brand Partners" />
-            <StatCounter end={250} prefix="$" suffix="+" label="Avg. Savings" />
+            <StatCounter end={250} prefix="$" suffix="+" label="Annual Savings" />
             <StatCounter end={96} suffix="%" label="Renewal Rate" />
           </div>
         </section>
@@ -604,7 +604,7 @@ export default function Home() {
                 Policies
               </h4>
               <ul className="space-y-2.5">
-                <FooterLink href="/policies/refund">Refund Policy</FooterLink>
+                <FooterLink href="/policies/refund">Returns</FooterLink>
                 <FooterLink href="/policies/privacy">Privacy Policy</FooterLink>
                 <FooterLink href="/policies/shipping">Shipping Policy</FooterLink>
                 <FooterLink href="/policies/terms">Terms of Service</FooterLink>

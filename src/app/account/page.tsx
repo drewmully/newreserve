@@ -191,9 +191,6 @@ export default function AccountPage() {
             >
               Sign Out
             </button>
-            <button className="text-xs text-ember/40 hover:text-ember transition-colors duration-300 cursor-pointer">
-              Delete Account
-            </button>
           </div>
         </div>
       </main>
