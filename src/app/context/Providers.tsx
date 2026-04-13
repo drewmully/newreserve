@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { MembershipProvider } from "./MembershipContext";
 import { EmailLinkHandler } from "../components/EmailLinkHandler";
 import { PageViewTracker } from "../components/PageViewTracker";
+import { IntercomWidget } from "../components/IntercomWidget";
 import { Suspense, type ReactNode } from "react";
 
 const MEMBERSHIP_EXEMPT_PREFIXES = [
@@ -31,7 +32,10 @@ export function Providers({ children }: { children: ReactNode }) {
         <PageViewTracker />
       </Suspense>
       {shouldWrapWithMembership ? (
-        <MembershipProvider>{children}</MembershipProvider>
+        <MembershipProvider>
+          <IntercomWidget />
+          {children}
+        </MembershipProvider>
       ) : (
         children
       )}
