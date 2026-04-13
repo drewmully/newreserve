@@ -24,11 +24,13 @@ describe("shouldUseMembershipProvider", () => {
     expect(shouldUseMembershipProvider("/affiliates")).toBe(true);
     expect(shouldUseMembershipProvider("/blog")).toBe(true);
     expect(shouldUseMembershipProvider("/influencers")).toBe(true);
+    expect(shouldUseMembershipProvider("/login")).toBe(true);
   });
 
   it("skips the provider only on truly static public routes", async () => {
     const { shouldUseMembershipProvider } = await import("@/app/context/Providers");
 
+    expect(shouldUseMembershipProvider("/")).toBe(false);
     expect(shouldUseMembershipProvider("/faq")).toBe(false);
     expect(shouldUseMembershipProvider("/handoff")).toBe(false);
     expect(shouldUseMembershipProvider("/policies/privacy")).toBe(false);

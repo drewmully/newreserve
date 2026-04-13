@@ -4,8 +4,13 @@ import { Resend } from "resend";
 import { adminDb, adminAuth } from "@/lib/firebase-admin";
 import { createReviewToken } from "@/lib/registry-tokens";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
 const ADMIN_EMAIL = "info@Mullybox.com";
+let resendClient: Resend | null = null;
+
+function getResendClient(): Resend {
+  resendClient ??= new Resend(process.env.RESEND_API_KEY);
+  return resendClient;
+}
 
 async function verifyAuth(req: NextRequest): Promise<string | null> {
   const header = req.headers.get("Authorization");
@@ -197,7 +202,7 @@ export async function POST(req: NextRequest) {
   const userEmail = String(metadata.submitted_by_email ?? "");
 
   // Send email to admin
-  const { error: emailError } = await resend.emails.send({
+  const { error: emailError } = await getResendClient().emails.send({
     from: "Mullybox Club Registry <noreply@mymully.com>",
     to: ADMIN_EMAIL,
     subject: `New Club Registry Request — ${String(metadata.club_name ?? "Unknown")}`,

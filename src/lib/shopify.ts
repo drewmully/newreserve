@@ -27,16 +27,23 @@ function requireEnv(name: string, value: string | undefined): string {
   return value;
 }
 
-// process.env.LITERAL_NAME must appear here for Next.js build-time substitution.
-const DOMAIN = requireEnv(
-  "NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN",
-  process.env.NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN
-);
-const TOKEN = requireEnv(
-  "NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN",
-  process.env.NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN
-);
-const ENDPOINT = `https://${DOMAIN}/api/2024-10/graphql.json`;
+function getStorefrontDomain(): string {
+  return requireEnv(
+    "NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN",
+    process.env.NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN
+  );
+}
+
+function getStorefrontToken(): string {
+  return requireEnv(
+    "NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN",
+    process.env.NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN
+  );
+}
+
+function getStorefrontEndpoint(): string {
+  return `https://${getStorefrontDomain()}/api/2024-10/graphql.json`;
+}
 
 async function storefrontFetch<T>(
   query: string,
@@ -47,7 +54,7 @@ async function storefrontFetch<T>(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-Shopify-Storefront-Access-Token": TOKEN,
+      "X-Shopify-Storefront-Access-Token": getStorefrontToken(),
     },
     body: JSON.stringify({ query, variables }),
   };
@@ -56,7 +63,7 @@ async function storefrontFetch<T>(
     opts.next = { revalidate };
   }
 
-  const res = await fetch(ENDPOINT, opts);
+  const res = await fetch(getStorefrontEndpoint(), opts);
   if (!res.ok) {
     throw new Error(`Shopify Storefront ${res.status}: ${await res.text()}`);
   }

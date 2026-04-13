@@ -20,11 +20,29 @@ export function SlideCart() {
   } = useMembership();
   const isPaid = tier !== "free";
 
-  const [checkoutHref, setCheckoutHref] = useState<string | null>(null);
+  const checkoutSourceKey = useMemo(
+    () =>
+      [
+        cartCheckoutUrl ?? "",
+        user?.uid ?? "guest",
+        ...cart.map((item) =>
+          [
+            item.variantId ?? item.slug,
+            item.quantity,
+            item.price,
+            item.retailPrice ?? "",
+          ].join(":")
+        ),
+      ].join("|"),
+    [cart, cartCheckoutUrl, user?.uid]
+  );
+  const [checkoutHref, setCheckoutHref] = useState<{
+    href: string;
+    sourceKey: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!cartCheckoutUrl) {
-      setCheckoutHref(null);
       return;
     }
 
@@ -42,7 +60,7 @@ export function SlideCart() {
       }
 
       if (!user) {
-        if (!cancelled) setCheckoutHref(baseUrl);
+        if (!cancelled) setCheckoutHref({ href: baseUrl, sourceKey: checkoutSourceKey });
         return;
       }
 
@@ -69,7 +87,7 @@ export function SlideCart() {
         if (res.ok) {
           const data = await res.json() as { checkoutUrl: string; error?: string };
           console.log("[SlideCart] checkout response:", data);
-          if (!cancelled) setCheckoutHref(data.checkoutUrl);
+          if (!cancelled) setCheckoutHref({ href: data.checkoutUrl, sourceKey: checkoutSourceKey });
           return;
         }
         console.error("[SlideCart] checkout API error:", res.status, await res.text());
@@ -77,12 +95,15 @@ export function SlideCart() {
         // Fall through to plain URL
       }
 
-      if (!cancelled) setCheckoutHref(baseUrl);
+      if (!cancelled) setCheckoutHref({ href: baseUrl, sourceKey: checkoutSourceKey });
     };
 
     void buildCheckoutUrl();
     return () => { cancelled = true; };
-  }, [cartCheckoutUrl, user]);
+  }, [cart, cartCheckoutUrl, checkoutSourceKey, user]);
+
+  const resolvedCheckoutHref =
+    checkoutHref?.sourceKey === checkoutSourceKey ? checkoutHref.href : null;
 
   useEffect(() => {
     if (!cartOpen) return;
@@ -347,9 +368,9 @@ export function SlideCart() {
               )}
             </div>
 
-            {checkoutHref ? (
+            {resolvedCheckoutHref ? (
               <a
-                href={checkoutHref}
+                href={resolvedCheckoutHref}
                 onClick={() => {
                   void trackEvent("checkout_clicked", {
                     properties: {

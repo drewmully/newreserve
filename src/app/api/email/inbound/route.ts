@@ -23,7 +23,12 @@ import { adminDb, adminAuth } from "@/lib/firebase-admin";
 import { pauseForReply, type EmailSequenceDoc } from "@/lib/email/sequences";
 import { generateReplyDraft, type MemberContext } from "@/lib/email/ai-reply";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+let resendClient: Resend | null = null;
+
+function getResendClient(): Resend {
+  resendClient ??= new Resend(process.env.RESEND_API_KEY);
+  return resendClient;
+}
 
 // ─── Quoted text stripping ────────────────────────────────────────────────────
 
@@ -87,7 +92,7 @@ function verifyWebhookPayload(
     return JSON.parse(payload) as ResendInboundPayload | { data: ResendInboundPayload };
   }
 
-  return resend.webhooks.verify({
+  return getResendClient().webhooks.verify({
     payload,
     headers: {
       id: req.headers.get("svix-id") ?? "",
@@ -112,7 +117,7 @@ interface ResendInboundPayload {
 }
 
 async function fetchEmailBody(emailId: string): Promise<string> {
-  const { data, error } = await resend.emails.receiving.get(emailId);
+  const { data, error } = await getResendClient().emails.receiving.get(emailId);
   if (error || !data) throw new Error(`Resend receiving.get failed: ${JSON.stringify(error)}`);
   return data.text ?? "";
 }

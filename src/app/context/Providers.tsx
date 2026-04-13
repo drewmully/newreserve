@@ -1,13 +1,29 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
-import { MembershipProvider } from "./MembershipContext";
-import { EmailLinkHandler } from "../components/EmailLinkHandler";
 import { PageViewTracker } from "../components/PageViewTracker";
-import { IntercomWidget } from "../components/IntercomWidget";
 import { Suspense, type ReactNode } from "react";
 
+const MembershipProvider = dynamic<{ children: ReactNode }>(() =>
+  import("./MembershipContext").then((mod) => mod.MembershipProvider)
+);
+
+const EmailLinkHandler = dynamic(
+  () =>
+    import("../components/EmailLinkHandler").then(
+      (mod) => mod.EmailLinkHandler
+    ),
+  { ssr: false }
+);
+
+const IntercomWidget = dynamic(
+  () => import("../components/IntercomWidget").then((mod) => mod.IntercomWidget),
+  { ssr: false }
+);
+
 const MEMBERSHIP_EXEMPT_PREFIXES = [
+  "/",
   "/faq",
   "/handoff",
   "/policies",
@@ -27,7 +43,7 @@ export function Providers({ children }: { children: ReactNode }) {
 
   return (
     <>
-      <EmailLinkHandler />
+      {shouldWrapWithMembership && <EmailLinkHandler />}
       <Suspense fallback={null}>
         <PageViewTracker />
       </Suspense>

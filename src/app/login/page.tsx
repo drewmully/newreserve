@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useMembership } from "../context/MembershipContext";
 import { auth, isSignInWithEmailLink, confirmOTPSignIn, signInWithGoogle } from "@/lib/firebase";
+import { PENDING_SIGN_IN_EMAIL_KEY } from "@/lib/pendingSignInEmail";
 
 /* ═══════════════════════════════════════════
    LOGIN PAGE  —  passwordless Email Link flow
@@ -55,7 +56,15 @@ export default function LoginPage() {
       : "email";
   });
 
-  const [emailValue, setEmailValue] = useState(contextEmail);
+  const [emailValue, setEmailValue] = useState(() => {
+    if (contextEmail) return contextEmail;
+    if (typeof window === "undefined") return "";
+    try {
+      return sessionStorage.getItem(PENDING_SIGN_IN_EMAIL_KEY) ?? "";
+    } catch {
+      return "";
+    }
+  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -80,7 +89,12 @@ export default function LoginPage() {
       setStep("email");
       setNeedsEmailForLink(true);
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!contextEmail) return;
+    setEmailValue((current) => current || contextEmail);
+  }, [contextEmail]);
 
   /* ── Redirect once authenticated ── */
   useEffect(() => {
@@ -115,6 +129,9 @@ export default function LoginPage() {
     setError(null);
     try {
       await sendOTPEmail(email);
+      try {
+        sessionStorage.removeItem(PENDING_SIGN_IN_EMAIL_KEY);
+      } catch {}
       setStep("sent");
       setResendCooldown(60);
     } catch (err) {
