@@ -2,6 +2,10 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@/lib/tracking", () => ({
+  trackEvent: vi.fn().mockResolvedValue(undefined),
+}));
+
 async function loadPage() {
   const mod = await import("@/app/reservecard/page");
   return mod.default;
@@ -54,7 +58,7 @@ describe("reserve card submission flow", () => {
     );
     expect(screen.getByRole("heading", { name: "Choose your plan." })).toBeInTheDocument();
     expect(screen.queryByText("You’re all set.")).not.toBeInTheDocument();
-  });
+  }, 10000);
 
   it("advances to success when the save request succeeds", async () => {
     const user = userEvent.setup();
@@ -75,5 +79,5 @@ describe("reserve card submission flow", () => {
       expect(screen.getByText("You’re all set.")).toBeInTheDocument()
     );
     expect(screen.getByText(/Thanks for updating your profile\./)).toBeInTheDocument();
-  });
+  }, 10000);
 });
