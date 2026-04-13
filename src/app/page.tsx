@@ -604,7 +604,7 @@ export default function Home() {
                 Policies
               </h4>
               <ul className="space-y-2.5">
-                <FooterLink href="/policies/refund">Returns</FooterLink>
+                <FooterLink href="/returns">Returns</FooterLink>
                 <FooterLink href="/policies/privacy">Privacy Policy</FooterLink>
                 <FooterLink href="/policies/shipping">Shipping Policy</FooterLink>
                 <FooterLink href="/policies/terms">Terms of Service</FooterLink>
