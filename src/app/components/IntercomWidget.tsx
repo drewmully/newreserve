@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import Intercom from "@intercom/messenger-js-sdk";
+import Intercom, { shutdown as intercomShutdown } from "@intercom/messenger-js-sdk";
 import { useMembership } from "../context/MembershipContext";
 
 const APP_ID = process.env.NEXT_PUBLIC_INTERCOM_APP_ID ?? "";
@@ -22,8 +22,7 @@ export function IntercomWidget() {
       });
     } else {
       // Shut down the messenger for logged-out users
-      Intercom({ app_id: APP_ID });
-      Intercom("shutdown");
+      intercomShutdown();
     }
   }, [isSignedIn, authLoading, user, email, username, tier]);
 
