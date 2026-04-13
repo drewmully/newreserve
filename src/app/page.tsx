@@ -456,10 +456,10 @@ export default function Home() {
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             <ScrollReveal delay={0}>
               <ReleaseCard
-                name="Windbreaker"
+                name="Forrester WindBlocker"
                 category="Stitch"
                 tag="Reserve Priced"
-                image="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/StitchGolf67d9ac3b246a3767d9ac3b248c7.3031551267d9ac3b248c7_x800_f11d3231-0562-431f-89d3-40892eb575f9.jpg?v=1771520832"
+                image="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/FO_WindBlockerM_Black-1.jpg?v=1775579847"
               />
             </ScrollReveal>
             <ScrollReveal delay={0.12}>
