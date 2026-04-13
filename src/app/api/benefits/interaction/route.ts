@@ -4,29 +4,58 @@ import { Resend } from "resend";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { getLoopRawSubscriptions } from "@/app/api/_lib/loopAdmin";
 import { resolveMemberTierFromVariantId } from "@/lib/membershipConfig";
+import {
+  isActionableBenefitKey,
+  PAID_MEMBER_TIERS,
+  type ActionableBenefitKey,
+  type MemberTier,
+} from "@/lib/benefits";
 
-type MemberTier = "free" | "access" | "member" | "black";
-type BenefitKey = "v1_virtual_coaching" | "concierge_support";
 type BenefitAction = "toggle" | "request";
 
 interface BenefitInteractionBody {
-  benefit: BenefitKey;
-  action: BenefitAction;
-  enabled?: boolean;
-  subject?: string;
-  message?: string;
-  source?: string;
+  benefit?: unknown;
+  action?: unknown;
+  enabled?: unknown;
+  subject?: unknown;
+  message?: unknown;
+  source?: unknown;
+  golfers?: unknown;
+  budgetPerGolfer?: unknown;
+  dates?: unknown;
+  destination?: unknown;
+  notes?: unknown;
 }
 
-const resend = process.env.RESEND_API_KEY
-  ? new Resend(process.env.RESEND_API_KEY)
-  : null;
+interface ConciergeRequest {
+  subject: string;
+  message: string;
+}
+
+interface FarSureRequest {
+  golfers: number;
+  budgetPerGolfer: string;
+  dates: string;
+  destination: string;
+  notes: string;
+}
+
+let resendClient: Resend | null | undefined;
+
+function getResendClient(): Resend | null {
+  if (!process.env.RESEND_API_KEY) return null;
+  if (resendClient === undefined) {
+    resendClient = new Resend(process.env.RESEND_API_KEY);
+  }
+  return resendClient;
+}
 
 const ADMIN_EMAIL = "info@Mullybox.com";
 
-const BENEFIT_ALLOWED_TIERS: Record<BenefitKey, MemberTier[]> = {
-  v1_virtual_coaching: ["access", "member", "black"],
-  concierge_support: ["member", "black"],
+const BENEFIT_ALLOWED_TIERS: Record<ActionableBenefitKey, readonly MemberTier[]> = {
+  v1_virtual_coaching: PAID_MEMBER_TIERS,
+  concierge_support: PAID_MEMBER_TIERS,
+  far_sure_golf_tours_credit: PAID_MEMBER_TIERS,
 };
 
 const TIER_RANK: Record<MemberTier, number> = {
@@ -50,6 +79,34 @@ async function verifyAuth(req: NextRequest): Promise<string | null> {
 function normalizeTier(raw: unknown): MemberTier {
   if (raw === "access" || raw === "member" || raw === "black") return raw;
   return "free";
+}
+
+function trimText(raw: unknown): string {
+  return String(raw ?? "").trim();
+}
+
+function escapeHtml(raw: unknown): string {
+  return trimText(raw).replace(/[&<>"']/g, (char) => {
+    switch (char) {
+      case "&":
+        return "&amp;";
+      case "<":
+        return "&lt;";
+      case ">":
+        return "&gt;";
+      case '"':
+        return "&quot;";
+      case "'":
+        return "&#39;";
+      default:
+        return char;
+    }
+  });
+}
+
+function escapeHtmlOrDash(raw: unknown): string {
+  const value = trimText(raw);
+  return value ? escapeHtml(value) : "-";
 }
 
 function resolveTierFromLoopSubs(subs: Array<Record<string, unknown>>): MemberTier | null {
@@ -114,28 +171,59 @@ function buildEmailHtml(input: {
   uid: string;
   email: string;
   tier: MemberTier;
-  benefit: BenefitKey;
+  benefit: ActionableBenefitKey;
   action: BenefitAction;
   enabled?: boolean;
-  subject?: string;
-  message?: string;
+  conciergeRequest?: ConciergeRequest | null;
+  farSureRequest?: FarSureRequest | null;
   source: string;
 }): string {
-  const actionDetail =
-    input.benefit === "v1_virtual_coaching"
-      ? `V1+ Virtual Coaching toggled: <strong>${input.enabled ? "ON" : "OFF"}</strong>`
-      : `Concierge request submitted`;
+  const actionDetail = (() => {
+    if (input.benefit === "v1_virtual_coaching") {
+      return "V1+ Virtual Coaching request submitted for review. Member should receive next steps within 1-3 days.";
+    }
+    if (input.benefit === "far_sure_golf_tours_credit") {
+      return "Far &amp; Sure Golf Tours Credit request submitted";
+    }
+    return "Concierge request submitted";
+  })();
 
   const conciergeBlock =
-    input.benefit === "concierge_support"
+    input.benefit === "concierge_support" && input.conciergeRequest
       ? `
       <tr>
         <td style="padding:8px 0;color:#8a7e72;font-size:12px;">Subject</td>
-        <td style="padding:8px 0;color:#1a2e1a;font-size:14px;text-align:right;"><strong>${input.subject ?? "-"}</strong></td>
+        <td style="padding:8px 0;color:#1a2e1a;font-size:14px;text-align:right;"><strong>${escapeHtmlOrDash(input.conciergeRequest.subject)}</strong></td>
       </tr>
       <tr>
         <td colspan="2" style="padding-top:10px;color:#333;font-size:14px;line-height:1.6;">
-          ${input.message ?? "-"}
+          ${escapeHtmlOrDash(input.conciergeRequest.message)}
+        </td>
+      </tr>`
+      : "";
+
+  const farSureBlock =
+    input.benefit === "far_sure_golf_tours_credit" && input.farSureRequest
+      ? `
+      <tr>
+        <td style="padding:8px 0;color:#8a7e72;font-size:12px;">Golfers</td>
+        <td style="padding:8px 0;color:#1a2e1a;font-size:14px;text-align:right;"><strong>${input.farSureRequest.golfers}</strong></td>
+      </tr>
+      <tr>
+        <td style="padding:8px 0;color:#8a7e72;font-size:12px;">Budget per golfer</td>
+        <td style="padding:8px 0;color:#1a2e1a;font-size:14px;text-align:right;"><strong>${escapeHtmlOrDash(input.farSureRequest.budgetPerGolfer)}</strong></td>
+      </tr>
+      <tr>
+        <td style="padding:8px 0;color:#8a7e72;font-size:12px;">Dates</td>
+        <td style="padding:8px 0;color:#1a2e1a;font-size:14px;text-align:right;"><strong>${escapeHtmlOrDash(input.farSureRequest.dates)}</strong></td>
+      </tr>
+      <tr>
+        <td style="padding:8px 0;color:#8a7e72;font-size:12px;">Destination</td>
+        <td style="padding:8px 0;color:#1a2e1a;font-size:14px;text-align:right;"><strong>${escapeHtmlOrDash(input.farSureRequest.destination)}</strong></td>
+      </tr>
+      <tr>
+        <td colspan="2" style="padding-top:10px;color:#333;font-size:14px;line-height:1.6;">
+          ${escapeHtmlOrDash(input.farSureRequest.notes)}
         </td>
       </tr>`
       : "";
@@ -164,31 +252,32 @@ function buildEmailHtml(input: {
               <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e8e0d5;border-radius:10px;background:#faf8f5;padding:12px;">
                 <tr>
                   <td style="padding:8px 0;color:#8a7e72;font-size:12px;">Benefit</td>
-                  <td style="padding:8px 0;color:#1a2e1a;font-size:14px;text-align:right;"><strong>${input.benefit}</strong></td>
+                  <td style="padding:8px 0;color:#1a2e1a;font-size:14px;text-align:right;"><strong>${escapeHtml(input.benefit)}</strong></td>
                 </tr>
                 <tr>
                   <td style="padding:8px 0;color:#8a7e72;font-size:12px;">Action</td>
-                  <td style="padding:8px 0;color:#1a2e1a;font-size:14px;text-align:right;"><strong>${input.action}</strong></td>
+                  <td style="padding:8px 0;color:#1a2e1a;font-size:14px;text-align:right;"><strong>${escapeHtml(input.action)}</strong></td>
                 </tr>
                 <tr>
                   <td style="padding:8px 0;color:#8a7e72;font-size:12px;">Tier</td>
-                  <td style="padding:8px 0;color:#1a2e1a;font-size:14px;text-align:right;"><strong>${input.tier}</strong></td>
+                  <td style="padding:8px 0;color:#1a2e1a;font-size:14px;text-align:right;"><strong>${escapeHtml(input.tier)}</strong></td>
                 </tr>
                 <tr>
                   <td style="padding:8px 0;color:#8a7e72;font-size:12px;">Email</td>
-                  <td style="padding:8px 0;color:#1a2e1a;font-size:14px;text-align:right;"><strong>${input.email || "-"}</strong></td>
+                  <td style="padding:8px 0;color:#1a2e1a;font-size:14px;text-align:right;"><strong>${escapeHtmlOrDash(input.email)}</strong></td>
                 </tr>
                 <tr>
                   <td style="padding:8px 0;color:#8a7e72;font-size:12px;">UID</td>
-                  <td style="padding:8px 0;color:#1a2e1a;font-size:12px;text-align:right;"><strong>${input.uid}</strong></td>
+                  <td style="padding:8px 0;color:#1a2e1a;font-size:12px;text-align:right;"><strong>${escapeHtml(input.uid)}</strong></td>
                 </tr>
                 <tr>
                   <td style="padding:8px 0;color:#8a7e72;font-size:12px;">Source</td>
-                  <td style="padding:8px 0;color:#1a2e1a;font-size:12px;text-align:right;"><strong>${input.source}</strong></td>
+                  <td style="padding:8px 0;color:#1a2e1a;font-size:12px;text-align:right;"><strong>${escapeHtml(input.source)}</strong></td>
                 </tr>
                 ${conciergeBlock}
+                ${farSureBlock}
               </table>
-              <p style="margin:14px 0 0;color:#aaa;font-size:11px;">Event ID: ${input.eventId}</p>
+              <p style="margin:14px 0 0;color:#aaa;font-size:11px;">Event ID: ${escapeHtml(input.eventId)}</p>
             </td>
           </tr>
         </table>
@@ -216,33 +305,67 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "benefit and action are required" }, { status: 400 });
   }
 
-  if (!["v1_virtual_coaching", "concierge_support"].includes(body.benefit)) {
+  if (!isActionableBenefitKey(body.benefit)) {
     return NextResponse.json({ error: "Invalid benefit" }, { status: 400 });
   }
-  if (!["toggle", "request"].includes(body.action)) {
+  if (body.action !== "toggle" && body.action !== "request") {
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   }
 
-  if (body.benefit === "v1_virtual_coaching" && body.action !== "toggle") {
+  const benefit = body.benefit;
+  const action = body.action;
+
+  if (benefit === "v1_virtual_coaching" && action !== "toggle") {
     return NextResponse.json({ error: "Invalid action for V1+ coaching" }, { status: 400 });
   }
-  if (body.benefit === "concierge_support" && body.action !== "request") {
+  if (benefit === "concierge_support" && action !== "request") {
     return NextResponse.json({ error: "Invalid action for concierge support" }, { status: 400 });
   }
-
-  if (body.benefit === "v1_virtual_coaching" && typeof body.enabled !== "boolean") {
-    return NextResponse.json({ error: "enabled is required for coaching toggle" }, { status: 400 });
+  if (benefit === "far_sure_golf_tours_credit" && action !== "request") {
+    return NextResponse.json({ error: "Invalid action for Far & Sure credit" }, { status: 400 });
   }
 
-  if (body.benefit === "concierge_support") {
-    const subject = String(body.subject ?? "").trim();
-    const message = String(body.message ?? "").trim();
+  if (benefit === "v1_virtual_coaching" && body.enabled !== true) {
+    return NextResponse.json({ error: "V1+ coaching can only be requested by toggling it on" }, { status: 400 });
+  }
+
+  let conciergeRequest: ConciergeRequest | null = null;
+  if (benefit === "concierge_support") {
+    const subject = trimText(body.subject);
+    const message = trimText(body.message);
     if (!subject || !message) {
       return NextResponse.json({ error: "subject and message are required" }, { status: 400 });
     }
     if (subject.length > 160 || message.length > 2000) {
       return NextResponse.json({ error: "subject or message too long" }, { status: 400 });
     }
+    conciergeRequest = { subject, message };
+  }
+
+  let farSureRequest: FarSureRequest | null = null;
+  if (benefit === "far_sure_golf_tours_credit") {
+    const golfers = Number(body.golfers);
+    const budgetPerGolfer = trimText(body.budgetPerGolfer);
+    const dates = trimText(body.dates);
+    const destination = trimText(body.destination);
+    const notes = trimText(body.notes);
+
+    if (!Number.isInteger(golfers) || golfers < 1 || golfers > 100) {
+      return NextResponse.json({ error: "golfers must be between 1 and 100" }, { status: 400 });
+    }
+    if (!budgetPerGolfer || !dates || !destination) {
+      return NextResponse.json({ error: "budgetPerGolfer, dates, and destination are required" }, { status: 400 });
+    }
+    if (
+      budgetPerGolfer.length > 120 ||
+      dates.length > 160 ||
+      destination.length > 160 ||
+      notes.length > 2000
+    ) {
+      return NextResponse.json({ error: "travel request fields are too long" }, { status: 400 });
+    }
+
+    farSureRequest = { golfers, budgetPerGolfer, dates, destination, notes };
   }
 
   const userRef = adminDb.collection("users").doc(uid);
@@ -255,7 +378,7 @@ export async function POST(req: NextRequest) {
   let tier = normalizeTier(userData.tier);
   const email = String(userData.email ?? "");
 
-  let allowed = BENEFIT_ALLOWED_TIERS[body.benefit].includes(tier);
+  let allowed = BENEFIT_ALLOWED_TIERS[benefit].includes(tier);
   if (!allowed) {
     const inferredTier = await inferTierFromSubscriptions({
       email,
@@ -263,7 +386,7 @@ export async function POST(req: NextRequest) {
     });
     if (inferredTier) {
       tier = inferredTier;
-      allowed = BENEFIT_ALLOWED_TIERS[body.benefit].includes(tier);
+      allowed = BENEFIT_ALLOWED_TIERS[benefit].includes(tier);
 
       const storedTier = normalizeTier(userData.tier);
       if (inferredTier !== storedTier) {
@@ -281,35 +404,46 @@ export async function POST(req: NextRequest) {
   }
 
   const eventRef = adminDb.collection("benefit_actions").doc();
-  const source = String(body.source ?? "dashboard_benefits");
+  const source = trimText(body.source) || "dashboard_benefits";
 
   const eventPayload: Record<string, unknown> = {
     id: eventRef.id,
     user_id: uid,
     email,
     tier,
-    benefit: body.benefit,
-    action: body.action,
+    benefit,
+    action,
     source,
     created_at: FieldValue.serverTimestamp(),
   };
 
-  if (body.benefit === "v1_virtual_coaching") {
+  if (benefit === "v1_virtual_coaching") {
     eventPayload.enabled = body.enabled;
+    eventPayload.status = "reviewing";
   }
 
-  if (body.benefit === "concierge_support") {
-    eventPayload.subject = String(body.subject ?? "").trim();
-    eventPayload.message = String(body.message ?? "").trim();
+  if (benefit === "concierge_support" && conciergeRequest) {
+    eventPayload.subject = conciergeRequest.subject;
+    eventPayload.message = conciergeRequest.message;
+  }
+
+  if (benefit === "far_sure_golf_tours_credit" && farSureRequest) {
+    eventPayload.golfers = farSureRequest.golfers;
+    eventPayload.budget_per_golfer = farSureRequest.budgetPerGolfer;
+    eventPayload.dates = farSureRequest.dates;
+    eventPayload.destination = farSureRequest.destination;
+    eventPayload.notes = farSureRequest.notes;
   }
 
   await eventRef.set(eventPayload);
 
-  if (body.benefit === "v1_virtual_coaching") {
+  if (benefit === "v1_virtual_coaching") {
     await userRef.set(
       {
         benefits: {
-          v1_virtual_coaching_enabled: body.enabled,
+          v1_virtual_coaching_enabled: true,
+          v1_virtual_coaching_status: "reviewing",
+          v1_virtual_coaching_requested_at: FieldValue.serverTimestamp(),
           v1_virtual_coaching_updated_at: FieldValue.serverTimestamp(),
         },
       },
@@ -317,39 +451,59 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  if (body.benefit === "concierge_support") {
+  if (benefit === "concierge_support" && conciergeRequest) {
     await adminDb.collection("concierge_requests").doc(eventRef.id).set({
       id: eventRef.id,
       user_id: uid,
       email,
       tier,
-      subject: String(body.subject ?? "").trim(),
-      message: String(body.message ?? "").trim(),
+      subject: conciergeRequest.subject,
+      message: conciergeRequest.message,
       status: "pending",
       source,
       created_at: FieldValue.serverTimestamp(),
     });
   }
 
+  if (benefit === "far_sure_golf_tours_credit" && farSureRequest) {
+    await adminDb.collection("travel_credit_requests").doc(eventRef.id).set({
+      id: eventRef.id,
+      user_id: uid,
+      email,
+      tier,
+      golfers: farSureRequest.golfers,
+      budget_per_golfer: farSureRequest.budgetPerGolfer,
+      dates: farSureRequest.dates,
+      destination: farSureRequest.destination,
+      notes: farSureRequest.notes,
+      status: "pending",
+      source,
+      created_at: FieldValue.serverTimestamp(),
+    });
+  }
+
+  const resend = getResendClient();
   if (resend) {
     try {
       await resend.emails.send({
         from: "Mully Benefits <noreply@mymully.com>",
         to: ADMIN_EMAIL,
         subject:
-          body.benefit === "concierge_support"
-            ? `[Benefits] Concierge request - ${String(body.subject ?? "").trim()}`
-            : `[Benefits] V1+ coaching ${body.enabled ? "enabled" : "disabled"}`,
+          benefit === "concierge_support" && conciergeRequest
+            ? `[Benefits] Concierge request - ${conciergeRequest.subject}`
+            : benefit === "far_sure_golf_tours_credit" && farSureRequest
+              ? `[Benefits] Far & Sure golf tours credit - ${farSureRequest.destination}`
+              : "[Benefits] V1+ coaching request submitted",
         html: buildEmailHtml({
           eventId: eventRef.id,
           uid,
           email,
           tier,
-          benefit: body.benefit,
-          action: body.action,
-          enabled: body.enabled,
-          subject: body.subject,
-          message: body.message,
+          benefit,
+          action,
+          enabled: typeof body.enabled === "boolean" ? body.enabled : undefined,
+          conciergeRequest,
+          farSureRequest,
           source,
         }),
       });

@@ -18,6 +18,13 @@ import { FORUM_TAGS, type ForumPost, type ForumComment } from "../community/post
 import type { User as FirebaseUser } from "firebase/auth";
 import { trackEvent } from "@/lib/tracking";
 import { formatExclusiveDropLabel, getExclusiveDropDate } from "@/lib/dropConfig";
+import {
+  BENEFIT_CATALOG,
+  type ActionableBenefitKey,
+  type BenefitCatalogAction,
+  type BenefitCatalogCategory,
+  type BenefitKey,
+} from "@/lib/benefits";
 
 /* ═══════════════════════════════════════════
    DASHBOARD — Shop · Community · Club · Benefits
@@ -368,10 +375,10 @@ const GATED_CONTENT = {
       </svg>
     ),
     title: "Member Benefits",
-    description: "Reserve pricing, free shipping, concierge support, and invite-only events. Upgrade your membership to unlock the full experience.",
+    description: "V1+ coaching, travel credits, free shipping, concierge support, and priority drop access. Upgrade your membership to unlock the full experience.",
     cta: "Upgrade Membership",
     href: "/onboarding",
-    features: ["Reserve pricing on all products", "Free 2-day shipping", "Concierge support & events"],
+    features: ["V1+ virtual coaching", "Far & Sure travel credit", "Free 2-day shipping"],
   },
 };
 
@@ -709,39 +716,60 @@ function DropsTab() {
    BENEFITS TAB — SkyMiles-style perks
    ═══════════════════════════════════════════ */
 
-type BenefitCategory = "All" | "Coaching" | "Travel" | "Entertainment" | "Other";
+type BenefitCategory = "All" | BenefitCatalogCategory;
 
 interface BenefitEntry {
+  key: BenefitKey;
   icon: React.ReactNode;
   title: string;
   subtitle: string;
   description: string;
   category: BenefitCategory;
-  status: "Active" | "Locked" | "Coming Soon" | "Launch Promo" | "Upgrade";
+  status: "Active" | "Locked" | "In Review";
   action: {
-    type: "toggle" | "link" | "auto" | "coming-soon";
+    type: BenefitCatalogAction;
     label: string;
-    href?: string;
   };
 }
+
+const V1_REVIEW_MESSAGE =
+  "Your V1+ Virtual Coaching request is being reviewed. You will receive an email within 1-3 days with next steps.";
+
+const BENEFIT_ICONS: Record<BenefitKey, React.ReactNode> = {
+  v1_virtual_coaching: <CoachingBenefitIcon />,
+  concierge_support: <ConciergeBenefitIcon />,
+  free_2_day_shipping: <ShippingBenefitIcon />,
+  far_sure_golf_tours_credit: <TravelBenefitIcon />,
+  priority_drop_access: <DropBenefitIcon />,
+};
 
 function BenefitsTab({ onUpgrade }: { onUpgrade: () => void }) {
   const { user, tier, tierLabel } = useMembership();
   const isFree = tier === "free";
   const isPaid = tier === "access" || tier === "member" || tier === "black";
-  const isMemberPlus = tier === "member" || tier === "black";
   const [activeCategory, setActiveCategory] = useState<BenefitCategory>("All");
-  const [enabledBenefits, setEnabledBenefits] = useState<Set<string>>(new Set());
+  const [enabledBenefits, setEnabledBenefits] = useState<Set<BenefitKey>>(new Set());
   const [conciergeOpen, setConciergeOpen] = useState(false);
   const [conciergeForm, setConciergeForm] = useState({ subject: "", message: "" });
   const [conciergeSent, setConciergeSent] = useState(false);
   const [conciergeSubmitting, setConciergeSubmitting] = useState(false);
   const [conciergeError, setConciergeError] = useState<string | null>(null);
+  const [farSureOpen, setFarSureOpen] = useState(false);
+  const [farSureForm, setFarSureForm] = useState({
+    golfers: "2",
+    budgetPerGolfer: "",
+    dates: "",
+    destination: "",
+    notes: "",
+  });
+  const [farSureSent, setFarSureSent] = useState(false);
+  const [farSureSubmitting, setFarSureSubmitting] = useState(false);
+  const [farSureError, setFarSureError] = useState<string | null>(null);
   const [coachingSyncing, setCoachingSyncing] = useState(false);
   const [coachingError, setCoachingError] = useState<string | null>(null);
   const [benefitToast, setBenefitToast] = useState<string | null>(null);
 
-  const categories: BenefitCategory[] = ["All", "Coaching", "Travel", "Entertainment", "Other"];
+  const categories: BenefitCategory[] = ["All", "Coaching", "Travel", "Other"];
 
   const tierPricing: Record<string, string> = {
     free: "Complimentary",
@@ -752,11 +780,16 @@ function BenefitsTab({ onUpgrade }: { onUpgrade: () => void }) {
 
   const postBenefitInteraction = useCallback(
     async (payload: {
-      benefit: "v1_virtual_coaching" | "concierge_support";
+      benefit: ActionableBenefitKey;
       action: "toggle" | "request";
       enabled?: boolean;
       subject?: string;
       message?: string;
+      golfers?: number;
+      budgetPerGolfer?: string;
+      dates?: string;
+      destination?: string;
+      notes?: string;
       source?: string;
     }) => {
       if (!user) {
@@ -789,22 +822,21 @@ function BenefitsTab({ onUpgrade }: { onUpgrade: () => void }) {
 
   useEffect(() => {
     if (!benefitToast) return;
-    const timer = setTimeout(() => setBenefitToast(null), 2800);
+    const timer = setTimeout(() => setBenefitToast(null), 5200);
     return () => clearTimeout(timer);
   }, [benefitToast]);
 
-  const toggleBenefit = async (title: string) => {
-    const wasEnabled = enabledBenefits.has(title);
-    const nextEnabled = !wasEnabled;
+  const toggleBenefit = async (benefit: BenefitEntry) => {
+    const wasEnabled = enabledBenefits.has(benefit.key);
+    if (wasEnabled) return;
 
     setEnabledBenefits((prev) => {
       const next = new Set(prev);
-      if (next.has(title)) next.delete(title);
-      else next.add(title);
+      next.add(benefit.key);
       return next;
     });
 
-    if (title !== "V1+ Virtual Coaching") return;
+    if (benefit.key !== "v1_virtual_coaching") return;
 
     setCoachingError(null);
     setCoachingSyncing(true);
@@ -812,26 +844,21 @@ function BenefitsTab({ onUpgrade }: { onUpgrade: () => void }) {
       await postBenefitInteraction({
         benefit: "v1_virtual_coaching",
         action: "toggle",
-        enabled: nextEnabled,
+        enabled: true,
         source: "dashboard_benefits",
       });
-      showBenefitToast(
-        nextEnabled
-          ? "V1+ Virtual Coaching is now enabled."
-          : "V1+ Virtual Coaching has been turned off."
-      );
+      showBenefitToast(V1_REVIEW_MESSAGE);
     } catch (err) {
       console.error("[Benefits] coaching toggle sync failed:", err);
       setEnabledBenefits((prev) => {
         const rollback = new Set(prev);
-        if (nextEnabled) rollback.delete(title);
-        else rollback.add(title);
+        rollback.delete(benefit.key);
         return rollback;
       });
       setCoachingError(
         err instanceof Error && err.message
           ? err.message
-          : "Could not sync V1+ coaching. Please try again."
+          : "Could not submit your V1+ coaching request. Please try again."
       );
     } finally {
       setCoachingSyncing(false);
@@ -873,89 +900,73 @@ function BenefitsTab({ onUpgrade }: { onUpgrade: () => void }) {
     }
   };
 
-  const benefits: BenefitEntry[] = [
-    {
-      icon: <CoachingBenefitIcon />,
-      title: "V1+ Virtual Coaching",
-      subtitle: "Normally $59.95 — Free with membership",
-      description: "Connect with a virtual golf coach through V1+. Get swing analysis, personalized drills, and video feedback from PGA-certified instructors.",
-      category: "Coaching",
-      status: isPaid ? "Active" : "Locked",
-      action: { type: "toggle", label: isPaid ? "Turn On" : "Upgrade to Access" },
+  const handleFarSureSend = async () => {
+    const golfers = Number(farSureForm.golfers);
+    const budgetPerGolfer = farSureForm.budgetPerGolfer.trim();
+    const dates = farSureForm.dates.trim();
+    const destination = farSureForm.destination.trim();
+    const notes = farSureForm.notes.trim();
+
+    if (!Number.isInteger(golfers) || golfers < 1 || !budgetPerGolfer || !dates || !destination) return;
+
+    setFarSureError(null);
+    setFarSureSubmitting(true);
+    try {
+      await postBenefitInteraction({
+        benefit: "far_sure_golf_tours_credit",
+        action: "request",
+        golfers,
+        budgetPerGolfer,
+        dates,
+        destination,
+        notes,
+        source: "dashboard_benefits",
+      });
+
+      showBenefitToast("Far & Sure Golf Tours Credit request submitted successfully.");
+      setFarSureSent(true);
+      setTimeout(() => {
+        setFarSureOpen(false);
+        setFarSureSent(false);
+        setFarSureForm({
+          golfers: "2",
+          budgetPerGolfer: "",
+          dates: "",
+          destination: "",
+          notes: "",
+        });
+      }, 2500);
+    } catch (err) {
+      console.error("[Benefits] Far & Sure request failed:", err);
+      setFarSureError(
+        err instanceof Error && err.message
+          ? err.message
+          : "Could not send your travel credit request. Please try again."
+      );
+    } finally {
+      setFarSureSubmitting(false);
+    }
+  };
+
+  const benefits: BenefitEntry[] = BENEFIT_CATALOG.map((benefit) => ({
+    ...benefit,
+    icon: BENEFIT_ICONS[benefit.key],
+    status:
+      isPaid && benefit.key === "v1_virtual_coaching" && enabledBenefits.has(benefit.key)
+        ? "In Review"
+        : isPaid ? "Active" : "Locked",
+    action: {
+      type: benefit.action,
+      label:
+        benefit.key === "v1_virtual_coaching"
+          ? isPaid && enabledBenefits.has(benefit.key) ? "Requested" : isPaid ? "Turn On" : "Upgrade to Access"
+          : benefit.key === "concierge_support"
+            ? isPaid ? "Send a Request" : "Upgrade to Access"
+            : benefit.key === "far_sure_golf_tours_credit"
+              ? isPaid ? "Request Credit" : "Upgrade to Access"
+              : isPaid ? "Active" : "Upgrade to Access",
     },
-    {
-      icon: <ConciergeBenefitIcon />,
-      title: "Concierge Support",
-      subtitle: "Your personal Reserve concierge",
-      description: "Need help with anything? Submit a request and our team will assist — from tee time bookings and travel planning to gifting and product sourcing.",
-      category: "Other",
-      status: isMemberPlus ? "Active" : "Locked",
-      action: { type: "link", label: isMemberPlus ? "Send a Request" : "Upgrade to Member", href: "#concierge" },
-    },
-    {
-      icon: <ShippingBenefitIcon />,
-      title: "Free 2-Day Shipping",
-      subtitle: "No minimums, no codes needed",
-      description: "Complimentary 2-day shipping on every Pro Shop order. Applied automatically at checkout for all paid members.",
-      category: "Travel",
-      status: isPaid ? "Active" : "Launch Promo",
-      action: { type: "auto", label: isPaid ? "Auto-Applied at Checkout" : "Free During Launch" },
-    },
-    {
-      icon: <PricingBenefitIcon />,
-      title: "Reserve Pricing",
-      subtitle: "Save $250+ per year",
-      description: "Members-only pricing on all products across gear, apparel, and accessories. Discounts applied automatically when signed in.",
-      category: "Other",
-      status: isPaid ? "Active" : "Locked",
-      action: { type: "auto", label: isPaid ? "Auto-Applied When Signed In" : "Upgrade to Access" },
-    },
-    {
-      icon: <DropBenefitIcon />,
-      title: "Priority Drop Access",
-      subtitle: "48-hour early access to limited releases",
-      description: "Get first access to limited drops before they go live to Access members. Never miss a release again.",
-      category: "Other",
-      status: isMemberPlus ? "Active" : isPaid ? "Upgrade" : "Locked",
-      action: { type: "auto", label: isMemberPlus ? "Active on All Drops" : "Upgrade to Member" },
-    },
-    {
-      icon: <EventBenefitIcon />,
-      title: "Invite-Only Events",
-      subtitle: "Member-exclusive outings & experiences",
-      description: "Access to member-only outings, demo days, partner experiences, and exclusive golf events throughout the year.",
-      category: "Entertainment",
-      status: isMemberPlus ? "Active" : "Locked",
-      action: { type: "link", label: isMemberPlus ? "View Upcoming Events" : "Upgrade to Member", href: "/home" },
-    },
-    {
-      icon: <HandicapBenefitIcon />,
-      title: "Official USGA Handicap",
-      subtitle: "Track your handicap officially",
-      description: "Track your handicap through Mully Reserve. Post scores from any course and maintain your official index.",
-      category: "Coaching",
-      status: "Coming Soon",
-      action: { type: "coming-soon", label: "Coming Soon" },
-    },
-    {
-      icon: <TravelBenefitIcon />,
-      title: "Golf Trip Planning",
-      subtitle: "Curated member travel packages",
-      description: "Access curated travel packages to premier golf destinations. Exclusive member rates and concierge-planned itineraries.",
-      category: "Travel",
-      status: "Coming Soon",
-      action: { type: "coming-soon", label: "Coming Soon" },
-    },
-    {
-      icon: <EntertainmentBenefitIcon />,
-      title: "Partner Perks & Discounts",
-      subtitle: "Exclusive offers from premium brands",
-      description: "Enjoy member-only discounts and perks from our partner network — top courses, resorts, simulators, and lifestyle brands.",
-      category: "Entertainment",
-      status: "Coming Soon",
-      action: { type: "coming-soon", label: "Coming Soon" },
-    },
-  ];
+  }));
 
   const filtered = activeCategory === "All" ? benefits : benefits.filter((b) => b.category === activeCategory);
 
@@ -1010,16 +1021,14 @@ function BenefitsTab({ onUpgrade }: { onUpgrade: () => void }) {
         {/* Benefits table */}
         <div className="space-y-4">
           {filtered.map((benefit) => {
-            const isEnabled = enabledBenefits.has(benefit.title);
-            const isLocked = benefit.status === "Locked" || benefit.status === "Upgrade";
-            const isComingSoon = benefit.status === "Coming Soon";
-            const shouldOpenUpgradeModal = isLocked && benefit.action.label === "Upgrade to Member";
+            const isEnabled = enabledBenefits.has(benefit.key);
+            const isLocked = benefit.status === "Locked";
 
             return (
               <div
-                key={benefit.title}
+                key={benefit.key}
                 className={`bg-cream rounded-xl border border-taupe/15 p-5 md:p-6 transition-all duration-200 ${
-                  isLocked ? "opacity-60" : isComingSoon ? "opacity-50" : "tile-hover"
+                  isLocked ? "opacity-60" : "tile-hover"
                 }`}
               >
                 <div className="flex items-start gap-4">
@@ -1035,16 +1044,17 @@ function BenefitsTab({ onUpgrade }: { onUpgrade: () => void }) {
                       <span className={`text-[10px] tracking-wider uppercase font-medium px-2 py-0.5 rounded-full w-fit ${
                         benefit.status === "Active"
                           ? "bg-forest/10 text-forest"
-                          : benefit.status === "Launch Promo"
-                            ? "bg-forest/10 text-forest"
-                            : "bg-taupe/20 text-charcoal/40"
+                          : "bg-taupe/20 text-charcoal/40"
                       }`}>
                         {benefit.status}
                       </span>
                     </div>
                     <p className="text-xs font-medium text-forest/70 mb-1">{benefit.subtitle}</p>
                     <p className="text-xs text-charcoal/50 leading-relaxed">{benefit.description}</p>
-                    {benefit.title === "V1+ Virtual Coaching" && coachingError && (
+                    {benefit.key === "v1_virtual_coaching" && isEnabled && (
+                      <p className="text-[11px] text-forest mt-2">{V1_REVIEW_MESSAGE}</p>
+                    )}
+                    {benefit.key === "v1_virtual_coaching" && coachingError && (
                       <p className="text-[11px] text-ember mt-2">{coachingError}</p>
                     )}
                   </div>
@@ -1053,21 +1063,30 @@ function BenefitsTab({ onUpgrade }: { onUpgrade: () => void }) {
                   <div className="shrink-0 self-center">
                     {benefit.action.type === "toggle" && !isLocked ? (
                       <button
-                        onClick={() => void toggleBenefit(benefit.title)}
-                        disabled={benefit.title === "V1+ Virtual Coaching" && coachingSyncing}
+                        onClick={() => void toggleBenefit(benefit)}
+                        disabled={benefit.key === "v1_virtual_coaching" && (coachingSyncing || isEnabled)}
+                        aria-label={
+                          benefit.key === "v1_virtual_coaching" && isEnabled
+                            ? "V1+ Virtual Coaching request in review"
+                            : "Turn on V1+ Virtual Coaching"
+                        }
+                        aria-checked={isEnabled}
+                        role="switch"
                         className={`relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-200 ${
                           isEnabled ? "bg-forest" : "bg-taupe/30"
-                        } ${benefit.title === "V1+ Virtual Coaching" && coachingSyncing ? "opacity-60 cursor-not-allowed" : ""}`}
+                        } ${benefit.key === "v1_virtual_coaching" && (coachingSyncing || isEnabled) ? "opacity-60 cursor-not-allowed" : ""}`}
                       >
                         <span className={`inline-block h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200 ${
                           isEnabled ? "translate-x-6" : "translate-x-1"
                         }`} />
                       </button>
-                    ) : benefit.action.type === "link" && !isLocked ? (
+                    ) : benefit.action.type === "request" && !isLocked ? (
                       <button
                         onClick={() => {
-                          if (benefit.title === "Concierge Support") {
+                          if (benefit.key === "concierge_support") {
                             setConciergeOpen(true);
+                          } else if (benefit.key === "far_sure_golf_tours_credit") {
+                            setFarSureOpen(true);
                           }
                         }}
                         className="inline-flex h-9 px-4 rounded-lg bg-forest text-bone text-xs font-medium tracking-wide uppercase hover:bg-forest-dark transition-colors duration-200 items-center whitespace-nowrap"
@@ -1078,24 +1097,13 @@ function BenefitsTab({ onUpgrade }: { onUpgrade: () => void }) {
                       <span className="inline-flex h-9 px-4 rounded-lg bg-forest/8 text-forest text-xs font-medium tracking-wide items-center whitespace-nowrap">
                         {benefit.action.label}
                       </span>
-                    ) : benefit.action.type === "coming-soon" ? (
-                      <span className="inline-flex h-9 px-4 rounded-lg bg-taupe/10 text-charcoal/30 text-xs font-medium tracking-wide items-center whitespace-nowrap">
-                        {benefit.action.label}
-                      </span>
-                    ) : shouldOpenUpgradeModal ? (
+                    ) : (
                       <button
                         onClick={onUpgrade}
                         className="inline-flex h-9 px-4 rounded-lg border border-forest/20 text-forest text-xs font-medium tracking-wide uppercase hover:bg-forest/5 transition-colors duration-200 items-center whitespace-nowrap"
                       >
                         {benefit.action.label}
                       </button>
-                    ) : (
-                      <a
-                        href="/onboarding"
-                        className="inline-flex h-9 px-4 rounded-lg border border-forest/20 text-forest text-xs font-medium tracking-wide uppercase hover:bg-forest/5 transition-colors duration-200 items-center whitespace-nowrap"
-                      >
-                        {benefit.action.label}
-                      </a>
                     )}
                   </div>
                 </div>
@@ -1110,8 +1118,10 @@ function BenefitsTab({ onUpgrade }: { onUpgrade: () => void }) {
             <div className="absolute inset-0 bg-obsidian/50 backdrop-blur-sm" onClick={() => { setConciergeOpen(false); setConciergeSent(false); }} />
             <div className="relative bg-bone rounded-2xl shadow-2xl w-full max-w-lg mx-4 p-8 animate-fade-up">
               <button
+                type="button"
                 onClick={() => { setConciergeOpen(false); setConciergeSent(false); }}
                 className="absolute top-4 right-4 text-charcoal/30 hover:text-charcoal transition-colors"
+                aria-label="Close concierge request"
               >
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -1136,8 +1146,9 @@ function BenefitsTab({ onUpgrade }: { onUpgrade: () => void }) {
                   </div>
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-xs font-medium text-charcoal/60 uppercase tracking-wider mb-1.5">Subject</label>
+                      <label htmlFor="concierge-subject" className="block text-xs font-medium text-charcoal/60 uppercase tracking-wider mb-1.5">Subject</label>
                       <input
+                        id="concierge-subject"
                         type="text"
                         value={conciergeForm.subject}
                         onChange={(e) => setConciergeForm((f) => ({ ...f, subject: e.target.value }))}
@@ -1146,8 +1157,9 @@ function BenefitsTab({ onUpgrade }: { onUpgrade: () => void }) {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-charcoal/60 uppercase tracking-wider mb-1.5">Message</label>
+                      <label htmlFor="concierge-message" className="block text-xs font-medium text-charcoal/60 uppercase tracking-wider mb-1.5">Message</label>
                       <textarea
+                        id="concierge-message"
                         value={conciergeForm.message}
                         onChange={(e) => setConciergeForm((f) => ({ ...f, message: e.target.value }))}
                         placeholder="Tell us how we can help..."
@@ -1156,6 +1168,7 @@ function BenefitsTab({ onUpgrade }: { onUpgrade: () => void }) {
                       />
                     </div>
                     <button
+                      type="button"
                       onClick={() => void handleConciergeSend()}
                       disabled={conciergeSubmitting}
                       className={`w-full h-11 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase transition-colors duration-300 ${
@@ -1166,6 +1179,115 @@ function BenefitsTab({ onUpgrade }: { onUpgrade: () => void }) {
                     </button>
                     {conciergeError && (
                       <p className="text-[11px] text-ember">{conciergeError}</p>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+        {farSureOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div className="absolute inset-0 bg-obsidian/50 backdrop-blur-sm" onClick={() => { setFarSureOpen(false); setFarSureSent(false); }} />
+            <div className="relative bg-bone rounded-2xl shadow-2xl w-full max-w-lg mx-4 p-8 animate-fade-up">
+              <button
+                type="button"
+                onClick={() => { setFarSureOpen(false); setFarSureSent(false); }}
+                className="absolute top-4 right-4 text-charcoal/30 hover:text-charcoal transition-colors"
+                aria-label="Close Far & Sure request"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+
+              {farSureSent ? (
+                <div className="text-center py-6">
+                  <div className="w-14 h-14 rounded-full bg-forest/10 flex items-center justify-center mx-auto mb-4">
+                    <svg className="w-7 h-7 text-forest" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <h3 className="font-serif text-xl text-obsidian mb-2">Request Sent</h3>
+                  <p className="text-sm text-charcoal/50">Our travel team will follow up with Far & Sure options.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="mb-6">
+                    <h3 className="font-serif text-xl text-obsidian mb-1">Far & Sure Golf Tours Credit</h3>
+                    <p className="text-sm text-charcoal/50">Tell us where you want to play and we will help apply your $200 per golfer credit.</p>
+                  </div>
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label htmlFor="far-sure-golfers" className="block text-xs font-medium text-charcoal/60 uppercase tracking-wider mb-1.5"># of golfers</label>
+                        <input
+                          id="far-sure-golfers"
+                          type="number"
+                          min="1"
+                          max="100"
+                          value={farSureForm.golfers}
+                          onChange={(e) => setFarSureForm((f) => ({ ...f, golfers: e.target.value }))}
+                          className="w-full h-10 px-4 rounded-lg border border-taupe/20 bg-cream text-sm text-obsidian placeholder:text-charcoal/30 focus:outline-none focus:border-forest/40 transition-colors"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="far-sure-budget" className="block text-xs font-medium text-charcoal/60 uppercase tracking-wider mb-1.5">Budget per golfer</label>
+                        <input
+                          id="far-sure-budget"
+                          type="text"
+                          value={farSureForm.budgetPerGolfer}
+                          onChange={(e) => setFarSureForm((f) => ({ ...f, budgetPerGolfer: e.target.value }))}
+                          placeholder="$2,500"
+                          className="w-full h-10 px-4 rounded-lg border border-taupe/20 bg-cream text-sm text-obsidian placeholder:text-charcoal/30 focus:outline-none focus:border-forest/40 transition-colors"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label htmlFor="far-sure-dates" className="block text-xs font-medium text-charcoal/60 uppercase tracking-wider mb-1.5">Dates</label>
+                      <input
+                        id="far-sure-dates"
+                        type="text"
+                        value={farSureForm.dates}
+                        onChange={(e) => setFarSureForm((f) => ({ ...f, dates: e.target.value }))}
+                        placeholder="June 12-16 or flexible"
+                        className="w-full h-10 px-4 rounded-lg border border-taupe/20 bg-cream text-sm text-obsidian placeholder:text-charcoal/30 focus:outline-none focus:border-forest/40 transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="far-sure-destination" className="block text-xs font-medium text-charcoal/60 uppercase tracking-wider mb-1.5">Destination</label>
+                      <input
+                        id="far-sure-destination"
+                        type="text"
+                        value={farSureForm.destination}
+                        onChange={(e) => setFarSureForm((f) => ({ ...f, destination: e.target.value }))}
+                        placeholder="Scotland, Pinehurst, Bandon..."
+                        className="w-full h-10 px-4 rounded-lg border border-taupe/20 bg-cream text-sm text-obsidian placeholder:text-charcoal/30 focus:outline-none focus:border-forest/40 transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="far-sure-notes" className="block text-xs font-medium text-charcoal/60 uppercase tracking-wider mb-1.5">Notes</label>
+                      <textarea
+                        id="far-sure-notes"
+                        value={farSureForm.notes}
+                        onChange={(e) => setFarSureForm((f) => ({ ...f, notes: e.target.value }))}
+                        placeholder="Course preferences, room count, flights, or anything else."
+                        rows={4}
+                        className="w-full px-4 py-3 rounded-lg border border-taupe/20 bg-cream text-sm text-obsidian placeholder:text-charcoal/30 focus:outline-none focus:border-forest/40 transition-colors resize-none"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void handleFarSureSend()}
+                      disabled={farSureSubmitting}
+                      className={`w-full h-11 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase transition-colors duration-300 ${
+                        farSureSubmitting ? "opacity-60 cursor-not-allowed" : "hover:bg-forest-dark"
+                      }`}
+                    >
+                      {farSureSubmitting ? "Sending..." : "Send Request"}
+                    </button>
+                    {farSureError && (
+                      <p className="text-[11px] text-ember">{farSureError}</p>
                     )}
                   </div>
                 </>
@@ -2699,15 +2821,6 @@ function PostCard({
    BENEFIT ICONS
    ═══════════════════════════════════════════ */
 
-function PricingBenefitIcon() {
-  return (
-    <svg className="w-5 h-5 text-forest" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" />
-      <path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" />
-    </svg>
-  );
-}
-
 function ShippingBenefitIcon() {
   return (
     <svg className="w-5 h-5 text-forest" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -2732,22 +2845,6 @@ function ConciergeBenefitIcon() {
   );
 }
 
-function EventBenefitIcon() {
-  return (
-    <svg className="w-5 h-5 text-forest" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5m-9-6h.008v.008H12v-.008zM12 15h.008v.008H12V15zm0 2.25h.008v.008H12v-.008zM9.75 15h.008v.008H9.75V15zm0 2.25h.008v.008H9.75v-.008zM7.5 15h.008v.008H7.5V15zm0 2.25h.008v.008H7.5v-.008zm6.75-4.5h.008v.008h-.008v-.008zm0 2.25h.008v.008h-.008V15zm0 2.25h.008v.008h-.008v-.008zm2.25-4.5h.008v.008H16.5v-.008zm0 2.25h.008v.008H16.5V15z" />
-    </svg>
-  );
-}
-
-function HandicapBenefitIcon() {
-  return (
-    <svg className="w-5 h-5 text-forest" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
-    </svg>
-  );
-}
-
 function CoachingBenefitIcon() {
   return (
     <svg className="w-5 h-5 text-forest" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -2760,14 +2857,6 @@ function TravelBenefitIcon() {
   return (
     <svg className="w-5 h-5 text-forest" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" />
-    </svg>
-  );
-}
-
-function EntertainmentBenefitIcon() {
-  return (
-    <svg className="w-5 h-5 text-forest" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
     </svg>
   );
 }
