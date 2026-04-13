@@ -94,7 +94,10 @@ export async function getLoopRawSubscriptions(
     throw new Error(`Loop API error ${res.status}: ${await res.text()}`);
   }
   const text = await res.text();
-  return (JSON.parse(text).data as LoopSubscription[]) ?? [];
+  return ((JSON.parse(text).data as LoopSubscription[]) ?? []).map((sub) => ({
+    ...sub,
+    id: String(sub.id),
+  }));
 }
 
 /**
