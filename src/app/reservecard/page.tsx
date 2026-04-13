@@ -89,7 +89,7 @@ export default function ReserveCardPage() {
         utm_campaign: params.get("utm_campaign"),
         utm_content: params.get("utm_content"),
       },
-    });
+    }, { includeAuth: false });
   }, []);
 
   const animClass = direction === "forward" ? "animate-substep-in" : "animate-substep-back-in";

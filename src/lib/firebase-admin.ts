@@ -19,9 +19,15 @@
  *        for newlines (common in .env files). Least reliable on some hosts.
  */
 
-import { initializeApp, getApps, cert, type ServiceAccount } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
-import { getAuth } from "firebase-admin/auth";
+import {
+  initializeApp,
+  getApps,
+  cert,
+  type App,
+  type ServiceAccount,
+} from "firebase-admin/app";
+import { getFirestore, type Firestore } from "firebase-admin/firestore";
+import { getAuth, type Auth } from "firebase-admin/auth";
 
 function resolveCredential() {
   // ── Strategy 1: base64-encoded service account JSON ──────────────────────
@@ -70,12 +76,35 @@ function resolveCredential() {
   return cert({ projectId, clientEmail, privateKey });
 }
 
+let adminApp: App | null = null;
+let adminDbInstance: Firestore | null = null;
+let adminAuthInstance: Auth | null = null;
+
 function getAdminApp() {
-  if (getApps().length > 0) return getApps()[0]!;
-  return initializeApp({ credential: resolveCredential() });
+  if (adminApp) return adminApp;
+  adminApp = getApps()[0] ?? initializeApp({ credential: resolveCredential() });
+  return adminApp;
 }
 
-const adminApp = getAdminApp();
+function getAdminDb() {
+  adminDbInstance ??= getFirestore(getAdminApp());
+  return adminDbInstance;
+}
 
-export const adminDb = getFirestore(adminApp);
-export const adminAuth = getAuth(adminApp);
+function getAdminAuth() {
+  adminAuthInstance ??= getAuth(getAdminApp());
+  return adminAuthInstance;
+}
+
+function lazyAdmin<T extends object>(getInstance: () => T): T {
+  return new Proxy({} as T, {
+    get(_target, prop) {
+      const instance = getInstance();
+      const value = Reflect.get(instance, prop, instance);
+      return typeof value === "function" ? value.bind(instance) : value;
+    },
+  });
+}
+
+export const adminDb = lazyAdmin(getAdminDb);
+export const adminAuth = lazyAdmin(getAdminAuth);

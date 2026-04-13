@@ -48,9 +48,12 @@ export function ClubhouseNav() {
     const prev = prevCartCount.current;
     prevCartCount.current = cartCount;
     if (cartCount > prev) {
-      setBadgePop(true);
-      const t = setTimeout(() => setBadgePop(false), 400);
-      return () => clearTimeout(t);
+      const start = setTimeout(() => setBadgePop(true), 0);
+      const end = setTimeout(() => setBadgePop(false), 400);
+      return () => {
+        clearTimeout(start);
+        clearTimeout(end);
+      };
     }
   }, [cartCount]);
 

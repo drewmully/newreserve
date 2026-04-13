@@ -85,4 +85,27 @@ describe("trackEvent", () => {
     expect(body.user_id).toBeUndefined();
     expect(body.event_name).toBe("page_view");
   });
+
+  it("can skip Firebase auth resolution for anonymous page views", async () => {
+    const getIdToken = vi.fn().mockResolvedValue("firebase-token");
+    authState.currentUser = {
+      uid: "uid_123",
+      email: "member@example.com",
+      getIdToken,
+    };
+
+    const { trackEvent } = await import("@/lib/tracking");
+    await trackEvent("page_view", {}, { includeAuth: false });
+
+    expect(getIdToken).not.toHaveBeenCalled();
+
+    const [, requestInit] = vi.mocked(fetch).mock.calls[0]!;
+    expect(requestInit?.headers).toEqual({
+      "Content-Type": "application/json",
+    });
+
+    const body = JSON.parse(String(requestInit?.body));
+    expect(body.user_id).toBeUndefined();
+    expect(body.event_name).toBe("page_view");
+  });
 });

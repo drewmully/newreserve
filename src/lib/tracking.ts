@@ -6,8 +6,6 @@
  *   - cookies       → _fbp / _fbc
  */
 
-import { auth } from "@/lib/firebase";
-
 const ANON_ID_KEY = "mully_anon_id";
 
 function getOrCreateAnonId(): string {
@@ -55,9 +53,14 @@ export interface TrackEventPayload {
   [key: string]: unknown;
 }
 
+interface TrackEventOptions {
+  includeAuth?: boolean;
+}
+
 export async function trackEvent(
   eventName: string,
-  payload: TrackEventPayload = {}
+  payload: TrackEventPayload = {},
+  options: TrackEventOptions = {}
 ): Promise<void> {
   const {
     user_id: explicitUserId,
@@ -68,7 +71,10 @@ export async function trackEvent(
     ...propertyLikeFields
   } = payload;
 
-  const currentUser = auth.currentUser;
+  const includeAuth = options.includeAuth ?? true;
+  const currentUser = includeAuth
+    ? (await import("@/lib/firebase")).auth.currentUser
+    : null;
   let user_id = explicitUserId ?? currentUser?.uid;
   const email = explicitEmail ?? currentUser?.email ?? undefined;
 

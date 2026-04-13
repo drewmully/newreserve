@@ -22,7 +22,7 @@ export function PageViewTracker() {
         path,
         query: query || undefined,
       },
-    });
+    }, { includeAuth: path !== "/" });
   }, [pathname, searchParams]);
 
   return null;

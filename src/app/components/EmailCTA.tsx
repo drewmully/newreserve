@@ -2,22 +2,26 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useMembership } from "../context/MembershipContext";
+import { PENDING_SIGN_IN_EMAIL_KEY } from "@/lib/pendingSignInEmail";
 
 export function EmailCTA({ variant = "hero" }: { variant?: "hero" | "bottom" }) {
   const router = useRouter();
-  const { setEmail } = useMembership();
   const [value, setValue] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (value.trim()) setEmail(value.trim());
+    const email = value.trim();
+    if (email) {
+      try {
+        sessionStorage.setItem(PENDING_SIGN_IN_EMAIL_KEY, email);
+      } catch {}
+    }
     router.push("/login");
   };
 
   if (variant === "hero") {
     return (
-      <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row items-stretch gap-3 max-w-md mb-5">
+      <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row items-stretch gap-3 w-full max-w-xs sm:max-w-md mx-auto md:mx-0 mb-5">
         <input
           type="email"
           value={value}

@@ -2,14 +2,12 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { useMembership } from "../context/MembershipContext";
 
 /* ─── LOGO LINK ─── */
 
 export function LogoLink() {
-  const { isSignedIn } = useMembership();
   return (
-    <Link href={isSignedIn ? "/home" : "/"} className="flex items-center gap-2 text-forest">
+    <Link href="/" className="flex items-center gap-2 text-forest">
       <svg viewBox="0 0 1002 540" fill="currentColor" className="h-5 w-auto" aria-hidden="true"><path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" /></svg>
       <span className="font-serif text-2xl font-bold tracking-wide">mully.</span>
     </Link>

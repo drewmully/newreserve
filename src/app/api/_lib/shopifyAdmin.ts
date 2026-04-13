@@ -21,13 +21,17 @@ function requireEnv(name: string, value: string | undefined): string {
   return value;
 }
 
-const STORE_DOMAIN = requireEnv(
-  "SHOPIFY_STORE_DOMAIN",
-  process.env.SHOPIFY_STORE_DOMAIN
-);
-const API_VERSION =
-  process.env.SHOPIFY_ADMIN_API_VERSION ?? "2024-10";
-const GQL_ENDPOINT = `https://${STORE_DOMAIN}/admin/api/${API_VERSION}/graphql.json`;
+function getStoreDomain(): string {
+  return requireEnv("SHOPIFY_STORE_DOMAIN", process.env.SHOPIFY_STORE_DOMAIN);
+}
+
+function getApiVersion(): string {
+  return process.env.SHOPIFY_ADMIN_API_VERSION ?? "2024-10";
+}
+
+function getGraphQLEndpoint(): string {
+  return `https://${getStoreDomain()}/admin/api/${getApiVersion()}/graphql.json`;
+}
 
 function getAdminHeaders(): Record<string, string> {
   const token =
@@ -49,7 +53,7 @@ async function shopifyGraphQL<T>(
   query: string,
   variables?: Record<string, unknown>
 ): Promise<T> {
-  const res = await fetch(GQL_ENDPOINT, {
+  const res = await fetch(getGraphQLEndpoint(), {
     method: "POST",
     headers: getAdminHeaders(),
     body: JSON.stringify({ query, variables }),
@@ -138,7 +142,7 @@ export async function getCustomerOrders(
     ? customerId.split("/").pop()!
     : customerId;
 
-  const url = `https://${STORE_DOMAIN}/admin/api/${API_VERSION}/customers/${numericId}/orders.json?limit=${limit}&status=any`;
+  const url = `https://${getStoreDomain()}/admin/api/${getApiVersion()}/customers/${numericId}/orders.json?limit=${limit}&status=any`;
 
   const res = await fetch(url, {
     headers: {

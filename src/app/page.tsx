@@ -1,3 +1,4 @@
+import Image from "next/image";
 import {
   ScrollReveal,
   StatCounter,
@@ -16,7 +17,7 @@ export default function Home() {
           <LogoLink />
           <a
             href="/login"
-            className="text-sm tracking-wider uppercase text-forest font-medium hover:text-forest-dark transition-colors duration-300"
+            className="text-xs sm:text-sm tracking-wider uppercase text-forest font-medium hover:text-forest-dark transition-colors duration-300 shrink-0 mr-4 md:mr-0"
           >
             Sign In
           </a>
@@ -25,12 +26,14 @@ export default function Home() {
 
       {/* ─── HERO ─── */}
       <section className="relative min-h-[82vh] md:h-[84vh] flex items-center px-6 md:px-12 lg:px-20 pt-20 pb-12 md:pt-16 md:pb-0 overflow-hidden">
-        {/* Layer 1: Full-bleed background image — displayed as-is */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <Image
           src="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/ChatGPT_Image_Feb_24_2026_03_08_18_PM.png?v=1771963720"
           alt=""
           aria-hidden="true"
+          fill
+          preload
+          fetchPriority="high"
+          sizes="100vw"
           draggable={false}
           className="absolute inset-0 w-full h-full object-cover pointer-events-none select-none"
         />
@@ -73,7 +76,7 @@ export default function Home() {
               of Golf
             </h1>
 
-            <p className="text-base md:text-xl text-charcoal/55 leading-relaxed mb-7 md:mb-10 max-w-sm mx-auto md:mx-0 animate-fade-up-delay-2">
+            <p className="text-base md:text-xl text-charcoal/55 leading-relaxed mb-7 md:mb-10 max-w-xs sm:max-w-sm mx-auto md:mx-0 animate-fade-up-delay-2">
               Live the private club life without country club costs.
             </p>
 
@@ -312,12 +315,13 @@ export default function Home() {
                 </div>
 
                 <div className="rounded-2xl overflow-hidden relative flex flex-col card-hover h-full glass-card glass-card-dark">
-                  {/* Decorative box image — cropped to the box graphic, hugging top-left */}
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
+                  <Image
                     src="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/Untitled_design_17.png?v=1771516197"
                     alt=""
                     aria-hidden="true"
+                    width={176}
+                    height={176}
+                    sizes="176px"
                     draggable={false}
                     className="absolute -top-4 -left-4 w-44 h-44 object-cover object-right-bottom opacity-[0.18] -rotate-6 pointer-events-none select-none"
                   />
@@ -751,10 +755,11 @@ function BenefitCard({
   return (
     <div className="bg-cream rounded-2xl overflow-hidden border border-taupe/15 card-hover group h-full">
       <div className="relative aspect-[3/2] overflow-hidden">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <Image
           src={image}
           alt={title}
+          fill
+          sizes="(min-width: 1024px) 360px, (min-width: 768px) 33vw, 100vw"
           className="w-full h-full object-cover transition-transform duration-600 group-hover:scale-105"
           draggable={false}
         />
@@ -884,10 +889,11 @@ function ReleaseCard({
       <div className="release-img-wrap">
         {image ? (
           <div className="release-img-inner aspect-[4/3] relative bg-cream">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <Image
               src={image}
               alt={name}
+              fill
+              sizes="(min-width: 1024px) 360px, (min-width: 640px) 50vw, 100vw"
               className="w-full h-full object-cover"
               draggable={false}
             />
