@@ -3,6 +3,7 @@ export type MemberTier = "free" | "access" | "member" | "black";
 export type BenefitKey =
   | "v1_virtual_coaching"
   | "concierge_support"
+  | "pro_shop_15_off"
   | "free_2_day_shipping"
   | "far_sure_golf_tours_credit"
   | "priority_drop_access";
@@ -51,6 +52,15 @@ export const BENEFIT_CATALOG: readonly BenefitCatalogEntry[] = [
       "Need help with anything? Submit a request and our team will assist - from tee time bookings and travel planning to gifting and product sourcing.",
     category: "Other",
     action: "request",
+  },
+  {
+    key: "pro_shop_15_off",
+    title: "15% Off Pro Shop",
+    subtitle: "Applied automatically at checkout",
+    description:
+      "Save 15% on every Pro Shop order. Active for Reserve Access, Reserve Member, and Legacy members.",
+    category: "Other",
+    action: "auto",
   },
   {
     key: "free_2_day_shipping",
