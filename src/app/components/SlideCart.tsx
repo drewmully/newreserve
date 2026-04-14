@@ -52,11 +52,11 @@ export function SlideCart() {
       let baseUrl = cartCheckoutUrl;
       try {
         const url = new URL(baseUrl);
-        url.searchParams.set("return_url", window.location.href);
+        url.searchParams.set("return_url", `${window.location.origin}/account`);
         baseUrl = url.toString();
       } catch {
         const sep = baseUrl.includes("?") ? "&" : "?";
-        baseUrl = `${baseUrl}${sep}return_url=${encodeURIComponent(window.location.href)}`;
+        baseUrl = `${baseUrl}${sep}return_url=${encodeURIComponent(`${window.location.origin}/account`)}`;
       }
 
       if (!user) {
