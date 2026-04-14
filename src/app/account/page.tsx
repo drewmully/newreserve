@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useMembership, type FitProfile, type StoreCreditState, type SubscriptionsState } from "../context/MembershipContext";
 import { trackEvent } from "@/lib/tracking";
 import { LOOP_CHANGE_PLAN_OPTIONS } from "@/lib/membershipConfig";
@@ -46,6 +46,7 @@ import { ClubhouseNav, ClubhouseBottomNav } from "../components/ClubhouseNav";
 
 export default function AccountPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const {
     user,
     isSignedIn,
@@ -72,7 +73,7 @@ export default function AccountPage() {
     source: "loading",
   });
 
-  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [upgradeOpen, setUpgradeOpen] = useState(() => searchParams.get("upgrade") === "1");
 
   useEffect(() => {
     if (!authLoading && !isSignedIn) {
