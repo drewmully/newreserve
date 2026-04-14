@@ -51,13 +51,15 @@ async function createMemberDraftOrder(
 
   const apiVersion = process.env.SHOPIFY_ADMIN_API_VERSION ?? "2024-10";
 
-  const lineItems = cartItems.map((item) => {
-    const numericId = item.variantId.startsWith("gid://")
-      ? parseInt(item.variantId.split("/").pop() ?? "0", 10)
-      : parseInt(item.variantId, 10);
+  const lineItems = cartItems
+    .filter((item) => item.quantity >= 1)
+    .map((item) => {
+      const numericId = item.variantId.startsWith("gid://")
+        ? parseInt(item.variantId.split("/").pop() ?? "0", 10)
+        : parseInt(item.variantId, 10);
 
-    return { variant_id: numericId, quantity: item.quantity };
-  });
+      return { variant_id: numericId, quantity: item.quantity };
+    });
 
   // Shopify requires `amount` = the calculated dollar value of the discount.
   // Without it the applied_discount is silently ignored.
