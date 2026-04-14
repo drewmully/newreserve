@@ -67,7 +67,7 @@ export function SlideCart() {
       try {
         const token = await user.getIdToken();
         const cartItems = cart
-          .filter((item) => item.variantId)
+          .filter((item) => item.variantId && item.quantity >= 1)
           .map((item) => ({
             variantId: item.variantId!,
             quantity: item.quantity,

@@ -61,6 +61,10 @@ async function createMemberDraftOrder(
       return { variant_id: numericId, quantity: item.quantity };
     });
 
+  if (lineItems.length === 0) {
+    throw new Error("No valid line items to create draft order");
+  }
+
   // Shopify requires `amount` = the calculated dollar value of the discount.
   // Without it the applied_discount is silently ignored.
   const totalDiscount = cartItems.reduce(
