@@ -1,6 +1,6 @@
 import { Resend } from "resend";
 
-export const FROM = "Drew Amato <drew@reserve.mymully.com>";
+export const FROM = "Drew Amato <drew@mymully.com>";
 export const REPLY_TO = "drew@mail.mymully.com";
 
 export interface PlainTextEmail {

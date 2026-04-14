@@ -35,7 +35,7 @@ export interface AiReplyResult {
 
 // ─── System prompt ────────────────────────────────────────────────────────────
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "reserve.mymully.com";
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "mymully.com";
 
 function buildSystemPrompt(ctx: MemberContext): string {
   const tierLabel =
