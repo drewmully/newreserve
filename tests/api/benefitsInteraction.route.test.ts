@@ -5,6 +5,7 @@ const verifyIdTokenMock = vi.fn();
 const adminDbCollectionMock = vi.fn();
 const getLoopRawSubscriptionsMock = vi.fn();
 const resendSendMock = vi.fn();
+const appendV1GoogleSheetSignupMock = vi.fn();
 
 vi.mock("firebase-admin/firestore", () => ({
   FieldValue: {
@@ -31,6 +32,10 @@ vi.mock("@/lib/firebase-admin", () => ({
 
 vi.mock("@/app/api/_lib/loopAdmin", () => ({
   getLoopRawSubscriptions: getLoopRawSubscriptionsMock,
+}));
+
+vi.mock("@/lib/v1GoogleSheet", () => ({
+  appendV1GoogleSheetSignup: appendV1GoogleSheetSignupMock,
 }));
 
 function makeRequest(
@@ -60,6 +65,8 @@ describe("POST /api/benefits/interaction", () => {
     adminDbCollectionMock.mockReset();
     getLoopRawSubscriptionsMock.mockReset();
     resendSendMock.mockReset();
+    appendV1GoogleSheetSignupMock.mockReset();
+    appendV1GoogleSheetSignupMock.mockResolvedValue("synced");
     delete process.env.RESEND_API_KEY;
   });
 
@@ -310,6 +317,8 @@ describe("POST /api/benefits/interaction", () => {
         data: () => ({
           email: "member@example.com",
           tier: "member",
+          firstName: "Drew",
+          lastName: "Amato",
         }),
       }),
       set: vi.fn().mockResolvedValue(undefined),
@@ -376,5 +385,74 @@ describe("POST /api/benefits/interaction", () => {
       },
       { merge: true }
     );
+    expect(appendV1GoogleSheetSignupMock).toHaveBeenCalledWith({
+      email: "member@example.com",
+      firstName: "Drew",
+      lastName: "Amato",
+      fullName: "Drew Amato",
+    });
+  });
+
+  it("keeps the V1+ request successful if the Google Sheet sync fails", async () => {
+    verifyIdTokenMock.mockResolvedValue({ uid: "uid_4" });
+    appendV1GoogleSheetSignupMock.mockRejectedValue(new Error("sheet unavailable"));
+
+    const userRef = {
+      get: vi.fn().mockResolvedValue({
+        exists: true,
+        data: () => ({
+          email: "member2@example.com",
+          tier: "member",
+          username: "player_02",
+        }),
+      }),
+      set: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const eventRef = {
+      id: "evt_456",
+      set: vi.fn().mockResolvedValue(undefined),
+    };
+
+    adminDbCollectionMock.mockImplementation((name: string) => {
+      if (name === "users") {
+        return {
+          doc: vi.fn(() => userRef),
+        };
+      }
+      if (name === "benefit_actions") {
+        return {
+          doc: vi.fn(() => eventRef),
+        };
+      }
+      throw new Error(`Unexpected collection ${name}`);
+    });
+
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const { POST } = await loadRoute();
+    const res = await POST(
+      makeRequest({
+        benefit: "v1_virtual_coaching",
+        action: "toggle",
+        enabled: true,
+      })
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json).toEqual({ ok: true, id: "evt_456" });
+    expect(appendV1GoogleSheetSignupMock).toHaveBeenCalledWith({
+      email: "member2@example.com",
+      firstName: "player_02",
+      lastName: "",
+      fullName: "player_02",
+    });
+    expect(errorSpy).toHaveBeenCalledWith(
+      "[benefits/interaction] V1+ Google Sheet sync failed:",
+      expect.any(Error)
+    );
+
+    errorSpy.mockRestore();
   });
 });

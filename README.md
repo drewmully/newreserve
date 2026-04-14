@@ -18,6 +18,40 @@ For production, add the same variable in your Vercel project settings:
 
 Keep this key server-side only. Do not expose it as `NEXT_PUBLIC_*`.
 
+### V1+ Google Sheet sync
+
+When a paid member turns on the V1+ Virtual Coaching benefit, the app appends a row to:
+
+```text
+https://docs.google.com/spreadsheets/d/10hT9nQ7QcMoafWhOxG2zXOJJmMS4haaNe0jMh7ZQn6g
+```
+
+The default row shape matches the current customer sheet:
+
+```text
+# | First Name | Last Name | Full Name | Email | Date Enabled | Active @ Mullly? | Active @ V1+?
+```
+
+Configure server-side Google credentials with one of these options:
+
+```bash
+GOOGLE_SHEETS_SERVICE_ACCOUNT_BASE64=base64_encoded_service_account_json
+# or
+GOOGLE_SHEETS_SERVICE_ACCOUNT_JSON={"client_email":"...","private_key":"..."}
+# or
+GOOGLE_SHEETS_CLIENT_EMAIL=service-account@project.iam.gserviceaccount.com
+GOOGLE_SHEETS_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+```
+
+If those are not present, the sync falls back to the Firebase service account env vars already used by the app. Share the Google Sheet with the service account `client_email` as an editor, and make sure the Google Sheets API is enabled in that Google Cloud project.
+
+Optional overrides:
+
+```bash
+V1_GOOGLE_SHEET_ID=10hT9nQ7QcMoafWhOxG2zXOJJmMS4haaNe0jMh7ZQn6g
+V1_GOOGLE_SHEET_RANGE=A:H
+```
+
 First, run the development server:
 
 ```bash

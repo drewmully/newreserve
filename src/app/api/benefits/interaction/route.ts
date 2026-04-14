@@ -4,6 +4,7 @@ import { Resend } from "resend";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { getLoopRawSubscriptions } from "@/app/api/_lib/loopAdmin";
 import { resolveMemberTierFromVariantId } from "@/lib/membershipConfig";
+import { appendV1GoogleSheetSignup } from "@/lib/v1GoogleSheet";
 import {
   isActionableBenefitKey,
   PAID_MEMBER_TIERS,
@@ -107,6 +108,42 @@ function escapeHtml(raw: unknown): string {
 function escapeHtmlOrDash(raw: unknown): string {
   const value = trimText(raw);
   return value ? escapeHtml(value) : "-";
+}
+
+function firstText(...values: unknown[]): string {
+  for (const value of values) {
+    const text = trimText(value);
+    if (text) return text;
+  }
+  return "";
+}
+
+function resolveV1SignupName(userData: Record<string, unknown>): {
+  firstName: string;
+  lastName: string;
+  fullName: string;
+} {
+  const firstName = firstText(userData.firstName, userData.first_name);
+  const lastName = firstText(userData.lastName, userData.last_name);
+  const explicitFullName = firstText(
+    userData.fullName,
+    userData.full_name,
+    userData.name,
+    userData.displayName
+  );
+  const username = firstText(userData.username);
+  const fullName = explicitFullName || [firstName, lastName].filter(Boolean).join(" ") || username;
+
+  if (firstName || lastName || !fullName) {
+    return { firstName, lastName, fullName };
+  }
+
+  const [derivedFirstName = "", ...rest] = fullName.split(/\s+/);
+  return {
+    firstName: derivedFirstName,
+    lastName: rest.join(" "),
+    fullName,
+  };
 }
 
 function resolveTierFromLoopSubs(subs: Array<Record<string, unknown>>): MemberTier | null {
@@ -449,6 +486,16 @@ export async function POST(req: NextRequest) {
       },
       { merge: true }
     );
+
+    try {
+      const signupName = resolveV1SignupName(userData as Record<string, unknown>);
+      await appendV1GoogleSheetSignup({
+        email,
+        ...signupName,
+      });
+    } catch (err) {
+      console.error("[benefits/interaction] V1+ Google Sheet sync failed:", err);
+    }
   }
 
   if (benefit === "concierge_support" && conciergeRequest) {
