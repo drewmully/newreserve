@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -98,6 +98,8 @@ describe("dashboard benefits", () => {
     mocks.getIdToken.mockClear();
     mocks.refreshStoreCredit.mockClear().mockResolvedValue(undefined);
     mocks.refreshSubscriptionStatus.mockClear().mockResolvedValue(undefined);
+    mocks.membershipState.tier = "access";
+    mocks.membershipState.tierLabel = "Reserve Access";
   });
 
   it("renders the new benefit list from the sheet", async () => {
@@ -115,6 +117,8 @@ describe("dashboard benefits", () => {
 
     expect(await screen.findByText("V1+ Virtual Coaching")).toBeInTheDocument();
     expect(screen.getByText("Concierge Support")).toBeInTheDocument();
+    expect(screen.getByText("15% Off Pro Shop")).toBeInTheDocument();
+    expect(screen.getByText(/Active for Reserve Access, Reserve Member, and Legacy members\./)).toBeInTheDocument();
     expect(screen.getByText("Free 2-Day Shipping")).toBeInTheDocument();
     expect(screen.getByText("Far & Sure Golf Tours Credit")).toBeInTheDocument();
     expect(screen.getByText("Priority Drop Access")).toBeInTheDocument();
@@ -122,6 +126,32 @@ describe("dashboard benefits", () => {
     expect(screen.queryByText("Reserve Pricing")).not.toBeInTheDocument();
     expect(screen.queryByText("Invite-Only Events")).not.toBeInTheDocument();
     expect(screen.queryByText("Partner Perks & Discounts")).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["access", "Reserve Access"],
+    ["member", "Reserve Member"],
+    ["member", "Legacy"],
+  ])("shows the Pro Shop discount as active for %s members", async (tier, tierLabel) => {
+    mocks.membershipState.tier = tier;
+    mocks.membershipState.tierLabel = tierLabel;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+      })
+    );
+
+    const DashboardPage = await loadPage();
+    render(<DashboardPage />);
+
+    const title = await screen.findByText("15% Off Pro Shop");
+    const benefitCard = title.closest(".bg-cream");
+
+    expect(benefitCard).not.toBeNull();
+    expect(within(benefitCard as HTMLElement).getAllByText("Active").length).toBeGreaterThan(0);
   });
 
   it("submits the Far & Sure credit form through the benefits API", async () => {
