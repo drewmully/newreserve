@@ -14,21 +14,9 @@ const securityHeaders = [
   },
 ];
 
-const SHOPIFY_STORE = "https://mullybox-store.myshopify.com";
-
 const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
-  async redirects() {
-    return [
-      // Shopify storefront routes that don't exist in this Next.js app
-      { source: "/cart",              destination: `${SHOPIFY_STORE}/cart`,              permanent: false },
-      { source: "/cart/:path*",       destination: `${SHOPIFY_STORE}/cart/:path*`,       permanent: false },
-      { source: "/checkout",          destination: `${SHOPIFY_STORE}/checkout`,          permanent: false },
-      { source: "/collections/:path*",destination: `${SHOPIFY_STORE}/collections/:path*`,permanent: false },
-      { source: "/products/:path*",   destination: `${SHOPIFY_STORE}/products/:path*`,   permanent: false },
-    ];
-  },
   async headers() {
     return [
       {

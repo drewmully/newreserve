@@ -155,18 +155,7 @@ export async function POST(request: NextRequest) {
     if (tier && tier !== "free" && cartItems.length > 0) {
       const invoiceUrl = await createMemberDraftOrder(cartItems, email);
       console.log("[checkout] draft order invoice_url:", invoiceUrl);
-      // Preserve return_url from original checkoutUrl
-      let finalInvoiceUrl = invoiceUrl;
-      try {
-        const originalUrl = new URL(checkoutUrl);
-        const returnUrl = originalUrl.searchParams.get("return_url");
-        if (returnUrl) {
-          const parsed = new URL(invoiceUrl);
-          parsed.searchParams.set("return_url", returnUrl);
-          finalInvoiceUrl = parsed.toString();
-        }
-      } catch {}
-      return NextResponse.json({ checkoutUrl: finalInvoiceUrl });
+      return NextResponse.json({ checkoutUrl: invoiceUrl });
     }
 
     console.log("[checkout] skipping draft order — tier:", tier, "items:", cartItems.length);
