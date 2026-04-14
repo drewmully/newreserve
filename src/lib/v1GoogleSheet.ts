@@ -20,6 +20,10 @@ type GoogleTokenResponse = {
   error_description?: string;
 };
 
+type GoogleValuesResponse = {
+  values?: unknown[][];
+};
+
 const DEFAULT_V1_GOOGLE_SHEET_ID = "10hT9nQ7QcMoafWhOxG2zXOJJmMS4haaNe0jMh7ZQn6g";
 const GOOGLE_TOKEN_URI = "https://oauth2.googleapis.com/token";
 const GOOGLE_SHEETS_SCOPE = "https://www.googleapis.com/auth/spreadsheets";
@@ -153,6 +157,48 @@ function todayIsoDate(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+function scopedRange(baseRange: string, targetRange: string): string {
+  const bangIndex = baseRange.lastIndexOf("!");
+  if (bangIndex === -1) return targetRange;
+  return `${baseRange.slice(0, bangIndex)}!${targetRange}`;
+}
+
+async function getFirstEmptyEmailRow(input: {
+  spreadsheetId: string;
+  baseRange: string;
+  accessToken: string;
+}): Promise<number> {
+  const emailRange = scopedRange(input.baseRange, "E:E");
+  const url = new URL(
+    `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(
+      input.spreadsheetId
+    )}/values/${encodeURIComponent(emailRange)}`
+  );
+  url.searchParams.set("majorDimension", "ROWS");
+
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${input.accessToken}`,
+    },
+  });
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Google Sheets email column read failed: HTTP ${res.status} ${detail.slice(0, 400)}`);
+  }
+
+  const data = (await res.json().catch(() => ({}))) as GoogleValuesResponse;
+  const rows = Array.isArray(data.values) ? data.values : [];
+  const scanLength = Math.max(rows.length + 1, 2);
+
+  for (let index = 1; index < scanLength; index += 1) {
+    const email = stringValue(rows[index]?.[0]);
+    if (!email) return index + 1;
+  }
+
+  return scanLength + 1;
+}
+
 export async function appendV1GoogleSheetSignup(
   signup: V1GoogleSheetSignup
 ): Promise<"synced" | "skipped"> {
@@ -165,6 +211,12 @@ export async function appendV1GoogleSheetSignup(
   const spreadsheetId = stringValue(process.env.V1_GOOGLE_SHEET_ID) || DEFAULT_V1_GOOGLE_SHEET_ID;
   const range = stringValue(process.env.V1_GOOGLE_SHEET_RANGE) || "A:H";
   const accessToken = await getAccessToken(serviceAccount);
+  const rowNumber = await getFirstEmptyEmailRow({
+    spreadsheetId,
+    baseRange: range,
+    accessToken,
+  });
+  const updateRange = scopedRange(range, `A${rowNumber}:H${rowNumber}`);
 
   const values = [
     [
@@ -182,13 +234,12 @@ export async function appendV1GoogleSheetSignup(
   const url = new URL(
     `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(
       spreadsheetId
-    )}/values/${encodeURIComponent(range)}:append`
+    )}/values/${encodeURIComponent(updateRange)}`
   );
   url.searchParams.set("valueInputOption", "USER_ENTERED");
-  url.searchParams.set("insertDataOption", "INSERT_ROWS");
 
   const res = await fetch(url, {
-    method: "POST",
+    method: "PUT",
     headers: {
       Authorization: `Bearer ${accessToken}`,
       "Content-Type": "application/json",
@@ -198,7 +249,7 @@ export async function appendV1GoogleSheetSignup(
 
   if (!res.ok) {
     const detail = await res.text().catch(() => "");
-    throw new Error(`Google Sheets append failed: HTTP ${res.status} ${detail.slice(0, 400)}`);
+    throw new Error(`Google Sheets row update failed: HTTP ${res.status} ${detail.slice(0, 400)}`);
   }
 
   return "synced";

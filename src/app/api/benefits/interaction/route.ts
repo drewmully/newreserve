@@ -146,6 +146,55 @@ function resolveV1SignupName(userData: Record<string, unknown>): {
   };
 }
 
+function getRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error && err.message ? err.message : String(err);
+}
+
+async function syncV1GoogleSheetSignup(input: {
+  userRef: { set: (data: Record<string, unknown>, options: { merge: true }) => Promise<unknown> };
+  userData: Record<string, unknown>;
+  email: string;
+}): Promise<void> {
+  try {
+    const signupName = resolveV1SignupName(input.userData);
+    const result = await appendV1GoogleSheetSignup({
+      email: input.email,
+      ...signupName,
+    });
+
+    if (result === "synced") {
+      await input.userRef.set(
+        {
+          benefits: {
+            v1_virtual_coaching_sheet_synced_at: FieldValue.serverTimestamp(),
+            v1_virtual_coaching_sheet_sync_error: null,
+          },
+        },
+        { merge: true }
+      );
+    }
+  } catch (err) {
+    console.error("[benefits/interaction] V1+ Google Sheet sync failed:", err);
+    try {
+      await input.userRef.set(
+        {
+          benefits: {
+            v1_virtual_coaching_sheet_sync_failed_at: FieldValue.serverTimestamp(),
+            v1_virtual_coaching_sheet_sync_error: errorMessage(err),
+          },
+        },
+        { merge: true }
+      );
+    } catch (writeErr) {
+      console.error("[benefits/interaction] V1+ sheet sync status write failed:", writeErr);
+    }
+  }
+}
+
 function resolveTierFromLoopSubs(subs: Array<Record<string, unknown>>): MemberTier | null {
   let resolved: MemberTier | null = null;
 
@@ -440,6 +489,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Tier not allowed for this benefit" }, { status: 403 });
   }
 
+  const existingBenefits = getRecord(userData.benefits);
+  const v1AlreadyRequested =
+    benefit === "v1_virtual_coaching" &&
+    (existingBenefits.v1_virtual_coaching_enabled === true ||
+      existingBenefits.v1_virtual_coaching_status === "reviewing");
+
+  if (v1AlreadyRequested) {
+    if (!existingBenefits.v1_virtual_coaching_sheet_synced_at) {
+      await syncV1GoogleSheetSignup({
+        userRef,
+        userData: userData as Record<string, unknown>,
+        email,
+      });
+    }
+
+    return NextResponse.json({ ok: true, id: null, duplicate: true });
+  }
+
   const eventRef = adminDb.collection("benefit_actions").doc();
   const source = trimText(body.source) || "dashboard_benefits";
 
@@ -487,15 +554,11 @@ export async function POST(req: NextRequest) {
       { merge: true }
     );
 
-    try {
-      const signupName = resolveV1SignupName(userData as Record<string, unknown>);
-      await appendV1GoogleSheetSignup({
-        email,
-        ...signupName,
-      });
-    } catch (err) {
-      console.error("[benefits/interaction] V1+ Google Sheet sync failed:", err);
-    }
+    await syncV1GoogleSheetSignup({
+      userRef,
+      userData: userData as Record<string, unknown>,
+      email,
+    });
   }
 
   if (benefit === "concierge_support" && conciergeRequest) {

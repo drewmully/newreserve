@@ -10,6 +10,11 @@ const mocks = vi.hoisted(() => {
   const refreshStoreCredit = vi.fn().mockResolvedValue(undefined);
   const refreshSubscriptionStatus = vi.fn().mockResolvedValue(undefined);
   const getIdToken = vi.fn().mockResolvedValue("token-123");
+  const doc = vi.fn((...parts: unknown[]) => parts.join("/"));
+  const getDoc = vi.fn().mockResolvedValue({
+    exists: () => false,
+    data: () => ({}),
+  });
 
   return {
     replace,
@@ -18,10 +23,12 @@ const mocks = vi.hoisted(() => {
     refreshStoreCredit,
     refreshSubscriptionStatus,
     getIdToken,
+    doc,
+    getDoc,
     membershipState: {
       isSignedIn: true,
       authLoading: false,
-      user: { getIdToken },
+      user: { uid: "uid_123", getIdToken },
       tier: "access",
       tierLabel: "Reserve Access",
       setTier,
@@ -55,6 +62,15 @@ vi.mock("next/link", () => ({
 
 vi.mock("@/app/context/MembershipContext", () => ({
   useMembership: () => mocks.membershipState,
+}));
+
+vi.mock("firebase/firestore", () => ({
+  doc: mocks.doc,
+  getDoc: mocks.getDoc,
+}));
+
+vi.mock("@/lib/firebase", () => ({
+  db: {},
 }));
 
 vi.mock("@/app/components/SlideCart", () => ({
@@ -98,6 +114,11 @@ describe("dashboard benefits", () => {
     mocks.getIdToken.mockClear();
     mocks.refreshStoreCredit.mockClear().mockResolvedValue(undefined);
     mocks.refreshSubscriptionStatus.mockClear().mockResolvedValue(undefined);
+    mocks.doc.mockClear();
+    mocks.getDoc.mockClear().mockResolvedValue({
+      exists: () => false,
+      data: () => ({}),
+    });
     mocks.membershipState.tier = "access";
     mocks.membershipState.tierLabel = "Reserve Access";
   });
@@ -233,5 +254,34 @@ describe("dashboard benefits", () => {
       enabled: true,
       source: "dashboard_benefits",
     });
+  });
+
+  it("keeps the V1+ switch requested when Firestore has a persisted review state", async () => {
+    mocks.getDoc.mockResolvedValue({
+      exists: () => true,
+      data: () => ({
+        benefits: {
+          v1_virtual_coaching_enabled: true,
+          v1_virtual_coaching_status: "reviewing",
+        },
+      }),
+    });
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ ok: true, id: "evt_v1" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const DashboardPage = await loadPage();
+    render(<DashboardPage />);
+
+    const v1Switch = await screen.findByRole("switch", {
+      name: "V1+ Virtual Coaching request in review",
+    });
+
+    expect(v1Switch).toBeDisabled();
+    expect(v1Switch).toHaveAttribute("aria-checked", "true");
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

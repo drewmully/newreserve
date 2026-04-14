@@ -455,4 +455,52 @@ describe("POST /api/benefits/interaction", () => {
 
     errorSpy.mockRestore();
   });
+
+  it("does not create duplicate V1+ events when the request is already reviewing", async () => {
+    verifyIdTokenMock.mockResolvedValue({ uid: "uid_duplicate" });
+
+    const userRef = {
+      get: vi.fn().mockResolvedValue({
+        exists: true,
+        data: () => ({
+          email: "duplicate@example.com",
+          tier: "member",
+          firstName: "Existing",
+          benefits: {
+            v1_virtual_coaching_enabled: true,
+            v1_virtual_coaching_status: "reviewing",
+            v1_virtual_coaching_sheet_synced_at: "server-ts",
+          },
+        }),
+      }),
+      set: vi.fn().mockResolvedValue(undefined),
+    };
+
+    adminDbCollectionMock.mockImplementation((name: string) => {
+      if (name === "users") {
+        return {
+          doc: vi.fn(() => userRef),
+        };
+      }
+      if (name === "benefit_actions") {
+        throw new Error("benefit_actions should not be written for duplicate V1+ requests");
+      }
+      throw new Error(`Unexpected collection ${name}`);
+    });
+
+    const { POST } = await loadRoute();
+    const res = await POST(
+      makeRequest({
+        benefit: "v1_virtual_coaching",
+        action: "toggle",
+        enabled: true,
+      })
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json).toEqual({ ok: true, id: null, duplicate: true });
+    expect(appendV1GoogleSheetSignupMock).not.toHaveBeenCalled();
+    expect(userRef.set).not.toHaveBeenCalled();
+  });
 });

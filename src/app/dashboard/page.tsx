@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { doc, getDoc } from "firebase/firestore";
 import { ShopGrid } from "../shop/components/ShopClient";
 import {
   getCollectionProducts,
@@ -12,6 +13,7 @@ import {
   type ShopifyProduct,
 } from "@/lib/shopify";
 import { useMembership } from "../context/MembershipContext";
+import { db } from "@/lib/firebase";
 import { SlideCart } from "../components/SlideCart";
 import { UpgradeModal } from "../components/UpgradeModal";
 import { FORUM_TAGS, type ForumPost, type ForumComment } from "../community/posts";
@@ -816,6 +818,45 @@ function BenefitsTab({ onUpgrade }: { onUpgrade: () => void }) {
     },
     [user]
   );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!user) {
+      setEnabledBenefits(new Set());
+      return;
+    }
+
+    async function loadPersistedBenefits(currentUser: FirebaseUser) {
+      try {
+        const snap = await getDoc(doc(db, "users", currentUser.uid));
+        if (cancelled || !snap.exists()) return;
+
+        const data = snap.data() as { benefits?: Record<string, unknown> };
+        const v1Enabled =
+          data.benefits?.v1_virtual_coaching_enabled === true ||
+          data.benefits?.v1_virtual_coaching_status === "reviewing";
+
+        setEnabledBenefits((prev) => {
+          const next = new Set(prev);
+          if (v1Enabled) {
+            next.add("v1_virtual_coaching");
+          } else {
+            next.delete("v1_virtual_coaching");
+          }
+          return next;
+        });
+      } catch (err) {
+        console.error("[Benefits] persisted benefits load failed:", err);
+      }
+    }
+
+    void loadPersistedBenefits(user);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   const showBenefitToast = useCallback((message: string) => {
     setBenefitToast(message);
