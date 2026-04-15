@@ -4,19 +4,43 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { PENDING_SIGN_IN_EMAIL_KEY } from "@/lib/pendingSignInEmail";
 
+export const PENDING_ONBOARDING_EMAIL_KEY = "pending_onboarding_email";
+
 export function EmailCTA({ variant = "hero" }: { variant?: "hero" | "bottom" }) {
   const router = useRouter();
   const [value, setValue] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const email = value.trim();
-    if (email) {
-      try {
-        sessionStorage.setItem(PENDING_SIGN_IN_EMAIL_KEY, email);
-      } catch {}
+    if (!email || loading) return;
+
+    setLoading(true);
+    try {
+      const res = await fetch("/api/auth/check-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json() as { exists?: boolean };
+
+      if (data.exists) {
+        // Existing user → normal login flow
+        try { sessionStorage.setItem(PENDING_SIGN_IN_EMAIL_KEY, email); } catch {}
+        router.push("/login");
+      } else {
+        // New user → onboarding first
+        try { sessionStorage.setItem(PENDING_ONBOARDING_EMAIL_KEY, email); } catch {}
+        router.push("/onboarding");
+      }
+    } catch {
+      // On error fall back to login
+      try { sessionStorage.setItem(PENDING_SIGN_IN_EMAIL_KEY, email); } catch {}
+      router.push("/login");
+    } finally {
+      setLoading(false);
     }
-    router.push("/login");
   };
 
   if (variant === "hero") {
@@ -27,13 +51,21 @@ export function EmailCTA({ variant = "hero" }: { variant?: "hero" | "bottom" }) 
           value={value}
           onChange={(e) => setValue(e.target.value)}
           placeholder="Your email"
-          className="w-full sm:flex-1 h-13 px-5 rounded-xl bg-white/60 border border-taupe/30 text-obsidian placeholder:text-charcoal/35 text-base focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300"
+          disabled={loading}
+          className="w-full sm:flex-1 h-13 px-5 rounded-xl bg-white/60 border border-taupe/30 text-obsidian placeholder:text-charcoal/35 text-base focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300 disabled:opacity-60"
         />
         <button
           type="submit"
-          className="w-full sm:w-auto h-13 px-8 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer whitespace-nowrap btn-press"
+          disabled={!value.trim() || loading}
+          className="w-full sm:w-auto h-13 px-8 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer whitespace-nowrap btn-press disabled:opacity-60 disabled:cursor-not-allowed"
         >
-          Unlock Access
+          {loading ? (
+            <span className="inline-flex items-center justify-center">
+              <span className="w-4 h-4 border-2 border-bone/30 border-t-bone rounded-full animate-spin" />
+            </span>
+          ) : (
+            "Unlock Access"
+          )}
         </button>
       </form>
     );
@@ -46,13 +78,21 @@ export function EmailCTA({ variant = "hero" }: { variant?: "hero" | "bottom" }) 
         value={value}
         onChange={(e) => setValue(e.target.value)}
         placeholder="Your email"
-        className="w-full h-13 px-5 rounded-xl bg-bone border border-taupe/30 text-obsidian placeholder:text-taupe text-base focus:border-forest focus:ring-2 focus:ring-forest/20 transition-all duration-300"
+        disabled={loading}
+        className="w-full h-13 px-5 rounded-xl bg-bone border border-taupe/30 text-obsidian placeholder:text-taupe text-base focus:border-forest focus:ring-2 focus:ring-forest/20 transition-all duration-300 disabled:opacity-60"
       />
       <button
         type="submit"
-        className="w-full h-13 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer btn-press"
+        disabled={!value.trim() || loading}
+        className="w-full h-13 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer btn-press disabled:opacity-60 disabled:cursor-not-allowed"
       >
-        Get Started
+        {loading ? (
+          <span className="inline-flex items-center justify-center">
+            <span className="w-4 h-4 border-2 border-bone/30 border-t-bone rounded-full animate-spin" />
+          </span>
+        ) : (
+          "Get Started"
+        )}
       </button>
     </form>
   );

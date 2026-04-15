@@ -3,11 +3,15 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useMembership } from "../context/MembershipContext";
+import { sendOTPEmail } from "@/lib/firebase";
+import { PENDING_ONBOARDING_EMAIL_KEY } from "../components/EmailCTA";
 import {
   FIT_SHIRT_SIZES, FIT_GLOVE_HANDS, FIT_GLOVE_SIZES,
   FIT_WAIST_SIZES, FIT_SHOE_SIZES, FIT_PANTS_INSEAMS, FIT_SHORTS_INSEAMS,
   FitDots, FitNav, PillButton,
 } from "../components/UpgradeModal";
+
+const PENDING_ONBOARDING_DATA_KEY = "pending_onboarding_data";
 
 /* ═══════════════════════════════════════════
    ONBOARDING — Preferences → Plan Selection
@@ -84,7 +88,7 @@ function daysInMonth(month: number, year: number): number {
 export default function OnboardingPage() {
   const router = useRouter();
   const {
-    email,
+    email: contextEmail,
     setEmail,
     username,
     setUsername,
@@ -94,11 +98,40 @@ export default function OnboardingPage() {
     isSignedIn,
   } = useMembership();
 
+  // Pre-auth mode: user came from home page without being logged in
+  const [preAuthEmail, setPreAuthEmail] = useState<string>(() => {
+    if (typeof window === "undefined") return "";
+    try { return sessionStorage.getItem(PENDING_ONBOARDING_EMAIL_KEY) ?? ""; } catch { return ""; }
+  });
+  const isPreAuth = !isSignedIn && !!preAuthEmail;
+  const email = isPreAuth ? preAuthEmail : contextEmail;
+
+  // "Check your email" screen after magic link sent in pre-auth mode
+  const [magicLinkSent, setMagicLinkSent] = useState(false);
+  const [sendingLink, setSendingLink] = useState(false);
+  const [sendLinkError, setSendLinkError] = useState<string | null>(null);
+
+  // Sync pre-auth email to context so login page picks it up
   useEffect(() => {
-    if (!authLoading && !isSignedIn) {
+    if (isPreAuth && preAuthEmail) setEmail(preAuthEmail);
+  }, [isPreAuth, preAuthEmail, setEmail]);
+
+  // Post-auth guard: if not signed in AND not pre-auth mode, redirect to login
+  useEffect(() => {
+    if (!authLoading && !isSignedIn && !isPreAuth) {
       router.replace("/login");
     }
-  }, [authLoading, isSignedIn, router]);
+  }, [authLoading, isSignedIn, isPreAuth, router]);
+
+  // If signed in and already completed onboarding, go home
+  useEffect(() => {
+    if (!authLoading && isSignedIn) {
+      // Clear any leftover pre-auth keys
+      try {
+        sessionStorage.removeItem(PENDING_ONBOARDING_EMAIL_KEY);
+      } catch {}
+    }
+  }, [authLoading, isSignedIn]);
 
   async function handleComplete(newTier: "free" | "access" | "member") {
     const nextFitProfile = {
@@ -110,7 +143,8 @@ export default function OnboardingPage() {
       shortsInseam,
       shoeSize,
     };
-    await completeOnboarding({
+
+    const onboardingData = {
       username,
       onboardingProfile: {
         birthMonth,
@@ -123,7 +157,32 @@ export default function OnboardingPage() {
         selectedTier: newTier,
       },
       fitProfile: newTier === "member" ? nextFitProfile : undefined,
-    });
+    };
+
+    if (isPreAuth) {
+      // Save data to sessionStorage, then send magic link
+      try {
+        sessionStorage.setItem(
+          PENDING_ONBOARDING_DATA_KEY,
+          JSON.stringify({ ...onboardingData, selectedTier: newTier })
+        );
+      } catch {}
+      setSendingLink(true);
+      setSendLinkError(null);
+      try {
+        await sendOTPEmail(preAuthEmail);
+        setMagicLinkSent(true);
+      } catch (err) {
+        setSendLinkError("Couldn't send the link. Please try again.");
+        console.error("[Onboarding] sendOTPEmail failed:", err);
+      } finally {
+        setSendingLink(false);
+      }
+      return;
+    }
+
+    // Post-auth mode: save directly
+    await completeOnboarding(onboardingData);
     setTier(newTier);
     router.push("/home");
   }
@@ -180,6 +239,47 @@ export default function OnboardingPage() {
   }
 
   const animClass = direction === "forward" ? "animate-substep-in" : "animate-substep-back-in";
+
+  // ── Magic link sent screen ──────────────────────────────────────────────────
+  if (magicLinkSent) {
+    return (
+      <div className="min-h-screen bg-bone flex flex-col items-center justify-center px-6">
+        <div className="w-full max-w-sm text-center">
+          <div className="w-12 h-12 rounded-2xl bg-forest/8 flex items-center justify-center mx-auto mb-6">
+            <svg viewBox="0 0 1002 540" fill="currentColor" className="h-5 w-auto text-forest" aria-hidden="true">
+              <path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" />
+            </svg>
+          </div>
+          <h1 className="font-serif text-2xl text-obsidian mb-2">Check your email</h1>
+          <p className="text-sm text-charcoal/50 leading-relaxed mb-6">
+            We sent a sign-in link to{" "}
+            <strong className="text-obsidian font-medium">{preAuthEmail}</strong>.
+            Click it to confirm your account and complete your membership.
+          </p>
+          <div className="rounded-xl bg-cream border border-taupe/15 px-5 py-4 text-sm text-charcoal/55 leading-relaxed mb-6">
+            The link expires after 1 hour. Check your spam folder if you don&apos;t see it.
+          </div>
+          <button
+            onClick={() => {
+              setSendingLink(true);
+              setSendLinkError(null);
+              sendOTPEmail(preAuthEmail)
+                .then(() => setSendLinkError(null))
+                .catch(() => setSendLinkError("Couldn't resend. Please try again."))
+                .finally(() => setSendingLink(false));
+            }}
+            disabled={sendingLink}
+            className="text-sm text-forest hover:underline disabled:opacity-50"
+          >
+            {sendingLink ? "Sending…" : "Resend link"}
+          </button>
+          {sendLinkError && (
+            <p className="text-xs text-ember mt-3">{sendLinkError}</p>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-bone">

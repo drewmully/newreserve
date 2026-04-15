@@ -1,11 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useMembership } from "../context/MembershipContext";
 import { auth, isSignInWithEmailLink, confirmOTPSignIn, signInWithGoogle } from "@/lib/firebase";
 import { PENDING_SIGN_IN_EMAIL_KEY } from "@/lib/pendingSignInEmail";
+import { SHOPIFY_MEMBERSHIP_PLANS } from "@/lib/membershipConfig";
+import { buildCheckoutOriginAttributes } from "@/lib/shopifyCheckoutOrigin";
+
+const PENDING_ONBOARDING_DATA_KEY = "pending_onboarding_data";
 
 /* ═══════════════════════════════════════════
    LOGIN PAGE  —  passwordless Email Link flow
@@ -44,9 +48,60 @@ function mapAuthError(code: string): string {
   return messages[code] ?? "Something went wrong. Please try again.";
 }
 
+async function createCheckoutAndRedirect(tier: "access" | "member") {
+  const PLANS = {
+    access: {
+      merchandiseId: SHOPIFY_MEMBERSHIP_PLANS.access.merchandiseId,
+      sellingPlanId: SHOPIFY_MEMBERSHIP_PLANS.access.sellingPlanGid,
+    },
+    member: {
+      merchandiseId: SHOPIFY_MEMBERSHIP_PLANS.member.merchandiseId,
+      sellingPlanId: SHOPIFY_MEMBERSHIP_PLANS.member.sellingPlanGid,
+    },
+  };
+  const { merchandiseId, sellingPlanId } = PLANS[tier];
+  const domain = process.env.NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN;
+  const token = process.env.NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN;
+  if (!domain || !token) return;
+
+  const returnTo = `${window.location.origin}/auth/callback`;
+  const attributes = buildCheckoutOriginAttributes(returnTo);
+
+  const res = await fetch(`https://${domain}/api/2024-10/graphql.json`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Shopify-Storefront-Access-Token": token,
+    },
+    body: JSON.stringify({
+      query: `mutation CreateSubscriptionCart(
+        $merchandiseId: ID!
+        $sellingPlanId: ID!
+        $attributes: [AttributeInput!]
+      ) {
+        cartCreate(input: {
+          lines: [{ merchandiseId: $merchandiseId, quantity: 1, sellingPlanId: $sellingPlanId }],
+          attributes: $attributes
+        }) {
+          cart { checkoutUrl }
+          userErrors { field message }
+        }
+      }`,
+      variables: { merchandiseId, sellingPlanId, attributes },
+    }),
+  });
+
+  const json = await res.json();
+  const checkoutUrl = json?.data?.cartCreate?.cart?.checkoutUrl;
+  if (checkoutUrl) {
+    window.location.href = checkoutUrl;
+  }
+}
+
 export default function LoginPage() {
   const router = useRouter();
-  const { sendOTPEmail, isSignedIn, authLoading, onboardingCompleted, email: contextEmail } = useMembership();
+  const { sendOTPEmail, isSignedIn, authLoading, onboardingCompleted, completeOnboarding, setTier, email: contextEmail } = useMembership();
+  const pendingOnboardingHandled = useRef(false);
 
   // Detect email link synchronously on first render so we never flash the form
   const [step, setStep] = useState<Step>(() => {
@@ -98,10 +153,49 @@ export default function LoginPage() {
 
   /* ── Redirect once authenticated ── */
   useEffect(() => {
-    if (!authLoading && isSignedIn) {
-      router.replace(onboardingCompleted ? "/home" : "/onboarding");
+    if (authLoading || !isSignedIn) return;
+    if (pendingOnboardingHandled.current) return;
+
+    const raw = (() => {
+      try { return sessionStorage.getItem(PENDING_ONBOARDING_DATA_KEY); } catch { return null; }
+    })();
+
+    if (raw && !onboardingCompleted) {
+      pendingOnboardingHandled.current = true;
+      try {
+        const data = JSON.parse(raw) as {
+          username: string;
+          onboardingProfile: Record<string, unknown>;
+          fitProfile?: Record<string, unknown>;
+          selectedTier: "free" | "access" | "member";
+        };
+        try { sessionStorage.removeItem(PENDING_ONBOARDING_DATA_KEY); } catch {}
+
+        const { selectedTier, username, onboardingProfile, fitProfile } = data;
+
+        void completeOnboarding({
+          username,
+          onboardingProfile: onboardingProfile as unknown as Parameters<typeof completeOnboarding>[0]["onboardingProfile"],
+          fitProfile: fitProfile as unknown as Parameters<typeof completeOnboarding>[0]["fitProfile"],
+        }).then(() => {
+          setTier(selectedTier);
+          if (selectedTier === "access" || selectedTier === "member") {
+            return createCheckoutAndRedirect(selectedTier);
+          } else {
+            router.replace("/home");
+          }
+        }).catch((err) => {
+          console.error("[Login] pending onboarding apply failed:", err);
+          router.replace("/onboarding");
+        });
+      } catch {
+        router.replace(onboardingCompleted ? "/home" : "/onboarding");
+      }
+      return;
     }
-  }, [authLoading, isSignedIn, onboardingCompleted, router]);
+
+    router.replace(onboardingCompleted ? "/home" : "/onboarding");
+  }, [authLoading, isSignedIn, onboardingCompleted, router, completeOnboarding, setTier]);
 
   /* ── Resend cooldown countdown ── */
   useEffect(() => {

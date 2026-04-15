@@ -1,13 +1,21 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
+import Link from "next/link";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { isAllowedAdminEmail } from "@/lib/adminEmailAllowlist";
 
+const NAV_LINKS = [
+  { href: "/admin/users", label: "Users" },
+  { href: "/admin/funnel", label: "Funnel" },
+  { href: "/admin/email-replies", label: "Reply queue" },
+];
+
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [status, setStatus] = useState<"loading" | "authorized" | "unauthorized">("loading");
 
   useEffect(() => {
@@ -41,5 +49,32 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     );
   }
 
-  return <>{children}</>;
+  return (
+    <div className="min-h-screen bg-cream">
+      <nav className="border-b border-taupe/20 bg-white">
+        <div className="max-w-6xl mx-auto px-6 flex items-center gap-8 h-12">
+          <span className="font-serif text-sm text-obsidian font-medium">Admin</span>
+          <div className="flex items-center gap-6">
+            {NAV_LINKS.map((link) => {
+              const active = pathname === link.href || pathname.startsWith(link.href + "/");
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={`text-sm transition-colors duration-200 ${
+                    active
+                      ? "text-forest font-medium"
+                      : "text-charcoal/50 hover:text-charcoal"
+                  }`}
+                >
+                  {link.label}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      </nav>
+      {children}
+    </div>
+  );
 }
