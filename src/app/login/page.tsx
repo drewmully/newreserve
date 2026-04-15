@@ -157,7 +157,7 @@ export default function LoginPage() {
     if (pendingOnboardingHandled.current) return;
 
     const raw = (() => {
-      try { return sessionStorage.getItem(PENDING_ONBOARDING_DATA_KEY); } catch { return null; }
+      try { return localStorage.getItem(PENDING_ONBOARDING_DATA_KEY); } catch { return null; }
     })();
 
     if (raw && !onboardingCompleted) {
@@ -169,7 +169,7 @@ export default function LoginPage() {
           fitProfile?: Record<string, unknown>;
           selectedTier: "free" | "access" | "member";
         };
-        try { sessionStorage.removeItem(PENDING_ONBOARDING_DATA_KEY); } catch {}
+        try { localStorage.removeItem(PENDING_ONBOARDING_DATA_KEY); } catch {}
 
         const { selectedTier, username, onboardingProfile, fitProfile } = data;
 

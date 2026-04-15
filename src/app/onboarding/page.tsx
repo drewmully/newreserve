@@ -160,9 +160,9 @@ export default function OnboardingPage() {
     };
 
     if (isPreAuth) {
-      // Save data to sessionStorage, then send magic link
+      // Save data to localStorage (persists across tabs — needed when magic link opens in new tab)
       try {
-        sessionStorage.setItem(
+        localStorage.setItem(
           PENDING_ONBOARDING_DATA_KEY,
           JSON.stringify({ ...onboardingData, selectedTier: newTier })
         );
