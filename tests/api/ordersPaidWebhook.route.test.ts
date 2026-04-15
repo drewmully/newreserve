@@ -199,4 +199,90 @@ describe("POST /api/webhooks/shopify/orders-paid", () => {
       shopify_customer_id: "999",
     });
   });
+
+  it("matches Shopify GID customer ids and uses the Firebase UID for purchases", async () => {
+    const receiptGet = vi.fn().mockResolvedValue({ exists: false });
+    const receiptSet = vi.fn().mockResolvedValue(undefined);
+    const userUpdate = vi.fn().mockResolvedValue(undefined);
+    const emptyUsersGet = vi.fn().mockResolvedValue({ empty: true, docs: [] });
+    const gidUsersGet = vi.fn().mockResolvedValue({
+      empty: false,
+      docs: [
+        {
+          id: "firebase_uid_456",
+          data: () => ({ shopify_customer_id: "gid://shopify/Customer/9352715862208" }),
+          ref: { update: userUpdate },
+        },
+      ],
+    });
+
+    adminDbCollectionMock.mockImplementation((name: string) => {
+      if (name === "webhook_receipts") {
+        return {
+          doc: vi.fn(() => ({
+            get: receiptGet,
+            set: receiptSet,
+          })),
+        };
+      }
+      if (name === "users") {
+        return {
+          where: vi.fn((_field: string, _operator: string, value: string) => ({
+            limit: vi.fn(() => ({
+              get: value === "gid://shopify/Customer/9352715862208"
+                ? gidUsersGet
+                : emptyUsersGet,
+            })),
+          })),
+        };
+      }
+      throw new Error(`Unexpected collection ${name}`);
+    });
+
+    const body = JSON.stringify({
+      id: 1002,
+      order_number: 78,
+      email: "member@example.com",
+      phone: null,
+      total_price: "249.00",
+      currency: "USD",
+      customer: { id: 9352715862208, email: "member@example.com" },
+      line_items: [
+        {
+          id: 1,
+          title: "Reserve Access Plan",
+          quantity: 1,
+          price: "99.00",
+          sku: "ACCESS",
+          variant_id: 47601025482944,
+        },
+      ],
+    });
+
+    const { POST } = await loadRoute();
+    const res = await POST(
+      buildRequest({
+        body,
+        secret: "webhook_secret",
+        webhookId: "wh_gid",
+      })
+    );
+
+    expect(res.status).toBe(200);
+    expect(dispatchAnalyticsEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event_name: "purchase",
+        user_id: "firebase_uid_456",
+        properties: expect.objectContaining({
+          reserve_user_id: "firebase_uid_456",
+          shopify_customer_id: "9352715862208",
+        }),
+      })
+    );
+    expect(dispatchAnalyticsEventMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        user_id: "9352715862208",
+      })
+    );
+  });
 });

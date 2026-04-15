@@ -120,15 +120,28 @@ async function findFirstUserByField(
   return snap.empty ? null : (snap.docs[0] as UserDocSnapshot);
 }
 
+function getShopifyCustomerIdCandidates(customerId?: string): string[] {
+  if (!customerId) return [];
+
+  const trimmed = customerId.trim();
+  if (!trimmed) return [];
+
+  const numericId = trimmed.match(/(\d+)$/)?.[1] ?? trimmed;
+  const gid = `gid://shopify/Customer/${numericId}`;
+
+  return Array.from(new Set([trimmed, numericId, gid]));
+}
+
 async function resolvePurchaseUserDoc(
   shopifyCustomerId?: string,
   email?: string
 ): Promise<UserDocSnapshot | null> {
-  return (
-    (await findFirstUserByField("shopify_customer_id", shopifyCustomerId)) ??
-    (await findFirstUserByField("email", email)) ??
-    null
-  );
+  for (const candidate of getShopifyCustomerIdCandidates(shopifyCustomerId)) {
+    const userDoc = await findFirstUserByField("shopify_customer_id", candidate);
+    if (userDoc) return userDoc;
+  }
+
+  return (await findFirstUserByField("email", email)) ?? null;
 }
 
 // ─── Shopify order shape (minimal) ───────────────────────────────────────────
@@ -196,9 +209,9 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     console.error("[orders-paid] user lookup failed:", err);
   }
-  const reserveUserId = purchaseUserDoc?.id;
+  const firebaseUid = purchaseUserDoc?.id;
   const purchaseDistinctId =
-    reserveUserId ??
+    firebaseUid ??
     email ??
     (shopifyCustomerId ? `shopify-${shopifyCustomerId}` : `shopify-${order.id}`);
   const shopperIp =
@@ -219,7 +232,7 @@ export async function POST(request: NextRequest) {
       order_id: String(order.order_number),
       shopify_order_id: String(order.id),
       shopify_customer_id: shopifyCustomerId,
-      reserve_user_id: reserveUserId,
+      reserve_user_id: firebaseUid,
       value,
       currency: order.currency,
       items: order.line_items.map((item) => ({
