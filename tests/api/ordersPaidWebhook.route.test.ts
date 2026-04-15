@@ -148,6 +148,11 @@ describe("POST /api/webhooks/shopify/orders-paid", () => {
       phone: null,
       total_price: "249.00",
       currency: "USD",
+      browser_ip: "198.51.100.24",
+      client_details: {
+        browser_ip: "198.51.100.24",
+        user_agent: "Shopify Checkout Browser",
+      },
       customer: { id: 999, email: "member@example.com" },
       line_items: [
         {
@@ -174,6 +179,13 @@ describe("POST /api/webhooks/shopify/orders-paid", () => {
     expect(res.status).toBe(200);
     expect(json).toEqual({ ok: true });
     expect(dispatchAnalyticsEventMock).toHaveBeenCalledTimes(1);
+    expect(dispatchAnalyticsEventMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event_name: "purchase",
+        ip: "198.51.100.24",
+        user_agent: "Shopify Checkout Browser",
+      })
+    );
     expect(persistAnalyticsEventMock).toHaveBeenCalledTimes(1);
     expect(aggregateKpiDailyMock).toHaveBeenCalledTimes(1);
     expect(userUpdate).toHaveBeenCalledWith({

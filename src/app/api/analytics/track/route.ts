@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { getClientIp } from "@/app/api/_lib/clientIp";
 import { dispatchAnalyticsEvent } from "@/app/api/_lib/analytics";
 import { recordAISalesSignal } from "@/app/api/_lib/aiSalesAgents";
 import {
@@ -21,14 +22,6 @@ const VALID_EVENTS = new Set([
   "subscription_state",
   "registry_applied",
 ]);
-
-function getClientIp(request: NextRequest): string | undefined {
-  return (
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    request.headers.get("x-real-ip") ??
-    undefined
-  );
-}
 
 function getBearerToken(request: NextRequest): string | null {
   const header = request.headers.get("authorization");
@@ -190,7 +183,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const ip = getClientIp(request);
+  const ip = getClientIp(request.headers);
   const rateLimitKey =
     uid ?? ip ?? sanitizeString(body.anonymous_id, 128) ?? "anonymous";
   const rateLimit = checkRateLimit("analytics_track", rateLimitKey, {

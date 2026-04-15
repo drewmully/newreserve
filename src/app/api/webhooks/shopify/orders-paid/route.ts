@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { randomUUID } from "crypto";
 import { dispatchAnalyticsEvent } from "@/app/api/_lib/analytics";
+import { getClientIp } from "@/app/api/_lib/clientIp";
 import {
   persistAnalyticsEvent,
   aggregateKpiDaily,
@@ -119,6 +120,11 @@ interface ShopifyOrder {
   phone: string | null;
   total_price: string;
   currency: string;
+  browser_ip?: string | null;
+  client_details?: {
+    browser_ip?: string | null;
+    user_agent?: string | null;
+  } | null;
   customer?: {
     id: number;
     email: string | null;
@@ -154,11 +160,20 @@ export async function POST(request: NextRequest) {
   const email = order.email ?? order.customer?.email ?? undefined;
   const shopifyCustomerId = order.customer?.id?.toString();
   const value = parseFloat(order.total_price);
+  const shopperIp =
+    getClientIp(new Headers({ "x-forwarded-for": order.browser_ip ?? "" })) ??
+    getClientIp(
+      new Headers({
+        "x-forwarded-for": order.client_details?.browser_ip ?? "",
+      })
+    );
 
   const event = {
     event_name: "purchase" as const,
     user_id: shopifyCustomerId,
     email,
+    ip: shopperIp,
+    user_agent: order.client_details?.user_agent ?? undefined,
     properties: {
       order_id: String(order.order_number),
       shopify_order_id: String(order.id),

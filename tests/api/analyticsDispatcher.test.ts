@@ -49,6 +49,7 @@ describe("dispatchAnalyticsEvent PostHog identity", () => {
     await dispatchAnalyticsEvent({
       event_name: "page_view",
       anonymous_id: "anon-123",
+      ip: "203.0.113.20",
       page_url: "https://example.com/shop",
       properties: {
         path: "/shop",
@@ -71,6 +72,7 @@ describe("dispatchAnalyticsEvent PostHog identity", () => {
           anonymous_id: "anon-123",
           is_authenticated: false,
           path: "/shop",
+          $ip: "203.0.113.20",
           $current_url: "https://example.com/shop",
           $session_id: "session-123",
         }),

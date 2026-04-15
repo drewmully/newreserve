@@ -169,6 +169,7 @@ describe("POST /api/analytics/track", () => {
         user_id: "uid_123",
         email: "member@example.com",
         phone: "5551234567",
+        ip: "203.0.113.10",
         page_url: "https://example.com/shop",
         segments: ["vip", "member"],
         properties: {
