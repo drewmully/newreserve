@@ -584,7 +584,7 @@ export default function Home() {
                 Company
               </h4>
               <ul className="space-y-2.5">
-                <FooterLink href="https://outings-self.vercel.app">Outings &amp; Groups</FooterLink>
+                <FooterLink href="/outings">Outings &amp; Groups</FooterLink>
                 <FooterLink href="/blog">Blog</FooterLink>
                 <FooterLink href="/faq">FAQ</FooterLink>
                 <FooterLink href="/login">Log In</FooterLink>

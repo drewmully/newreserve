@@ -1077,9 +1077,7 @@ export default function HomeLabPage() {
                   </div>
                   <div className="flex flex-wrap gap-3">
                     <a
-                      href="https://outings-self.vercel.app"
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      href="/outings"
                       className="inline-flex items-center gap-2 rounded-full bg-forest px-5 py-3 text-sm font-medium text-bone hover:bg-forest-dark transition-colors btn-press"
                     >
                       Outings & groups
