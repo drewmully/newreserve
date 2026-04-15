@@ -18,7 +18,8 @@ import {
   persistAnalyticsEvent,
   aggregateKpiDaily,
 } from "@/app/api/_lib/kpiReporting";
-import { adminDb } from "@/lib/firebase-admin";
+import { adminDb, adminAuth } from "@/lib/firebase-admin";
+import { sendPlainText } from "@/lib/email/resend";
 import { resolveMemberTierFromVariantId } from "@/lib/membershipConfig";
 import { startFlow, type EmailFlow } from "@/lib/email/sequences";
 
@@ -128,6 +129,7 @@ interface ShopifyOrder {
   customer?: {
     id: number;
     email: string | null;
+    first_name?: string | null;
   };
   line_items: ShopifyLineItem[];
 }
@@ -203,7 +205,50 @@ export async function POST(request: NextRequest) {
             .where("email", "==", email)
             .limit(1)
             .get();
-          if (!snap.empty) {
+
+          const emailFlow = tier === "member" || tier === "black" ? "member" : "access";
+
+          if (snap.empty) {
+            // New user from pre-auth paid onboarding flow — create Firebase account + send magic link
+            let uid: string;
+            try {
+              const newUser = await adminAuth.createUser({ email });
+              uid = newUser.uid;
+            } catch {
+              // User might already exist in Firebase Auth (edge case) — look them up
+              try {
+                const existing = await adminAuth.getUserByEmail(email);
+                uid = existing.uid;
+              } catch (err) {
+                console.error("[orders-paid] could not create or find Firebase user for", email, err);
+                return;
+              }
+            }
+
+            await adminDb.collection("users").doc(uid).set({
+              email,
+              tier,
+              shopify_customer_id: shopifyCustomerId ?? null,
+              onboarding_completed: false,
+              created_at: Date.now(),
+              updated_at: Date.now(),
+            });
+
+            const magicLink = await adminAuth.generateSignInWithEmailLink(email, {
+              url: "https://mymully.com/login",
+              handleCodeInApp: true,
+            });
+
+            const firstName = order.customer?.first_name ?? null;
+            await sendPlainText({
+              to: email,
+              subject: "Unlock your Mully account",
+              text: `Hey${firstName ? ` ${firstName}` : ""},\n\nYour membership is confirmed. Click the link below to unlock your dashboard:\n\n${magicLink}\n\nSee you inside,\nDrew`,
+            });
+
+            await triggerEmailFlow(uid, email, firstName, emailFlow);
+          } else {
+            // Existing user — update tier only
             const userDoc = snap.docs[0];
             const uid = userDoc.id;
             const userData = userDoc.data();
@@ -213,8 +258,6 @@ export async function POST(request: NextRequest) {
             }
             await userDoc.ref.update(updates);
 
-            // Trigger email flow for the new tier (access or member)
-            const emailFlow = tier === "member" || tier === "black" ? "member" : "access";
             const firstName = (userData.username as string | undefined) ?? null;
             await triggerEmailFlow(uid, email, firstName, emailFlow);
           }

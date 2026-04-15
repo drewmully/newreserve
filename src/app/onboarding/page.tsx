@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useMembership } from "../context/MembershipContext";
 import { sendOTPEmail } from "@/lib/firebase";
+import { createMembershipCheckout } from "@/lib/shopifyCheckout";
 import { PENDING_ONBOARDING_EMAIL_KEY } from "../components/EmailCTA";
 import {
   FIT_SHIRT_SIZES, FIT_GLOVE_HANDS, FIT_GLOVE_SIZES,
@@ -167,8 +168,25 @@ export default function OnboardingPage() {
           JSON.stringify({ ...onboardingData, selectedTier: newTier })
         );
       } catch {}
+
       setSendingLink(true);
       setSendLinkError(null);
+
+      if (newTier === "access" || newTier === "member") {
+        // Paid flow: go directly to Shopify checkout — magic link sent after payment via webhook
+        // Pre-set emailForSignIn so the login page can auto-confirm when the magic link is clicked
+        try { localStorage.setItem("emailForSignIn", preAuthEmail); } catch {}
+        try {
+          await createMembershipCheckout(newTier);
+        } catch (err) {
+          setSendLinkError("Couldn't start checkout. Please try again.");
+          console.error("[Onboarding] createMembershipCheckout failed:", err);
+          setSendingLink(false);
+        }
+        return;
+      }
+
+      // Free flow: send magic link now
       try {
         await sendOTPEmail(preAuthEmail);
         setMagicLinkSent(true);

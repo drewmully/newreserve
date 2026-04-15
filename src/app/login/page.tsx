@@ -6,10 +6,10 @@ import Link from "next/link";
 import { useMembership } from "../context/MembershipContext";
 import { auth, isSignInWithEmailLink, confirmOTPSignIn, signInWithGoogle } from "@/lib/firebase";
 import { PENDING_SIGN_IN_EMAIL_KEY } from "@/lib/pendingSignInEmail";
-import { SHOPIFY_MEMBERSHIP_PLANS } from "@/lib/membershipConfig";
-import { buildCheckoutOriginAttributes } from "@/lib/shopifyCheckoutOrigin";
+import { createMembershipCheckout } from "@/lib/shopifyCheckout";
 
 const PENDING_ONBOARDING_DATA_KEY = "pending_onboarding_data";
+const POST_CHECKOUT_KEY = "mully_post_checkout";
 
 /* ═══════════════════════════════════════════
    LOGIN PAGE  —  passwordless Email Link flow
@@ -48,55 +48,6 @@ function mapAuthError(code: string): string {
   return messages[code] ?? "Something went wrong. Please try again.";
 }
 
-async function createCheckoutAndRedirect(tier: "access" | "member") {
-  const PLANS = {
-    access: {
-      merchandiseId: SHOPIFY_MEMBERSHIP_PLANS.access.merchandiseId,
-      sellingPlanId: SHOPIFY_MEMBERSHIP_PLANS.access.sellingPlanGid,
-    },
-    member: {
-      merchandiseId: SHOPIFY_MEMBERSHIP_PLANS.member.merchandiseId,
-      sellingPlanId: SHOPIFY_MEMBERSHIP_PLANS.member.sellingPlanGid,
-    },
-  };
-  const { merchandiseId, sellingPlanId } = PLANS[tier];
-  const domain = process.env.NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN;
-  const token = process.env.NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN;
-  if (!domain || !token) return;
-
-  const returnTo = `${window.location.origin}/auth/callback`;
-  const attributes = buildCheckoutOriginAttributes(returnTo);
-
-  const res = await fetch(`https://${domain}/api/2024-10/graphql.json`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Shopify-Storefront-Access-Token": token,
-    },
-    body: JSON.stringify({
-      query: `mutation CreateSubscriptionCart(
-        $merchandiseId: ID!
-        $sellingPlanId: ID!
-        $attributes: [AttributeInput!]
-      ) {
-        cartCreate(input: {
-          lines: [{ merchandiseId: $merchandiseId, quantity: 1, sellingPlanId: $sellingPlanId }],
-          attributes: $attributes
-        }) {
-          cart { checkoutUrl }
-          userErrors { field message }
-        }
-      }`,
-      variables: { merchandiseId, sellingPlanId, attributes },
-    }),
-  });
-
-  const json = await res.json();
-  const checkoutUrl = json?.data?.cartCreate?.cart?.checkoutUrl;
-  if (checkoutUrl) {
-    window.location.href = checkoutUrl;
-  }
-}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -173,14 +124,21 @@ export default function LoginPage() {
 
         const { selectedTier, username, onboardingProfile, fitProfile } = data;
 
+        const alreadyPaid = (() => {
+          try { return !!localStorage.getItem(POST_CHECKOUT_KEY); } catch { return false; }
+        })();
+        if (alreadyPaid) {
+          try { localStorage.removeItem(POST_CHECKOUT_KEY); } catch {}
+        }
+
         void completeOnboarding({
           username,
           onboardingProfile: onboardingProfile as unknown as Parameters<typeof completeOnboarding>[0]["onboardingProfile"],
           fitProfile: fitProfile as unknown as Parameters<typeof completeOnboarding>[0]["fitProfile"],
         }).then(() => {
           setTier(selectedTier);
-          if (selectedTier === "access" || selectedTier === "member") {
-            return createCheckoutAndRedirect(selectedTier);
+          if (!alreadyPaid && (selectedTier === "access" || selectedTier === "member")) {
+            return createMembershipCheckout(selectedTier);
           } else {
             router.replace("/home");
           }

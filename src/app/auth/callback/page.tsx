@@ -16,9 +16,10 @@ export default function AuthCallbackPage() {
   const router = useRouter();
   const { isSignedIn, authLoading } = useMembership();
 
-  // Redirect unauthenticated visitors to login
+  // Redirect unauthenticated visitors to login — they came back from Shopify checkout
   useEffect(() => {
     if (!authLoading && !isSignedIn) {
+      try { localStorage.setItem("mully_post_checkout", "true"); } catch {}
       router.replace("/login");
     }
   }, [authLoading, isSignedIn, router]);
