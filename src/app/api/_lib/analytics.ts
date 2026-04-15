@@ -233,6 +233,7 @@ function getPostHogEventProperties(event: AnalyticsEvent) {
     phone: event.phone,
     is_authenticated: Boolean(event.user_id || event.email),
     $ip: event.ip,
+    raw_ip: event.ip,
     $user_agent: event.user_agent,
     $current_url: event.page_url,
     segments: event.segments?.length ? event.segments : undefined,

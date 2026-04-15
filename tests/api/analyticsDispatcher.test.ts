@@ -73,6 +73,7 @@ describe("dispatchAnalyticsEvent PostHog identity", () => {
           is_authenticated: false,
           path: "/shop",
           $ip: "203.0.113.20",
+          raw_ip: "203.0.113.20",
           $current_url: "https://example.com/shop",
           $session_id: "session-123",
         }),
