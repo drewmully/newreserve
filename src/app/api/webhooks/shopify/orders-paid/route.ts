@@ -235,7 +235,7 @@ export async function POST(request: NextRequest) {
             });
 
             const magicLink = await adminAuth.generateSignInWithEmailLink(email, {
-              url: "https://mymully.com/login",
+              url: "https://mymully.com/login?paid=1",
               handleCodeInApp: true,
             });
 

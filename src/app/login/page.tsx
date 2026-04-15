@@ -125,7 +125,12 @@ export default function LoginPage() {
         const { selectedTier, username, onboardingProfile, fitProfile } = data;
 
         const alreadyPaid = (() => {
-          try { return !!localStorage.getItem(POST_CHECKOUT_KEY); } catch { return false; }
+          try {
+            // Set by the magic link URL (?paid=1) when webhook generates the link post-checkout
+            if (new URLSearchParams(window.location.search).get("paid") === "1") return true;
+            // Fallback: flag set when user returned through /auth/callback
+            return !!localStorage.getItem(POST_CHECKOUT_KEY);
+          } catch { return false; }
         })();
         if (alreadyPaid) {
           try { localStorage.removeItem(POST_CHECKOUT_KEY); } catch {}
