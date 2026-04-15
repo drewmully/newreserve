@@ -23,21 +23,30 @@ export function EmailCTA({ variant = "hero" }: { variant?: "hero" | "bottom" }) 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
-      const data = await res.json() as { exists?: boolean };
 
-      if (data.exists) {
+      let exists = false;
+      if (res.ok) {
+        try {
+          const data = await res.json() as { exists?: boolean };
+          exists = data.exists === true;
+        } catch {
+          // JSON parse failed — treat as new user
+        }
+      }
+
+      if (exists) {
         // Existing user → normal login flow
         try { sessionStorage.setItem(PENDING_SIGN_IN_EMAIL_KEY, email); } catch {}
         router.push("/login");
       } else {
-        // New user → onboarding first
+        // New user (or error) → onboarding first
         try { sessionStorage.setItem(PENDING_ONBOARDING_EMAIL_KEY, email); } catch {}
         router.push("/onboarding");
       }
     } catch {
-      // On error fall back to login
-      try { sessionStorage.setItem(PENDING_SIGN_IN_EMAIL_KEY, email); } catch {}
-      router.push("/login");
+      // Network error — treat as new user
+      try { sessionStorage.setItem(PENDING_ONBOARDING_EMAIL_KEY, email); } catch {}
+      router.push("/onboarding");
     } finally {
       setLoading(false);
     }
