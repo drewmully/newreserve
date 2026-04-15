@@ -7,16 +7,41 @@
  */
 
 const ANON_ID_KEY = "mully_anon_id";
+const SESSION_ID_KEY = "mully_session_id";
+
+function createTrackingId(prefix: string): string {
+  try {
+    if (typeof crypto !== "undefined" && crypto.randomUUID) {
+      return `${prefix}-${crypto.randomUUID()}`;
+    }
+  } catch {
+    // Fall through to the non-crypto fallback below.
+  }
+
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
 
 function getOrCreateAnonId(): string {
   try {
     const existing = localStorage.getItem(ANON_ID_KEY);
     if (existing) return existing;
-    const id = crypto.randomUUID();
+    const id = createTrackingId("anon");
     localStorage.setItem(ANON_ID_KEY, id);
     return id;
   } catch {
-    return "anon";
+    return createTrackingId("anon");
+  }
+}
+
+function getOrCreateSessionId(): string {
+  try {
+    const existing = sessionStorage.getItem(SESSION_ID_KEY);
+    if (existing) return existing;
+    const id = createTrackingId("session");
+    sessionStorage.setItem(SESSION_ID_KEY, id);
+    return id;
+  } catch {
+    return createTrackingId("session");
   }
 }
 
@@ -38,6 +63,39 @@ function getCookie(name: string): string | null {
   } catch {
     return null;
   }
+}
+
+function getAttributionProperties(): Record<string, string | null> {
+  return {
+    utm_source: getUrlParam("utm_source"),
+    utm_medium: getUrlParam("utm_medium"),
+    utm_campaign: getUrlParam("utm_campaign"),
+    utm_term: getUrlParam("utm_term"),
+    utm_content: getUrlParam("utm_content"),
+    gclid: getUrlParam("gclid"),
+    gbraid: getUrlParam("gbraid"),
+    wbraid: getUrlParam("wbraid"),
+    fbp: getCookie("_fbp"),
+    fbc: getCookie("_fbc"),
+  };
+}
+
+function getBrowserProperties(): Record<string, string | number | undefined> {
+  if (typeof window === "undefined") return {};
+
+  return {
+    page_title: document.title || undefined,
+    referrer: document.referrer || undefined,
+    path: window.location.pathname,
+    query: window.location.search || undefined,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    locale: navigator.language,
+    screen_width: window.screen?.width,
+    screen_height: window.screen?.height,
+    viewport_width: window.innerWidth,
+    viewport_height: window.innerHeight,
+    device_pixel_ratio: window.devicePixelRatio,
+  };
 }
 
 /**
@@ -77,6 +135,8 @@ export async function trackEvent(
     : null;
   let user_id = explicitUserId ?? currentUser?.uid;
   const email = explicitEmail ?? currentUser?.email ?? undefined;
+  const anonymous_id = getOrCreateAnonId();
+  const session_id = getOrCreateSessionId();
 
   try {
     const headers: Record<string, string> = {
@@ -102,17 +162,17 @@ export async function trackEvent(
         email,
         phone,
         segments,
-        anonymous_id: getOrCreateAnonId(),
+        anonymous_id,
         page_url:
           typeof window !== "undefined" ? window.location.href : undefined,
         properties: {
+          ...getBrowserProperties(),
           ...(properties ?? {}),
           ...propertyLikeFields,
-          gclid: getUrlParam("gclid"),
-          gbraid: getUrlParam("gbraid"),
-          wbraid: getUrlParam("wbraid"),
-          fbp: getCookie("_fbp"),
-          fbc: getCookie("_fbc"),
+          anonymous_id,
+          session_id,
+          $session_id: session_id,
+          ...getAttributionProperties(),
         },
       }),
     });

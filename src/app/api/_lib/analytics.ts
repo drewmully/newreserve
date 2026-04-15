@@ -182,6 +182,63 @@ async function fireGoogleAds(event: AnalyticsEvent): Promise<void> {
 
 // ─── PostHog capture API ─────────────────────────────────────────────────────
 
+function compactObject<T extends Record<string, unknown>>(value: T): T {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, item]) => item !== undefined)
+  ) as T;
+}
+
+function getPostHogDistinctId(event: AnalyticsEvent): string {
+  return event.user_id ?? event.email ?? event.anonymous_id ?? "anonymous";
+}
+
+function getPostHogPersonId(event: AnalyticsEvent): string | undefined {
+  return event.user_id ?? event.email;
+}
+
+function getEventDate(event: AnalyticsEvent): Date {
+  return event.timestamp ? new Date(event.timestamp * 1000) : new Date();
+}
+
+function getPostHogPersonProperties(event: AnalyticsEvent) {
+  const eventDate = getEventDate(event).toISOString();
+
+  return compactObject({
+    $set: compactObject({
+      email: event.email,
+      phone: event.phone,
+      reserve_user_id: event.user_id,
+      segments: event.segments?.length ? event.segments : undefined,
+      last_seen_at: eventDate,
+      last_seen_url: event.page_url,
+      last_event_name: event.event_name,
+    }),
+    $set_once: compactObject({
+      first_seen_at: eventDate,
+      first_anonymous_id: event.anonymous_id,
+    }),
+    $anon_distinct_id:
+      event.anonymous_id && event.anonymous_id !== getPostHogDistinctId(event)
+        ? event.anonymous_id
+        : undefined,
+  });
+}
+
+function getPostHogEventProperties(event: AnalyticsEvent) {
+  return compactObject({
+    ...(event.properties ?? {}),
+    reserve_user_id: event.user_id,
+    anonymous_id: event.anonymous_id,
+    email: event.email,
+    phone: event.phone,
+    is_authenticated: Boolean(event.user_id || event.email),
+    $ip: event.ip,
+    $user_agent: event.user_agent,
+    $current_url: event.page_url,
+    segments: event.segments?.length ? event.segments : undefined,
+  });
+}
+
 async function firePostHog(event: AnalyticsEvent): Promise<void> {
   const apiKey =
     process.env.POSTHOG_PROJECT_API_KEY ??
@@ -192,24 +249,24 @@ async function firePostHog(event: AnalyticsEvent): Promise<void> {
     process.env.POSTHOG_HOST ??
     process.env.NEXT_PUBLIC_POSTHOG_HOST ??
     "https://us.i.posthog.com";
-  const distinctId = event.user_id ?? event.email ?? "anonymous";
+  const distinctId = getPostHogDistinctId(event);
+  const personId = getPostHogPersonId(event);
 
   const posthog = new PostHog(apiKey, { host });
 
   try {
+    if (personId) {
+      posthog.identify({
+        distinctId: personId,
+        properties: getPostHogPersonProperties(event),
+      });
+    }
+
     posthog.capture({
       distinctId,
       event: event.event_name,
-      properties: {
-        ...(event.properties ?? {}),
-        $ip: event.ip,
-        $user_agent: event.user_agent,
-        $current_url: event.page_url,
-        segments: event.segments,
-      },
-      timestamp: event.timestamp
-        ? new Date(event.timestamp * 1000)
-        : new Date(),
+      properties: getPostHogEventProperties(event),
+      timestamp: getEventDate(event),
     });
   } finally {
     // Ensure pending events are flushed before the request lifecycle ends.

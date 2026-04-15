@@ -18,6 +18,7 @@ describe("trackEvent", () => {
   beforeEach(() => {
     authState.currentUser = null;
     localStorage.clear();
+    sessionStorage.clear();
     document.cookie = "";
     vi.stubGlobal(
       "fetch",
@@ -107,5 +108,38 @@ describe("trackEvent", () => {
     const body = JSON.parse(String(requestInit?.body));
     expect(body.user_id).toBeUndefined();
     expect(body.event_name).toBe("page_view");
+  });
+
+  it("sends stable anonymous, session, attribution, and browser context properties", async () => {
+    document.title = "Shop";
+    window.history.replaceState(
+      {},
+      "",
+      "/shop?gclid=abc123&utm_source=newsletter&utm_campaign=spring"
+    );
+
+    const { trackEvent } = await import("@/lib/tracking");
+    await trackEvent("page_view", {}, { includeAuth: false });
+
+    const [, requestInit] = vi.mocked(fetch).mock.calls[0]!;
+    const body = JSON.parse(String(requestInit?.body));
+
+    expect(body.anonymous_id).toMatch(/^anon-/);
+    expect(body.properties).toEqual(
+      expect.objectContaining({
+        anonymous_id: body.anonymous_id,
+        session_id: expect.stringMatching(/^session-/),
+        $session_id: expect.stringMatching(/^session-/),
+        path: "/shop",
+        query: "?gclid=abc123&utm_source=newsletter&utm_campaign=spring",
+        gclid: "abc123",
+        utm_source: "newsletter",
+        utm_campaign: "spring",
+        page_title: expect.any(String),
+        timezone: expect.any(String),
+        locale: expect.any(String),
+      })
+    );
+    expect(body.properties.$session_id).toBe(body.properties.session_id);
   });
 });
