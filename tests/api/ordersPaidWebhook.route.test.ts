@@ -114,6 +114,7 @@ describe("POST /api/webhooks/shopify/orders-paid", () => {
       empty: false,
       docs: [
         {
+          id: "uid_123",
           data: () => ({ shopify_customer_id: null }),
           ref: { update: userUpdate },
         },
@@ -182,8 +183,13 @@ describe("POST /api/webhooks/shopify/orders-paid", () => {
     expect(dispatchAnalyticsEventMock).toHaveBeenCalledWith(
       expect.objectContaining({
         event_name: "purchase",
+        user_id: "uid_123",
         ip: "198.51.100.24",
         user_agent: "Shopify Checkout Browser",
+        properties: expect.objectContaining({
+          reserve_user_id: "uid_123",
+          shopify_customer_id: "999",
+        }),
       })
     );
     expect(persistAnalyticsEventMock).toHaveBeenCalledTimes(1);

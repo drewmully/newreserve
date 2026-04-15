@@ -66,6 +66,7 @@ vi.mock("@/lib/firebase", () => ({
 }));
 
 vi.mock("@/lib/tracking", () => ({
+  identifyAnalyticsUser: vi.fn().mockResolvedValue(undefined),
   trackEvent: mocks.trackEvent,
 }));
 

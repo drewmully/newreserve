@@ -10,6 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import type { QueryDocumentSnapshot } from "firebase-admin/firestore";
 import crypto from "crypto";
 import { randomUUID } from "crypto";
 import { dispatchAnalyticsEvent } from "@/app/api/_lib/analytics";
@@ -92,6 +93,7 @@ async function isDuplicateWebhook(request: NextRequest): Promise<boolean> {
 // ─── Tier resolution ──────────────────────────────────────────────────────────
 
 type MemberTier = "free" | "access" | "member" | "black";
+type UserDocSnapshot = QueryDocumentSnapshot<Record<string, unknown>>;
 
 function resolveTierFromLineItems(
   lineItems: { variant_id: number | null }[]
@@ -101,6 +103,32 @@ function resolveTierFromLineItems(
     if (tier) return tier;
   }
   return null;
+}
+
+async function findFirstUserByField(
+  field: "shopify_customer_id" | "email",
+  value?: string | null
+): Promise<UserDocSnapshot | null> {
+  if (!value) return null;
+
+  const snap = await adminDb
+    .collection("users")
+    .where(field, "==", value)
+    .limit(1)
+    .get();
+
+  return snap.empty ? null : (snap.docs[0] as UserDocSnapshot);
+}
+
+async function resolvePurchaseUserDoc(
+  shopifyCustomerId?: string,
+  email?: string
+): Promise<UserDocSnapshot | null> {
+  return (
+    (await findFirstUserByField("shopify_customer_id", shopifyCustomerId)) ??
+    (await findFirstUserByField("email", email)) ??
+    null
+  );
 }
 
 // ─── Shopify order shape (minimal) ───────────────────────────────────────────
@@ -162,6 +190,17 @@ export async function POST(request: NextRequest) {
   const email = order.email ?? order.customer?.email ?? undefined;
   const shopifyCustomerId = order.customer?.id?.toString();
   const value = parseFloat(order.total_price);
+  let purchaseUserDoc: UserDocSnapshot | null = null;
+  try {
+    purchaseUserDoc = await resolvePurchaseUserDoc(shopifyCustomerId, email);
+  } catch (err) {
+    console.error("[orders-paid] user lookup failed:", err);
+  }
+  const reserveUserId = purchaseUserDoc?.id;
+  const purchaseDistinctId =
+    reserveUserId ??
+    email ??
+    (shopifyCustomerId ? `shopify-${shopifyCustomerId}` : `shopify-${order.id}`);
   const shopperIp =
     getClientIp(new Headers({ "x-forwarded-for": order.browser_ip ?? "" })) ??
     getClientIp(
@@ -172,13 +211,15 @@ export async function POST(request: NextRequest) {
 
   const event = {
     event_name: "purchase" as const,
-    user_id: shopifyCustomerId,
+    user_id: purchaseDistinctId,
     email,
     ip: shopperIp,
     user_agent: order.client_details?.user_agent ?? undefined,
     properties: {
       order_id: String(order.order_number),
       shopify_order_id: String(order.id),
+      shopify_customer_id: shopifyCustomerId,
+      reserve_user_id: reserveUserId,
       value,
       currency: order.currency,
       items: order.line_items.map((item) => ({
@@ -200,15 +241,9 @@ export async function POST(request: NextRequest) {
         const tier = resolveTierFromLineItems(order.line_items);
         if (!tier || tier === "free") return;
         try {
-          const snap = await adminDb
-            .collection("users")
-            .where("email", "==", email)
-            .limit(1)
-            .get();
-
           const emailFlow = tier === "member" || tier === "black" ? "member" : "access";
 
-          if (snap.empty) {
+          if (!purchaseUserDoc) {
             // New user from pre-auth paid onboarding flow — create Firebase account + send magic link
             let uid: string;
             try {
@@ -249,7 +284,7 @@ export async function POST(request: NextRequest) {
             await triggerEmailFlow(uid, email, firstName, emailFlow);
           } else {
             // Existing user — update tier only
-            const userDoc = snap.docs[0];
+            const userDoc = purchaseUserDoc;
             const uid = userDoc.id;
             const userData = userDoc.data();
             const updates: Record<string, unknown> = { tier };

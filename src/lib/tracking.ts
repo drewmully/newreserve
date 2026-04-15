@@ -115,6 +115,29 @@ interface TrackEventOptions {
   includeAuth?: boolean;
 }
 
+export interface IdentifyAnalyticsUserInput {
+  reserve_user_id: string;
+  email?: string | null;
+  phone?: string | null;
+}
+
+export async function identifyAnalyticsUser({
+  reserve_user_id,
+  email,
+  phone,
+}: IdentifyAnalyticsUserInput): Promise<void> {
+  try {
+    const { default: posthog } = await import("posthog-js");
+    posthog.identify(reserve_user_id, {
+      email: email ?? undefined,
+      phone: phone ?? undefined,
+      reserve_user_id,
+    });
+  } catch {
+    // Client analytics must never block auth.
+  }
+}
+
 export async function trackEvent(
   eventName: string,
   payload: TrackEventPayload = {},

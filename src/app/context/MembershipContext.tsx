@@ -16,7 +16,7 @@ import {
 } from "firebase/auth";
 import { doc, updateDoc, getDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db, syncUserProfile, sendOTPEmail, confirmOTPSignIn } from "@/lib/firebase";
-import { trackEvent } from "@/lib/tracking";
+import { identifyAnalyticsUser, trackEvent } from "@/lib/tracking";
 import {
   cartCreate,
   cartAttributesUpdate,
@@ -559,6 +559,11 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
 
         if (loginTrackedUidRef.current !== firebaseUser.uid) {
           loginTrackedUidRef.current = firebaseUser.uid;
+          void identifyAnalyticsUser({
+            reserve_user_id: firebaseUser.uid,
+            email: firebaseUser.email,
+            phone: firebaseUser.phoneNumber,
+          });
           void trackEvent("login", {
             properties: {
               auth_provider: firebaseUser.providerData[0]?.providerId ?? "unknown",

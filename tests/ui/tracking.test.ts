@@ -9,14 +9,24 @@ const authState = vi.hoisted(() => ({
       }
     | null,
 }));
+const posthogMock = vi.hoisted(() => ({
+  identify: vi.fn(),
+}));
 
 vi.mock("@/lib/firebase", () => ({
   auth: authState,
 }));
 
+vi.mock("posthog-js", () => ({
+  default: {
+    identify: posthogMock.identify,
+  },
+}));
+
 describe("trackEvent", () => {
   beforeEach(() => {
     authState.currentUser = null;
+    posthogMock.identify.mockClear();
     localStorage.clear();
     sessionStorage.clear();
     document.cookie = "";
@@ -141,5 +151,21 @@ describe("trackEvent", () => {
       })
     );
     expect(body.properties.$session_id).toBe(body.properties.session_id);
+  });
+
+  it("identifies the PostHog browser user after login", async () => {
+    const { identifyAnalyticsUser } = await import("@/lib/tracking");
+
+    await identifyAnalyticsUser({
+      reserve_user_id: "uid_123",
+      email: "member@example.com",
+      phone: "5551234567",
+    });
+
+    expect(posthogMock.identify).toHaveBeenCalledWith("uid_123", {
+      email: "member@example.com",
+      phone: "5551234567",
+      reserve_user_id: "uid_123",
+    });
   });
 });
