@@ -49,26 +49,5 @@ export async function POST(request: Request) {
     );
   }
 
-  // Send Slack notification
-  const slackToken = process.env.SLACK_BOT_TOKEN;
-  if (slackToken) {
-    try {
-      await fetch("https://slack.com/api/chat.postMessage", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${slackToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          channel: "C06K9L5M7EY",
-          text: `New Outing Inquiry!\n\n*Name:* ${name}\n*Email:* ${email}\n*Event Type:* ${eventType}\n*Guests:* ${guestCount}\n*Budget:* ${budget}${message ? `\n*Message:* ${message}` : ""}`,
-        }),
-      });
-    } catch (slackError) {
-      // Log but don't fail the request if Slack notification fails
-      console.error("Slack notification error:", slackError);
-    }
-  }
-
   return NextResponse.json({ success: true });
 }
