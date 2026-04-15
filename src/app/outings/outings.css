@@ -1,0 +1,305 @@
+/*
+ * Outings page styles — fully scoped under .outings-page
+ * This prevents any bleed into newreserve's existing theme.
+ */
+
+/* ── Outings CSS custom properties (scoped) ── */
+.outings-page {
+  --o-background: #0b1a12;
+  --o-foreground: #f2ede4;
+  --o-gold: #c8a951;
+  --o-gold-light: #dfc577;
+  --o-green-dark: #1a3328;
+  --o-green-medium: #2d5a3f;
+  --o-cream: #f2ede4;
+  --o-muted: #7a8c7a;
+  --o-surface: rgba(255, 255, 255, 0.035);
+  --o-surface-raised: #111e17;
+  --o-border-color: rgba(255, 255, 255, 0.08);
+  --o-font-serif: "Playfair Display", "Georgia", "Times New Roman", serif;
+  --o-font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  background: var(--o-background);
+  color: var(--o-foreground);
+  font-family: var(--o-font-sans);
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+
+/* ── Scroll reveal ── */
+.outings-page .reveal {
+  opacity: 0;
+  transform: translateY(32px);
+  transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.outings-page .reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.outings-page .reveal-delay-1 { transition-delay: 0.1s; }
+.outings-page .reveal-delay-2 { transition-delay: 0.2s; }
+.outings-page .reveal-delay-3 { transition-delay: 0.3s; }
+.outings-page .reveal-delay-4 { transition-delay: 0.4s; }
+.outings-page .reveal-delay-5 { transition-delay: 0.5s; }
+.outings-page .reveal-delay-6 { transition-delay: 0.6s; }
+
+/* ── Hero animations ── */
+@keyframes o-fadeInUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes o-fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes o-shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+.outings-page .animate-fade-in-up {
+  animation: o-fadeInUp 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.outings-page .animate-fade-in {
+  animation: o-fadeIn 1s ease forwards;
+}
+
+/* ── Gold shimmer text ── */
+.outings-page .gold-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--o-gold) 0%,
+    var(--o-gold-light) 30%,
+    var(--o-gold) 60%,
+    var(--o-gold-light) 80%,
+    var(--o-gold) 100%
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: o-shimmer 5s linear infinite;
+}
+
+/* ── Decorative gold line ── */
+.outings-page .gold-line {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--o-gold), transparent);
+}
+
+/* ── Card hover ── */
+.outings-page .o-card-hover {
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.4s ease;
+}
+
+.outings-page .o-card-hover:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  border-color: rgba(200, 169, 81, 0.25);
+}
+
+/* ── Primary button ── */
+.outings-page .btn-primary {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 32px;
+  border: 1px solid var(--o-gold);
+  color: var(--o-gold);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.outings-page .btn-primary::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--o-gold);
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 0;
+}
+
+.outings-page .btn-primary:hover::before {
+  transform: scaleX(1);
+  transform-origin: left;
+}
+
+.outings-page .btn-primary:hover {
+  color: var(--o-background);
+}
+
+.outings-page .btn-primary span {
+  position: relative;
+  z-index: 1;
+}
+
+.outings-page .btn-primary:focus-visible {
+  outline: 2px solid var(--o-gold);
+  outline-offset: 2px;
+}
+
+/* ── Filled button variant ── */
+.outings-page .btn-filled {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 28px;
+  border: none;
+  background: var(--o-gold);
+  color: var(--o-background);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.3s ease, transform 0.2s ease;
+}
+
+.outings-page .btn-filled:hover {
+  background: var(--o-gold-light);
+  transform: translateY(-1px);
+}
+
+.outings-page .btn-filled:focus-visible {
+  outline: 2px solid var(--o-gold);
+  outline-offset: 2px;
+}
+
+/* ── Form inputs ── */
+.outings-page .form-input {
+  width: 100%;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--o-cream);
+  font-size: 15px;
+  font-family: var(--o-font-sans);
+  transition: border-color 0.3s ease, background 0.3s ease;
+  outline: none;
+}
+
+.outings-page .form-input:focus-visible {
+  border-color: var(--o-gold);
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: 0 0 0 2px rgba(200, 169, 81, 0.15);
+}
+
+.outings-page .form-input::placeholder {
+  color: var(--o-muted);
+}
+
+/* ── Select wrapper (custom arrow) ── */
+.outings-page .select-wrapper {
+  position: relative;
+}
+
+.outings-page .select-wrapper::after {
+  content: '';
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 5px solid transparent;
+  border-top: 6px solid var(--o-muted);
+  pointer-events: none;
+}
+
+.outings-page .select-wrapper select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  padding-right: 40px;
+  cursor: pointer;
+}
+
+/* ── Image containers ── */
+.outings-page .img-container {
+  position: relative;
+  overflow: hidden;
+  background: var(--o-green-dark);
+}
+
+.outings-page .img-container img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.outings-page .img-container:hover img {
+  transform: scale(1.03);
+}
+
+/* ── Grain overlay ── */
+.outings-page .grain-overlay::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ── Selection ── */
+.outings-page ::selection {
+  background: rgba(200, 169, 81, 0.3);
+  color: var(--o-cream);
+}
+
+/* ── Tailwind color overrides for outings page ──
+   Map Tailwind utility classes to outings theme variables
+   so that classes like text-cream, bg-background, etc. work correctly
+   within the outings page context. */
+.outings-page {
+  --color-background: var(--o-background);
+  --color-foreground: var(--o-foreground);
+  --color-gold: var(--o-gold);
+  --color-gold-light: var(--o-gold-light);
+  --color-green-dark: var(--o-green-dark);
+  --color-green-medium: var(--o-green-medium);
+  --color-cream: var(--o-cream);
+  --color-muted: var(--o-muted);
+  --color-surface: var(--o-surface);
+  --color-surface-raised: var(--o-surface-raised);
+  --color-border: var(--o-border-color);
+  --font-serif: var(--o-font-serif);
+  --font-sans: var(--o-font-sans);
+}
+
+/* ── Reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+  .outings-page *,
+  .outings-page *::before,
+  .outings-page *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .outings-page .reveal {
+    opacity: 1;
+    transform: none;
+  }
+}
