@@ -120,9 +120,14 @@ export async function POST(request: NextRequest) {
           if (detail) detailedSub = detail;
         }
 
-        // Log all fields so we can discover Loop's actual field names
-        loopRawFields = Object.fromEntries(Object.entries(detailedSub));
-        const rawVariantId = detailedSub.shopify_variant_id ?? detailedSub.variant_id ?? null;
+        loopRawFields = { id: detailedSub.id, status: detailedSub.status };
+        // Loop returns variant info nested under lines[0].variantShopifyId
+        const lines = detailedSub.lines as { variantShopifyId?: unknown }[] | undefined;
+        const rawVariantId =
+          lines?.[0]?.variantShopifyId ??
+          detailedSub.shopify_variant_id ??
+          detailedSub.variant_id ??
+          null;
         loopVariantId = rawVariantId != null ? String(rawVariantId) : null;
         resolvedTier = resolveMemberTierFromVariantId(rawVariantId);
       }

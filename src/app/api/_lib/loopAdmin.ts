@@ -33,6 +33,7 @@ export interface LoopSubscription {
   shopify_customer_id?: string;
   variant_id?: number | string | null;
   shopify_variant_id?: number | string | null;
+  lines?: { variantShopifyId?: number | string | null; [key: string]: unknown }[];
   [key: string]: unknown; // allow unknown fields for raw inspection
 }
 
