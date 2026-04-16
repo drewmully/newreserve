@@ -77,8 +77,10 @@ export async function POST(request: NextRequest) {
   }
 
   const results: ResultRow[] = [];
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
   for (const doc of docs) {
+    await sleep(300); // avoid Loop API rate limiting
     const data = doc.data() as Record<string, unknown>;
     const uid = doc.id;
     const email = (data.email as string | null) ?? null;
@@ -118,11 +120,8 @@ export async function POST(request: NextRequest) {
           if (detail) detailedSub = detail;
         }
 
-        loopRawFields = Object.fromEntries(
-          Object.entries(detailedSub).filter(([k]) =>
-            ["id", "status", "variant_id", "shopify_variant_id", "selling_plan_id", "shopify_selling_plan_id", "product_id"].includes(k)
-          )
-        );
+        // Log all fields so we can discover Loop's actual field names
+        loopRawFields = Object.fromEntries(Object.entries(detailedSub));
         const rawVariantId = detailedSub.shopify_variant_id ?? detailedSub.variant_id ?? null;
         loopVariantId = rawVariantId != null ? String(rawVariantId) : null;
         resolvedTier = resolveMemberTierFromVariantId(rawVariantId);
