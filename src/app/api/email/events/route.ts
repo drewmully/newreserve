@@ -53,7 +53,7 @@ function verifyDevFallback(req: NextRequest): boolean {
 }
 
 function verifyAndParse(req: NextRequest, payload: string): ResendEventPayload {
-  const secret = process.env.RESEND_WEBHOOK_SECRET;
+  const secret = process.env.RESEND_EVENTS_WEBHOOK_SECRET ?? process.env.RESEND_WEBHOOK_SECRET;
 
   if (!secret) {
     if (!verifyDevFallback(req)) throw new Error("Webhook secret not configured");
