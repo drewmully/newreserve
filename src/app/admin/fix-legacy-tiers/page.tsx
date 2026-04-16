@@ -8,8 +8,8 @@ import { useMembership } from "@/app/context/MembershipContext";
 interface ResultRow {
   uid: string;
   email: string | null;
+  loop_plan_name: string | null;
   loop_variant_id: string | null;
-  loop_raw_fields: Record<string, unknown> | null;
   resolved_tier: string | null;
   action: "updated" | "skipped_no_shopify_id" | "skipped_unknown_variant" | "skipped_loop_error";
   error?: string;
@@ -188,7 +188,7 @@ export default function FixLegacyTiersPage() {
               <thead>
                 <tr className="border-b border-taupe/10 bg-bone/50">
                   <th className="text-left px-5 py-3 text-xs uppercase tracking-widest text-charcoal/40 font-medium">User</th>
-                  <th className="text-left px-5 py-3 text-xs uppercase tracking-widest text-charcoal/40 font-medium">Loop Variant</th>
+                  <th className="text-left px-5 py-3 text-xs uppercase tracking-widest text-charcoal/40 font-medium">Current Plan</th>
                   <th className="text-left px-5 py-3 text-xs uppercase tracking-widest text-charcoal/40 font-medium">New Tier</th>
                   <th className="text-left px-5 py-3 text-xs uppercase tracking-widest text-charcoal/40 font-medium">Status</th>
                 </tr>
@@ -200,13 +200,8 @@ export default function FixLegacyTiersPage() {
                       <p className="text-obsidian font-medium">{row.email ?? "—"}</p>
                       <p className="text-charcoal/40 text-xs">{row.uid}</p>
                     </td>
-                    <td className="px-5 py-3.5 font-mono text-xs text-charcoal/60">
-                      {row.loop_variant_id ?? "—"}
-                      {row.loop_raw_fields && (
-                        <pre className="mt-1 text-[10px] text-charcoal/40 whitespace-pre-wrap break-all">
-                          {JSON.stringify(row.loop_raw_fields, null, 2)}
-                        </pre>
-                      )}
+                    <td className="px-5 py-3.5 text-sm text-charcoal/70">
+                      {row.loop_plan_name ?? "—"}
                     </td>
                     <td className="px-5 py-3.5">
                       {row.resolved_tier ? (

@@ -32,8 +32,8 @@ async function verifyAdmin(request: NextRequest): Promise<string> {
 interface ResultRow {
   uid: string;
   email: string | null;
+  loop_plan_name: string | null;
   loop_variant_id: string | null;
-  loop_raw_fields: Record<string, unknown> | null;
   resolved_tier: string | null;
   action: "updated" | "skipped_no_shopify_id" | "skipped_unknown_variant" | "skipped_loop_error";
   error?: string;
@@ -92,8 +92,8 @@ export async function POST(request: NextRequest) {
       results.push({
         uid,
         email,
+        loop_plan_name: null,
         loop_variant_id: null,
-        loop_raw_fields: null,
         resolved_tier: null,
         action: "skipped_no_shopify_id",
       });
@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
 
     // 3. Fetch raw Loop subscriptions for this customer
     let loopVariantId: string | null = null;
-    let loopRawFields: Record<string, unknown> | null = null;
+    let loopPlanName: string | null = null;
     let resolvedTier: ReturnType<typeof resolveMemberTierFromVariantId> = null;
 
     try {
@@ -112,31 +112,40 @@ export async function POST(request: NextRequest) {
       if (activeSub) {
         let detailedSub = activeSub;
 
-        // The list endpoint only returns id+status. If variant is missing,
-        // fetch the full subscription detail to get variant_id.
+        // The list endpoint only returns id+status — fetch full detail for variant.
         const listVariant = activeSub.shopify_variant_id ?? activeSub.variant_id ?? null;
         if (listVariant == null) {
           const detail = await getLoopSubscriptionById(activeSub.id);
           if (detail) detailedSub = detail;
         }
 
-        loopRawFields = { id: detailedSub.id, status: detailedSub.status };
-        // Loop returns variant info nested under lines[0].variantShopifyId
-        const lines = detailedSub.lines as { variantShopifyId?: unknown }[] | undefined;
+        // Loop nests variant info under lines[0]
+        type LoopLine = { variantShopifyId?: unknown; productTitle?: string; sellingPlanName?: string };
+        const lines = detailedSub.lines as LoopLine[] | undefined;
+        const firstLine = lines?.[0];
+
         const rawVariantId =
-          lines?.[0]?.variantShopifyId ??
+          firstLine?.variantShopifyId ??
           detailedSub.shopify_variant_id ??
           detailedSub.variant_id ??
           null;
+
         loopVariantId = rawVariantId != null ? String(rawVariantId) : null;
         resolvedTier = resolveMemberTierFromVariantId(rawVariantId);
+
+        // Human-readable plan name for the UI
+        if (firstLine?.productTitle) {
+          loopPlanName = firstLine.sellingPlanName
+            ? `${firstLine.productTitle} · ${firstLine.sellingPlanName}`
+            : firstLine.productTitle;
+        }
       }
     } catch (err) {
       results.push({
         uid,
         email,
+        loop_plan_name: null,
         loop_variant_id: null,
-        loop_raw_fields: null,
         resolved_tier: null,
         action: "skipped_loop_error",
         error: err instanceof Error ? err.message : String(err),
@@ -149,8 +158,8 @@ export async function POST(request: NextRequest) {
       results.push({
         uid,
         email,
+        loop_plan_name: loopPlanName,
         loop_variant_id: loopVariantId,
-        loop_raw_fields: loopRawFields,
         resolved_tier: null,
         action: "skipped_unknown_variant",
       });
@@ -174,8 +183,8 @@ export async function POST(request: NextRequest) {
     results.push({
       uid,
       email,
+      loop_plan_name: loopPlanName,
       loop_variant_id: loopVariantId,
-      loop_raw_fields: loopRawFields,
       resolved_tier: resolvedTier,
       action: "updated",
     });
