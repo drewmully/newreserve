@@ -54,16 +54,23 @@ export async function POST(request: NextRequest) {
     // default to dry_run=true if body is missing
   }
 
-  // 1. Fetch all users with tier="free".
-  // We don't filter by subscriptions.status or shopify_customer_id here —
-  // legacy users may never have logged in so status was never cached,
-  // and != null queries require composite indexes. Loop acts as source of truth.
-  let snap: FirebaseFirestore.QuerySnapshot;
+  // 1. Fetch users with no paid tier. The admin UI shows tier ?? "free", so
+  // legacy users may have tier="free", tier=null, or a missing tier field.
+  // Run both queries and deduplicate by uid.
+  let docs: FirebaseFirestore.QueryDocumentSnapshot[];
   try {
-    snap = await adminDb
-      .collection("users")
-      .where("tier", "==", "free")
-      .get();
+    const [freeTierSnap, nullTierSnap] = await Promise.all([
+      adminDb.collection("users").where("tier", "==", "free").get(),
+      adminDb.collection("users").where("tier", "==", null).get(),
+    ]);
+    const seen = new Set<string>();
+    docs = [];
+    for (const doc of [...freeTierSnap.docs, ...nullTierSnap.docs]) {
+      if (!seen.has(doc.id)) {
+        seen.add(doc.id);
+        docs.push(doc);
+      }
+    }
   } catch (err) {
     console.error("[fix-legacy-tiers] Firestore query failed:", err);
     return NextResponse.json({ error: "Firestore query failed" }, { status: 500 });
@@ -71,7 +78,7 @@ export async function POST(request: NextRequest) {
 
   const results: ResultRow[] = [];
 
-  for (const doc of snap.docs) {
+  for (const doc of docs) {
     const data = doc.data() as Record<string, unknown>;
     const uid = doc.id;
     const email = (data.email as string | null) ?? null;
@@ -152,7 +159,7 @@ export async function POST(request: NextRequest) {
   }
 
   const summary = {
-    total_candidates: snap.size,
+    total_candidates: docs.length,
     would_update: results.filter((r) => r.action === "updated").length,
     skipped_no_shopify_id: results.filter((r) => r.action === "skipped_no_shopify_id").length,
     skipped_unknown_variant: results.filter((r) => r.action === "skipped_unknown_variant").length,
