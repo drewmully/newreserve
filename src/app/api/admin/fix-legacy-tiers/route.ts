@@ -33,6 +33,7 @@ interface ResultRow {
   uid: string;
   email: string | null;
   loop_variant_id: string | null;
+  loop_raw_fields: Record<string, unknown> | null;
   resolved_tier: string | null;
   action: "updated" | "skipped_no_shopify_id" | "skipped_unknown_variant" | "skipped_loop_error";
   error?: string;
@@ -90,6 +91,7 @@ export async function POST(request: NextRequest) {
         uid,
         email,
         loop_variant_id: null,
+        loop_raw_fields: null,
         resolved_tier: null,
         action: "skipped_no_shopify_id",
       });
@@ -98,6 +100,7 @@ export async function POST(request: NextRequest) {
 
     // 3. Fetch raw Loop subscriptions for this customer
     let loopVariantId: string | null = null;
+    let loopRawFields: Record<string, unknown> | null = null;
     let resolvedTier: ReturnType<typeof resolveMemberTierFromVariantId> = null;
 
     try {
@@ -105,7 +108,12 @@ export async function POST(request: NextRequest) {
       const activeSub = subs.find((s) => s.status === "ACTIVE");
 
       if (activeSub) {
-        // Loop may return variant_id or shopify_variant_id depending on the plan
+        // Capture all fields Loop returns for debugging unknown variants
+        loopRawFields = Object.fromEntries(
+          Object.entries(activeSub).filter(([k]) =>
+            ["id", "status", "variant_id", "shopify_variant_id", "selling_plan_id", "shopify_selling_plan_id", "product_id"].includes(k)
+          )
+        );
         const rawVariantId = activeSub.shopify_variant_id ?? activeSub.variant_id ?? null;
         loopVariantId = rawVariantId != null ? String(rawVariantId) : null;
         resolvedTier = resolveMemberTierFromVariantId(rawVariantId);
@@ -115,6 +123,7 @@ export async function POST(request: NextRequest) {
         uid,
         email,
         loop_variant_id: null,
+        loop_raw_fields: null,
         resolved_tier: null,
         action: "skipped_loop_error",
         error: err instanceof Error ? err.message : String(err),
@@ -128,6 +137,7 @@ export async function POST(request: NextRequest) {
         uid,
         email,
         loop_variant_id: loopVariantId,
+        loop_raw_fields: loopRawFields,
         resolved_tier: null,
         action: "skipped_unknown_variant",
       });
@@ -152,6 +162,7 @@ export async function POST(request: NextRequest) {
       uid,
       email,
       loop_variant_id: loopVariantId,
+      loop_raw_fields: loopRawFields,
       resolved_tier: resolvedTier,
       action: "updated",
     });
