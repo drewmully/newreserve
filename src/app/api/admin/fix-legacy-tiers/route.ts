@@ -54,15 +54,20 @@ export async function POST(request: NextRequest) {
     // default to dry_run=true if body is missing
   }
 
-  // 1. Fetch all users with tier="free" that have a shopify_customer_id.
-  // We don't filter by subscriptions.status here because legacy users may
-  // never have logged in after purchase, so that field was never cached.
-  // Loop itself acts as the source of truth for subscription status.
-  const snap = await adminDb
-    .collection("users")
-    .where("tier", "==", "free")
-    .where("shopify_customer_id", "!=", null)
-    .get();
+  // 1. Fetch all users with tier="free".
+  // We don't filter by subscriptions.status or shopify_customer_id here —
+  // legacy users may never have logged in so status was never cached,
+  // and != null queries require composite indexes. Loop acts as source of truth.
+  let snap: FirebaseFirestore.QuerySnapshot;
+  try {
+    snap = await adminDb
+      .collection("users")
+      .where("tier", "==", "free")
+      .get();
+  } catch (err) {
+    console.error("[fix-legacy-tiers] Firestore query failed:", err);
+    return NextResponse.json({ error: "Firestore query failed" }, { status: 500 });
+  }
 
   const results: ResultRow[] = [];
 
