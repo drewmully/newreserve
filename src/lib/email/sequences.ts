@@ -236,7 +236,15 @@ export async function processSequence(uid: string): Promise<void> {
   }
 
   const { subject, text } = template(seq.firstName);
-  await sendPlainText({ to: seq.email, subject, text });
+  await sendPlainText({
+    to: seq.email,
+    subject,
+    text,
+    tags: [
+      { name: "flow", value: seq.flow },
+      { name: "step", value: String(step) },
+    ],
+  });
 
   // Advance to the next step.
   const nextStep = step + 1;
@@ -309,7 +317,15 @@ export async function triggerEventStep(
   if (!template) return;
 
   const { subject, text } = template(seq.firstName);
-  await sendPlainText({ to: seq.email, subject, text });
+  await sendPlainText({
+    to: seq.email,
+    subject,
+    text,
+    tags: [
+      { name: "flow", value: seq.flow },
+      { name: "step", value: String(stepIndex) },
+    ],
+  });
 
   await ref.update({ lastSentStep: stepIndex });
 }

@@ -18,6 +18,10 @@ interface AdminUser {
   mullybox_active: boolean;
   store_credit_cents: number;
   segments: string[];
+  sequence_flow: string | null;
+  sequence_status: string | null;
+  sequence_last_step: number | null;
+  sequence_next_send_at: number | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -175,6 +179,7 @@ export default function AdminUsersPage() {
               <th className="text-left px-5 py-3 text-xs uppercase tracking-widest text-charcoal/40 font-medium">Tier</th>
               <th className="text-left px-5 py-3 text-xs uppercase tracking-widest text-charcoal/40 font-medium">Subscription</th>
               <th className="text-left px-5 py-3 text-xs uppercase tracking-widest text-charcoal/40 font-medium">Credit</th>
+              <th className="text-left px-5 py-3 text-xs uppercase tracking-widest text-charcoal/40 font-medium">Sequence</th>
               <th className="text-left px-5 py-3 text-xs uppercase tracking-widest text-charcoal/40 font-medium">Joined</th>
               <th className="text-left px-5 py-3 text-xs uppercase tracking-widest text-charcoal/40 font-medium">Last login</th>
             </tr>
@@ -182,13 +187,13 @@ export default function AdminUsersPage() {
           <tbody>
             {loading && users.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-5 py-10 text-center text-charcoal/40 text-sm">
+                <td colSpan={7} className="px-5 py-10 text-center text-charcoal/40 text-sm">
                   Loading...
                 </td>
               </tr>
             ) : users.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-5 py-10 text-center text-charcoal/40 text-sm">
+                <td colSpan={7} className="px-5 py-10 text-center text-charcoal/40 text-sm">
                   No users found.
                 </td>
               </tr>
@@ -217,6 +222,22 @@ export default function AdminUsersPage() {
                     {u.store_credit_cents > 0
                       ? `$${(u.store_credit_cents / 100).toFixed(2)}`
                       : "—"}
+                  </td>
+                  <td className="px-5 py-3.5">
+                    {u.sequence_flow ? (
+                      <div>
+                        <p className="text-xs text-charcoal/70">
+                          {u.sequence_flow} · step {(u.sequence_last_step ?? -1) + 1}
+                        </p>
+                        <p className={`text-xs mt-0.5 ${u.sequence_status === "paused" ? "text-ember/70" : u.sequence_status === "completed" ? "text-charcoal/30" : "text-charcoal/40"}`}>
+                          {u.sequence_status === "active" && u.sequence_next_send_at
+                            ? `next ${formatDate(u.sequence_next_send_at)}`
+                            : u.sequence_status ?? "—"}
+                        </p>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-charcoal/30">—</span>
+                    )}
                   </td>
                   <td className="px-5 py-3.5 text-charcoal/60">{formatDate(u.created_at)}</td>
                   <td className="px-5 py-3.5 text-charcoal/60">{formatDate(u.last_login)}</td>

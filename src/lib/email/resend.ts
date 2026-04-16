@@ -8,6 +8,7 @@ export interface PlainTextEmail {
   subject: string;
   text: string;
   idempotencyKey?: string;
+  tags?: { name: string; value: string }[];
 }
 
 function getResendClient(): Resend {
@@ -27,6 +28,7 @@ export async function sendPlainText(email: PlainTextEmail): Promise<string | nul
       to: email.to,
       subject: email.subject,
       text: email.text,
+      ...(email.tags ? { tags: email.tags } : {}),
     },
     email.idempotencyKey ? { idempotencyKey: email.idempotencyKey } : undefined
   );

@@ -55,26 +55,40 @@ export async function GET(request: NextRequest) {
 
     const snap = await query.get();
 
+    // Batch-fetch sequence states for all users on this page
+    const seqRefs = snap.docs.map((d) =>
+      adminDb.collection("email_sequences").doc(d.id)
+    );
+    const seqDocs = seqRefs.length > 0 ? await adminDb.getAll(...seqRefs) : [];
+    const seqMap = new Map(
+      seqDocs.map((d) => [d.id, d.exists ? (d.data() as Record<string, unknown>) : null])
+    );
+
     const users = snap.docs.map((doc) => {
       const d = doc.data() as Record<string, unknown>;
       const subs = (d.subscriptions ?? {}) as Record<string, unknown>;
       const credit = (d.store_credit ?? {}) as Record<string, unknown>;
+      const seq = seqMap.get(doc.id);
+      const toMs = (v: unknown) => {
+        const s = (v as { _seconds?: number } | null)?._seconds;
+        return s ? s * 1000 : null;
+      };
       return {
         uid: doc.id,
         email: d.email ?? null,
         username: d.username ?? null,
         tier: d.tier ?? "free",
-        created_at: (d.created_at as { _seconds?: number } | null)?._seconds
-          ? (d.created_at as { _seconds: number })._seconds * 1000
-          : null,
-        last_login: (d.last_login as { _seconds?: number } | null)?._seconds
-          ? (d.last_login as { _seconds: number })._seconds * 1000
-          : null,
+        created_at: toMs(d.created_at),
+        last_login: toMs(d.last_login),
         onboarding_completed: d.onboarding_completed ?? false,
         subscription_status: subs.status ?? "none",
         mullybox_active: subs.mullybox_active ?? false,
         store_credit_cents: credit.balance_cents ?? 0,
         segments: d.segments ?? [],
+        sequence_flow: seq?.flow ?? null,
+        sequence_status: seq?.status ?? null,
+        sequence_last_step: seq?.lastSentStep ?? null,
+        sequence_next_send_at: toMs(seq?.nextSendAt),
       };
     });
 
