@@ -175,8 +175,8 @@ export default function AdminUserDetailPage() {
       const res = await fetch(`/api/admin/users/${uid}`, {
         headers: await getHeaders(),
       });
-      if (!res.ok) throw new Error("Failed to load user");
-      const json = await res.json() as UserDetail;
+      const json = await res.json() as UserDetail & { error?: string };
+      if (!res.ok) throw new Error(json.error ?? "Failed to load user");
       setData(json);
     } catch (e) {
       setError((e as Error).message);

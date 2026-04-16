@@ -7,6 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import type { QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { isAllowedAdminEmail } from "@/lib/adminEmailAllowlist";
 
@@ -41,7 +42,10 @@ export async function GET(
   const { uid } = await params;
 
   try {
-    // Fetch user doc, email sequence, email events, recent analytics events in parallel
+    // Fetch user doc, email sequence, email events, recent analytics events in parallel.
+    // Timeline queries (email_events, analytics_events, email_replies) require composite indexes;
+    // if they don't exist yet they'll fail gracefully and return empty arrays.
+    const emptySnap = { docs: [] as QueryDocumentSnapshot[] };
     const [userSnap, seqSnap, emailEventsSnap, analyticsSnap, repliesSnap] =
       await Promise.all([
         adminDb.collection("users").doc(uid).get(),
@@ -51,19 +55,22 @@ export async function GET(
           .where("uid", "==", uid)
           .orderBy("created_at", "desc")
           .limit(50)
-          .get(),
+          .get()
+          .catch(() => emptySnap),
         adminDb
           .collection("analytics_events")
           .where("uid", "==", uid)
           .orderBy("stored_at", "desc")
           .limit(50)
-          .get(),
+          .get()
+          .catch(() => emptySnap),
         adminDb
           .collection("email_replies")
           .where("uid", "==", uid)
           .orderBy("createdAt", "desc")
           .limit(20)
-          .get(),
+          .get()
+          .catch(() => emptySnap),
       ]);
 
     if (!userSnap.exists) {
