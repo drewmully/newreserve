@@ -12,6 +12,7 @@ const NAV_LINKS = [
   { href: "/admin/sequences", label: "Sequences" },
   { href: "/admin/funnel", label: "Funnel" },
   { href: "/admin/email-replies", label: "Reply queue" },
+  { href: "/admin/fix-legacy-tiers", label: "Fix legacy tiers" },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
