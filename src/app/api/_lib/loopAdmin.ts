@@ -101,6 +101,22 @@ export async function getLoopRawSubscriptions(
 }
 
 /**
+ * Fetch a single Loop subscription by ID (returns full detail including variant_id).
+ */
+export async function getLoopSubscriptionById(
+  subscriptionId: string
+): Promise<LoopSubscription | null> {
+  const url = `${BASE_URL}/subscription/${encodeURIComponent(subscriptionId)}`;
+  const res = await fetch(url, { headers: getLoopHeaders() });
+  if (!res.ok) {
+    throw new Error(`Loop API error ${res.status}: ${await res.text()}`);
+  }
+  const data = (await res.json()) as { data?: LoopSubscription };
+  if (!data.data) return null;
+  return { ...data.data, id: String(data.data.id) };
+}
+
+/**
  * Returns the Loop subscription ID of the first ACTIVE subscription.
  */
 export async function getActiveLoopSubscriptionId(

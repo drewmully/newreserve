@@ -14,7 +14,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { isAllowedAdminEmail } from "@/lib/adminEmailAllowlist";
-import { getLoopRawSubscriptions } from "@/app/api/_lib/loopAdmin";
+import { getLoopRawSubscriptions, getLoopSubscriptionById } from "@/app/api/_lib/loopAdmin";
 import { resolveMemberTierFromVariantId } from "@/lib/membershipConfig";
 import { startFlow, type EmailFlow } from "@/lib/email/sequences";
 
@@ -108,13 +108,22 @@ export async function POST(request: NextRequest) {
       const activeSub = subs.find((s) => s.status === "ACTIVE");
 
       if (activeSub) {
-        // Capture all fields Loop returns for debugging unknown variants
+        let detailedSub = activeSub;
+
+        // The list endpoint only returns id+status. If variant is missing,
+        // fetch the full subscription detail to get variant_id.
+        const listVariant = activeSub.shopify_variant_id ?? activeSub.variant_id ?? null;
+        if (listVariant == null) {
+          const detail = await getLoopSubscriptionById(activeSub.id);
+          if (detail) detailedSub = detail;
+        }
+
         loopRawFields = Object.fromEntries(
-          Object.entries(activeSub).filter(([k]) =>
+          Object.entries(detailedSub).filter(([k]) =>
             ["id", "status", "variant_id", "shopify_variant_id", "selling_plan_id", "shopify_selling_plan_id", "product_id"].includes(k)
           )
         );
-        const rawVariantId = activeSub.shopify_variant_id ?? activeSub.variant_id ?? null;
+        const rawVariantId = detailedSub.shopify_variant_id ?? detailedSub.variant_id ?? null;
         loopVariantId = rawVariantId != null ? String(rawVariantId) : null;
         resolvedTier = resolveMemberTierFromVariantId(rawVariantId);
       }
