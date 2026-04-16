@@ -54,23 +54,22 @@ export async function POST(request: NextRequest) {
     // default to dry_run=true if body is missing
   }
 
-  // 1. Fetch users with no paid tier. The admin UI shows tier ?? "free", so
-  // legacy users may have tier="free", tier=null, or a missing tier field.
-  // Run both queries and deduplicate by uid.
+  // 1. Fetch users with an active Loop subscription cached in Firestore.
+  // We can't reliably filter by missing tier fields (Firestore won't return
+  // documents where the field is absent via == null). Instead, query by
+  // subscriptions.status = "active" and filter unpaid tiers client-side.
+  const PAID_TIERS = new Set(["access", "member", "black"]);
   let docs: FirebaseFirestore.QueryDocumentSnapshot[];
   try {
-    const [freeTierSnap, nullTierSnap] = await Promise.all([
-      adminDb.collection("users").where("tier", "==", "free").get(),
-      adminDb.collection("users").where("tier", "==", null).get(),
-    ]);
-    const seen = new Set<string>();
-    docs = [];
-    for (const doc of [...freeTierSnap.docs, ...nullTierSnap.docs]) {
-      if (!seen.has(doc.id)) {
-        seen.add(doc.id);
-        docs.push(doc);
-      }
-    }
+    const snap = await adminDb
+      .collection("users")
+      .where("subscriptions.status", "==", "active")
+      .get();
+    // Keep only users without a paid tier (missing field, null, or "free")
+    docs = snap.docs.filter((doc) => {
+      const tier = (doc.data() as Record<string, unknown>).tier;
+      return !tier || !PAID_TIERS.has(tier as string);
+    });
   } catch (err) {
     console.error("[fix-legacy-tiers] Firestore query failed:", err);
     return NextResponse.json({ error: "Firestore query failed" }, { status: 500 });
