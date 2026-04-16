@@ -122,9 +122,7 @@ export async function POST(request: NextRequest) {
 
     // 5. Apply fix (unless dry run)
     if (!dryRun) {
-      const emailFlow: EmailFlow = resolvedTier === "member" || resolvedTier === "black"
-        ? "member"
-        : "access";
+      const emailFlow: EmailFlow = resolvedTier === "member" ? "member" : "access";
 
       await doc.ref.update({
         tier: resolvedTier,
