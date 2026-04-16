@@ -54,11 +54,14 @@ export async function POST(request: NextRequest) {
     // default to dry_run=true if body is missing
   }
 
-  // 1. Fetch all users with tier="free" AND subscriptions.status="active"
+  // 1. Fetch all users with tier="free" that have a shopify_customer_id.
+  // We don't filter by subscriptions.status here because legacy users may
+  // never have logged in after purchase, so that field was never cached.
+  // Loop itself acts as the source of truth for subscription status.
   const snap = await adminDb
     .collection("users")
     .where("tier", "==", "free")
-    .where("subscriptions.status", "==", "active")
+    .where("shopify_customer_id", "!=", null)
     .get();
 
   const results: ResultRow[] = [];
