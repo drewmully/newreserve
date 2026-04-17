@@ -14,34 +14,41 @@ export function LogoLink() {
   );
 }
 
-/* ─── GLASS HEADER (transparent → frosted on scroll) ─── */
+/* ─── GLASS HEADER (real transparent backdrop-blur, like outings) ─── */
 
 export function GlassHeader() {
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 40);
-    onScroll(); // check initial state
+    onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-[400ms] ease-out ${
-        scrolled ? "glass-header-scrolled" : "glass-header-top"
-      }`}
+      className="fixed top-0 left-0 right-0 z-50 transition-all duration-500"
+      style={scrolled ? {
+        background: 'rgba(11, 26, 18, 0.88)',
+        backdropFilter: 'blur(16px) saturate(1.6)',
+        WebkitBackdropFilter: 'blur(16px) saturate(1.6)',
+        borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+      } : {
+        background: 'transparent',
+        backdropFilter: 'none',
+        WebkitBackdropFilter: 'none',
+        borderBottom: '1px solid transparent',
+      }}
     >
       <div className="max-w-7xl mx-auto px-6 md:px-12 flex items-center justify-between h-16">
-        <Link href="/" className={`flex items-center gap-2 transition-colors duration-[400ms] text-bone`}>
+        <Link href="/" className="flex items-center gap-2 text-bone transition-colors duration-400">
           <svg viewBox="0 0 1002 540" fill="currentColor" className="h-5 w-auto" aria-hidden="true"><path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" /></svg>
           <span className="font-serif text-2xl font-bold tracking-wide">mully.</span>
         </Link>
         <a
           href="/login"
-          className={`text-xs sm:text-sm tracking-wider uppercase font-medium transition-colors duration-[400ms] shrink-0 mr-4 md:mr-0 ${
-            scrolled ? "text-bone/90 hover:text-bone" : "text-bone/90 hover:text-bone"
-          }`}
+          className="text-xs sm:text-sm tracking-wider uppercase font-medium text-bone/90 hover:text-bone transition-colors duration-400 shrink-0 mr-4 md:mr-0"
         >
           Sign In
         </a>
@@ -291,34 +298,32 @@ export function FloatingCTA() {
       className={`fixed bottom-0 left-0 right-0 z-40 pointer-events-none transition-all duration-400 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-full"}`}
       aria-hidden={!visible}
     >
-      <div className="max-w-7xl mx-auto px-4 pb-4 md:px-6 md:pb-6">
-        <div
-          className="pointer-events-auto rounded-xl px-4 py-3 md:px-6 md:py-3.5 flex items-center justify-between gap-4 safe-area-bottom"
-          style={{
-            background: "rgba(245, 241, 232, 0.82)",
-            backdropFilter: "blur(20px) saturate(1.4)",
-            WebkitBackdropFilter: "blur(20px) saturate(1.4)",
-            border: "1px solid rgba(255, 255, 255, 0.25)",
-            boxShadow:
-              "0 -4px 24px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.4)",
-          }}
-        >
-          <p className="text-sm md:text-base text-charcoal/70 font-medium hidden sm:block leading-tight">
+      <div
+        className="pointer-events-auto px-4 py-3 md:px-6 md:py-3.5 flex items-center justify-between gap-4 safe-area-bottom"
+        style={{
+          background: 'rgba(11, 26, 18, 0.88)',
+          backdropFilter: 'blur(16px) saturate(1.6)',
+          WebkitBackdropFilter: 'blur(16px) saturate(1.6)',
+          borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+        }}
+      >
+        <div className="max-w-7xl mx-auto w-full flex items-center justify-between gap-4">
+          <p className="text-sm md:text-base text-bone/70 font-medium hidden sm:block leading-tight">
             Join 2,400+ members with Reserve access.
           </p>
-          <p className="text-sm text-charcoal/70 font-medium sm:hidden leading-tight">
+          <p className="text-sm text-bone/70 font-medium sm:hidden leading-tight">
             Join 2,400+ members
           </p>
           <div className="flex items-center gap-3 shrink-0">
             <button
               onClick={handleClick}
-              className="h-10 px-5 rounded-lg bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-all duration-300 btn-press whitespace-nowrap"
+              className="h-10 px-5 rounded-lg bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-all duration-300 btn-press whitespace-nowrap"
             >
               Unlock Access
             </button>
             <button
               onClick={() => setDismissed(true)}
-              className="w-8 h-8 rounded-full flex items-center justify-center text-charcoal/30 hover:text-charcoal/60 hover:bg-charcoal/5 transition-colors"
+              className="w-8 h-8 rounded-full flex items-center justify-center text-bone/30 hover:text-bone/60 hover:bg-bone/5 transition-colors"
               aria-label="Dismiss"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
