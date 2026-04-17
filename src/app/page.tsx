@@ -60,7 +60,7 @@ export default function Home() {
             </p>
 
             <div className="animate-fade-up-delay-3">
-              <div className="hero-email-glass rounded-xl p-1 max-w-xs sm:max-w-md mx-auto md:mx-0">
+              <div className="max-w-xs sm:max-w-md mx-auto md:mx-0">
                 <EmailCTA variant="hero" />
               </div>
               <p className="text-[11px] text-bone/35 tracking-wide mt-2">

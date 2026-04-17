@@ -348,7 +348,7 @@ export function FloatingCTA() {
             <button
               type="submit"
               disabled={loading}
-              className="h-9 px-5 rounded-lg bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-all duration-300 btn-press whitespace-nowrap disabled:opacity-60"
+              className="h-9 px-5 rounded-lg bg-ember text-bone text-sm font-medium tracking-wider uppercase hover:brightness-110 transition-all duration-300 btn-press whitespace-nowrap disabled:opacity-60"
             >
               {loading ? "..." : "Unlock Access"}
             </button>

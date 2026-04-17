@@ -61,12 +61,12 @@ export function EmailCTA({ variant = "hero" }: { variant?: "hero" | "bottom" }) 
           onChange={(e) => setValue(e.target.value)}
           placeholder="Your email"
           disabled={loading}
-          className="w-full sm:flex-1 h-13 px-5 rounded-xl bg-white/60 border border-taupe/30 text-obsidian placeholder:text-charcoal/35 text-base focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300 disabled:opacity-60"
+          className="w-full sm:flex-1 h-12 px-5 rounded-lg bg-white/10 border border-white/15 text-bone placeholder:text-bone/40 text-base focus:border-white/30 focus:ring-1 focus:ring-white/20 transition-all duration-300 disabled:opacity-60"
         />
         <button
           type="submit"
           disabled={!value.trim() || loading}
-          className="w-full sm:w-auto h-13 px-8 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer whitespace-nowrap btn-press disabled:opacity-60 disabled:cursor-not-allowed"
+          className="w-full sm:w-auto h-12 px-8 rounded-lg bg-ember text-bone text-sm font-medium tracking-wider uppercase hover:brightness-110 transition-all duration-300 cursor-pointer whitespace-nowrap btn-press disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {loading ? (
             <span className="inline-flex items-center justify-center">
@@ -93,7 +93,7 @@ export function EmailCTA({ variant = "hero" }: { variant?: "hero" | "bottom" }) 
       <button
         type="submit"
         disabled={!value.trim() || loading}
-        className="w-full h-13 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer btn-press disabled:opacity-60 disabled:cursor-not-allowed"
+        className="w-full h-13 rounded-xl bg-ember text-bone text-sm font-medium tracking-wider uppercase hover:brightness-110 transition-all duration-300 cursor-pointer btn-press disabled:opacity-60 disabled:cursor-not-allowed"
       >
         {loading ? (
           <span className="inline-flex items-center justify-center">
