@@ -5,6 +5,7 @@ import {
   ScrollChevron,
   FadeInSection,
   LogoLink,
+  FloatingCTA,
 } from "./components/ClientComponents";
 import { EmailCTA } from "./components/EmailCTA";
 
@@ -25,7 +26,7 @@ export default function Home() {
       </header>
 
       {/* ─── HERO ─── */}
-      <section className="relative min-h-[82vh] md:h-[84vh] flex items-center px-6 md:px-12 lg:px-20 pt-20 pb-12 md:pt-16 md:pb-0 overflow-hidden">
+      <section id="hero" className="relative min-h-[82vh] md:h-[84vh] flex items-center px-6 md:px-12 lg:px-20 pt-20 pb-12 md:pt-16 md:pb-0 overflow-hidden">
         <Image
           src="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/ChatGPT_Image_Feb_24_2026_03_08_18_PM.png?v=1771963720"
           alt=""
@@ -80,13 +81,16 @@ export default function Home() {
             </h1>
 
             <p className="text-base md:text-xl text-charcoal/55 leading-relaxed mb-7 md:mb-10 max-w-xs sm:max-w-sm mx-auto md:mx-0 animate-fade-up-delay-2">
-              Live the private club life without country club costs.
+              Members-only pricing on premium gear. Curated quarterly boxes. Concierge service. No&nbsp;initiation fees.
             </p>
 
             <div className="animate-fade-up-delay-3">
               <EmailCTA variant="hero" />
               <p className="text-[11px] text-charcoal/40 tracking-wide mt-1">
                 Complimentary access &middot; No credit card required
+              </p>
+              <p className="text-[11px] text-charcoal/35 tracking-wide mt-1">
+                &#10003; Free to start &middot; Cancel anytime
               </p>
             </div>
           </div>
@@ -111,9 +115,9 @@ export default function Home() {
       <FadeInSection initialOpacity={0.15}>
         <section className="py-16 md:py-20 px-6 md:px-12 bg-bone-dark/50 stats-section-premium stats-bottom-border">
           <div className="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-4 relative">
-            <StatCounter end={100} suffix="K+" label="Orders Shipped" />
+            <StatCounter end={100} suffix="K+" label="Products Delivered" />
             <StatCounter end={40} suffix="+" label="Brand Partners" />
-            <StatCounter end={250} prefix="$" suffix="+" label="Annual Savings" />
+            <StatCounter end={250} prefix="$" suffix="+" label="Avg. Member Savings" />
             <StatCounter end={96} suffix="%" label="Renewal Rate" />
           </div>
         </section>
@@ -133,10 +137,10 @@ export default function Home() {
                 What is Mully Reserve?
               </h2>
               <p className="text-lg text-charcoal/65 leading-relaxed">
-                Mully Reserve brings you the curated products, expert services,
-                and experiences you&rsquo;d expect from a top-tier club, all in
-                one place, at a fraction of the cost. No membership fees.
-                No&nbsp;gatekeeping. Just access.
+                Mully Reserve brings you curated products, expert services,
+                and experiences you&rsquo;d expect from a top-tier club&mdash;all
+                in one place, starting free. No initiation fees. No&nbsp;pretension.
+                Just access.
               </p>
             </div>
           </ScrollReveal>
@@ -146,14 +150,14 @@ export default function Home() {
               <BenefitCard
                 image="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/ChatGPT_Image_Feb_24_2026_02_24_48_PM.png?v=1771961106"
                 title="Curated Partner Access"
-                description="Exclusive access to vetted partners across gear, training, and lifestyle. Every partner is hand-selected."
+                description="Vetted brands like Greyson, Rhone, and Stitch at pricing you won't find anywhere else. Every partner is hand-selected."
               />
             </ScrollReveal>
             <ScrollReveal delay={0.12}>
               <BenefitCard
                 image="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/Colorado_Hoodie.webp?v=1771960357"
                 title="Reserve Pricing"
-                description="Members-only pricing on premium gear. No markups. Just honest value."
+                description="Members-only pricing on 40+ premium brands. No markups, no gimmicks. Honest value on the gear you actually want."
                 overlay={
                   <div
                     className="rounded-lg px-3 py-2.5"
@@ -184,7 +188,7 @@ export default function Home() {
               <BenefitCard
                 image="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/ChatGPT_Image_Feb_24_2026_02_25_26_PM.png?v=1771961138"
                 title="Club-Level Service"
-                description="Concierge support, styling, and exclusive events. The full club experience without the club membership."
+                description="Concierge support for gear questions, styling recommendations, and exclusive member events. The club experience, without the club."
               />
             </ScrollReveal>
           </div>
@@ -210,9 +214,9 @@ export default function Home() {
         <ScrollReveal>
           <div className="relative max-w-4xl mx-auto text-center">
             <blockquote className="font-serif text-3xl md:text-5xl lg:text-6xl text-bone/95 leading-[1.15] mb-8">
-              You don&rsquo;t buy status.
+              The golf world has private clubs.
               <br />
-              You build it.
+              We built something better.
             </blockquote>
             <div className="flex items-center justify-center gap-3 mb-6">
               <span className="w-12 h-px bg-sage/40" />
@@ -220,8 +224,8 @@ export default function Home() {
               <span className="w-12 h-px bg-sage/40" />
             </div>
             <p className="text-sage text-base md:text-lg tracking-wide max-w-lg mx-auto">
-              Progress takes intention. Mully Reserve is for those who
-              understand that.
+              Premium gear, insider pricing, and a community that plays at a
+              higher level&mdash;without the initiation fee.
             </p>
           </div>
         </ScrollReveal>
@@ -254,7 +258,7 @@ export default function Home() {
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5 lg:gap-4 items-stretch">
             {/* ── Tier 1 — Free ── */}
             <ScrollReveal delay={0}>
-              <div className="rounded-2xl p-7 md:p-8 flex flex-col card-hover h-full glass-card glass-card-light tier-card-shimmer tier-border-sage">
+              <div className="rounded-2xl p-7 md:p-8 flex flex-col card-hover h-full glass-card glass-card-light tier-card-shimmer tier-border-sage tier-bg-free">
                 <div className="h-5 mb-3" />
                 <span className="text-[11px] tracking-[0.25em] uppercase text-sage font-medium">
                   Free
@@ -272,7 +276,7 @@ export default function Home() {
                     href="/login"
                     className="mt-8 block w-full text-center h-12 leading-[3rem] rounded-xl border border-forest/80 text-forest text-sm font-medium tracking-wider uppercase hover:bg-forest hover:text-bone transition-all duration-300 btn-press"
                   >
-                    Sign Up Free
+                    Start Free
                   </a>
                 </div>
               </div>
@@ -280,8 +284,10 @@ export default function Home() {
 
             {/* ── Tier 2 — Reserve Access ($99/yr) ── */}
             <ScrollReveal delay={0.08}>
-              <div className="rounded-2xl p-7 md:p-8 flex flex-col card-hover h-full glass-card glass-card-light tier-card-shimmer tier-border-forest">
-                <div className="h-5 mb-3" />
+              <div className="rounded-2xl p-7 md:p-8 flex flex-col card-hover h-full glass-card glass-card-light tier-card-shimmer tier-border-forest tier-bg-access">
+                <div className="h-5 mb-3">
+                  <span className="text-[9px] tracking-[0.15em] uppercase text-forest/60 font-semibold">Best Value</span>
+                </div>
                 <span className="text-[11px] tracking-[0.25em] uppercase text-forest font-medium">
                   Reserve Access
                 </span>
@@ -295,13 +301,12 @@ export default function Home() {
                     <TierFeature text="Early drop access" />
                     <TierFeature text="Partner benefits" />
                     <TierFeature text="Free 2-day shipping" />
-                    <TierFeature text="USGA Handicap (soon)" />
                   </ul>
                   <a
                     href="/login"
                     className="mt-8 block w-full text-center h-12 leading-[3rem] rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-all duration-300 btn-press"
                   >
-                    Join Now
+                    Get Reserve Access
                   </a>
                 </div>
               </div>
@@ -351,7 +356,7 @@ export default function Home() {
                         href="/login"
                         className="mt-8 block w-full text-center h-12 leading-[3rem] rounded-xl bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-all duration-300 btn-press"
                       >
-                        Join Now
+                        Become a Member
                       </a>
                     </div>
                   </div>
@@ -463,8 +468,8 @@ export default function Home() {
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             <ScrollReveal delay={0}>
               <ReleaseCard
-                name="Forrester WindBlocker"
-                category="Stitch"
+                name="Windbreaker"
+                category="Forresters"
                 tag="Reserve Priced"
                 image="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/FO_WindBlockerM_Black-1.jpg?v=1775579847"
               />
@@ -516,7 +521,7 @@ export default function Home() {
       </section>
 
       {/* ─── FINAL CTA ─── */}
-      <section className="py-28 md:py-40 px-6 md:px-12 bg-bone relative overflow-hidden cta-grain-bg">
+      <section id="bottom-cta" className="py-28 md:py-40 px-6 md:px-12 bg-bone relative overflow-hidden cta-grain-bg">
         {/* Decorative background elements */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
           <div
@@ -559,11 +564,17 @@ export default function Home() {
                 <p className="text-xs text-taupe/70 mt-4 text-center">
                   Join 2,400+ members already inside.
                 </p>
+                <p className="text-[11px] text-charcoal/35 mt-2 text-center">
+                  4.9&#9733; from 2,400+ members
+                </p>
               </div>
             </div>
           </div>
         </ScrollReveal>
       </section>
+
+      {/* ─── FLOATING CTA BAR ─── */}
+      <FloatingCTA />
 
       {/* ─── FOOTER ─── */}
       <footer className="py-16 px-6 md:px-12 bg-forest topo-pattern footer-premium">
@@ -767,6 +778,7 @@ function BenefitCard({
           className="w-full h-full object-cover transition-transform duration-600 group-hover:scale-105"
           draggable={false}
         />
+        <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-white/60 to-transparent pointer-events-none" />
         {overlay && (
           <div className="absolute top-3 right-3 z-10">
             {overlay}
@@ -774,7 +786,7 @@ function BenefitCard({
         )}
       </div>
       <div className="p-6 md:p-7">
-        <h3 className="font-serif text-lg text-obsidian mb-2">{title}</h3>
+        <h3 className="font-serif text-xl md:text-2xl text-obsidian mb-2">{title}</h3>
         <p className="text-sm text-charcoal/50 leading-relaxed">{description}</p>
         {children}
       </div>
@@ -835,10 +847,10 @@ function StepCard({
 }) {
   return (
     <div className="text-center px-4">
-      <div className="w-14 h-14 rounded-2xl bg-forest/8 flex items-center justify-center mx-auto mb-5 icon-hover-shift">
+      <div className="w-16 h-16 rounded-2xl bg-forest/10 flex items-center justify-center mx-auto mb-5 icon-hover-shift">
         {icon}
       </div>
-      <span className="font-serif text-xs tracking-[0.2em] text-forest/30 uppercase block mb-3">
+      <span className="font-serif text-xs tracking-[0.2em] text-sage uppercase block mb-3">
         Step {number}
       </span>
       <h3 className="font-serif text-xl text-obsidian mb-3">{title}</h3>
@@ -889,7 +901,8 @@ function ReleaseCard({
         : "bg-sage/15 text-sage";
 
   return (
-    <div className="group bg-bone rounded-2xl border border-taupe/15 overflow-hidden card-hover h-full">
+    <div className="group bg-bone rounded-2xl border border-taupe/15 overflow-hidden card-hover h-full relative">
+      <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-sage/40 to-transparent z-10" />
       <div className="release-img-wrap">
         {image ? (
           <div className="release-img-inner aspect-[4/3] relative bg-cream">
@@ -911,7 +924,7 @@ function ReleaseCard({
         )}
       </div>
       <div className="p-6">
-        <span className="text-xs tracking-[0.2em] uppercase text-sage font-medium">
+        <span className="text-xs tracking-[0.2em] uppercase text-forest font-medium">
           {category}
         </span>
         <h4 className="font-serif text-lg text-obsidian mt-1.5 mb-3">

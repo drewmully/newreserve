@@ -26,12 +26,12 @@ export function Navigation() {
       }`}
     >
       <div className="max-w-[1200px] mx-auto px-6 md:px-10 flex items-center justify-between h-[72px]">
-        <button
-          onClick={() => scrollTo("hero")}
+        <a
+          href="/"
           className="font-serif text-2xl tracking-tight text-cream hover:text-gold transition-colors"
         >
           mully
-        </button>
+        </a>
 
         {/* Desktop */}
         <div className="hidden md:flex items-center gap-8">

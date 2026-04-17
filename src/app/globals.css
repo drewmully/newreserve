@@ -1084,10 +1084,90 @@ input:focus-visible {
   outline: none;
 }
 
+/* ─── STATS INNER SHADOW & DIVIDERS ─── */
+
+.stats-section-premium {
+  box-shadow: inset 0 2px 8px -2px rgba(0, 0, 0, 0.06), inset 0 -2px 8px -2px rgba(0, 0, 0, 0.04);
+}
+
+/* Thin vertical divider between stats on desktop */
+.stats-section-premium .grid > div {
+  position: relative;
+}
+@media (min-width: 768px) {
+  .stats-section-premium .grid > div + div::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 20%;
+    height: 60%;
+    width: 1px;
+    background: linear-gradient(to bottom, transparent, rgba(110, 139, 116, 0.25), transparent);
+    pointer-events: none;
+  }
+}
+
+/* ─── PRICING CARD GRADIENT BACKGROUNDS ─── */
+
+.tier-bg-free {
+  background: linear-gradient(180deg, rgba(245, 241, 232, 0.6) 0%, rgba(255, 255, 255, 0.55) 100%);
+}
+
+.tier-bg-access {
+  background: linear-gradient(180deg, rgba(245, 241, 232, 0.6) 0%, rgba(250, 246, 238, 0.55) 100%);
+}
+
+/* ─── FLOATING CTA BAR ─── */
+
+@keyframes floating-cta-in {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes floating-cta-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+}
+
+.floating-cta-bar {
+  animation: floating-cta-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.floating-cta-bar-exit {
+  animation: floating-cta-out 0.3s ease-in forwards;
+}
+
+/* ─── CTA CARD PROMINENT BORDER ─── */
+
+.cta-card-glass {
+  border: 1px solid rgba(110, 139, 116, 0.2);
+  box-shadow:
+    0 8px 32px -4px rgba(0, 0, 0, 0.10),
+    0 16px 56px -8px rgba(0, 0, 0, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.60);
+}
+
 /* ─── REDUCED MOTION ─── */
 
 @media (prefers-reduced-motion: reduce) {
   .tier-card-shimmer:hover::before {
     animation: none;
+  }
+  .floating-cta-bar {
+    animation: none;
+    opacity: 1;
+    transform: translateY(0);
   }
 }
