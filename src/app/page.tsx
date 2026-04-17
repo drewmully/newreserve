@@ -4,7 +4,7 @@ import {
   StatCounter,
   ScrollChevron,
   FadeInSection,
-  LogoLink,
+  GlassHeader,
   FloatingCTA,
 } from "./components/ClientComponents";
 import { EmailCTA } from "./components/EmailCTA";
@@ -12,21 +12,12 @@ import { EmailCTA } from "./components/EmailCTA";
 export default function Home() {
   return (
     <div className="min-h-screen bg-bone">
-      {/* ─── HEADER ─── */}
-      <header className="fixed top-0 left-0 right-0 z-50 header-glass">
-        <div className="max-w-7xl mx-auto px-6 md:px-12 flex items-center justify-between h-16">
-          <LogoLink />
-          <a
-            href="/login"
-            className="text-xs sm:text-sm tracking-wider uppercase text-forest font-medium hover:text-forest-dark transition-colors duration-300 shrink-0 mr-4 md:mr-0"
-          >
-            Sign In
-          </a>
-        </div>
-      </header>
+      {/* ─── GLASS HEADER ─── */}
+      <GlassHeader />
 
-      {/* ─── HERO ─── */}
-      <section id="hero" className="relative min-h-[82vh] md:h-[84vh] flex items-center px-6 md:px-12 lg:px-20 pt-20 pb-12 md:pt-16 md:pb-0 overflow-hidden">
+      {/* ─── HERO — DARK CINEMATIC ─── */}
+      <section id="hero" className="relative min-h-[92vh] md:min-h-screen flex items-center px-6 md:px-12 lg:px-20 pt-20 pb-16 md:pt-0 md:pb-0 overflow-hidden">
+        {/* Background image */}
         <Image
           src="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/ChatGPT_Image_Feb_24_2026_03_08_18_PM.png?v=1771963720"
           alt=""
@@ -37,67 +28,67 @@ export default function Home() {
           sizes="100vw"
           draggable={false}
           className="absolute inset-0 w-full h-full object-cover pointer-events-none select-none"
+          style={{ backgroundAttachment: "fixed" }}
         />
 
-        {/* Layer 2: Soft scrim for left-side text readability */}
+        {/* Dark cinematic overlay — deep forest green color grade */}
         <div
           className="absolute inset-0 pointer-events-none"
           style={{
-            background: "linear-gradient(105deg, rgba(245,241,232,0.88) 0%, rgba(245,241,232,0.65) 35%, rgba(245,241,232,0.15) 55%, transparent 70%)",
+            background: "linear-gradient(160deg, rgba(15,30,20,0.88) 0%, rgba(31,61,43,0.65) 50%, rgba(15,30,20,0.80) 100%)",
           }}
         />
-        {/* Layer 2b: Mobile scrim — centered content needs broader coverage */}
+        {/* Extra bottom vignette for seamless stats transition */}
         <div
-          className="absolute inset-0 pointer-events-none md:hidden"
+          className="absolute inset-0 pointer-events-none"
           style={{
-            background: "linear-gradient(180deg, rgba(245,241,232,0.75) 0%, rgba(245,241,232,0.60) 50%, rgba(245,241,232,0.40) 80%, transparent 100%)",
+            background: "linear-gradient(to bottom, transparent 60%, rgba(15,30,20,0.95) 100%)",
           }}
         />
-        {/* Film grain overlay for editorial depth */}
-        <div className="hero-grain-overlay" />
+        {/* Film grain overlay — slightly more visible on dark */}
+        <div className="hero-grain-overlay" style={{ opacity: 0.05 }} />
 
         {/* ── Two-column hero content ── */}
         <div className="relative max-w-7xl mx-auto w-full grid md:grid-cols-2 gap-6 md:gap-12 lg:gap-20 items-center z-10">
 
           {/* LEFT COLUMN — headline, subtext, CTA */}
-          <div className="max-w-lg text-center md:text-left mx-auto md:mx-0">
+          <div className="max-w-xl text-center md:text-left mx-auto md:mx-0">
             {/* Mobile member card — compact, above headline */}
-            <div className="md:hidden flex justify-center mb-5 animate-fade-up">
+            <div className="md:hidden flex justify-center mb-6 animate-fade-up">
               <MemberCard size="sm" />
             </div>
 
             <div className="animate-fade-up-delay-0 mb-5 md:mb-8">
-              <span className="inline-flex items-center gap-2.5 text-[11px] tracking-[0.38em] uppercase text-sage/80 font-medium">
-                <span className="w-10 h-px bg-sage/40" />
-                Mully Reserve
-                <span className="w-10 h-px bg-sage/40" />
+              <span className="inline-flex items-center gap-2.5 text-[11px] tracking-[0.38em] uppercase text-bone/50 font-medium">
+                <span className="w-10 h-px bg-bone/20" />
+                <span className="gold-shimmer-text">Mully Reserve</span>
+                <span className="w-10 h-px bg-bone/20" />
               </span>
               <span className="gold-accent-line mt-2.5" />
             </div>
 
-            <h1 className="font-serif text-3xl md:text-5xl lg:text-[4.25rem] text-forest leading-[1.05] tracking-tight mb-4 md:mb-6 animate-fade-up-delay-1">
+            <h1 className="font-serif text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl text-bone leading-[1.02] tracking-tight mb-5 md:mb-7 animate-fade-up-delay-1">
               Access the Best<br />
               of Golf
             </h1>
 
-            <p className="text-base md:text-xl text-charcoal/55 leading-relaxed mb-7 md:mb-10 max-w-xs sm:max-w-sm mx-auto md:mx-0 animate-fade-up-delay-2">
+            <p className="text-base md:text-xl text-bone/60 leading-relaxed mb-8 md:mb-10 max-w-sm sm:max-w-md mx-auto md:mx-0 animate-fade-up-delay-2">
               Members-only pricing on premium gear. Curated quarterly boxes. Concierge service. No&nbsp;initiation fees.
             </p>
 
             <div className="animate-fade-up-delay-3">
-              <EmailCTA variant="hero" />
-              <p className="text-[11px] text-charcoal/40 tracking-wide mt-1">
+              <div className="hero-email-glass rounded-xl p-1 max-w-xs sm:max-w-md mx-auto md:mx-0">
+                <EmailCTA variant="hero" />
+              </div>
+              <p className="text-[11px] text-bone/35 tracking-wide mt-2">
                 Complimentary access &middot; No credit card required
-              </p>
-              <p className="text-[11px] text-charcoal/35 tracking-wide mt-1">
-                &#10003; Free to start &middot; Cancel anytime
               </p>
             </div>
           </div>
 
           {/* RIGHT COLUMN — Desktop member card */}
           <div className="hidden md:flex items-center justify-center animate-fade-up-delay-2">
-            <div className="member-card-glow">
+            <div className="member-card-glow-dark">
               <div className="member-card-float">
                 <MemberCard size="lg" />
               </div>
@@ -106,25 +97,23 @@ export default function Home() {
         </div>
 
         {/* Scroll indicator */}
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 scroll-chevron-refined">
-          <ScrollChevron />
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 scroll-line-indicator">
+          <div className="scroll-line-pulse" />
         </div>
       </section>
 
-      {/* ─── SOCIAL PROOF STRIP ─── */}
-      <FadeInSection initialOpacity={0.15}>
-        <section className="py-16 md:py-20 px-6 md:px-12 bg-bone-dark/50 stats-section-premium stats-bottom-border">
-          <div className="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-4 relative">
-            <StatCounter end={100} suffix="K+" label="Products Delivered" />
-            <StatCounter end={40} suffix="+" label="Brand Partners" />
-            <StatCounter end={250} prefix="$" suffix="+" label="Avg. Member Savings" />
-            <StatCounter end={96} suffix="%" label="Renewal Rate" />
-          </div>
-        </section>
-      </FadeInSection>
+      {/* ─── STATS BAR — dark, continuation of hero ─── */}
+      <section className="stats-dark-section py-16 md:py-20 px-6 md:px-12">
+        <div className="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-4 relative stats-gold-dividers">
+          <StatCounter end={100} suffix="K+" label="Products Delivered" dark />
+          <StatCounter end={40} suffix="+" label="Brand Partners" dark />
+          <StatCounter end={250} prefix="$" suffix="+" label="Avg. Member Savings" dark />
+          <StatCounter end={96} suffix="%" label="Renewal Rate" dark />
+        </div>
+      </section>
 
-      {/* ─── WHAT IS MULLY RESERVE ─── */}
-      <section id="reserve" className="py-24 md:py-36 px-6 md:px-12">
+      {/* ─── WHAT IS MULLY RESERVE — Feature Cards ─── */}
+      <section id="reserve" className="py-24 md:py-36 px-6 md:px-12 bg-bone">
         <div className="max-w-6xl mx-auto">
           <ScrollReveal>
             <div className="max-w-3xl mx-auto text-center mb-20">
@@ -133,7 +122,7 @@ export default function Home() {
                 The Program
                 <span className="w-7 h-px bg-sage/40" />
               </span>
-              <h2 className="font-serif text-3xl md:text-5xl text-obsidian leading-tight mb-8">
+              <h2 className="font-serif text-3xl md:text-5xl lg:text-6xl text-obsidian leading-tight mb-8">
                 What is Mully Reserve?
               </h2>
               <p className="text-lg text-charcoal/65 leading-relaxed">
@@ -147,45 +136,21 @@ export default function Home() {
 
           <div className="grid md:grid-cols-3 gap-6 lg:gap-8">
             <ScrollReveal delay={0}>
-              <BenefitCard
+              <FeatureCard
                 image="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/ChatGPT_Image_Feb_24_2026_02_24_48_PM.png?v=1771961106"
                 title="Curated Partner Access"
                 description="Vetted brands like Greyson, Rhone, and Stitch at pricing you won't find anywhere else. Every partner is hand-selected."
               />
             </ScrollReveal>
             <ScrollReveal delay={0.12}>
-              <BenefitCard
+              <FeatureCard
                 image="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/Colorado_Hoodie.webp?v=1771960357"
                 title="Reserve Pricing"
                 description="Members-only pricing on 40+ premium brands. No markups, no gimmicks. Honest value on the gear you actually want."
-                overlay={
-                  <div
-                    className="rounded-lg px-3 py-2.5"
-                    style={{
-                      background: "rgba(245,241,232,0.82)",
-                      backdropFilter: "blur(16px) saturate(1.4)",
-                      WebkitBackdropFilter: "blur(16px) saturate(1.4)",
-                      border: "1px solid rgba(255,255,255,0.35)",
-                      boxShadow: "0 4px 16px -4px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.50)",
-                    }}
-                  >
-                    <p className="text-[9px] tracking-[0.12em] uppercase text-charcoal/45 mb-1">Greyson Colorado Hoodie</p>
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-[11px] text-charcoal/30 line-through">$170</span>
-                      <span className="text-sm text-forest font-semibold">$144</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 mt-1.5 pt-1.5 border-t border-taupe/10">
-                      <svg className="w-3 h-3 text-forest/50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 01-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m3 0H21M3.375 14.25h3.504c.576 0 1.09.22 1.49.588m0 0a3.012 3.012 0 015.171 0m-5.171 0H3.375m9.504 0h4.524c.577 0 1.09-.22 1.49-.588M14.25 14.25v-2.25m0 0h3.375a1.125 1.125 0 001.125-1.125v-3.375" />
-                      </svg>
-                      <span className="text-[8px] tracking-[0.1em] uppercase text-forest/50 font-medium">Free express shipping</span>
-                    </div>
-                  </div>
-                }
               />
             </ScrollReveal>
             <ScrollReveal delay={0.24}>
-              <BenefitCard
+              <FeatureCard
                 image="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/ChatGPT_Image_Feb_24_2026_02_25_26_PM.png?v=1771961138"
                 title="Club-Level Service"
                 description="Concierge support for gear questions, styling recommendations, and exclusive member events. The club experience, without the club."
@@ -195,35 +160,30 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ─── PHILOSOPHY BANNER ─── */}
-      <section className="relative py-28 md:py-40 px-6 md:px-12 bg-forest overflow-hidden">
+      {/* ─── MANIFESTO — Full Cinematic Moment ─── */}
+      <section className="relative min-h-[70vh] md:min-h-[80vh] flex items-center justify-center px-6 md:px-12 overflow-hidden manifesto-section">
+        {/* Grain overlay */}
+        <div className="hero-grain-overlay" style={{ opacity: 0.04 }} />
+        {/* Subtle moving gradient */}
+        <div className="manifesto-ambient-light" />
         {/* Decorative oversized quote marks */}
         <div className="absolute top-8 left-6 md:left-16 pointer-events-none">
-          <span className="font-serif text-[12rem] md:text-[18rem] leading-none text-bone/[0.03] select-none">
+          <span className="font-serif text-[12rem] md:text-[20rem] leading-none text-bone/[0.03] select-none">
             &ldquo;
           </span>
         </div>
-        {/* Subtle pattern overlay */}
-        <div
-          className="absolute inset-0 opacity-[0.03] pointer-events-none"
-          style={{
-            backgroundImage: `radial-gradient(circle at 1px 1px, #F5F1E8 0.5px, transparent 0)`,
-            backgroundSize: "32px 32px",
-          }}
-        />
+
         <ScrollReveal>
           <div className="relative max-w-4xl mx-auto text-center">
-            <blockquote className="font-serif text-3xl md:text-5xl lg:text-6xl text-bone/95 leading-[1.15] mb-8">
+            <blockquote className="font-serif text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl text-bone/95 leading-[1.12] mb-10">
               The golf world has private clubs.
               <br />
               We built something better.
             </blockquote>
-            <div className="flex items-center justify-center gap-3 mb-6">
-              <span className="w-12 h-px bg-sage/40" />
-              <MullyMark className="w-5 h-5 text-sage/60" />
-              <span className="w-12 h-px bg-sage/40" />
+            <div className="flex items-center justify-center gap-4 mb-8">
+              <span className="w-16 h-px bg-gradient-to-r from-transparent via-ember/50 to-transparent" />
             </div>
-            <p className="text-sage text-base md:text-lg tracking-wide max-w-lg mx-auto">
+            <p className="text-bone/50 text-base md:text-lg tracking-wide max-w-lg mx-auto leading-relaxed">
               Premium gear, insider pricing, and a community that plays at a
               higher level&mdash;without the initiation fee.
             </p>
@@ -246,7 +206,7 @@ export default function Home() {
                 Membership
                 <span className="w-7 h-px bg-sage/40" />
               </span>
-              <h2 className="font-serif text-3xl md:text-5xl text-obsidian leading-tight mb-6">
+              <h2 className="font-serif text-3xl md:text-5xl lg:text-6xl text-obsidian leading-tight mb-6">
                 Choose Your Level
               </h2>
               <p className="text-lg text-charcoal/65 max-w-xl mx-auto">
@@ -255,7 +215,7 @@ export default function Home() {
             </div>
           </ScrollReveal>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5 lg:gap-4 items-stretch">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5 lg:gap-4 items-end">
             {/* ── Tier 1 — Free ── */}
             <ScrollReveal delay={0}>
               <div className="rounded-2xl p-7 md:p-8 flex flex-col card-hover h-full glass-card glass-card-light tier-card-shimmer tier-border-sage tier-bg-free">
@@ -312,17 +272,17 @@ export default function Home() {
               </div>
             </ScrollReveal>
 
-            {/* ── Tier 3 — Reserve Member ($249/qtr, Featured) ── */}
+            {/* ── Tier 3 — Reserve Member ($249/qtr, THE HERO) ── */}
             <ScrollReveal delay={0.16}>
-              <div className="relative h-full">
-                {/* Badge — lives outside overflow-hidden so it never clips */}
+              <div className="relative h-full tier-member-hero">
+                {/* Badge */}
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-20">
-                  <span className="inline-block badge-gold text-[10px] tracking-[0.2em] uppercase font-semibold px-4 py-1.5 rounded-full whitespace-nowrap">
+                  <span className="inline-block badge-gold text-[10px] tracking-[0.2em] uppercase font-semibold px-4 py-1.5 rounded-full whitespace-nowrap badge-shimmer">
                     Most Popular
                   </span>
                 </div>
 
-                <div className="rounded-2xl overflow-hidden relative flex flex-col card-hover h-full glass-card glass-card-dark tier-card-shimmer tier-border-gold">
+                <div className="rounded-2xl overflow-hidden relative flex flex-col card-hover h-full glass-card glass-card-dark tier-card-shimmer tier-border-gold tier-member-glow">
                   <Image
                     src="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/Untitled_design_17.png?v=1771516197"
                     alt=""
@@ -334,8 +294,7 @@ export default function Home() {
                     className="absolute -top-4 -left-4 w-44 h-44 object-cover object-right-bottom opacity-[0.18] -rotate-6 pointer-events-none select-none"
                   />
 
-                  {/* Content — layered above the background image */}
-                  <div className="relative z-10 p-7 md:p-8 flex flex-col flex-1">
+                  <div className="relative z-10 p-7 md:p-9 flex flex-col flex-1">
                     <div className="h-5 mb-3" />
                     <span className="text-[11px] tracking-[0.25em] uppercase text-bone/80 font-medium">
                       Reserve Member
@@ -366,14 +325,16 @@ export default function Home() {
 
             {/* ── Tier 4 — Reserve Black ── */}
             <ScrollReveal delay={0.24}>
-              <div className="rounded-2xl p-7 md:p-8 flex flex-col card-hover h-full relative overflow-hidden tier-black-glass tier-card-shimmer">
-                <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-bone/20 to-transparent" />
-                <div className="h-5 mb-3" />
+              <div className="rounded-2xl p-7 md:p-8 flex flex-col card-hover h-full relative overflow-hidden tier-black-glass tier-card-shimmer tier-black-gold-border">
+                <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-ember/30 to-transparent" />
+                <div className="h-5 mb-3">
+                  <span className="text-[9px] tracking-[0.15em] uppercase text-bone/30 font-semibold">Invite Only</span>
+                </div>
                 <span className="text-[11px] tracking-[0.25em] uppercase text-bone/50 font-medium">
                   Reserve Black
                 </span>
                 <div className="mt-2 mb-5">
-                  <span className="font-serif text-3xl text-bone/90">Invite Only</span>
+                  <span className="font-serif text-3xl text-bone/90">By Invitation</span>
                 </div>
                 <div className="border-t border-bone/8 pt-5 flex-1 flex flex-col">
                   <ul className="space-y-3 flex-1">
@@ -384,14 +345,13 @@ export default function Home() {
                     <TierFeature text="Invite-only experiences" dark />
                   </ul>
                   <div className="mt-8 block w-full text-center h-12 leading-[3rem] rounded-xl border border-bone/12 text-bone/35 text-sm font-medium tracking-wider uppercase cursor-default">
-                    By Invitation
+                    Request Invite
                   </div>
                 </div>
               </div>
             </ScrollReveal>
           </div>
 
-          {/* Reassurance — reduces friction */}
           <ScrollReveal delay={0.3}>
             <p className="text-center text-sm text-charcoal/40 mt-12">
               Start free. Upgrade or cancel anytime. No commitments.
@@ -400,45 +360,49 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ─── HOW IT WORKS ─── */}
-      <section className="py-24 md:py-36 px-6 md:px-12 bg-bone">
-        <div className="max-w-5xl mx-auto">
+      {/* ─── HOW IT WORKS — dark section ─── */}
+      <section className="py-24 md:py-36 px-6 md:px-12 bg-forest relative overflow-hidden">
+        <div className="hero-grain-overlay" style={{ opacity: 0.03 }} />
+        <div className="max-w-5xl mx-auto relative z-10">
           <ScrollReveal>
             <div className="text-center mb-20">
-              <span className="inline-flex items-center gap-2.5 text-xs tracking-[0.35em] uppercase text-sage/80 font-medium mb-6">
-                <span className="w-7 h-px bg-sage/40" />
+              <span className="inline-flex items-center gap-2.5 text-xs tracking-[0.35em] uppercase text-bone/40 font-medium mb-6">
+                <span className="w-7 h-px bg-bone/15" />
                 Simple
-                <span className="w-7 h-px bg-sage/40" />
+                <span className="w-7 h-px bg-bone/15" />
               </span>
-              <h2 className="font-serif text-3xl md:text-5xl text-obsidian leading-tight">
+              <h2 className="font-serif text-3xl md:text-5xl lg:text-6xl text-bone leading-tight">
                 How It Works
               </h2>
             </div>
           </ScrollReveal>
 
           <div className="grid md:grid-cols-3 gap-12 md:gap-0">
-            <ScrollReveal delay={0} className="step-connector">
+            <ScrollReveal delay={0} className="step-connector-dark">
               <StepCard
                 number="01"
-                icon={<EnvelopeIcon />}
+                icon={<EnvelopeIcon light />}
                 title="Unlock Access"
                 description="Enter your email to claim your complimentary Reserve Access. No credit card. No commitments."
+                dark
               />
             </ScrollReveal>
-            <ScrollReveal delay={0.15} className="step-connector">
+            <ScrollReveal delay={0.15} className="step-connector-dark">
               <StepCard
                 number="02"
-                icon={<KeyIcon />}
+                icon={<KeyIcon light />}
                 title="Access Activates"
                 description="Reserve access attaches to your account automatically. Partner benefits and pricing unlock instantly."
+                dark
               />
             </ScrollReveal>
-            <ScrollReveal delay={0.3} className="step-connector">
+            <ScrollReveal delay={0.3} className="step-connector-dark">
               <StepCard
                 number="03"
-                icon={<BellIcon />}
+                icon={<BellIcon light />}
                 title="Private Releases"
                 description="When curated products and experiences become available, you&rsquo;ll be the first to know. High signal, low noise."
+                dark
               />
             </ScrollReveal>
           </div>
@@ -455,7 +419,7 @@ export default function Home() {
                 The Drop
                 <span className="w-7 h-px bg-sage/40" />
               </span>
-              <h2 className="font-serif text-3xl md:text-5xl text-obsidian leading-tight mb-6">
+              <h2 className="font-serif text-3xl md:text-5xl lg:text-6xl text-obsidian leading-tight mb-6">
                 Recent Releases
               </h2>
               <p className="text-lg text-charcoal/65 max-w-xl mx-auto">
@@ -496,11 +460,9 @@ export default function Home() {
             <div className="text-center mt-12">
               <a
                 href="#"
-                className="inline-flex items-center gap-2 text-sm tracking-wider uppercase text-forest font-medium group link-hover-underline"
+                className="inline-flex items-center gap-3 text-sm tracking-wider uppercase text-forest font-medium group px-6 py-3 rounded-lg border border-forest/20 hover:bg-forest hover:text-bone transition-all duration-300"
               >
-                <span className="group-hover:text-forest-dark transition-colors duration-300">
-                  View All Past Drops
-                </span>
+                <span>View All Past Drops</span>
                 <svg
                   className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1"
                   fill="none"
@@ -520,51 +482,42 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ─── FINAL CTA ─── */}
-      <section id="bottom-cta" className="py-28 md:py-40 px-6 md:px-12 bg-bone relative overflow-hidden cta-grain-bg">
-        {/* Decorative background elements */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
-          <div
-            className="w-[600px] h-[600px] rounded-full opacity-[0.04]"
-            style={{
-              background:
-                "radial-gradient(circle, #1F3D2B 0%, transparent 70%)",
-            }}
-          />
-        </div>
+      {/* ─── FINAL CTA — Dark cinematic close ─── */}
+      <section id="bottom-cta" className="py-28 md:py-40 px-6 md:px-12 relative overflow-hidden bottom-cta-dark">
+        <div className="hero-grain-overlay" style={{ opacity: 0.04 }} />
 
         <ScrollReveal>
-          <div className="relative max-w-4xl mx-auto">
+          <div className="relative max-w-4xl mx-auto z-10">
             <div className="grid md:grid-cols-2 gap-12 md:gap-16 items-center">
               {/* Left: Message */}
               <div className="text-center md:text-left">
-                <h2 className="font-serif text-3xl md:text-5xl lg:text-[3.5rem] text-obsidian leading-tight mb-6">
+                <h2 className="font-serif text-3xl md:text-5xl lg:text-[3.5rem] text-bone leading-tight mb-6">
                   Built for players
                   <br />
                   who care.
                 </h2>
-                <p className="text-lg text-charcoal/60 leading-relaxed mb-4">
+                <p className="text-lg text-bone/50 leading-relaxed mb-4">
                   Earn your edge. Join Mully Reserve and get access to what
                   matters. Without the noise.
                 </p>
-                <p className="text-sm text-sage italic">
+                <p className="text-sm text-bone/30 italic">
                   &ldquo;Taste. Earned.&rdquo;
                 </p>
               </div>
 
-              {/* Right: CTA */}
-              <div className="rounded-2xl p-8 md:p-10 cta-card-glass">
-                <h3 className="font-serif text-xl text-obsidian mb-2">
+              {/* Right: CTA Card */}
+              <div className="rounded-2xl p-8 md:p-10 bottom-cta-card-glass">
+                <h3 className="font-serif text-xl text-bone mb-2">
                   Unlock Reserve Access
                 </h3>
-                <p className="text-sm text-charcoal/50 mb-6">
+                <p className="text-sm text-bone/45 mb-6">
                   Complimentary. No credit card required.
                 </p>
                 <EmailCTA variant="bottom" />
-                <p className="text-xs text-taupe/70 mt-4 text-center">
+                <p className="text-xs text-bone/30 mt-4 text-center">
                   Join 2,400+ members already inside.
                 </p>
-                <p className="text-[11px] text-charcoal/35 mt-2 text-center">
+                <p className="text-[11px] text-bone/20 mt-2 text-center">
                   4.9&#9733; from 2,400+ members
                 </p>
               </div>
@@ -577,7 +530,7 @@ export default function Home() {
       <FloatingCTA />
 
       {/* ─── FOOTER ─── */}
-      <footer className="py-16 px-6 md:px-12 bg-forest topo-pattern footer-premium">
+      <footer className="py-16 px-6 md:px-12 bg-forest topo-pattern footer-glass-border">
         <div className="max-w-6xl mx-auto">
           {/* Top — Logo + Nav columns */}
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-10 mb-14">
@@ -707,44 +660,44 @@ function MullyMark({ className }: { className?: string }) {
   );
 }
 
-/* ── Glassmorphic Reserve Member Card ── */
+/* ── Glassmorphic Reserve Member Card (dark-aware) ── */
 function MemberCard({ size = "lg" }: { size?: "sm" | "lg" }) {
   const isSmall = size === "sm";
   return (
     <div
       className={`relative ${isSmall ? "w-[240px] aspect-[1.6/1] rounded-xl" : "w-[360px] lg:w-[400px] aspect-[1.6/1] rounded-2xl"} overflow-hidden member-card-shimmer`}
       style={{
-        background: "linear-gradient(135deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0.18) 50%, rgba(255,255,255,0.25) 100%)",
-        backdropFilter: "blur(18px) saturate(1.6)",
-        WebkitBackdropFilter: "blur(18px) saturate(1.6)",
-        border: "1px solid rgba(255,255,255,0.45)",
+        background: "linear-gradient(135deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.14) 100%)",
+        backdropFilter: "blur(24px) saturate(1.8)",
+        WebkitBackdropFilter: "blur(24px) saturate(1.8)",
+        border: "1px solid rgba(255,255,255,0.22)",
         boxShadow: isSmall
-          ? "0 4px 20px -4px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.50)"
-          : "0 8px 32px -4px rgba(0,0,0,0.15), 0 32px 72px -12px rgba(0,0,0,0.10), inset 0 1px 0 rgba(255,255,255,0.60), inset 0 0 0 0.5px rgba(255,255,255,0.30)",
+          ? "0 4px 20px -4px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.25)"
+          : "0 8px 32px -4px rgba(0,0,0,0.4), 0 32px 72px -12px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.30), inset 0 0 0 0.5px rgba(255,255,255,0.15)",
       }}
     >
-      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/50 to-transparent" />
+      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
       <div className={`relative z-10 h-full flex flex-col justify-between ${isSmall ? "p-4" : "p-7"}`}>
         <div className="flex items-start justify-between">
-          <div className={`flex items-center gap-1.5 text-forest ${isSmall ? "" : "gap-2"}`}>
+          <div className={`flex items-center gap-1.5 text-bone/90 ${isSmall ? "" : "gap-2"}`}>
             <svg viewBox="0 0 1002 540" fill="currentColor" className={`${isSmall ? "h-3" : "h-4"} w-auto`} aria-hidden="true">
               <path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" />
             </svg>
             <span className={`font-serif font-bold tracking-wide ${isSmall ? "text-xs" : "text-sm"}`}>mully.</span>
           </div>
-          <span className={`tracking-[0.2em] uppercase text-forest/40 font-medium ${isSmall ? "text-[7px]" : "text-[9px]"}`}>EST. 2026</span>
+          <span className={`tracking-[0.2em] uppercase text-bone/30 font-medium ${isSmall ? "text-[7px]" : "text-[9px]"}`}>EST. 2026</span>
         </div>
         <div className="text-center">
-          <span className={`tracking-[0.4em] uppercase text-forest/70 font-medium ${isSmall ? "text-[9px]" : "text-[11px]"}`}>
+          <span className={`tracking-[0.4em] uppercase text-bone/60 font-medium ${isSmall ? "text-[9px]" : "text-[11px]"}`}>
             Mully Reserve
           </span>
         </div>
         <div className="flex items-end justify-between">
           <div>
-            <span className={`block tracking-[0.2em] uppercase text-forest/40 mb-0.5 ${isSmall ? "text-[7px]" : "text-[9px] mb-1"}`}>Member</span>
-            <span className={`text-forest/80 tracking-widest font-light ${isSmall ? "text-xs" : "text-sm"}`}>0001 &nbsp;2847</span>
+            <span className={`block tracking-[0.2em] uppercase text-bone/30 mb-0.5 ${isSmall ? "text-[7px]" : "text-[9px] mb-1"}`}>Member</span>
+            <span className={`text-bone/70 tracking-widest font-light ${isSmall ? "text-xs" : "text-sm"}`}>0001 &nbsp;2847</span>
           </div>
-          <span className={`tracking-[0.15em] uppercase text-forest/35 font-medium ${isSmall ? "text-[7px]" : "text-[9px]"}`}>
+          <span className={`tracking-[0.15em] uppercase text-bone/25 font-medium ${isSmall ? "text-[7px]" : "text-[9px]"}`}>
             Reserve Member
           </span>
         </div>
@@ -753,42 +706,33 @@ function MemberCard({ size = "lg" }: { size?: "sm" | "lg" }) {
   );
 }
 
-function BenefitCard({
+/* ── Dark glass feature card with ken-burns ── */
+function FeatureCard({
   image,
   title,
   description,
-  overlay,
-  children,
 }: {
   image: string;
   title: string;
   description: string;
-  overlay?: React.ReactNode;
-  children?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl overflow-hidden group h-full benefit-card-premium relative">
-      <div className="card-top-accent" />
+    <div className="rounded-2xl overflow-hidden group h-full feature-card-dark relative">
       <div className="relative aspect-[3/2] overflow-hidden">
         <Image
           src={image}
           alt={title}
           fill
           sizes="(min-width: 1024px) 360px, (min-width: 768px) 33vw, 100vw"
-          className="w-full h-full object-cover transition-transform duration-600 group-hover:scale-105"
+          className="w-full h-full object-cover transition-transform duration-[1.2s] group-hover:scale-110"
           draggable={false}
         />
-        <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-white/60 to-transparent pointer-events-none" />
-        {overlay && (
-          <div className="absolute top-3 right-3 z-10">
-            {overlay}
-          </div>
-        )}
+        {/* Gradient fade into card body */}
+        <div className="absolute inset-0 bg-gradient-to-t from-[#111]/80 via-[#111]/20 to-transparent pointer-events-none" />
       </div>
       <div className="p-6 md:p-7">
-        <h3 className="font-serif text-xl md:text-2xl text-obsidian mb-2">{title}</h3>
-        <p className="text-sm text-charcoal/50 leading-relaxed">{description}</p>
-        {children}
+        <h3 className="font-serif text-xl md:text-2xl text-bone mb-2">{title}</h3>
+        <p className="text-sm text-bone/50 leading-relaxed">{description}</p>
       </div>
     </div>
   );
@@ -839,22 +783,24 @@ function StepCard({
   icon,
   title,
   description,
+  dark,
 }: {
   number: string;
   icon: React.ReactNode;
   title: string;
   description: string;
+  dark?: boolean;
 }) {
   return (
     <div className="text-center px-4">
-      <div className="w-16 h-16 rounded-2xl bg-forest/10 flex items-center justify-center mx-auto mb-5 icon-hover-shift">
+      <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-5 ${dark ? "bg-bone/10" : "bg-forest/10"}`}>
         {icon}
       </div>
-      <span className="font-serif text-xs tracking-[0.2em] text-sage uppercase block mb-3">
+      <span className={`font-serif text-xs tracking-[0.2em] uppercase block mb-3 ${dark ? "text-ember/60" : "text-sage"}`}>
         Step {number}
       </span>
-      <h3 className="font-serif text-xl text-obsidian mb-3">{title}</h3>
-      <p className="text-sm text-charcoal/55 leading-relaxed max-w-xs mx-auto">
+      <h3 className={`font-serif text-xl mb-3 ${dark ? "text-bone" : "text-obsidian"}`}>{title}</h3>
+      <p className={`text-sm leading-relaxed max-w-xs mx-auto ${dark ? "text-bone/45" : "text-charcoal/55"}`}>
         {description}
       </p>
     </div>
@@ -944,69 +890,10 @@ function ReleaseCard({
    ICONS
    ═══════════════════════════════════════════ */
 
-function PartnerIcon() {
+function EnvelopeIcon({ light }: { light?: boolean }) {
   return (
     <svg
-      className="w-6 h-6 text-forest"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={1.5}
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z"
-      />
-    </svg>
-  );
-}
-
-function PricingIcon() {
-  return (
-    <svg
-      className="w-6 h-6 text-forest"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={1.5}
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z"
-      />
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M6 6h.008v.008H6V6z"
-      />
-    </svg>
-  );
-}
-
-function ClubIcon() {
-  return (
-    <svg
-      className="w-6 h-6 text-forest"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={1.5}
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M3 3v1.5M3 21v-6m0 0l2.77-.693a9 9 0 016.208.682l.108.054a9 9 0 006.086.71l3.114-.732a48.524 48.524 0 01-.005-10.499l-3.11.732a9 9 0 01-6.085-.711l-.108-.054a9 9 0 00-6.208-.682L3 4.5M3 15V4.5"
-      />
-    </svg>
-  );
-}
-
-function EnvelopeIcon() {
-  return (
-    <svg
-      className="w-6 h-6 text-forest"
+      className={`w-6 h-6 ${light ? "text-bone/70" : "text-forest"}`}
       fill="none"
       viewBox="0 0 24 24"
       stroke="currentColor"
@@ -1021,10 +908,10 @@ function EnvelopeIcon() {
   );
 }
 
-function KeyIcon() {
+function KeyIcon({ light }: { light?: boolean }) {
   return (
     <svg
-      className="w-6 h-6 text-forest"
+      className={`w-6 h-6 ${light ? "text-bone/70" : "text-forest"}`}
       fill="none"
       viewBox="0 0 24 24"
       stroke="currentColor"
@@ -1039,10 +926,10 @@ function KeyIcon() {
   );
 }
 
-function BellIcon() {
+function BellIcon({ light }: { light?: boolean }) {
   return (
     <svg
-      className="w-6 h-6 text-forest"
+      className={`w-6 h-6 ${light ? "text-bone/70" : "text-forest"}`}
       fill="none"
       viewBox="0 0 24 24"
       stroke="currentColor"
@@ -1056,4 +943,3 @@ function BellIcon() {
     </svg>
   );
 }
-

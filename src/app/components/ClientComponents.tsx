@@ -14,6 +14,42 @@ export function LogoLink() {
   );
 }
 
+/* ─── GLASS HEADER (transparent → frosted on scroll) ─── */
+
+export function GlassHeader() {
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 40);
+    onScroll(); // check initial state
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  return (
+    <header
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-[400ms] ease-out ${
+        scrolled ? "glass-header-scrolled" : "glass-header-top"
+      }`}
+    >
+      <div className="max-w-7xl mx-auto px-6 md:px-12 flex items-center justify-between h-16">
+        <Link href="/" className={`flex items-center gap-2 transition-colors duration-[400ms] ${scrolled ? "text-forest" : "text-bone"}`}>
+          <svg viewBox="0 0 1002 540" fill="currentColor" className="h-5 w-auto" aria-hidden="true"><path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" /></svg>
+          <span className="font-serif text-2xl font-bold tracking-wide">mully.</span>
+        </Link>
+        <a
+          href="/login"
+          className={`text-xs sm:text-sm tracking-wider uppercase font-medium transition-colors duration-[400ms] shrink-0 mr-4 md:mr-0 ${
+            scrolled ? "text-forest hover:text-forest-dark" : "text-bone/90 hover:text-bone"
+          }`}
+        >
+          Sign In
+        </a>
+      </div>
+    </header>
+  );
+}
+
 /* ─── SCROLL REVEAL ─── */
 
 interface ScrollRevealProps {
@@ -132,6 +168,7 @@ interface StatCounterProps {
   prefix?: string;
   duration?: number;
   label: string;
+  dark?: boolean;
 }
 
 export function StatCounter({
@@ -140,6 +177,7 @@ export function StatCounter({
   prefix = "",
   duration = 2200,
   label,
+  dark,
 }: StatCounterProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [count, setCount] = useState(0);
@@ -183,12 +221,12 @@ export function StatCounter({
 
   return (
     <div ref={ref} className="text-center">
-      <span className="font-serif text-4xl md:text-5xl lg:text-6xl text-forest block mb-2">
+      <span className={`font-serif text-4xl md:text-5xl lg:text-[3.5rem] block mb-2 ${dark ? "text-bone" : "text-forest"}`}>
         {prefix}
         {count.toLocaleString()}
         {suffix}
       </span>
-      <span className="text-xs tracking-[0.25em] uppercase text-charcoal/50 font-medium">
+      <span className={`text-xs tracking-[0.25em] uppercase font-medium ${dark ? "text-bone/50" : "text-charcoal/50"}`}>
         {label}
       </span>
     </div>
@@ -203,48 +241,72 @@ export function FloatingCTA() {
 
   useEffect(() => {
     const hero = document.getElementById("hero");
+    const bottomCta = document.getElementById("bottom-cta");
     if (!hero) return;
 
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        // Show when hero is NOT intersecting (user scrolled past)
-        setVisible(!entry.isIntersecting);
-      },
+    const heroObs = new IntersectionObserver(
+      ([entry]) => setVisible((prev) => {
+        // Show when hero is NOT intersecting, but respect bottom CTA
+        const bottomEl = document.getElementById("bottom-cta");
+        if (bottomEl) {
+          const rect = bottomEl.getBoundingClientRect();
+          if (rect.top < window.innerHeight) return false;
+        }
+        return !entry.isIntersecting;
+      }),
       { threshold: 0 }
     );
+    heroObs.observe(hero);
 
-    observer.observe(hero);
-    return () => observer.disconnect();
+    let bottomObs: IntersectionObserver | undefined;
+    if (bottomCta) {
+      bottomObs = new IntersectionObserver(
+        ([entry]) => {
+          if (entry.isIntersecting) setVisible(false);
+          else {
+            // Re-check hero visibility
+            const heroRect = hero.getBoundingClientRect();
+            if (heroRect.bottom < 0) setVisible(true);
+          }
+        },
+        { threshold: 0 }
+      );
+      bottomObs.observe(bottomCta);
+    }
+
+    return () => {
+      heroObs.disconnect();
+      bottomObs?.disconnect();
+    };
   }, []);
 
   if (dismissed) return null;
 
   const handleClick = () => {
-    const el = document.getElementById("bottom-cta");
-    if (el) el.scrollIntoView({ behavior: "smooth" });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   return (
     <div
-      className={`fixed bottom-0 left-0 right-0 z-40 pointer-events-none transition-opacity duration-300 ${visible ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+      className={`fixed bottom-0 left-0 right-0 z-40 pointer-events-none transition-all duration-400 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-full"}`}
       aria-hidden={!visible}
     >
       <div className="max-w-7xl mx-auto px-4 pb-4 md:px-6 md:pb-6">
         <div
-          className={`pointer-events-auto rounded-xl px-4 py-3 md:px-6 md:py-4 flex items-center justify-between gap-4 floating-cta-bar safe-area-bottom`}
+          className="pointer-events-auto rounded-xl px-4 py-3 md:px-6 md:py-3.5 flex items-center justify-between gap-4 safe-area-bottom"
           style={{
             background: "rgba(245, 241, 232, 0.82)",
-            backdropFilter: "blur(20px) saturate(1.5)",
-            WebkitBackdropFilter: "blur(20px) saturate(1.5)",
-            border: "1px solid rgba(255, 255, 255, 0.35)",
+            backdropFilter: "blur(20px) saturate(1.4)",
+            WebkitBackdropFilter: "blur(20px) saturate(1.4)",
+            border: "1px solid rgba(255, 255, 255, 0.25)",
             boxShadow:
-              "0 -4px 24px -4px rgba(0,0,0,0.08), 0 8px 32px -4px rgba(0,0,0,0.10), inset 0 1px 0 rgba(255,255,255,0.60)",
+              "0 -4px 24px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,0.4)",
           }}
         >
-          <p className="text-sm md:text-base text-charcoal/70 font-medium hidden sm:block">
+          <p className="text-sm md:text-base text-charcoal/70 font-medium hidden sm:block leading-tight">
             Join 2,400+ members with Reserve access.
           </p>
-          <p className="text-sm text-charcoal/70 font-medium sm:hidden">
+          <p className="text-sm text-charcoal/70 font-medium sm:hidden leading-tight">
             Join 2,400+ members
           </p>
           <div className="flex items-center gap-3 shrink-0">
