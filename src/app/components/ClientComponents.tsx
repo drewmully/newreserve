@@ -195,6 +195,81 @@ export function StatCounter({
   );
 }
 
+/* ─── FLOATING CTA BAR ─── */
+
+export function FloatingCTA() {
+  const [visible, setVisible] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    const hero = document.getElementById("hero");
+    if (!hero) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        // Show when hero is NOT intersecting (user scrolled past)
+        setVisible(!entry.isIntersecting);
+      },
+      { threshold: 0 }
+    );
+
+    observer.observe(hero);
+    return () => observer.disconnect();
+  }, []);
+
+  if (dismissed) return null;
+
+  const handleClick = () => {
+    const el = document.getElementById("bottom-cta");
+    if (el) el.scrollIntoView({ behavior: "smooth" });
+  };
+
+  return (
+    <div
+      className={`fixed bottom-0 left-0 right-0 z-40 pointer-events-none transition-opacity duration-300 ${visible ? "opacity-100" : "opacity-0 pointer-events-none"}`}
+      aria-hidden={!visible}
+    >
+      <div className="max-w-7xl mx-auto px-4 pb-4 md:px-6 md:pb-6">
+        <div
+          className={`pointer-events-auto rounded-xl px-4 py-3 md:px-6 md:py-4 flex items-center justify-between gap-4 floating-cta-bar safe-area-bottom`}
+          style={{
+            background: "rgba(245, 241, 232, 0.82)",
+            backdropFilter: "blur(20px) saturate(1.5)",
+            WebkitBackdropFilter: "blur(20px) saturate(1.5)",
+            border: "1px solid rgba(255, 255, 255, 0.35)",
+            boxShadow:
+              "0 -4px 24px -4px rgba(0,0,0,0.08), 0 8px 32px -4px rgba(0,0,0,0.10), inset 0 1px 0 rgba(255,255,255,0.60)",
+          }}
+        >
+          <p className="text-sm md:text-base text-charcoal/70 font-medium hidden sm:block">
+            Join 2,400+ members with Reserve access.
+          </p>
+          <p className="text-sm text-charcoal/70 font-medium sm:hidden">
+            Join 2,400+ members
+          </p>
+          <div className="flex items-center gap-3 shrink-0">
+            <button
+              onClick={handleClick}
+              className="h-10 px-5 rounded-lg bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-all duration-300 btn-press whitespace-nowrap"
+            >
+              Unlock Access
+            </button>
+            <button
+              onClick={() => setDismissed(true)}
+              className="w-8 h-8 rounded-full flex items-center justify-center text-charcoal/30 hover:text-charcoal/60 hover:bg-charcoal/5 transition-colors"
+              aria-label="Dismiss"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── SCROLL-ANIMATED CHEVRON ─── */
 
 export function ScrollChevron({ light }: { light?: boolean }) {
