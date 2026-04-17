@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
+
+/* ─── EMAIL CTA CONSTANTS (local to avoid coupling with EmailCTA.tsx) ─── */
+const PENDING_SIGN_IN_EMAIL_KEY = "pending_sign_in_email";
+const PENDING_ONBOARDING_EMAIL_KEY = "pending_onboarding_email";
 
 /* ─── LOGO LINK ─── */
 
@@ -30,10 +35,10 @@ export function GlassHeader() {
     <header
       className="fixed top-0 left-0 right-0 z-50 transition-all duration-500"
       style={scrolled ? {
-        background: 'rgba(11, 26, 18, 0.88)',
-        backdropFilter: 'blur(16px) saturate(1.6)',
-        WebkitBackdropFilter: 'blur(16px) saturate(1.6)',
-        borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+        background: 'rgba(11, 26, 18, 0.3)',
+        backdropFilter: 'blur(20px) saturate(1.8)',
+        WebkitBackdropFilter: 'blur(20px) saturate(1.8)',
+        borderBottom: '1px solid rgba(255, 255, 255, 0.15)',
       } : {
         background: 'transparent',
         backdropFilter: 'none',
@@ -244,7 +249,9 @@ export function StatCounter({
 
 export function FloatingCTA() {
   const [visible, setVisible] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
+  const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     const hero = document.getElementById("hero");
@@ -252,8 +259,7 @@ export function FloatingCTA() {
     if (!hero) return;
 
     const heroObs = new IntersectionObserver(
-      ([entry]) => setVisible((prev) => {
-        // Show when hero is NOT intersecting, but respect bottom CTA
+      ([entry]) => setVisible(() => {
         const bottomEl = document.getElementById("bottom-cta");
         if (bottomEl) {
           const rect = bottomEl.getBoundingClientRect();
@@ -271,7 +277,6 @@ export function FloatingCTA() {
         ([entry]) => {
           if (entry.isIntersecting) setVisible(false);
           else {
-            // Re-check hero visibility
             const heroRect = hero.getBoundingClientRect();
             if (heroRect.bottom < 0) setVisible(true);
           }
@@ -287,10 +292,30 @@ export function FloatingCTA() {
     };
   }, []);
 
-  if (dismissed) return null;
-
-  const handleClick = () => {
-    window.scrollTo({ top: 0, behavior: "smooth" });
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim() || loading) return;
+    setLoading(true);
+    try {
+      const res = await fetch("/api/auth/check-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim() }),
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok && data?.exists === true) {
+        sessionStorage.setItem(PENDING_SIGN_IN_EMAIL_KEY, email.trim());
+        router.push("/login");
+      } else {
+        sessionStorage.setItem(PENDING_ONBOARDING_EMAIL_KEY, email.trim());
+        router.push("/onboarding");
+      }
+    } catch {
+      sessionStorage.setItem(PENDING_ONBOARDING_EMAIL_KEY, email.trim());
+      router.push("/onboarding");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -299,38 +324,35 @@ export function FloatingCTA() {
       aria-hidden={!visible}
     >
       <div
-        className="pointer-events-auto px-4 py-3 md:px-6 md:py-3.5 flex items-center justify-between gap-4 safe-area-bottom"
+        className="pointer-events-auto px-4 py-3 md:px-6 safe-area-bottom"
         style={{
-          background: 'rgba(11, 26, 18, 0.88)',
-          backdropFilter: 'blur(16px) saturate(1.6)',
-          WebkitBackdropFilter: 'blur(16px) saturate(1.6)',
-          borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+          background: 'rgba(11, 26, 18, 0.3)',
+          backdropFilter: 'blur(20px) saturate(1.8)',
+          WebkitBackdropFilter: 'blur(20px) saturate(1.8)',
+          borderTop: '1px solid rgba(255, 255, 255, 0.15)',
         }}
       >
         <div className="max-w-7xl mx-auto w-full flex items-center justify-between gap-4">
-          <p className="text-sm md:text-base text-bone/70 font-medium hidden sm:block leading-tight">
+          <p className="text-sm md:text-base text-bone/70 font-medium hidden sm:block leading-tight shrink-0">
             Join 2,400+ members with Reserve access.
           </p>
-          <p className="text-sm text-bone/70 font-medium sm:hidden leading-tight">
-            Join 2,400+ members
-          </p>
-          <div className="flex items-center gap-3 shrink-0">
+          <form onSubmit={handleSubmit} className="flex items-center gap-2 w-full sm:w-auto sm:shrink-0">
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Enter your email"
+              required
+              className="h-10 px-3 rounded-lg bg-white/10 border border-white/15 text-bone text-sm placeholder:text-bone/40 focus:outline-none focus:border-white/30 focus:ring-1 focus:ring-white/20 transition-colors w-full sm:w-56"
+            />
             <button
-              onClick={handleClick}
-              className="h-10 px-5 rounded-lg bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-all duration-300 btn-press whitespace-nowrap"
+              type="submit"
+              disabled={loading}
+              className="h-10 px-5 rounded-lg bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-all duration-300 btn-press whitespace-nowrap disabled:opacity-60"
             >
-              Unlock Access
+              {loading ? "..." : "Unlock Access"}
             </button>
-            <button
-              onClick={() => setDismissed(true)}
-              className="w-8 h-8 rounded-full flex items-center justify-center text-bone/30 hover:text-bone/60 hover:bg-bone/5 transition-colors"
-              aria-label="Dismiss"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
+          </form>
         </div>
       </div>
     </div>
