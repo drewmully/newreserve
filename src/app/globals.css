@@ -1174,11 +1174,11 @@ input:focus-visible {
 }
 
 .glass-header-scrolled {
-  background: rgba(245, 241, 232, 0.72);
-  backdrop-filter: blur(20px) saturate(1.4);
-  -webkit-backdrop-filter: blur(20px) saturate(1.4);
-  box-shadow: 0 4px 20px -4px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.3);
-  border-bottom: none;
+  background: rgba(15, 30, 20, 0.82);
+  backdrop-filter: blur(24px) saturate(1.8);
+  -webkit-backdrop-filter: blur(24px) saturate(1.8);
+  box-shadow: 0 8px 32px -4px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 .glass-header-scrolled::after {
   content: "";
@@ -1187,7 +1187,7 @@ input:focus-visible {
   left: 0;
   right: 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(110, 139, 116, 0.25), rgba(31, 61, 43, 0.15), rgba(110, 139, 116, 0.25), transparent);
+  background: linear-gradient(90deg, transparent, rgba(110, 139, 116, 0.15), rgba(200, 169, 81, 0.10), rgba(110, 139, 116, 0.15), transparent);
   pointer-events: none;
 }
 
@@ -1247,6 +1247,39 @@ input:focus-visible {
   z-index: -1;
 }
 
+/* ─── HERO TOPO BACKGROUND ─── */
+
+.hero-topo-bg {
+  background-color: #1a3325;
+  background-image:
+    /* Subtle topographic contour lines */
+    repeating-radial-gradient(
+      ellipse at 20% 50%,
+      transparent 0,
+      transparent 30px,
+      rgba(110, 139, 116, 0.08) 31px,
+      transparent 32px
+    ),
+    repeating-radial-gradient(
+      ellipse at 80% 30%,
+      transparent 0,
+      transparent 45px,
+      rgba(110, 139, 116, 0.06) 46px,
+      transparent 47px
+    ),
+    repeating-radial-gradient(
+      ellipse at 50% 80%,
+      transparent 0,
+      transparent 25px,
+      rgba(110, 139, 116, 0.07) 26px,
+      transparent 27px
+    ),
+    /* Depth gradient overlay for cinematic feel */
+    radial-gradient(ellipse at 30% 40%, rgba(31, 61, 43, 0.6) 0%, transparent 60%),
+    radial-gradient(ellipse at 70% 70%, rgba(15, 30, 20, 0.4) 0%, transparent 50%),
+    linear-gradient(160deg, #0f1e14 0%, #1a3325 40%, #1F3D2B 60%, #0f1e14 100%);
+}
+
 /* ─── SCROLL LINE INDICATOR (replaces chevron) ─── */
 
 .scroll-line-indicator {
@@ -1275,8 +1308,35 @@ input:focus-visible {
 /* ─── STATS BAR — DARK ─── */
 
 .stats-dark-section {
-  background: linear-gradient(to bottom, rgba(15, 30, 20, 0.95), #1F3D2B);
+  background-color: #1a3325;
+  background-image:
+    repeating-radial-gradient(
+      ellipse at 60% 40%,
+      transparent 0,
+      transparent 35px,
+      rgba(110, 139, 116, 0.06) 36px,
+      transparent 37px
+    ),
+    repeating-radial-gradient(
+      ellipse at 30% 70%,
+      transparent 0,
+      transparent 50px,
+      rgba(110, 139, 116, 0.04) 51px,
+      transparent 52px
+    ),
+    linear-gradient(to bottom, rgba(15, 30, 20, 0.95), #1F3D2B);
   position: relative;
+}
+
+.stats-dark-section::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 10%, rgba(200, 169, 81, 0.2) 30%, rgba(110, 139, 116, 0.3) 50%, rgba(200, 169, 81, 0.2) 70%, transparent 90%);
+  pointer-events: none;
 }
 
 /* Gold dividers between stats */
@@ -1315,7 +1375,23 @@ input:focus-visible {
 /* ─── MANIFESTO SECTION ─── */
 
 .manifesto-section {
-  background: linear-gradient(160deg, #0f1e14 0%, #1a3325 50%, #0f1e14 100%);
+  background-color: #1a3325;
+  background-image:
+    repeating-radial-gradient(
+      ellipse at 40% 60%,
+      transparent 0,
+      transparent 30px,
+      rgba(110, 139, 116, 0.05) 31px,
+      transparent 32px
+    ),
+    repeating-radial-gradient(
+      ellipse at 70% 20%,
+      transparent 0,
+      transparent 45px,
+      rgba(110, 139, 116, 0.04) 46px,
+      transparent 47px
+    ),
+    linear-gradient(160deg, #0f1e14 0%, #1a3325 50%, #0f1e14 100%);
 }
 
 /* Subtle ambient light animation */
@@ -1404,7 +1480,30 @@ input:focus-visible {
 /* ─── BOTTOM CTA — DARK ─── */
 
 .bottom-cta-dark {
-  background: linear-gradient(160deg, #0f1e14 0%, #1a3325 50%, #0f1e14 100%);
+  background-color: #1a3325;
+  background-image:
+    repeating-radial-gradient(
+      ellipse at 20% 50%,
+      transparent 0,
+      transparent 30px,
+      rgba(110, 139, 116, 0.06) 31px,
+      transparent 32px
+    ),
+    repeating-radial-gradient(
+      ellipse at 80% 30%,
+      transparent 0,
+      transparent 45px,
+      rgba(110, 139, 116, 0.04) 46px,
+      transparent 47px
+    ),
+    repeating-radial-gradient(
+      ellipse at 50% 80%,
+      transparent 0,
+      transparent 25px,
+      rgba(110, 139, 116, 0.05) 26px,
+      transparent 27px
+    ),
+    linear-gradient(160deg, #0f1e14 0%, #1a3325 50%, #0f1e14 100%);
 }
 
 .bottom-cta-card-glass {

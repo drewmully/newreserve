@@ -33,14 +33,14 @@ export function GlassHeader() {
       }`}
     >
       <div className="max-w-7xl mx-auto px-6 md:px-12 flex items-center justify-between h-16">
-        <Link href="/" className={`flex items-center gap-2 transition-colors duration-[400ms] ${scrolled ? "text-forest" : "text-bone"}`}>
+        <Link href="/" className={`flex items-center gap-2 transition-colors duration-[400ms] text-bone`}>
           <svg viewBox="0 0 1002 540" fill="currentColor" className="h-5 w-auto" aria-hidden="true"><path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" /></svg>
           <span className="font-serif text-2xl font-bold tracking-wide">mully.</span>
         </Link>
         <a
           href="/login"
           className={`text-xs sm:text-sm tracking-wider uppercase font-medium transition-colors duration-[400ms] shrink-0 mr-4 md:mr-0 ${
-            scrolled ? "text-forest hover:text-forest-dark" : "text-bone/90 hover:text-bone"
+            scrolled ? "text-bone/90 hover:text-bone" : "text-bone/90 hover:text-bone"
           }`}
         >
           Sign In

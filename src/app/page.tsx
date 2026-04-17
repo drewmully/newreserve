@@ -16,28 +16,7 @@ export default function Home() {
       <GlassHeader />
 
       {/* ─── HERO — DARK CINEMATIC ─── */}
-      <section id="hero" className="relative min-h-[92vh] md:min-h-screen flex items-center px-6 md:px-12 lg:px-20 pt-20 pb-16 md:pt-0 md:pb-0 overflow-hidden">
-        {/* Background image */}
-        <Image
-          src="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/ChatGPT_Image_Feb_24_2026_03_08_18_PM.png?v=1771963720"
-          alt=""
-          aria-hidden="true"
-          fill
-          preload
-          fetchPriority="high"
-          sizes="100vw"
-          draggable={false}
-          className="absolute inset-0 w-full h-full object-cover pointer-events-none select-none"
-          style={{ backgroundAttachment: "fixed" }}
-        />
-
-        {/* Dark cinematic overlay — deep forest green color grade */}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            background: "linear-gradient(160deg, rgba(15,30,20,0.88) 0%, rgba(31,61,43,0.65) 50%, rgba(15,30,20,0.80) 100%)",
-          }}
-        />
+      <section id="hero" className="relative min-h-[92vh] md:min-h-screen flex items-center px-6 md:px-12 lg:px-20 pt-20 pb-16 md:pt-0 md:pb-0 overflow-hidden hero-topo-bg">
         {/* Extra bottom vignette for seamless stats transition */}
         <div
           className="absolute inset-0 pointer-events-none"
@@ -161,14 +140,14 @@ export default function Home() {
       </section>
 
       {/* ─── MANIFESTO — Full Cinematic Moment ─── */}
-      <section className="relative min-h-[70vh] md:min-h-[80vh] flex items-center justify-center px-6 md:px-12 overflow-hidden manifesto-section">
+      <section className="relative min-h-[55vh] md:min-h-[65vh] flex items-center justify-center px-6 md:px-12 overflow-hidden manifesto-section">
         {/* Grain overlay */}
         <div className="hero-grain-overlay" style={{ opacity: 0.04 }} />
         {/* Subtle moving gradient */}
         <div className="manifesto-ambient-light" />
         {/* Decorative oversized quote marks */}
         <div className="absolute top-8 left-6 md:left-16 pointer-events-none">
-          <span className="font-serif text-[12rem] md:text-[20rem] leading-none text-bone/[0.03] select-none">
+          <span className="font-serif text-[10rem] md:text-[16rem] leading-none text-bone/[0.06] select-none">
             &ldquo;
           </span>
         </div>
@@ -361,7 +340,7 @@ export default function Home() {
       </section>
 
       {/* ─── HOW IT WORKS — dark section ─── */}
-      <section className="py-24 md:py-36 px-6 md:px-12 bg-forest relative overflow-hidden">
+      <section className="py-20 md:py-28 px-6 md:px-12 bg-forest topo-pattern relative overflow-hidden">
         <div className="hero-grain-overlay" style={{ opacity: 0.03 }} />
         <div className="max-w-5xl mx-auto relative z-10">
           <ScrollReveal>
@@ -371,6 +350,7 @@ export default function Home() {
                 Simple
                 <span className="w-7 h-px bg-bone/15" />
               </span>
+              <span className="block w-12 h-px mx-auto mb-6 bg-gradient-to-r from-transparent via-ember/30 to-transparent" />
               <h2 className="font-serif text-3xl md:text-5xl lg:text-6xl text-bone leading-tight">
                 How It Works
               </h2>
@@ -793,7 +773,15 @@ function StepCard({
 }) {
   return (
     <div className="text-center px-4">
-      <div className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-5 ${dark ? "bg-bone/10" : "bg-forest/10"}`}>
+      <div
+        className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-5 ${dark ? "" : "bg-forest/10"}`}
+        style={dark ? {
+          background: 'rgba(255,255,255,0.06)',
+          backdropFilter: 'blur(12px)',
+          border: '1px solid rgba(255,255,255,0.10)',
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)'
+        } : undefined}
+      >
         {icon}
       </div>
       <span className={`font-serif text-xs tracking-[0.2em] uppercase block mb-3 ${dark ? "text-ember/60" : "text-sage"}`}>
