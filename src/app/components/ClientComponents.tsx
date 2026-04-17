@@ -324,7 +324,7 @@ export function FloatingCTA() {
       aria-hidden={!visible}
     >
       <div
-        className="pointer-events-auto px-4 py-3 md:px-6 safe-area-bottom"
+        className="pointer-events-auto"
         style={{
           background: 'rgba(11, 26, 18, 0.3)',
           backdropFilter: 'blur(20px) saturate(1.8)',
@@ -332,10 +332,10 @@ export function FloatingCTA() {
           borderTop: '1px solid rgba(255, 255, 255, 0.15)',
         }}
       >
-        <div className="max-w-7xl mx-auto w-full flex items-center justify-between gap-4">
-          <p className="text-sm md:text-base text-bone/70 font-medium hidden sm:block leading-tight shrink-0">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 px-4 md:px-6" style={{ height: '52px' }}>
+          <span className="text-sm md:text-base text-bone/70 font-medium hidden sm:inline shrink-0">
             Join 2,400+ members with Reserve access.
-          </p>
+          </span>
           <form onSubmit={handleSubmit} className="flex items-center gap-2 w-full sm:w-auto sm:shrink-0">
             <input
               type="email"
@@ -343,12 +343,12 @@ export function FloatingCTA() {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Enter your email"
               required
-              className="h-10 px-3 rounded-lg bg-white/10 border border-white/15 text-bone text-sm placeholder:text-bone/40 focus:outline-none focus:border-white/30 focus:ring-1 focus:ring-white/20 transition-colors w-full sm:w-56"
+              className="h-9 px-3 rounded-lg bg-white/10 border border-white/15 text-bone text-sm placeholder:text-bone/40 focus:outline-none focus:border-white/30 focus:ring-1 focus:ring-white/20 transition-colors w-full sm:w-56"
             />
             <button
               type="submit"
               disabled={loading}
-              className="h-10 px-5 rounded-lg bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-all duration-300 btn-press whitespace-nowrap disabled:opacity-60"
+              className="h-9 px-5 rounded-lg bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-all duration-300 btn-press whitespace-nowrap disabled:opacity-60"
             >
               {loading ? "..." : "Unlock Access"}
             </button>
