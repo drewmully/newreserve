@@ -12,7 +12,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-bone">
       {/* ─── HEADER ─── */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-bone/90 backdrop-blur-md header-grass">
+      <header className="fixed top-0 left-0 right-0 z-50 header-glass">
         <div className="max-w-7xl mx-auto px-6 md:px-12 flex items-center justify-between h-16">
           <LogoLink />
           <a
@@ -52,6 +52,8 @@ export default function Home() {
             background: "linear-gradient(180deg, rgba(245,241,232,0.75) 0%, rgba(245,241,232,0.60) 50%, rgba(245,241,232,0.40) 80%, transparent 100%)",
           }}
         />
+        {/* Film grain overlay for editorial depth */}
+        <div className="hero-grain-overlay" />
 
         {/* ── Two-column hero content ── */}
         <div className="relative max-w-7xl mx-auto w-full grid md:grid-cols-2 gap-6 md:gap-12 lg:gap-20 items-center z-10">
@@ -63,12 +65,13 @@ export default function Home() {
               <MemberCard size="sm" />
             </div>
 
-            <div className="animate-fade-up mb-5 md:mb-8">
-              <span className="inline-flex items-center gap-2.5 text-[11px] tracking-[0.35em] uppercase text-sage font-medium">
-                <span className="w-8 h-px bg-sage/40" />
+            <div className="animate-fade-up-delay-0 mb-5 md:mb-8">
+              <span className="inline-flex items-center gap-2.5 text-[11px] tracking-[0.38em] uppercase text-sage/80 font-medium">
+                <span className="w-10 h-px bg-sage/40" />
                 Mully Reserve
-                <span className="w-8 h-px bg-sage/40" />
+                <span className="w-10 h-px bg-sage/40" />
               </span>
+              <span className="gold-accent-line mt-2.5" />
             </div>
 
             <h1 className="font-serif text-3xl md:text-5xl lg:text-[4.25rem] text-forest leading-[1.05] tracking-tight mb-4 md:mb-6 animate-fade-up-delay-1">
@@ -99,15 +102,15 @@ export default function Home() {
         </div>
 
         {/* Scroll indicator */}
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2">
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 scroll-chevron-refined">
           <ScrollChevron />
         </div>
       </section>
 
       {/* ─── SOCIAL PROOF STRIP ─── */}
       <FadeInSection initialOpacity={0.15}>
-        <section className="py-16 md:py-20 px-6 md:px-12 border-b border-taupe/15 bg-bone-dark/50">
-          <div className="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-4">
+        <section className="py-16 md:py-20 px-6 md:px-12 bg-bone-dark/50 stats-section-premium stats-bottom-border">
+          <div className="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-4 relative">
             <StatCounter end={100} suffix="K+" label="Orders Shipped" />
             <StatCounter end={40} suffix="+" label="Brand Partners" />
             <StatCounter end={250} prefix="$" suffix="+" label="Annual Savings" />
@@ -121,10 +124,10 @@ export default function Home() {
         <div className="max-w-6xl mx-auto">
           <ScrollReveal>
             <div className="max-w-3xl mx-auto text-center mb-20">
-              <span className="inline-flex items-center gap-2 text-xs tracking-[0.3em] uppercase text-sage font-medium mb-6">
-                <span className="w-6 h-px bg-sage/50" />
+              <span className="inline-flex items-center gap-2.5 text-xs tracking-[0.35em] uppercase text-sage/80 font-medium mb-6">
+                <span className="w-7 h-px bg-sage/40" />
                 The Program
-                <span className="w-6 h-px bg-sage/50" />
+                <span className="w-7 h-px bg-sage/40" />
               </span>
               <h2 className="font-serif text-3xl md:text-5xl text-obsidian leading-tight mb-8">
                 What is Mully Reserve?
@@ -234,10 +237,10 @@ export default function Home() {
         <div className="max-w-6xl mx-auto relative">
           <ScrollReveal>
             <div className="text-center mb-20">
-              <span className="inline-flex items-center gap-2 text-xs tracking-[0.3em] uppercase text-sage font-medium mb-6">
-                <span className="w-6 h-px bg-sage/50" />
+              <span className="inline-flex items-center gap-2.5 text-xs tracking-[0.35em] uppercase text-sage/80 font-medium mb-6">
+                <span className="w-7 h-px bg-sage/40" />
                 Membership
-                <span className="w-6 h-px bg-sage/50" />
+                <span className="w-7 h-px bg-sage/40" />
               </span>
               <h2 className="font-serif text-3xl md:text-5xl text-obsidian leading-tight mb-6">
                 Choose Your Level
@@ -251,7 +254,7 @@ export default function Home() {
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5 lg:gap-4 items-stretch">
             {/* ── Tier 1 — Free ── */}
             <ScrollReveal delay={0}>
-              <div className="rounded-2xl p-7 md:p-8 flex flex-col card-hover h-full glass-card glass-card-light">
+              <div className="rounded-2xl p-7 md:p-8 flex flex-col card-hover h-full glass-card glass-card-light tier-card-shimmer tier-border-sage">
                 <div className="h-5 mb-3" />
                 <span className="text-[11px] tracking-[0.25em] uppercase text-sage font-medium">
                   Free
@@ -277,7 +280,7 @@ export default function Home() {
 
             {/* ── Tier 2 — Reserve Access ($99/yr) ── */}
             <ScrollReveal delay={0.08}>
-              <div className="rounded-2xl p-7 md:p-8 flex flex-col card-hover h-full glass-card glass-card-light">
+              <div className="rounded-2xl p-7 md:p-8 flex flex-col card-hover h-full glass-card glass-card-light tier-card-shimmer tier-border-forest">
                 <div className="h-5 mb-3" />
                 <span className="text-[11px] tracking-[0.25em] uppercase text-forest font-medium">
                   Reserve Access
@@ -309,12 +312,12 @@ export default function Home() {
               <div className="relative h-full">
                 {/* Badge — lives outside overflow-hidden so it never clips */}
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-20">
-                  <span className="inline-block bg-sage text-bone text-[10px] tracking-[0.2em] uppercase font-semibold px-4 py-1.5 rounded-full shadow-sm whitespace-nowrap">
+                  <span className="inline-block badge-gold text-[10px] tracking-[0.2em] uppercase font-semibold px-4 py-1.5 rounded-full whitespace-nowrap">
                     Most Popular
                   </span>
                 </div>
 
-                <div className="rounded-2xl overflow-hidden relative flex flex-col card-hover h-full glass-card glass-card-dark">
+                <div className="rounded-2xl overflow-hidden relative flex flex-col card-hover h-full glass-card glass-card-dark tier-card-shimmer tier-border-gold">
                   <Image
                     src="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/Untitled_design_17.png?v=1771516197"
                     alt=""
@@ -358,24 +361,24 @@ export default function Home() {
 
             {/* ── Tier 4 — Reserve Black ── */}
             <ScrollReveal delay={0.24}>
-              <div className="rounded-2xl p-7 md:p-8 flex flex-col card-hover h-full relative overflow-hidden glass-card glass-card-light">
-                <div className="absolute top-0 left-0 right-0 h-1 bg-obsidian" />
+              <div className="rounded-2xl p-7 md:p-8 flex flex-col card-hover h-full relative overflow-hidden tier-black-glass tier-card-shimmer">
+                <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-bone/20 to-transparent" />
                 <div className="h-5 mb-3" />
-                <span className="text-[11px] tracking-[0.25em] uppercase text-charcoal/50 font-medium">
+                <span className="text-[11px] tracking-[0.25em] uppercase text-bone/50 font-medium">
                   Reserve Black
                 </span>
                 <div className="mt-2 mb-5">
-                  <span className="font-serif text-3xl text-obsidian">Invite Only</span>
+                  <span className="font-serif text-3xl text-bone/90">Invite Only</span>
                 </div>
-                <div className="border-t border-taupe/12 pt-5 flex-1 flex flex-col">
+                <div className="border-t border-bone/8 pt-5 flex-1 flex flex-col">
                   <ul className="space-y-3 flex-1">
-                    <TierFeature text="Everything in Member" />
-                    <TierFeature text="$1,000 quarterly credit" />
-                    <TierFeature text="Personal stylist" />
-                    <TierFeature text="Concierge phone line" />
-                    <TierFeature text="Invite-only experiences" />
+                    <TierFeature text="Everything in Member" dark />
+                    <TierFeature text="$1,000 quarterly credit" dark />
+                    <TierFeature text="Personal stylist" dark />
+                    <TierFeature text="Concierge phone line" dark />
+                    <TierFeature text="Invite-only experiences" dark />
                   </ul>
-                  <div className="mt-8 block w-full text-center h-12 leading-[3rem] rounded-xl border border-charcoal/15 text-charcoal/40 text-sm font-medium tracking-wider uppercase cursor-default">
+                  <div className="mt-8 block w-full text-center h-12 leading-[3rem] rounded-xl border border-bone/12 text-bone/35 text-sm font-medium tracking-wider uppercase cursor-default">
                     By Invitation
                   </div>
                 </div>
@@ -397,10 +400,10 @@ export default function Home() {
         <div className="max-w-5xl mx-auto">
           <ScrollReveal>
             <div className="text-center mb-20">
-              <span className="inline-flex items-center gap-2 text-xs tracking-[0.3em] uppercase text-sage font-medium mb-6">
-                <span className="w-6 h-px bg-sage/50" />
+              <span className="inline-flex items-center gap-2.5 text-xs tracking-[0.35em] uppercase text-sage/80 font-medium mb-6">
+                <span className="w-7 h-px bg-sage/40" />
                 Simple
-                <span className="w-6 h-px bg-sage/50" />
+                <span className="w-7 h-px bg-sage/40" />
               </span>
               <h2 className="font-serif text-3xl md:text-5xl text-obsidian leading-tight">
                 How It Works
@@ -442,10 +445,10 @@ export default function Home() {
         <div className="max-w-6xl mx-auto">
           <ScrollReveal>
             <div className="text-center mb-16">
-              <span className="inline-flex items-center gap-2 text-xs tracking-[0.3em] uppercase text-sage font-medium mb-6">
-                <span className="w-6 h-px bg-sage/50" />
+              <span className="inline-flex items-center gap-2.5 text-xs tracking-[0.35em] uppercase text-sage/80 font-medium mb-6">
+                <span className="w-7 h-px bg-sage/40" />
                 The Drop
-                <span className="w-6 h-px bg-sage/50" />
+                <span className="w-7 h-px bg-sage/40" />
               </span>
               <h2 className="font-serif text-3xl md:text-5xl text-obsidian leading-tight mb-6">
                 Recent Releases
@@ -513,7 +516,7 @@ export default function Home() {
       </section>
 
       {/* ─── FINAL CTA ─── */}
-      <section className="py-28 md:py-40 px-6 md:px-12 bg-bone relative overflow-hidden">
+      <section className="py-28 md:py-40 px-6 md:px-12 bg-bone relative overflow-hidden cta-grain-bg">
         {/* Decorative background elements */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
           <div
@@ -545,7 +548,7 @@ export default function Home() {
               </div>
 
               {/* Right: CTA */}
-              <div className="bg-cream rounded-2xl p-8 md:p-10 border border-taupe/20 shadow-sm">
+              <div className="rounded-2xl p-8 md:p-10 cta-card-glass">
                 <h3 className="font-serif text-xl text-obsidian mb-2">
                   Unlock Reserve Access
                 </h3>
@@ -563,7 +566,7 @@ export default function Home() {
       </section>
 
       {/* ─── FOOTER ─── */}
-      <footer className="py-16 px-6 md:px-12 bg-forest">
+      <footer className="py-16 px-6 md:px-12 bg-forest topo-pattern footer-premium">
         <div className="max-w-6xl mx-auto">
           {/* Top — Logo + Nav columns */}
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-10 mb-14">
@@ -753,7 +756,8 @@ function BenefitCard({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="bg-cream rounded-2xl overflow-hidden border border-taupe/15 card-hover group h-full">
+    <div className="rounded-2xl overflow-hidden group h-full benefit-card-premium relative">
+      <div className="card-top-accent" />
       <div className="relative aspect-[3/2] overflow-hidden">
         <Image
           src={image}
