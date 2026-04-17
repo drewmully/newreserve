@@ -54,7 +54,7 @@ export function EmailCTA({ variant = "hero" }: { variant?: "hero" | "bottom" }) 
 
   if (variant === "hero") {
     return (
-      <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row items-stretch gap-3 w-full max-w-xs sm:max-w-md mx-auto md:mx-0 mb-5">
+      <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full max-w-xs sm:max-w-md mx-auto md:mx-0 mb-5">
         <input
           type="email"
           value={value}
