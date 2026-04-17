@@ -66,7 +66,7 @@ export function EmailCTA({ variant = "hero" }: { variant?: "hero" | "bottom" }) 
         <button
           type="submit"
           disabled={!value.trim() || loading}
-          className="w-full sm:w-auto h-12 px-8 rounded-lg text-white text-sm font-semibold tracking-wider uppercase shadow-lg hover:brightness-110 transition-all duration-300 cursor-pointer whitespace-nowrap btn-press disabled:opacity-60 disabled:cursor-not-allowed"
+          className="w-full sm:w-auto h-12 px-8 rounded-lg text-white text-sm font-semibold tracking-wider uppercase shadow-lg hover:brightness-110 transition-all duration-300 cursor-pointer whitespace-nowrap btn-press"
           style={{ background: '#D4772C' }}
         >
           {loading ? (
@@ -94,7 +94,7 @@ export function EmailCTA({ variant = "hero" }: { variant?: "hero" | "bottom" }) 
       <button
         type="submit"
         disabled={!value.trim() || loading}
-        className="w-full h-13 rounded-xl text-white text-sm font-semibold tracking-wider uppercase shadow-lg hover:brightness-110 transition-all duration-300 cursor-pointer btn-press disabled:opacity-60 disabled:cursor-not-allowed"
+        className="w-full h-13 rounded-xl text-white text-sm font-semibold tracking-wider uppercase shadow-lg hover:brightness-110 transition-all duration-300 cursor-pointer btn-press"
         style={{ background: '#D4772C' }}
       >
         {loading ? (
