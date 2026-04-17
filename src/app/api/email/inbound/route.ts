@@ -82,7 +82,7 @@ function verifyWebhookPayload(
   req: NextRequest,
   payload: string
 ): ResendInboundPayload | { data: ResendInboundPayload } {
-  const secret = process.env.RESEND_WEBHOOK_SECRET;
+  const secret = process.env.RESEND_INBOUND_WEBHOOK_SECRET ?? process.env.RESEND_WEBHOOK_SECRET;
 
   if (!secret) {
     if (!verifyDevFallback(req)) {
