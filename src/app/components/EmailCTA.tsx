@@ -66,11 +66,12 @@ export function EmailCTA({ variant = "hero" }: { variant?: "hero" | "bottom" }) 
         <button
           type="submit"
           disabled={!value.trim() || loading}
-          className="w-full sm:w-auto h-12 px-8 rounded-lg bg-ember text-bone text-sm font-medium tracking-wider uppercase hover:brightness-110 transition-all duration-300 cursor-pointer whitespace-nowrap btn-press disabled:opacity-60 disabled:cursor-not-allowed"
+          className="w-full sm:w-auto h-12 px-8 rounded-lg text-white text-sm font-semibold tracking-wider uppercase shadow-lg hover:brightness-110 transition-all duration-300 cursor-pointer whitespace-nowrap btn-press disabled:opacity-60 disabled:cursor-not-allowed"
+          style={{ background: '#D4772C' }}
         >
           {loading ? (
             <span className="inline-flex items-center justify-center">
-              <span className="w-4 h-4 border-2 border-bone/30 border-t-bone rounded-full animate-spin" />
+              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
             </span>
           ) : (
             "Unlock Access"
@@ -93,11 +94,12 @@ export function EmailCTA({ variant = "hero" }: { variant?: "hero" | "bottom" }) 
       <button
         type="submit"
         disabled={!value.trim() || loading}
-        className="w-full h-13 rounded-xl bg-ember text-bone text-sm font-medium tracking-wider uppercase hover:brightness-110 transition-all duration-300 cursor-pointer btn-press disabled:opacity-60 disabled:cursor-not-allowed"
+        className="w-full h-13 rounded-xl text-white text-sm font-semibold tracking-wider uppercase shadow-lg hover:brightness-110 transition-all duration-300 cursor-pointer btn-press disabled:opacity-60 disabled:cursor-not-allowed"
+        style={{ background: '#D4772C' }}
       >
         {loading ? (
           <span className="inline-flex items-center justify-center">
-            <span className="w-4 h-4 border-2 border-bone/30 border-t-bone rounded-full animate-spin" />
+            <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
           </span>
         ) : (
           "Get Started"
