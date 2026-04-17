@@ -16,7 +16,11 @@ export default function Home() {
       <GlassHeader />
 
       {/* ─── HERO — DARK CINEMATIC ─── */}
-      <section id="hero" className="relative min-h-[92vh] md:min-h-screen flex items-center px-6 md:px-12 lg:px-20 pt-20 pb-16 md:pt-0 md:pb-0 overflow-hidden hero-topo-bg">
+      <section id="hero" className="relative min-h-[92vh] md:min-h-screen flex items-center px-6 md:px-12 lg:px-20 pt-20 pb-16 md:pt-0 md:pb-0 overflow-hidden"
+        style={{ backgroundColor: '#1a3325' }}
+      >
+        {/* Topo pattern background layer */}
+        <div className="absolute inset-0 pointer-events-none hero-topo-bg" />
         {/* Extra bottom vignette for seamless stats transition */}
         <div
           className="absolute inset-0 pointer-events-none"

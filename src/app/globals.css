@@ -1250,7 +1250,7 @@ input:focus-visible {
 /* ─── HERO TOPO BACKGROUND ─── */
 
 .hero-topo-bg {
-  background-color: #1a3325;
+  background-color: #1a3325 !important;
   background-image:
     /* Subtle topographic contour lines */
     repeating-radial-gradient(
