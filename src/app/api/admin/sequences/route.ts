@@ -55,10 +55,14 @@ export async function GET(request: NextRequest) {
     ]);
 
     // Aggregate email events by flow+step+event_type
+    const isTestEmail = (email: unknown) =>
+      typeof email === "string" && /^leo(\+[^@]*)?@mullybox\.com$/i.test(email);
+
     // Events from Resend have tags: { flow: "free", step: "0" }
     const eventCounts: Record<string, Record<string, Record<string, number>>> = {};
     for (const doc of eventsSnap.docs) {
       const d = doc.data() as Record<string, unknown>;
+      if (isTestEmail(d.email)) continue;
       const tags = d.tags as Record<string, string> | null | undefined;
       if (!tags?.flow || tags.step === undefined) continue;
       const flow = tags.flow;
@@ -87,6 +91,7 @@ export async function GET(request: NextRequest) {
     const userCounts: Record<string, { active: number; paused: number; completed: number }> = {};
     for (const doc of seqSnap.docs) {
       const d = doc.data() as Record<string, unknown>;
+      if (isTestEmail(d.email)) continue;
       const flow = d.flow as string | undefined;
       const status = d.status as string | undefined;
       if (!flow) continue;
