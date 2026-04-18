@@ -16,7 +16,7 @@ export default function Home() {
       <GlassHeader />
 
       {/* ─── HERO — LIGHT EDITORIAL ─── */}
-      <section id="hero" className="relative min-h-[92vh] md:min-h-screen flex items-center px-6 md:px-12 lg:px-20 pt-20 pb-16 md:pt-0 md:pb-0 overflow-hidden"
+      <section id="hero" className="relative min-h-[92vh] md:min-h-screen flex items-center px-6 md:px-12 lg:px-20 pt-20 pb-16 md:pt-24 md:pb-12"
         style={{ backgroundColor: '#FAF8F4' }}
       >
         {/* ── Two-column hero content ── */}
@@ -78,13 +78,13 @@ export default function Home() {
           </div>
 
           {/* RIGHT COLUMN — Desktop hero shelf image */}
-          <div className="hidden md:flex items-center justify-center animate-fade-up-delay-2">
+          <div className="hidden md:flex items-center justify-end animate-fade-up-delay-2 -mr-8 lg:-mr-16">
             <Image
               src="/hero-shelf.png"
               alt="Premium golf gear on display"
-              width={800}
-              height={700}
-              className="w-full object-contain"
+              width={900}
+              height={750}
+              className="w-full max-w-2xl object-contain"
               priority
             />
           </div>
