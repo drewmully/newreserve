@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useMembership } from "../context/MembershipContext";
 import { sendOTPEmail } from "@/lib/firebase";
@@ -13,6 +13,30 @@ import {
 } from "../components/UpgradeModal";
 
 const PENDING_ONBOARDING_DATA_KEY = "pending_onboarding_data";
+
+/* ─── A/B bucket reader (mirrors mr_ab cookie from middleware) ─── */
+function getABBucket(): number {
+  if (typeof document === "undefined") return 0;
+  const match = document.cookie.match(/(?:^|; )mr_ab=(\d+)/);
+  return match ? parseInt(match[1], 10) : 0;
+}
+
+/* Onboarding variant maps — keyed by bucket ranges */
+const OB_VARIANTS = {
+  planHeadline: {
+    control: "Choose your membership.",
+    variantA: "Your membership is ready.",
+  },
+  planSubtext: {
+    control: "Start free or unlock the full Reserve experience. Upgrade anytime.",
+    variantA: "Every tier includes Reserve pricing. Pick the level that fits your game.",
+  },
+} as const;
+
+function getOnboardingVariant(key: keyof typeof OB_VARIANTS, bucket: number): string {
+  const v = OB_VARIANTS[key];
+  return bucket < 50 ? v.control : v.variantA;
+}
 
 /* ═══════════════════════════════════════════
    ONBOARDING — Preferences → Plan Selection
@@ -205,6 +229,20 @@ export default function OnboardingPage() {
     router.push("/home");
   }
   const [step, setStep] = useState(1);
+  const abBucket = typeof window !== "undefined" ? getABBucket() : 0;
+
+  // Register onboarding A/B variants with PostHog for conversion analysis
+  const obVariants = useMemo(() => ({
+    "ob-plan-headline": abBucket < 50 ? "control" : "variant-a",
+    "ob-plan-subtext": abBucket < 50 ? "control" : "variant-a",
+  }), [abBucket]);
+
+  useEffect(() => {
+    try {
+      const ph = require("posthog-js").default;
+      if (ph?.__loaded) ph.register(obVariants);
+    } catch {}
+  }, [obVariants]);
 
   // Sub-step within step 1 (1 = basics, 2 = your game, 3 = vibe check)
   const [substep, setSubstep] = useState(1);
@@ -691,10 +729,10 @@ export default function OnboardingPage() {
                 <span className="w-6 h-px bg-sage/50" />
               </span>
               <h1 className="font-serif text-3xl md:text-4xl text-obsidian leading-tight mb-3">
-                Choose your membership.
+                {getOnboardingVariant("planHeadline", abBucket)}
               </h1>
               <p className="text-base text-charcoal/55 leading-relaxed mb-10">
-                Start free or unlock the full Reserve experience. Upgrade anytime.
+                {getOnboardingVariant("planSubtext", abBucket)}
               </p>
 
               <div className="space-y-5">
