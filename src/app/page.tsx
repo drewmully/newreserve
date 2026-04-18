@@ -16,27 +16,27 @@ export default function Home() {
       <GlassHeader />
 
       {/* ─── HERO — LIGHT EDITORIAL ─── */}
-      <section id="hero" className="relative min-h-[92vh] md:min-h-screen flex items-center px-6 md:px-12 lg:px-20 pt-20 pb-16 md:pt-24 md:pb-12"
+      <section id="hero" className="relative min-h-[92vh] md:min-h-screen flex items-center px-6 md:px-12 lg:px-20 pt-16 pb-8 md:pt-24 md:pb-12"
         style={{ backgroundColor: '#F5F3EF' }}
       >
         {/* ── Two-column hero content ── */}
-        <div className="relative max-w-7xl mx-auto w-full grid md:grid-cols-[45%_55%] gap-8 md:gap-12 lg:gap-20 items-center z-10">
+        <div className="relative max-w-7xl mx-auto w-full grid md:grid-cols-[45%_55%] gap-4 md:gap-12 lg:gap-20 items-center z-10">
 
           {/* Mobile hero image — above headline on small screens */}
-          <div className="md:hidden flex justify-center mb-2 animate-fade-up">
+          <div className="md:hidden flex justify-center mb-1 animate-fade-up">
             <Image
               src="/hero-shelf.png"
               alt="Premium golf gear on display"
               width={600}
               height={500}
-              className="w-full max-w-sm object-contain"
+              className="w-full max-w-[260px] object-contain"
               priority
             />
           </div>
 
           {/* LEFT COLUMN — headline, subtext, value props, CTA */}
           <div className="max-w-xl text-center md:text-left mx-auto md:mx-0">
-            <div className="animate-fade-up-delay-0 mb-5 md:mb-8">
+            <div className="animate-fade-up-delay-0 mb-3 md:mb-8">
               <span className="inline-flex items-center gap-2.5 text-[11px] tracking-[0.38em] uppercase font-medium">
                 <span className="w-10 h-px bg-forest/20" />
                 <span className="gold-shimmer-text">Mully Reserve</span>
@@ -45,17 +45,17 @@ export default function Home() {
               <span className="gold-accent-line mt-2.5" />
             </div>
 
-            <h1 className="font-serif text-4xl sm:text-5xl md:text-[3.5rem] lg:text-6xl xl:text-7xl text-forest leading-[1.05] tracking-tight mb-5 md:mb-7 animate-fade-up-delay-1">
+            <h1 className="font-serif text-3xl sm:text-5xl md:text-[3.5rem] lg:text-6xl xl:text-7xl text-forest leading-[1.05] tracking-tight mb-3 md:mb-7 animate-fade-up-delay-1">
               Premium Golf.<br />
               Members-Only Pricing.
             </h1>
 
-            <p className="text-base md:text-xl text-charcoal leading-relaxed mb-6 md:mb-8 max-w-sm sm:max-w-md mx-auto md:mx-0 animate-fade-up-delay-2">
+            <p className="text-sm md:text-xl text-charcoal leading-relaxed mb-4 md:mb-8 max-w-sm sm:max-w-md mx-auto md:mx-0 animate-fade-up-delay-2">
               Curated gear from 40+ top brands&mdash;at pricing you won&rsquo;t find anywhere else. No&nbsp;initiation fees. No&nbsp;markups.
             </p>
 
             {/* Value prop callouts */}
-            <div className="flex flex-col gap-2.5 mb-8 md:mb-10 max-w-sm sm:max-w-md mx-auto md:mx-0 animate-fade-up-delay-2">
+            <div className="flex flex-col gap-1.5 mb-5 md:mb-10 max-w-sm sm:max-w-md mx-auto md:mx-0 animate-fade-up-delay-2">
               <span className="text-sm text-forest/80 flex items-start gap-2">
                 <span className="text-ember shrink-0">&#10022;</span>
                 Hand-selected from brands like Greyson, Rhone &amp; Quiet Golf
