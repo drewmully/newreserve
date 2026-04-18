@@ -13,10 +13,12 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
+    "@flags-sdk/vercel": "^1.3.0",
     "@intercom/messenger-js-sdk": "^0.0.19",
     "@supabase/supabase-js": "^2.103.2",
     "firebase": "^12.9.0",
     "firebase-admin": "^13.6.1",
+    "flags": "^4.0.6",
     "next": "16.1.6",
     "nodemailer": "^8.0.3",
     "posthog-js": "^1.363.2",

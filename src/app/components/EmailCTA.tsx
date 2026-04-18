@@ -6,7 +6,7 @@ import { PENDING_SIGN_IN_EMAIL_KEY } from "@/lib/pendingSignInEmail";
 
 export const PENDING_ONBOARDING_EMAIL_KEY = "pending_onboarding_email";
 
-export function EmailCTA({ variant = "hero" }: { variant?: "hero" | "bottom" }) {
+export function EmailCTA({ variant = "hero", ctaText }: { variant?: "hero" | "bottom"; ctaText?: string }) {
   const router = useRouter();
   const [value, setValue] = useState("");
   const [loading, setLoading] = useState(false);
@@ -74,7 +74,7 @@ export function EmailCTA({ variant = "hero" }: { variant?: "hero" | "bottom" }) 
               <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
             </span>
           ) : (
-            "Unlock Access"
+            ctaText ?? "Unlock Access"
           )}
         </button>
       </form>

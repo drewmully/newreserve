@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
+import { FlagValues } from "flags/react";
+import { heroHeadline, heroCta } from "../flags";
 import { Providers } from "./context/Providers";
+import { PostHogFlagSync } from "./components/PostHogFlagSync";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -18,7 +22,7 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
@@ -39,7 +43,27 @@ export default function RootLayout({
       </head>
       <body className="antialiased">
         <Providers>{children}</Providers>
+        <Suspense fallback={null}>
+          <FlagValuesWithTracking />
+        </Suspense>
       </body>
     </html>
+  );
+}
+
+async function FlagValuesWithTracking() {
+  const [headlineValue, ctaValue] = await Promise.all([
+    heroHeadline(),
+    heroCta(),
+  ]);
+  const flagMap = {
+    "hero-headline": headlineValue,
+    "hero-cta": ctaValue,
+  };
+  return (
+    <>
+      <FlagValues values={flagMap} />
+      <PostHogFlagSync flags={flagMap} />
+    </>
   );
 }

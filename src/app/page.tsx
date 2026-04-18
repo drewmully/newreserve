@@ -8,8 +8,22 @@ import {
   FloatingCTA,
 } from "./components/ClientComponents";
 import { EmailCTA } from "./components/EmailCTA";
+import { heroHeadline, heroCta } from "../flags";
 
-export default function Home() {
+const headlines: Record<string, React.ReactNode> = {
+  "control": <>Premium Golf.<br />Members-Only Pricing.</>,
+  "variant-a": <>The Golf Gear You Want.<br />The Price You Deserve.</>,
+  "variant-b": <>Premium Gear. Insider Pricing.<br />No Initiation Fee.</>,
+};
+
+const ctaTexts: Record<string, string> = {
+  "control": "UNLOCK ACCESS",
+  "variant-a": "JOIN FREE",
+};
+
+export default async function Home() {
+  const headlineVariant = await heroHeadline();
+  const ctaVariant = await heroCta();
   return (
     <div className="min-h-screen bg-bone">
       {/* ─── GLASS HEADER ─── */}
@@ -46,8 +60,7 @@ export default function Home() {
             </div>
 
             <h1 className="font-serif text-3xl sm:text-5xl md:text-[3.5rem] lg:text-6xl xl:text-7xl text-forest leading-[1.05] tracking-tight mb-3 md:mb-7 animate-fade-up-delay-1">
-              Premium Golf.<br />
-              Members-Only Pricing.
+              {headlines[headlineVariant]}
             </h1>
 
             <p className="text-sm md:text-xl text-charcoal leading-relaxed mb-4 md:mb-8 max-w-sm sm:max-w-md mx-auto md:mx-0 animate-fade-up-delay-2">
@@ -68,7 +81,7 @@ export default function Home() {
 
             <div className="animate-fade-up-delay-3">
               <div className="max-w-xs sm:max-w-md mx-auto md:mx-0">
-                <EmailCTA variant="hero" />
+                <EmailCTA variant="hero" ctaText={ctaTexts[ctaVariant]} />
               </div>
               <p className="text-[11px] text-charcoal/50 tracking-wide mt-2">
                 Complimentary access &middot; No credit card required
