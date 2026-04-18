@@ -182,6 +182,8 @@ interface StatCounterProps {
   duration?: number;
   label: string;
   dark?: boolean;
+  /** Format function to customize how the number displays during counting */
+  formatValue?: (n: number) => string;
 }
 
 export function StatCounter({
@@ -191,6 +193,7 @@ export function StatCounter({
   duration = 2200,
   label,
   dark,
+  formatValue,
 }: StatCounterProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [count, setCount] = useState(0);
@@ -236,7 +239,7 @@ export function StatCounter({
     <div ref={ref} className="text-center">
       <span className={`font-serif text-4xl md:text-5xl lg:text-[3.5rem] block mb-2 ${dark ? "text-bone" : "text-forest"}`}>
         {prefix}
-        {count.toLocaleString()}
+        {formatValue ? formatValue(count) : count.toLocaleString()}
         {suffix}
       </span>
       <span className={`text-xs tracking-[0.25em] uppercase font-medium ${dark ? "text-bone/50" : "text-charcoal/50"}`}>

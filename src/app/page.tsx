@@ -106,7 +106,7 @@ export default async function Home() {
       {/* ─── STATS BAR — dark, continuation of hero ─── */}
       <section className="stats-dark-section py-16 md:py-20 px-6 md:px-12">
         <div className="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-4 relative stats-gold-dividers">
-          <StatCounter end={1} suffix="M+" label="Products Delivered" dark />
+          <StatCounter end={10} suffix="+" label="Products Delivered" dark formatValue={(n) => n >= 10 ? '1M' : n > 0 ? `${n * 100}K` : '0'} />
           <StatCounter end={40} suffix="+" label="Brand Partners" dark />
           <StatCounter end={250} prefix="$" suffix="+" label="Avg. Member Savings" dark />
           <StatCounter end={96} suffix="%" label="Renewal Rate" dark />
