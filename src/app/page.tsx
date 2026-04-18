@@ -17,7 +17,7 @@ export default function Home() {
 
       {/* ─── HERO — LIGHT EDITORIAL ─── */}
       <section id="hero" className="relative min-h-[92vh] md:min-h-screen flex items-center px-6 md:px-12 lg:px-20 pt-20 pb-16 md:pt-24 md:pb-12"
-        style={{ backgroundColor: '#FAF8F4' }}
+        style={{ backgroundColor: '#F5F3EF' }}
       >
         {/* ── Two-column hero content ── */}
         <div className="relative max-w-7xl mx-auto w-full grid md:grid-cols-[45%_55%] gap-8 md:gap-12 lg:gap-20 items-center z-10">
@@ -45,10 +45,9 @@ export default function Home() {
               <span className="gold-accent-line mt-2.5" />
             </div>
 
-            <h1 className="font-serif text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl text-forest leading-[1.02] tracking-tight mb-5 md:mb-7 animate-fade-up-delay-1">
+            <h1 className="font-serif text-4xl sm:text-5xl md:text-[3.5rem] lg:text-6xl xl:text-7xl text-forest leading-[1.05] tracking-tight mb-5 md:mb-7 animate-fade-up-delay-1">
               Premium Golf.<br />
-              Members-Only<br />
-              Pricing.
+              Members-Only Pricing.
             </h1>
 
             <p className="text-base md:text-xl text-charcoal leading-relaxed mb-6 md:mb-8 max-w-sm sm:max-w-md mx-auto md:mx-0 animate-fade-up-delay-2">
@@ -63,7 +62,7 @@ export default function Home() {
               </span>
               <span className="text-sm text-forest/80 flex items-start gap-2">
                 <span className="text-ember shrink-0">&#10022;</span>
-                Avg. $180+ saved per member, every quarter
+                Average members save $400+ annually
               </span>
             </div>
 
@@ -78,13 +77,13 @@ export default function Home() {
           </div>
 
           {/* RIGHT COLUMN — Desktop hero shelf image */}
-          <div className="hidden md:flex items-center justify-end animate-fade-up-delay-2 -mr-8 lg:-mr-16">
+          <div className="hidden md:flex items-center justify-center animate-fade-up-delay-2">
             <Image
               src="/hero-shelf.png"
               alt="Premium golf gear on display"
-              width={900}
-              height={750}
-              className="w-full max-w-2xl object-contain"
+              width={706}
+              height={658}
+              className="w-full max-w-lg lg:max-w-xl object-contain"
               priority
             />
           </div>
