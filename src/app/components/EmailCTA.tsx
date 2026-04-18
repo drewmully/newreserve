@@ -61,7 +61,7 @@ export function EmailCTA({ variant = "hero" }: { variant?: "hero" | "bottom" }) 
           onChange={(e) => setValue(e.target.value)}
           placeholder="Your email"
           disabled={loading}
-          className="w-full sm:flex-1 h-12 px-5 rounded-lg bg-white/10 border border-white/15 text-bone placeholder:text-bone/40 text-base focus:border-white/30 focus:ring-1 focus:ring-white/20 transition-all duration-300 disabled:opacity-60"
+          className="w-full sm:flex-1 h-12 px-5 rounded-lg bg-white border border-taupe/30 text-forest placeholder:text-charcoal/40 text-base focus:border-forest/40 focus:ring-1 focus:ring-forest/20 transition-all duration-300 disabled:opacity-60"
         />
         <button
           type="submit"

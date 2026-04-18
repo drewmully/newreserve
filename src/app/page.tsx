@@ -15,73 +15,79 @@ export default function Home() {
       {/* ─── GLASS HEADER ─── */}
       <GlassHeader />
 
-      {/* ─── HERO — DARK CINEMATIC ─── */}
+      {/* ─── HERO — LIGHT EDITORIAL ─── */}
       <section id="hero" className="relative min-h-[92vh] md:min-h-screen flex items-center px-6 md:px-12 lg:px-20 pt-20 pb-16 md:pt-0 md:pb-0 overflow-hidden"
-        style={{ backgroundColor: '#1a3325' }}
+        style={{ backgroundColor: '#FAF8F4' }}
       >
-        {/* Topo pattern background layer */}
-        <div className="absolute inset-0 pointer-events-none hero-topo-bg" />
-        {/* Extra bottom vignette for seamless stats transition */}
-        <div
-          className="absolute inset-0 pointer-events-none"
-          style={{
-            background: "linear-gradient(to bottom, transparent 60%, rgba(15,30,20,0.95) 100%)",
-          }}
-        />
-        {/* Film grain overlay — slightly more visible on dark */}
-        <div className="hero-grain-overlay" style={{ opacity: 0.05 }} />
-
         {/* ── Two-column hero content ── */}
-        <div className="relative max-w-7xl mx-auto w-full grid md:grid-cols-2 gap-6 md:gap-12 lg:gap-20 items-center z-10">
+        <div className="relative max-w-7xl mx-auto w-full grid md:grid-cols-[45%_55%] gap-8 md:gap-12 lg:gap-20 items-center z-10">
 
-          {/* LEFT COLUMN — headline, subtext, CTA */}
+          {/* Mobile hero image — above headline on small screens */}
+          <div className="md:hidden flex justify-center mb-2 animate-fade-up">
+            <Image
+              src="/hero-shelf.png"
+              alt="Premium golf gear on display"
+              width={600}
+              height={500}
+              className="w-full max-w-sm object-contain"
+              priority
+            />
+          </div>
+
+          {/* LEFT COLUMN — headline, subtext, value props, CTA */}
           <div className="max-w-xl text-center md:text-left mx-auto md:mx-0">
-            {/* Mobile member card — compact, above headline */}
-            <div className="md:hidden flex justify-center mb-6 animate-fade-up">
-              <MemberCard size="sm" />
-            </div>
-
             <div className="animate-fade-up-delay-0 mb-5 md:mb-8">
-              <span className="inline-flex items-center gap-2.5 text-[11px] tracking-[0.38em] uppercase text-bone/50 font-medium">
-                <span className="w-10 h-px bg-bone/20" />
+              <span className="inline-flex items-center gap-2.5 text-[11px] tracking-[0.38em] uppercase font-medium">
+                <span className="w-10 h-px bg-forest/20" />
                 <span className="gold-shimmer-text">Mully Reserve</span>
-                <span className="w-10 h-px bg-bone/20" />
+                <span className="w-10 h-px bg-forest/20" />
               </span>
               <span className="gold-accent-line mt-2.5" />
             </div>
 
-            <h1 className="font-serif text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl text-bone leading-[1.02] tracking-tight mb-5 md:mb-7 animate-fade-up-delay-1">
-              Access the Best<br />
-              of Golf
+            <h1 className="font-serif text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl text-forest leading-[1.02] tracking-tight mb-5 md:mb-7 animate-fade-up-delay-1">
+              Premium Golf.<br />
+              Members-Only<br />
+              Pricing.
             </h1>
 
-            <p className="text-base md:text-xl text-bone/60 leading-relaxed mb-8 md:mb-10 max-w-sm sm:max-w-md mx-auto md:mx-0 animate-fade-up-delay-2">
-              Members-only pricing on premium gear. Curated quarterly boxes. Concierge service. No&nbsp;initiation fees.
+            <p className="text-base md:text-xl text-charcoal leading-relaxed mb-6 md:mb-8 max-w-sm sm:max-w-md mx-auto md:mx-0 animate-fade-up-delay-2">
+              Curated gear from 40+ top brands&mdash;at pricing you won&rsquo;t find anywhere else. No&nbsp;initiation fees. No&nbsp;markups.
             </p>
+
+            {/* Value prop callouts */}
+            <div className="flex flex-col gap-2.5 mb-8 md:mb-10 max-w-sm sm:max-w-md mx-auto md:mx-0 animate-fade-up-delay-2">
+              <span className="text-sm text-forest/80 flex items-start gap-2">
+                <span className="text-ember shrink-0">&#10022;</span>
+                Hand-selected from brands like Greyson, Rhone &amp; Quiet Golf
+              </span>
+              <span className="text-sm text-forest/80 flex items-start gap-2">
+                <span className="text-ember shrink-0">&#10022;</span>
+                Avg. $180+ saved per member, every quarter
+              </span>
+            </div>
 
             <div className="animate-fade-up-delay-3">
               <div className="max-w-xs sm:max-w-md mx-auto md:mx-0">
                 <EmailCTA variant="hero" />
               </div>
-              <p className="text-[11px] text-bone/35 tracking-wide mt-2">
+              <p className="text-[11px] text-charcoal/50 tracking-wide mt-2">
                 Complimentary access &middot; No credit card required
               </p>
             </div>
           </div>
 
-          {/* RIGHT COLUMN — Desktop member card */}
+          {/* RIGHT COLUMN — Desktop hero shelf image */}
           <div className="hidden md:flex items-center justify-center animate-fade-up-delay-2">
-            <div className="member-card-glow-dark">
-              <div className="member-card-float">
-                <MemberCard size="lg" />
-              </div>
-            </div>
+            <Image
+              src="/hero-shelf.png"
+              alt="Premium golf gear on display"
+              width={800}
+              height={700}
+              className="w-full object-contain"
+              priority
+            />
           </div>
-        </div>
-
-        {/* Scroll indicator */}
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 scroll-line-indicator">
-          <div className="scroll-line-pulse" />
         </div>
       </section>
 

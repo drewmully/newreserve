@@ -47,13 +47,14 @@ export function GlassHeader() {
       }}
     >
       <div className="max-w-7xl mx-auto px-6 md:px-12 flex items-center justify-between h-16">
-        <Link href="/" className="flex items-center gap-2 text-bone transition-colors duration-400">
+        <Link href="/" className="flex items-center gap-2 transition-colors duration-400" style={{ color: scrolled ? '#F5F1E8' : '#1a3325' }}>
           <svg viewBox="0 0 1002 540" fill="currentColor" className="h-5 w-auto" aria-hidden="true"><path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" /></svg>
           <span className="font-serif text-2xl font-bold tracking-wide">mully.</span>
         </Link>
         <a
           href="/login"
-          className="text-xs sm:text-sm tracking-wider uppercase font-medium text-bone/90 hover:text-bone transition-colors duration-400 shrink-0 mr-4 md:mr-0"
+          className="text-xs sm:text-sm tracking-wider uppercase font-medium transition-colors duration-400 shrink-0 mr-4 md:mr-0"
+          style={{ color: scrolled ? 'rgba(245, 241, 232, 0.9)' : '#1a3325' }}
         >
           Sign In
         </a>
