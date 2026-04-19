@@ -64,11 +64,11 @@ export default async function Home() {
             </h1>
 
             <p className="text-sm md:text-xl text-charcoal leading-relaxed mb-4 md:mb-8 max-w-sm sm:max-w-md mx-auto md:mx-0 animate-fade-up-delay-2">
-              Curated gear from 40+ top brands&mdash;at pricing you won&rsquo;t find anywhere else. No&nbsp;initiation fees. No&nbsp;markups.
+              Curated gear from 40+ top brands, at pricing you won&rsquo;t find anywhere else. No&nbsp;initiation fees. No&nbsp;markups.
             </p>
 
             {/* Value prop callouts */}
-            <div className="flex flex-col gap-1.5 mb-5 md:mb-10 max-w-sm sm:max-w-md mx-auto md:mx-0 animate-fade-up-delay-2">
+            <div className="flex flex-col gap-1.5 mb-5 md:mb-10 max-w-sm sm:max-w-md mx-auto md:mx-0 text-left animate-fade-up-delay-2">
               <span className="text-sm text-forest/80 flex items-start gap-2">
                 <span className="text-ember shrink-0">&#10022;</span>
                 Hand-selected from brands like Greyson, Rhone &amp; Quiet Golf
@@ -128,7 +128,7 @@ export default async function Home() {
               </h2>
               <p className="text-lg text-charcoal/65 leading-relaxed">
                 Mully Reserve brings you curated products, expert services,
-                and experiences you&rsquo;d expect from a top-tier club&mdash;all
+                and experiences you&rsquo;d expect from a top-tier club. All
                 in one place, starting free. No initiation fees. No&nbsp;pretension.
                 Just access.
               </p>
@@ -186,7 +186,7 @@ export default async function Home() {
             </div>
             <p className="text-bone/50 text-base md:text-lg tracking-wide max-w-lg mx-auto leading-relaxed">
               Premium gear, insider pricing, and a community that plays at a
-              higher level&mdash;without the initiation fee.
+              higher level, without the initiation fee.
             </p>
           </div>
         </ScrollReveal>
