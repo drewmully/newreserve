@@ -2,23 +2,21 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
-  BLOG_POSTS,
   CATEGORY_COLORS,
-  getBlogPostBySlug,
+  getPostBySlug,
+  getRelatedPosts,
 } from "../posts";
 import { AuthAwareSignIn } from "../../components/AuthAwareSignIn";
+
+export const dynamic = "force-dynamic";
 
 interface Props {
   params: Promise<{ slug: string }>;
 }
 
-export function generateStaticParams() {
-  return BLOG_POSTS.map((post) => ({ slug: post.slug }));
-}
-
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const post = getBlogPostBySlug(slug);
+  const post = await getPostBySlug(slug);
 
   if (!post) {
     return {};
@@ -38,16 +36,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function BlogPostPage({ params }: Props) {
   const { slug } = await params;
-  const post = getBlogPostBySlug(slug);
+  const post = await getPostBySlug(slug);
 
   if (!post) {
     notFound();
   }
 
-  const relatedPosts = BLOG_POSTS.filter((item) => item.slug !== post.slug).slice(
-    0,
-    3,
-  );
+  const relatedPosts = await getRelatedPosts(slug);
 
   return (
     <div className="min-h-screen bg-bone">

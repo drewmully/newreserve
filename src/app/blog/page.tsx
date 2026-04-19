@@ -1,12 +1,24 @@
 import Link from "next/link";
 import {
-  BLOG_LIST_POSTS,
+  getAllPublishedPosts,
+  getFeaturedPost,
   CATEGORY_COLORS,
-  FEATURED_POST,
 } from "./posts";
 import { AuthAwareSignIn } from "../components/AuthAwareSignIn";
 
-export default function BlogPage() {
+export const dynamic = "force-dynamic";
+
+export default async function BlogPage() {
+  const [featuredResult, allPosts] = await Promise.all([
+    getFeaturedPost(),
+    getAllPublishedPosts(),
+  ]);
+
+  const featuredPost = featuredResult ?? allPosts[0] ?? null;
+  const listPosts = featuredPost
+    ? allPosts.filter((p) => p.slug !== featuredPost.slug)
+    : allPosts.slice(1);
+
   return (
     <div className="min-h-screen bg-bone">
       <header className="fixed top-0 left-0 right-0 z-50 bg-bone/90 backdrop-blur-md border-b border-taupe/15">
@@ -60,44 +72,46 @@ export default function BlogPage() {
             </div>
           </section>
 
-          <Link
-            href={`/blog/${FEATURED_POST.slug}`}
-            className="block rounded-2xl border border-taupe/15 bg-cream overflow-hidden mb-10 group card-hover transition-all duration-300"
-          >
-            <div className="relative aspect-[2.15/1] overflow-hidden">
-              <div
-                className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-[1.03]"
-                style={{ backgroundImage: `url(${FEATURED_POST.image})` }}
-                role="img"
-                aria-label={FEATURED_POST.imageAlt}
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-obsidian/65 via-obsidian/15 to-transparent" />
-              <div className="absolute top-4 left-4">
-                <span className="inline-flex items-center rounded-full bg-bone/90 px-3 py-1 text-[10px] tracking-[0.15em] uppercase text-forest font-medium">
-                  Featured Story
-                </span>
+          {featuredPost && (
+            <Link
+              href={`/blog/${featuredPost.slug}`}
+              className="block rounded-2xl border border-taupe/15 bg-cream overflow-hidden mb-10 group card-hover transition-all duration-300"
+            >
+              <div className="relative aspect-[2.15/1] overflow-hidden">
+                <div
+                  className="absolute inset-0 bg-cover bg-center transition-transform duration-700 group-hover:scale-[1.03]"
+                  style={{ backgroundImage: `url(${featuredPost.image})` }}
+                  role="img"
+                  aria-label={featuredPost.imageAlt}
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-obsidian/65 via-obsidian/15 to-transparent" />
+                <div className="absolute top-4 left-4">
+                  <span className="inline-flex items-center rounded-full bg-bone/90 px-3 py-1 text-[10px] tracking-[0.15em] uppercase text-forest font-medium">
+                    Featured Story
+                  </span>
+                </div>
               </div>
-            </div>
-            <div className="p-6 md:p-7">
-              <div className="flex flex-wrap items-center gap-2.5 mb-3">
-                <span className={`text-[10px] tracking-[0.15em] uppercase font-medium px-2 py-0.5 rounded-full ${CATEGORY_COLORS[FEATURED_POST.category]}`}>
-                  {FEATURED_POST.category}
-                </span>
-                <span className="text-[11px] text-charcoal/30">{FEATURED_POST.date}</span>
-                <span className="text-[11px] text-charcoal/30">&middot;</span>
-                <span className="text-[11px] text-charcoal/30">{FEATURED_POST.readTime}</span>
+              <div className="p-6 md:p-7">
+                <div className="flex flex-wrap items-center gap-2.5 mb-3">
+                  <span className={`text-[10px] tracking-[0.15em] uppercase font-medium px-2 py-0.5 rounded-full ${CATEGORY_COLORS[featuredPost.category]}`}>
+                    {featuredPost.category}
+                  </span>
+                  <span className="text-[11px] text-charcoal/30">{featuredPost.date}</span>
+                  <span className="text-[11px] text-charcoal/30">&middot;</span>
+                  <span className="text-[11px] text-charcoal/30">{featuredPost.readTime}</span>
+                </div>
+                <h2 className="font-serif text-2xl md:text-3xl text-obsidian mb-3 group-hover:text-forest transition-colors duration-300">
+                  {featuredPost.title}
+                </h2>
+                <p className="text-sm md:text-base text-charcoal/55 leading-relaxed max-w-3xl">
+                  {featuredPost.excerpt}
+                </p>
               </div>
-              <h2 className="font-serif text-2xl md:text-3xl text-obsidian mb-3 group-hover:text-forest transition-colors duration-300">
-                {FEATURED_POST.title}
-              </h2>
-              <p className="text-sm md:text-base text-charcoal/55 leading-relaxed max-w-3xl">
-                {FEATURED_POST.excerpt}
-              </p>
-            </div>
-          </Link>
+            </Link>
+          )}
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {BLOG_LIST_POSTS.map((post) => (
+            {listPosts.map((post) => (
               <Link
                 key={post.slug}
                 href={`/blog/${post.slug}`}
