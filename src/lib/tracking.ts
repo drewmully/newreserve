@@ -65,6 +65,26 @@ function getCookie(name: string): string | null {
   }
 }
 
+/**
+ * Reads the A/B bucket from the `mr_ab` cookie and returns the
+ * variant assignments that should be attached to every analytics event.
+ * This ensures PostHog events (page_view, purchase, etc.) carry the
+ * same variant properties that PostHogFlagSync registers client-side.
+ */
+function getAbVariantProperties(): Record<string, string> {
+  const raw = getCookie("mr_ab");
+  if (raw === null) return {};
+  const bucket = parseInt(raw, 10);
+  if (Number.isNaN(bucket)) return {};
+
+  return {
+    "hero-headline": bucket < 34 ? "control" : bucket < 67 ? "variant-a" : "variant-b",
+    "hero-cta": bucket < 50 ? "control" : "variant-a",
+    "ob-plan-headline": bucket < 50 ? "control" : "variant-a",
+    "ob-plan-subtext": bucket < 50 ? "control" : "variant-a",
+  };
+}
+
 function getAttributionProperties(): Record<string, string | null> {
   return {
     utm_source: getUrlParam("utm_source"),
@@ -190,6 +210,7 @@ export async function trackEvent(
           typeof window !== "undefined" ? window.location.href : undefined,
         properties: {
           ...getBrowserProperties(),
+          ...getAbVariantProperties(),
           ...(properties ?? {}),
           ...propertyLikeFields,
           anonymous_id,
