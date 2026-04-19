@@ -1,13 +1,24 @@
 "use client";
 
+import { useContext } from "react";
 import Link from "next/link";
-import { useMembership } from "@/app/context/MembershipContext";
+import { MembershipContext } from "@/app/context/MembershipContext";
 import { EmailCTA } from "./EmailCTA";
 
-export function AuthAwareHero({ ctaText }: { ctaText?: string }) {
-  const { isSignedIn, authLoading } = useMembership();
+/**
+ * Safely reads the MembershipContext. Returns null when rendered outside
+ * MembershipProvider (e.g., the homepage, which is exempt from the provider).
+ */
+function useAuthState() {
+  const ctx = useContext(MembershipContext);
+  if (!ctx) return { isSignedIn: false, authLoading: false };
+  return { isSignedIn: ctx.isSignedIn, authLoading: ctx.authLoading };
+}
 
-  // While auth is loading, show the default EmailCTA to avoid layout flash
+export function AuthAwareHero({ ctaText }: { ctaText?: string }) {
+  const { isSignedIn, authLoading } = useAuthState();
+
+  // No provider, loading, or not signed in — show default EmailCTA
   if (authLoading || !isSignedIn) {
     return <EmailCTA variant="hero" ctaText={ctaText} />;
   }
@@ -25,7 +36,7 @@ export function AuthAwareHero({ ctaText }: { ctaText?: string }) {
 }
 
 export function AuthAwareBottomCTA() {
-  const { isSignedIn, authLoading } = useMembership();
+  const { isSignedIn, authLoading } = useAuthState();
 
   if (authLoading || !isSignedIn) {
     return <EmailCTA variant="bottom" />;

@@ -215,7 +215,7 @@ interface MembershipContextValue {
    CONTEXT
    ═══════════════════════════════════════════ */
 
-const MembershipContext = createContext<MembershipContextValue | null>(null);
+export const MembershipContext = createContext<MembershipContextValue | null>(null);
 
 export function useMembership() {
   const ctx = useContext(MembershipContext);
