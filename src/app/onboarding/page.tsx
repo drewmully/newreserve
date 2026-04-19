@@ -121,6 +121,7 @@ export default function OnboardingPage() {
     completeOnboarding,
     authLoading,
     isSignedIn,
+    onboardingCompleted,
   } = useMembership();
 
   // Pre-auth mode: user came from home page without being logged in
@@ -148,15 +149,19 @@ export default function OnboardingPage() {
     }
   }, [authLoading, isSignedIn, isPreAuth, router]);
 
-  // If signed in and already completed onboarding, go home
+  // If signed in, clear leftover pre-auth keys and redirect if onboarding is done
   useEffect(() => {
     if (!authLoading && isSignedIn) {
       // Clear any leftover pre-auth keys
       try {
         sessionStorage.removeItem(PENDING_ONBOARDING_EMAIL_KEY);
       } catch {}
+      // Redirect away if the user already completed onboarding
+      if (onboardingCompleted) {
+        router.replace("/home");
+      }
     }
-  }, [authLoading, isSignedIn]);
+  }, [authLoading, isSignedIn, onboardingCompleted, router]);
 
   async function handleComplete(newTier: "free" | "access" | "member") {
     const nextFitProfile = {
@@ -225,8 +230,15 @@ export default function OnboardingPage() {
 
     // Post-auth mode: save directly
     await completeOnboarding(onboardingData);
-    setTier(newTier);
-    router.push("/home");
+    if (newTier === "access" || newTier === "member") {
+      // Paid tier — redirect to Shopify checkout; the orders-paid webhook
+      // sets the tier in Firestore after payment is confirmed.
+      await createMembershipCheckout(newTier);
+    } else {
+      // Free tier — go straight to dashboard
+      setTier(newTier);
+      router.push("/home");
+    }
   }
   const [step, setStep] = useState(1);
   const abBucket = typeof window !== "undefined" ? getABBucket() : 0;
@@ -412,12 +424,14 @@ export default function OnboardingPage() {
                         <div className="flex-1 h-11 px-4 rounded-xl bg-taupe/10 border border-taupe/15 flex items-center">
                           <span className="text-sm text-charcoal/50">{email}</span>
                         </div>
-                        <button
-                          onClick={() => setEditingEmail(true)}
-                          className="text-xs text-charcoal/40 hover:text-forest transition-colors duration-300 cursor-pointer whitespace-nowrap"
-                        >
-                          Edit
-                        </button>
+                        {isPreAuth && (
+                          <button
+                            onClick={() => setEditingEmail(true)}
+                            className="text-xs text-charcoal/40 hover:text-forest transition-colors duration-300 cursor-pointer whitespace-nowrap"
+                          >
+                            Edit
+                          </button>
+                        )}
                       </div>
                     ) : (
                       <input

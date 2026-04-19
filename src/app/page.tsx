@@ -7,7 +7,7 @@ import {
   GlassHeader,
   FloatingCTA,
 } from "./components/ClientComponents";
-import { EmailCTA } from "./components/EmailCTA";
+import { AuthAwareHero, AuthAwareBottomCTA } from "./components/AuthAwareHero";
 import { heroHeadline, heroCta } from "../flags";
 
 const headlines: Record<string, React.ReactNode> = {
@@ -81,7 +81,7 @@ export default async function Home() {
 
             <div className="animate-fade-up-delay-3">
               <div className="max-w-xs sm:max-w-md mx-auto md:mx-0">
-                <EmailCTA variant="hero" ctaText={ctaTexts[ctaVariant]} />
+                <AuthAwareHero ctaText={ctaTexts[ctaVariant]} />
               </div>
               <p className="text-[11px] text-charcoal/50 tracking-wide mt-2">
                 Complimentary access &middot; No credit card required
@@ -515,7 +515,7 @@ export default async function Home() {
                 <p className="text-sm text-bone/45 mb-6">
                   Complimentary. No credit card required.
                 </p>
-                <EmailCTA variant="bottom" />
+                <AuthAwareBottomCTA />
                 <p className="text-xs text-bone/30 mt-4 text-center">
                   Join 2,400+ members already inside.
                 </p>

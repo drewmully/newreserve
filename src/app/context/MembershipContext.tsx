@@ -295,7 +295,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
   const [authLoading, setAuthLoading] = useState(true);
 
   // ── User display ──────────────────────────────────────────────────────────
-  const [email, setEmail] = useState("");
+  const [email, setEmailRaw] = useState("");
   const [username, setUsername] = useState("");
 
   // ── Membership tier ───────────────────────────────────────────────────────
@@ -351,6 +351,13 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
   // ── Club ──────────────────────────────────────────────────────────────────
   const [clubStatus, setClubStatus] = useState<ClubStatus>("none");
   const [interestedClubs, setInterestedClubs] = useState<string[]>([]);
+
+  // Guarded setEmail — no-op when the user is authenticated so that
+  // components can't overwrite the canonical Firebase Auth email in state.
+  const setEmail = useCallback((newEmail: string) => {
+    if (user) return;
+    setEmailRaw(newEmail);
+  }, [user]);
 
   /* ── Fit profile helpers ── */
 
@@ -554,7 +561,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
       setUser(firebaseUser);
 
       if (firebaseUser) {
-        setEmail(firebaseUser.email ?? "");
+        setEmailRaw(firebaseUser.email ?? "");
         setUsername(firebaseUser.displayName ?? "");
 
         if (loginTrackedUidRef.current !== firebaseUser.uid) {
@@ -663,7 +670,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
         }
       } else {
         // Signed out — reset all state
-        setEmail("");
+        setEmailRaw("");
         setUsername("");
         setTier("free");
         setCart([]);
