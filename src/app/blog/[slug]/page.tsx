@@ -130,6 +130,12 @@ export default async function BlogPostPage({ params }: Props) {
 
           <div className="rounded-2xl bg-forest text-bone p-6 md:p-8 mt-6">
             <p className="text-sm md:text-base leading-relaxed text-bone/90">{post.closing}</p>
+            <Link
+              href="/onboarding"
+              className="inline-flex items-center justify-center h-10 px-6 rounded-xl bg-bone text-forest text-xs font-medium tracking-[0.2em] uppercase hover:bg-bone/90 transition-colors duration-300 btn-press mt-4"
+            >
+              Unlock Access
+            </Link>
           </div>
         </article>
 
