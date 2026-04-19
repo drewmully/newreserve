@@ -189,6 +189,11 @@ export default function OnboardingPage() {
       fitProfile: newTier === "member" ? nextFitProfile : undefined,
     };
 
+    // Fire X (Twitter) Account_Created conversion event
+    if (typeof window !== "undefined" && typeof (window as any).twq === "function") {
+      (window as any).twq("event", "tw-od2vz-rbzyk", {});
+    }
+
     if (isPreAuth) {
       // Save data to localStorage (persists across tabs — needed when magic link opens in new tab)
       try {
