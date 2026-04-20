@@ -14,6 +14,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useMembership } from "@/app/context/MembershipContext";
+import { MemberCard } from "@/app/admin/components/MemberCard";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -195,25 +196,28 @@ function ReplyCard({
   const flowLabel = FLOW_LABELS[reply.flow] ?? reply.flow;
 
   return (
-    <div className="bg-white border border-taupe/30 rounded-xl p-6 space-y-5">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="font-serif text-lg text-obsidian">
-            {reply.firstName ?? reply.email}
-          </p>
-          <p className="text-sm text-charcoal/60">{reply.email}</p>
+    <div className="bg-white border border-taupe/30 rounded-xl overflow-hidden">
+      <div className="flex gap-0">
+        {/* Left: reply content */}
+        <div className="flex-1 min-w-0 p-6 space-y-5">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="font-serif text-lg text-obsidian">
+              {reply.firstName ?? reply.email}
+            </p>
+            <p className="text-sm text-charcoal/60">{reply.email}</p>
+          </div>
+          <div className="text-right text-xs text-charcoal/50 space-y-1">
+            <p>{flowLabel} — step {reply.lastSentStep + 1}</p>
+            <p>{formatDate(reply.createdAt)}</p>
+            {reply.status === "draft_failed" && (
+              <span className="inline-block px-2 py-0.5 rounded bg-ember/10 text-ember text-xs font-medium">
+                Draft failed
+              </span>
+            )}
+          </div>
         </div>
-        <div className="text-right text-xs text-charcoal/50 space-y-1">
-          <p>{flowLabel} — step {reply.lastSentStep + 1}</p>
-          <p>{formatDate(reply.createdAt)}</p>
-          {reply.status === "draft_failed" && (
-            <span className="inline-block px-2 py-0.5 rounded bg-ember/10 text-ember text-xs font-medium">
-              Draft failed
-            </span>
-          )}
-        </div>
-      </div>
 
       {/* Subject */}
       <p className="text-sm text-charcoal/70 italic">Re: {reply.subject}</p>
@@ -367,6 +371,14 @@ function ReplyCard({
           {loading === "dismiss" ? "Dismissing..." : "Dismiss"}
         </button>
       </div>
+        </div>{/* end reply content */}
+
+        {/* Right: member sidebar */}
+        <div className="w-64 shrink-0 border-l border-taupe/20 p-4 bg-cream/40">
+          <p className="text-xs uppercase tracking-widest text-charcoal/40 mb-3">Member</p>
+          <MemberCard uid={reply.uid} getApiHeaders={getApiHeaders} />
+        </div>
+      </div>
     </div>
   );
 }
@@ -425,7 +437,7 @@ export default function EmailRepliesPage() {
 
   return (
     <div className="min-h-screen bg-cream">
-      <div className="max-w-3xl mx-auto px-6 py-12">
+      <div className="max-w-5xl mx-auto px-6 py-12">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>

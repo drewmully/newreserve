@@ -22,7 +22,7 @@ import { Resend } from "resend";
 import { adminDb, adminAuth } from "@/lib/firebase-admin";
 import { pauseForReply, type EmailSequenceDoc } from "@/lib/email/sequences";
 import { generateReplyDraft, loadMemberKnowledge, type MemberContext } from "@/lib/email/ai-reply";
-import { resolveCustomerByEmail, getStoreCreditByCustomerId } from "@/app/api/_lib/shopifyAdmin";
+import { resolveCustomerByEmail, getStoreCreditByCustomerId, getCustomerOrders } from "@/app/api/_lib/shopifyAdmin";
 
 let resendClient: Resend | null = null;
 
@@ -168,12 +168,12 @@ export async function POST(req: NextRequest) {
 
   // 1. Find user by email using Firebase Auth (always returns the real uid)
   let uid: string;
-  let userData: Record<string, string | undefined>;
+  let userData: Record<string, unknown>;
   try {
     const authUser = await adminAuth.getUserByEmail(senderEmail);
     uid = authUser.uid;
     const userSnap = await adminDb.collection("users").doc(uid).get();
-    userData = (userSnap.data() ?? {}) as Record<string, string | undefined>;
+    userData = (userSnap.data() ?? {}) as Record<string, unknown>;
   } catch {
     console.warn(`[email/inbound] Unknown sender: ${senderEmail}`);
     return NextResponse.json({ ok: true, note: "unknown_sender" });
@@ -198,7 +198,7 @@ export async function POST(req: NextRequest) {
   await replyRef.set({
     uid,
     email: senderEmail,
-    firstName: userData.firstName ?? null,
+    firstName: typeof userData.firstName === "string" ? userData.firstName : null,
     subject: payload.subject ?? "",
     replyText,
     rawText,
@@ -218,24 +218,61 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const [memberNotes, storeCreditBalance] = await Promise.all([
+    const shopifyCustomerId = typeof userData.shopify_customer_id === "string" ? userData.shopify_customer_id : null;
+
+    type StoreCreditResult = { balance_cents: number; currency: string } | null;
+    type OrderResult = Array<{ name: string; total_price: string; currency: string; created_at: string; line_items: Array<{ name: string }> }>;
+
+    const [memberNotes, storeCreditBalance, rawOrders] = await Promise.all([
       loadMemberKnowledge(uid),
-      resolveCustomerByEmail(senderEmail)
-        .then((id) => (id ? getStoreCreditByCustomerId(id) : null))
-        .catch(() => null),
+      shopifyCustomerId
+        ? (getStoreCreditByCustomerId(shopifyCustomerId).catch(() => null) as Promise<StoreCreditResult>)
+        : Promise.resolve(null as StoreCreditResult),
+      shopifyCustomerId
+        ? (getCustomerOrders(shopifyCustomerId, 5).catch(() => []) as Promise<OrderResult>)
+        : Promise.resolve([] as OrderResult),
     ]);
+
     const storeCredit = storeCreditBalance?.balance_cents ?? null;
+
+    const recentOrders = rawOrders.map((o) => ({
+      name: o.name,
+      total: `${o.currency} ${o.total_price}`,
+      date: new Date(o.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+      items: o.line_items.map((li) => li.name),
+    }));
+
+    const onboardingProfile = (userData.onboarding_profile ?? {}) as Record<string, unknown>;
+    const fitProfile = (userData.fit_profile ?? null) as Record<string, string> | null;
+    const subs = (userData.subscriptions ?? {}) as Record<string, unknown>;
 
     const ctx: MemberContext = {
       uid,
       email: senderEmail,
-      firstName: userData.firstName ?? null,
-      tier: userData.tier ?? "free",
+      firstName: typeof userData.firstName === "string" ? userData.firstName : null,
+      tier: typeof userData.tier === "string" ? userData.tier : "free",
+      isLegacy: userData.isLegacy === true,
+      legacyPlan: typeof userData.legacyPlan === "string" ? userData.legacyPlan : null,
       flow: seq.flow,
       lastSentStep: seq.lastSentStep,
       tags: seq.tags ?? [],
       memberNotes: memberNotes.length > 0 ? memberNotes : undefined,
       storeCredit: storeCredit ?? null,
+      handicap: typeof onboardingProfile.handicap === "string" ? onboardingProfile.handicap : null,
+      vibeCheck: typeof onboardingProfile.vibe_check === "string" ? onboardingProfile.vibe_check : null,
+      hasPrivateClub: typeof onboardingProfile.private_club_member === "boolean" ? onboardingProfile.private_club_member : null,
+      fitProfile: fitProfile ? {
+        shirtSize: fitProfile.shirtSize,
+        gloveHand: fitProfile.gloveHand,
+        gloveSize: fitProfile.gloveSize,
+        waistSize: fitProfile.waistSize,
+        pantsInseam: fitProfile.pantsInseam,
+        shoeSize: fitProfile.shoeSize,
+      } : null,
+      recentOrders: recentOrders.length > 0 ? recentOrders : undefined,
+      emailTags: Array.isArray(userData.emailTags) ? (userData.emailTags as string[]) : undefined,
+      segments: Array.isArray(userData.segments) ? (userData.segments as string[]) : undefined,
+      subscriptionStatus: typeof subs.status === "string" ? subs.status : undefined,
     };
 
     const { draft, toolCalls } = await generateReplyDraft(ctx, replyText);

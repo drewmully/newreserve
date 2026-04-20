@@ -18,11 +18,28 @@ export interface MemberContext {
   email: string;
   firstName: string | null;
   tier: string;
+  isLegacy?: boolean;
+  legacyPlan?: string | null;
   flow: EmailFlow;
   lastSentStep: number;
   tags: string[];
   memberNotes?: string[];
   storeCredit?: number | null;
+  handicap?: string | null;
+  vibeCheck?: string | null;
+  hasPrivateClub?: boolean | null;
+  fitProfile?: {
+    shirtSize?: string;
+    gloveHand?: string;
+    gloveSize?: string;
+    waistSize?: string;
+    pantsInseam?: string;
+    shoeSize?: string;
+  } | null;
+  recentOrders?: Array<{ name: string; total: string; date: string; items: string[] }>;
+  emailTags?: string[];
+  segments?: string[];
+  subscriptionStatus?: string;
 }
 
 export interface ToolCallResult {
@@ -40,23 +57,55 @@ export interface AiReplyResult {
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "mymully.com";
 
 function buildSystemPrompt(ctx: MemberContext): string {
-  const tierLabel =
-    ctx.tier === "member"
-      ? "Reserve Member ($249/quarter)"
-      : ctx.tier === "access"
-      ? "Reserve Access ($99/quarter)"
-      : "Free member";
+  const isBack9Legacy = ctx.isLegacy && ctx.legacyPlan === "back9";
+
+  const tierLabel = isBack9Legacy
+    ? "Back 9 Legacy (Member-level access, legacy pricing)"
+    : ctx.tier === "member"
+    ? "Reserve Member ($249/quarter)"
+    : ctx.tier === "access"
+    ? "Reserve Access ($99/quarter)"
+    : "Free member";
 
   const notesSection =
     ctx.memberNotes && ctx.memberNotes.length > 0
       ? `\nMEMBER NOTES (from prior interactions — use this context to personalize your reply)\n${ctx.memberNotes.map((n) => `- ${n}`).join("\n")}`
       : "";
 
-  const creditDollars =
-    ctx.storeCredit != null ? ctx.storeCredit / 100 : null;
+  const creditDollars = ctx.storeCredit != null ? ctx.storeCredit / 100 : null;
   const creditSection =
     creditDollars != null && creditDollars > 0
       ? `\n- Store credit balance: $${creditDollars.toFixed(2)} — look for natural opportunities to mention browsing the Pro Shop or upcoming Drops`
+      : "";
+
+  const legacySection = isBack9Legacy
+    ? `\n- LEGACY NOTE: This member is on the Back 9 Legacy plan (discontinued). They have Member-level access but legacy pricing. If the conversation naturally allows, mention the current Reserve Member plan. Do not force the upsell. Be helpful first.`
+    : "";
+
+  const profileLines: string[] = [];
+  if (ctx.handicap) profileLines.push(`- Handicap: ${ctx.handicap}`);
+  if (ctx.vibeCheck) profileLines.push(`- Vibe: ${ctx.vibeCheck}`);
+  if (ctx.hasPrivateClub != null) profileLines.push(`- Private club member: ${ctx.hasPrivateClub ? "yes" : "no"}`);
+  if (ctx.fitProfile?.shirtSize) profileLines.push(`- Shirt size: ${ctx.fitProfile.shirtSize}`);
+  if (ctx.fitProfile?.waistSize) profileLines.push(`- Waist: ${ctx.fitProfile.waistSize}`);
+  if (ctx.fitProfile?.shoeSize) profileLines.push(`- Shoe: ${ctx.fitProfile.shoeSize}`);
+  const profileSection = profileLines.length > 0 ? `\nMEMBER PROFILE\n${profileLines.join("\n")}` : "";
+
+  const ordersSection =
+    ctx.recentOrders && ctx.recentOrders.length > 0
+      ? `\nRECENT ORDERS (last ${ctx.recentOrders.length})\n${ctx.recentOrders
+          .map((o) => `- ${o.name} (${o.date}, ${o.total}): ${o.items.join(", ")}`)
+          .join("\n")}`
+      : "";
+
+  const tagsSection =
+    ctx.emailTags && ctx.emailTags.length > 0
+      ? `\n- Email tags: ${ctx.emailTags.join(", ")}`
+      : "";
+
+  const segmentsSection =
+    ctx.segments && ctx.segments.length > 0
+      ? `\n- Segments: ${ctx.segments.join(", ")}`
       : "";
 
   return `You are Drew Amato, CEO and co-founder of Mully Reserve. You are responding to a reply from a member in your automated email drip sequence. Draft a reply on Drew's behalf.
@@ -65,9 +114,10 @@ MEMBER CONTEXT
 - Name: ${ctx.firstName ?? "unknown"}
 - Email: ${ctx.email}
 - Tier: ${tierLabel}
+- Subscription status: ${ctx.subscriptionStatus ?? "unknown"}
 - Email flow: ${ctx.flow}
 - Last email sent: step ${ctx.lastSentStep}
-- Tags: ${ctx.tags.length > 0 ? ctx.tags.join(", ") : "none"}${creditSection}${notesSection}
+- Tags: ${ctx.tags.length > 0 ? ctx.tags.join(", ") : "none"}${creditSection}${legacySection}${tagsSection}${segmentsSection}${profileSection}${ordersSection}${notesSection}
 
 BRAND VOICE RULES
 - Speak as Drew Amato. First person, founder energy. Not corporate.
