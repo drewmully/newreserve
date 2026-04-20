@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useMembership } from "@/app/context/MembershipContext";
+import { getTierLabel } from "@/lib/membershipConfig";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -11,13 +12,18 @@ interface UserProfile {
   email: string | null;
   username: string | null;
   tier: string;
+  isLegacy: boolean;
+  legacyPlan: string | null;
   created_at: number | null;
   last_login: number | null;
   onboarding_completed: boolean;
   onboarding_profile: Record<string, unknown>;
+  fit_profile: Record<string, string> | null;
+  emailTags: string[];
   subscription_status: string;
   mullybox_active: boolean;
   manage_url: string | null;
+  active_subscription_ids: string[];
   store_credit_cents: number;
   segments: string[];
   messaging_preferences: Record<string, boolean>;
@@ -79,6 +85,7 @@ const TIER_COLORS: Record<string, string> = {
   member: "bg-forest text-bone",
   access: "bg-sage/30 text-forest",
   free: "bg-taupe/20 text-charcoal/60",
+  legacy: "bg-taupe/40 text-charcoal/70 ring-1 ring-taupe",
 };
 
 const EMAIL_EVENT_COLORS: Record<string, string> = {
@@ -236,8 +243,8 @@ export default function AdminUserDetailPage() {
           <h1 className="font-serif text-3xl text-obsidian">{user.username ?? user.email ?? uid}</h1>
           {user.username && <p className="text-charcoal/50 text-sm mt-0.5">{user.email}</p>}
         </div>
-        <span className={`px-3 py-1 rounded text-sm font-medium ${TIER_COLORS[user.tier] ?? TIER_COLORS.free}`}>
-          {capitalize(user.tier)}
+        <span className={`px-3 py-1 rounded text-sm font-medium ${user.isLegacy ? TIER_COLORS.legacy : (TIER_COLORS[user.tier] ?? TIER_COLORS.free)}`}>
+          {getTierLabel(user.tier as "free" | "access" | "member" | "black", user.isLegacy, user.legacyPlan)}
         </span>
       </div>
 
@@ -251,10 +258,22 @@ export default function AdminUserDetailPage() {
             <Row label="Last login" value={formatDate(user.last_login, false)} />
             <Row label="Onboarding" value={user.onboarding_completed ? "Complete" : "Incomplete"} />
             <Row label="Subscription" value={capitalize(user.subscription_status)} />
+            {user.isLegacy && (
+              <Row label="Plan" value="Back 9 (Legacy)" />
+            )}
             <Row
               label="Store credit"
               value={user.store_credit_cents > 0 ? `$${(user.store_credit_cents / 100).toFixed(2)}` : "—"}
             />
+            {user.onboarding_profile.handicap != null && (
+              <Row label="Handicap" value={String(user.onboarding_profile.handicap)} />
+            )}
+            {user.onboarding_profile.vibe_check != null && (
+              <Row label="Vibe" value={String(user.onboarding_profile.vibe_check)} />
+            )}
+            {user.fit_profile?.shirtSize && (
+              <Row label="Shirt size" value={user.fit_profile.shirtSize} />
+            )}
             {user.manage_url && (
               <a
                 href={user.manage_url}
@@ -266,6 +285,18 @@ export default function AdminUserDetailPage() {
               </a>
             )}
           </div>
+          {user.emailTags.length > 0 && (
+            <div className="bg-white border border-taupe/20 rounded-xl p-5">
+              <p className="text-xs uppercase tracking-widest text-charcoal/40 mb-3">Email tags</p>
+              <div className="flex flex-wrap gap-1.5">
+                {user.emailTags.map((t) => (
+                  <span key={t} className="text-xs px-2 py-0.5 bg-forest/10 text-forest rounded">
+                    {t}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Segments */}
           {(user.segments as string[]).length > 0 && (
