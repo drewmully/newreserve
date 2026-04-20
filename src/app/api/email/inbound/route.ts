@@ -21,7 +21,8 @@ import { Timestamp } from "firebase-admin/firestore";
 import { Resend } from "resend";
 import { adminDb, adminAuth } from "@/lib/firebase-admin";
 import { pauseForReply, type EmailSequenceDoc } from "@/lib/email/sequences";
-import { generateReplyDraft, type MemberContext } from "@/lib/email/ai-reply";
+import { generateReplyDraft, loadMemberKnowledge, type MemberContext } from "@/lib/email/ai-reply";
+import { resolveCustomerByEmail, getStoreCreditByCustomerId } from "@/app/api/_lib/shopifyAdmin";
 
 let resendClient: Resend | null = null;
 
@@ -217,6 +218,14 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    const [memberNotes, storeCreditBalance] = await Promise.all([
+      loadMemberKnowledge(uid),
+      resolveCustomerByEmail(senderEmail)
+        .then((id) => (id ? getStoreCreditByCustomerId(id) : null))
+        .catch(() => null),
+    ]);
+    const storeCredit = storeCreditBalance?.balance_cents ?? null;
+
     const ctx: MemberContext = {
       uid,
       email: senderEmail,
@@ -225,6 +234,8 @@ export async function POST(req: NextRequest) {
       flow: seq.flow,
       lastSentStep: seq.lastSentStep,
       tags: seq.tags ?? [],
+      memberNotes: memberNotes.length > 0 ? memberNotes : undefined,
+      storeCredit: storeCredit ?? null,
     };
 
     const { draft, toolCalls } = await generateReplyDraft(ctx, replyText);

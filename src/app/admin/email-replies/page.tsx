@@ -69,8 +69,85 @@ function ReplyCard({
   getApiHeaders: () => Promise<HeadersInit>;
 }) {
   const [draft, setDraft] = useState(reply.draft ?? "");
-  const [loading, setLoading] = useState<"approve" | "dismiss" | null>(null);
+  const [loading, setLoading] = useState<"approve" | "dismiss" | "regenerate" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState("");
+  const [saveToKnowledge, setSaveToKnowledge] = useState(false);
+  const [notes, setNotes] = useState<string[]>([]);
+  const [newNote, setNewNote] = useState("");
+  const [notesOpen, setNotesOpen] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchNotes() {
+      try {
+        const headers = await getApiHeaders();
+        const res = await fetch(`/api/email/member-knowledge/${reply.uid}`, { headers });
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled) setNotes(data.notes ?? []);
+        }
+      } catch {
+        // non-critical
+      }
+    }
+    void fetchNotes();
+    return () => { cancelled = true; };
+  }, [reply.uid, getApiHeaders]);
+
+  async function handleRegenerate() {
+    if (!feedback.trim()) return;
+    setLoading("regenerate");
+    setError(null);
+    try {
+      const res = await fetch(`/api/email/replies/${reply.id}/regenerate`, {
+        method: "POST",
+        headers: await getApiHeaders(),
+        body: JSON.stringify({ feedback: feedback.trim(), saveToKnowledge }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to regenerate");
+      setDraft(data.draft ?? "");
+      setFeedback("");
+      if (saveToKnowledge) setNotes((prev) => [...prev, feedback.trim()]);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  async function handleAddNote() {
+    if (!newNote.trim()) return;
+    try {
+      const headers = await getApiHeaders();
+      const res = await fetch(`/api/email/member-knowledge/${reply.uid}`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ note: newNote.trim() }),
+      });
+      if (res.ok) {
+        setNotes((prev) => [...prev, newNote.trim()]);
+        setNewNote("");
+      }
+    } catch {
+      // non-critical
+    }
+  }
+
+  async function handleDeleteNote(note: string) {
+    try {
+      const headers = await getApiHeaders();
+      await fetch(`/api/email/member-knowledge/${reply.uid}`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ deleteNote: note }),
+      });
+      setNotes((prev) => prev.filter((n) => n !== note));
+    } catch {
+      // non-critical
+    }
+  }
 
   async function handleApprove() {
     setLoading("approve");
@@ -189,6 +266,83 @@ function ReplyCard({
               : "Loading draft..."
           }
         />
+      </div>
+
+      {/* Feedback / Regenerate */}
+      <div className="border border-taupe/20 rounded-lg p-4 space-y-3 bg-bone/40">
+        <p className="text-xs uppercase tracking-widest text-charcoal/40">
+          Improve draft
+        </p>
+        <textarea
+          className="w-full h-20 bg-white border border-taupe/40 rounded-lg p-3 text-sm text-obsidian leading-relaxed resize-none focus:outline-none focus:ring-2 focus:ring-forest/30"
+          placeholder="Tell Claude what to change or add (e.g. 'mention pro-shop is coming', 'highlight his credits')…"
+          value={feedback}
+          onChange={(e) => setFeedback(e.target.value)}
+        />
+        <div className="flex items-center justify-between gap-3">
+          <label className="flex items-center gap-2 text-xs text-charcoal/60 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={saveToKnowledge}
+              onChange={(e) => setSaveToKnowledge(e.target.checked)}
+              className="rounded"
+            />
+            Save feedback to member knowledgebase
+          </label>
+          <button
+            onClick={handleRegenerate}
+            disabled={!feedback.trim() || loading !== null}
+            className="px-4 py-2 rounded-lg bg-sage/80 text-white text-sm font-medium disabled:opacity-40 hover:bg-sage transition-colors"
+          >
+            {loading === "regenerate" ? "Regenerating…" : "Regenerate"}
+          </button>
+        </div>
+      </div>
+
+      {/* Member knowledgebase */}
+      <div>
+        <button
+          onClick={() => setNotesOpen((v) => !v)}
+          className="text-xs uppercase tracking-widest text-charcoal/40 hover:text-charcoal/70 transition-colors"
+        >
+          Member notes {notes.length > 0 && `(${notes.length})`} {notesOpen ? "▲" : "▼"}
+        </button>
+        {notesOpen && (
+          <div className="mt-3 space-y-2">
+            {notes.length === 0 && (
+              <p className="text-xs text-charcoal/40">No notes yet.</p>
+            )}
+            {notes.map((note, i) => (
+              <div key={i} className="flex items-start justify-between gap-2 bg-cream rounded-lg px-3 py-2">
+                <p className="text-xs text-charcoal leading-relaxed">{note}</p>
+                <button
+                  onClick={() => handleDeleteNote(note)}
+                  className="text-charcoal/30 hover:text-ember text-xs shrink-0"
+                  title="Remove note"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+            <div className="flex gap-2 mt-2">
+              <input
+                type="text"
+                value={newNote}
+                onChange={(e) => setNewNote(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") void handleAddNote(); }}
+                placeholder="Add a note about this member…"
+                className="flex-1 bg-white border border-taupe/40 rounded-lg px-3 py-1.5 text-xs text-obsidian focus:outline-none focus:ring-2 focus:ring-forest/30"
+              />
+              <button
+                onClick={handleAddNote}
+                disabled={!newNote.trim()}
+                className="px-3 py-1.5 rounded-lg bg-forest/10 text-forest text-xs font-medium disabled:opacity-40 hover:bg-forest/20 transition-colors"
+              >
+                Add
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Error */}

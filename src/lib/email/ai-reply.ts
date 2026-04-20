@@ -21,6 +21,8 @@ export interface MemberContext {
   flow: EmailFlow;
   lastSentStep: number;
   tags: string[];
+  memberNotes?: string[];
+  storeCredit?: number | null;
 }
 
 export interface ToolCallResult {
@@ -45,6 +47,18 @@ function buildSystemPrompt(ctx: MemberContext): string {
       ? "Reserve Access ($99/quarter)"
       : "Free member";
 
+  const notesSection =
+    ctx.memberNotes && ctx.memberNotes.length > 0
+      ? `\nMEMBER NOTES (from prior interactions — use this context to personalize your reply)\n${ctx.memberNotes.map((n) => `- ${n}`).join("\n")}`
+      : "";
+
+  const creditDollars =
+    ctx.storeCredit != null ? ctx.storeCredit / 100 : null;
+  const creditSection =
+    creditDollars != null && creditDollars > 0
+      ? `\n- Store credit balance: $${creditDollars.toFixed(2)} — look for natural opportunities to mention browsing the Pro Shop or upcoming Drops`
+      : "";
+
   return `You are Drew Amato, CEO and co-founder of Mully Reserve. You are responding to a reply from a member in your automated email drip sequence. Draft a reply on Drew's behalf.
 
 MEMBER CONTEXT
@@ -53,7 +67,7 @@ MEMBER CONTEXT
 - Tier: ${tierLabel}
 - Email flow: ${ctx.flow}
 - Last email sent: step ${ctx.lastSentStep}
-- Tags: ${ctx.tags.length > 0 ? ctx.tags.join(", ") : "none"}
+- Tags: ${ctx.tags.length > 0 ? ctx.tags.join(", ") : "none"}${creditSection}${notesSection}
 
 BRAND VOICE RULES
 - Speak as Drew Amato. First person, founder energy. Not corporate.
@@ -209,22 +223,30 @@ const TOOLS: Anthropic.Tool[] = [
 
 /**
  * Generate a draft reply and tool calls for a member's inbound email.
+ * Pass `options.previousDraft` + `options.feedback` to regenerate with human feedback.
  */
 export async function generateReplyDraft(
   ctx: MemberContext,
-  memberReplyText: string
+  memberReplyText: string,
+  options?: { previousDraft?: string; feedback?: string }
 ): Promise<AiReplyResult> {
+  type Message = { role: "user" | "assistant"; content: string };
+  const messages: Message[] = [{ role: "user", content: memberReplyText }];
+
+  if (options?.previousDraft && options?.feedback) {
+    messages.push({ role: "assistant", content: options.previousDraft });
+    messages.push({
+      role: "user",
+      content: `Please revise the reply based on this feedback: ${options.feedback}`,
+    });
+  }
+
   const response = await client.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 1024,
     system: buildSystemPrompt(ctx),
     tools: TOOLS,
-    messages: [
-      {
-        role: "user",
-        content: memberReplyText,
-      },
-    ],
+    messages,
   });
 
   let draft = "";
@@ -303,4 +325,20 @@ export async function executeToolCalls(
       }
     }
   }
+}
+
+// ─── Member knowledge helpers ─────────────────────────────────────────────────
+
+export async function loadMemberKnowledge(uid: string): Promise<string[]> {
+  const snap = await adminDb.collection("member_knowledge").doc(uid).get();
+  if (!snap.exists) return [];
+  return (snap.data()?.notes as string[]) ?? [];
+}
+
+export async function saveMemberNote(uid: string, note: string): Promise<void> {
+  const ref = adminDb.collection("member_knowledge").doc(uid);
+  await ref.set(
+    { notes: FieldValue.arrayUnion(note), updatedAt: Timestamp.now() },
+    { merge: true }
+  );
 }
