@@ -375,9 +375,11 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
   const setFitProfile = useCallback(
     async (profile: FitProfile) => {
       setFitProfileState(profile);
+      console.log("[FitProfile] user uid:", user?.uid, "db:", !!db);
       if (user?.uid) {
         try {
           await updateDoc(doc(db, "users", user.uid), { fit_profile: profile });
+          console.log("[FitProfile] write success");
         } catch (err) {
           console.error("[FitProfile] Firestore persist failed:", err);
         }
