@@ -43,8 +43,13 @@ function resolveTierFromLoopSubs(
 ): { tier: MemberTier; variantId: unknown } | null {
   const active = subs.filter((s) => s.status === "ACTIVE");
   for (const sub of active) {
+    // The list endpoint may not include `lines` — fall back to top-level variant fields
     const lines = sub.lines as Array<Record<string, unknown>> | undefined;
-    const variantShopifyId = lines?.[0]?.variantShopifyId;
+    const variantShopifyId =
+      lines?.[0]?.variantShopifyId ??
+      sub.shopify_variant_id ??
+      sub.variant_id ??
+      null;
     if (variantShopifyId != null) {
       const tier = resolveMemberTierFromVariantId(variantShopifyId);
       if (tier) return { tier, variantId: variantShopifyId };
