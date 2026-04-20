@@ -115,6 +115,8 @@ export interface UserDocument {
   onboarding_completed: boolean;
   fit_profile?: Record<string, string>;
   tier?: "free" | "access" | "member" | "black";
+  isLegacy?: boolean;
+  legacyPlan?: string | null;
 }
 
 const USER_DEFAULTS: Omit<

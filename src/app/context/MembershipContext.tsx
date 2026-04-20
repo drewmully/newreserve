@@ -28,7 +28,7 @@ import {
   type ShopifyCart,
 } from "@/lib/shopify";
 import { buildCheckoutOriginAttributes } from "@/lib/shopifyCheckoutOrigin";
-import { resolveMemberTierFromVariantId } from "@/lib/membershipConfig";
+import { resolveMemberTierFromVariantId, resolveLegacyFromVariantId, getTierLabel } from "@/lib/membershipConfig";
 import {
   buildCompleteOnboardingUpdatePayload,
   fromFirestoreOnboardingProfile,
@@ -40,14 +40,14 @@ import {
 
 function resolveTierFromLoopSubs(
   subs: Array<Record<string, unknown>>
-): MemberTier | null {
+): { tier: MemberTier; variantId: unknown } | null {
   const active = subs.filter((s) => s.status === "ACTIVE");
   for (const sub of active) {
     const lines = sub.lines as Array<Record<string, unknown>> | undefined;
     const variantShopifyId = lines?.[0]?.variantShopifyId;
     if (variantShopifyId != null) {
       const tier = resolveMemberTierFromVariantId(variantShopifyId);
-      if (tier) return tier;
+      if (tier) return { tier, variantId: variantShopifyId };
     }
   }
   return null;
@@ -164,6 +164,8 @@ interface MembershipContextValue {
   tier: MemberTier;
   setTier: (tier: MemberTier) => void;
   tierLabel: string;
+  isLegacy: boolean;
+  legacyPlan: string | null;
 
   // Cart
   cart: CartItem[];
@@ -228,6 +230,8 @@ export function useMembership() {
    PROVIDER
    ═══════════════════════════════════════════ */
 
+// Use getTierLabel from membershipConfig for dynamic label (legacy-aware).
+// This static map is kept as a fallback for contexts without isLegacy info.
 const TIER_LABELS: Record<MemberTier, string> = {
   free: "Free",
   access: "Reserve Access",
@@ -300,6 +304,8 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
 
   // ── Membership tier ───────────────────────────────────────────────────────
   const [tier, setTier] = useState<MemberTier>("free");
+  const [isLegacy, setIsLegacy] = useState(false);
+  const [legacyPlan, setLegacyPlan] = useState<string | null>(null);
 
   // ── Onboarding ────────────────────────────────────────────────────────────
   const [onboardingCompleted, setOnboardingCompleted] = useState(false);
@@ -614,6 +620,12 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
           if (profile.tier && ["free", "access", "member", "black"].includes(profile.tier)) {
             setTier(profile.tier as MemberTier);
           }
+          if (typeof profile.isLegacy === "boolean") {
+            setIsLegacy(profile.isLegacy);
+          }
+          if (profile.legacyPlan === null || typeof profile.legacyPlan === "string") {
+            setLegacyPlan(profile.legacyPlan ?? null);
+          }
         } catch (err) {
           console.error("[MembershipContext] syncUserProfile failed:", err);
         }
@@ -653,10 +665,24 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
           });
           if (res.ok) {
             const data = await res.json() as { subscriptions: Array<Record<string, unknown>>; source: string };
-
-            const loopTier = resolveTierFromLoopSubs(data.subscriptions);
-            if (loopTier) {
+            const resolved = resolveTierFromLoopSubs(data.subscriptions);
+            if (resolved) {
+              const { tier: loopTier, variantId } = resolved;
+              const legacy = resolveLegacyFromVariantId(variantId);
               setTier(loopTier);
+              setIsLegacy(legacy.isLegacy);
+              setLegacyPlan(legacy.legacyPlan);
+              // Persist to Firestore so future cold loads are correct
+              try {
+                await updateDoc(doc(db, "users", firebaseUser.uid), {
+                  tier: loopTier,
+                  isLegacy: legacy.isLegacy,
+                  legacyPlan: legacy.legacyPlan,
+                  updated_at: serverTimestamp(),
+                });
+              } catch {
+                // Non-fatal
+              }
             }
           }
         } catch (err) {
@@ -673,6 +699,8 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
         setEmailRaw("");
         setUsername("");
         setTier("free");
+        setIsLegacy(false);
+        setLegacyPlan(null);
         setCart([]);
         setCartId(null);
         setCartCheckoutUrl(null);
@@ -1025,7 +1053,9 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
         // Tier
         tier,
         setTier,
-        tierLabel: TIER_LABELS[tier],
+        tierLabel: getTierLabel(tier, isLegacy, legacyPlan),
+        isLegacy,
+        legacyPlan,
 
         // Cart
         cart,

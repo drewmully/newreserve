@@ -179,3 +179,34 @@ export function isSupportedSellingPlanId(value: unknown): boolean {
   if (!normalized) return false;
   return SUPPORTED_SELLING_PLAN_IDS.has(normalized);
 }
+
+// ─── Legacy plan detection ────────────────────────────────────────────────────
+
+const LEGACY_VARIANT_PLAN_MAP: Record<string, string> = {};
+for (const legacyVariantId of MEMBER_LEGACY_VARIANT_IDS) {
+  LEGACY_VARIANT_PLAN_MAP[String(legacyVariantId)] = "back9";
+}
+
+export function resolveLegacyFromVariantId(
+  variantId: unknown
+): { isLegacy: boolean; legacyPlan: string | null } {
+  const normalized = normalizePositiveIntegerString(variantId);
+  if (!normalized) return { isLegacy: false, legacyPlan: null };
+  const legacyPlan = LEGACY_VARIANT_PLAN_MAP[normalized] ?? null;
+  return { isLegacy: legacyPlan !== null, legacyPlan };
+}
+
+export function getTierLabel(
+  tier: MemberTier,
+  isLegacy: boolean,
+  legacyPlan: string | null
+): string {
+  if (isLegacy && legacyPlan === "back9") return "Back 9 (Legacy)";
+  const TIER_LABELS: Record<MemberTier, string> = {
+    free: "Free",
+    access: "Reserve Access",
+    member: "Reserve Member",
+    black: "Reserve Black",
+  };
+  return TIER_LABELS[tier];
+}

@@ -15,7 +15,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { isAllowedAdminEmail } from "@/lib/adminEmailAllowlist";
 import { getLoopRawSubscriptions, getLoopSubscriptionById } from "@/app/api/_lib/loopAdmin";
-import { resolveMemberTierFromVariantId } from "@/lib/membershipConfig";
+import { resolveMemberTierFromVariantId, resolveLegacyFromVariantId } from "@/lib/membershipConfig";
 import { startFlow, type EmailFlow } from "@/lib/email/sequences";
 
 async function verifyAdmin(request: NextRequest): Promise<string> {
@@ -35,6 +35,8 @@ interface ResultRow {
   loop_plan_name: string | null;
   loop_variant_id: string | null;
   resolved_tier: string | null;
+  is_legacy: boolean;
+  legacy_plan: string | null;
   action: "updated" | "skipped_no_shopify_id" | "skipped_unknown_variant" | "skipped_loop_error";
   error?: string;
 }
@@ -95,6 +97,8 @@ export async function POST(request: NextRequest) {
         loop_plan_name: null,
         loop_variant_id: null,
         resolved_tier: null,
+        is_legacy: false,
+        legacy_plan: null,
         action: "skipped_no_shopify_id",
       });
       continue;
@@ -147,6 +151,8 @@ export async function POST(request: NextRequest) {
         loop_plan_name: null,
         loop_variant_id: null,
         resolved_tier: null,
+        is_legacy: false,
+        legacy_plan: null,
         action: "skipped_loop_error",
         error: err instanceof Error ? err.message : String(err),
       });
@@ -161,10 +167,14 @@ export async function POST(request: NextRequest) {
         loop_plan_name: loopPlanName,
         loop_variant_id: loopVariantId,
         resolved_tier: null,
+        is_legacy: false,
+        legacy_plan: null,
         action: "skipped_unknown_variant",
       });
       continue;
     }
+
+    const { isLegacy, legacyPlan } = resolveLegacyFromVariantId(loopVariantId);
 
     // 5. Apply fix (unless dry run)
     if (!dryRun) {
@@ -172,6 +182,8 @@ export async function POST(request: NextRequest) {
 
       await doc.ref.update({
         tier: resolvedTier,
+        isLegacy,
+        legacyPlan,
         updated_at: Date.now(),
       });
 
@@ -186,6 +198,8 @@ export async function POST(request: NextRequest) {
       loop_plan_name: loopPlanName,
       loop_variant_id: loopVariantId,
       resolved_tier: resolvedTier,
+      is_legacy: isLegacy,
+      legacy_plan: legacyPlan,
       action: "updated",
     });
   }
