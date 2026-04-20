@@ -90,7 +90,10 @@ service cloud.firestore {
           "messaging_preferences.push_notifications",
           "cart",
           "cart.cart_id",
-          "cart.updated_at"
+          "cart.updated_at",
+          "tier",
+          "isLegacy",
+          "legacyPlan"
         ])
         && request.resource.data.created_at == resource.data.created_at
         && request.resource.data.shopify_customer_id == resource.data.shopify_customer_id
