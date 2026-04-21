@@ -63,25 +63,25 @@ export default async function Home() {
               {headlines[headlineVariant]}
             </h1>
 
-            <p className="text-sm md:text-xl text-charcoal leading-relaxed mb-4 md:mb-6 max-w-sm sm:max-w-md mx-auto md:mx-0 animate-fade-up-delay-2">
-              A golf membership that unlocks insider pricing on 40+ premium brands, curated gear drops, and private club experiences. Start free.
+            <p className="text-sm md:text-lg text-charcoal leading-relaxed mb-3 md:mb-4 max-w-sm sm:max-w-md mx-auto md:mx-0 animate-fade-up-delay-2">
+              Join Mully Reserve to unlock:
             </p>
 
-            {/* Value prop callouts — 3 concrete member perks */}
-            <div className="flex flex-col gap-1.5 mb-5 md:mb-8 max-w-sm sm:max-w-md mx-auto md:mx-0 text-left animate-fade-up-delay-2">
-              <span className="text-sm text-forest/80 flex items-start gap-2">
-                <span className="text-ember shrink-0">&#10022;</span>
-                Reserve pricing on Rhone, Greyson, Quiet Golf &amp; more
-              </span>
-              <span className="text-sm text-forest/80 flex items-start gap-2">
-                <span className="text-ember shrink-0">&#10022;</span>
-                Curated gear drops and quarterly member boxes
-              </span>
-              <span className="text-sm text-forest/80 flex items-start gap-2">
-                <span className="text-ember shrink-0">&#10022;</span>
-                Private club access, fittings, and experiences
-              </span>
-            </div>
+            {/* Value prop bullets — user-approved copy */}
+            <ul className="flex flex-col gap-2 mb-5 md:mb-8 max-w-sm sm:max-w-md mx-auto md:mx-0 text-left animate-fade-up-delay-2">
+              <li className="text-sm md:text-base text-forest/85 flex items-start gap-2.5">
+                <span className="text-ember shrink-0 mt-[2px]">&#10022;</span>
+                <span>Members-only pricing (10–30% off top brands)</span>
+              </li>
+              <li className="text-sm md:text-base text-forest/85 flex items-start gap-2.5">
+                <span className="text-ember shrink-0 mt-[2px]">&#10022;</span>
+                <span>Curated gear drops &amp; quarterly boxes</span>
+              </li>
+              <li className="text-sm md:text-base text-forest/85 flex items-start gap-2.5">
+                <span className="text-ember shrink-0 mt-[2px]">&#10022;</span>
+                <span>Private club access, fittings, and experiences</span>
+              </li>
+            </ul>
 
             <div className="animate-fade-up-delay-3">
               <div className="max-w-xs sm:max-w-md mx-auto md:mx-0">
