@@ -23,6 +23,7 @@ import { adminDb, adminAuth } from "@/lib/firebase-admin";
 import { pauseForReply, type EmailSequenceDoc } from "@/lib/email/sequences";
 import { generateReplyDraft, loadMemberKnowledge, type MemberContext } from "@/lib/email/ai-reply";
 import { resolveCustomerByEmail, getStoreCreditByCustomerId, getCustomerOrders } from "@/app/api/_lib/shopifyAdmin";
+import { getLoopSubscriptionStatus } from "@/app/api/_lib/loopAdmin";
 
 let resendClient: Resend | null = null;
 
@@ -223,7 +224,7 @@ export async function POST(req: NextRequest) {
     type StoreCreditResult = { balance_cents: number; currency: string } | null;
     type OrderResult = Array<{ name: string; total_price: string; currency: string; created_at: string; line_items: Array<{ name: string }> }>;
 
-    const [memberNotes, storeCreditBalance, rawOrders] = await Promise.all([
+    const [memberNotes, storeCreditBalance, rawOrders, loopSubs] = await Promise.all([
       loadMemberKnowledge(uid),
       shopifyCustomerId
         ? (getStoreCreditByCustomerId(shopifyCustomerId).catch(() => null) as Promise<StoreCreditResult>)
@@ -231,6 +232,7 @@ export async function POST(req: NextRequest) {
       shopifyCustomerId
         ? (getCustomerOrders(shopifyCustomerId, 5).catch(() => []) as Promise<OrderResult>)
         : Promise.resolve([] as OrderResult),
+      getLoopSubscriptionStatus(senderEmail).catch(() => null),
     ]);
 
     const storeCredit = storeCreditBalance?.balance_cents ?? null;
@@ -244,7 +246,6 @@ export async function POST(req: NextRequest) {
 
     const onboardingProfile = (userData.onboarding_profile ?? {}) as Record<string, unknown>;
     const fitProfile = (userData.fit_profile ?? null) as Record<string, string> | null;
-    const subs = (userData.subscriptions ?? {}) as Record<string, unknown>;
 
     const ctx: MemberContext = {
       uid,
@@ -272,18 +273,18 @@ export async function POST(req: NextRequest) {
       recentOrders: recentOrders.length > 0 ? recentOrders : undefined,
       emailTags: Array.isArray(userData.emailTags) ? (userData.emailTags as string[]) : undefined,
       segments: Array.isArray(userData.segments) ? (userData.segments as string[]) : undefined,
-      subscriptionStatus: typeof subs.status === "string" ? subs.status : undefined,
-      nextBillingDate: subs.nextBillingDate ?? null,
-      billingInterval: subs.billingInterval ?? null,
-      memberSince: subs.memberSince ?? null,
-      successfulPayments: subs.successfulPayments ?? null,
-      lastPaymentStatus: subs.lastPaymentStatus ?? null,
-      planPrice: subs.planPrice ?? null,
-      planName: subs.planName ?? null,
-      isPrepaid: subs.isPrepaid ?? null,
-      shippingCity: subs.shippingCity ?? null,
-      shippingState: subs.shippingState ?? null,
-      loopFitProfile: subs.loopFitProfile ?? null,
+      subscriptionStatus: loopSubs?.status ?? undefined,
+      nextBillingDate: loopSubs?.nextBillingDate ?? null,
+      billingInterval: loopSubs?.billingInterval ?? null,
+      memberSince: loopSubs?.memberSince ?? null,
+      successfulPayments: loopSubs?.successfulPayments ?? null,
+      lastPaymentStatus: loopSubs?.lastPaymentStatus ?? null,
+      planPrice: loopSubs?.planPrice ?? null,
+      planName: loopSubs?.planName ?? null,
+      isPrepaid: loopSubs?.isPrepaid ?? null,
+      shippingCity: loopSubs?.shippingCity ?? null,
+      shippingState: loopSubs?.shippingState ?? null,
+      loopFitProfile: loopSubs?.loopFitProfile ?? null,
     };
 
     const { draft, toolCalls } = await generateReplyDraft(ctx, replyText);
