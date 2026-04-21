@@ -20,11 +20,11 @@ export async function GET(request: NextRequest) {
     const email = request.nextUrl.searchParams.get("email");
     if (!email) return NextResponse.json({ error: "email param required" }, { status: 400 });
 
-    const customer = await resolveCustomerByEmail(email);
-    if (!customer) return NextResponse.json({ error: "Shopify customer not found" }, { status: 404 });
+    const customerId = await resolveCustomerByEmail(email);
+    if (!customerId) return NextResponse.json({ error: "Shopify customer not found" }, { status: 404 });
 
-    const subs = await getLoopRawSubscriptions(customer.id);
-    return NextResponse.json({ customerId: customer.id, subscriptions: subs });
+    const subs = await getLoopRawSubscriptions(customerId);
+    return NextResponse.json({ customerId, subscriptions: subs });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: err.status ?? 500 });
   }
