@@ -62,6 +62,7 @@ function DashboardContent() {
     setCartOpen,
     refreshStoreCredit,
     refreshSubscriptionStatus,
+    isLegacy,
   } = useMembership();
   const isPaid = tier === "access" || tier === "member" || tier === "black";
   const [upgradeOpen, setUpgradeOpen] = useState(false);
@@ -210,8 +211,25 @@ function DashboardContent() {
         </div>
       </div>
 
+      {/* ─── LEGACY BANNER ─── */}
+      {isLegacy && (
+        <div className="fixed top-[10.5rem] left-0 right-0 z-30 bg-taupe/20 border-b border-taupe/30">
+          <div className="max-w-7xl mx-auto px-6 md:px-12 py-2 flex items-center justify-center gap-3">
+            <p className="text-xs text-charcoal/80 text-center">
+              You&rsquo;re on the <strong className="text-forest">Back 9 Legacy plan</strong>. Explore current membership options.
+            </p>
+            <Link
+              href="/onboarding"
+              className="shrink-0 text-xs font-medium text-forest underline underline-offset-2 hover:text-forest-dark transition-colors"
+            >
+              View plans →
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* ─── TAB CONTENT ─── */}
-      <main className="pt-48 pb-24">
+      <main className={isLegacy ? "pt-56 pb-24" : "pt-48 pb-24"}>
         <div key={activeTab} className="animate-tab-in">
           {activeTab === "shop" && (isSignedIn ? <ShopTab /> : <GatedTab type="shop" onUpgrade={() => setUpgradeOpen(true)} />)}
           {activeTab === "drops" && (isPaid ? <DropsTab /> : <GatedTab type="drops" onUpgrade={() => setUpgradeOpen(true)} />)}
