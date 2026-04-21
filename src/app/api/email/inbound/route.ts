@@ -273,6 +273,8 @@ export async function POST(req: NextRequest) {
       emailTags: Array.isArray(userData.emailTags) ? (userData.emailTags as string[]) : undefined,
       segments: Array.isArray(userData.segments) ? (userData.segments as string[]) : undefined,
       subscriptionStatus: typeof subs.status === "string" ? subs.status : undefined,
+      nextBillingDate: subs.nextBillingDate ?? null,
+      billingInterval: subs.billingInterval ?? null,
     };
 
     const { draft, toolCalls } = await generateReplyDraft(ctx, replyText);

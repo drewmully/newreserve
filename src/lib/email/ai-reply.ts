@@ -40,6 +40,8 @@ export interface MemberContext {
   emailTags?: string[];
   segments?: string[];
   subscriptionStatus?: string;
+  nextBillingDate?: string | null;
+  billingInterval?: string | null;
 }
 
 export interface ToolCallResult {
@@ -114,7 +116,7 @@ MEMBER CONTEXT
 - Name: ${ctx.firstName ?? "unknown"}
 - Email: ${ctx.email}
 - Tier: ${tierLabel}
-- Subscription status: ${ctx.subscriptionStatus ?? "unknown"}
+- Subscription status: ${ctx.subscriptionStatus ?? "unknown"}${ctx.nextBillingDate ? `\n- Next billing / box ship date: ${ctx.nextBillingDate}` : ""}${ctx.billingInterval ? `\n- Billing frequency: ${ctx.billingInterval}` : ""}
 - Email flow: ${ctx.flow}
 - Last email sent: step ${ctx.lastSentStep}
 - Tags: ${ctx.tags.length > 0 ? ctx.tags.join(", ") : "none"}${creditSection}${legacySection}${tagsSection}${segmentsSection}${profileSection}${ordersSection}${notesSection}

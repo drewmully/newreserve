@@ -44,6 +44,8 @@ export interface LoopSubscriptionStatus {
   active_subscription_ids: string[];
   manage_url: string | null;
   next_unblock_url: string | null;
+  nextBillingDate: string | null;
+  billingInterval: string | null;
 }
 
 /**
@@ -73,13 +75,31 @@ export async function getLoopSubscriptionStatus(
     status = subs[0].status.toLowerCase();
   }
 
+  const activeSub = active[0] as any;
+  let nextBillingDate: string | null = null;
+  let billingInterval: string | null = null;
+
+  if (activeSub?.nextBillingDateEpoch) {
+    const d = new Date(activeSub.nextBillingDateEpoch * 1000);
+    nextBillingDate = d.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+  }
+  if (activeSub?.billingPolicy) {
+    const { interval, intervalCount } = activeSub.billingPolicy;
+    if (interval && intervalCount) {
+      const unit = interval.charAt(0) + interval.slice(1).toLowerCase();
+      billingInterval = intervalCount === 1 ? unit : `every ${intervalCount} ${unit.toLowerCase()}s`;
+    }
+  }
+
   return {
     mullybox_active: active.length > 0,
     status,
     total_subscription_count: active.length,
     active_subscription_ids: active.map((s) => s.id),
-    manage_url: null, // populated by the route handler after calling getLoopManageSubscriptionUrl
+    manage_url: null,
     next_unblock_url: null,
+    nextBillingDate,
+    billingInterval,
   };
 }
 
