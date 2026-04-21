@@ -42,6 +42,15 @@ export interface MemberContext {
   subscriptionStatus?: string;
   nextBillingDate?: string | null;
   billingInterval?: string | null;
+  memberSince?: string | null;
+  successfulPayments?: number | null;
+  lastPaymentStatus?: string | null;
+  planPrice?: string | null;
+  planName?: string | null;
+  isPrepaid?: boolean | null;
+  shippingCity?: string | null;
+  shippingState?: string | null;
+  loopFitProfile?: Record<string, string> | null;
 }
 
 export interface ToolCallResult {
@@ -116,7 +125,7 @@ MEMBER CONTEXT
 - Name: ${ctx.firstName ?? "unknown"}
 - Email: ${ctx.email}
 - Tier: ${tierLabel}
-- Subscription status: ${ctx.subscriptionStatus ?? "unknown"}${ctx.nextBillingDate ? `\n- Next billing / box ship date: ${ctx.nextBillingDate}` : ""}${ctx.billingInterval ? `\n- Billing frequency: ${ctx.billingInterval}` : ""}
+- Subscription status: ${ctx.subscriptionStatus ?? "unknown"}${ctx.planName ? `\n- Plan: ${ctx.planName}` : ""}${ctx.planPrice ? ` (${ctx.planPrice}/cycle)` : ""}${ctx.billingInterval ? `\n- Billing frequency: ${ctx.billingInterval}` : ""}${ctx.nextBillingDate ? `\n- Next billing / box ship date: ${ctx.nextBillingDate}` : ""}${ctx.memberSince ? `\n- Member since: ${ctx.memberSince}` : ""}${ctx.successfulPayments != null ? `\n- Successful payments: ${ctx.successfulPayments}` : ""}${ctx.lastPaymentStatus ? `\n- Last payment: ${ctx.lastPaymentStatus.toLowerCase()}` : ""}${ctx.isPrepaid ? `\n- Prepaid: yes` : ""}${ctx.shippingCity && ctx.shippingState ? `\n- Ships to: ${ctx.shippingCity}, ${ctx.shippingState}` : ""}${ctx.loopFitProfile && Object.keys(ctx.loopFitProfile).length > 0 ? `\n- Fit profile (from Loop): ${Object.entries(ctx.loopFitProfile).map(([k, v]) => `${k}: ${v}`).join(", ")}` : ""}
 - Email flow: ${ctx.flow}
 - Last email sent: step ${ctx.lastSentStep}
 - Tags: ${ctx.tags.length > 0 ? ctx.tags.join(", ") : "none"}${creditSection}${legacySection}${tagsSection}${segmentsSection}${profileSection}${ordersSection}${notesSection}

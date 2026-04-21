@@ -275,6 +275,15 @@ export async function POST(req: NextRequest) {
       subscriptionStatus: typeof subs.status === "string" ? subs.status : undefined,
       nextBillingDate: subs.nextBillingDate ?? null,
       billingInterval: subs.billingInterval ?? null,
+      memberSince: subs.memberSince ?? null,
+      successfulPayments: subs.successfulPayments ?? null,
+      lastPaymentStatus: subs.lastPaymentStatus ?? null,
+      planPrice: subs.planPrice ?? null,
+      planName: subs.planName ?? null,
+      isPrepaid: subs.isPrepaid ?? null,
+      shippingCity: subs.shippingCity ?? null,
+      shippingState: subs.shippingState ?? null,
+      loopFitProfile: subs.loopFitProfile ?? null,
     };
 
     const { draft, toolCalls } = await generateReplyDraft(ctx, replyText);

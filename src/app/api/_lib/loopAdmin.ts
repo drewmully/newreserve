@@ -46,6 +46,15 @@ export interface LoopSubscriptionStatus {
   next_unblock_url: string | null;
   nextBillingDate: string | null;
   billingInterval: string | null;
+  memberSince: string | null;
+  successfulPayments: number | null;
+  lastPaymentStatus: string | null;
+  planPrice: string | null;
+  planName: string | null;
+  isPrepaid: boolean | null;
+  shippingCity: string | null;
+  shippingState: string | null;
+  loopFitProfile: Record<string, string> | null;
 }
 
 /**
@@ -76,8 +85,11 @@ export async function getLoopSubscriptionStatus(
   }
 
   const activeSub = active[0] as any;
+
   let nextBillingDate: string | null = null;
   let billingInterval: string | null = null;
+  let memberSince: string | null = null;
+  let loopFitProfile: Record<string, string> | null = null;
 
   if (activeSub?.nextBillingDateEpoch) {
     const d = new Date(activeSub.nextBillingDateEpoch * 1000);
@@ -90,6 +102,19 @@ export async function getLoopSubscriptionStatus(
       billingInterval = intervalCount === 1 ? unit : `every ${intervalCount} ${unit.toLowerCase()}s`;
     }
   }
+  if (activeSub?.createdAt) {
+    const d = new Date(activeSub.createdAt);
+    memberSince = d.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  }
+
+  const line = activeSub?.lines?.[0] as any;
+  if (line?.attributes && Array.isArray(line.attributes)) {
+    const attrs: Record<string, string> = {};
+    for (const a of line.attributes) {
+      if (a.key && a.value) attrs[a.key] = a.value;
+    }
+    if (Object.keys(attrs).length > 0) loopFitProfile = attrs;
+  }
 
   return {
     mullybox_active: active.length > 0,
@@ -100,6 +125,15 @@ export async function getLoopSubscriptionStatus(
     next_unblock_url: null,
     nextBillingDate,
     billingInterval,
+    memberSince,
+    successfulPayments: activeSub?.billingAttemptSuccessCount ?? null,
+    lastPaymentStatus: activeSub?.lastPaymentStatus ?? null,
+    planPrice: line?.price ? `$${line.price}` : null,
+    planName: line?.productTitle ?? null,
+    isPrepaid: activeSub?.isPrepaid ?? null,
+    shippingCity: activeSub?.shippingAddress?.city ?? null,
+    shippingState: activeSub?.shippingAddress?.provinceCode ?? null,
+    loopFitProfile,
   };
 }
 
