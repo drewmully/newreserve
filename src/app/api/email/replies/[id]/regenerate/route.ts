@@ -20,7 +20,8 @@ import {
   saveMemberNote,
   type MemberContext,
 } from "@/lib/email/ai-reply";
-import { resolveCustomerByEmail, getStoreCreditByCustomerId } from "@/app/api/_lib/shopifyAdmin";
+import { resolveCustomerByEmail, getStoreCreditByCustomerId, getCustomerOrders } from "@/app/api/_lib/shopifyAdmin";
+import { getLoopSubscriptionStatus } from "@/app/api/_lib/loopAdmin";
 import type { EmailFlow } from "@/lib/email/sequences";
 
 export async function POST(
@@ -60,29 +61,68 @@ export async function POST(
   const email = reply.email as string;
   const previousDraft = (reply.draft as string) ?? "";
 
-  const [userSnap, seqSnap, memberNotes, storeCreditBalance] = await Promise.all([
+  const shopifyIdForEmail = await resolveCustomerByEmail(email).catch(() => null);
+
+  const [userSnap, seqSnap, memberNotes, storeCreditBalance, rawOrders, loopSubs] = await Promise.all([
     adminDb.collection("users").doc(uid).get(),
     adminDb.collection("email_sequences").doc(uid).get(),
     loadMemberKnowledge(uid),
-    resolveCustomerByEmail(email)
-      .then((shopifyId) => (shopifyId ? getStoreCreditByCustomerId(shopifyId) : null))
-      .catch(() => null),
+    shopifyIdForEmail ? getStoreCreditByCustomerId(shopifyIdForEmail).catch(() => null) : Promise.resolve(null),
+    shopifyIdForEmail ? getCustomerOrders(shopifyIdForEmail, 5).catch(() => []) : Promise.resolve([]),
+    getLoopSubscriptionStatus(email).catch(() => null),
   ]);
   const storeCredit = storeCreditBalance?.balance_cents ?? null;
 
-  const userData = (userSnap.data() ?? {}) as Record<string, string | undefined>;
+  const recentOrders = (rawOrders as any[]).map((o) => ({
+    name: o.name,
+    total: `${o.currency} ${o.total_price}`,
+    date: new Date(o.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+    items: o.line_items.map((li: any) => li.name),
+  }));
+
+  const userData = (userSnap.data() ?? {}) as Record<string, unknown>;
   const seq = seqSnap.data() ?? {};
+  const onboardingProfile = (userData.onboarding_profile ?? {}) as Record<string, unknown>;
+  const fitProfile = (userData.fit_profile ?? null) as Record<string, string> | null;
 
   const ctx: MemberContext = {
     uid,
     email,
     firstName: (reply.firstName as string | null) ?? null,
-    tier: userData.tier ?? "free",
+    tier: typeof userData.tier === "string" ? userData.tier : "free",
+    isLegacy: userData.isLegacy === true,
+    legacyPlan: typeof userData.legacyPlan === "string" ? userData.legacyPlan : null,
     flow: (seq.flow as EmailFlow) ?? "free",
     lastSentStep: (seq.lastSentStep as number) ?? 0,
     tags: (seq.tags as string[]) ?? [],
     memberNotes: memberNotes.length > 0 ? memberNotes : undefined,
     storeCredit: storeCredit ?? null,
+    handicap: typeof onboardingProfile.handicap === "string" ? onboardingProfile.handicap : null,
+    vibeCheck: typeof onboardingProfile.vibe_check === "string" ? onboardingProfile.vibe_check : null,
+    hasPrivateClub: typeof onboardingProfile.private_club_member === "boolean" ? onboardingProfile.private_club_member : null,
+    fitProfile: fitProfile ? {
+      shirtSize: fitProfile.shirtSize,
+      gloveHand: fitProfile.gloveHand,
+      gloveSize: fitProfile.gloveSize,
+      waistSize: fitProfile.waistSize,
+      pantsInseam: fitProfile.pantsInseam,
+      shoeSize: fitProfile.shoeSize,
+    } : null,
+    recentOrders: recentOrders.length > 0 ? recentOrders : undefined,
+    emailTags: Array.isArray(userData.emailTags) ? (userData.emailTags as string[]) : undefined,
+    segments: Array.isArray(userData.segments) ? (userData.segments as string[]) : undefined,
+    subscriptionStatus: loopSubs?.status ?? undefined,
+    nextBillingDate: loopSubs?.nextBillingDate ?? null,
+    billingInterval: loopSubs?.billingInterval ?? null,
+    memberSince: loopSubs?.memberSince ?? null,
+    successfulPayments: loopSubs?.successfulPayments ?? null,
+    lastPaymentStatus: loopSubs?.lastPaymentStatus ?? null,
+    planPrice: loopSubs?.planPrice ?? null,
+    planName: loopSubs?.planName ?? null,
+    isPrepaid: loopSubs?.isPrepaid ?? null,
+    shippingCity: loopSubs?.shippingCity ?? null,
+    shippingState: loopSubs?.shippingState ?? null,
+    loopFitProfile: loopSubs?.loopFitProfile ?? null,
   };
 
   const { draft, toolCalls } = await generateReplyDraft(
