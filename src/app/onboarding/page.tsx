@@ -33,9 +33,44 @@ const OB_VARIANTS = {
   },
 } as const;
 
-function getOnboardingVariant(key: keyof typeof OB_VARIANTS, bucket: number): string {
+type OverrideMap = Record<string, string>;
+
+function getOnboardingVariant(
+  key: keyof typeof OB_VARIANTS,
+  bucket: number,
+  overrides: OverrideMap = {},
+): string {
   const v = OB_VARIANTS[key];
+  const flagKey = key === "planHeadline" ? "ob-plan-headline" : "ob-plan-subtext";
+  const forced = overrides[flagKey];
+  if (forced === "control") return v.control;
+  if (forced === "variant-a") return v.variantA;
   return bucket < 50 ? v.control : v.variantA;
+}
+
+/* Fetches flag_overrides from Supabase on the client. Returns empty map on failure. */
+async function fetchClientFlagOverrides(): Promise<OverrideMap> {
+  try {
+    const res = await fetch(
+      "https://xnfjdbpjuaezxjgargto.supabase.co/rest/v1/flag_overrides?select=flag_key,forced_variant",
+      {
+        headers: {
+          apikey:
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhuZmpkYnBqdWFlenhqZ2FyZ3RvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0NzMxOTAsImV4cCI6MjA5MDA0OTE5MH0.rY1jpedgZ0qJmIRNJLYJNCuIBwBTljWJGpcZI9-YN_g",
+        },
+      },
+    );
+    if (!res.ok) return {};
+    const rows: Array<{ flag_key: string; forced_variant: string | null }> =
+      await res.json();
+    const map: OverrideMap = {};
+    for (const row of rows) {
+      if (row.forced_variant) map[row.flag_key] = row.forced_variant;
+    }
+    return map;
+  } catch {
+    return {};
+  }
 }
 
 /* ═══════════════════════════════════════════
@@ -248,11 +283,28 @@ export default function OnboardingPage() {
   const [step, setStep] = useState(1);
   const abBucket = typeof window !== "undefined" ? getABBucket() : 0;
 
-  // Register onboarding A/B variants with PostHog for conversion analysis
+  // Load flag_overrides (declared winners) from Supabase on mount.
+  const [flagOverrides, setFlagOverrides] = useState<OverrideMap>({});
+  useEffect(() => {
+    fetchClientFlagOverrides().then(setFlagOverrides);
+  }, []);
+
+  // Resolve the variant for each onboarding flag, preferring overrides.
+  const resolveOb = (key: "planHeadline" | "planSubtext") => {
+    const flagKey = key === "planHeadline" ? "ob-plan-headline" : "ob-plan-subtext";
+    const forced = flagOverrides[flagKey];
+    if (forced === "control" || forced === "variant-a") return forced;
+    return abBucket < 50 ? "control" : "variant-a";
+  };
+
+  // Register onboarding A/B variants with PostHog for conversion analysis.
+  // Uses the resolved variant (override-aware) so analytics reflect what the
+  // user actually saw, not just their cookie bucket.
   const obVariants = useMemo(() => ({
-    "ob-plan-headline": abBucket < 50 ? "control" : "variant-a",
-    "ob-plan-subtext": abBucket < 50 ? "control" : "variant-a",
-  }), [abBucket]);
+    "ob-plan-headline": resolveOb("planHeadline"),
+    "ob-plan-subtext": resolveOb("planSubtext"),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [abBucket, flagOverrides]);
 
   useEffect(() => {
     try {
@@ -748,10 +800,10 @@ export default function OnboardingPage() {
                 <span className="w-6 h-px bg-sage/50" />
               </span>
               <h1 className="font-serif text-3xl md:text-4xl text-obsidian leading-tight mb-3">
-                {getOnboardingVariant("planHeadline", abBucket)}
+                {getOnboardingVariant("planHeadline", abBucket, flagOverrides)}
               </h1>
               <p className="text-base text-charcoal/55 leading-relaxed mb-10">
-                {getOnboardingVariant("planSubtext", abBucket)}
+                {getOnboardingVariant("planSubtext", abBucket, flagOverrides)}
               </p>
 
               <div className="space-y-5">
