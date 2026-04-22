@@ -60,15 +60,31 @@ export async function POST(request: NextRequest) {
     // default to dry_run=true
   }
 
-  // Fetch all non-completed sequences
-  const seqSnap = await adminDb
-    .collection("email_sequences")
-    .where("status", "in", ["active", "paused"])
-    .get();
+  // Two queries: active/paused sequences + completed legacy_skip sequences
+  // where flow may have been left as "free" by a previous backfill run.
+  const [activeSnap, legacyCompletedSnap] = await Promise.all([
+    adminDb.collection("email_sequences").where("status", "in", ["active", "paused"]).get(),
+    adminDb.collection("email_sequences")
+      .where("status", "==", "completed")
+      .where("tags", "array-contains", "legacy_skip")
+      .get(),
+  ]);
+
+  // Merge, deduplicate by doc id
+  const seenIds = new Set<string>();
+  const allDocs: FirebaseFirestore.QueryDocumentSnapshot[] = [];
+  for (const snap of [activeSnap, legacyCompletedSnap]) {
+    for (const doc of snap.docs) {
+      if (!seenIds.has(doc.id)) {
+        seenIds.add(doc.id);
+        allDocs.push(doc);
+      }
+    }
+  }
 
   const results: ResultRow[] = [];
 
-  for (const seqDoc of seqSnap.docs) {
+  for (const seqDoc of allDocs) {
     const uid = seqDoc.id;
     const seqData = seqDoc.data() as Record<string, unknown>;
     const currentFlow = (seqData.flow as string) ?? "free";
@@ -182,7 +198,7 @@ export async function POST(request: NextRequest) {
   }
 
   const summary = {
-    total_checked: seqSnap.size,
+    total_checked: allDocs.length,
     legacy_marked_completed: results.filter((r) => r.action === "legacy_marked_completed").length,
     switched_to_member: results.filter((r) => r.action === "switched_to_member").length,
     switched_to_access: results.filter((r) => r.action === "switched_to_access").length,
