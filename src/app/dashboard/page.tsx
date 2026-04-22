@@ -63,6 +63,7 @@ function DashboardContent() {
     refreshStoreCredit,
     refreshSubscriptionStatus,
     isLegacy,
+    subscriptions,
   } = useMembership();
   const isPaid = tier === "access" || tier === "member" || tier === "black";
   const [upgradeOpen, setUpgradeOpen] = useState(false);
@@ -765,7 +766,7 @@ const BENEFIT_ICONS: Record<BenefitKey, React.ReactNode> = {
 };
 
 function BenefitsTab({ onUpgrade }: { onUpgrade: () => void }) {
-  const { user, tier, tierLabel } = useMembership();
+  const { user, tier, tierLabel, subscriptions } = useMembership();
   const isFree = tier === "free";
   const isPaid = tier === "access" || tier === "member" || tier === "black";
   const [activeCategory, setActiveCategory] = useState<BenefitCategory>("All");
@@ -792,12 +793,14 @@ function BenefitsTab({ onUpgrade }: { onUpgrade: () => void }) {
 
   const categories: BenefitCategory[] = ["All", "Coaching", "Travel", "Other"];
 
-  const tierPricing: Record<string, string> = {
+  const tierPricingFallback: Record<string, string> = {
     free: "Complimentary",
     access: "$99/year",
     member: "$249/quarter",
     black: "By Invitation",
   };
+
+  const displayPrice = subscriptions?.planPrice ?? tierPricingFallback[tier];
 
   const postBenefitInteraction = useCallback(
     async (payload: {
@@ -1043,7 +1046,7 @@ function BenefitsTab({ onUpgrade }: { onUpgrade: () => void }) {
             <p className={`text-xs tracking-[0.3em] uppercase font-medium mb-2 text-sage`}>Your Tier</p>
             <h2 className={`font-serif text-3xl mb-2 ${isFree ? "text-obsidian" : "text-bone"}`}>{tierLabel}</h2>
             <p className={`text-sm ${isFree ? "text-charcoal/50" : "text-bone/50"}`}>
-              Member since February 2026 &middot; {tierPricing[tier]}
+              Member since February 2026 &middot; {displayPrice}
             </p>
           </div>
           {isFree && (

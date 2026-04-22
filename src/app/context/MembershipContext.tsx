@@ -104,6 +104,10 @@ export interface SubscriptionsState {
   active_subscription_ids: string[];
   manage_url: string | null;
   next_unblock_url: string | null;
+  planPrice: string | null;
+  planName: string | null;
+  nextBillingDate: string | null;
+  billingInterval: string | null;
   source?: "loop" | "cache";
   isStale?: boolean;
 }
@@ -255,6 +259,10 @@ const EMPTY_SUBSCRIPTIONS_STATE: SubscriptionsState = {
   active_subscription_ids: [],
   manage_url: null,
   next_unblock_url: null,
+  planPrice: null,
+  planName: null,
+  nextBillingDate: null,
+  billingInterval: null,
   source: "cache",
   isStale: true,
 };

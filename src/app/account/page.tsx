@@ -602,12 +602,14 @@ function SubscriptionSection({
 }) {
   const [manageOpen, setManageOpen] = useState(false);
 
-  const tierPricing: Record<string, string> = {
+  const tierPricingFallback: Record<string, string> = {
     free: "Free",
     access: "$99/year",
     member: "$249/quarter",
     black: "By Invitation",
   };
+
+  const displayPrice = subscriptions?.planPrice ?? tierPricingFallback[tier];
 
   const isPaid = tier !== "free";
   const isActive = subscriptions?.status.toUpperCase() === "ACTIVE";
@@ -625,7 +627,7 @@ function SubscriptionSection({
                 {tierLabel}
               </h3>
               <p className={`text-sm ${isPaid ? "text-bone/45" : "text-charcoal/40"}`}>
-                {tierPricing[tier]}
+                {displayPrice}
               </p>
             </div>
             {tier === "free" && (
