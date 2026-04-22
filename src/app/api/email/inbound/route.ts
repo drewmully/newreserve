@@ -22,8 +22,9 @@ import { Resend } from "resend";
 import { adminDb, adminAuth } from "@/lib/firebase-admin";
 import { pauseForReply, type EmailSequenceDoc } from "@/lib/email/sequences";
 import { generateReplyDraft, loadMemberKnowledge, type MemberContext } from "@/lib/email/ai-reply";
-import { resolveCustomerByEmail, getStoreCreditByCustomerId, getCustomerOrders } from "@/app/api/_lib/shopifyAdmin";
+import { resolveCustomerByEmail, getStoreCreditByCustomerId, getCustomerOrders, getCustomerFirstNameById } from "@/app/api/_lib/shopifyAdmin";
 import { getLoopSubscriptionStatus } from "@/app/api/_lib/loopAdmin";
+import { getSentEmailText } from "@/lib/email/sequences";
 
 let resendClient: Resend | null = null;
 
@@ -195,11 +196,16 @@ export async function POST(req: NextRequest) {
   // 4. Strip quoted text and save the reply
   const replyText = stripQuotedText(rawText);
 
+  // Resolve firstName early (best-effort from Firestore; Shopify lookup happens below)
+  const earlyFirstName: string | null =
+    typeof userData.username === "string" ? userData.username :
+    typeof userData.firstName === "string" ? userData.firstName : null;
+
   const replyRef = adminDb.collection("email_replies").doc();
   await replyRef.set({
     uid,
     email: senderEmail,
-    firstName: typeof userData.firstName === "string" ? userData.firstName : null,
+    firstName: earlyFirstName,
     subject: payload.subject ?? "",
     replyText,
     rawText,
@@ -224,7 +230,7 @@ export async function POST(req: NextRequest) {
     type StoreCreditResult = { balance_cents: number; currency: string } | null;
     type OrderResult = Array<{ name: string; total_price: string; currency: string; created_at: string; line_items: Array<{ name: string }> }>;
 
-    const [memberNotes, storeCreditBalance, rawOrders, loopSubs] = await Promise.all([
+    const [memberNotes, storeCreditBalance, rawOrders, loopSubs, shopifyFirstName] = await Promise.all([
       loadMemberKnowledge(uid),
       shopifyCustomerId
         ? (getStoreCreditByCustomerId(shopifyCustomerId).catch(() => null) as Promise<StoreCreditResult>)
@@ -233,6 +239,9 @@ export async function POST(req: NextRequest) {
         ? (getCustomerOrders(shopifyCustomerId, 5).catch(() => []) as Promise<OrderResult>)
         : Promise.resolve([] as OrderResult),
       getLoopSubscriptionStatus(senderEmail).catch(() => null),
+      shopifyCustomerId
+        ? getCustomerFirstNameById(shopifyCustomerId).catch(() => null)
+        : Promise.resolve(null),
     ]);
 
     const storeCredit = storeCreditBalance?.balance_cents ?? null;
@@ -244,13 +253,19 @@ export async function POST(req: NextRequest) {
       items: o.line_items.map((li) => li.name),
     }));
 
+    // Resolve firstName: Firestore username → Shopify → null
+    const resolvedFirstName: string | null =
+      (typeof userData.username === "string" ? userData.username : null) ??
+      shopifyFirstName ??
+      null;
+
     const onboardingProfile = (userData.onboarding_profile ?? {}) as Record<string, unknown>;
     const fitProfile = (userData.fit_profile ?? null) as Record<string, string> | null;
 
     const ctx: MemberContext = {
       uid,
       email: senderEmail,
-      firstName: typeof userData.firstName === "string" ? userData.firstName : null,
+      firstName: resolvedFirstName,
       tier: typeof userData.tier === "string" ? userData.tier : "free",
       isLegacy: userData.isLegacy === true,
       legacyPlan: typeof userData.legacyPlan === "string" ? userData.legacyPlan : null,
@@ -287,11 +302,16 @@ export async function POST(req: NextRequest) {
       loopFitProfile: loopSubs?.loopFitProfile ?? null,
     };
 
-    const { draft, toolCalls } = await generateReplyDraft(ctx, replyText);
+    // Get the email Drew sent (the step that triggered this reply) for full thread context
+    const drewEmailText = getSentEmailText(seq.flow, seq.lastSentStep, resolvedFirstName) ?? undefined;
+
+    const { draft, toolCalls } = await generateReplyDraft(ctx, replyText, { drewEmailText });
 
     await replyRef.update({
       draft,
       toolCalls,
+      firstName: resolvedFirstName,
+      drewEmailText: drewEmailText ?? null,
       status: "pending_approval",
       draftedAt: Timestamp.now(),
     });

@@ -284,21 +284,31 @@ const TOOLS: Anthropic.Tool[] = [
 
 /**
  * Generate a draft reply and tool calls for a member's inbound email.
+ * Pass `options.drewEmailText` for full thread context (the email Drew sent that triggered the reply).
  * Pass `options.previousDraft` + `options.feedback` to regenerate with human feedback.
  */
 export async function generateReplyDraft(
   ctx: MemberContext,
   memberReplyText: string,
-  options?: { previousDraft?: string; feedback?: string }
+  options?: { drewEmailText?: string; previousDraft?: string; feedback?: string }
 ): Promise<AiReplyResult> {
   type Message = { role: "user" | "assistant"; content: string };
-  const messages: Message[] = [{ role: "user", content: memberReplyText }];
+  const messages: Message[] = [];
+
+  // Include the email Drew sent as the first assistant message so Claude
+  // has the full thread context, not just the member's reply in isolation.
+  if (options?.drewEmailText) {
+    messages.push({ role: "assistant", content: options.drewEmailText });
+  }
+
+  messages.push({ role: "user", content: memberReplyText });
 
   if (options?.previousDraft && options?.feedback) {
     messages.push({ role: "assistant", content: options.previousDraft });
+    // Instruct Claude to revise without acknowledging — just output the new draft directly.
     messages.push({
       role: "user",
-      content: `Please revise the reply based on this feedback: ${options.feedback}`,
+      content: `[Revision instruction — output only the revised draft, no acknowledgment or meta-commentary]\n${options.feedback}`,
     });
   }
 

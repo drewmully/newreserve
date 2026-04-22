@@ -74,6 +74,22 @@ export interface EmailSequenceDoc {
   pausedReason?: "reply";
 }
 
+// ─── Template text helper ─────────────────────────────────────────────────────
+
+/**
+ * Returns the plain-text body of a sent drip email given its flow and step index.
+ * Used to reconstruct thread context when generating AI reply drafts.
+ */
+export function getSentEmailText(
+  flow: EmailFlow,
+  stepIndex: number,
+  firstName: string | null
+): string | null {
+  const template = TEMPLATES[flow]?.[stepIndex];
+  if (!template) return null;
+  return template(firstName).text;
+}
+
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 
 function seqRef(uid: string) {

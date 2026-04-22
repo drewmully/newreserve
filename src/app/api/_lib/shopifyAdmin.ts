@@ -105,6 +105,32 @@ export async function resolveCustomerByEmail(
   return gid.split("/").pop() ?? null;
 }
 
+/**
+ * Fetch the first name for a Shopify customer by numeric ID.
+ * Returns null if the customer is not found or has no first name.
+ */
+export async function getCustomerFirstNameById(
+  customerId: string
+): Promise<string | null> {
+  const numericId = customerId.startsWith("gid://")
+    ? customerId.split("/").pop()!
+    : customerId;
+
+  const query = `
+    query GetCustomerFirstName($id: ID!) {
+      customer(id: $id) {
+        firstName
+      }
+    }
+  `;
+
+  const data = await shopifyGraphQL<{
+    customer: { firstName: string | null } | null;
+  }>(query, { id: `gid://shopify/Customer/${numericId}` });
+
+  return data.customer?.firstName ?? null;
+}
+
 export interface ShopifyOrderLineItem {
   name: string;
   quantity: number;

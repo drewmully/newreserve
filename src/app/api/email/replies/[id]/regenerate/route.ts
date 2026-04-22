@@ -20,7 +20,8 @@ import {
   saveMemberNote,
   type MemberContext,
 } from "@/lib/email/ai-reply";
-import { resolveCustomerByEmail, getStoreCreditByCustomerId, getCustomerOrders } from "@/app/api/_lib/shopifyAdmin";
+import { resolveCustomerByEmail, getStoreCreditByCustomerId, getCustomerOrders, getCustomerFirstNameById } from "@/app/api/_lib/shopifyAdmin";
+import { getSentEmailText } from "@/lib/email/sequences";
 import { getLoopSubscriptionStatus } from "@/app/api/_lib/loopAdmin";
 import type { EmailFlow } from "@/lib/email/sequences";
 
@@ -63,13 +64,14 @@ export async function POST(
 
   const shopifyIdForEmail = await resolveCustomerByEmail(email).catch(() => null);
 
-  const [userSnap, seqSnap, memberNotes, storeCreditBalance, rawOrders, loopSubs] = await Promise.all([
+  const [userSnap, seqSnap, memberNotes, storeCreditBalance, rawOrders, loopSubs, shopifyFirstName] = await Promise.all([
     adminDb.collection("users").doc(uid).get(),
     adminDb.collection("email_sequences").doc(uid).get(),
     loadMemberKnowledge(uid),
     shopifyIdForEmail ? getStoreCreditByCustomerId(shopifyIdForEmail).catch(() => null) : Promise.resolve(null),
     shopifyIdForEmail ? getCustomerOrders(shopifyIdForEmail, 5).catch(() => []) : Promise.resolve([]),
     getLoopSubscriptionStatus(email).catch(() => null),
+    shopifyIdForEmail ? getCustomerFirstNameById(shopifyIdForEmail).catch(() => null) : Promise.resolve(null),
   ]);
   const storeCredit = storeCreditBalance?.balance_cents ?? null;
 
@@ -85,10 +87,17 @@ export async function POST(
   const onboardingProfile = (userData.onboarding_profile ?? {}) as Record<string, unknown>;
   const fitProfile = (userData.fit_profile ?? null) as Record<string, string> | null;
 
+  // Resolve firstName: Firestore username → saved reply firstName → Shopify → null
+  const resolvedFirstName: string | null =
+    (typeof userData.username === "string" ? userData.username : null) ??
+    (reply.firstName as string | null) ??
+    shopifyFirstName ??
+    null;
+
   const ctx: MemberContext = {
     uid,
     email,
-    firstName: (reply.firstName as string | null) ?? null,
+    firstName: resolvedFirstName,
     tier: typeof userData.tier === "string" ? userData.tier : "free",
     isLegacy: userData.isLegacy === true,
     legacyPlan: typeof userData.legacyPlan === "string" ? userData.legacyPlan : null,
@@ -125,10 +134,20 @@ export async function POST(
     loopFitProfile: loopSubs?.loopFitProfile ?? null,
   };
 
+  // Use stored drewEmailText if available, otherwise reconstruct from template
+  const drewEmailText: string | undefined =
+    (reply.drewEmailText as string | undefined) ??
+    getSentEmailText(
+      (reply.flow as string) as import("@/lib/email/sequences").EmailFlow,
+      (reply.lastSentStep as number) ?? 0,
+      resolvedFirstName
+    ) ??
+    undefined;
+
   const { draft, toolCalls } = await generateReplyDraft(
     ctx,
     reply.replyText as string,
-    { previousDraft, feedback }
+    { drewEmailText, previousDraft, feedback }
   );
 
   await replyRef.update({
