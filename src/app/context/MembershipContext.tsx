@@ -635,17 +635,6 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
           console.error("[MembershipContext] syncUserProfile failed:", err);
         }
 
-        // Kick off welcome email flow for new free members (idempotent)
-        try {
-          const idToken = await firebaseUser.getIdToken();
-          void fetch("/api/email/welcome", {
-            method: "POST",
-            headers: { Authorization: `Bearer ${idToken}` },
-          });
-        } catch {
-          // Non-fatal: email flow failure should never break auth
-        }
-
         // Load persisted registry status (if user has already applied)
         try {
           const registrySnap = await getDoc(
@@ -692,6 +681,18 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
           }
         } catch (err) {
           console.error("[Loop] subscription tier check failed:", err);
+        }
+
+        // Kick off welcome email flow — runs AFTER Loop reconciliation so
+        // tier and isLegacy are already written to Firestore before welcome reads them.
+        try {
+          const idToken = await firebaseUser.getIdToken();
+          void fetch("/api/email/welcome", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${idToken}` },
+          });
+        } catch {
+          // Non-fatal: email flow failure should never break auth
         }
 
         if (firebaseUser.email) {
