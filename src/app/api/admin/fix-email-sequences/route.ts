@@ -62,18 +62,17 @@ export async function POST(request: NextRequest) {
 
   // Two queries: active/paused sequences + completed legacy_skip sequences
   // where flow may have been left as "free" by a previous backfill run.
-  const [activeSnap, legacyCompletedSnap] = await Promise.all([
+  // Single-field array-contains doesn't require a composite index.
+  // The status filter is skipped here and handled client-side in the loop.
+  const [activeSnap, legacyTaggedSnap] = await Promise.all([
     adminDb.collection("email_sequences").where("status", "in", ["active", "paused"]).get(),
-    adminDb.collection("email_sequences")
-      .where("status", "==", "completed")
-      .where("tags", "array-contains", "legacy_skip")
-      .get(),
+    adminDb.collection("email_sequences").where("tags", "array-contains", "legacy_skip").get(),
   ]);
 
   // Merge, deduplicate by doc id
   const seenIds = new Set<string>();
   const allDocs: FirebaseFirestore.QueryDocumentSnapshot[] = [];
-  for (const snap of [activeSnap, legacyCompletedSnap]) {
+  for (const snap of [activeSnap, legacyTaggedSnap]) {
     for (const doc of snap.docs) {
       if (!seenIds.has(doc.id)) {
         seenIds.add(doc.id);
