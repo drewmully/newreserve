@@ -11,8 +11,8 @@ import { AuthAwareHero, AuthAwareBottomCTA } from "./components/AuthAwareHero";
 import { heroHeadline, heroCta } from "../flags";
 
 const headlines: Record<string, React.ReactNode> = {
-  "control": <>Premium Golf.<br />Members-Only Pricing.</>,
-  "variant-a": <>The Golf Gear You Want.<br />The Price You Deserve.</>,
+  "control": <>The Golf Membership<br />For Gear, Drops &amp; Access.</>,
+  "variant-a": <>Join the Club.<br />Skip the Markups.</>,
   "variant-b": <>Premium Gear. Insider Pricing.<br />No Initiation Fee.</>,
 };
 
@@ -63,21 +63,25 @@ export default async function Home() {
               {headlines[headlineVariant]}
             </h1>
 
-            <p className="text-sm md:text-xl text-charcoal leading-relaxed mb-4 md:mb-8 max-w-sm sm:max-w-md mx-auto md:mx-0 animate-fade-up-delay-2">
-              Curated gear from 40+ top brands, at pricing you won&rsquo;t find anywhere else. No&nbsp;initiation fees. No&nbsp;markups.
+            <p className="text-sm md:text-lg text-charcoal leading-relaxed mb-3 md:mb-4 max-w-sm sm:max-w-md mx-auto md:mx-0 animate-fade-up-delay-2">
+              Join Mully Reserve to unlock:
             </p>
 
-            {/* Value prop callouts */}
-            <div className="flex flex-col gap-1.5 mb-5 md:mb-10 max-w-sm sm:max-w-md mx-auto md:mx-0 text-left animate-fade-up-delay-2">
-              <span className="text-sm text-forest/80 flex items-start gap-2">
-                <span className="text-ember shrink-0">&#10022;</span>
-                Hand-selected from brands like Greyson, Rhone &amp; Quiet Golf
-              </span>
-              <span className="text-sm text-forest/80 flex items-start gap-2">
-                <span className="text-ember shrink-0">&#10022;</span>
-                Average members save $400+ annually
-              </span>
-            </div>
+            {/* Value prop bullets — user-approved copy */}
+            <ul className="flex flex-col gap-2 mb-5 md:mb-8 max-w-sm sm:max-w-md mx-auto md:mx-0 text-left animate-fade-up-delay-2">
+              <li className="text-sm md:text-base text-forest/85 flex items-start gap-2.5">
+                <span className="text-ember shrink-0 mt-[2px]">&#10022;</span>
+                <span>Members-only pricing (10–30% off top brands)</span>
+              </li>
+              <li className="text-sm md:text-base text-forest/85 flex items-start gap-2.5">
+                <span className="text-ember shrink-0 mt-[2px]">&#10022;</span>
+                <span>Curated gear drops &amp; quarterly boxes</span>
+              </li>
+              <li className="text-sm md:text-base text-forest/85 flex items-start gap-2.5">
+                <span className="text-ember shrink-0 mt-[2px]">&#10022;</span>
+                <span>Private club access, fittings, and experiences</span>
+              </li>
+            </ul>
 
             <div className="animate-fade-up-delay-3">
               <div className="max-w-xs sm:max-w-md mx-auto md:mx-0">
@@ -113,6 +117,92 @@ export default async function Home() {
         </div>
       </section>
 
+      {/* ─── HOW MULLY RESERVE WORKS — 4-step plain-English explainer (EARLY) ─── */}
+      <section id="how-it-works" className="py-20 md:py-24 px-6 md:px-12 bg-bone">
+        <div className="max-w-6xl mx-auto">
+          <ScrollReveal>
+            <div className="text-center mb-14 md:mb-16">
+              <span className="inline-flex items-center gap-2.5 text-xs tracking-[0.35em] uppercase text-sage/80 font-medium mb-5">
+                <span className="w-7 h-px bg-sage/40" />
+                How It Works
+                <span className="w-7 h-px bg-sage/40" />
+              </span>
+              <h2 className="font-serif text-3xl md:text-5xl lg:text-[3.25rem] text-obsidian leading-tight mb-5">
+                A membership for golfers<br className="hidden md:block" /> who want better gear and access.
+              </h2>
+              <p className="text-base md:text-lg text-charcoal/65 max-w-2xl mx-auto">
+                Four steps. No initiation fee. Cancel anytime.
+              </p>
+            </div>
+          </ScrollReveal>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 lg:gap-6">
+            <ScrollReveal delay={0}>
+              <SimpleStep
+                number="1"
+                title="Join free"
+                description="Enter your email to unlock Reserve Access. No credit card required. Upgrade anytime."
+              />
+            </ScrollReveal>
+            <ScrollReveal delay={0.08}>
+              <SimpleStep
+                number="2"
+                title="Unlock insider pricing"
+                description="Reserve pricing activates on 40+ premium brands. Rhone, Greyson, Quiet Golf, Penfold and more."
+              />
+            </ScrollReveal>
+            <ScrollReveal delay={0.16}>
+              <SimpleStep
+                number="3"
+                title="Shop drops or get a box"
+                description="Browse curated gear at member pricing or subscribe to the quarterly Reserve box."
+              />
+            </ScrollReveal>
+            <ScrollReveal delay={0.24}>
+              <SimpleStep
+                number="4"
+                title="Use club access"
+                description="Tap into private club tee times, fittings, and member-only experiences as they drop."
+              />
+            </ScrollReveal>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── JOIN TODAY AND GET — immediate-gratification block ─── */}
+      <section className="py-14 md:py-16 px-6 md:px-12 bg-cream">
+        <div className="max-w-4xl mx-auto">
+          <ScrollReveal>
+            <div className="rounded-2xl border border-forest/10 bg-bone/70 backdrop-blur-sm p-8 md:p-10 shadow-[0_1px_0_rgba(255,255,255,0.6)_inset,0_20px_50px_-30px_rgba(0,0,0,0.2)]">
+              <div className="flex flex-col md:flex-row md:items-start gap-6 md:gap-10">
+                <div className="md:w-1/3">
+                  <span className="inline-block text-[11px] tracking-[0.3em] uppercase text-ember font-semibold mb-3">
+                    Join Today &amp; Get
+                  </span>
+                  <h3 className="font-serif text-2xl md:text-3xl text-obsidian leading-tight">
+                    Access unlocks instantly.
+                  </h3>
+                </div>
+                <div className="md:w-2/3 flex flex-col gap-3">
+                  <ImmediateBenefit
+                    label="Members-only pricing"
+                    description="Reserve pricing activates the moment you join. Shop 40+ brands at insider rates."
+                  />
+                  <ImmediateBenefit
+                    label="First access to the next drop"
+                    description="You’ll be first in line when the next curated release goes live to members."
+                  />
+                  <ImmediateBenefit
+                    label="No credit card required"
+                    description="Start free, upgrade when you’re ready. Cancel anytime. No commitments."
+                  />
+                </div>
+              </div>
+            </div>
+          </ScrollReveal>
+        </div>
+      </section>
+
       {/* ─── WHAT IS MULLY RESERVE — Feature Cards ─── */}
       <section id="reserve" className="py-24 md:py-36 px-6 md:px-12 bg-bone">
         <div className="max-w-6xl mx-auto">
@@ -124,13 +214,12 @@ export default async function Home() {
                 <span className="w-7 h-px bg-sage/40" />
               </span>
               <h2 className="font-serif text-3xl md:text-5xl lg:text-6xl text-obsidian leading-tight mb-8">
-                What is Mully Reserve?
+                What you get as a member.
               </h2>
               <p className="text-lg text-charcoal/65 leading-relaxed">
-                Mully Reserve brings you curated products, expert services,
-                and experiences you&rsquo;d expect from a top-tier club. All
-                in one place, starting free. No initiation fees. No&nbsp;pretension.
-                Just access.
+                Mully Reserve is one membership that bundles insider pricing,
+                curated gear drops, and private club access. Everything you’d
+                expect from a top-tier club, without the initiation fee.
               </p>
             </div>
           </ScrollReveal>
@@ -138,23 +227,23 @@ export default async function Home() {
           <div className="grid md:grid-cols-3 gap-6 lg:gap-8">
             <ScrollReveal delay={0}>
               <FeatureCard
-                image="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/ChatGPT_Image_Feb_24_2026_02_24_48_PM.png?v=1771961106"
-                title="Curated Partner Access"
-                description="Vetted brands like Greyson, Rhone, and Stitch at pricing you won't find anywhere else. Every partner is hand-selected."
+                image="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/Colorado_Hoodie.webp?v=1771960357"
+                title="Save on every brand"
+                description="Reserve pricing on 40+ premium brands like Rhone, Greyson, and Quiet Golf. Average members save $400+ annually."
               />
             </ScrollReveal>
             <ScrollReveal delay={0.12}>
               <FeatureCard
-                image="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/Colorado_Hoodie.webp?v=1771960357"
-                title="Reserve Pricing"
-                description="Members-only pricing on 40+ premium brands. No markups, no gimmicks. Honest value on the gear you actually want."
+                image="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/ChatGPT_Image_Feb_24_2026_02_24_48_PM.png?v=1771961106"
+                title="Curated drops and boxes"
+                description="Members get first access to hand-picked gear drops, plus the option to subscribe to the quarterly Reserve box."
               />
             </ScrollReveal>
             <ScrollReveal delay={0.24}>
               <FeatureCard
                 image="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/ChatGPT_Image_Feb_24_2026_02_25_26_PM.png?v=1771961138"
-                title="Club-Level Service"
-                description="Concierge support for gear questions, styling recommendations, and exclusive member events. The club experience, without the club."
+                title="Private club access"
+                description="Tee times at private courses, fittings with pros, and member-only experiences as they open up through the year."
               />
             </ScrollReveal>
           </div>
@@ -358,56 +447,6 @@ export default async function Home() {
               Start free. Upgrade or cancel anytime. No commitments.
             </p>
           </ScrollReveal>
-        </div>
-      </section>
-
-      {/* ─── HOW IT WORKS — dark section ─── */}
-      <section className="py-20 md:py-28 px-6 md:px-12 bg-forest topo-pattern relative overflow-hidden">
-        <div className="hero-grain-overlay" style={{ opacity: 0.03 }} />
-        <div className="max-w-5xl mx-auto relative z-10">
-          <ScrollReveal>
-            <div className="text-center mb-20">
-              <span className="inline-flex items-center gap-2.5 text-xs tracking-[0.35em] uppercase text-bone/40 font-medium mb-6">
-                <span className="w-7 h-px bg-bone/15" />
-                Simple
-                <span className="w-7 h-px bg-bone/15" />
-              </span>
-              <span className="block w-12 h-px mx-auto mb-6 bg-gradient-to-r from-transparent via-ember/30 to-transparent" />
-              <h2 className="font-serif text-3xl md:text-5xl lg:text-6xl text-bone leading-tight">
-                How It Works
-              </h2>
-            </div>
-          </ScrollReveal>
-
-          <div className="grid md:grid-cols-3 gap-12 md:gap-0">
-            <ScrollReveal delay={0} className="step-connector-dark">
-              <StepCard
-                number="01"
-                icon={<EnvelopeIcon light />}
-                title="Unlock Access"
-                description="Enter your email to claim your complimentary Reserve Access. No credit card. No commitments."
-                dark
-              />
-            </ScrollReveal>
-            <ScrollReveal delay={0.15} className="step-connector-dark">
-              <StepCard
-                number="02"
-                icon={<KeyIcon light />}
-                title="Access Activates"
-                description="Reserve access attaches to your account automatically. Partner benefits and pricing unlock instantly."
-                dark
-              />
-            </ScrollReveal>
-            <ScrollReveal delay={0.3} className="step-connector-dark">
-              <StepCard
-                number="03"
-                icon={<BellIcon light />}
-                title="Private Releases"
-                description="When curated products and experiences become available, you&rsquo;ll be the first to know. High signal, low noise."
-                dark
-              />
-            </ScrollReveal>
-          </div>
         </div>
       </section>
 
@@ -735,6 +774,63 @@ function FeatureCard({
       <div className="p-6 md:p-7">
         <h3 className="font-serif text-xl md:text-2xl text-bone mb-2">{title}</h3>
         <p className="text-sm text-bone/50 leading-relaxed">{description}</p>
+      </div>
+    </div>
+  );
+}
+
+/* ── Simple numbered step card used in the early "How It Works" section ── */
+function SimpleStep({
+  number,
+  title,
+  description,
+}: {
+  number: string;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="relative h-full p-6 md:p-7 rounded-2xl bg-cream/80 border border-forest/10 hover:border-forest/20 transition-colors duration-300">
+      <div className="flex items-center gap-3 mb-4">
+        <span className="flex items-center justify-center w-8 h-8 rounded-full bg-forest text-bone font-serif text-sm">
+          {number}
+        </span>
+        <span className="h-px flex-1 bg-gradient-to-r from-forest/20 to-transparent" />
+      </div>
+      <h3 className="font-serif text-lg md:text-xl text-obsidian mb-2 leading-tight">
+        {title}
+      </h3>
+      <p className="text-sm text-charcoal/70 leading-relaxed">{description}</p>
+    </div>
+  );
+}
+
+/* ── Immediate-benefit row for the "Join Today & Get" block ── */
+function ImmediateBenefit({
+  label,
+  description,
+}: {
+  label: string;
+  description: string;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <svg
+        className="w-5 h-5 mt-0.5 shrink-0 text-ember"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2.5}
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M5 13l4 4L19 7"
+        />
+      </svg>
+      <div>
+        <p className="text-sm font-semibold text-obsidian leading-snug">{label}</p>
+        <p className="text-sm text-charcoal/60 leading-relaxed">{description}</p>
       </div>
     </div>
   );
