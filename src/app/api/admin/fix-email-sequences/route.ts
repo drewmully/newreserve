@@ -109,6 +109,7 @@ export async function POST(request: NextRequest) {
 
       if (!dryRun) {
         await seqDoc.ref.update({
+          flow: "member",
           status: "completed",
           nextSendAt: null,
           tags: ["legacy_skip"],
