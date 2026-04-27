@@ -651,9 +651,11 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
           firestoreIsLegacy = profile.isLegacy ?? false;
           firestoreBack9WelcomeSeen = profile.back9WelcomeSeen ?? false;
           setBack9WelcomeSeen(firestoreBack9WelcomeSeen);
+          console.log("[back9]", { isLegacy: firestoreIsLegacy, back9WelcomeSeen: firestoreBack9WelcomeSeen });
           // Already known as legacy and haven't seen welcome — modal path
           if (firestoreIsLegacy && !firestoreBack9WelcomeSeen) {
             setBack9UX("modal");
+            console.log("[back9] → modal");
           }
         } catch (err) {
           console.error("[MembershipContext] syncUserProfile failed:", err);
