@@ -71,6 +71,13 @@ function DashboardContent() {
   const isPaid = tier === "access" || tier === "member" || tier === "black";
   const [upgradeOpen, setUpgradeOpen] = useState(false);
 
+  // Auto-open upgrade modal when redirected from Back 9 welcome flow
+  useEffect(() => {
+    if (searchParams.get("upgrade") === "1") {
+      setUpgradeOpen(true);
+    }
+  }, [searchParams]);
+
   // Redirect to landing page if this is the first time a Back 9 user logs in
   useEffect(() => {
     if (!authLoading && back9UX === "landing") {
