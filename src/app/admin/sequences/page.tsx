@@ -43,9 +43,10 @@ const FLOW_LABELS: Record<string, string> = {
   free: "Free",
   access: "Reserve Access",
   member: "Reserve Member",
+  back9: "Back 9 (Legacy)",
 };
 
-const FLOW_ORDER = ["free", "access", "member"];
+const FLOW_ORDER = ["free", "access", "member", "back9"];
 
 // ─── Step row ─────────────────────────────────────────────────────────────────
 

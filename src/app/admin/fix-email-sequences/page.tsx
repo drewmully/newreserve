@@ -11,7 +11,8 @@ interface ResultRow {
   current_flow: string;
   current_status: string;
   action:
-    | "legacy_marked_completed"
+    | "legacy_switched_to_back9"
+    | "legacy_already_on_back9"
     | "switched_to_member"
     | "switched_to_access"
     | "already_correct"
@@ -23,7 +24,8 @@ interface ApiResponse {
   dry_run: boolean;
   summary: {
     total_checked: number;
-    legacy_marked_completed: number;
+    legacy_switched_to_back9: number;
+    legacy_already_on_back9: number;
     switched_to_member: number;
     switched_to_access: number;
     already_correct: number;
@@ -33,7 +35,8 @@ interface ApiResponse {
 }
 
 const ACTION_LABELS: Record<ResultRow["action"], string> = {
-  legacy_marked_completed: "Legacy → completed",
+  legacy_switched_to_back9: "Legacy → back9 flow",
+  legacy_already_on_back9: "Legacy — already correct",
   switched_to_member: "free → member",
   switched_to_access: "free → access",
   already_correct: "Already correct",
@@ -42,7 +45,8 @@ const ACTION_LABELS: Record<ResultRow["action"], string> = {
 };
 
 const ACTION_COLORS: Record<ResultRow["action"], string> = {
-  legacy_marked_completed: "bg-sage/30 text-forest",
+  legacy_switched_to_back9: "bg-sage/30 text-forest",
+  legacy_already_on_back9: "bg-taupe/20 text-charcoal/50",
   switched_to_member: "bg-forest/10 text-forest",
   switched_to_access: "bg-forest/10 text-forest",
   already_correct: "bg-taupe/20 text-charcoal/50",
@@ -104,7 +108,7 @@ export default function FixEmailSequencesPage() {
 
   const data = applyData ?? previewData;
   const isDone = state === "done";
-  const toFix = (previewData?.summary.legacy_marked_completed ?? 0) +
+  const toFix = (previewData?.summary.legacy_switched_to_back9 ?? 0) +
     (previewData?.summary.switched_to_member ?? 0) +
     (previewData?.summary.switched_to_access ?? 0);
 
@@ -114,13 +118,13 @@ export default function FixEmailSequencesPage() {
         <h1 className="font-serif text-3xl text-obsidian">Fix Email Sequences</h1>
         <p className="text-charcoal/50 text-sm mt-1">
           Finds active sequences where the flow doesn&apos;t match the user&apos;s actual tier and corrects them.
-          Legacy members (Back 9) get marked completed — no emails sent.
+          Back 9 legacy members on the wrong flow are switched to the back9 drip. Paid members restart at step 0 of their correct flow.
         </p>
       </div>
 
       <div className="bg-bone border border-taupe/30 rounded-xl p-5 mb-8 text-sm text-charcoal/70 space-y-1.5">
         <p><span className="font-medium text-obsidian">Step 1</span> — Run preview to see affected users.</p>
-        <p><span className="font-medium text-obsidian">Step 2</span> — Review. Legacy members won&apos;t receive any emails. Paid members will restart from step 0 of their correct flow.</p>
+        <p><span className="font-medium text-obsidian">Step 2</span> — Review. Legacy members already on back9 flow show as correct. Those on wrong flows get switched to back9. Paid members restart from step 0.</p>
         <p><span className="font-medium text-obsidian">Step 3</span> — Apply.</p>
       </div>
 
@@ -166,7 +170,7 @@ export default function FixEmailSequencesPage() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
             {[
               { label: "Checked", value: data.summary.total_checked },
-              { label: "Legacy → done", value: data.summary.legacy_marked_completed, highlight: true },
+              { label: "Legacy → back9", value: data.summary.legacy_switched_to_back9, highlight: true },
               { label: "Switched flows", value: data.summary.switched_to_member + data.summary.switched_to_access, highlight: true },
               { label: "Already correct", value: data.summary.already_correct },
             ].map(({ label, value, highlight }) => (

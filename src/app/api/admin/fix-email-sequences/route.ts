@@ -11,7 +11,6 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { Timestamp } from "firebase-admin/firestore";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { isAllowedAdminEmail } from "@/lib/adminEmailAllowlist";
 import { startFlow, type EmailFlow } from "@/lib/email/sequences";
@@ -27,7 +26,8 @@ async function verifyAdmin(request: NextRequest): Promise<void> {
 }
 
 type ActionType =
-  | "legacy_marked_completed"
+  | "legacy_switched_to_back9"
+  | "legacy_already_on_back9"
   | "switched_to_member"
   | "switched_to_access"
   | "already_correct"
@@ -110,8 +110,35 @@ export async function POST(request: NextRequest) {
     const isLegacy = (userData.isLegacy as boolean | undefined) ?? false;
     const firstName = (userData.username as string | undefined) ?? null;
 
-    // Case 1: legacy member in any active flow → mark completed
+    // Case 1: legacy member — correct flow is "back9"
     if (isLegacy) {
+      if (currentFlow === "back9") {
+        results.push({
+          uid,
+          email,
+          tier,
+          is_legacy: true,
+          current_flow: currentFlow,
+          current_status: currentStatus,
+          action: "legacy_already_on_back9",
+        });
+        continue;
+      }
+
+      // On wrong flow (e.g. legacy_skip or free) → switch to back9
+      if (!email) {
+        results.push({
+          uid,
+          email: null,
+          tier,
+          is_legacy: true,
+          current_flow: currentFlow,
+          current_status: currentStatus,
+          action: "skipped_no_email",
+        });
+        continue;
+      }
+
       results.push({
         uid,
         email,
@@ -119,17 +146,11 @@ export async function POST(request: NextRequest) {
         is_legacy: true,
         current_flow: currentFlow,
         current_status: currentStatus,
-        action: "legacy_marked_completed",
+        action: "legacy_switched_to_back9",
       });
 
       if (!dryRun) {
-        await seqDoc.ref.update({
-          flow: "member",
-          status: "completed",
-          nextSendAt: null,
-          tags: ["legacy_skip"],
-          updatedAt: Timestamp.now(),
-        });
+        await startFlow(uid, email, firstName, "back9");
       }
       continue;
     }
@@ -198,7 +219,8 @@ export async function POST(request: NextRequest) {
 
   const summary = {
     total_checked: allDocs.length,
-    legacy_marked_completed: results.filter((r) => r.action === "legacy_marked_completed").length,
+    legacy_switched_to_back9: results.filter((r) => r.action === "legacy_switched_to_back9").length,
+    legacy_already_on_back9: results.filter((r) => r.action === "legacy_already_on_back9").length,
     switched_to_member: results.filter((r) => r.action === "switched_to_member").length,
     switched_to_access: results.filter((r) => r.action === "switched_to_access").length,
     already_correct: results.filter((r) => r.action === "already_correct").length,
