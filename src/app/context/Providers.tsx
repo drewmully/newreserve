@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { PageViewTracker } from "../components/PageViewTracker";
+import { Back9WelcomeOverlay } from "../components/Back9WelcomeOverlay";
 import { Suspense, type ReactNode } from "react";
 
 const MembershipProvider = dynamic<{ children: ReactNode }>(() =>
@@ -50,6 +51,7 @@ export function Providers({ children }: { children: ReactNode }) {
       {shouldWrapWithMembership ? (
         <MembershipProvider>
           <IntercomWidget />
+          <Back9WelcomeOverlay />
           {children}
         </MembershipProvider>
       ) : (

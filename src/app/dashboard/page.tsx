@@ -16,7 +16,6 @@ import { useMembership } from "../context/MembershipContext";
 import { db } from "@/lib/firebase";
 import { SlideCart } from "../components/SlideCart";
 import { UpgradeModal } from "../components/UpgradeModal";
-import { Back9WelcomeModal } from "../components/Back9WelcomeModal";
 import { FORUM_TAGS, type ForumPost, type ForumComment } from "../community/posts";
 import type { User as FirebaseUser } from "firebase/auth";
 import { trackEvent } from "@/lib/tracking";
@@ -66,7 +65,6 @@ function DashboardContent() {
     isLegacy,
     subscriptions,
     username,
-    back9WelcomeSeen,
     back9UX,
     markBack9WelcomeSeen,
   } = useMembership();
@@ -263,13 +261,7 @@ function DashboardContent() {
         onSelectPlan={(t) => setTier(t)}
       />
 
-      {/* ─── BACK 9 WELCOME MODAL ─── */}
-      {isLegacy && !back9WelcomeSeen && back9UX !== "landing" && (
-        <Back9WelcomeModal
-          username={username}
-          onClose={markBack9WelcomeSeen}
-        />
-      )}
+      {/* Back9WelcomeModal is rendered by Back9WelcomeOverlay in Providers.tsx */}
 
       {/* ─── FOOTER ─── */}
       <footer className="py-16 px-6 md:px-12 bg-forest">
