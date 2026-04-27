@@ -66,6 +66,7 @@ function DashboardContent() {
     isLegacy,
     subscriptions,
     username,
+    back9WelcomeSeen,
     back9UX,
     markBack9WelcomeSeen,
   } = useMembership();
@@ -263,7 +264,7 @@ function DashboardContent() {
       />
 
       {/* ─── BACK 9 WELCOME MODAL ─── */}
-      {back9UX === "modal" && (
+      {isLegacy && !back9WelcomeSeen && back9UX !== "landing" && (
         <Back9WelcomeModal
           username={username}
           onClose={markBack9WelcomeSeen}
