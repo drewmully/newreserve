@@ -2,12 +2,12 @@
  * POST /api/email/welcome
  *
  * Called client-side from MembershipContext after first sign-in.
- * Idempotent: only starts the free flow if no sequence exists yet.
+ * Idempotent — skips if a non-legacy-skip sequence already exists.
+ * Legacy users previously marked legacy_skip are upgraded to Flow 4 (back9).
  * Accepts Firebase ID token for auth.
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { Timestamp } from "firebase-admin/firestore";
 import { adminDb, adminAuth } from "@/lib/firebase-admin";
 import { startFlow, type EmailFlow } from "@/lib/email/sequences";
 
@@ -28,9 +28,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Don't start if a sequence already exists (idempotency)
   const existing = await adminDb.collection("email_sequences").doc(uid).get();
-  if (existing.exists) {
+  const isLegacySkip =
+    existing.exists && existing.data()?.tags?.includes("legacy_skip");
+
+  // Already has an active/completed flow — skip (idempotent)
+  if (existing.exists && !isLegacySkip) {
     return NextResponse.json({ ok: true, skipped: true });
   }
 
@@ -45,22 +48,13 @@ export async function POST(req: NextRequest) {
   const tier = (userData.tier as string | undefined) ?? "free";
   const isLegacy = (userData.isLegacy as boolean | undefined) ?? false;
 
-  // Legacy members (Back 9, etc.) have been members for years — skip onboarding
+  // Legacy Back 9 members get Flow 4 — replaces any prior legacy_skip doc
   if (isLegacy) {
-    await adminDb.collection("email_sequences").doc(uid).set({
-      flow: "member",
-      status: "completed",
-      nextStep: 0,
-      startedAt: Timestamp.now(),
-      nextSendAt: null,
-      lastSentStep: -1,
-      skippedSteps: [],
-      tags: ["legacy_skip"],
-      email,
-      firstName,
-    });
-    console.log(`[email/welcome] legacy user uid=${uid} — marked completed, no sequence`);
-    return NextResponse.json({ ok: true, skipped: "legacy" });
+    await startFlow(uid, email, firstName, "back9");
+    console.log(
+      `[email/welcome] back9 flow started for uid=${uid}${isLegacySkip ? " (was legacy_skip)" : ""}`
+    );
+    return NextResponse.json({ ok: true });
   }
 
   let flow: EmailFlow = "free";

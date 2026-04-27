@@ -16,6 +16,7 @@ import { useMembership } from "../context/MembershipContext";
 import { db } from "@/lib/firebase";
 import { SlideCart } from "../components/SlideCart";
 import { UpgradeModal } from "../components/UpgradeModal";
+import { Back9WelcomeModal } from "../components/Back9WelcomeModal";
 import { FORUM_TAGS, type ForumPost, type ForumComment } from "../community/posts";
 import type { User as FirebaseUser } from "firebase/auth";
 import { trackEvent } from "@/lib/tracking";
@@ -64,9 +65,19 @@ function DashboardContent() {
     refreshSubscriptionStatus,
     isLegacy,
     subscriptions,
+    username,
+    back9UX,
+    markBack9WelcomeSeen,
   } = useMembership();
   const isPaid = tier === "access" || tier === "member" || tier === "black";
   const [upgradeOpen, setUpgradeOpen] = useState(false);
+
+  // Redirect to landing page if this is the first time a Back 9 user logs in
+  useEffect(() => {
+    if (!authLoading && back9UX === "landing") {
+      router.push("/back9-welcome");
+    }
+  }, [authLoading, back9UX, router]);
 
   useEffect(() => {
     if (parsedTab !== activeTab) {
@@ -250,6 +261,14 @@ function DashboardContent() {
         currentTier={tier}
         onSelectPlan={(t) => setTier(t)}
       />
+
+      {/* ─── BACK 9 WELCOME MODAL ─── */}
+      {back9UX === "modal" && (
+        <Back9WelcomeModal
+          username={username}
+          onClose={markBack9WelcomeSeen}
+        />
+      )}
 
       {/* ─── FOOTER ─── */}
       <footer className="py-16 px-6 md:px-12 bg-forest">

@@ -8,9 +8,10 @@ import { adminDb } from "@/lib/firebase-admin";
 import { FREE_TEMPLATES } from "./templates/free";
 import { ACCESS_TEMPLATES } from "./templates/access";
 import { MEMBER_TEMPLATES } from "./templates/member";
+import { BACK9_TEMPLATES } from "./templates/back9";
 import { sendPlainText } from "./resend";
 
-export type EmailFlow = "free" | "access" | "member";
+export type EmailFlow = "free" | "access" | "member" | "back9";
 export type SequenceStatus = "active" | "paused" | "completed";
 
 export type SkipCondition =
@@ -52,12 +53,21 @@ export const FLOW_STEPS: Record<EmailFlow, EmailStepConfig[]> = {
     { step: 4, triggerType: "event", delayDays: 0 },
     { step: 5, triggerType: "schedule", delayDays: 45 },
   ],
+  back9: [
+    { step: 0, triggerType: "schedule", delayDays: 0 },
+    { step: 1, triggerType: "schedule", delayDays: 2 },
+    { step: 2, triggerType: "schedule", delayDays: 5 },
+    { step: 3, triggerType: "schedule", delayDays: 10 },
+    { step: 4, triggerType: "schedule", delayDays: 16 },
+    { step: 5, triggerType: "schedule", delayDays: 22 },
+  ],
 };
 
 const TEMPLATES = {
   free: FREE_TEMPLATES,
   access: ACCESS_TEMPLATES,
   member: MEMBER_TEMPLATES,
+  back9: BACK9_TEMPLATES,
 };
 
 export interface EmailSequenceDoc {

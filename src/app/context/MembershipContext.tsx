@@ -175,6 +175,9 @@ interface MembershipContextValue {
   tierLabel: string;
   isLegacy: boolean;
   legacyPlan: string | null;
+  back9WelcomeSeen: boolean;
+  back9UX: "landing" | "modal" | null;
+  markBack9WelcomeSeen: () => Promise<void>;
 
   // Cart
   cart: CartItem[];
@@ -319,6 +322,8 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
   const [tier, setTier] = useState<MemberTier>("free");
   const [isLegacy, setIsLegacy] = useState(false);
   const [legacyPlan, setLegacyPlan] = useState<string | null>(null);
+  const [back9WelcomeSeen, setBack9WelcomeSeen] = useState(false);
+  const [back9UX, setBack9UX] = useState<"landing" | "modal" | null>(null);
 
   // ── Onboarding ────────────────────────────────────────────────────────────
   const [onboardingCompleted, setOnboardingCompleted] = useState(false);
@@ -583,6 +588,10 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
         setEmailRaw(firebaseUser.email ?? "");
         setUsername(firebaseUser.displayName ?? "");
 
+        // Captured after syncUserProfile, used after Loop reconciliation
+        let firestoreIsLegacy = false;
+        let firestoreBack9WelcomeSeen = false;
+
         if (loginTrackedUidRef.current !== firebaseUser.uid) {
           loginTrackedUidRef.current = firebaseUser.uid;
           void identifyAnalyticsUser({
@@ -639,6 +648,13 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
           if (profile.legacyPlan === null || typeof profile.legacyPlan === "string") {
             setLegacyPlan(profile.legacyPlan ?? null);
           }
+          firestoreIsLegacy = profile.isLegacy ?? false;
+          firestoreBack9WelcomeSeen = profile.back9WelcomeSeen ?? false;
+          setBack9WelcomeSeen(firestoreBack9WelcomeSeen);
+          // Already known as legacy and haven't seen welcome — modal path
+          if (firestoreIsLegacy && !firestoreBack9WelcomeSeen) {
+            setBack9UX("modal");
+          }
         } catch (err) {
           console.error("[MembershipContext] syncUserProfile failed:", err);
         }
@@ -674,6 +690,10 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
               setTier(loopTier);
               setIsLegacy(legacy.isLegacy);
               setLegacyPlan(legacy.legacyPlan);
+              // Newly detected as Back 9 this session — show landing page
+              if (legacy.isLegacy && !firestoreBack9WelcomeSeen && !firestoreIsLegacy) {
+                setBack9UX("landing");
+              }
               // Persist to Firestore so future cold loads are correct
               try {
                 await updateDoc(doc(db, "users", firebaseUser.uid), {
@@ -726,6 +746,8 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
         setMessagingPreferences({ email_marketing: true, sms_marketing: false });
         setClubStatus("none");
         setInterestedClubs([]);
+        setBack9WelcomeSeen(false);
+        setBack9UX(null);
         cartIdRef.current = null;
         identityBoundRef.current = null;
         loginTrackedUidRef.current = null;
@@ -743,6 +765,21 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     await firebaseSignOut(auth);
   }, []);
+
+  /* ── Back 9 welcome ── */
+  const markBack9WelcomeSeen = useCallback(async () => {
+    if (!user) return;
+    setBack9WelcomeSeen(true);
+    setBack9UX(null);
+    try {
+      await updateDoc(doc(db, "users", user.uid), {
+        back9WelcomeSeen: true,
+        updated_at: serverTimestamp(),
+      });
+    } catch (err) {
+      console.error("[Back9] markBack9WelcomeSeen failed:", err);
+    }
+  }, [user]);
 
   /* ── Cart actions ── */
 
@@ -1070,6 +1107,9 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
         tierLabel: getTierLabel(tier, isLegacy, legacyPlan),
         isLegacy,
         legacyPlan,
+        back9WelcomeSeen,
+        back9UX,
+        markBack9WelcomeSeen,
 
         // Cart
         cart,

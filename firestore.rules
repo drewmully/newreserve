@@ -93,13 +93,11 @@ service cloud.firestore {
           "cart.updated_at",
           "tier",
           "isLegacy",
-          "legacyPlan"
+          "legacyPlan",
+          "back9WelcomeSeen"
         ])
         && request.resource.data.created_at == resource.data.created_at
         && request.resource.data.shopify_customer_id == resource.data.shopify_customer_id
-        && request.resource.data.store_credit == resource.data.store_credit
-        && request.resource.data.subscriptions == resource.data.subscriptions
-        && request.resource.data.segments == resource.data.segments
         && (
           request.resource.data.email == resource.data.email
           || (
@@ -108,27 +106,27 @@ service cloud.firestore {
           )
         )
         && (
-          !request.resource.data.keys().hasAny(["username"])
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(["username"])
           || request.resource.data.username is string
         )
         && (
-          !request.resource.data.keys().hasAny(["onboarding_completed"])
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(["onboarding_completed"])
           || request.resource.data.onboarding_completed is bool
         )
         && (
-          !request.resource.data.keys().hasAny(["messaging_preferences"])
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(["messaging_preferences"])
           || request.resource.data.messaging_preferences is map
         )
         && (
-          !request.resource.data.keys().hasAny(["cart"])
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(["cart"])
           || request.resource.data.cart is map
         )
         && (
-          !request.resource.data.keys().hasAny(["fit_profile"])
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(["fit_profile"])
           || request.resource.data.fit_profile is map
         )
         && (
-          !request.resource.data.keys().hasAny(["onboarding_profile"])
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(["onboarding_profile"])
           || request.resource.data.onboarding_profile is map
         );
 

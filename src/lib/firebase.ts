@@ -117,6 +117,7 @@ export interface UserDocument {
   tier?: "free" | "access" | "member" | "black";
   isLegacy?: boolean;
   legacyPlan?: string | null;
+  back9WelcomeSeen?: boolean;
 }
 
 const USER_DEFAULTS: Omit<
