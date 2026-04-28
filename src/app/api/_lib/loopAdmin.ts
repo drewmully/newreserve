@@ -197,6 +197,67 @@ async function loopSubscriptionMutation(
   }
 }
 
+const STOREFRONT_BASE_URL = BASE_URL.replace("/admin/", "/storefront/");
+
+async function generateLoopSessionToken(shopifyCustomerId: string): Promise<string> {
+  const url = `${BASE_URL}/customer/${encodeURIComponent(shopifyCustomerId)}/sessionToken`;
+  const res = await fetch(url, { method: "POST", headers: getLoopHeaders() });
+  if (!res.ok) {
+    throw new Error(`Loop sessionToken error ${res.status}: ${await res.text()}`);
+  }
+  const data = (await res.json()) as { data?: { sessionToken?: string } };
+  const token = data.data?.sessionToken;
+  if (!token) throw new Error("Loop sessionToken response missing data.sessionToken");
+  return token;
+}
+
+async function exchangeLoopSessionTokenForAccessToken(sessionToken: string): Promise<string> {
+  const url = `${STOREFRONT_BASE_URL}/auth/refreshToken`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionToken }),
+  });
+  if (!res.ok) {
+    throw new Error(`Loop auth/refreshToken error ${res.status}: ${await res.text()}`);
+  }
+  const data = (await res.json()) as { data?: { accessToken?: string } };
+  const token = data.data?.accessToken;
+  if (!token) throw new Error("Loop auth/refreshToken response missing data.accessToken");
+  return token;
+}
+
+export async function swapLoopSubscriptionProduct(params: {
+  shopifyCustomerId: string;
+  subscriptionId: string;
+  lineId: string;
+  variantShopifyId: number;
+  quantity: number;
+  sellingPlanGroupId?: number;
+}): Promise<void> {
+  const { shopifyCustomerId, subscriptionId, lineId, variantShopifyId, quantity, sellingPlanGroupId } = params;
+
+  const sessionToken = await generateLoopSessionToken(shopifyCustomerId);
+  const accessToken = await exchangeLoopSessionTokenForAccessToken(sessionToken);
+
+  const url = `${STOREFRONT_BASE_URL}/subscription/${encodeURIComponent(subscriptionId)}/line/${encodeURIComponent(lineId)}/swap`;
+  const body: Record<string, unknown> = { variantShopifyId, quantity };
+  if (sellingPlanGroupId != null) body.sellingPlanGroupId = sellingPlanGroupId;
+
+  const res = await fetch(url, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Loop swap error ${res.status}: ${await res.text()}`);
+  }
+}
+
 export const pauseLoopSubscription = (id: string) =>
   loopSubscriptionMutation(id, "pause");
 

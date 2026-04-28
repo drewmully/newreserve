@@ -19,6 +19,7 @@ import {
   cancelLoopSubscription,
   changeLoopSubscriptionPlan,
   reactivateLoopSubscription,
+  swapLoopSubscriptionProduct,
 } from "@/app/api/_lib/loopAdmin";
 import {
   getLoopUserContext,
@@ -27,6 +28,8 @@ import {
 import {
   isSupportedSellingPlanId,
   normalizeShopifyNumericId,
+  resolveMemberTierFromVariantId,
+  SHOPIFY_MEMBERSHIP_PLANS,
 } from "@/lib/membershipConfig";
 
 function getMatchingSubscriptions(
@@ -66,6 +69,7 @@ export async function POST(
     "cancel",
     "change-plan",
     "reactivate",
+    "swap-product",
   ]);
   if (!VALID_ACTIONS.has(action)) {
     return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });
@@ -89,6 +93,17 @@ export async function POST(
     }
   }
 
+  const swapVariantShopifyId =
+    action === "swap-product"
+      ? normalizeShopifyNumericId(body.variantShopifyId)
+      : null;
+
+  if (action === "swap-product") {
+    if (!swapVariantShopifyId || !resolveMemberTierFromVariantId(swapVariantShopifyId)) {
+      return NextResponse.json({ error: "Invalid variantShopifyId" }, { status: 400 });
+    }
+  }
+
   if (action === "cancel" && body.reason !== undefined && typeof body.reason !== "string") {
     return NextResponse.json({ error: "Invalid cancel reason" }, { status: 400 });
   }
@@ -102,6 +117,10 @@ export async function POST(
 
   if (!context.loopCustomerIdentifier) {
     return NextResponse.json({ error: "No Loop customer found" }, { status: 400 });
+  }
+
+  if (!context.shopifyCustomerId && action === "swap-product") {
+    return NextResponse.json({ error: "No Shopify customer ID found" }, { status: 400 });
   }
 
   try {
@@ -153,6 +172,25 @@ export async function POST(
       case "reactivate":
         await reactivateLoopSubscription(subscriptionId);
         break;
+      case "swap-product": {
+        const lines = (sub as any).lines as Array<{ id: string | number }> | undefined;
+        const lineId = lines?.[0]?.id;
+        if (!lineId) {
+          return NextResponse.json({ error: "No subscription line found" }, { status: 400 });
+        }
+        const targetTier = resolveMemberTierFromVariantId(swapVariantShopifyId!);
+        const plan = targetTier ? SHOPIFY_MEMBERSHIP_PLANS[targetTier] : null;
+        await swapLoopSubscriptionProduct({
+          shopifyCustomerId: context.shopifyCustomerId!,
+          subscriptionId,
+          lineId: String(lineId),
+          variantShopifyId: swapVariantShopifyId!,
+          quantity: 1,
+          // sellingPlanGroupId omitted: Loop auto-assigns the plan from the variant.
+          // Passing the Shopify SellingPlanGroup ID causes a 422.
+        });
+        break;
+      }
     }
 
     return NextResponse.json({ ok: true });

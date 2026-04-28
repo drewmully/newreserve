@@ -7,6 +7,7 @@ interface MembershipPlanDefinition {
   price: string;
   variantId: number;
   sellingPlanId: number;
+  sellingPlanGroupId: number;
   merchandiseId: string;
   sellingPlanGid: string;
 }
@@ -15,10 +16,12 @@ const DEFAULT_IDS = {
   access: {
     variantId: 47601025482944,
     sellingPlanId: 3241443520,
+    sellingPlanGroupId: 1580597440, // Shopify SellingPlanGroup — Annual Reserve
   },
   member: {
     variantId: 47601025122496,
     sellingPlanId: 3241476288,
+    sellingPlanGroupId: 1580630208, // Shopify SellingPlanGroup — Quarterly Reserve
   },
 } as const;
 
@@ -106,6 +109,7 @@ function createPlan(input: {
   price: string;
   variantId: number;
   sellingPlanId: number;
+  sellingPlanGroupId: number;
 }): MembershipPlanDefinition {
   return {
     tier: input.tier,
@@ -113,6 +117,7 @@ function createPlan(input: {
     price: input.price,
     variantId: input.variantId,
     sellingPlanId: input.sellingPlanId,
+    sellingPlanGroupId: input.sellingPlanGroupId,
     merchandiseId: toShopifyVariantGid(input.variantId),
     sellingPlanGid: toShopifySellingPlanGid(input.sellingPlanId),
   };
@@ -128,6 +133,7 @@ export const SHOPIFY_MEMBERSHIP_PLANS: Record<
     price: "$99/year",
     variantId: ACCESS_VARIANT_ID,
     sellingPlanId: ACCESS_SELLING_PLAN_ID,
+    sellingPlanGroupId: DEFAULT_IDS.access.sellingPlanGroupId,
   }),
   member: createPlan({
     tier: "member",
@@ -135,6 +141,7 @@ export const SHOPIFY_MEMBERSHIP_PLANS: Record<
     price: "$249/quarter",
     variantId: MEMBER_VARIANT_ID,
     sellingPlanId: MEMBER_SELLING_PLAN_ID,
+    sellingPlanGroupId: DEFAULT_IDS.member.sellingPlanGroupId,
   }),
 };
 
