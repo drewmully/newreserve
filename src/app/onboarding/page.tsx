@@ -88,6 +88,8 @@ const HANDICAP_OPTIONS = [
   "I don't keep one",
 ];
 
+const PUTTER_TYPE_OPTIONS = ["Blade", "Mallet", "Mid-Mallet", "Not Sure"];
+
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
@@ -219,6 +221,7 @@ export default function OnboardingPage() {
         privateClub,
         clubName: privateClub === true ? clubName : "",
         vibeCheck,
+        putterType,
         selectedTier: newTier,
       },
       fitProfile: newTier === "member" ? nextFitProfile : undefined,
@@ -326,6 +329,7 @@ export default function OnboardingPage() {
 
   // Step 1b state
   const [handicap, setHandicap] = useState("");
+  const [putterType, setPutterType] = useState("");
   const [privateClub, setPrivateClub] = useState<boolean | null>(null);
   const [clubName, setClubName] = useState("");
 
@@ -634,6 +638,28 @@ export default function OnboardingPage() {
                           onClick={() => setHandicap(handicap === opt ? "" : opt)}
                           className={`px-4 py-2.5 rounded-xl text-sm transition-all duration-300 cursor-pointer border ${
                             handicap === opt
+                              ? "bg-forest text-bone border-forest"
+                              : "bg-cream border-taupe/25 text-charcoal/70 hover:border-forest/40"
+                          }`}
+                        >
+                          {opt}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Putter Type */}
+                  <div className="mb-10">
+                    <h3 className="text-sm font-medium text-obsidian tracking-wide mb-4">
+                      What type of putter do you game?
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {PUTTER_TYPE_OPTIONS.map((opt) => (
+                        <button
+                          key={opt}
+                          onClick={() => setPutterType(putterType === opt ? "" : opt)}
+                          className={`px-4 py-2.5 rounded-xl text-sm transition-all duration-300 cursor-pointer border ${
+                            putterType === opt
                               ? "bg-forest text-bone border-forest"
                               : "bg-cream border-taupe/25 text-charcoal/70 hover:border-forest/40"
                           }`}

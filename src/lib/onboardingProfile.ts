@@ -8,6 +8,7 @@ export interface OnboardingProfileInput {
   privateClub: boolean | null;
   clubName: string;
   vibeCheck: string;
+  putterType: string;
   selectedTier: string;
 }
 
@@ -19,6 +20,7 @@ export interface NormalizedOnboardingProfile {
   privateClub: boolean | null;
   clubName: string;
   vibeCheck: string;
+  putterType: string;
   selectedTier: SelectedTier;
 }
 
@@ -31,6 +33,7 @@ export interface FirestoreOnboardingProfile {
   private_club_member: boolean | null;
   club_name: string;
   vibe_check: string;
+  putter_type: string;
   selected_tier: SelectedTier;
 }
 
@@ -82,6 +85,7 @@ export function normalizeOnboardingProfile(
     privateClub,
     clubName: privateClub === true ? profile.clubName : "",
     vibeCheck: profile.vibeCheck,
+    putterType: typeof profile.putterType === "string" ? profile.putterType : "",
     selectedTier: normalizeSelectedTier(profile.selectedTier),
   };
 }
@@ -103,6 +107,7 @@ export function toFirestoreOnboardingProfile(
     private_club_member: normalized.privateClub,
     club_name: normalized.clubName,
     vibe_check: normalized.vibeCheck,
+    putter_type: normalized.putterType,
     selected_tier: normalized.selectedTier,
   };
 }
@@ -123,6 +128,7 @@ export function fromFirestoreOnboardingProfile(
       privateClubRaw === true ? true : privateClubRaw === false ? false : null,
     clubName: typeof map.club_name === "string" ? map.club_name : "",
     vibeCheck: typeof map.vibe_check === "string" ? map.vibe_check : "",
+    putterType: typeof map.putter_type === "string" ? map.putter_type : "",
     selectedTier: normalizeSelectedTier(map.selected_tier),
   };
 }
