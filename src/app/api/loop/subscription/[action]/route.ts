@@ -31,6 +31,7 @@ import {
   resolveMemberTierFromVariantId,
   SHOPIFY_MEMBERSHIP_PLANS,
 } from "@/lib/membershipConfig";
+import { startFlow, type EmailFlow } from "@/lib/email/sequences";
 
 function getMatchingSubscriptions(
   subscriptions: LoopSubscription[],
@@ -178,8 +179,12 @@ export async function POST(
         if (!lineId) {
           return NextResponse.json({ error: "No subscription line found" }, { status: 400 });
         }
+
         const targetTier = resolveMemberTierFromVariantId(swapVariantShopifyId!);
-        const plan = targetTier ? SHOPIFY_MEMBERSHIP_PLANS[targetTier] : null;
+        if (!targetTier) {
+          return NextResponse.json({ error: "Could not resolve tier from variantShopifyId" }, { status: 400 });
+        }
+
         await swapLoopSubscriptionProduct({
           shopifyCustomerId: context.shopifyCustomerId!,
           subscriptionId,
@@ -189,6 +194,22 @@ export async function POST(
           // sellingPlanGroupId omitted: Loop auto-assigns the plan from the variant.
           // Passing the Shopify SellingPlanGroup ID causes a 422.
         });
+
+        // Sync Firestore tier
+        await context.userRef.update({ tier: targetTier, updated_at: Date.now() });
+
+        // Trigger email flow for the new tier (non-fatal)
+        try {
+          const email = context.email;
+          const firstName = (context.userData.username as string | undefined) ?? null;
+          const emailFlow: EmailFlow = targetTier === "member" ? "member" : "access";
+          if (email) {
+            await startFlow(uid, email, firstName, emailFlow);
+          }
+        } catch (err) {
+          console.error("[swap-product] email flow trigger failed:", err);
+        }
+
         break;
       }
     }
