@@ -114,8 +114,9 @@ export default function ReserveCardPage() {
 
   const emailIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
-  async function handleConfirm() {
-    if (!selectedPlan || isSubmitting) return;
+  async function submitPlan(plan: string) {
+    if (!plan || isSubmitting) return;
+    setSelectedPlan(plan);
     setIsSubmitting(true);
     setSubmitError(null);
     try {
@@ -140,7 +141,7 @@ export default function ReserveCardPage() {
             putter_type: putterType,
             brand_interest: brands,
           },
-          selected_plan: selectedPlan,
+          selected_plan: plan,
           source: "reserve_card_qr",
         }),
       });
@@ -158,9 +159,6 @@ export default function ReserveCardPage() {
           ? err.message
           : "We couldn't save your details. Please try again."
       );
-      return;
-      // Still advance — don't block the member on a Firestore error
-      goTo(6);
     } finally {
       setIsSubmitting(false);
     }
@@ -460,12 +458,14 @@ export default function ReserveCardPage() {
                     </span>
                   </div>
                   <button
-                    onClick={() => setSelectedPlan("member")}
-                    className={`w-full text-left rounded-2xl overflow-hidden relative transition-all duration-300 cursor-pointer ${
+                    onClick={() => submitPlan("member")}
+                    disabled={isSubmitting}
+                    aria-busy={isSubmitting && selectedPlan === "member"}
+                    className={`w-full text-left rounded-2xl overflow-hidden relative transition-all duration-300 ${
                       selectedPlan === "member"
                         ? "ring-2 ring-forest shadow-lg shadow-forest/15"
                         : "ring-1 ring-sage/20 hover:ring-forest/40"
-                    }`}
+                    } ${isSubmitting ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
                   >
                     <div className="bg-forest p-6 relative">
                       <span className="text-[11px] tracking-[0.25em] uppercase text-sage font-medium">
@@ -488,7 +488,12 @@ export default function ReserveCardPage() {
                           <FeatureItem text="Invite-only events" light />
                         </ul>
                       </div>
-                      {selectedPlan === "member" && (
+                      {isSubmitting && selectedPlan === "member" && (
+                        <div className="absolute top-5 right-5 text-sage text-xs tracking-wider uppercase">
+                          Saving…
+                        </div>
+                      )}
+                      {!isSubmitting && selectedPlan === "member" && (
                         <div className="absolute top-5 right-5">
                           <CheckCircle className="text-sage" />
                         </div>
@@ -499,12 +504,14 @@ export default function ReserveCardPage() {
 
                 {/* Reserve Access */}
                 <button
-                  onClick={() => setSelectedPlan("access")}
-                  className={`w-full text-left rounded-2xl p-6 transition-all duration-300 cursor-pointer border ${
+                  onClick={() => submitPlan("access")}
+                  disabled={isSubmitting}
+                  aria-busy={isSubmitting && selectedPlan === "access"}
+                  className={`w-full text-left rounded-2xl p-6 transition-all duration-300 border ${
                     selectedPlan === "access"
                       ? "border-forest ring-2 ring-forest bg-cream shadow-lg shadow-forest/10"
                       : "border-taupe/20 bg-cream hover:border-forest/40"
-                  }`}
+                  } ${isSubmitting ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
                 >
                   <div className="flex items-start justify-between">
                     <div>
@@ -516,7 +523,11 @@ export default function ReserveCardPage() {
                         <span className="text-charcoal/40 text-sm ml-1">/year</span>
                       </div>
                     </div>
-                    {selectedPlan === "access" && <CheckCircle className="text-forest" />}
+                    {isSubmitting && selectedPlan === "access" ? (
+                      <span className="text-forest text-xs tracking-wider uppercase">Saving…</span>
+                    ) : (
+                      selectedPlan === "access" && <CheckCircle className="text-forest" />
+                    )}
                   </div>
                   <div className="border-t border-taupe/12 pt-4">
                     <ul className="space-y-2">
@@ -530,12 +541,14 @@ export default function ReserveCardPage() {
 
                 {/* Keep Legacy */}
                 <button
-                  onClick={() => setSelectedPlan("legacy")}
-                  className={`w-full text-left rounded-2xl p-6 transition-all duration-300 cursor-pointer border ${
+                  onClick={() => submitPlan("legacy")}
+                  disabled={isSubmitting}
+                  aria-busy={isSubmitting && selectedPlan === "legacy"}
+                  className={`w-full text-left rounded-2xl p-6 transition-all duration-300 border ${
                     selectedPlan === "legacy"
                       ? "border-forest ring-2 ring-forest bg-cream shadow-lg shadow-forest/10"
                       : "border-taupe/20 bg-cream hover:border-forest/40"
-                  }`}
+                  } ${isSubmitting ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
                 >
                   <div className="flex items-start justify-between">
                     <div>
@@ -548,13 +561,20 @@ export default function ReserveCardPage() {
                         </span>
                       </div>
                     </div>
-                    {selectedPlan === "legacy" && <CheckCircle className="text-forest" />}
+                    {isSubmitting && selectedPlan === "legacy" ? (
+                      <span className="text-forest text-xs tracking-wider uppercase">Saving…</span>
+                    ) : (
+                      selectedPlan === "legacy" && <CheckCircle className="text-forest" />
+                    )}
                   </div>
                 </button>
               </div>
 
               {submitError && (
-                <div className="mt-6 rounded-xl border border-ember/20 bg-ember/5 px-4 py-3">
+                <div
+                  data-testid="reserve-card-submit-error"
+                  className="mt-6 rounded-xl border border-ember/20 bg-ember/5 px-4 py-3"
+                >
                   <p className="text-sm text-ember/80">{submitError}</p>
                 </div>
               )}
@@ -563,23 +583,15 @@ export default function ReserveCardPage() {
               <div className="flex items-center justify-between mt-10">
                 <button
                   onClick={() => goTo(4)}
-                  className="text-sm text-charcoal/40 hover:text-charcoal/60 transition-colors duration-300 cursor-pointer flex items-center gap-1.5"
+                  disabled={isSubmitting}
+                  className={`text-sm text-charcoal/40 transition-colors duration-300 flex items-center gap-1.5 ${
+                    isSubmitting ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:text-charcoal/60"
+                  }`}
                 >
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
                   </svg>
                   Back
-                </button>
-                <button
-                  onClick={handleConfirm}
-                  disabled={!selectedPlan || isSubmitting}
-                  className={`h-12 px-10 rounded-xl text-sm font-medium tracking-wider uppercase transition-all duration-300 btn-press ${
-                    selectedPlan && !isSubmitting
-                      ? "bg-forest text-bone hover:bg-forest-dark cursor-pointer"
-                      : "bg-taupe/25 text-charcoal/30 cursor-not-allowed"
-                  }`}
-                >
-                  {isSubmitting ? "Saving…" : "Confirm"}
                 </button>
               </div>
             </div>
@@ -680,6 +692,17 @@ export default function ReserveCardPage() {
               <p className="text-xs text-charcoal/35 mt-4">
                 Explore the new member experience, shop drops, and connect with the community.
               </p>
+
+              <div className="mt-6">
+                <button
+                  type="button"
+                  data-testid="reserve-card-change-plan"
+                  onClick={() => goTo(5)}
+                  className="text-sm text-charcoal/55 hover:text-forest underline underline-offset-4 transition-colors duration-300 cursor-pointer"
+                >
+                  Pick a different plan
+                </button>
+              </div>
             </div>
           )}
         </div>

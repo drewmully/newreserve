@@ -20,7 +20,7 @@ async function loadPage() {
   return mod.default;
 }
 
-async function advanceToConfirmationStep(user: ReturnType<typeof userEvent.setup>) {
+async function advanceToPlanStep(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText("First name"), "Jordan");
   await user.type(screen.getByLabelText("Last name"), "Spieth");
   await user.type(screen.getByLabelText("Your email"), "member@example.com");
@@ -61,7 +61,7 @@ describe("mulligan re-activation flow", () => {
     ).toBeInTheDocument();
   });
 
-  it("does not advance to success when the save request fails", async () => {
+  it("does not advance to success when the save request fails and stays on plan step", async () => {
     const user = userEvent.setup();
     const MulliganPage = await loadPage();
     const fetchMock = vi.mocked(fetch);
@@ -72,9 +72,8 @@ describe("mulligan re-activation flow", () => {
 
     render(<MulliganPage />);
 
-    await advanceToConfirmationStep(user);
+    await advanceToPlanStep(user);
     await user.click(screen.getByRole("button", { name: /Reserve Access/i }));
-    await user.click(screen.getByRole("button", { name: "Confirm" }));
 
     await waitFor(() =>
       expect(screen.getByText("Unable to save mulligan")).toBeInTheDocument()
@@ -83,7 +82,7 @@ describe("mulligan re-activation flow", () => {
     expect(screen.queryByText("Welcome back.")).not.toBeInTheDocument();
   }, 10000);
 
-  it("advances to success and posts the expected payload when the save succeeds", async () => {
+  it("immediately submits when a plan card is clicked and advances on success", async () => {
     const user = userEvent.setup();
     const MulliganPage = await loadPage();
     const fetchMock = vi.mocked(fetch);
@@ -94,14 +93,17 @@ describe("mulligan re-activation flow", () => {
 
     render(<MulliganPage />);
 
-    await advanceToConfirmationStep(user);
+    await advanceToPlanStep(user);
+
+    expect(screen.queryByRole("button", { name: "Confirm" })).not.toBeInTheDocument();
+
     await user.click(screen.getByRole("button", { name: /Reserve Member/i }));
-    await user.click(screen.getByRole("button", { name: "Confirm" }));
 
     await waitFor(() =>
       expect(screen.getByText("Welcome back.")).toBeInTheDocument()
     );
 
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/mulligan",
       expect.objectContaining({ method: "POST" })
@@ -117,5 +119,62 @@ describe("mulligan re-activation flow", () => {
       reactivation_choice: "member",
       source: "mulligan",
     });
+  }, 10000);
+
+  it("ignores additional plan clicks while a submission is in progress", async () => {
+    const user = userEvent.setup();
+    const MulliganPage = await loadPage();
+    const fetchMock = vi.mocked(fetch);
+    let resolve!: (value: Response) => void;
+    fetchMock.mockReturnValue(
+      new Promise<Response>((res) => {
+        resolve = res;
+      })
+    );
+
+    render(<MulliganPage />);
+
+    await advanceToPlanStep(user);
+    await user.click(screen.getByRole("button", { name: /Reserve Member/i }));
+    await user.click(screen.getByRole("button", { name: /Reserve Access/i }));
+    await user.click(screen.getByRole("button", { name: /Not Right Now/i }));
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    resolve({
+      ok: true,
+      json: async () => ({ ok: true }),
+    } as Response);
+
+    await waitFor(() =>
+      expect(screen.getByText("Welcome back.")).toBeInTheDocument()
+    );
+  }, 10000);
+
+  it("lets the user return to the plan step from the confirmation summary", async () => {
+    const user = userEvent.setup();
+    const MulliganPage = await loadPage();
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true }),
+    } as Response);
+
+    render(<MulliganPage />);
+
+    await advanceToPlanStep(user);
+    await user.click(screen.getByRole("button", { name: /Reserve Access/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText("Welcome back.")).toBeInTheDocument()
+    );
+
+    await user.click(screen.getByTestId("mulligan-change-plan"));
+
+    await waitFor(() =>
+      expect(screen.getByRole("heading", { name: "Pick your way back in." })).toBeInTheDocument()
+    );
+
+    expect(screen.queryByText("Welcome back.")).not.toBeInTheDocument();
   }, 10000);
 });
