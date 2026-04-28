@@ -27,6 +27,7 @@ const MEMBERSHIP_EXEMPT_PREFIXES = [
   "/",
   "/faq",
   "/handoff",
+  "/mulligan",
   "/policies",
   "/reservecard",
 ];

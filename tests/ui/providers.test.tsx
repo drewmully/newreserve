@@ -35,6 +35,7 @@ describe("shouldUseMembershipProvider", () => {
     expect(shouldUseMembershipProvider("/handoff")).toBe(false);
     expect(shouldUseMembershipProvider("/policies/privacy")).toBe(false);
     expect(shouldUseMembershipProvider("/reservecard")).toBe(false);
+    expect(shouldUseMembershipProvider("/mulligan")).toBe(false);
     expect(shouldUseMembershipProvider("/shop")).toBe(true);
   });
 });
