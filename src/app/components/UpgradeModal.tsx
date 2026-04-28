@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useState } from "react";
 import { buildCheckoutOriginAttributes } from "@/lib/shopifyCheckoutOrigin";
 import { SHOPIFY_MEMBERSHIP_PLANS } from "@/lib/membershipConfig";
+import { useMembership } from "@/app/context/MembershipContext";
 
 /* ═══════════════════════════════════════════
    UPGRADE MODAL
@@ -19,6 +20,10 @@ interface UpgradeModalProps {
 }
 
 export function UpgradeModal({ open, onClose, currentTier }: UpgradeModalProps) {
+  const { user, subscriptions, setTier, refreshSubscriptionStatus } = useMembership();
+  const [swapping, setSwapping] = useState(false);
+  const [swapError, setSwapError] = useState<string | null>(null);
+
   const handleClose = useCallback(() => {
     onClose();
   }, [onClose]);
@@ -43,6 +48,10 @@ export function UpgradeModal({ open, onClose, currentTier }: UpgradeModalProps) 
   }, [open, handleEscape]);
 
   if (!open) return null;
+
+  const hasActiveSubscription = !!(
+    subscriptions?.mullybox_active && subscriptions.active_subscription_ids.length > 0
+  );
 
   const PLANS = {
     access: {
@@ -115,16 +124,58 @@ export function UpgradeModal({ open, onClose, currentTier }: UpgradeModalProps) 
     }
   }
 
+  async function swapAndUpgrade(targetTier: "access" | "member") {
+    if (!user) return;
+    setSwapping(true);
+    setSwapError(null);
+    try {
+      const idToken = await user.getIdToken();
+      const variantShopifyId = SHOPIFY_MEMBERSHIP_PLANS[targetTier].variantId;
+      const res = await fetch("/api/loop/subscription/swap-product", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ variantShopifyId }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(data.error ?? `Swap failed (${res.status})`);
+      }
+      setTier(targetTier);
+      await refreshSubscriptionStatus();
+      handleClose();
+    } catch (err) {
+      console.error("[UpgradeModal] swap failed:", err);
+      setSwapError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    } finally {
+      setSwapping(false);
+    }
+  }
+
   function handleChooseAccess() {
-    createCartAndCheckout("access").catch((err) =>
-      console.error("[UpgradeModal] handleChooseAccess failed:", err)
-    );
+    if (hasActiveSubscription) {
+      swapAndUpgrade("access").catch((err) =>
+        console.error("[UpgradeModal] swapAndUpgrade access failed:", err)
+      );
+    } else {
+      createCartAndCheckout("access").catch((err) =>
+        console.error("[UpgradeModal] handleChooseAccess failed:", err)
+      );
+    }
   }
 
   function handleChooseMember() {
-    createCartAndCheckout("member").catch((err) =>
-      console.error("[UpgradeModal] handleChooseMember failed:", err)
-    );
+    if (hasActiveSubscription) {
+      swapAndUpgrade("member").catch((err) =>
+        console.error("[UpgradeModal] swapAndUpgrade member failed:", err)
+      );
+    } else {
+      createCartAndCheckout("member").catch((err) =>
+        console.error("[UpgradeModal] handleChooseMember failed:", err)
+      );
+    }
   }
 
   const showAccessCard = currentTier === "free";
@@ -186,9 +237,10 @@ export function UpgradeModal({ open, onClose, currentTier }: UpgradeModalProps) 
                       </ul>
                       <button
                         onClick={handleChooseAccess}
-                        className="h-11 px-8 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-all duration-300 cursor-pointer btn-press"
+                        disabled={swapping}
+                        className="h-11 px-8 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-all duration-300 cursor-pointer btn-press disabled:opacity-60 disabled:cursor-default"
                       >
-                        Join Reserve Access
+                        {swapping ? "Upgrading…" : "Join Reserve Access"}
                       </button>
                     </div>
                   </div>
@@ -225,9 +277,10 @@ export function UpgradeModal({ open, onClose, currentTier }: UpgradeModalProps) 
                           </ul>
                           <button
                             onClick={handleChooseMember}
-                            className="h-11 px-8 rounded-xl bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-all duration-300 cursor-pointer btn-press"
+                            disabled={swapping}
+                            className="h-11 px-8 rounded-xl bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-all duration-300 cursor-pointer btn-press disabled:opacity-60 disabled:cursor-default"
                           >
-                            Join Reserve Member
+                            {swapping ? "Upgrading…" : "Join Reserve Member"}
                           </button>
                         </div>
                       </div>
@@ -257,6 +310,10 @@ export function UpgradeModal({ open, onClose, currentTier }: UpgradeModalProps) 
                   </div>
                 </div>
               </div>
+
+              {swapError && (
+                <p className="text-center text-xs text-red-500 mt-4">{swapError}</p>
+              )}
 
               <p className="text-center text-xs text-charcoal/35 mt-6 leading-relaxed">
                 Cancel or change plans anytime. Complete your fit profile in onboarding or from your Account page.
