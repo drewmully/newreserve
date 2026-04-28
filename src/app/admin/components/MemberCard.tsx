@@ -143,6 +143,9 @@ export function MemberCard({
         {user.onboarding_profile?.vibe_check != null && (
           <Row label="Vibe" value={String(user.onboarding_profile.vibe_check)} />
         )}
+        {user.onboarding_profile?.putter_type != null && user.onboarding_profile.putter_type !== "" && (
+          <Row label="Putter" value={String(user.onboarding_profile.putter_type)} />
+        )}
         {user.fit_profile?.shirtSize && (
           <Row label="Shirt" value={user.fit_profile.shirtSize} />
         )}
