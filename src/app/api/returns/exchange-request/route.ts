@@ -5,12 +5,13 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 export async function POST(request: NextRequest) {
   try {
-    const { orderName, customerEmail } = await request.json() as {
+    const { orderName, customerEmail, message } = await request.json() as {
       orderName: string;
       customerEmail: string;
+      message: string;
     };
 
-    if (!orderName || !customerEmail) {
+    if (!orderName || !customerEmail || !message?.trim()) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
@@ -19,7 +20,7 @@ export async function POST(request: NextRequest) {
       to: "info@mymully.com",
       replyTo: customerEmail,
       subject: `Exchange Request — ${orderName}`,
-      text: `My order number is ${orderName}, I am looking to exchange.\n\nCustomer email: ${customerEmail}`,
+      text: `${message.trim()}\n\nCustomer email: ${customerEmail}`,
     });
 
     return NextResponse.json({ ok: true });

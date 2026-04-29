@@ -73,15 +73,19 @@ function SpecificItemForm({
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
+  const [message, setMessage] = useState(
+    `My order number is ${order.orderName}, I am looking to exchange `
+  );
 
   async function handleSend() {
+    if (!message.trim()) return;
     setSending(true);
     setError("");
     try {
       const res = await fetch("/api/returns/exchange-request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderName: order.orderName, customerEmail }),
+        body: JSON.stringify({ orderName: order.orderName, customerEmail, message }),
       });
       if (!res.ok) throw new Error("Failed to send");
       setSent(true);
@@ -134,9 +138,12 @@ function SpecificItemForm({
         </div>
         <div>
           <p className="text-xs uppercase tracking-widest text-charcoal/40 mb-1">Message</p>
-          <p className="text-sm text-charcoal/70 leading-relaxed">
-            My order number is {order.orderName}, I am looking to exchange
-          </p>
+          <textarea
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            rows={4}
+            className="w-full text-sm text-obsidian bg-bone border border-taupe/20 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-forest/20 resize-none leading-relaxed"
+          />
         </div>
       </div>
       {error && (
