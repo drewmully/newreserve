@@ -84,6 +84,12 @@ function ReturnsContent() {
   const [order, setOrder] = useState<OrderData | null>(null);
   const [selections, setSelections] = useState<Map<string, SelectedItem>>(new Map());
   const [confirmation, setConfirmation] = useState<ReturnConfirmation | null>(null);
+  const [boxChoice, setBoxChoice] = useState<"pending" | "full" | "specific" | null>(null);
+
+  const BOX_SKUS = ["RES-MEM", "BCK-9"];
+  function isBoxOrder(o: OrderData): boolean {
+    return o.items.some((item) => BOX_SKUS.includes(item.sku));
+  }
 
   const { tier } = useMembership();
 
@@ -106,8 +112,13 @@ function ReturnsContent() {
       if (!res.ok) {
         throw new Error(data.error || "Order not found");
       }
-      setOrder(data as OrderData);
-      setStep(2);
+      const resolved = data as OrderData;
+      setOrder(resolved);
+      if (isBoxOrder(resolved)) {
+        setBoxChoice("pending");
+      } else {
+        setStep(2);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
     } finally {
@@ -229,7 +240,7 @@ function ReturnsContent() {
           {/* ═══════════════════════════════════════
              STEP 1 — Order Lookup
              ═══════════════════════════════════════ */}
-          {step === 1 && (
+          {step === 1 && !boxChoice && (
             <div className="animate-fade-up">
               <div className="text-center mb-10">
                 <span className="inline-flex items-center gap-2.5 text-[11px] tracking-[0.35em] uppercase text-sage font-medium mb-4">
@@ -302,6 +313,103 @@ function ReturnsContent() {
                 Find your order number in your confirmation email, or check your{" "}
                 <Link href="/account" className="underline hover:text-charcoal/60 transition-colors">account page</Link>.
               </p>
+            </div>
+          )}
+
+          {/* ═══════════════════════════════════════
+             BOX CHOICE — Full box or specific item?
+             ═══════════════════════════════════════ */}
+          {step === 1 && boxChoice === "pending" && order && (
+            <div className="animate-fade-up">
+              <div className="text-center mb-10">
+                <span className="inline-flex items-center gap-2.5 text-[11px] tracking-[0.35em] uppercase text-sage font-medium mb-4">
+                  <span className="w-6 h-px bg-sage/40" />
+                  Returns
+                  <span className="w-6 h-px bg-sage/40" />
+                </span>
+                <h1 className="font-serif text-3xl md:text-4xl text-obsidian mb-3">
+                  What are you exchanging?
+                </h1>
+                <p className="text-sm text-charcoal/60 max-w-md mx-auto leading-relaxed">
+                  Order {order.orderName} — let us know what you&rsquo;d like to exchange.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <button
+                  onClick={() => { setBoxChoice("full"); setStep(2); }}
+                  className="flex flex-col items-start gap-2 rounded-xl border border-taupe/20 bg-white p-6 text-left hover:border-forest/40 hover:shadow-sm transition-all duration-300"
+                >
+                  <span className="text-base font-medium text-obsidian">Full box</span>
+                  <span className="text-sm text-charcoal/50 leading-relaxed">Return the entire box as received.</span>
+                </button>
+                <button
+                  onClick={() => setBoxChoice("specific")}
+                  className="flex flex-col items-start gap-2 rounded-xl border border-taupe/20 bg-white p-6 text-left hover:border-forest/40 hover:shadow-sm transition-all duration-300"
+                >
+                  <span className="text-base font-medium text-obsidian">Specific item</span>
+                  <span className="text-sm text-charcoal/50 leading-relaxed">Exchange one item from the box.</span>
+                </button>
+              </div>
+              <div className="mt-6 text-center">
+                <button
+                  onClick={() => { setBoxChoice(null); setOrder(null); }}
+                  className="text-xs text-charcoal/40 hover:text-charcoal transition-colors"
+                >
+                  ← Back
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ═══════════════════════════════════════
+             SPECIFIC ITEM — Email form
+             ═══════════════════════════════════════ */}
+          {step === 1 && boxChoice === "specific" && order && (
+            <div className="animate-fade-up">
+              <div className="text-center mb-10">
+                <span className="inline-flex items-center gap-2.5 text-[11px] tracking-[0.35em] uppercase text-sage font-medium mb-4">
+                  <span className="w-6 h-px bg-sage/40" />
+                  Returns
+                  <span className="w-6 h-px bg-sage/40" />
+                </span>
+                <h1 className="font-serif text-3xl md:text-4xl text-obsidian mb-3">
+                  Contact us to exchange
+                </h1>
+                <p className="text-sm text-charcoal/60 max-w-md mx-auto leading-relaxed">
+                  For specific item exchanges, our team handles it personally.
+                  Your email is pre-filled — just hit send.
+                </p>
+              </div>
+              <div className="bg-white rounded-xl border border-taupe/20 p-6 space-y-4">
+                <div>
+                  <p className="text-xs uppercase tracking-widest text-charcoal/40 mb-1">To</p>
+                  <p className="text-sm text-obsidian">info@MyMully.com</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-widest text-charcoal/40 mb-1">Subject</p>
+                  <p className="text-sm text-obsidian">Exchange Request — {order.orderName}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-widest text-charcoal/40 mb-1">Message</p>
+                  <p className="text-sm text-charcoal/70 leading-relaxed">
+                    My order number is {order.orderName}, I am looking to exchange
+                  </p>
+                </div>
+                <a
+                  href={`mailto:info@MyMully.com?subject=${encodeURIComponent(`Exchange Request — ${order.orderName}`)}&body=${encodeURIComponent(`My order number is ${order.orderName}, I am looking to exchange`)}`}
+                  className="flex items-center justify-center w-full py-3.5 rounded-lg bg-forest text-bone text-sm font-medium tracking-wide hover:bg-forest/90 transition-colors duration-300"
+                >
+                  Open in email app
+                </a>
+              </div>
+              <div className="mt-6 text-center">
+                <button
+                  onClick={() => setBoxChoice("pending")}
+                  className="text-xs text-charcoal/40 hover:text-charcoal transition-colors"
+                >
+                  ← Back
+                </button>
+              </div>
             </div>
           )}
 
