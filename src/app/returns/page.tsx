@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useMembership } from "../context/MembershipContext";
@@ -62,6 +62,14 @@ const RETURN_REASONS = [
 ];
 
 export default function ReturnsPage() {
+  return (
+    <Suspense>
+      <ReturnsContent />
+    </Suspense>
+  );
+}
+
+function ReturnsContent() {
   const searchParams = useSearchParams();
   const [step, setStep] = useState(1);
   const [orderNumber, setOrderNumber] = useState("");
