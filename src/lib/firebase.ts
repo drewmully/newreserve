@@ -80,6 +80,7 @@ export interface UserDocument {
     private_club_member: boolean | null;
     club_name: string;
     vibe_check: string;
+    putter_type: string;
     selected_tier: "free" | "access" | "member" | "";
   };
   email: string;
@@ -133,6 +134,7 @@ const USER_DEFAULTS: Omit<
     private_club_member: null,
     club_name: "",
     vibe_check: "",
+    putter_type: "",
     selected_tier: "",
   },
   username: "",

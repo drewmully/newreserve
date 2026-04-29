@@ -140,6 +140,7 @@ export interface OnboardingProfile {
   privateClub: boolean | null;
   clubName: string;
   vibeCheck: string;
+  putterType: string;
   selectedTier: "free" | "access" | "member" | "";
 }
 
@@ -151,6 +152,7 @@ export const EMPTY_ONBOARDING_PROFILE: OnboardingProfile = {
   privateClub: null,
   clubName: "",
   vibeCheck: "",
+  putterType: "",
   selectedTier: "",
 };
 

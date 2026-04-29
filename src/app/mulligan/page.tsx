@@ -8,11 +8,6 @@ import {
   PillButton,
 } from "../components/UpgradeModal";
 
-/* ═══════════════════════════════════════════
-   RESERVE CARD — Existing Member Update Flow
-   QR code entry → sizing → preferences → plan → confirm
-   ═══════════════════════════════════════════ */
-
 const TOTAL_STEPS = 6;
 
 const STYLE_VIBES = [
@@ -45,13 +40,15 @@ const BRAND_INTEREST = [
   "No Preference",
 ];
 
-export default function ReserveCardPage() {
+export default function MulliganPage() {
   const [step, setStep] = useState(1);
   const [direction, setDirection] = useState<"forward" | "back">("forward");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // Step 1: Welcome + email + gender
+  // Step 1: Welcome + identification + gender
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [emailTouched, setEmailTouched] = useState(false);
   const [gender, setGender] = useState("");
@@ -73,16 +70,14 @@ export default function ReserveCardPage() {
   const [putterType, setPutterType] = useState("");
   const [brands, setBrands] = useState<string[]>([]);
 
-  // Step 5: Plan selection
+  // Step 5: Re-activation choice
   const [selectedPlan, setSelectedPlan] = useState("");
-
-  // Step 6: Confirmation (no state needed)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     trackEvent("page_view", {
       properties: {
-        page: "reserve_card",
+        page: "mulligan",
         referrer: document.referrer || null,
         utm_source: params.get("utm_source"),
         utm_medium: params.get("utm_medium"),
@@ -113,6 +108,7 @@ export default function ReserveCardPage() {
   }
 
   const emailIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const namesAreValid = firstName.trim().length > 0 && lastName.trim().length > 0;
 
   async function submitPlan(plan: string) {
     if (!plan || isSubmitting) return;
@@ -120,10 +116,12 @@ export default function ReserveCardPage() {
     setIsSubmitting(true);
     setSubmitError(null);
     try {
-      const res = await fetch("/api/reserve-card", {
+      const res = await fetch("/api/mulligan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          first_name: firstName.trim(),
+          last_name: lastName.trim(),
           email: email.trim().toLowerCase(),
           gender,
           fit: {
@@ -141,8 +139,8 @@ export default function ReserveCardPage() {
             putter_type: putterType,
             brand_interest: brands,
           },
-          selected_plan: plan,
-          source: "reserve_card_qr",
+          reactivation_choice: plan,
+          source: "mulligan",
         }),
       });
 
@@ -153,7 +151,7 @@ export default function ReserveCardPage() {
 
       goTo(6);
     } catch (err) {
-      console.error("Failed to save reserve card submission:", err);
+      console.error("Failed to save mulligan submission:", err);
       setSubmitError(
         err instanceof Error && err.message
           ? err.message
@@ -199,24 +197,62 @@ export default function ReserveCardPage() {
             <div className={animClass}>
               <span className="inline-flex items-center gap-2 text-xs tracking-[0.3em] uppercase text-sage font-medium mb-4">
                 <span className="w-6 h-px bg-sage/50" />
-                Welcome Back
+                Take Your Mulligan
                 <span className="w-6 h-px bg-sage/50" />
               </span>
 
               <h1 className="font-serif text-3xl text-obsidian leading-tight mb-3">
-                Good to see you.
+                Let&rsquo;s tee it up again.
               </h1>
-              <p className="text-base text-charcoal/55 leading-relaxed mb-10">
-                We&rsquo;re updating the Reserve experience. Take a minute to confirm your sizing, tell us what you like, and choose the membership that fits.
+              <p className="text-base text-charcoal/55 leading-relaxed mb-6">
+                Reserve has a brand-new look. Tell us a bit about how you play and dress today, and we&rsquo;ll line up your re-activation into the new experience.
               </p>
+
+              <div className="rounded-xl border border-sage/30 bg-sage/5 px-4 py-3 mb-10">
+                <p className="text-xs text-forest/80 leading-relaxed">
+                  <span className="font-semibold">Heads up:</span> the new boxes are estimated to ship before the end of May. Reserve Member re-activations are not charged until your box is ready.
+                </p>
+              </div>
+
+              {/* Name */}
+              <div className="mb-6 grid grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="ml-first" className="block text-sm font-medium text-obsidian tracking-wide mb-3">
+                    First name
+                  </label>
+                  <input
+                    id="ml-first"
+                    type="text"
+                    autoComplete="given-name"
+                    placeholder="Jordan"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    className="w-full h-12 px-4 rounded-xl border border-taupe/25 bg-cream text-obsidian text-sm placeholder:text-charcoal/30 outline-none transition-all duration-200 focus:border-forest"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="ml-last" className="block text-sm font-medium text-obsidian tracking-wide mb-3">
+                    Last name
+                  </label>
+                  <input
+                    id="ml-last"
+                    type="text"
+                    autoComplete="family-name"
+                    placeholder="Spieth"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    className="w-full h-12 px-4 rounded-xl border border-taupe/25 bg-cream text-obsidian text-sm placeholder:text-charcoal/30 outline-none transition-all duration-200 focus:border-forest"
+                  />
+                </div>
+              </div>
 
               {/* Email */}
               <div className="mb-8">
-                <label htmlFor="rc-email" className="block text-sm font-medium text-obsidian tracking-wide mb-3">
+                <label htmlFor="ml-email" className="block text-sm font-medium text-obsidian tracking-wide mb-3">
                   Your email
                 </label>
                 <input
-                  id="rc-email"
+                  id="ml-email"
                   type="email"
                   inputMode="email"
                   autoComplete="email"
@@ -260,9 +296,9 @@ export default function ReserveCardPage() {
               <div className="flex justify-end">
                 <button
                   onClick={() => goTo(2)}
-                  disabled={!emailIsValid || !gender}
+                  disabled={!emailIsValid || !gender || !namesAreValid}
                   className={`h-12 px-10 rounded-xl text-sm font-medium tracking-wider uppercase transition-all duration-300 btn-press ${
-                    emailIsValid && gender
+                    emailIsValid && gender && namesAreValid
                       ? "bg-forest text-bone hover:bg-forest-dark cursor-pointer"
                       : "bg-taupe/25 text-charcoal/30 cursor-not-allowed"
                   }`}
@@ -285,7 +321,6 @@ export default function ReserveCardPage() {
                 Let&rsquo;s make sure we have your fit dialed in.
               </p>
 
-              {/* Shirt */}
               <div className="mb-8">
                 <h3 className="text-sm font-medium text-obsidian mb-3">Shirt</h3>
                 <div className="flex flex-wrap gap-2">
@@ -295,7 +330,6 @@ export default function ReserveCardPage() {
                 </div>
               </div>
 
-              {/* Glove Hand */}
               <div className="mb-8">
                 <h3 className="text-sm font-medium text-obsidian mb-3">Glove hand</h3>
                 <div className="flex flex-wrap gap-2">
@@ -305,7 +339,6 @@ export default function ReserveCardPage() {
                 </div>
               </div>
 
-              {/* Glove Size */}
               {gloveHand && (
                 <div className="mb-10 animate-fade-up">
                   <h3 className="text-sm font-medium text-obsidian mb-3">Glove size</h3>
@@ -333,7 +366,6 @@ export default function ReserveCardPage() {
                 Almost done with sizing.
               </p>
 
-              {/* Waist */}
               <div className="mb-8">
                 <h3 className="text-sm font-medium text-obsidian mb-3">Waist</h3>
                 <div className="flex flex-wrap gap-2">
@@ -343,7 +375,6 @@ export default function ReserveCardPage() {
                 </div>
               </div>
 
-              {/* Pants Inseam */}
               <div className="mb-8">
                 <h3 className="text-sm font-medium text-obsidian mb-3">Pants inseam</h3>
                 <div className="flex flex-wrap gap-2">
@@ -353,7 +384,6 @@ export default function ReserveCardPage() {
                 </div>
               </div>
 
-              {/* Shorts Inseam */}
               <div className="mb-8">
                 <h3 className="text-sm font-medium text-obsidian mb-3">Shorts inseam</h3>
                 <div className="flex flex-wrap gap-2">
@@ -363,7 +393,6 @@ export default function ReserveCardPage() {
                 </div>
               </div>
 
-              {/* Shoe */}
               <div className="mb-10">
                 <h3 className="text-sm font-medium text-obsidian mb-3">Shoe size</h3>
                 <div className="flex flex-wrap gap-2">
@@ -389,7 +418,6 @@ export default function ReserveCardPage() {
                 Optional, but helps our curation team put together better Reserve boxes and recommendations for you.
               </p>
 
-              {/* Style Vibe */}
               <div className="mb-8">
                 <h3 className="text-sm font-medium text-obsidian mb-3">How would you describe your style?</h3>
                 <div className="flex flex-wrap gap-2">
@@ -399,7 +427,6 @@ export default function ReserveCardPage() {
                 </div>
               </div>
 
-              {/* Color Preference */}
               <div className="mb-8">
                 <h3 className="text-sm font-medium text-obsidian mb-3">Color palette you gravitate toward?</h3>
                 <div className="flex flex-wrap gap-2">
@@ -409,7 +436,6 @@ export default function ReserveCardPage() {
                 </div>
               </div>
 
-              {/* Putter Type */}
               <div className="mb-8">
                 <h3 className="text-sm font-medium text-obsidian mb-3">What type of putter do you game?</h3>
                 <div className="flex flex-wrap gap-2">
@@ -419,7 +445,6 @@ export default function ReserveCardPage() {
                 </div>
               </div>
 
-              {/* Brand Interest */}
               <div className="mb-10">
                 <h3 className="text-sm font-medium text-obsidian mb-3">Brands you like (pick a few)</h3>
                 <div className="flex flex-wrap gap-2">
@@ -433,21 +458,26 @@ export default function ReserveCardPage() {
             </div>
           )}
 
-          {/* ═══════ STEP 5: PLAN SELECTION ═══════ */}
+          {/* ═══════ STEP 5: RE-ACTIVATION CHOICE ═══════ */}
           {step === 5 && (
             <div className={animClass}>
               <span className="inline-flex items-center gap-2 text-xs tracking-[0.3em] uppercase text-sage font-medium mb-4">
                 <span className="w-6 h-px bg-sage/50" />
-                Your Membership
+                Re-activate
                 <span className="w-6 h-px bg-sage/50" />
               </span>
 
               <h1 className="font-serif text-3xl text-obsidian leading-tight mb-3">
-                Choose your plan.
+                Pick your way back in.
               </h1>
-              <p className="text-sm text-charcoal/45 leading-relaxed mb-8">
-                Your new membership takes effect at your next scheduled renewal. Change or cancel anytime.
+              <p className="text-sm text-charcoal/45 leading-relaxed mb-4">
+                Your last subscription is currently inactive. Choose how you&rsquo;d like to come back to Reserve.
               </p>
+              <div className="rounded-xl border border-sage/30 bg-sage/5 px-4 py-3 mb-8">
+                <p className="text-xs text-forest/80 leading-relaxed">
+                  New boxes are estimated to ship before the end of May. Reserve Member re-activations are <span className="font-semibold">not charged until your box is ready</span>.
+                </p>
+              </div>
 
               <div className="space-y-4">
                 {/* Reserve Member (Recommended) */}
@@ -476,7 +506,7 @@ export default function ReserveCardPage() {
                         <span className="text-bone/45 text-sm ml-1">/quarter</span>
                       </div>
                       <p className="text-xs text-bone/40 mb-4">
-                        Curated boxes, concierge access, and the full Reserve experience.
+                        Curated boxes, concierge access, and the full Reserve experience. Not charged until your box ships.
                       </p>
                       <div className="border-t border-bone/10 pt-4">
                         <ul className="space-y-2">
@@ -539,13 +569,13 @@ export default function ReserveCardPage() {
                   </div>
                 </button>
 
-                {/* Keep Legacy */}
+                {/* Not Yet */}
                 <button
-                  onClick={() => submitPlan("legacy")}
+                  onClick={() => submitPlan("not_now")}
                   disabled={isSubmitting}
-                  aria-busy={isSubmitting && selectedPlan === "legacy"}
+                  aria-busy={isSubmitting && selectedPlan === "not_now"}
                   className={`w-full text-left rounded-2xl p-6 transition-all duration-300 border ${
-                    selectedPlan === "legacy"
+                    selectedPlan === "not_now"
                       ? "border-forest ring-2 ring-forest bg-cream shadow-lg shadow-forest/10"
                       : "border-taupe/20 bg-cream hover:border-forest/40"
                   } ${isSubmitting ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
@@ -553,18 +583,18 @@ export default function ReserveCardPage() {
                   <div className="flex items-start justify-between">
                     <div>
                       <span className="text-[11px] tracking-[0.25em] uppercase text-charcoal/50 font-medium">
-                        Keep Current Plan
+                        Not Right Now
                       </span>
                       <div className="mt-2">
                         <span className="text-sm text-charcoal/55 leading-relaxed">
-                          Continue with your existing legacy subscription at the same rate. No changes to your billing.
+                          Stay on the list. We&rsquo;ll keep your profile on file and check back when the next box is ready.
                         </span>
                       </div>
                     </div>
-                    {isSubmitting && selectedPlan === "legacy" ? (
+                    {isSubmitting && selectedPlan === "not_now" ? (
                       <span className="text-forest text-xs tracking-wider uppercase">Saving…</span>
                     ) : (
-                      selectedPlan === "legacy" && <CheckCircle className="text-forest" />
+                      selectedPlan === "not_now" && <CheckCircle className="text-forest" />
                     )}
                   </div>
                 </button>
@@ -572,14 +602,13 @@ export default function ReserveCardPage() {
 
               {submitError && (
                 <div
-                  data-testid="reserve-card-submit-error"
+                  data-testid="mulligan-submit-error"
                   className="mt-6 rounded-xl border border-ember/20 bg-ember/5 px-4 py-3"
                 >
                   <p className="text-sm text-ember/80">{submitError}</p>
                 </div>
               )}
 
-              {/* Nav */}
               <div className="flex items-center justify-between mt-10">
                 <button
                   onClick={() => goTo(4)}
@@ -600,7 +629,6 @@ export default function ReserveCardPage() {
           {/* ═══════ STEP 6: CONFIRMATION ═══════ */}
           {step === 6 && (
             <div className="animate-fade-up text-center pt-8">
-              {/* Checkmark */}
               <div className="mx-auto w-16 h-16 rounded-full bg-forest/10 flex items-center justify-center mb-6">
                 <svg className="w-8 h-8 text-forest" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -608,19 +636,23 @@ export default function ReserveCardPage() {
               </div>
 
               <h1 className="font-serif text-3xl text-obsidian leading-tight mb-3">
-                You&rsquo;re all set.
+                Welcome back.
               </h1>
-              <p className="text-sm text-charcoal/55 leading-relaxed mb-8 max-w-xs mx-auto">
-                Thanks for updating your profile.
-                {selectedPlan === "legacy"
-                  ? " Your current plan will continue as is."
-                  : " Your new membership will take effect at your next renewal date."}
+              <p className="text-sm text-charcoal/55 leading-relaxed mb-6 max-w-xs mx-auto">
+                {selectedPlan === "member" && "We've got your re-activation on file. Reserve Members are not charged until your box ships — estimated before the end of May."}
+                {selectedPlan === "access" && "Your Reserve Access re-activation is on the way. We'll be in touch with next steps."}
+                {selectedPlan === "not_now" && "Got it — we'll keep your profile on file and check back when the next box is ready, estimated before the end of May."}
               </p>
 
-              {/* Summary card */}
               <div className="bg-cream rounded-2xl p-6 border border-taupe/20 text-left mb-8">
                 <h3 className="text-xs tracking-[0.2em] uppercase text-sage font-medium mb-4">Summary</h3>
                 <div className="space-y-3 text-sm">
+                  {(firstName || lastName) && (
+                    <div className="flex justify-between">
+                      <span className="text-charcoal/50">Name</span>
+                      <span className="text-obsidian font-medium">{`${firstName.trim()} ${lastName.trim()}`.trim()}</span>
+                    </div>
+                  )}
                   {email && (
                     <div className="flex justify-between">
                       <span className="text-charcoal/50">Email</span>
@@ -671,18 +703,17 @@ export default function ReserveCardPage() {
                   )}
                   <div className="border-t border-taupe/15 pt-3">
                     <div className="flex justify-between">
-                      <span className="text-charcoal/50">Membership</span>
+                      <span className="text-charcoal/50">Re-activation</span>
                       <span className="text-obsidian font-medium">
                         {selectedPlan === "member" && "Reserve Member"}
                         {selectedPlan === "access" && "Reserve Access"}
-                        {selectedPlan === "legacy" && "Current Plan (No Change)"}
+                        {selectedPlan === "not_now" && "Stay on List"}
                       </span>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* CTA */}
               <a
                 href="/login"
                 className="inline-flex h-12 px-10 items-center justify-center rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-all duration-300 btn-press"
@@ -690,13 +721,13 @@ export default function ReserveCardPage() {
                 Log In &amp; Browse the Clubhouse
               </a>
               <p className="text-xs text-charcoal/35 mt-4">
-                Explore the new member experience, shop drops, and connect with the community.
+                Explore the new member experience while we get your box ready.
               </p>
 
               <div className="mt-6">
                 <button
                   type="button"
-                  data-testid="reserve-card-change-plan"
+                  data-testid="mulligan-change-plan"
                   onClick={() => goTo(5)}
                   className="text-sm text-charcoal/55 hover:text-forest underline underline-offset-4 transition-colors duration-300 cursor-pointer"
                 >
@@ -710,10 +741,6 @@ export default function ReserveCardPage() {
     </div>
   );
 }
-
-/* ═══════════════════════════════════════════
-   SUB-COMPONENTS
-   ═══════════════════════════════════════════ */
 
 function StepDots({ total, current }: { total: number; current: number }) {
   return (

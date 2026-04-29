@@ -16,11 +16,13 @@ vi.mock("@/lib/firebase", () => ({
 }));
 
 async function loadPage() {
-  const mod = await import("@/app/reservecard/page");
+  const mod = await import("@/app/mulligan/page");
   return mod.default;
 }
 
 async function advanceToPlanStep(user: ReturnType<typeof userEvent.setup>) {
+  await user.type(screen.getByLabelText("First name"), "Jordan");
+  await user.type(screen.getByLabelText("Last name"), "Spieth");
   await user.type(screen.getByLabelText("Your email"), "member@example.com");
   await user.click(screen.getByRole("button", { name: "Menswear" }));
   await user.click(screen.getByRole("button", { name: "Get Started" }));
@@ -38,46 +40,58 @@ async function advanceToPlanStep(user: ReturnType<typeof userEvent.setup>) {
 
   await user.click(screen.getByRole("button", { name: "Skip" }));
   await waitFor(() =>
-    expect(screen.getByRole("heading", { name: "Choose your plan." })).toBeInTheDocument()
+    expect(screen.getByRole("heading", { name: "Pick your way back in." })).toBeInTheDocument()
   );
 }
 
-describe("reserve card submission flow", () => {
+describe("mulligan re-activation flow", () => {
   beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn());
   });
 
+  it("shows the May ship-by and no-charge messaging on the welcome step", async () => {
+    const MulliganPage = await loadPage();
+    render(<MulliganPage />);
+
+    expect(
+      screen.getByText(/estimated to ship before the end of May/i)
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/not charged until your box is ready/i)
+    ).toBeInTheDocument();
+  });
+
   it("does not advance to success when the save request fails and stays on plan step", async () => {
     const user = userEvent.setup();
-    const ReserveCardPage = await loadPage();
+    const MulliganPage = await loadPage();
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValue({
       ok: false,
-      json: async () => ({ error: "Unable to save reserve card" }),
+      json: async () => ({ error: "Unable to save mulligan" }),
     } as Response);
 
-    render(<ReserveCardPage />);
+    render(<MulliganPage />);
 
     await advanceToPlanStep(user);
     await user.click(screen.getByRole("button", { name: /Reserve Access/i }));
 
     await waitFor(() =>
-      expect(screen.getByText("Unable to save reserve card")).toBeInTheDocument()
+      expect(screen.getByText("Unable to save mulligan")).toBeInTheDocument()
     );
-    expect(screen.getByRole("heading", { name: "Choose your plan." })).toBeInTheDocument();
-    expect(screen.queryByText("You’re all set.")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Pick your way back in." })).toBeInTheDocument();
+    expect(screen.queryByText("Welcome back.")).not.toBeInTheDocument();
   }, 10000);
 
   it("immediately submits when a plan card is clicked and advances on success", async () => {
     const user = userEvent.setup();
-    const ReserveCardPage = await loadPage();
+    const MulliganPage = await loadPage();
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValue({
       ok: true,
       json: async () => ({ ok: true }),
     } as Response);
 
-    render(<ReserveCardPage />);
+    render(<MulliganPage />);
 
     await advanceToPlanStep(user);
 
@@ -86,25 +100,30 @@ describe("reserve card submission flow", () => {
     await user.click(screen.getByRole("button", { name: /Reserve Member/i }));
 
     await waitFor(() =>
-      expect(screen.getByText("You’re all set.")).toBeInTheDocument()
+      expect(screen.getByText("Welcome back.")).toBeInTheDocument()
     );
-    expect(screen.getByText(/Thanks for updating your profile\./)).toBeInTheDocument();
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/mulligan",
+      expect.objectContaining({ method: "POST" })
+    );
     const call = fetchMock.mock.calls[0];
     const init = call[1] as RequestInit;
     const body = JSON.parse(init.body as string);
     expect(body).toMatchObject({
+      first_name: "Jordan",
+      last_name: "Spieth",
       email: "member@example.com",
       gender: "Menswear",
-      selected_plan: "member",
-      source: "reserve_card_qr",
+      reactivation_choice: "member",
+      source: "mulligan",
     });
   }, 10000);
 
   it("ignores additional plan clicks while a submission is in progress", async () => {
     const user = userEvent.setup();
-    const ReserveCardPage = await loadPage();
+    const MulliganPage = await loadPage();
     const fetchMock = vi.mocked(fetch);
     let resolve!: (value: Response) => void;
     fetchMock.mockReturnValue(
@@ -113,12 +132,12 @@ describe("reserve card submission flow", () => {
       })
     );
 
-    render(<ReserveCardPage />);
+    render(<MulliganPage />);
 
     await advanceToPlanStep(user);
     await user.click(screen.getByRole("button", { name: /Reserve Member/i }));
     await user.click(screen.getByRole("button", { name: /Reserve Access/i }));
-    await user.click(screen.getByRole("button", { name: /Keep Current Plan/i }));
+    await user.click(screen.getByRole("button", { name: /Not Right Now/i }));
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
@@ -128,34 +147,34 @@ describe("reserve card submission flow", () => {
     } as Response);
 
     await waitFor(() =>
-      expect(screen.getByText("You’re all set.")).toBeInTheDocument()
+      expect(screen.getByText("Welcome back.")).toBeInTheDocument()
     );
   }, 10000);
 
   it("lets the user return to the plan step from the confirmation summary", async () => {
     const user = userEvent.setup();
-    const ReserveCardPage = await loadPage();
+    const MulliganPage = await loadPage();
     const fetchMock = vi.mocked(fetch);
     fetchMock.mockResolvedValue({
       ok: true,
       json: async () => ({ ok: true }),
     } as Response);
 
-    render(<ReserveCardPage />);
+    render(<MulliganPage />);
 
     await advanceToPlanStep(user);
     await user.click(screen.getByRole("button", { name: /Reserve Access/i }));
 
     await waitFor(() =>
-      expect(screen.getByText("You’re all set.")).toBeInTheDocument()
+      expect(screen.getByText("Welcome back.")).toBeInTheDocument()
     );
 
-    await user.click(screen.getByTestId("reserve-card-change-plan"));
+    await user.click(screen.getByTestId("mulligan-change-plan"));
 
     await waitFor(() =>
-      expect(screen.getByRole("heading", { name: "Choose your plan." })).toBeInTheDocument()
+      expect(screen.getByRole("heading", { name: "Pick your way back in." })).toBeInTheDocument()
     );
 
-    expect(screen.queryByText("You’re all set.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Welcome back.")).not.toBeInTheDocument();
   }, 10000);
 });

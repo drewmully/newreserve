@@ -33,6 +33,7 @@ const mocks = vi.hoisted(() => {
       privateClub: true,
       clubName: "Oakland Hills",
       vibeCheck: "classic",
+      putterType: "Mallet",
       selectedTier: "member",
     },
     fitProfile: {
