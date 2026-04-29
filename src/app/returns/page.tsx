@@ -186,9 +186,10 @@ function ReturnsContent() {
   const [confirmation, setConfirmation] = useState<ReturnConfirmation | null>(null);
   const [boxChoice, setBoxChoice] = useState<"pending" | "full" | "specific" | null>(null);
 
-  const BOX_SKUS = ["RES-MEM", "BCK-9"];
   function isBoxOrder(o: OrderData): boolean {
-    return o.items.some((item) => BOX_SKUS.includes(item.sku));
+    return o.items.some((item) =>
+      item.title.includes("Reserve Member") || item.title.includes("Back 9")
+    );
   }
 
   const { tier } = useMembership();
