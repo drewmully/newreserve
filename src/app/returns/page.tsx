@@ -61,6 +61,106 @@ const RETURN_REASONS = [
   "Other",
 ];
 
+function SpecificItemForm({
+  order,
+  customerEmail,
+  onBack,
+}: {
+  order: OrderData;
+  customerEmail: string;
+  onBack: () => void;
+}) {
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSend() {
+    setSending(true);
+    setError("");
+    try {
+      const res = await fetch("/api/returns/exchange-request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderName: order.orderName, customerEmail }),
+      });
+      if (!res.ok) throw new Error("Failed to send");
+      setSent(true);
+    } catch {
+      setError("Something went wrong. Please try again.");
+    } finally {
+      setSending(false);
+    }
+  }
+
+  if (sent) {
+    return (
+      <div className="animate-fade-up text-center py-10">
+        <div className="w-12 h-12 rounded-full bg-forest/10 flex items-center justify-center mx-auto mb-5">
+          <svg className="w-6 h-6 text-forest" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+          </svg>
+        </div>
+        <h2 className="font-serif text-2xl text-obsidian mb-2">Request sent</h2>
+        <p className="text-sm text-charcoal/60 max-w-sm mx-auto">
+          We&rsquo;ll be in touch at {customerEmail} to sort out your exchange.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="animate-fade-up">
+      <div className="text-center mb-10">
+        <span className="inline-flex items-center gap-2.5 text-[11px] tracking-[0.35em] uppercase text-sage font-medium mb-4">
+          <span className="w-6 h-px bg-sage/40" />
+          Returns
+          <span className="w-6 h-px bg-sage/40" />
+        </span>
+        <h1 className="font-serif text-3xl md:text-4xl text-obsidian mb-3">
+          Contact us to exchange
+        </h1>
+        <p className="text-sm text-charcoal/60 max-w-md mx-auto leading-relaxed">
+          For specific item exchanges, our team handles it personally.
+        </p>
+      </div>
+      <div className="bg-white rounded-xl border border-taupe/20 p-6 space-y-4 mb-6">
+        <div>
+          <p className="text-xs uppercase tracking-widest text-charcoal/40 mb-1">To</p>
+          <p className="text-sm text-obsidian">info@MyMully.com</p>
+        </div>
+        <div>
+          <p className="text-xs uppercase tracking-widest text-charcoal/40 mb-1">Subject</p>
+          <p className="text-sm text-obsidian">Exchange Request — {order.orderName}</p>
+        </div>
+        <div>
+          <p className="text-xs uppercase tracking-widest text-charcoal/40 mb-1">Message</p>
+          <p className="text-sm text-charcoal/70 leading-relaxed">
+            My order number is {order.orderName}, I am looking to exchange
+          </p>
+        </div>
+      </div>
+      {error && (
+        <p className="text-sm text-ember text-center mb-4">{error}</p>
+      )}
+      <button
+        onClick={handleSend}
+        disabled={sending}
+        className="flex items-center justify-center w-full py-3.5 rounded-lg bg-forest text-bone text-sm font-medium tracking-wide hover:bg-forest/90 transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {sending ? "Sending..." : "Send exchange request"}
+      </button>
+      <div className="mt-6 text-center">
+        <button
+          onClick={onBack}
+          className="text-xs text-charcoal/40 hover:text-charcoal transition-colors"
+        >
+          ← Back
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function ReturnsPage() {
   return (
     <Suspense>
@@ -362,55 +462,14 @@ function ReturnsContent() {
           )}
 
           {/* ═══════════════════════════════════════
-             SPECIFIC ITEM — Email form
+             SPECIFIC ITEM — Send exchange request
              ═══════════════════════════════════════ */}
           {step === 1 && boxChoice === "specific" && order && (
-            <div className="animate-fade-up">
-              <div className="text-center mb-10">
-                <span className="inline-flex items-center gap-2.5 text-[11px] tracking-[0.35em] uppercase text-sage font-medium mb-4">
-                  <span className="w-6 h-px bg-sage/40" />
-                  Returns
-                  <span className="w-6 h-px bg-sage/40" />
-                </span>
-                <h1 className="font-serif text-3xl md:text-4xl text-obsidian mb-3">
-                  Contact us to exchange
-                </h1>
-                <p className="text-sm text-charcoal/60 max-w-md mx-auto leading-relaxed">
-                  For specific item exchanges, our team handles it personally.
-                  Your email is pre-filled — just hit send.
-                </p>
-              </div>
-              <div className="bg-white rounded-xl border border-taupe/20 p-6 space-y-4">
-                <div>
-                  <p className="text-xs uppercase tracking-widest text-charcoal/40 mb-1">To</p>
-                  <p className="text-sm text-obsidian">info@MyMully.com</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-widest text-charcoal/40 mb-1">Subject</p>
-                  <p className="text-sm text-obsidian">Exchange Request — {order.orderName}</p>
-                </div>
-                <div>
-                  <p className="text-xs uppercase tracking-widest text-charcoal/40 mb-1">Message</p>
-                  <p className="text-sm text-charcoal/70 leading-relaxed">
-                    My order number is {order.orderName}, I am looking to exchange
-                  </p>
-                </div>
-                <a
-                  href={`mailto:info@MyMully.com?subject=${encodeURIComponent(`Exchange Request — ${order.orderName}`)}&body=${encodeURIComponent(`My order number is ${order.orderName}, I am looking to exchange`)}`}
-                  className="flex items-center justify-center w-full py-3.5 rounded-lg bg-forest text-bone text-sm font-medium tracking-wide hover:bg-forest/90 transition-colors duration-300"
-                >
-                  Open in email app
-                </a>
-              </div>
-              <div className="mt-6 text-center">
-                <button
-                  onClick={() => setBoxChoice("pending")}
-                  className="text-xs text-charcoal/40 hover:text-charcoal transition-colors"
-                >
-                  ← Back
-                </button>
-              </div>
-            </div>
+            <SpecificItemForm
+              order={order}
+              customerEmail={email}
+              onBack={() => setBoxChoice("pending")}
+            />
           )}
 
           {/* ═══════════════════════════════════════
