@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useMembership } from "../context/MembershipContext";
 import { ShopHeader } from "../components/ShopHeader";
 
@@ -61,9 +62,15 @@ const RETURN_REASONS = [
 ];
 
 export default function ReturnsPage() {
+  const searchParams = useSearchParams();
   const [step, setStep] = useState(1);
   const [orderNumber, setOrderNumber] = useState("");
   const [email, setEmail] = useState("");
+
+  useEffect(() => {
+    const pre = searchParams.get("order");
+    if (pre) setOrderNumber(pre);
+  }, [searchParams]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [order, setOrder] = useState<OrderData | null>(null);

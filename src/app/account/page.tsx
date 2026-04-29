@@ -1156,9 +1156,19 @@ function OrdersSection({ orders }: { orders: OrdersState }) {
                 <p className="text-xs text-charcoal/40 leading-relaxed">
                   {order.line_items.map((li) => `${li.name} ×${li.quantity}`).join(", ")}
                 </p>
-                <span className="text-[11px] text-charcoal/30 shrink-0">
-                  {formatOrderDate(order.created_at)}
-                </span>
+                <div className="flex items-center gap-3 shrink-0">
+                  {new Date(order.created_at) >= new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) && (
+                    <Link
+                      href={`/returns?order=${encodeURIComponent(order.name)}`}
+                      className="text-[11px] text-forest/70 hover:text-forest transition-colors duration-200 underline underline-offset-2"
+                    >
+                      Return
+                    </Link>
+                  )}
+                  <span className="text-[11px] text-charcoal/30">
+                    {formatOrderDate(order.created_at)}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
