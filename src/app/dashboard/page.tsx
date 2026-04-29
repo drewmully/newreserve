@@ -316,6 +316,7 @@ function DashboardContent() {
               </h4>
               <ul className="space-y-2.5">
                 <li><a href="/policies/refund" className="text-sm text-bone/50 hover:text-bone transition-colors duration-300 link-hover-underline">Refund Policy</a></li>
+                <li><a href="/returns" className="text-sm text-bone/50 hover:text-bone transition-colors duration-300 link-hover-underline">Returns</a></li>
                 <li><a href="/policies/privacy" className="text-sm text-bone/50 hover:text-bone transition-colors duration-300 link-hover-underline">Privacy Policy</a></li>
                 <li><a href="/policies/shipping" className="text-sm text-bone/50 hover:text-bone transition-colors duration-300 link-hover-underline">Shipping Policy</a></li>
                 <li><a href="/policies/terms" className="text-sm text-bone/50 hover:text-bone transition-colors duration-300 link-hover-underline">Terms of Service</a></li>
