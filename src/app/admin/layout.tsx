@@ -8,6 +8,7 @@ import { auth } from "@/lib/firebase";
 import { isAllowedAdminEmail } from "@/lib/adminEmailAllowlist";
 
 const NAV_LINKS = [
+  { href: "/admin", label: "Overview", exact: true },
   { href: "/admin/users", label: "Users" },
   { href: "/admin/sequences", label: "Sequences" },
   { href: "/admin/funnel", label: "Funnel" },
@@ -60,7 +61,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           <span className="font-serif text-sm text-obsidian font-medium">Admin</span>
           <div className="flex items-center gap-6">
             {NAV_LINKS.map((link) => {
-              const active = pathname === link.href || pathname.startsWith(link.href + "/");
+              const active = link.exact
+                ? pathname === link.href
+                : pathname === link.href || pathname.startsWith(link.href + "/");
               return (
                 <Link
                   key={link.href}
