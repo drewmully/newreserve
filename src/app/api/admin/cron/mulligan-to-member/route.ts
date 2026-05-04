@@ -101,12 +101,18 @@ export async function GET(req: NextRequest) {
   }
 
   const summary = {
+    cron: "mulligan-to-member",
     total: snap.size,
     processed: results.filter((r) => r.action === "processed").length,
     skipped: results.filter((r) => r.action.startsWith("skipped")).length,
     failed: results.filter((r) => r.action === "failed").length,
     results,
   };
+
+  await adminDb.collection("cron_logs").add({
+    ...summary,
+    ran_at: Timestamp.now(),
+  });
 
   console.log("[cron/mulligan-to-member]", JSON.stringify(summary));
   return NextResponse.json(summary);

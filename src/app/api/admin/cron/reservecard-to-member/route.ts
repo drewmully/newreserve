@@ -87,12 +87,18 @@ export async function GET(req: NextRequest) {
   }
 
   const summary = {
+    cron: "reservecard-to-member",
     total: pending.length,
     swapped: results.filter((r) => r.action === "swapped").length,
     skipped: results.filter((r) => r.action.startsWith("skipped")).length,
     failed: results.filter((r) => r.action === "failed").length,
     results,
   };
+
+  await adminDb.collection("cron_logs").add({
+    ...summary,
+    ran_at: Timestamp.now(),
+  });
 
   console.log("[cron/reservecard-to-member]", JSON.stringify(summary));
   return NextResponse.json(summary);

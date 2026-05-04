@@ -129,6 +129,86 @@ function RecommendationCard({
   );
 }
 
+// ─── Cron logs ────────────────────────────────────────────────────────────────
+
+interface CronLog {
+  id: string;
+  cron: string;
+  ran_at: string;
+  total: number;
+  processed: number;
+  skipped: number;
+  failed: number;
+}
+
+const CRON_LABELS: Record<string, string> = {
+  "reservecard-to-member": "Reserve Card → Member",
+  "mulligan-to-member": "Mulligan → Member",
+};
+
+function CronLogsSection({ getHeaders }: { getHeaders: () => Promise<HeadersInit> }) {
+  const [logs, setLogs] = useState<CronLog[] | null>(null);
+
+  useEffect(() => {
+    getHeaders()
+      .then((h) => fetch("/api/admin/cron-logs", { headers: h }))
+      .then((r) => r.json())
+      .then((d: { logs: CronLog[] }) => setLogs(d.logs))
+      .catch(() => setLogs([]));
+  }, [getHeaders]);
+
+  if (!logs) return null;
+  if (logs.length === 0) {
+    return (
+      <div>
+        <p className="text-xs uppercase tracking-widest text-charcoal/40 mb-4">Cron jobs</p>
+        <p className="text-sm text-charcoal/40">No runs logged yet.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <p className="text-xs uppercase tracking-widest text-charcoal/40 mb-4">Cron jobs</p>
+      <div className="bg-white border border-taupe/20 rounded-xl divide-y divide-taupe/10">
+        {logs.map((log) => (
+          <div key={log.id} className="flex items-center justify-between px-5 py-3">
+            <div>
+              <p className="text-sm font-medium text-obsidian">
+                {CRON_LABELS[log.cron] ?? log.cron}
+              </p>
+              <p className="text-xs text-charcoal/40 mt-0.5">
+                {new Date(log.ran_at).toLocaleString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+              </p>
+            </div>
+            <div className="flex items-center gap-4 text-xs text-right">
+              <div>
+                <p className="text-charcoal/40">processed</p>
+                <p className="font-medium text-obsidian">{log.processed}</p>
+              </div>
+              <div>
+                <p className="text-charcoal/40">skipped</p>
+                <p className="font-medium text-obsidian">{log.skipped}</p>
+              </div>
+              <div>
+                <p className="text-charcoal/40">failed</p>
+                <p className={`font-medium ${log.failed > 0 ? "text-ember" : "text-obsidian"}`}>
+                  {log.failed}
+                </p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function AdminOverviewPage() {
@@ -296,6 +376,9 @@ export default function AdminOverviewPage() {
         <p className="text-xs uppercase tracking-widest text-charcoal/40 mb-4">What to focus on</p>
         <RecommendationCard rec={data.recommendation} />
       </div>
+
+      {/* Cron logs */}
+      <CronLogsSection getHeaders={getHeaders} />
 
       {/* Quick links */}
       <div className="border-t border-taupe/10 pt-6">
