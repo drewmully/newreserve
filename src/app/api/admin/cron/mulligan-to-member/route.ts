@@ -37,10 +37,12 @@ type ResultRow = {
   email: string;
   action:
     | "processed"
+    | "processed_no_date"
     | "skipped_no_shopify_id"
     | "skipped_no_sub"
     | "failed";
   error?: string;
+  billing_date_error?: string;
 };
 
 export async function GET(req: NextRequest) {
@@ -94,10 +96,17 @@ export async function GET(req: NextRequest) {
         quantity: 1,
       });
 
-      await updateLoopSubscriptionNextBillingDate(targetSub.id, MAY_21_2026_EPOCH);
+      let billingDateError: string | undefined;
+      try {
+        await updateLoopSubscriptionNextBillingDate(targetSub.id, MAY_21_2026_EPOCH);
+      } catch (err) {
+        billingDateError = err instanceof Error ? err.message : String(err);
+        console.warn(`[cron/mulligan-to-member] billing date failed for ${email}:`, billingDateError);
+      }
 
+      const action = billingDateError ? "processed_no_date" : "processed";
       await doc.ref.update({ status: "processed", processed_at: Timestamp.now() });
-      results.push({ email, action: "processed" });
+      results.push({ email, action, ...(billingDateError ? { billing_date_error: billingDateError } : {}) });
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
       results.push({ email, action: "failed", error });
@@ -107,7 +116,8 @@ export async function GET(req: NextRequest) {
   const summary = {
     cron: "mulligan-to-member",
     total: snap.size,
-    processed: results.filter((r) => r.action === "processed").length,
+    processed: results.filter((r) => r.action === "processed" || r.action === "processed_no_date").length,
+    processed_no_date: results.filter((r) => r.action === "processed_no_date").length,
     skipped: results.filter((r) => r.action.startsWith("skipped")).length,
     failed: results.filter((r) => r.action === "failed").length,
     skipped_no_sub: results.filter((r) => r.action === "skipped_no_sub").length,
