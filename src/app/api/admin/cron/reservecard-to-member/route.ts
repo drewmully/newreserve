@@ -52,6 +52,10 @@ export async function GET(req: NextRequest) {
       const shopifyCustomerId = await resolveCustomerByEmail(email);
       if (!shopifyCustomerId) {
         results.push({ email, action: "skipped_no_shopify_id" });
+        await adminDb.collection("review_tasks").add({
+          source: "cron", cron: "reservecard-to-member", email,
+          reason: "No Shopify account found", status: "open", createdAt: Timestamp.now(),
+        });
         continue;
       }
 
@@ -60,6 +64,10 @@ export async function GET(req: NextRequest) {
 
       if (!activeSub) {
         results.push({ email, action: "skipped_no_active_sub" });
+        await adminDb.collection("review_tasks").add({
+          source: "cron", cron: "reservecard-to-member", email,
+          reason: "No active Loop subscription found", status: "open", createdAt: Timestamp.now(),
+        });
         continue;
       }
 
@@ -67,6 +75,10 @@ export async function GET(req: NextRequest) {
       const lineId = String(lines?.[0]?.id ?? "");
       if (!lineId) {
         results.push({ email, action: "failed", error: "No line found on active subscription" });
+        await adminDb.collection("review_tasks").add({
+          source: "cron", cron: "reservecard-to-member", email,
+          reason: "Active subscription has no line item", status: "open", createdAt: Timestamp.now(),
+        });
         continue;
       }
 
@@ -84,8 +96,16 @@ export async function GET(req: NextRequest) {
       const error = err instanceof Error ? err.message : String(err);
       if (error.includes("Prepaid subscriptions are not supported")) {
         results.push({ email, action: "skipped_prepaid" });
+        await adminDb.collection("review_tasks").add({
+          source: "cron", cron: "reservecard-to-member", email,
+          reason: "Prepaid subscription — swap must be done manually in Loop", status: "open", createdAt: Timestamp.now(),
+        });
       } else {
         results.push({ email, action: "failed", error });
+        await adminDb.collection("review_tasks").add({
+          source: "cron", cron: "reservecard-to-member", email,
+          reason: `Processing failed: ${error}`, status: "open", createdAt: Timestamp.now(),
+        });
       }
     }
   }

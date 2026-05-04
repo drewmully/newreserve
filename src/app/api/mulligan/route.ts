@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Timestamp } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase-admin";
 
-const VALID_CHOICES = new Set(["member", "access", "not_now"]);
+const VALID_CHOICES = new Set(["member", "access"]);
 
 function normalizeString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -48,8 +48,7 @@ export async function POST(request: NextRequest) {
   const fit = (body.fit ?? {}) as Record<string, unknown>;
   const style = (body.style ?? {}) as Record<string, unknown>;
 
-  const status =
-    reactivationChoice === "not_now" ? "declined" : "pending_reactivation";
+  const status = "pending_reactivation";
 
   await adminDb
     .collection("mulligan_submissions")

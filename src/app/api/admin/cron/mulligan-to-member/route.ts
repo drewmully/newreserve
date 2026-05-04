@@ -2,11 +2,12 @@
  * GET /api/admin/cron/mulligan-to-member
  *
  * Cron job — runs every 6 hours via Vercel cron.
- * Picks up mulligan_submissions with reactivation_choice="member" and
- * status="pending_reactivation", then:
- *   1. Reactivates their cancelled Loop subscription
- *   2. Swaps the product to the Member variant ($250/quarter)
- *   3. Sets the next billing date to May 21, 2026
+ * Picks up mulligan_submissions with status="pending_reactivation" for
+ * both "member" and "access" reactivation choices, then:
+ *   1. Finds the best Reserve-related cancelled (or active) Loop subscription
+ *   2. Reactivates it if cancelled
+ *   3. Swaps the product to the correct variant
+ *   4. For member: sets the next billing date to May 21, 2026
  *
  * Secured with CRON_SECRET (Vercel sends Authorization: Bearer <CRON_SECRET>).
  */
@@ -20,9 +21,16 @@ import {
   reactivateLoopSubscription,
   swapLoopSubscriptionProduct,
   updateLoopSubscriptionNextBillingDate,
+  type LoopSubscription,
 } from "@/app/api/_lib/loopAdmin";
 
-const MEMBER_VARIANT_SHOPIFY_ID = 47601025122496;
+const VARIANT_BY_TIER: Record<string, number> = {
+  member: 47601025122496,
+  access: 47601025482944,
+};
+
+// Reserve-related keywords to identify the right subscription when multiple exist
+const RESERVE_KEYWORDS = ["reserve", "back 9", "mullybox", "mully"];
 
 // 2026-05-21 00:00:00 UTC
 const MAY_21_2026_EPOCH = 1779321600;
@@ -33,8 +41,35 @@ function isAuthorized(req: NextRequest): boolean {
   return req.headers.get("authorization") === `Bearer ${secret}`;
 }
 
+function isReserveSub(sub: LoopSubscription): boolean {
+  const lines = sub.lines as Array<Record<string, unknown>> | undefined;
+  const title = String(lines?.[0]?.productTitle ?? "").toLowerCase();
+  return RESERVE_KEYWORDS.some((kw) => title.includes(kw));
+}
+
+function pickBestSub(
+  subs: LoopSubscription[],
+  status: "CANCELLED" | "ACTIVE"
+): LoopSubscription | undefined {
+  const matching = subs.filter((s) => s.status === status);
+  // Prefer Reserve-related sub; fall back to first match
+  return matching.find(isReserveSub) ?? matching[0];
+}
+
+async function createReviewTask(email: string, reason: string, cron: string): Promise<void> {
+  await adminDb.collection("review_tasks").add({
+    source: "cron",
+    cron,
+    email,
+    reason,
+    status: "open",
+    createdAt: Timestamp.now(),
+  });
+}
+
 type ResultRow = {
   email: string;
+  reactivation_choice: string;
   action:
     | "processed"
     | "processed_no_date"
@@ -52,29 +87,37 @@ export async function GET(req: NextRequest) {
 
   const snap = await adminDb
     .collection("mulligan_submissions")
-    .where("reactivation_choice", "==", "member")
     .where("status", "==", "pending_reactivation")
     .get();
 
   const results: ResultRow[] = [];
 
   for (const doc of snap.docs) {
-    const { email } = doc.data() as { email: string };
+    const data = doc.data() as { email: string; reactivation_choice: string };
+    const { email, reactivation_choice } = data;
+
+    const variantShopifyId = VARIANT_BY_TIER[reactivation_choice];
+    if (!variantShopifyId) {
+      // Unknown choice — skip silently (shouldn't happen after form cleanup)
+      continue;
+    }
 
     try {
       const shopifyCustomerId = await resolveCustomerByEmail(email);
       if (!shopifyCustomerId) {
-        results.push({ email, action: "skipped_no_shopify_id" });
+        results.push({ email, reactivation_choice, action: "skipped_no_shopify_id" });
+        await createReviewTask(email, "No Shopify account found", "mulligan-to-member");
         continue;
       }
 
       const subs = await getLoopRawSubscriptions(shopifyCustomerId);
-      const cancelledSub = subs.find((s) => s.status === "CANCELLED");
-      const activeSub = subs.find((s) => s.status === "ACTIVE");
+      const cancelledSub = pickBestSub(subs, "CANCELLED");
+      const activeSub = pickBestSub(subs, "ACTIVE");
       const targetSub = cancelledSub ?? activeSub;
 
       if (!targetSub) {
-        results.push({ email, action: "skipped_no_sub" });
+        results.push({ email, reactivation_choice, action: "skipped_no_sub" });
+        await createReviewTask(email, "No Loop subscription found (cancelled or active)", "mulligan-to-member");
         continue;
       }
 
@@ -92,24 +135,27 @@ export async function GET(req: NextRequest) {
         shopifyCustomerId,
         subscriptionId: targetSub.id,
         lineId,
-        variantShopifyId: MEMBER_VARIANT_SHOPIFY_ID,
+        variantShopifyId,
         quantity: 1,
       });
 
       let billingDateError: string | undefined;
-      try {
-        await updateLoopSubscriptionNextBillingDate(targetSub.id, MAY_21_2026_EPOCH);
-      } catch (err) {
-        billingDateError = err instanceof Error ? err.message : String(err);
-        console.warn(`[cron/mulligan-to-member] billing date failed for ${email}:`, billingDateError);
+      if (reactivation_choice === "member") {
+        try {
+          await updateLoopSubscriptionNextBillingDate(targetSub.id, MAY_21_2026_EPOCH);
+        } catch (err) {
+          billingDateError = err instanceof Error ? err.message : String(err);
+          console.warn(`[cron/mulligan-to-member] billing date failed for ${email}:`, billingDateError);
+        }
       }
 
       const action = billingDateError ? "processed_no_date" : "processed";
       await doc.ref.update({ status: "processed", processed_at: Timestamp.now() });
-      results.push({ email, action, ...(billingDateError ? { billing_date_error: billingDateError } : {}) });
+      results.push({ email, reactivation_choice, action, ...(billingDateError ? { billing_date_error: billingDateError } : {}) });
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
-      results.push({ email, action: "failed", error });
+      results.push({ email, reactivation_choice, action: "failed", error });
+      await createReviewTask(email, `Processing failed: ${error}`, "mulligan-to-member");
     }
   }
 
@@ -120,7 +166,6 @@ export async function GET(req: NextRequest) {
     processed_no_date: results.filter((r) => r.action === "processed_no_date").length,
     skipped: results.filter((r) => r.action.startsWith("skipped")).length,
     failed: results.filter((r) => r.action === "failed").length,
-    skipped_no_sub: results.filter((r) => r.action === "skipped_no_sub").length,
     results,
   };
 

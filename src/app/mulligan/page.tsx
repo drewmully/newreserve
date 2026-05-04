@@ -569,35 +569,6 @@ export default function MulliganPage() {
                   </div>
                 </button>
 
-                {/* Not Yet */}
-                <button
-                  onClick={() => submitPlan("not_now")}
-                  disabled={isSubmitting}
-                  aria-busy={isSubmitting && selectedPlan === "not_now"}
-                  className={`w-full text-left rounded-2xl p-6 transition-all duration-300 border ${
-                    selectedPlan === "not_now"
-                      ? "border-forest ring-2 ring-forest bg-cream shadow-lg shadow-forest/10"
-                      : "border-taupe/20 bg-cream hover:border-forest/40"
-                  } ${isSubmitting ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
-                >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <span className="text-[11px] tracking-[0.25em] uppercase text-charcoal/50 font-medium">
-                        Not Right Now
-                      </span>
-                      <div className="mt-2">
-                        <span className="text-sm text-charcoal/55 leading-relaxed">
-                          Stay on the list. We&rsquo;ll keep your profile on file and check back when the next box is ready.
-                        </span>
-                      </div>
-                    </div>
-                    {isSubmitting && selectedPlan === "not_now" ? (
-                      <span className="text-forest text-xs tracking-wider uppercase">Saving…</span>
-                    ) : (
-                      selectedPlan === "not_now" && <CheckCircle className="text-forest" />
-                    )}
-                  </div>
-                </button>
               </div>
 
               {submitError && (
@@ -641,7 +612,6 @@ export default function MulliganPage() {
               <p className="text-sm text-charcoal/55 leading-relaxed mb-6 max-w-xs mx-auto">
                 {selectedPlan === "member" && "We've got your re-activation on file. Reserve Members are not charged until your box ships — estimated before the end of May."}
                 {selectedPlan === "access" && "Your Reserve Access re-activation is on the way. We'll be in touch with next steps."}
-                {selectedPlan === "not_now" && "Got it — we'll keep your profile on file and check back when the next box is ready, estimated before the end of May."}
               </p>
 
               <div className="bg-cream rounded-2xl p-6 border border-taupe/20 text-left mb-8">
@@ -707,8 +677,7 @@ export default function MulliganPage() {
                       <span className="text-obsidian font-medium">
                         {selectedPlan === "member" && "Reserve Member"}
                         {selectedPlan === "access" && "Reserve Access"}
-                        {selectedPlan === "not_now" && "Stay on List"}
-                      </span>
+                        </span>
                     </div>
                   </div>
                 </div>
