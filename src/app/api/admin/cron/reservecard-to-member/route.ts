@@ -27,7 +27,7 @@ function isAuthorized(req: NextRequest): boolean {
 
 type ResultRow = {
   email: string;
-  action: "swapped" | "skipped_no_shopify_id" | "skipped_no_active_sub" | "failed";
+  action: "swapped" | "skipped_no_shopify_id" | "skipped_no_active_sub" | "skipped_prepaid" | "failed";
   error?: string;
 };
 
@@ -82,7 +82,11 @@ export async function GET(req: NextRequest) {
       results.push({ email, action: "swapped" });
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
-      results.push({ email, action: "failed", error });
+      if (error.includes("Prepaid subscriptions are not supported")) {
+        results.push({ email, action: "skipped_prepaid" });
+      } else {
+        results.push({ email, action: "failed", error });
+      }
     }
   }
 
@@ -91,6 +95,7 @@ export async function GET(req: NextRequest) {
     total: pending.length,
     swapped: results.filter((r) => r.action === "swapped").length,
     skipped: results.filter((r) => r.action.startsWith("skipped")).length,
+    skipped_prepaid: results.filter((r) => r.action === "skipped_prepaid").length,
     failed: results.filter((r) => r.action === "failed").length,
     results,
   };

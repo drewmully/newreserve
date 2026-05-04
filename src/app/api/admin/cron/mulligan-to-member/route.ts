@@ -25,7 +25,7 @@ import {
 const MEMBER_VARIANT_SHOPIFY_ID = 47601025122496;
 
 // 2026-05-21 00:00:00 UTC
-const MAY_21_2026_EPOCH = 1747785600;
+const MAY_21_2026_EPOCH = 1779321600;
 
 function isAuthorized(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
@@ -38,7 +38,7 @@ type ResultRow = {
   action:
     | "processed"
     | "skipped_no_shopify_id"
-    | "skipped_no_cancelled_sub"
+    | "skipped_no_sub"
     | "failed";
   error?: string;
 };
@@ -68,29 +68,33 @@ export async function GET(req: NextRequest) {
 
       const subs = await getLoopRawSubscriptions(shopifyCustomerId);
       const cancelledSub = subs.find((s) => s.status === "CANCELLED");
+      const activeSub = subs.find((s) => s.status === "ACTIVE");
+      const targetSub = cancelledSub ?? activeSub;
 
-      if (!cancelledSub) {
-        results.push({ email, action: "skipped_no_cancelled_sub" });
+      if (!targetSub) {
+        results.push({ email, action: "skipped_no_sub" });
         continue;
       }
 
-      await reactivateLoopSubscription(cancelledSub.id);
+      if (cancelledSub) {
+        await reactivateLoopSubscription(cancelledSub.id);
+      }
 
-      const lines = cancelledSub.lines as Array<{ id: string | number; [key: string]: unknown }> | undefined;
+      const lines = targetSub.lines as Array<{ id: string | number; [key: string]: unknown }> | undefined;
       const lineId = String(lines?.[0]?.id ?? "");
       if (!lineId) {
-        throw new Error("No line found on subscription after reactivation");
+        throw new Error("No line found on subscription");
       }
 
       await swapLoopSubscriptionProduct({
         shopifyCustomerId,
-        subscriptionId: cancelledSub.id,
+        subscriptionId: targetSub.id,
         lineId,
         variantShopifyId: MEMBER_VARIANT_SHOPIFY_ID,
         quantity: 1,
       });
 
-      await updateLoopSubscriptionNextBillingDate(cancelledSub.id, MAY_21_2026_EPOCH);
+      await updateLoopSubscriptionNextBillingDate(targetSub.id, MAY_21_2026_EPOCH);
 
       await doc.ref.update({ status: "processed", processed_at: Timestamp.now() });
       results.push({ email, action: "processed" });
@@ -106,6 +110,7 @@ export async function GET(req: NextRequest) {
     processed: results.filter((r) => r.action === "processed").length,
     skipped: results.filter((r) => r.action.startsWith("skipped")).length,
     failed: results.filter((r) => r.action === "failed").length,
+    skipped_no_sub: results.filter((r) => r.action === "skipped_no_sub").length,
     results,
   };
 
