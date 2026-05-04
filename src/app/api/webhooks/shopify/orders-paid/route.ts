@@ -23,6 +23,51 @@ import { adminDb, adminAuth } from "@/lib/firebase-admin";
 import { sendPlainText } from "@/lib/email/resend";
 import { resolveMemberTierFromVariantId } from "@/lib/membershipConfig";
 import { startFlow, type EmailFlow } from "@/lib/email/sequences";
+import {
+  getLoopRawSubscriptions,
+  swapLoopSubscriptionProduct,
+} from "@/app/api/_lib/loopAdmin";
+
+const LOOP_VARIANT_BY_TIER: Partial<Record<string, number>> = {
+  member: 47601025122496,
+  access: 47601025482944,
+};
+
+async function swapLoopSubscription(
+  shopifyCustomerId: string,
+  tier: string
+): Promise<void> {
+  const variantShopifyId = LOOP_VARIANT_BY_TIER[tier];
+  if (!variantShopifyId) return;
+
+  try {
+    const subs = await getLoopRawSubscriptions(shopifyCustomerId);
+    const activeSub = subs.find((s) => s.status === "ACTIVE");
+    if (!activeSub) {
+      console.log(`[orders-paid] no active Loop sub for customer ${shopifyCustomerId} — skipping swap`);
+      return;
+    }
+
+    const lines = activeSub.lines as Array<{ id: string | number }> | undefined;
+    const lineId = String(lines?.[0]?.id ?? "");
+    if (!lineId) {
+      console.warn(`[orders-paid] active Loop sub has no line for customer ${shopifyCustomerId}`);
+      return;
+    }
+
+    await swapLoopSubscriptionProduct({
+      shopifyCustomerId,
+      subscriptionId: activeSub.id,
+      lineId,
+      variantShopifyId,
+      quantity: 1,
+    });
+
+    console.log(`[orders-paid] Loop swap → ${tier} for customer ${shopifyCustomerId}`);
+  } catch (err) {
+    console.error(`[orders-paid] Loop swap failed for customer ${shopifyCustomerId}:`, err);
+  }
+}
 
 async function triggerEmailFlow(
   uid: string,
@@ -315,11 +360,18 @@ export async function POST(request: NextRequest) {
       })()
     : Promise.resolve();
 
+  const resolvedTier = email ? resolveTierFromLineItems(order.line_items) : null;
+  const loopSwap =
+    resolvedTier && shopifyCustomerId && LOOP_VARIANT_BY_TIER[resolvedTier]
+      ? swapLoopSubscription(shopifyCustomerId, resolvedTier)
+      : Promise.resolve();
+
   await Promise.allSettled([
     dispatchAnalyticsEvent(event),
     persistAnalyticsEvent(eventId, event),
     aggregateKpiDaily(event),
     tierUpdate,
+    loopSwap,
   ]);
 
   // Shopify expects a 200 response quickly or it will retry
