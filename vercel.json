@@ -3,6 +3,14 @@
     {
       "path": "/api/email/process",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/admin/cron/reservecard-to-member",
+      "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/admin/cron/mulligan-to-member",
+      "schedule": "0 */6 * * *"
     }
   ]
 }

@@ -274,6 +274,35 @@ export const reactivateLoopSubscription = (id: string) =>
   loopSubscriptionMutation(id, "reactivate");
 
 /**
+ * Update the next billing date for a subscription, preserving the existing
+ * billing and delivery policies.
+ */
+export async function updateLoopSubscriptionNextBillingDate(
+  subscriptionId: string,
+  nextBillingDateEpoch: number
+): Promise<void> {
+  const sub = (await getLoopSubscriptionById(subscriptionId)) as Record<string, unknown> | null;
+  const billingPolicy = (sub?.billingPolicy as Record<string, unknown>) ?? {
+    interval: "MONTH",
+    intervalCount: 3,
+  };
+  const deliveryPolicy = (sub?.deliveryPolicy as Record<string, unknown>) ?? {
+    interval: "MONTH",
+    intervalCount: 3,
+  };
+
+  const url = `${BASE_URL}/subscription/${encodeURIComponent(subscriptionId)}/frequency`;
+  const res = await fetch(url, {
+    method: "PUT",
+    headers: getLoopHeaders(),
+    body: JSON.stringify({ billingPolicy, deliveryPolicy, discountType: "OLD", nextBillingDateEpoch }),
+  });
+  if (!res.ok) {
+    throw new Error(`Loop frequency error ${res.status}: ${await res.text()}`);
+  }
+}
+
+/**
  * Build the customer-specific subscription management URL.
  * Replaces the {customer_id} placeholder in LOOP_MANAGE_SUBSCRIPTION_URL.
  */
