@@ -13,6 +13,7 @@ interface UserResult {
   email: string;
   shopifyCustomerId: string | null;
   activeSubs: SubInfo[];
+  cancelledReserveSubs: SubInfo[];
   wrongSubs: SubInfo[];
   error?: string;
 }
@@ -82,15 +83,14 @@ export default function CleanupReactivatedSubsPage() {
       <div>
         <h1 className="font-serif text-3xl text-obsidian">Cleanup: Incorrectly Reactivated Subs</h1>
         <p className="text-charcoal/50 text-sm mt-1">
-          Scans the 10 processed Mulligan users for active Loop subscriptions that are not Reserve-related.
-          These were incorrectly reactivated by the first cron run before the keyword filter was added.
+          Scans processed Mulligan users. If a user still has a CANCELLED Reserve sub, their active
+          sub was reactivated by mistake — only those are flagged for cancellation.
         </p>
       </div>
 
-      <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-4 text-sm text-amber-800">
-        <strong>How this works:</strong> The scan checks each processed Mulligan user&apos;s active Loop subscriptions.
-        Any active sub whose product title does NOT contain reserve/back 9/mullybox/mully keywords is flagged as incorrectly reactivated.
-        Only run &ldquo;Execute&rdquo; after reviewing the scan results.
+      <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-4 text-sm text-amber-800 space-y-1">
+        <p><strong>Signal used:</strong> user has a CANCELLED Reserve sub → the cron reactivated the wrong sub → cancel the active one.</p>
+        <p><strong>Safe cases:</strong> if no CANCELLED Reserve sub exists, the reactivation was correct and nothing is touched.</p>
       </div>
 
       <div className="flex gap-3">
@@ -114,12 +114,10 @@ export default function CleanupReactivatedSubsPage() {
       </div>
 
       {scanResult && (
-        <div className="space-y-6">
-          <div className="flex items-center gap-3">
-            <span className="text-sm font-medium text-obsidian">
-              {scanResult.users.length} processed users scanned
-            </span>
-            <span className={`text-sm font-medium ${scanResult.totalToCancel > 0 ? "text-red-600" : "text-forest"}`}>
+        <div className="space-y-4">
+          <div className="flex items-center gap-4 text-sm">
+            <span className="text-obsidian font-medium">{scanResult.users.length} users scanned</span>
+            <span className={scanResult.totalToCancel > 0 ? "text-red-600 font-medium" : "text-forest font-medium"}>
               {scanResult.totalToCancel > 0
                 ? `${scanResult.totalToCancel} sub(s) to cancel`
                 : "All clean — nothing to cancel"}
@@ -127,44 +125,51 @@ export default function CleanupReactivatedSubsPage() {
           </div>
 
           <div className="bg-white border border-taupe/20 rounded-xl divide-y divide-taupe/10">
-            {scanResult.users.map((user) => (
-              <div key={user.email} className="px-5 py-4">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-sm font-medium text-obsidian">{user.email}</p>
-                    {user.error && (
-                      <p className="text-xs text-ember mt-0.5">{user.error}</p>
-                    )}
-                  </div>
-                  <div className="text-right shrink-0">
-                    {user.wrongSubs.length > 0 ? (
-                      <span className="text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded px-2 py-0.5">
-                        {user.wrongSubs.length} wrong sub(s)
-                      </span>
-                    ) : (
-                      <span className="text-xs text-forest">OK</span>
-                    )}
-                  </div>
+            {scanResult.users.map((u) => (
+              <div key={u.email} className="px-5 py-4 space-y-3">
+                <div className="flex items-center justify-between gap-4">
+                  <p className="text-sm font-medium text-obsidian">{u.email}</p>
+                  {u.error ? (
+                    <span className="text-xs text-ember">{u.error}</span>
+                  ) : u.wrongSubs.length > 0 ? (
+                    <span className="text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded px-2 py-0.5">
+                      {u.wrongSubs.length} to cancel
+                    </span>
+                  ) : (
+                    <span className="text-xs text-forest font-medium">OK</span>
+                  )}
                 </div>
 
-                {user.activeSubs.length > 0 && (
-                  <div className="mt-3 space-y-1.5">
-                    {user.activeSubs.map((sub) => {
-                      const isWrong = user.wrongSubs.some((w) => w.id === sub.id);
+                {u.cancelledReserveSubs.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-xs text-charcoal/40 uppercase tracking-wide">Reserve sub still CANCELLED (evidence)</p>
+                    {u.cancelledReserveSubs.map((s) => (
+                      <div key={s.id} className="flex items-center gap-3 text-xs bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2">
+                        <span className="font-mono text-charcoal/40">{s.id}</span>
+                        <span>{s.productTitle}</span>
+                        <span className="ml-auto uppercase tracking-wide font-medium">cancelled</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {u.activeSubs.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-xs text-charcoal/40 uppercase tracking-wide">Active subs</p>
+                    {u.activeSubs.map((s) => {
+                      const isWrong = u.wrongSubs.some((w) => w.id === s.id);
                       return (
                         <div
-                          key={sub.id}
+                          key={s.id}
                           className={`flex items-center gap-3 text-xs rounded-lg px-3 py-2 ${
                             isWrong
                               ? "bg-red-50 border border-red-200 text-red-700"
                               : "bg-forest/5 border border-forest/20 text-forest"
                           }`}
                         >
-                          <span className="font-mono text-charcoal/40">{sub.id}</span>
-                          <span className="font-medium">{sub.productTitle}</span>
-                          {isWrong && (
-                            <span className="ml-auto font-medium">will be cancelled</span>
-                          )}
+                          <span className="font-mono text-charcoal/40">{s.id}</span>
+                          <span>{s.productTitle}</span>
+                          {isWrong && <span className="ml-auto font-medium">will be cancelled</span>}
                         </div>
                       );
                     })}
@@ -179,12 +184,10 @@ export default function CleanupReactivatedSubsPage() {
       {executeResult && (
         <div className="space-y-4">
           <div className={`rounded-xl px-5 py-4 border ${
-            executeResult.totalErrors === 0
-              ? "bg-forest/5 border-forest/20"
-              : "bg-amber-50 border-amber-200"
+            executeResult.totalErrors === 0 ? "bg-forest/5 border-forest/20" : "bg-amber-50 border-amber-200"
           }`}>
             <p className="text-sm font-medium text-obsidian">
-              Cleanup complete: {executeResult.totalCancelled} cancelled
+              Done: {executeResult.totalCancelled} cancelled
               {executeResult.totalErrors > 0 && `, ${executeResult.totalErrors} errors`}
             </p>
           </div>
