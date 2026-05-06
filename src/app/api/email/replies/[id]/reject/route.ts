@@ -13,7 +13,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Timestamp } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase-admin";
-import { resumeSequence } from "@/lib/email/sequences";
+import { completeSequence } from "@/lib/email/sequences";
 import { verifyAdminRequest } from "@/app/api/_lib/adminAuth";
 
 export async function POST(
@@ -51,8 +51,8 @@ export async function POST(
     dismissNote: body.note ?? null,
   });
 
-  // Resume the drip so it's not stuck paused
-  await resumeSequence(reply.uid);
+  // End the drip — once a member replies, they're out of the flow
+  await completeSequence(reply.uid);
 
   console.log(`[email/replies] Dismissed replyId=${id} uid=${reply.uid}`);
   return NextResponse.json({ ok: true });

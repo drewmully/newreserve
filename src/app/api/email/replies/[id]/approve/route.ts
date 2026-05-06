@@ -20,7 +20,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Timestamp } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase-admin";
 import { sendPlainText } from "@/lib/email/resend";
-import { resumeSequence } from "@/lib/email/sequences";
+import { completeSequence } from "@/lib/email/sequences";
 import { executeToolCalls } from "@/lib/email/ai-reply";
 import { verifyAdminRequest } from "@/app/api/_lib/adminAuth";
 
@@ -199,7 +199,7 @@ export async function POST(
   }
 
   if (shouldReplaySideEffect(reply, "sequenceResumed")) {
-    await resumeSequence(uid);
+    await completeSequence(uid);
     await replyRef.update({ sequenceResumed: true });
   }
 

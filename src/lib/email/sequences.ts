@@ -262,7 +262,7 @@ export async function processSequence(uid: string): Promise<void> {
   }
 
   const { subject, text } = template(seq.firstName);
-  await sendPlainText({
+  const emailId = await sendPlainText({
     to: seq.email,
     subject,
     text,
@@ -270,6 +270,19 @@ export async function processSequence(uid: string): Promise<void> {
       { name: "flow", value: seq.flow },
       { name: "step", value: String(step) },
     ],
+  });
+
+  // Write sent event directly so funnel stats work without Resend webhook.
+  adminDb.collection("email_events").add({
+    event_type: "sent",
+    email_id: emailId,
+    email: seq.email,
+    uid,
+    subject,
+    created_at: FieldValue.serverTimestamp(),
+    tags: { flow: seq.flow, step: String(step) },
+  }).catch((err: unknown) => {
+    console.error("[sequences] Failed to write sent event:", err);
   });
 
   // Advance to the next step.
@@ -315,6 +328,15 @@ export async function resumeSequence(uid: string): Promise<void> {
       ? Timestamp.fromMillis(Date.now() + 24 * 60 * 60 * 1000)
       : null,
   });
+}
+
+/**
+ * Ends a sequence immediately (e.g. after a personal reply from Drew).
+ */
+export async function completeSequence(uid: string): Promise<void> {
+  const snap = await seqRef(uid).get();
+  if (!snap.exists) return;
+  await seqRef(uid).update({ status: "completed", nextSendAt: null });
 }
 
 /**

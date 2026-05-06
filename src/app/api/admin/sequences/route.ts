@@ -2,8 +2,11 @@
  * GET /api/admin/sequences
  *
  * Returns email sequence performance metrics for the admin CRM.
- * Aggregates email_events (by flow+step tag) and email_replies (by flow+step).
- * Also returns current user distribution across flows from email_sequences.
+ *
+ * "Sent" is derived from email_sequences.lastSentStep (source of truth, per
+ * unique user). Using email_events for sent counts caused inflated numbers
+ * due to resets and flow switches. Open/click still comes from email_events
+ * (populated by Resend webhook at /api/email/events).
  *
  * Auth: Firebase Bearer token (admin email allowlist).
  */
@@ -38,6 +41,9 @@ interface FlowMetrics {
   steps: StepMetrics[];
 }
 
+const isTestEmail = (email: unknown) =>
+  typeof email === "string" && /^leo(\+[^@]*)?@mullybox\.com$/i.test(email);
+
 export async function GET(request: NextRequest) {
   try {
     await verifyAdmin(request);
@@ -47,61 +53,71 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Fetch all three collections in parallel
     const [eventsSnap, repliesSnap, seqSnap] = await Promise.all([
       adminDb.collection("email_events").get(),
       adminDb.collection("email_replies").get(),
       adminDb.collection("email_sequences").get(),
     ]);
 
-    // Aggregate email events by flow+step+event_type
-    const isTestEmail = (email: unknown) =>
-      typeof email === "string" && /^leo(\+[^@]*)?@mullybox\.com$/i.test(email);
-
-    // Events from Resend have tags: { flow: "free", step: "0" }
-    const eventCounts: Record<string, Record<string, Record<string, number>>> = {};
-    for (const doc of eventsSnap.docs) {
-      const d = doc.data() as Record<string, unknown>;
-      if (isTestEmail(d.email)) continue;
-      const tags = d.tags as Record<string, string> | null | undefined;
-      if (!tags?.flow || tags.step === undefined) continue;
-      const flow = tags.flow;
-      const step = tags.step;
-      const eventType = (d.event_type as string) ?? "unknown";
-
-      eventCounts[flow] ??= {};
-      eventCounts[flow][step] ??= {};
-      eventCounts[flow][step][eventType] = (eventCounts[flow][step][eventType] ?? 0) + 1;
-    }
-
-    // Aggregate replies by flow+lastSentStep
-    for (const doc of repliesSnap.docs) {
-      const d = doc.data() as Record<string, unknown>;
-      const flow = d.flow as string | undefined;
-      const step = d.lastSentStep as number | undefined;
-      if (!flow || step === undefined || step === null) continue;
-      const stepKey = String(step);
-
-      eventCounts[flow] ??= {};
-      eventCounts[flow][stepKey] ??= {};
-      eventCounts[flow][stepKey]["replied"] = (eventCounts[flow][stepKey]["replied"] ?? 0) + 1;
-    }
-
-    // User distribution per flow
+    // ── 1. Sent counts + user distribution from email_sequences ──────────────
+    // "sent at step N" = number of unique users whose lastSentStep >= N.
+    // This always produces a funnel shape and survives resets/flow switches.
+    const sentCounts: Record<string, Record<string, number>> = {};
     const userCounts: Record<string, { active: number; paused: number; completed: number }> = {};
+
     for (const doc of seqSnap.docs) {
       const d = doc.data() as Record<string, unknown>;
       if (isTestEmail(d.email)) continue;
       const flow = d.flow as string | undefined;
       const status = d.status as string | undefined;
+      const lastSentStep = typeof d.lastSentStep === "number" ? d.lastSentStep : -1;
       if (!flow) continue;
+
       userCounts[flow] ??= { active: 0, paused: 0, completed: 0 };
       if (status === "active") userCounts[flow].active++;
       else if (status === "paused") userCounts[flow].paused++;
       else if (status === "completed") userCounts[flow].completed++;
+
+      sentCounts[flow] ??= {};
+      for (let i = 0; i <= lastSentStep; i++) {
+        const key = String(i);
+        sentCounts[flow][key] = (sentCounts[flow][key] ?? 0) + 1;
+      }
     }
 
-    // Build response using FLOW_STEPS as the source of truth for step definitions
+    // ── 2. Open/click from email_events (Resend webhook) ─────────────────────
+    const engagementCounts: Record<string, Record<string, Record<string, number>>> = {};
+
+    for (const doc of eventsSnap.docs) {
+      const d = doc.data() as Record<string, unknown>;
+      if (isTestEmail(d.email)) continue;
+      const eventType = d.event_type as string | undefined;
+      if (eventType !== "opened" && eventType !== "clicked") continue;
+      const tags = d.tags as Record<string, string> | null | undefined;
+      if (!tags?.flow || tags.step === undefined) continue;
+
+      const flow = tags.flow;
+      const step = tags.step;
+      engagementCounts[flow] ??= {};
+      engagementCounts[flow][step] ??= {};
+      engagementCounts[flow][step][eventType] = (engagementCounts[flow][step][eventType] ?? 0) + 1;
+    }
+
+    // ── 3. Reply counts from email_replies ────────────────────────────────────
+    const replyCounts: Record<string, Record<string, number>> = {};
+
+    for (const doc of repliesSnap.docs) {
+      const d = doc.data() as Record<string, unknown>;
+      if (isTestEmail(d.email)) continue;
+      const flow = d.flow as string | undefined;
+      const step = d.lastSentStep as number | undefined;
+      if (!flow || step === undefined || step === null) continue;
+      const stepKey = String(step);
+      replyCounts[flow] ??= {};
+      replyCounts[flow][stepKey] = (replyCounts[flow][stepKey] ?? 0) + 1;
+    }
+
+    // ── 4. Build response ─────────────────────────────────────────────────────
     const flows: Record<string, FlowMetrics> = {};
     for (const [flowName, steps] of Object.entries(FLOW_STEPS) as [EmailFlow, typeof FLOW_STEPS[EmailFlow]][]) {
       const uc = userCounts[flowName] ?? { active: 0, paused: 0, completed: 0 };
@@ -109,15 +125,15 @@ export async function GET(request: NextRequest) {
         users: { ...uc, total: uc.active + uc.paused + uc.completed },
         steps: steps.map((s) => {
           const stepKey = String(s.step);
-          const ec = eventCounts[flowName]?.[stepKey] ?? {};
+          const ec = engagementCounts[flowName]?.[stepKey] ?? {};
           return {
             step: s.step,
             delayDays: s.delayDays,
             triggerType: s.triggerType,
-            sent: ec["sent"] ?? 0,
+            sent: sentCounts[flowName]?.[stepKey] ?? 0,
             opened: ec["opened"] ?? 0,
             clicked: ec["clicked"] ?? 0,
-            replied: ec["replied"] ?? 0,
+            replied: replyCounts[flowName]?.[stepKey] ?? 0,
           };
         }),
       };
