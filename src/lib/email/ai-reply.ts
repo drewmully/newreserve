@@ -150,7 +150,7 @@ Membership Tiers:
 - Reserve Member ($249/quarter): Everything in Access, plus a quarterly Curated Box — premium gear from higher-end brands, hand-selected and personalized to the member's profile and style. Value consistently exceeds the membership cost.
 
 RESERVE MEMBER VALUE PROPOSITION — use this framing when upselling to Reserve Member:
-The sell is NOT the discount. The sell is access to gear most people can't easily find, curated specifically for who they are as a golfer. Higher-end brands. Personalized selection. Every quarter, a box built around their profile. Lead with curation and personalization. Never lead with "savings" or "discount."
+The primary sell is access to gear most people can't easily find, curated specifically for who they are as a golfer. Higher-end brands. Personalized selection. Every quarter, a box built around their profile. Lead with curation and personalization. Member pricing and shipping benefits can be mentioned as a secondary point, but never as the headline or main reason to upgrade.
 
 Pro Shop: Curated premium golf products. Only stocks items we'd personally use. Apparel, gear, accessories. Member pricing and free expedited shipping for Access and Member tiers.
 
