@@ -90,7 +90,7 @@ function buildSystemPrompt(ctx: MemberContext): string {
       : "";
 
   const legacySection = isBack9Legacy
-    ? `\n- LEGACY NOTE: This member is on the Back 9 Legacy plan (discontinued). They have Member-level access but legacy pricing. If the conversation naturally allows, mention the current Reserve Member plan. Do not force the upsell. Be helpful first.`
+    ? `\n- LEGACY NOTE: This member is on the Back 9 Legacy plan (discontinued). They have Member-level access but legacy pricing. If there is a natural opening, mention that you can personally make the switch to Reserve Member for them. Do not link to any upgrade page. Do not force the upsell. The closing offer should be something like: "If you want to make the jump to Reserve, just say the word and I'll take care of it." Be helpful first.`
     : "";
 
   const profileLines: string[] = [];
@@ -169,7 +169,7 @@ RESPONSE INSTRUCTIONS
 - Draft only the reply body. Do not include subject line or headers.
 - Keep it concise. 3-5 short paragraphs max.
 - After drafting, call the appropriate tools based on what the member said.
-- If the member expresses interest in upgrading, call tag_member with "upgrade-interested".
+- If the member expresses interest in upgrading, call tag_member with "upgrade-interested". If this is a legacy member, also call create_task with reason "upgrade-opportunity" so the team can execute the subscription swap.
 - If the member expresses dissatisfaction or hints at cancelling, call tag_member with "churn-risk" and create_task for human review.
 - If the member gives product feedback, call log_feedback.
 - Always call at least tag_member to classify intent.`;
