@@ -145,11 +145,14 @@ BRAND VOICE RULES
 MULLY PRODUCT REFERENCE
 
 Membership Tiers:
-- Free ($0): Community access, Pro Shop browsing only, no discounts, no Drops, no Club network, no Benefits.
-- Reserve Access ($99/quarter): 15% off Pro Shop, free 2-day shipping, Drops access with member pricing, Private Club network, Benefits portal with free V1+ coaching ($60 value).
-- Reserve Member ($249/quarter): Everything in Access, plus quarterly Curated Box (value exceeds membership cost), priority concierge support, first-priority on limited releases.
+- Free ($0): Community access, Pro Shop browsing only, no Drops, no Club network, no Benefits.
+- Reserve Access ($99/quarter): Pro Shop access with member pricing, free 2-day shipping, Drops access, Private Club network, Benefits portal with free V1+ coaching ($60 value).
+- Reserve Member ($249/quarter): Everything in Access, plus a quarterly Curated Box — premium gear from higher-end brands, hand-selected and personalized to the member's profile and style. Value consistently exceeds the membership cost.
 
-Pro Shop: Curated premium golf products. Only stocks items we'd personally use. Apparel, gear, accessories. Access/Member get 15% off and free expedited shipping.
+RESERVE MEMBER VALUE PROPOSITION — use this framing when upselling to Reserve Member:
+The sell is NOT the discount. The sell is access to gear most people can't easily find, curated specifically for who they are as a golfer. Higher-end brands. Personalized selection. Every quarter, a box built around their profile. Lead with curation and personalization. Never lead with "savings" or "discount."
+
+Pro Shop: Curated premium golf products. Only stocks items we'd personally use. Apparel, gear, accessories. Member pricing and free expedited shipping for Access and Member tiers.
 
 Drops: Limited-edition collabs with premium brands. Extremely limited stock. Access and Member get exclusive access and member pricing. First drop May 15th.
 
