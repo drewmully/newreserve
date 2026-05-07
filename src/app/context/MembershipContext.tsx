@@ -610,6 +610,19 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
 
         try {
           const profile = await syncUserProfile(firebaseUser);
+
+          // Mirror the latest Firestore profile to mully-hub Supabase in
+          // real time. Fire-and-forget: never block sign-in on hub IO.
+          firebaseUser.getIdToken().then((token) => {
+            fetch("/api/users/sync-hub", {
+              method: "POST",
+              headers: { Authorization: `Bearer ${token}` },
+              keepalive: true,
+            }).catch((e) =>
+              console.warn("[MembershipContext] sync-hub failed:", e)
+            );
+          }).catch(() => {});
+
           if (profile.username) setUsername(profile.username);
           setOnboardingCompleted(profile.onboarding_completed ?? false);
           if (profile.messaging_preferences) {
