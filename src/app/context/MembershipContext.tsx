@@ -219,6 +219,8 @@ interface MembershipContextValue {
     username: string;
     onboardingProfile: OnboardingProfile;
     fitProfile?: FitProfile;
+    phone?: string;
+    smsOptIn?: boolean;
   }) => Promise<void>;
   saveUsername: (username: string) => Promise<void>;
 
@@ -942,6 +944,8 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
       username: string;
       onboardingProfile: OnboardingProfile;
       fitProfile?: FitProfile;
+      phone?: string;
+      smsOptIn?: boolean;
     }) => {
       const { normalizedOnboardingProfile, normalizedFitProfile, updates } =
         buildCompleteOnboardingUpdatePayload({
@@ -952,9 +956,26 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
           updatedAt: serverTimestamp(),
         });
 
+      // Phone + SMS consent (TCPA: only mark consent when checkbox checked AND a valid phone is present)
+      const phoneE164 = (data.phone ?? "").trim();
+      const smsOptIn = !!(data.smsOptIn && phoneE164);
+      if (phoneE164) {
+        updates.phone_e164 = phoneE164;
+      }
+      // Always write email_marketing default true; sms only true when explicit consent
+      updates["messaging_preferences.email_marketing"] = true;
+      updates["messaging_preferences.sms_marketing"] = smsOptIn;
+      if (smsOptIn) {
+        updates.sms_consent_given_at = serverTimestamp();
+      }
+
       setUsername(data.username);
       setOnboardingCompleted(true);
       setOnboardingProfileState(normalizedOnboardingProfile);
+      setMessagingPreferences({
+        email_marketing: true,
+        sms_marketing: smsOptIn,
+      });
       if (normalizedFitProfile) {
         setFitProfileState(normalizedFitProfile);
       }

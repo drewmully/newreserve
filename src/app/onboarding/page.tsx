@@ -14,6 +14,16 @@ import {
 
 const PENDING_ONBOARDING_DATA_KEY = "pending_onboarding_data";
 
+/* Normalize a US phone input to E.164. Returns "" if not a plausible US 10-digit number. */
+function normalizePhoneE164(raw: string): string {
+  if (!raw) return "";
+  const digits = raw.replace(/\D+/g, "");
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+  if (raw.trim().startsWith("+") && digits.length >= 10) return `+${digits}`;
+  return "";
+}
+
 /* ─── A/B bucket reader (mirrors mr_ab cookie from middleware) ─── */
 function getABBucket(): number {
   if (typeof document === "undefined") return 0;
@@ -224,6 +234,8 @@ export default function OnboardingPage() {
         putterType,
         selectedTier: newTier,
       },
+      phone: normalizePhoneE164(phone),
+      smsOptIn: smsOptIn && !!normalizePhoneE164(phone),
       fitProfile: newTier === "member" ? nextFitProfile : undefined,
     };
 
@@ -326,6 +338,8 @@ export default function OnboardingPage() {
   const [birthMonth, setBirthMonth] = useState("");
   const [birthDay, setBirthDay] = useState("");
   const [birthYear, setBirthYear] = useState("");
+  const [phone, setPhone] = useState("");
+  const [smsOptIn, setSmsOptIn] = useState(false);
 
   // Step 1b state
   const [handicap, setHandicap] = useState("");
@@ -592,6 +606,43 @@ export default function OnboardingPage() {
                         </select>
                       </div>
                     </div>
+                  </div>
+
+                  {/* Phone (optional) */}
+                  <div className="mb-12">
+                    <h3 className="text-sm font-medium text-obsidian tracking-wide mb-2">
+                      Phone <span className="text-charcoal/40 font-normal">(optional)</span>
+                    </h3>
+                    <p className="text-xs text-charcoal/40 mb-4">
+                      For drop notifications and Reserve updates. We never share your number.
+                    </p>
+                    <input
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="(313) 555-0123"
+                      className="w-full max-w-sm h-11 px-4 rounded-xl bg-cream border border-taupe/25 text-obsidian text-sm placeholder:text-charcoal/30 focus:border-forest/40 focus:ring-2 focus:ring-forest/10 transition-all duration-300"
+                    />
+                    <label className="flex items-start gap-3 mt-4 max-w-sm cursor-pointer group">
+                      <input
+                        type="checkbox"
+                        checked={smsOptIn}
+                        onChange={(e) => setSmsOptIn(e.target.checked)}
+                        className="mt-0.5 h-4 w-4 rounded border-taupe/40 text-forest focus:ring-forest/30 cursor-pointer"
+                      />
+                      <span className="text-xs text-charcoal/60 leading-relaxed">
+                        Text me about drops and Reserve updates from Mully Group, Inc. Recurring marketing texts (≤4/month). Consent is not a condition of purchase. Msg &amp; data rates may apply. Reply STOP to opt out, HELP for help. See our{" "}
+                        <a href="/policies/privacy" target="_blank" rel="noopener noreferrer" className="underline hover:text-forest">
+                          Privacy Policy
+                        </a>
+                        {" "}and{" "}
+                        <a href="/policies/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-forest">
+                          Terms
+                        </a>.
+                      </span>
+                    </label>
                   </div>
 
                   {/* Continue */}

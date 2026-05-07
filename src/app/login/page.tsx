@@ -119,10 +119,12 @@ export default function LoginPage() {
           onboardingProfile: Record<string, unknown>;
           fitProfile?: Record<string, unknown>;
           selectedTier: "free" | "access" | "member";
+          phone?: string;
+          smsOptIn?: boolean;
         };
         try { localStorage.removeItem(PENDING_ONBOARDING_DATA_KEY); } catch {}
 
-        const { selectedTier, username, onboardingProfile, fitProfile } = data;
+        const { selectedTier, username, onboardingProfile, fitProfile, phone, smsOptIn } = data;
 
         const alreadyPaid = (() => {
           try {
@@ -140,6 +142,8 @@ export default function LoginPage() {
           username,
           onboardingProfile: onboardingProfile as unknown as Parameters<typeof completeOnboarding>[0]["onboardingProfile"],
           fitProfile: fitProfile as unknown as Parameters<typeof completeOnboarding>[0]["fitProfile"],
+          phone,
+          smsOptIn,
         }).then(() => {
           setTier(selectedTier);
           if (!alreadyPaid && (selectedTier === "access" || selectedTier === "member")) {

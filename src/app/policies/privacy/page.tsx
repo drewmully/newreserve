@@ -5,7 +5,7 @@
 export default function PrivacyPolicyPage() {
   return (
     <article>
-      <PolicyHeader title="Privacy Policy" updated="February 1, 2026" />
+      <PolicyHeader title="Privacy Policy" updated="May 7, 2026" />
 
       <div className="policy-prose">
         <p>
@@ -41,6 +41,31 @@ export default function PrivacyPolicyPage() {
           <li>Prevent fraud and maintain security</li>
           <li>Comply with legal obligations</li>
         </ul>
+
+        <h2>SMS / Text Messages</h2>
+        <p>
+          You can choose to share your mobile phone number with us during onboarding or in your account settings. Providing a phone number is <strong>optional</strong> and is never required to create an account or make a purchase.
+        </p>
+        <h3>Consent</h3>
+        <p>
+          By providing your phone number <strong>and</strong> checking the SMS consent box at the point of collection, you expressly agree to receive recurring marketing and informational text messages from Mully Group, Inc., including notifications about product drops, member events, and Reserve updates. Consent is not a condition of any purchase. We will never tie a discount, gift, or other benefit to opting in.
+        </p>
+        <h3>Message Frequency &amp; Cost</h3>
+        <p>
+          Message frequency varies but will not exceed 4 messages per month. Message and data rates may apply, depending on your mobile carrier and plan. Mully Group, Inc. is not responsible for charges from your carrier.
+        </p>
+        <h3>Opt-Out</h3>
+        <p>
+          You can cancel SMS messages at any time by replying <strong>STOP</strong> to any message we send. After you reply STOP, we will send a single confirmation message and will not send you any additional messages unless you opt back in. For help, reply <strong>HELP</strong> or contact us at <a href="mailto:Info@MyMully.com">Info@MyMully.com</a>. You may also adjust your messaging preferences in your account settings at any time.
+        </p>
+        <h3>Carrier Disclaimer</h3>
+        <p>
+          Carriers are not liable for delayed or undelivered messages. Supported carriers include AT&amp;T, T-Mobile, Verizon Wireless, Sprint, U.S. Cellular, and most major U.S. carriers.
+        </p>
+        <h3>How We Use Your Number</h3>
+        <p>
+          We use the phone number you provide to send the messages described above and, where applicable, transactional messages such as order or shipping updates. <strong>We do not sell, rent, or share your mobile number or SMS opt-in data with any third parties for their marketing purposes.</strong> Mobile information will not be shared with third parties or affiliates for marketing or promotional purposes. Information sharing to subcontractors in support of the services we provide (e.g., our SMS messaging platform) is permitted; these vendors are contractually prohibited from using the data for any other purpose.
+        </p>
 
         <h2>How We Share Your Information</h2>
         <p>We do not sell your personal information. We share data only with:</p>

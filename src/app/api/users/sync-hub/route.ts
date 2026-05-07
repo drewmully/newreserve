@@ -77,6 +77,11 @@ export async function POST(request: NextRequest) {
     onboarding_profile: profile.onboarding_profile,
     store_credit: profile.store_credit,
     subscriptions: profile.subscriptions,
+    // Phone (optional, E.164) + SMS consent timestamp — set when user opts in
+    // during onboarding or in account settings. Forwarded to mully-hub so
+    // customers.phone_e164 + accepts_sms_marketing stay in lock-step.
+    phone: typeof profile.phone_e164 === "string" ? profile.phone_e164 : null,
+    sms_consent_given_at: profile.sms_consent_given_at ?? null,
   };
   const body = JSON.stringify(payload);
 
