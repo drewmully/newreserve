@@ -26,14 +26,22 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: msg }, { status: msg === "Forbidden" ? 403 : 401 });
   }
 
-  const snap = await adminDb
-    .collection("review_tasks")
-    .where("source", "==", "cron")
-    .orderBy("createdAt", "desc")
-    .limit(50)
-    .get();
+  const [cronSnap, emailSnap] = await Promise.all([
+    adminDb
+      .collection("review_tasks")
+      .where("source", "==", "cron")
+      .orderBy("createdAt", "desc")
+      .limit(50)
+      .get(),
+    adminDb
+      .collection("review_tasks")
+      .where("source", "==", "email_reply")
+      .orderBy("createdAt", "desc")
+      .limit(50)
+      .get(),
+  ]);
 
-  const tasks = snap.docs.map((doc) => {
+  const tasks = cronSnap.docs.map((doc) => {
     const d = doc.data();
     return {
       id: doc.id,
@@ -45,7 +53,21 @@ export async function GET(request: NextRequest) {
     };
   });
 
-  return NextResponse.json({ tasks });
+  const emailTasks = emailSnap.docs.map((doc) => {
+    const d = doc.data();
+    return {
+      id: doc.id,
+      uid: d.uid as string,
+      replyId: d.replyId as string,
+      email: d.email as string,
+      reason: d.reason as string,
+      note: d.note as string,
+      status: d.status as string,
+      createdAt: (d.createdAt as FirebaseFirestore.Timestamp).toDate().toISOString(),
+    };
+  });
+
+  return NextResponse.json({ tasks, emailTasks });
 }
 
 export async function POST(request: NextRequest) {

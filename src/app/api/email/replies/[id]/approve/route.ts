@@ -193,7 +193,7 @@ export async function POST(
   const toolCalls = Array.isArray(reply.toolCalls) ? reply.toolCalls : [];
   if (shouldReplaySideEffect(reply, "toolCallsCompleted")) {
     if (toolCalls.length > 0) {
-      await executeToolCalls(uid, id, toolCalls);
+      await executeToolCalls(uid, id, toolCalls, email);
     }
     await replyRef.update({ toolCallsCompleted: true });
   }

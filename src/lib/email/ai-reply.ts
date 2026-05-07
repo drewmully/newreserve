@@ -346,7 +346,8 @@ export async function generateReplyDraft(
 export async function executeToolCalls(
   uid: string,
   replyId: string,
-  toolCalls: ToolCallResult[]
+  toolCalls: ToolCallResult[],
+  email?: string
 ): Promise<void> {
   for (const call of toolCalls) {
     switch (call.name) {
@@ -375,8 +376,10 @@ export async function executeToolCalls(
       }
       case "create_task": {
         await adminDb.collection("review_tasks").add({
+          source: "email_reply",
           uid,
           replyId,
+          email: email ?? "",
           reason: call.input.reason,
           note: call.input.note,
           status: "open",
