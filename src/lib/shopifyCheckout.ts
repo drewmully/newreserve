@@ -1,7 +1,24 @@
 import { SHOPIFY_MEMBERSHIP_PLANS } from "./membershipConfig";
 import { buildCheckoutOriginAttributes } from "./shopifyCheckoutOrigin";
 
-export async function createMembershipCheckout(tier: "access" | "member"): Promise<void> {
+export interface CreateMembershipCheckoutOptions {
+  /**
+   * Pre-fills the Shopify checkout `email` field. Use this when the visitor
+   * already gave us their email (EmailCTA / start-account flow). Shopify
+   * accepts ?checkout[email]= on the storefront checkout URL.
+   */
+  email?: string;
+  /**
+   * Override the post-checkout return URL. Defaults to /auth/callback so
+   * Leo's auto-login pattern continues to work.
+   */
+  returnPath?: string;
+}
+
+export async function createMembershipCheckout(
+  tier: "access" | "member",
+  options: CreateMembershipCheckoutOptions = {}
+): Promise<void> {
   const PLANS = {
     access: {
       merchandiseId: SHOPIFY_MEMBERSHIP_PLANS.access.merchandiseId,
@@ -17,7 +34,8 @@ export async function createMembershipCheckout(tier: "access" | "member"): Promi
   const token = process.env.NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN;
   if (!domain || !token) return;
 
-  const returnTo = `${window.location.origin}/auth/callback`;
+  const returnPath = options.returnPath ?? "/auth/callback";
+  const returnTo = `${window.location.origin}${returnPath}`;
   const attributes = [
     ...buildCheckoutOriginAttributes(returnTo),
     { key: "new_user", value: "true" },
@@ -49,7 +67,30 @@ export async function createMembershipCheckout(tier: "access" | "member"): Promi
 
   const json = await res.json();
   const checkoutUrl = json?.data?.cartCreate?.cart?.checkoutUrl;
-  if (checkoutUrl) {
-    window.location.href = checkoutUrl;
+  if (!checkoutUrl) {
+    console.error(
+      "[shopifyCheckout] no checkoutUrl \u2014 errors:",
+      json?.data?.cartCreate?.userErrors,
+      json?.errors
+    );
+    return;
+  }
+
+  // Append `?return_url=` (and email pre-fill) the same way UpgradeModal does.
+  // Shopify honors `return_url` query param and bounces the buyer back to
+  // /auth/callback as an authenticated session via Leo's pattern.
+  try {
+    const checkout = new URL(checkoutUrl);
+    checkout.searchParams.set("return_url", returnTo);
+    if (options.email) {
+      checkout.searchParams.set("checkout[email]", options.email);
+    }
+    window.location.href = checkout.toString();
+  } catch {
+    const separator = checkoutUrl.includes("?") ? "&" : "?";
+    const emailParam = options.email
+      ? `&checkout%5Bemail%5D=${encodeURIComponent(options.email)}`
+      : "";
+    window.location.href = `${checkoutUrl}${separator}return_url=${encodeURIComponent(returnTo)}${emailParam}`;
   }
 }

@@ -3,8 +3,34 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { PENDING_SIGN_IN_EMAIL_KEY } from "@/lib/pendingSignInEmail";
+import { trackEvent } from "@/lib/tracking";
 
 export const PENDING_ONBOARDING_EMAIL_KEY = "pending_onboarding_email";
+
+/** Read UTM/click ID query params off the current URL. */
+function collectAttribution(): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  try {
+    const sp = new URLSearchParams(window.location.search);
+    const out: Record<string, string> = {};
+    for (const k of [
+      "utm_source",
+      "utm_medium",
+      "utm_campaign",
+      "utm_content",
+      "utm_term",
+      "gclid",
+      "gbraid",
+      "wbraid",
+    ]) {
+      const v = sp.get(k);
+      if (v) out[k] = v;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
 
 export function EmailCTA({ variant = "hero", ctaText }: { variant?: "hero" | "bottom"; ctaText?: string }) {
   const router = useRouter();
@@ -17,35 +43,85 @@ export function EmailCTA({ variant = "hero", ctaText }: { variant?: "hero" | "bo
     if (!email || loading) return;
 
     setLoading(true);
+
+    // Always remember the email locally (for fallback paths).
+    try { sessionStorage.setItem(PENDING_ONBOARDING_EMAIL_KEY, email); } catch {}
+
+    // Fire "email submitted" up front so we can measure top-of-funnel even
+    // if the user bounces before /choose-plan loads.
+    void trackEvent("email_submitted", {
+      email,
+      properties: { source: variant === "hero" ? "hero_cta" : "bottom_cta" },
+    });
+
     try {
-      const res = await fetch("/api/auth/check-email", {
+      const checkRes = await fetch("/api/auth/check-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
 
       let exists = false;
-      if (res.ok) {
+      if (checkRes.ok) {
         try {
-          const data = await res.json() as { exists?: boolean };
+          const data = (await checkRes.json()) as { exists?: boolean };
           exists = data.exists === true;
         } catch {
-          // JSON parse failed — treat as new user
+          // Treat as new user.
         }
       }
 
       if (exists) {
-        // Existing user → normal login flow
         try { sessionStorage.setItem(PENDING_SIGN_IN_EMAIL_KEY, email); } catch {}
         router.push("/login");
-      } else {
-        // New user (or error) → onboarding first
-        try { sessionStorage.setItem(PENDING_ONBOARDING_EMAIL_KEY, email); } catch {}
-        router.push("/onboarding");
+        return;
       }
+
+      // New user: create a Firebase account with no password and sign in
+      // with the returned custom token, then route to /choose-plan.
+      const startRes = await fetch("/api/auth/start-account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          source: variant === "hero" ? "hero_cta" : "bottom_cta",
+          utm: collectAttribution(),
+        }),
+      });
+
+      if (!startRes.ok) {
+        // Fall back to the legacy onboarding page so we never lose a lead.
+        router.push("/onboarding");
+        return;
+      }
+
+      const startData = (await startRes.json()) as {
+        uid?: string;
+        customToken?: string;
+      };
+
+      if (startData.customToken) {
+        try {
+          const [{ auth }, { signInWithCustomToken }] = await Promise.all([
+            import("@/lib/firebase"),
+            import("firebase/auth"),
+          ]);
+          await signInWithCustomToken(auth, startData.customToken);
+          void trackEvent("account_created", {
+            user_id: startData.uid,
+            email,
+            properties: { method: "email_only", tier: "free" },
+          });
+        } catch (signInErr) {
+          console.error("[EmailCTA] custom-token sign-in failed:", signInErr);
+          // Fall through to /choose-plan anyway — the page treats unauth
+          // users as legitimate guests and re-prompts.
+        }
+      }
+
+      router.push("/choose-plan");
     } catch {
-      // Network error — treat as new user
-      try { sessionStorage.setItem(PENDING_ONBOARDING_EMAIL_KEY, email); } catch {}
+      // Network error — keep them moving via the legacy path.
       router.push("/onboarding");
     } finally {
       setLoading(false);

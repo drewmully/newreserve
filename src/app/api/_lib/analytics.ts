@@ -188,6 +188,57 @@ function compactObject<T extends Record<string, unknown>>(value: T): T {
   ) as T;
 }
 
+/** Parse referring domain from a referrer URL. Returns undefined for empty/invalid. */
+function parseReferringDomain(referrer: unknown): string | undefined {
+  if (typeof referrer !== "string" || referrer.trim().length === 0) {
+    return undefined;
+  }
+  try {
+    const url = new URL(referrer.trim());
+    return url.hostname || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Lightweight UA parsing for PostHog $browser / $device_type / $os fields. */
+function parseBrowser(ua: string | undefined): string | undefined {
+  if (!ua) return undefined;
+  if (/Edg\//i.test(ua)) return "Edge";
+  if (/OPR\/|Opera/i.test(ua)) return "Opera";
+  if (/Chrome\//i.test(ua) && !/Chromium/i.test(ua)) return "Chrome";
+  if (/Firefox\//i.test(ua)) return "Firefox";
+  if (/Safari\//i.test(ua) && !/Chrome\//i.test(ua)) return "Safari";
+  if (/MSIE |Trident\//i.test(ua)) return "Internet Explorer";
+  return undefined;
+}
+
+function parseDeviceType(ua: string | undefined): string | undefined {
+  if (!ua) return undefined;
+  if (/iPad|Tablet|PlayBook|Nexus 7|Nexus 10/i.test(ua)) return "Tablet";
+  if (/Mobi|iPhone|Android.*Mobile|Windows Phone|IEMobile|BlackBerry/i.test(ua))
+    return "Mobile";
+  return "Desktop";
+}
+
+function parseOS(ua: string | undefined): string | undefined {
+  if (!ua) return undefined;
+  if (/Windows NT/i.test(ua)) return "Windows";
+  if (/Mac OS X/i.test(ua)) return "Mac OS X";
+  if (/Android/i.test(ua)) return "Android";
+  if (/(iPhone|iPad|iPod)/i.test(ua)) return "iOS";
+  if (/Linux/i.test(ua)) return "Linux";
+  return undefined;
+}
+
+/** Heuristic bot detection so we can flag obvious crawler hits. */
+function looksLikeBot(ua: string | undefined): boolean {
+  if (!ua) return false;
+  return /bot|crawler|spider|crawling|slurp|bingpreview|facebookexternalhit|preview|headlesschrome|lighthouse|gptbot|claudebot|chatgpt-user|google-extended|applebot/i.test(
+    ua
+  );
+}
+
 function getPostHogDistinctId(event: AnalyticsEvent): string {
   return event.user_id ?? event.email ?? event.anonymous_id ?? "anonymous";
 }
@@ -225,17 +276,42 @@ function getPostHogPersonProperties(event: AnalyticsEvent) {
 }
 
 function getPostHogEventProperties(event: AnalyticsEvent) {
+  const props = event.properties ?? {};
+  const referrer = props.referrer ?? props.$referrer;
+  const path = props.path ?? props.$pathname;
+  const referringDomain = parseReferringDomain(referrer);
+
+  let pageHost: string | undefined;
+  if (event.page_url) {
+    try {
+      pageHost = new URL(event.page_url).hostname;
+    } catch {
+      pageHost = undefined;
+    }
+  }
+
   return compactObject({
-    ...(event.properties ?? {}),
+    ...props,
     reserve_user_id: event.user_id,
     anonymous_id: event.anonymous_id,
     email: event.email,
     phone: event.phone,
     is_authenticated: Boolean(event.user_id || event.email),
+    // PostHog standard properties so HogQL filters like `$referring_domain`,
+    // `$pathname`, `$browser`, `$device_type` actually resolve.
     $ip: event.ip,
     raw_ip: event.ip,
     $user_agent: event.user_agent,
     $current_url: event.page_url,
+    $host: pageHost,
+    $referrer: typeof referrer === "string" ? referrer : undefined,
+    $referring_domain: referringDomain ?? "$direct",
+    $pathname: typeof path === "string" ? path : undefined,
+    $browser: parseBrowser(event.user_agent),
+    $device_type: parseDeviceType(event.user_agent),
+    $os: parseOS(event.user_agent),
+    $lib: "mully-server",
+    is_bot: looksLikeBot(event.user_agent),
     segments: event.segments?.length ? event.segments : undefined,
   });
 }

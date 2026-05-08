@@ -7,6 +7,14 @@ import Image from "next/image";
 import { useMembership } from "../context/MembershipContext";
 import { SlideCart } from "../components/SlideCart";
 import { UpgradeModal } from "../components/UpgradeModal";
+import { SetPasswordOrMagicLinkGate } from "../components/SetPasswordOrMagicLinkGate";
+import {
+  FirstBoxWelcomeDrawer,
+  AccessWelcomeBanner,
+  ProfileNudge,
+} from "../components/WelcomeDrawers";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import { ScrollReveal } from "../components/ClientComponents";
 import { ClubhouseNav, ClubhouseBottomNav } from "../components/ClubhouseNav";
 import { QuickAddToCartButton } from "../components/QuickAddToCartButton";
@@ -183,6 +191,55 @@ export default function HomePage() {
   } = useMembership();
 
   const isPaid = tier === "access" || tier === "member" || tier === "black";
+
+  // ── First-visit password / magic-link gate ──
+  // Triggered when user signed up via passwordless EmailCTA flow.
+  // Reads `password_set` from Firestore. While loading we render nothing
+  // for the gate (allow page to render normally). Once we know the value,
+  // if false, render the BLOCKING modal.
+  const [passwordSet, setPasswordSet] = useState<boolean | null>(null);
+  const [onboardingCompletedDoc, setOnboardingCompletedDoc] = useState<
+    boolean | null
+  >(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadFlags() {
+      if (!user || !db) return;
+      try {
+        const snap = await getDoc(doc(db, "users", user.uid));
+        if (cancelled) return;
+        if (snap.exists()) {
+          const data = snap.data();
+          setPasswordSet(data.password_set !== false);
+          setOnboardingCompletedDoc(data.onboarding_completed === true);
+        } else {
+          // No doc yet, treat as needing the gate.
+          setPasswordSet(false);
+          setOnboardingCompletedDoc(false);
+        }
+      } catch (err) {
+        console.error("[HomePage] failed to load user flags", err);
+        // Fail open. Don't block the user if Firestore read errors.
+        if (!cancelled) {
+          setPasswordSet(true);
+          setOnboardingCompletedDoc(true);
+        }
+      }
+    }
+    loadFlags();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  const handleGateSatisfied = () => {
+    setPasswordSet(true);
+  };
+
+  const showPasswordGate = passwordSet === false;
+  const showWelcome =
+    passwordSet === true && onboardingCompletedDoc === false;
 
   // ── Auth guard ──
   useEffect(() => {
@@ -458,7 +515,21 @@ export default function HomePage() {
     <div className="min-h-screen bg-bone">
       <ClubhouseNav />
 
+      {/* First-visit password / magic-link gate (BLOCKING) */}
+      {showPasswordGate && (
+        <SetPasswordOrMagicLinkGate
+          email={user?.email || ""}
+          onSatisfied={handleGateSatisfied}
+        />
+      )}
+
+      {/* First-visit welcome surfaces by tier (only after gate cleared) */}
+      {showWelcome && tier === "member" && <FirstBoxWelcomeDrawer />}
+
       <main className="pt-48 pb-32 md:pb-24">
+        {showWelcome && tier === "access" && <AccessWelcomeBanner />}
+        {showWelcome && tier === "free" && <ProfileNudge />}
+
         {/* ═══════════════════════════════════════════
            1. THE FIRST TEE — Greeting
            ═══════════════════════════════════════════ */}

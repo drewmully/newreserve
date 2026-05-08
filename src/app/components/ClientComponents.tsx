@@ -198,10 +198,32 @@ export function StatCounter({
   const ref = useRef<HTMLDivElement>(null);
   const [count, setCount] = useState(0);
   const [started, setStarted] = useState(false);
+  const [done, setDone] = useState(false);
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+
+    // If the user has prefers-reduced-motion, skip the animation entirely.
+    const reduceMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduceMotion) {
+      setCount(end);
+      setDone(true);
+      return;
+    }
+
+    // If element is already in the viewport on mount (above-the-fold stats
+    // bar), skip waiting for IntersectionObserver and start immediately.
+    const rect = el.getBoundingClientRect();
+    const inViewport =
+      rect.top < window.innerHeight && rect.bottom > 0;
+    if (inViewport) {
+      setStarted(true);
+      return;
+    }
 
     const observer = new IntersectionObserver(
       ([entry]) => {
@@ -210,12 +232,20 @@ export function StatCounter({
           observer.unobserve(entry.target);
         }
       },
-      { threshold: 0.4 }
+      { threshold: 0.2 }
     );
 
     observer.observe(el);
-    return () => observer.disconnect();
-  }, [started]);
+
+    // Fallback: if observer never fires (some browsers / hidden parents),
+    // force-start after 1500ms so the counter never stays stuck on 0.
+    const fallback = window.setTimeout(() => setStarted(true), 1500);
+
+    return () => {
+      observer.disconnect();
+      window.clearTimeout(fallback);
+    };
+  }, [started, end]);
 
   useEffect(() => {
     if (!started) return;
@@ -228,23 +258,51 @@ export function StatCounter({
       const progress = Math.min(elapsed / duration, 1);
       const eased = 1 - Math.pow(1 - progress, 3);
       setCount(Math.floor(eased * end));
-      if (progress < 1) raf = requestAnimationFrame(animate);
+      if (progress < 1) {
+        raf = requestAnimationFrame(animate);
+      } else {
+        setCount(end);
+        setDone(true);
+      }
     };
 
     raf = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(raf);
   }, [started, end, duration]);
 
+  // Pre-paint the final value so the page never shows "0+" before the
+  // animation starts. The animation still runs once `started` flips true.
+  const displayCount = started || done ? count : end;
+
+  // For the hundreds-k display, render the final value once started so we
+  // never flash "0". During animation we map count 1..N to 100K..NK,
+  // capped at 1M when count crosses end.
+  const renderValue = () => {
+    if (displayAs === "hundreds-k") {
+      if (!started && !done) return `${end * 100}K`;
+      if (displayCount >= end) return "1M";
+      if (displayCount <= 0) return "100K";
+      return `${displayCount * 100}K`;
+    }
+    return displayCount.toLocaleString();
+  };
+
   return (
     <div ref={ref} className="text-center">
-      <span className={`font-serif text-4xl md:text-5xl lg:text-[3.5rem] block mb-2 ${dark ? "text-bone" : "text-forest"}`}>
+      <span
+        className={`font-serif text-4xl md:text-5xl lg:text-[3.5rem] block mb-2 ${
+          dark ? "text-bone" : "text-forest"
+        }`}
+      >
         {prefix}
-        {displayAs === 'hundreds-k'
-          ? (count >= 10 ? '1M' : count > 0 ? `${count * 100}K` : '0')
-          : count.toLocaleString()}
+        {renderValue()}
         {suffix}
       </span>
-      <span className={`text-xs tracking-[0.25em] uppercase font-medium ${dark ? "text-bone/50" : "text-charcoal/50"}`}>
+      <span
+        className={`text-xs tracking-[0.25em] uppercase font-medium ${
+          dark ? "text-bone/50" : "text-charcoal/50"
+        }`}
+      >
         {label}
       </span>
     </div>
