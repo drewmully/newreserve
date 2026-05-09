@@ -65,7 +65,7 @@ export default async function Home() {
               </li>
               <li className="text-sm md:text-base text-forest/85 flex items-start gap-2.5">
                 <span className="text-ember shrink-0 mt-[2px]">&#10022;</span>
-                <span>Private club access, fittings, and experiences</span>
+                <span>Personalized curation, hand-picked and shipped to your door</span>
               </li>
             </ul>
 
