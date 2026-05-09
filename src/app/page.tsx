@@ -696,11 +696,11 @@ function BrandStrip() {
       style={{ backgroundColor: "#F5F3EF" }}
     >
       <div className="max-w-6xl mx-auto">
-        <div className="text-center mb-7 md:mb-8">
-          <span className="inline-flex items-center gap-2.5 text-[10px] md:text-[11px] tracking-[0.3em] uppercase text-forest/60 font-medium">
-            <span className="w-7 h-px bg-forest/20" />
+        <div className="text-center mb-7 md:mb-8 px-2">
+          <span className="inline-flex items-center justify-center gap-2 md:gap-2.5 text-[9px] md:text-[11px] tracking-[0.25em] md:tracking-[0.3em] uppercase text-forest/60 font-medium whitespace-nowrap">
+            <span className="hidden sm:block w-7 h-px bg-forest/20" />
             Members get pricing on brands like
-            <span className="w-7 h-px bg-forest/20" />
+            <span className="hidden sm:block w-7 h-px bg-forest/20" />
           </span>
         </div>
 
