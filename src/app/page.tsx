@@ -11,13 +11,13 @@ import { AuthAwareHero, AuthAwareBottomCTA } from "./components/AuthAwareHero";
 import { heroHeadline, heroCta } from "../flags";
 
 const headlines: Record<string, React.ReactNode> = {
-  "control": <>The Golf Membership<br />For Gear, Drops &amp; Access.</>,
+  "control": <>Built for golfers<br />who buy the good brands.</>,
   "variant-a": <>Join the Club.<br />Skip the Markups.</>,
   "variant-b": <>Premium Gear. Insider Pricing.<br />No Initiation Fee.</>,
 };
 
 const ctaTexts: Record<string, string> = {
-  "control": "UNLOCK ACCESS",
+  "control": "VIEW SAVINGS",
   "variant-a": "JOIN FREE",
 };
 
@@ -64,18 +64,18 @@ export default async function Home() {
             </h1>
 
             <p className="text-sm md:text-lg text-charcoal leading-relaxed mb-3 md:mb-4 max-w-sm sm:max-w-md mx-auto md:mx-0 animate-fade-up-delay-2">
-              Join Mully Reserve to unlock:
+              Member pricing on Greyson, Rhone, Quiet Golf, Penfold, and more. Preview your savings before you choose a tier.
             </p>
 
-            {/* Value prop bullets — user-approved copy */}
+            {/* Value prop bullets — brand-led, no subscription-box framing */}
             <ul className="flex flex-col gap-2 mb-5 md:mb-8 max-w-sm sm:max-w-md mx-auto md:mx-0 text-left animate-fade-up-delay-2">
               <li className="text-sm md:text-base text-forest/85 flex items-start gap-2.5">
                 <span className="text-ember shrink-0 mt-[2px]">&#10022;</span>
-                <span>Members-only pricing (10–30% off top brands)</span>
+                <span>Member pricing on 40+ premium brands</span>
               </li>
               <li className="text-sm md:text-base text-forest/85 flex items-start gap-2.5">
                 <span className="text-ember shrink-0 mt-[2px]">&#10022;</span>
-                <span>Curated gear drops &amp; quarterly boxes</span>
+                <span>Average members save $400+ annually</span>
               </li>
               <li className="text-sm md:text-base text-forest/85 flex items-start gap-2.5">
                 <span className="text-ember shrink-0 mt-[2px]">&#10022;</span>
@@ -106,6 +106,9 @@ export default async function Home() {
           </div>
         </div>
       </section>
+
+      {/* ─── BRAND STRIP — social proof directly under hero ─── */}
+      <BrandStrip />
 
       {/* ─── STATS BAR — dark, continuation of hero ─── */}
       <section className="stats-dark-section py-16 md:py-20 px-6 md:px-12">
@@ -154,8 +157,8 @@ export default async function Home() {
             <ScrollReveal delay={0.16}>
               <SimpleStep
                 number="3"
-                title="Shop drops or get a box"
-                description="Browse curated gear at member pricing or subscribe to the quarterly Reserve box."
+                title="Shop the pro shop"
+                description="Browse curated gear at member pricing. Early access on every drop. Free 2-day shipping."
               />
             </ScrollReveal>
             <ScrollReveal delay={0.24}>
@@ -235,8 +238,8 @@ export default async function Home() {
             <ScrollReveal delay={0.12}>
               <FeatureCard
                 image="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/ChatGPT_Image_Feb_24_2026_02_24_48_PM.png?v=1771961106"
-                title="Curated drops and boxes"
-                description="Members get first access to hand-picked gear drops, plus the option to subscribe to the quarterly Reserve box."
+                title="First access to every drop"
+                description="Members see new releases before anyone else. Hand-picked gear from the brands you already wear."
               />
             </ScrollReveal>
             <ScrollReveal delay={0.24}>
@@ -671,6 +674,85 @@ export default async function Home() {
 /* ═══════════════════════════════════════════
    COMPONENTS
    ═══════════════════════════════════════════ */
+
+/* ── Brand strip — social proof under the hero ── */
+function BrandStrip() {
+  const brands = [
+    { name: "Rhone", src: "/brands/rhone.jpg" },
+    { name: "Greyson", src: "/brands/greyson.jpg" },
+    { name: "Quiet Golf", src: "/brands/quiet-golf.jpg" },
+    { name: "Field Day Sporting Co.", src: "/brands/field-day.jpg" },
+    { name: "Arnie's", src: "/brands/arnies.jpg" },
+    { name: "Harlestons", src: "/brands/harlestons.jpg" },
+    { name: "Topo Athletic", src: "/brands/topo.jpg" },
+    { name: "Hyperice", src: "/brands/hyperice.jpg" },
+    { name: "Feetures", src: "/brands/feetures.jpg" },
+  ];
+
+  return (
+    <section
+      aria-label="Featured brand partners"
+      className="py-10 md:py-12 px-6 md:px-12 border-y border-forest/10"
+      style={{ backgroundColor: "#F5F3EF" }}
+    >
+      <div className="max-w-6xl mx-auto">
+        <div className="text-center mb-7 md:mb-8">
+          <span className="inline-flex items-center gap-2.5 text-[10px] md:text-[11px] tracking-[0.3em] uppercase text-forest/60 font-medium">
+            <span className="w-7 h-px bg-forest/20" />
+            Members get pricing on brands like
+            <span className="w-7 h-px bg-forest/20" />
+          </span>
+        </div>
+
+        {/* Desktop: even grid */}
+        <div className="hidden md:grid grid-cols-3 lg:grid-cols-9 gap-x-6 lg:gap-x-4 gap-y-6 items-center">
+          {brands.map((b) => (
+            <div
+              key={b.name}
+              className="flex items-center justify-center h-10 lg:h-9"
+              title={b.name}
+            >
+              <Image
+                src={b.src}
+                alt={b.name}
+                width={140}
+                height={40}
+                className="max-h-full w-auto object-contain opacity-70 hover:opacity-100 transition-opacity duration-300"
+                style={{ filter: "grayscale(100%) contrast(1.05)" }}
+              />
+            </div>
+          ))}
+        </div>
+
+        {/* Mobile marquee */}
+        <div className="md:hidden overflow-hidden brand-marquee-mask">
+          <div className="brand-marquee flex items-center gap-10 whitespace-nowrap">
+            {[...brands, ...brands].map((b, i) => (
+              <div
+                key={`${b.name}-${i}`}
+                className="flex items-center justify-center h-8 shrink-0"
+                title={b.name}
+              >
+                <Image
+                  src={b.src}
+                  alt={b.name}
+                  width={120}
+                  height={32}
+                  className="max-h-full w-auto object-contain opacity-75"
+                  style={{ filter: "grayscale(100%) contrast(1.05)" }}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <p className="text-center text-[11px] md:text-xs text-charcoal/45 mt-7 md:mt-8 tracking-wide">
+          Plus 30+ more. New brands added each season.
+        </p>
+      </div>
+    </section>
+  );
+}
 
 function MullyMark({ className }: { className?: string }) {
   return (

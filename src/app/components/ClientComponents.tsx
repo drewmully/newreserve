@@ -196,7 +196,10 @@ export function StatCounter({
   displayAs,
 }: StatCounterProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const [count, setCount] = useState(0);
+  // Initialize at `end` so SSR / first paint never flashes 0.
+  // The animation effect will reset to 0 and run when the element
+  // enters the viewport.
+  const [count, setCount] = useState(end);
   const [started, setStarted] = useState(false);
   const [done, setDone] = useState(false);
 
@@ -250,6 +253,8 @@ export function StatCounter({
   useEffect(() => {
     if (!started) return;
 
+    // Reset to 0 so the animation has somewhere to count up from.
+    setCount(0);
     const startTime = performance.now();
     let raf: number;
 

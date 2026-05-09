@@ -1565,3 +1565,34 @@ input:focus-visible {
     animation: none;
   }
 }
+
+/* ─── Brand Strip — mobile marquee ─── */
+.brand-marquee-mask {
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    black 8%,
+    black 92%,
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0%,
+    black 8%,
+    black 92%,
+    transparent 100%
+  );
+}
+.brand-marquee {
+  animation: brand-marquee-scroll 28s linear infinite;
+  width: max-content;
+}
+@keyframes brand-marquee-scroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .brand-marquee {
+    animation: none;
+  }
+}
