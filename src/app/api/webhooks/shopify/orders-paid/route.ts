@@ -325,6 +325,7 @@ export async function POST(request: NextRequest) {
               onboarding_completed: false,
               created_at: Date.now(),
               updated_at: Date.now(),
+              tier_paid_at: Date.now(),
             });
 
             const magicLink = await adminAuth.generateSignInWithEmailLink(email, {
@@ -345,7 +346,11 @@ export async function POST(request: NextRequest) {
             const userDoc = purchaseUserDoc;
             const uid = userDoc.id;
             const userData = userDoc.data();
-            const updates: Record<string, unknown> = { tier };
+            const updates: Record<string, unknown> = {
+              tier,
+              updated_at: Date.now(),
+              tier_paid_at: Date.now(),
+            };
             if (shopifyCustomerId && !userData.shopify_customer_id) {
               updates.shopify_customer_id = shopifyCustomerId;
             }
