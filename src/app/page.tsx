@@ -8,29 +8,15 @@ import {
   FloatingCTA,
 } from "./components/ClientComponents";
 import { AuthAwareHero, AuthAwareBottomCTA } from "./components/AuthAwareHero";
-import { heroHeadline, heroCta } from "../flags";
-
-const headlines: Record<string, React.ReactNode> = {
-  "control": <>Built for golfers<br />who buy the good brands.</>,
-  "variant-a": <>Join the Club.<br />Skip the Markups.</>,
-  "variant-b": <>Premium Gear. Insider Pricing.<br />No Initiation Fee.</>,
-};
-
-const ctaTexts: Record<string, string> = {
-  "control": "VIEW SAVINGS",
-  "variant-a": "JOIN FREE",
-};
 
 export default async function Home() {
-  const headlineVariant = await heroHeadline();
-  const ctaVariant = await heroCta();
   return (
     <div className="min-h-screen bg-bone">
       {/* ─── GLASS HEADER ─── */}
       <GlassHeader />
 
       {/* ─── HERO — LIGHT EDITORIAL ─── */}
-      <section id="hero" className="relative min-h-[92vh] md:min-h-screen flex items-center px-6 md:px-12 lg:px-20 pt-16 pb-8 md:pt-24 md:pb-12"
+      <section id="hero" className="relative min-h-[92vh] md:min-h-screen flex flex-col justify-center px-6 md:px-12 lg:px-20 pt-16 pb-6 md:pt-24 md:pb-8"
         style={{ backgroundColor: '#F5F3EF' }}
       >
         {/* ── Two-column hero content ── */}
@@ -60,7 +46,7 @@ export default async function Home() {
             </div>
 
             <h1 className="font-serif text-3xl sm:text-5xl md:text-[3.5rem] lg:text-6xl xl:text-7xl text-forest leading-[1.05] tracking-tight mb-3 md:mb-7 animate-fade-up-delay-1">
-              {headlines[headlineVariant]}
+              Built for golfers<br />who buy the good brands.
             </h1>
 
             <p className="text-sm md:text-lg text-charcoal leading-relaxed mb-3 md:mb-4 max-w-sm sm:max-w-md mx-auto md:mx-0 animate-fade-up-delay-2">
@@ -85,7 +71,7 @@ export default async function Home() {
 
             <div className="animate-fade-up-delay-3">
               <div className="max-w-xs sm:max-w-md mx-auto md:mx-0">
-                <AuthAwareHero ctaText={ctaTexts[ctaVariant]} />
+                <AuthAwareHero ctaText="VIEW SAVINGS" />
               </div>
               <p className="text-[11px] text-charcoal/50 tracking-wide mt-2">
                 Complimentary access &middot; No credit card required
@@ -105,10 +91,12 @@ export default async function Home() {
             />
           </div>
         </div>
-      </section>
 
-      {/* ─── BRAND STRIP — social proof directly under hero ─── */}
-      <BrandStrip />
+        {/* ── BRAND STRIP — inside hero, full width below CTA ── */}
+        <div className="relative z-10 max-w-7xl mx-auto w-full mt-8 md:mt-12 animate-fade-up-delay-3">
+          <BrandStrip />
+        </div>
+      </section>
 
       {/* ─── STATS BAR — dark, continuation of hero ─── */}
       <section className="stats-dark-section py-16 md:py-20 px-6 md:px-12">
@@ -675,41 +663,40 @@ export default async function Home() {
    COMPONENTS
    ═══════════════════════════════════════════ */
 
-/* ── Brand strip — social proof under the hero ── */
+/* ── Brand strip — infinite-scroll marquee inside hero ── */
 function BrandStrip() {
   const brands = [
-    { name: "Rhone", src: "/brands/rhone.jpg" },
-    { name: "Greyson", src: "/brands/greyson.jpg" },
-    { name: "Quiet Golf", src: "/brands/quiet-golf.jpg" },
-    { name: "Field Day Sporting Co.", src: "/brands/field-day.jpg" },
-    { name: "Arnie's", src: "/brands/arnies.jpg" },
-    { name: "Harlestons", src: "/brands/harlestons.jpg" },
-    { name: "Topo Athletic", src: "/brands/topo.jpg" },
-    { name: "Hyperice", src: "/brands/hyperice.jpg" },
-    { name: "Feetures", src: "/brands/feetures.jpg" },
+    { name: "Rhone", src: "/brands/rhone.png" },
+    { name: "Greyson", src: "/brands/greyson.png" },
+    { name: "Quiet Golf", src: "/brands/quiet-golf.png" },
+    { name: "Field Day Sporting Co.", src: "/brands/field-day.png" },
+    { name: "Arnie's", src: "/brands/arnies.png" },
+    { name: "Harlestons", src: "/brands/harlestons.png" },
+    { name: "Topo Athletic", src: "/brands/topo.png" },
+    { name: "Hyperice", src: "/brands/hyperice.png" },
+    { name: "Feetures", src: "/brands/feetures.png" },
   ];
 
-  return (
-    <section
-      aria-label="Featured brand partners"
-      className="py-10 md:py-12 px-6 md:px-12 border-y border-forest/10"
-      style={{ backgroundColor: "#F5F3EF" }}
-    >
-      <div className="max-w-6xl mx-auto">
-        <div className="text-center mb-7 md:mb-8 px-2">
-          <span className="inline-flex items-center justify-center gap-2 md:gap-2.5 text-[9px] md:text-[11px] tracking-[0.25em] md:tracking-[0.3em] uppercase text-forest/60 font-medium whitespace-nowrap">
-            <span className="hidden sm:block w-7 h-px bg-forest/20" />
-            Members get pricing on brands like
-            <span className="hidden sm:block w-7 h-px bg-forest/20" />
-          </span>
-        </div>
+  // Duplicate the array for seamless loop
+  const looped = [...brands, ...brands];
 
-        {/* Desktop: even grid */}
-        <div className="hidden md:grid grid-cols-3 lg:grid-cols-9 gap-x-6 lg:gap-x-4 gap-y-6 items-center">
-          {brands.map((b) => (
+  return (
+    <div aria-label="Featured brand partners" className="w-full">
+      <div className="text-center mb-5 md:mb-6 px-2">
+        <span className="inline-flex items-center justify-center gap-2 md:gap-2.5 text-[9px] md:text-[11px] tracking-[0.25em] md:tracking-[0.3em] uppercase text-forest/60 font-medium whitespace-nowrap">
+          <span className="hidden sm:block w-7 h-px bg-forest/20" />
+          Members get pricing on brands like
+          <span className="hidden sm:block w-7 h-px bg-forest/20" />
+        </span>
+      </div>
+
+      {/* Infinite-scroll marquee — all viewports */}
+      <div className="overflow-hidden brand-marquee-mask">
+        <div className="brand-marquee flex items-center gap-10 md:gap-16 whitespace-nowrap">
+          {looped.map((b, i) => (
             <div
-              key={b.name}
-              className="flex items-center justify-center h-10 lg:h-9"
+              key={`${b.name}-${i}`}
+              className="flex items-center justify-center h-8 md:h-10 shrink-0"
               title={b.name}
             >
               <Image
@@ -717,40 +704,15 @@ function BrandStrip() {
                 alt={b.name}
                 width={140}
                 height={40}
-                className="max-h-full w-auto object-contain opacity-70 hover:opacity-100 transition-opacity duration-300"
+                unoptimized
+                className="max-h-full w-auto object-contain opacity-70"
                 style={{ filter: "grayscale(100%) contrast(1.05)" }}
               />
             </div>
           ))}
         </div>
-
-        {/* Mobile marquee */}
-        <div className="md:hidden overflow-hidden brand-marquee-mask">
-          <div className="brand-marquee flex items-center gap-10 whitespace-nowrap">
-            {[...brands, ...brands].map((b, i) => (
-              <div
-                key={`${b.name}-${i}`}
-                className="flex items-center justify-center h-8 shrink-0"
-                title={b.name}
-              >
-                <Image
-                  src={b.src}
-                  alt={b.name}
-                  width={120}
-                  height={32}
-                  className="max-h-full w-auto object-contain opacity-75"
-                  style={{ filter: "grayscale(100%) contrast(1.05)" }}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <p className="text-center text-[11px] md:text-xs text-charcoal/45 mt-7 md:mt-8 tracking-wide">
-          Plus 30+ more. New brands added each season.
-        </p>
       </div>
-    </section>
+    </div>
   );
 }
 
