@@ -439,8 +439,8 @@ export default function FoundersLandingClient({
             {[
               ["1", "Claim your spot", "Pay now or reply to hold for 48 hours."],
               ["2", "Tell us your fit", "Quick onboarding, sizes, style, what to avoid."],
-              ["3", "We curate", "Our stylists pick 4-6 pieces. You preview before we ship."],
-              ["4", "Box ships May 27", "Wear what you love. Send back what you don't."],
+              ["3", "We curate", "Our stylists pick 4-6 pieces tailored to your fit and style profile."],
+              ["4", "Box ships May 27", "Try everything at home. Swap anything that does not feel right."],
             ].map(([n, t, d]) => (
               <li
                 key={n}
@@ -581,7 +581,7 @@ export default function FoundersLandingClient({
           {[
             {
               q: "What's actually in the box?",
-              a: "Four to six curated pieces for your season, shirts, layers, accessories, picked based on the fit and style profile you set during onboarding. You can preview before we ship and swap anything that doesn't feel right.",
+              a: "Four to six curated pieces for your season, shirts, layers, accessories, picked based on the fit and style profile you set during onboarding. Try everything at home and swap anything that does not feel right.",
             },
             {
               q: "Is the $50 discount one-time or ongoing?",
