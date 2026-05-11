@@ -9,16 +9,17 @@
  *     and surfaces a confirmation. Replying to the actual email also works
  *     via the analyzer trigger.)
  *
- * Pay-now path matches the homepage flow exactly: email -> check-email ->
- * start-account (Firebase) -> createMembershipCheckout with the founders
- * discount appended. Identical /auth/callback bounce-back as home users.
+ * Pay-now path mirrors the /onboarding paid-tier flow exactly: a direct
+ * createMembershipCheckout call. No check-email, no Firebase signIn, no
+ * start-account — the orders-paid webhook handles Firebase + tier after
+ * Shopify completes the order, and /auth/callback handles the magic-link
+ * bounce-back. The Shopify cart binds the email via buyerIdentity so
+ * existing customers' orders attach to the right record.
  */
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createMembershipCheckout } from "@/lib/shopifyCheckout";
 import type { FoundersTokenPayload } from "@/lib/foundersCampaign";
-import { PENDING_ONBOARDING_EMAIL_KEY } from "@/app/components/EmailCTA";
-import { PENDING_SIGN_IN_EMAIL_KEY } from "@/lib/pendingSignInEmail";
 import { trackEvent } from "@/lib/tracking";
 
 type Meta = {
@@ -118,9 +119,10 @@ export default function FoundersLandingClient({
   const founderPriceLabel = "$199 first quarter, then $249";
 
   // ---- CTAs -------------------------------------------------------------
-  // Mirrors the homepage flow exactly: check-email -> start-account ->
-  // Firebase custom-token sign-in -> createMembershipCheckout. Same
-  // /auth/callback bounce-back so post-purchase handoff works identically.
+  // Mirrors /onboarding's paid-tier flow exactly: one call to
+  // createMembershipCheckout, then Shopify takes over. The orders-paid
+  // webhook creates/links the Firebase user and sets the tier; the magic
+  // link is emailed after payment. /auth/callback handles the return.
   const handlePayNow = useCallback(
     async (overrideEmail?: string) => {
       if (payLoading) return;
@@ -133,31 +135,21 @@ export default function FoundersLandingClient({
       setPayError(null);
       setPayLoading(true);
 
-      // Remember the email locally for fallback paths (matches homepage).
-      try {
-        sessionStorage.setItem(PENDING_ONBOARDING_EMAIL_KEY, email);
-      } catch {}
-
-      void trackEvent("email_submitted", {
+      void trackEvent("checkout_clicked", {
         email,
         properties: {
+          plan: "member",
+          method: "shopify_checkout",
           source: "reserve_founders_lp",
           campaign_id: meta.campaignId,
           tier: invite?.tier ?? null,
         },
       });
-      void trackEvent("checkout_clicked", {
-        properties: {
-          plan: "member",
-          source: "reserve_founders_lp",
-          campaign_id: meta.campaignId,
-        },
-      });
 
-      const goToCheckout = async () => {
+      try {
         await createMembershipCheckout("member", {
-          discountCodes: showDiscount ? [meta.discountCode] : [],
           email,
+          discountCodes: showDiscount ? [meta.discountCode] : [],
           attributes: [
             { key: "campaign_id", value: meta.campaignId },
             { key: "invited_email", value: email },
@@ -168,88 +160,12 @@ export default function FoundersLandingClient({
           ],
           returnPath: "/auth/callback",
         });
-      };
-
-      try {
-        // Check if this email already has a Firebase account.
-        const checkRes = await fetch("/api/auth/check-email", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email }),
-        });
-        let exists = false;
-        if (checkRes.ok) {
-          try {
-            const data = (await checkRes.json()) as { exists?: boolean };
-            exists = data.exists === true;
-          } catch {}
-        }
-
-        if (exists) {
-          // Stash for sign-in page and bounce home-style. Existing members
-          // sign in there and the dashboard already exposes the upgrade.
-          try {
-            sessionStorage.setItem(PENDING_SIGN_IN_EMAIL_KEY, email);
-          } catch {}
-          // For Founders, route straight to checkout — they already exist,
-          // they don't need /login to claim the spot. The cart attaches
-          // their email so Shopify ties the order to the right customer.
-          await goToCheckout();
-          return;
-        }
-
-        // New user: create a Firebase account + sign in (homepage pattern).
-        const startRes = await fetch("/api/auth/start-account", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email,
-            source: "reserve_founders_lp",
-            utm: {
-              utm_source: "reserve_founders_v1",
-              utm_medium: "email",
-              utm_campaign: meta.campaignId,
-            },
-          }),
-        });
-
-        if (startRes.ok) {
-          const startData = (await startRes.json()) as {
-            uid?: string;
-            customToken?: string;
-          };
-          if (startData.customToken) {
-            try {
-              const [{ auth }, { signInWithCustomToken }] = await Promise.all([
-                import("@/lib/firebase"),
-                import("firebase/auth"),
-              ]);
-              await signInWithCustomToken(auth, startData.customToken);
-              void trackEvent("account_created", {
-                user_id: startData.uid,
-                email,
-                properties: {
-                  method: "email_only",
-                  tier: "reserve_founders",
-                },
-              });
-            } catch (signInErr) {
-              console.error(
-                "[founders] custom-token sign-in failed:",
-                signInErr,
-              );
-              // Fall through — /auth/callback can recover post-checkout.
-            }
-          }
-        }
-
-        await goToCheckout();
       } catch (err) {
-        console.error("[founders] pay-now failed:", err);
-        setPayError("Something went wrong. Try again or reply to the email.");
+        console.error("[founders] createMembershipCheckout failed:", err);
+        setPayError("Couldn't start checkout. Try again or reply to the email.");
       } finally {
-        // createMembershipCheckout navigates away on success; if we land
-        // back here, either the call failed silently or env vars are missing.
+        // createMembershipCheckout navigates away on success; if we end up
+        // back here, env vars are missing or the call returned without a URL.
         setPayLoading(false);
       }
     },
