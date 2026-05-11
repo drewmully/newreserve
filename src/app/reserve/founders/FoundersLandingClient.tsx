@@ -55,7 +55,7 @@ export default function FoundersLandingClient({
   const [spotsLoading, setSpotsLoading] = useState(true);
   const [payLoading, setPayLoading] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
-  const [payEmailInput, setPayEmailInput] = useState<string>(invite?.email ?? "");
+
   const [reserveSubmitting, setReserveSubmitting] = useState(false);
   const [reserveResult, setReserveResult] = useState<
     | { kind: "idle" }
@@ -124,19 +124,17 @@ export default function FoundersLandingClient({
   // webhook creates/links the Firebase user and sets the tier; the magic
   // link is emailed after payment. /auth/callback handles the return.
   const handlePayNow = useCallback(
-    async (overrideEmail?: string) => {
+    async () => {
       if (payLoading) return;
-      const email =
-        (overrideEmail ?? invite?.email ?? "").trim().toLowerCase();
-      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        setPayError("Enter a valid email.");
-        return;
-      }
+      // If we have an invited email (token-linked), pre-fill Shopify's
+      // checkout email field. If not, leave it blank — Shopify will
+      // collect it on the checkout page like every other purchase.
+      const inviteEmail = invite?.email?.trim().toLowerCase() ?? "";
       setPayError(null);
       setPayLoading(true);
 
       void trackEvent("checkout_clicked", {
-        email,
+        email: inviteEmail || undefined,
         properties: {
           plan: "member",
           method: "shopify_checkout",
@@ -148,11 +146,13 @@ export default function FoundersLandingClient({
 
       try {
         await createMembershipCheckout("member", {
-          email,
+          email: inviteEmail || undefined,
           discountCodes: showDiscount ? [meta.discountCode] : [],
           attributes: [
             { key: "campaign_id", value: meta.campaignId },
-            { key: "invited_email", value: email },
+            ...(inviteEmail
+              ? [{ key: "invited_email", value: inviteEmail }]
+              : []),
             ...(invite?.tier
               ? [{ key: "invited_tier", value: invite.tier }]
               : []),
@@ -162,7 +162,7 @@ export default function FoundersLandingClient({
         });
       } catch (err) {
         console.error("[founders] createMembershipCheckout failed:", err);
-        setPayError("Couldn't start checkout. Try again or reply to the email.");
+        setPayError("Couldn't start checkout. Please try again.");
       } finally {
         // createMembershipCheckout navigates away on success; if we end up
         // back here, env vars are missing or the call returned without a URL.
@@ -307,10 +307,11 @@ export default function FoundersLandingClient({
               </div>
             </div>
 
-            {/* Dual CTA — matches homepage flow (email -> start-account -> checkout) */}
+            {/* Single CTA — straight to Shopify checkout. Shopify collects
+                the email itself, the same as every other purchase flow. */}
             {isSoldOut ? (
               <SoldOutBanner />
-            ) : isInvited ? (
+            ) : (
               <div className="flex flex-col sm:flex-row gap-3">
                 <button
                   onClick={() => handlePayNow()}
@@ -323,38 +324,15 @@ export default function FoundersLandingClient({
                       ? "Claim my spot — $50 off"
                       : "Become a Reserve Member"}
                 </button>
-                <a
-                  href="#reserve-by-reply"
-                  className="px-6 py-4 rounded-xl border border-[#F5F1E8]/40 text-[#F5F1E8] font-medium hover:bg-[#F5F1E8]/10 transition text-center"
-                >
-                  Hold my spot for 48h
-                </a>
+                {isInvited && (
+                  <a
+                    href="#reserve-by-reply"
+                    className="px-6 py-4 rounded-xl border border-[#F5F1E8]/40 text-[#F5F1E8] font-medium hover:bg-[#F5F1E8]/10 transition text-center"
+                  >
+                    Hold my spot for 48h
+                  </a>
+                )}
               </div>
-            ) : (
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  void handlePayNow(payEmailInput);
-                }}
-                className="flex flex-col sm:flex-row items-stretch gap-3 max-w-md"
-              >
-                <input
-                  type="email"
-                  required
-                  value={payEmailInput}
-                  onChange={(e) => setPayEmailInput(e.target.value)}
-                  placeholder="Your email"
-                  disabled={payLoading}
-                  className="flex-1 h-12 px-5 rounded-lg bg-[#F5F1E8] text-[#111111] placeholder:text-[#2A2A2A]/40 focus:outline-none focus:ring-2 focus:ring-[#D4772C]/50 disabled:opacity-60"
-                />
-                <button
-                  type="submit"
-                  disabled={payLoading || !payEmailInput.trim()}
-                  className="h-12 px-6 rounded-lg bg-[#D4772C] text-[#F5F1E8] text-sm font-semibold tracking-wider uppercase hover:bg-[#bb6824] transition disabled:opacity-60 whitespace-nowrap"
-                >
-                  {payLoading ? "Loading…" : "Become a Member"}
-                </button>
-              </form>
             )}
             {payError && (
               <p className="text-sm text-[#D4772C] mt-3">{payError}</p>
@@ -656,27 +634,19 @@ export default function FoundersLandingClient({
               ? "Join the waitlist to be first in line for the next batch."
               : `First batch ships ${formatShipDate(meta.deadline)}. Once 300 spots fill, that's it.`}
           </p>
-          {!isSoldOut &&
-            (isInvited ? (
-              <button
-                onClick={() => handlePayNow()}
-                disabled={payLoading}
-                className="px-8 py-4 rounded-xl bg-[#D4772C] text-[#F5F1E8] font-semibold hover:bg-[#bb6824] transition disabled:opacity-60"
-              >
-                {payLoading
-                  ? "Loading…"
-                  : showDiscount
-                    ? "Claim my spot — $50 off"
-                    : "Become a Reserve Member"}
-              </button>
-            ) : (
-              <a
-                href="#hero"
-                className="inline-block px-8 py-4 rounded-xl bg-[#D4772C] text-[#F5F1E8] font-semibold hover:bg-[#bb6824] transition"
-              >
-                Become a Reserve Member
-              </a>
-            ))}
+          {!isSoldOut && (
+            <button
+              onClick={() => handlePayNow()}
+              disabled={payLoading}
+              className="px-8 py-4 rounded-xl bg-[#D4772C] text-[#F5F1E8] font-semibold hover:bg-[#bb6824] transition disabled:opacity-60"
+            >
+              {payLoading
+                ? "Loading…"
+                : showDiscount
+                  ? "Claim my spot — $50 off"
+                  : "Become a Reserve Member"}
+            </button>
+          )}
           <p className="text-xs text-[#F5F1E8]/45 mt-8">
             555 Friendly St., Pontiac, MI 48341
           </p>
