@@ -18,7 +18,7 @@
  *   }
  *
  * Behavior:
- *   1. Reject if no spots remaining (unless override) — surfaces 409.
+ *   1. Reject if no spots remaining (unless override), surfaces 409.
  *   2. Resolve email -> customers.id (case-insensitive). 404 if not found.
  *   3. Upsert customer_facts row with reserve_reservation_at = NOW(),
  *      reserve_reservation_expires_at = NOW() + 48h, source = ...,
@@ -91,7 +91,7 @@ export async function POST(req: Request) {
   const campaignId = body.campaign_id ?? FOUNDERS_CAMPAIGN_ID;
   const source = body.source ?? "reply_email";
 
-  // Optional token verification — if provided we require it to be valid AND
+  // Optional token verification, if provided we require it to be valid AND
   // its email to match the body. Defense in depth for any future
   // browser-callable path that proxies through this endpoint.
   if (body.token) {
@@ -167,7 +167,7 @@ export async function POST(req: Request) {
   );
 
   // Use upsert on customer_id (PK). If a paid_at already exists we DO NOT
-  // overwrite — they're a real subscriber now.
+  // overwrite, they're a real subscriber now.
   const { data: existing, error: existingErr } = await supabase
     .from("customer_facts")
     .select("customer_id, reserve_reservation_paid_at")
@@ -194,7 +194,7 @@ export async function POST(req: Request) {
     reserve_reservation_at: reservedAt.toISOString(),
     reserve_reservation_expires_at: expiresAt.toISOString(),
     reserve_reservation_source: campaignId,
-    // Explicitly leave reserve_reservation_paid_at NULL — it's set by webhook
+    // Explicitly leave reserve_reservation_paid_at NULL, it's set by webhook
     // when the actual Shopify subscription order completes.
     reserve_reservation_paid_at: null,
     updated_at: reservedAt.toISOString(),

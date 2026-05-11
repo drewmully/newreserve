@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Founders LP — client island. Owns:
+ * Founders LP, client island. Owns:
  *   - live spots-remaining counter (polled every 30s)
  *   - dual-CTA: pay-now (Shopify checkout w/ FOUNDERS50) vs reserve-by-reply
  *   - email capture form for the reply path (we don't have an inbox here,
@@ -11,7 +11,7 @@
  *
  * Pay-now path mirrors the /onboarding paid-tier flow exactly: a direct
  * createMembershipCheckout call. No check-email, no Firebase signIn, no
- * start-account — the orders-paid webhook handles Firebase + tier after
+ * start-account, the orders-paid webhook handles Firebase + tier after
  * Shopify completes the order, and /auth/callback handles the magic-link
  * bounce-back. The Shopify cart binds the email via buyerIdentity so
  * existing customers' orders attach to the right record.
@@ -74,7 +74,7 @@ export default function FoundersLandingClient({
         setSpots(j);
       }
     } catch {
-      // swallow — keep last good value
+      // swallow, keep last good value
     } finally {
       setSpotsLoading(false);
     }
@@ -103,12 +103,12 @@ export default function FoundersLandingClient({
       return greetingName
         ? `${greetingName}, your Founders invite is live.`
         : "Your Founders invite is live.";
-    return "Reserve Box — First Batch, May 27.";
+    return "Reserve Box, First Batch, May 27.";
   }, [tier, isInvited, greetingName]);
 
   const subhead = useMemo(() => {
     if (tier === "A" || tier === "B")
-      return "We picked 300 founders to ship the first batch. You're one of them — claim your spot below.";
+      return "We picked 300 founders to ship the first batch. You're one of them, claim your spot below.";
     if (isInvited)
       return "300 spots in the first batch. Founders pricing locks in your $50 off and your place in the May 27 shipment.";
     return "A curated quarterly box from Mully. Reserve Members get our best fits, picked for them.";
@@ -127,7 +127,7 @@ export default function FoundersLandingClient({
     async () => {
       if (payLoading) return;
       // If we have an invited email (token-linked), pre-fill Shopify's
-      // checkout email field. If not, leave it blank — Shopify will
+      // checkout email field. If not, leave it blank, Shopify will
       // collect it on the checkout page like every other purchase.
       const inviteEmail = invite?.email?.trim().toLowerCase() ?? "";
       setPayError(null);
@@ -191,7 +191,7 @@ export default function FoundersLandingClient({
       setReserveResult({ kind: "idle" });
       try {
         // Public form goes through a server action proxy that adds the
-        // CRON_SECRET — we'll add /api/reserve/reserve-by-reply/public next.
+        // CRON_SECRET, we'll add /api/reserve/reserve-by-reply/public next.
         const res = await fetch("/api/reserve/hold-by-form", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -282,7 +282,7 @@ export default function FoundersLandingClient({
               <div className="flex items-end justify-between mb-2">
                 <div>
                   <div className="text-5xl md:text-6xl font-semibold tabular-nums leading-none">
-                    {spotsLoading ? "—" : remaining}
+                    {spotsLoading ? "-" : remaining}
                   </div>
                   <div className="text-sm text-[#F5F1E8]/70 mt-1">
                     of {meta.totalSpots} founders spots left
@@ -307,7 +307,7 @@ export default function FoundersLandingClient({
               </div>
             </div>
 
-            {/* Single CTA — straight to Shopify checkout. Shopify collects
+            {/* Single CTA, straight to Shopify checkout. Shopify collects
                 the email itself, the same as every other purchase flow. */}
             {isSoldOut ? (
               <SoldOutBanner />
@@ -321,7 +321,7 @@ export default function FoundersLandingClient({
                   {payLoading
                     ? "Loading…"
                     : showDiscount
-                      ? "Claim my spot — $50 off"
+                      ? "Claim my spot, $50 off"
                       : "Become a Reserve Member"}
                 </button>
                 {isInvited && (
@@ -345,7 +345,7 @@ export default function FoundersLandingClient({
             </p>
           </div>
 
-          {/* Hero image — Mully Reserve box, glowing forest green */}
+          {/* Hero image, Mully Reserve box, glowing forest green */}
           <div className="relative aspect-[4/5] rounded-2xl overflow-hidden bg-[#162b1e] border border-[#F5F1E8]/10">
             <Image
               src="/reserve-founders-hero.jpg"
@@ -360,14 +360,14 @@ export default function FoundersLandingClient({
                 First Batch
               </div>
               <div className="text-sm">
-                Quarterly Reserve Box · 4–6 curated pieces
+                Quarterly Reserve Box · 4-6 curated pieces
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* BRAND STRIP — mirrors home page, light section directly under hero */}
+      {/* BRAND STRIP, mirrors home page, light section directly under hero */}
       <section className="bg-[#F5F3EF] py-10 md:py-12 border-y border-[#C8BFAF]/30">
         <div className="max-w-7xl mx-auto px-6 md:px-12">
           <BrandStrip />
@@ -387,7 +387,7 @@ export default function FoundersLandingClient({
             ? [
                 {
                   k: "Hand-picked",
-                  v: "You're on the founders shortlist — based on your taste, history, and how you shop with us.",
+                  v: "You're on the founders shortlist, based on your taste, history, and how you shop with us.",
                 },
                 {
                   k: "First batch",
@@ -405,7 +405,7 @@ export default function FoundersLandingClient({
                 },
                 {
                   k: "Pro-grade picks",
-                  v: "Pieces our stylists are excited about — not whatever a feed served up.",
+                  v: "Pieces our stylists are excited about, not whatever a feed served up.",
                 },
                 {
                   k: "Cancel anytime",
@@ -438,8 +438,8 @@ export default function FoundersLandingClient({
           <ol className="grid md:grid-cols-4 gap-6">
             {[
               ["1", "Claim your spot", "Pay now or reply to hold for 48 hours."],
-              ["2", "Tell us your fit", "Quick onboarding — sizes, style, what to avoid."],
-              ["3", "We curate", "Our stylists pick 4–6 pieces. You preview before we ship."],
+              ["2", "Tell us your fit", "Quick onboarding, sizes, style, what to avoid."],
+              ["3", "We curate", "Our stylists pick 4-6 pieces. You preview before we ship."],
               ["4", "Box ships May 27", "Wear what you love. Send back what you don't."],
             ].map(([n, t, d]) => (
               <li
@@ -518,7 +518,7 @@ export default function FoundersLandingClient({
               </p>
             )}
             <p className="text-xs text-[#F5F1E8]/55 mt-4">
-              Or just reply to our email with the word RESERVE — same result.
+              Or just reply to our email with the word RESERVE, same result.
             </p>
           </div>
         </section>
@@ -544,9 +544,9 @@ export default function FoundersLandingClient({
               </div>
             </div>
             {[
-              ["Ships", "May 27, 2026", "TBD — next batch only"],
+              ["Ships", "May 27, 2026", "TBD, next batch only"],
               ["Price", showDiscount ? "$199 first quarter" : "$249/quarter", "$249/quarter"],
-              ["$50 founders discount", "Yes — locked in", "No"],
+              ["$50 founders discount", "Yes, locked in", "No"],
               ["Spot in line", "Reserved", "First-come on next batch"],
               ["Cancel anytime", "Yes", "Yes"],
             ].map(([label, a, b]) => (
@@ -581,7 +581,7 @@ export default function FoundersLandingClient({
           {[
             {
               q: "What's actually in the box?",
-              a: "Four to six curated pieces for your season — shirts, layers, accessories — picked based on the fit and style profile you set during onboarding. You can preview before we ship and swap anything that doesn't feel right.",
+              a: "Four to six curated pieces for your season, shirts, layers, accessories, picked based on the fit and style profile you set during onboarding. You can preview before we ship and swap anything that doesn't feel right.",
             },
             {
               q: "Is the $50 discount one-time or ongoing?",
@@ -593,7 +593,7 @@ export default function FoundersLandingClient({
             },
             {
               q: "Can I cancel?",
-              a: "Yes — anytime. No contracts, no penalties. Skip a quarter or stop entirely from your dashboard.",
+              a: "Yes, anytime. No contracts, no penalties. Skip a quarter or stop entirely from your dashboard.",
             },
             {
               q: "How does the hold-by-reply work?",
@@ -643,7 +643,7 @@ export default function FoundersLandingClient({
               {payLoading
                 ? "Loading…"
                 : showDiscount
-                  ? "Claim my spot — $50 off"
+                  ? "Claim my spot, $50 off"
                   : "Become a Reserve Member"}
             </button>
           )}
@@ -657,7 +657,7 @@ export default function FoundersLandingClient({
 }
 
 /**
- * BrandStrip — mirrors the homepage marquee. Uses the global `.brand-marquee`
+ * BrandStrip, mirrors the homepage marquee. Uses the global `.brand-marquee`
  * and `.brand-marquee-mask` CSS classes defined in globals.css.
  */
 function BrandStrip() {
@@ -713,7 +713,7 @@ function SoldOutBanner() {
       <div className="font-semibold mb-1">Founders batch is full</div>
       <p className="text-sm text-[#F5F1E8]/80">
         All 300 spots are claimed. We&apos;re starting the waitlist for the next
-        batch — drop your email and you&apos;ll be first in line.
+        batch, drop your email and you&apos;ll be first in line.
       </p>
     </div>
   );

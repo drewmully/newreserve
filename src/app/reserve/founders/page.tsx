@@ -1,5 +1,5 @@
 /**
- * /reserve/founders — Reserve Founders Shortlist v1 landing page.
+ * /reserve/founders, Reserve Founders Shortlist v1 landing page.
  *
  * Server component. Reads `?t=<hmac>` once, validates it, and passes the
  * decoded payload (or `null` for token-less visitors) to the client island
@@ -23,7 +23,7 @@ import {
 } from "@/lib/foundersCampaign";
 
 export const metadata: Metadata = {
-  title: "Reserve Founders Shortlist — Mully",
+  title: "Reserve Founders Shortlist, Mully",
   description:
     "300 spots. One batch. Ships May 27. Lock in your founders pricing for the Reserve Box quarterly experience.",
   robots: { index: false, follow: false }, // shortlist-only, keep out of search

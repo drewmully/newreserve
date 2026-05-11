@@ -1,5 +1,5 @@
 /**
- * Reserve Founders Shortlist v1 — campaign constants & helpers.
+ * Reserve Founders Shortlist v1, campaign constants & helpers.
  *
  * One campaign, 9,285 invited contacts, 300 spots. Drives traffic to
  * /reserve/founders with a personalization token in the URL. Two paths
@@ -19,7 +19,7 @@ export const FOUNDERS_CAMPAIGN_ID =
 export const FOUNDERS_DISCOUNT_CODE =
   process.env.NEXT_PUBLIC_FOUNDERS_DISCOUNT_CODE ?? "FOUNDERS50";
 
-/** Total founders batch size — when claimed >= cap, the LP swaps to waitlist mode. */
+/** Total founders batch size, when claimed >= cap, the LP swaps to waitlist mode. */
 export const FOUNDERS_TOTAL_SPOTS = parsePositiveInt(
   process.env.FOUNDERS_TOTAL_SPOTS,
   300,
@@ -56,15 +56,15 @@ const TOKEN_SECRET =
 export interface FoundersTokenPayload {
   /** Lowercased email. */
   email: string;
-  /** Customer 360 id, if known at send time — speeds up server-side lookup. */
+  /** Customer 360 id, if known at send time, speeds up server-side lookup. */
   customerId?: string;
   /** Score tier at the time of send: A/B/C/D/E. Drives copy + display. */
   tier?: "A" | "B" | "C" | "D" | "E";
-  /** First name when available — pre-fills "Hey {firstName}". */
+  /** First name when available, pre-fills "Hey {firstName}". */
   firstName?: string;
   /** Unix seconds when the token was issued. */
   iat: number;
-  /** Campaign id — lets us invalidate cleanly later. */
+  /** Campaign id, lets us invalidate cleanly later. */
   cmp: string;
 }
 
@@ -120,7 +120,7 @@ export function verifyFoundersToken(
     return null;
   }
   if (decoded.cmp !== FOUNDERS_CAMPAIGN_ID) return null;
-  // No expiry by design — campaign ends at FOUNDERS_SHIP_DATE; UI hides the
+  // No expiry by design, campaign ends at FOUNDERS_SHIP_DATE; UI hides the
   // founders pricing automatically once spots are gone.
   return decoded;
 }

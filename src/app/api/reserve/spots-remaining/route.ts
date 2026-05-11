@@ -19,7 +19,7 @@ import {
   FOUNDERS_TOTAL_SPOTS,
 } from "@/lib/foundersCampaign";
 
-// Campaign launch cutoff — only paid Reserve subs whose membership was acquired
+// Campaign launch cutoff, only paid Reserve subs whose membership was acquired
 // at-or-after this moment count against the Founders pool. ISO UTC.
 const FOUNDERS_CAMPAIGN_START =
   process.env.FOUNDERS_CAMPAIGN_START ?? "2026-05-11T00:00:00Z";
@@ -42,7 +42,7 @@ export async function GET() {
   const total = FOUNDERS_TOTAL_SPOTS;
   const supabase = getSupabase();
   if (!supabase) {
-    // No service role available — return total with zero claimed so the LP
+    // No service role available, return total with zero claimed so the LP
     // still renders. We log so prod misconfiguration surfaces immediately.
     console.error(
       "[spots-remaining] SUPABASE_SERVICE_ROLE_KEY missing; returning fallback",
@@ -110,7 +110,7 @@ export async function GET() {
     },
     {
       headers: {
-        // Short TTL — LP polls every ~30s and we want near-live counter.
+        // Short TTL, LP polls every ~30s and we want near-live counter.
         "cache-control": "public, max-age=10, s-maxage=30, stale-while-revalidate=60",
       },
     },
