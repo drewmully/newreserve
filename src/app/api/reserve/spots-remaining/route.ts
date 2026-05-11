@@ -14,6 +14,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import {
   FOUNDERS_CAMPAIGN_ID,
+  FOUNDERS_COUNTER_BASELINE_CLAIMED,
   FOUNDERS_SHIP_DATE,
   FOUNDERS_TOTAL_SPOTS,
 } from "@/lib/foundersCampaign";
@@ -50,9 +51,10 @@ export async function GET() {
       {
         campaign_id: FOUNDERS_CAMPAIGN_ID,
         total_spots: total,
+        baseline: FOUNDERS_COUNTER_BASELINE_CLAIMED,
         paid: 0,
         pending: 0,
-        remaining: total,
+        remaining: Math.max(0, total - FOUNDERS_COUNTER_BASELINE_CLAIMED),
         deadline: FOUNDERS_SHIP_DATE,
         campaign_start: FOUNDERS_CAMPAIGN_START,
         degraded: true,
@@ -92,12 +94,14 @@ export async function GET() {
 
   const paid = paidRes.count ?? 0;
   const pending = pendingRes.count ?? 0;
-  const remaining = Math.max(0, total - paid - pending);
+  const baseline = FOUNDERS_COUNTER_BASELINE_CLAIMED;
+  const remaining = Math.max(0, total - baseline - paid - pending);
 
   return NextResponse.json(
     {
       campaign_id: FOUNDERS_CAMPAIGN_ID,
       total_spots: total,
+      baseline,
       paid,
       pending,
       remaining,

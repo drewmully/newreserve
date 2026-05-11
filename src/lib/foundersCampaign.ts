@@ -25,6 +25,17 @@ export const FOUNDERS_TOTAL_SPOTS = parsePositiveInt(
   300,
 );
 
+/**
+ * Baseline already-claimed count used at campaign go-live so the public
+ * counter doesn't start at zero. Counted toward `claimed` in all math
+ * (display + availability gating). Env-overridable so we can adjust
+ * without a redeploy.
+ */
+export const FOUNDERS_COUNTER_BASELINE_CLAIMED = parseNonNegativeInt(
+  process.env.FOUNDERS_COUNTER_BASELINE_CLAIMED,
+  53,
+);
+
 /** First batch ship date (ISO). Used as the campaign deadline in copy. */
 export const FOUNDERS_SHIP_DATE = process.env.FOUNDERS_SHIP_DATE ?? "2026-05-27";
 
@@ -133,4 +144,10 @@ function parsePositiveInt(raw: string | undefined, fallback: number): number {
   if (!raw) return fallback;
   const n = Number(raw);
   return Number.isSafeInteger(n) && n > 0 ? n : fallback;
+}
+
+function parseNonNegativeInt(raw: string | undefined, fallback: number): number {
+  if (raw === undefined || raw === "") return fallback;
+  const n = Number(raw);
+  return Number.isSafeInteger(n) && n >= 0 ? n : fallback;
 }

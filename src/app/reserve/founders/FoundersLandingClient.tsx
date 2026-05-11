@@ -8,10 +8,18 @@
  *     so the LP form posts to /api/reserve/reserve-by-reply on the server
  *     and surfaces a confirmation. Replying to the actual email also works
  *     via the analyzer trigger.)
+ *
+ * Pay-now path matches the homepage flow exactly: email -> check-email ->
+ * start-account (Firebase) -> createMembershipCheckout with the founders
+ * discount appended. Identical /auth/callback bounce-back as home users.
  */
+import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createMembershipCheckout } from "@/lib/shopifyCheckout";
 import type { FoundersTokenPayload } from "@/lib/foundersCampaign";
+import { PENDING_ONBOARDING_EMAIL_KEY } from "@/app/components/EmailCTA";
+import { PENDING_SIGN_IN_EMAIL_KEY } from "@/lib/pendingSignInEmail";
+import { trackEvent } from "@/lib/tracking";
 
 type Meta = {
   campaignId: string;
@@ -23,6 +31,7 @@ type Meta = {
 type SpotsResponse = {
   campaign_id: string;
   total_spots: number;
+  baseline?: number;
   paid: number;
   pending: number;
   remaining: number;
@@ -44,6 +53,8 @@ export default function FoundersLandingClient({
   const [spots, setSpots] = useState<SpotsResponse | null>(null);
   const [spotsLoading, setSpotsLoading] = useState(true);
   const [payLoading, setPayLoading] = useState(false);
+  const [payError, setPayError] = useState<string | null>(null);
+  const [payEmailInput, setPayEmailInput] = useState<string>(invite?.email ?? "");
   const [reserveSubmitting, setReserveSubmitting] = useState(false);
   const [reserveResult, setReserveResult] = useState<
     | { kind: "idle" }
@@ -107,30 +118,150 @@ export default function FoundersLandingClient({
   const founderPriceLabel = "$199 first quarter, then $249";
 
   // ---- CTAs -------------------------------------------------------------
-  const handlePayNow = useCallback(async () => {
-    setPayLoading(true);
-    try {
-      await createMembershipCheckout("member", {
-        discountCodes: showDiscount ? [meta.discountCode] : [],
-        email: invite?.email,
-        attributes: [
-          { key: "campaign_id", value: meta.campaignId },
-          ...(invite?.email
-            ? [{ key: "invited_email", value: invite.email }]
-            : []),
-          ...(invite?.tier
-            ? [{ key: "invited_tier", value: invite.tier }]
-            : []),
-          ...(tokenRaw ? [{ key: "founders_token", value: tokenRaw }] : []),
-        ],
-        returnPath: "/auth/callback",
+  // Mirrors the homepage flow exactly: check-email -> start-account ->
+  // Firebase custom-token sign-in -> createMembershipCheckout. Same
+  // /auth/callback bounce-back so post-purchase handoff works identically.
+  const handlePayNow = useCallback(
+    async (overrideEmail?: string) => {
+      if (payLoading) return;
+      const email =
+        (overrideEmail ?? invite?.email ?? "").trim().toLowerCase();
+      if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        setPayError("Enter a valid email.");
+        return;
+      }
+      setPayError(null);
+      setPayLoading(true);
+
+      // Remember the email locally for fallback paths (matches homepage).
+      try {
+        sessionStorage.setItem(PENDING_ONBOARDING_EMAIL_KEY, email);
+      } catch {}
+
+      void trackEvent("email_submitted", {
+        email,
+        properties: {
+          source: "reserve_founders_lp",
+          campaign_id: meta.campaignId,
+          tier: invite?.tier ?? null,
+        },
       });
-    } finally {
-      // createMembershipCheckout navigates away on success; if we get here
-      // either the call failed silently or env vars are missing.
-      setPayLoading(false);
-    }
-  }, [showDiscount, meta.discountCode, meta.campaignId, invite, tokenRaw]);
+      void trackEvent("checkout_clicked", {
+        properties: {
+          plan: "member",
+          source: "reserve_founders_lp",
+          campaign_id: meta.campaignId,
+        },
+      });
+
+      const goToCheckout = async () => {
+        await createMembershipCheckout("member", {
+          discountCodes: showDiscount ? [meta.discountCode] : [],
+          email,
+          attributes: [
+            { key: "campaign_id", value: meta.campaignId },
+            { key: "invited_email", value: email },
+            ...(invite?.tier
+              ? [{ key: "invited_tier", value: invite.tier }]
+              : []),
+            ...(tokenRaw ? [{ key: "founders_token", value: tokenRaw }] : []),
+          ],
+          returnPath: "/auth/callback",
+        });
+      };
+
+      try {
+        // Check if this email already has a Firebase account.
+        const checkRes = await fetch("/api/auth/check-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+        });
+        let exists = false;
+        if (checkRes.ok) {
+          try {
+            const data = (await checkRes.json()) as { exists?: boolean };
+            exists = data.exists === true;
+          } catch {}
+        }
+
+        if (exists) {
+          // Stash for sign-in page and bounce home-style. Existing members
+          // sign in there and the dashboard already exposes the upgrade.
+          try {
+            sessionStorage.setItem(PENDING_SIGN_IN_EMAIL_KEY, email);
+          } catch {}
+          // For Founders, route straight to checkout — they already exist,
+          // they don't need /login to claim the spot. The cart attaches
+          // their email so Shopify ties the order to the right customer.
+          await goToCheckout();
+          return;
+        }
+
+        // New user: create a Firebase account + sign in (homepage pattern).
+        const startRes = await fetch("/api/auth/start-account", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email,
+            source: "reserve_founders_lp",
+            utm: {
+              utm_source: "reserve_founders_v1",
+              utm_medium: "email",
+              utm_campaign: meta.campaignId,
+            },
+          }),
+        });
+
+        if (startRes.ok) {
+          const startData = (await startRes.json()) as {
+            uid?: string;
+            customToken?: string;
+          };
+          if (startData.customToken) {
+            try {
+              const [{ auth }, { signInWithCustomToken }] = await Promise.all([
+                import("@/lib/firebase"),
+                import("firebase/auth"),
+              ]);
+              await signInWithCustomToken(auth, startData.customToken);
+              void trackEvent("account_created", {
+                user_id: startData.uid,
+                email,
+                properties: {
+                  method: "email_only",
+                  tier: "reserve_founders",
+                },
+              });
+            } catch (signInErr) {
+              console.error(
+                "[founders] custom-token sign-in failed:",
+                signInErr,
+              );
+              // Fall through — /auth/callback can recover post-checkout.
+            }
+          }
+        }
+
+        await goToCheckout();
+      } catch (err) {
+        console.error("[founders] pay-now failed:", err);
+        setPayError("Something went wrong. Try again or reply to the email.");
+      } finally {
+        // createMembershipCheckout navigates away on success; if we land
+        // back here, either the call failed silently or env vars are missing.
+        setPayLoading(false);
+      }
+    },
+    [
+      payLoading,
+      showDiscount,
+      meta.discountCode,
+      meta.campaignId,
+      invite,
+      tokenRaw,
+    ],
+  );
 
   const handleReserveByForm = useCallback(
     async (e: React.FormEvent<HTMLFormElement>) => {
@@ -196,7 +327,8 @@ export default function FoundersLandingClient({
 
   // ---- derived counter UI ----------------------------------------------
   const remaining = spots?.remaining ?? meta.totalSpots;
-  const claimed = (spots?.paid ?? 0) + (spots?.pending ?? 0);
+  const claimed =
+    (spots?.baseline ?? 0) + (spots?.paid ?? 0) + (spots?.pending ?? 0);
   const pctClaimed = Math.min(
     100,
     Math.round((claimed / meta.totalSpots) * 100),
@@ -208,7 +340,10 @@ export default function FoundersLandingClient({
   return (
     <div className="min-h-screen bg-[#FAF9F6] text-[#111111]">
       {/* HERO */}
-      <section className="relative overflow-hidden bg-[#1F3D2B] text-[#F5F1E8]">
+      <section
+        id="hero"
+        className="relative overflow-hidden bg-[#1F3D2B] text-[#F5F1E8]"
+      >
         <div className="absolute inset-0 opacity-20 pointer-events-none [background:radial-gradient(circle_at_30%_20%,rgba(212,119,44,0.3),transparent_60%)]" />
         <div className="relative max-w-6xl mx-auto px-6 md:px-12 py-16 md:py-24 grid md:grid-cols-2 gap-10 md:gap-16 items-center">
           <div>
@@ -256,27 +391,57 @@ export default function FoundersLandingClient({
               </div>
             </div>
 
-            {/* Dual CTA */}
+            {/* Dual CTA — matches homepage flow (email -> start-account -> checkout) */}
             {isSoldOut ? (
               <SoldOutBanner />
-            ) : (
+            ) : isInvited ? (
               <div className="flex flex-col sm:flex-row gap-3">
                 <button
-                  onClick={handlePayNow}
+                  onClick={() => handlePayNow()}
                   disabled={payLoading}
                   className="px-6 py-4 rounded-xl bg-[#D4772C] text-[#F5F1E8] font-semibold hover:bg-[#bb6824] transition disabled:opacity-60"
                 >
-                  {payLoading ? "Loading…" : showDiscount ? "Claim my spot — $50 off" : "Become a Reserve Member"}
+                  {payLoading
+                    ? "Loading…"
+                    : showDiscount
+                      ? "Claim my spot — $50 off"
+                      : "Become a Reserve Member"}
                 </button>
-                {isInvited && (
-                  <a
-                    href="#reserve-by-reply"
-                    className="px-6 py-4 rounded-xl border border-[#F5F1E8]/40 text-[#F5F1E8] font-medium hover:bg-[#F5F1E8]/10 transition text-center"
-                  >
-                    Hold my spot for 48h
-                  </a>
-                )}
+                <a
+                  href="#reserve-by-reply"
+                  className="px-6 py-4 rounded-xl border border-[#F5F1E8]/40 text-[#F5F1E8] font-medium hover:bg-[#F5F1E8]/10 transition text-center"
+                >
+                  Hold my spot for 48h
+                </a>
               </div>
+            ) : (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void handlePayNow(payEmailInput);
+                }}
+                className="flex flex-col sm:flex-row items-stretch gap-3 max-w-md"
+              >
+                <input
+                  type="email"
+                  required
+                  value={payEmailInput}
+                  onChange={(e) => setPayEmailInput(e.target.value)}
+                  placeholder="Your email"
+                  disabled={payLoading}
+                  className="flex-1 h-12 px-5 rounded-lg bg-[#F5F1E8] text-[#111111] placeholder:text-[#2A2A2A]/40 focus:outline-none focus:ring-2 focus:ring-[#D4772C]/50 disabled:opacity-60"
+                />
+                <button
+                  type="submit"
+                  disabled={payLoading || !payEmailInput.trim()}
+                  className="h-12 px-6 rounded-lg bg-[#D4772C] text-[#F5F1E8] text-sm font-semibold tracking-wider uppercase hover:bg-[#bb6824] transition disabled:opacity-60 whitespace-nowrap"
+                >
+                  {payLoading ? "Loading…" : "Become a Member"}
+                </button>
+              </form>
+            )}
+            {payError && (
+              <p className="text-sm text-[#D4772C] mt-3">{payError}</p>
             )}
 
             <p className="text-xs text-[#F5F1E8]/55 mt-4">
@@ -286,13 +451,18 @@ export default function FoundersLandingClient({
             </p>
           </div>
 
-          {/* Hero image placeholder — stock-style per Drew */}
-          <div className="relative aspect-[4/5] rounded-2xl overflow-hidden bg-[#2a5239] border border-[#F5F1E8]/10">
-            <div className="absolute inset-0 flex items-center justify-center text-[#F5F1E8]/30 text-sm">
-              Box hero photo
-            </div>
-            <div className="absolute bottom-4 left-4 right-4 px-4 py-3 rounded-xl bg-[#111111]/40 backdrop-blur text-[#F5F1E8]">
-              <div className="text-xs uppercase tracking-widest text-[#F5F1E8]/60 mb-1">
+          {/* Hero image — Mully Reserve box, glowing forest green */}
+          <div className="relative aspect-[4/5] rounded-2xl overflow-hidden bg-[#162b1e] border border-[#F5F1E8]/10">
+            <Image
+              src="/reserve-founders-hero.jpg"
+              alt="Mully Reserve box with a striped polo, navy pants, and woven leather belt"
+              fill
+              priority
+              sizes="(min-width: 768px) 55vw, 100vw"
+              className="object-cover"
+            />
+            <div className="absolute bottom-4 left-4 right-4 px-4 py-3 rounded-xl bg-[#111111]/55 backdrop-blur text-[#F5F1E8]">
+              <div className="text-xs uppercase tracking-widest text-[#F5F1E8]/70 mb-1">
                 First Batch
               </div>
               <div className="text-sm">
@@ -300,6 +470,13 @@ export default function FoundersLandingClient({
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* BRAND STRIP — mirrors home page, light section directly under hero */}
+      <section className="bg-[#F5F3EF] py-10 md:py-12 border-y border-[#C8BFAF]/30">
+        <div className="max-w-7xl mx-auto px-6 md:px-12">
+          <BrandStrip />
         </div>
       </section>
 
@@ -563,24 +740,83 @@ export default function FoundersLandingClient({
               ? "Join the waitlist to be first in line for the next batch."
               : `First batch ships ${formatShipDate(meta.deadline)}. Once 300 spots fill, that's it.`}
           </p>
-          {!isSoldOut && (
-            <button
-              onClick={handlePayNow}
-              disabled={payLoading}
-              className="px-8 py-4 rounded-xl bg-[#D4772C] text-[#F5F1E8] font-semibold hover:bg-[#bb6824] transition disabled:opacity-60"
-            >
-              {payLoading
-                ? "Loading…"
-                : showDiscount
-                  ? "Claim my spot — $50 off"
-                  : "Become a Reserve Member"}
-            </button>
-          )}
+          {!isSoldOut &&
+            (isInvited ? (
+              <button
+                onClick={() => handlePayNow()}
+                disabled={payLoading}
+                className="px-8 py-4 rounded-xl bg-[#D4772C] text-[#F5F1E8] font-semibold hover:bg-[#bb6824] transition disabled:opacity-60"
+              >
+                {payLoading
+                  ? "Loading…"
+                  : showDiscount
+                    ? "Claim my spot — $50 off"
+                    : "Become a Reserve Member"}
+              </button>
+            ) : (
+              <a
+                href="#hero"
+                className="inline-block px-8 py-4 rounded-xl bg-[#D4772C] text-[#F5F1E8] font-semibold hover:bg-[#bb6824] transition"
+              >
+                Become a Reserve Member
+              </a>
+            ))}
           <p className="text-xs text-[#F5F1E8]/45 mt-8">
             555 Friendly St., Pontiac, MI 48341
           </p>
         </div>
       </section>
+    </div>
+  );
+}
+
+/**
+ * BrandStrip — mirrors the homepage marquee. Uses the global `.brand-marquee`
+ * and `.brand-marquee-mask` CSS classes defined in globals.css.
+ */
+function BrandStrip() {
+  const brands = [
+    { name: "Rhone", src: "/brands/rhone.png" },
+    { name: "Greyson", src: "/brands/greyson.png" },
+    { name: "Quiet Golf", src: "/brands/quiet-golf.png" },
+    { name: "Field Day Sporting Co.", src: "/brands/field-day.png" },
+    { name: "Arnie's", src: "/brands/arnies.png" },
+    { name: "Harlestons", src: "/brands/harlestons.png" },
+    { name: "Topo Athletic", src: "/brands/topo.png" },
+    { name: "Hyperice", src: "/brands/hyperice.png" },
+    { name: "Feetures", src: "/brands/feetures.png" },
+  ];
+  const looped = [...brands, ...brands];
+  return (
+    <div aria-label="Featured brand partners" className="w-full">
+      <div className="text-center mb-5 md:mb-6 px-2">
+        <span className="inline-flex items-center justify-center gap-2 md:gap-2.5 text-[9px] md:text-[11px] tracking-[0.25em] md:tracking-[0.3em] uppercase text-[#1F3D2B]/60 font-medium whitespace-nowrap">
+          <span className="hidden sm:block w-7 h-px bg-[#1F3D2B]/20" />
+          Members get pricing on brands like
+          <span className="hidden sm:block w-7 h-px bg-[#1F3D2B]/20" />
+        </span>
+      </div>
+      <div className="overflow-hidden brand-marquee-mask">
+        <div className="brand-marquee flex items-center gap-10 md:gap-16 whitespace-nowrap">
+          {looped.map((b, i) => (
+            <div
+              key={`${b.name}-${i}`}
+              className="flex items-center justify-center h-8 md:h-10 shrink-0"
+              title={b.name}
+            >
+              <Image
+                src={b.src}
+                alt={b.name}
+                width={140}
+                height={40}
+                unoptimized
+                className="max-h-full w-auto object-contain opacity-70"
+                style={{ filter: "grayscale(100%) contrast(1.05)" }}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

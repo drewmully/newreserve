@@ -30,6 +30,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import {
   FOUNDERS_CAMPAIGN_ID,
+  FOUNDERS_COUNTER_BASELINE_CLAIMED,
   FOUNDERS_RESERVATION_HOLD_HOURS,
   FOUNDERS_TOTAL_SPOTS,
   verifyFoundersToken,
@@ -104,8 +105,11 @@ export async function POST(req: Request) {
   }
 
   // ---- 1. Spot availability gate -----------------------------------------
+  // NOTE: baseline is included so the gate stays consistent with the public
+  // counter in /api/reserve/spots-remaining. Adjust both via env in lockstep.
   const nowIso = new Date().toISOString();
-  let remaining = FOUNDERS_TOTAL_SPOTS;
+  const baseline = FOUNDERS_COUNTER_BASELINE_CLAIMED;
+  let remaining = Math.max(0, FOUNDERS_TOTAL_SPOTS - baseline);
   if (!body.skip_spot_check) {
     const [paidRes, pendingRes] = await Promise.all([
       supabase
@@ -123,12 +127,13 @@ export async function POST(req: Request) {
     ]);
     const paid = paidRes.count ?? 0;
     const pending = pendingRes.count ?? 0;
-    remaining = Math.max(0, FOUNDERS_TOTAL_SPOTS - paid - pending);
+    remaining = Math.max(0, FOUNDERS_TOTAL_SPOTS - baseline - paid - pending);
     if (remaining <= 0) {
       return NextResponse.json(
         {
           error: "no_spots_remaining",
           remaining: 0,
+          baseline,
           paid,
           pending,
         },
