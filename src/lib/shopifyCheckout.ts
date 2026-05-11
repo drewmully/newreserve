@@ -4,8 +4,9 @@ import { buildCheckoutOriginAttributes } from "./shopifyCheckoutOrigin";
 export interface CreateMembershipCheckoutOptions {
   /**
    * Pre-fills the Shopify checkout `email` field. Use this when the visitor
-   * already gave us their email (EmailCTA / start-account flow). Shopify
-   * accepts ?checkout[email]= on the storefront checkout URL.
+   * already gave us their email (EmailCTA / start-account flow / founders
+   * invite token). Shopify accepts ?checkout[email]= on the storefront
+   * checkout URL.
    */
   email?: string;
   /**
@@ -13,6 +14,10 @@ export interface CreateMembershipCheckoutOptions {
    * Leo's auto-login pattern continues to work.
    */
   returnPath?: string;
+  /** Optional Shopify discount code(s) applied at cart creation. */
+  discountCodes?: string[];
+  /** Optional extra cart attributes (campaign id, invite token, tier, etc.). */
+  attributes?: Array<{ key: string; value: string }>;
 }
 
 export async function createMembershipCheckout(
@@ -39,7 +44,12 @@ export async function createMembershipCheckout(
   const attributes = [
     ...buildCheckoutOriginAttributes(returnTo),
     { key: "new_user", value: "true" },
+    ...(options.attributes ?? []),
   ];
+
+  const discountCodes = (options.discountCodes ?? [])
+    .map((code) => code.trim())
+    .filter(Boolean);
 
   const res = await fetch(`https://${domain}/api/2024-10/graphql.json`, {
     method: "POST",
@@ -52,16 +62,26 @@ export async function createMembershipCheckout(
         $merchandiseId: ID!
         $sellingPlanId: ID!
         $attributes: [AttributeInput!]
+        $discountCodes: [String!]
+        $buyerIdentity: CartBuyerIdentityInput
       ) {
         cartCreate(input: {
           lines: [{ merchandiseId: $merchandiseId, quantity: 1, sellingPlanId: $sellingPlanId }],
-          attributes: $attributes
+          attributes: $attributes,
+          discountCodes: $discountCodes,
+          buyerIdentity: $buyerIdentity
         }) {
           cart { checkoutUrl }
           userErrors { field message }
         }
       }`,
-      variables: { merchandiseId, sellingPlanId, attributes },
+      variables: {
+        merchandiseId,
+        sellingPlanId,
+        attributes,
+        discountCodes: discountCodes.length ? discountCodes : null,
+        buyerIdentity: options.email ? { email: options.email } : null,
+      },
     }),
   });
 
@@ -69,7 +89,7 @@ export async function createMembershipCheckout(
   const checkoutUrl = json?.data?.cartCreate?.cart?.checkoutUrl;
   if (!checkoutUrl) {
     console.error(
-      "[shopifyCheckout] no checkoutUrl \u2014 errors:",
+      "[shopifyCheckout] no checkoutUrl — errors:",
       json?.data?.cartCreate?.userErrors,
       json?.errors
     );
