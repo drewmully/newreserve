@@ -677,7 +677,7 @@ function DropsTab() {
 
             {/* Featured product preview */}
             <Link
-              href={`/shop/${FEATURED_DROP.productHandle}?from=dashboard`}
+              href={`/drops/${FEATURED_DROP.slug}`}
               className="flex flex-col sm:flex-row gap-5 mb-8 p-4 rounded-xl bg-bone/5 hover:bg-bone/10 transition-colors group"
             >
               <div className="relative w-full sm:w-32 md:w-36 aspect-square flex-shrink-0 rounded-lg overflow-hidden bg-bone/10">
@@ -736,7 +736,7 @@ function DropsTab() {
                   ))}
                 </div>
                 <Link
-                  href={`/shop/${FEATURED_DROP.productHandle}?from=dashboard`}
+                  href={`/drops/${FEATURED_DROP.slug}`}
                   className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-bone text-forest text-xs font-medium tracking-wide hover:bg-cream transition-colors btn-press"
                 >
                   Preview the Drop
@@ -747,7 +747,7 @@ function DropsTab() {
               </>
             ) : (
               <Link
-                href={`/shop/${FEATURED_DROP.productHandle}?from=dashboard`}
+                href={`/drops/${FEATURED_DROP.slug}`}
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-ember text-bone text-xs font-bold tracking-[0.18em] uppercase hover:bg-ember/90 transition-colors btn-press"
               >
                 <span className="w-2 h-2 rounded-full bg-bone animate-pulse" />

@@ -7,6 +7,7 @@ const DEFAULT_DROP_DATE_ISO = "2026-05-15T21:00:00-04:00";
    ─────────────────────────────────────────────────────────────── */
 export interface FeaturedDrop {
   number: string;            // e.g. "Drop 001"
+  slug: string;              // URL slug for /drops/<slug>
   productHandle: string;     // Shopify storefront handle
   productName: string;       // Display name for cards
   brand: string;             // Vendor / brand label
@@ -15,11 +16,18 @@ export interface FeaturedDrop {
   image: string;             // Primary card image URL
   retailPrice: number;       // Sticker price
   memberPrice: number;       // Reserve / member price (15% off retail)
+  isLive: boolean;           // true once the drop is publicly buyable
   badge?: string;            // Optional pill label, e.g. "Tonight"
+  podcast?: {
+    title: string;           // Episode title
+    youtubeId: string;       // YouTube video ID for embed
+    blurb?: string;          // 1–2 sentence lead-in
+  };
 }
 
 export const FEATURED_DROP: FeaturedDrop = {
   number: "Drop 001",
+  slug: "001",
   productHandle: "morning-people-golforever-polo",
   productName: "Morning People Golforever Polo",
   brand: "Morning People",
@@ -30,6 +38,13 @@ export const FEATURED_DROP: FeaturedDrop = {
     "https://cdn.shopify.com/s/files/1/0734/7879/9573/files/Charcoal_Studio_Front.jpg?v=1768163516",
   retailPrice: 75,
   memberPrice: 64,
+  isLive: true,
+  podcast: {
+    title: "The story behind Morning People",
+    youtubeId: "TrJzBWFgj34",
+    blurb:
+      "We sat down with the founders to talk fabric, fit, and why the Golforever Polo became their flagship.",
+  },
 };
 
 function parseDate(value: string | undefined): Date | null {

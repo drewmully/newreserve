@@ -333,7 +333,7 @@ const PRODUCT_FIELDS = `
       }
     }
   }
-  images(first: 5) {
+  images(first: 30) {
     nodes {
       url
       altText
@@ -376,9 +376,9 @@ const CART_FIELDS = `
 export async function getCollectionProducts(
   collectionHandle: string
 ): Promise<ShopifyProduct[]> {
-  // cache-bust: v3 — drop001 price fix 2026-05-15
+  // cache-bust: v4 — drop001 alt-text + 30 images 2026-05-15
   const query = `
-    query CollectionProductsV3($handle: String!) {
+    query CollectionProductsV4($handle: String!) {
       collection(handle: $handle) {
         products(first: 50) {
           nodes { ${PRODUCT_FIELDS} }
@@ -397,9 +397,9 @@ export async function getCollectionProducts(
 export async function getProductByHandle(
   handle: string
 ): Promise<ShopifyProduct | null> {
-  // cache-bust: v3 — drop001 price fix 2026-05-15
+  // cache-bust: v4 — drop001 alt-text + 30 images 2026-05-15
   const query = `
-    query ProductByHandleV3($handle: String!) {
+    query ProductByHandleV4($handle: String!) {
       product(handle: $handle) { ${PRODUCT_FIELDS} }
     }
   `;

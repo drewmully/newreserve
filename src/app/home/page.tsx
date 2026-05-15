@@ -696,7 +696,7 @@ export default function HomePage() {
                 <div className="flex flex-col md:flex-row md:items-center gap-6 md:gap-8">
                   {/* Featured product image */}
                   <Link
-                    href={`/shop/${FEATURED_DROP.productHandle}?from=home`}
+                    href={`/drops/${FEATURED_DROP.slug}`}
                     className="relative w-full md:w-48 lg:w-56 flex-shrink-0 aspect-square rounded-xl overflow-hidden bg-bone/5 group"
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -713,7 +713,7 @@ export default function HomePage() {
                   {/* Drop copy */}
                   <div className="flex-1 min-w-0">
                     <p className="text-[10px] tracking-[0.35em] uppercase text-sage font-medium mb-2">
-                      {dropActive ? "Next Exclusive Drop" : "The Drop Is Live"}
+                      The Drop Is Live
                     </p>
                     <h2 className="font-serif text-2xl md:text-3xl text-bone mb-1 leading-tight">
                       {FEATURED_DROP.headline}
@@ -736,25 +736,18 @@ export default function HomePage() {
                       )}
                     </div>
 
-                    {/* Countdown / Live banner */}
-                    {dropActive ? (
-                      <div className="flex items-center gap-3 mb-5">
-                        <p className="text-[10px] tracking-[0.3em] uppercase text-bone/40">Dropping In</p>
-                        <p className="font-mono text-base md:text-lg text-bone font-bold tracking-wider">{countdown}</p>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 mb-5">
-                        <span className="w-2.5 h-2.5 rounded-full bg-ember animate-pulse" />
-                        <span className="font-serif text-base text-ember font-bold tracking-wide">LIVE NOW</span>
-                      </div>
-                    )}
+                    {/* Live banner */}
+                    <div className="flex items-center gap-2 mb-5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-ember animate-pulse" />
+                      <span className="font-serif text-base text-ember font-bold tracking-wide">LIVE NOW</span>
+                    </div>
 
                     <div className="flex flex-wrap items-center gap-3">
                       <Link
-                        href={`/shop/${FEATURED_DROP.productHandle}?from=home`}
+                        href={`/drops/${FEATURED_DROP.slug}`}
                         className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-bone text-forest text-xs font-medium tracking-wide hover:bg-cream transition-colors btn-press"
                       >
-                        {dropActive ? "Preview Drop" : "Shop the Drop"}
+                        Shop the Drop
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
                         </svg>
