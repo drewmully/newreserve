@@ -62,7 +62,7 @@ export default async function DropLandingPage({ params }: Props) {
         {/* ─── HERO ──────────────────────────────────────────────── */}
         <section className="relative overflow-hidden topo-pattern-dark">
           <div className="absolute inset-0 hero-grain opacity-30 pointer-events-none" />
-          <div className="relative z-10 max-w-6xl mx-auto px-6 md:px-12 pt-10 md:pt-16 pb-12 md:pb-16">
+          <div className="relative z-10 max-w-6xl mx-auto px-6 md:px-12 pt-44 md:pt-36 pb-12 md:pb-16">
             <Link
               href="/shop"
               className="inline-flex items-center gap-2 text-xs tracking-[0.25em] uppercase text-bone/55 hover:text-bone transition-colors mb-8"
