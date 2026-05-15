@@ -376,9 +376,9 @@ const CART_FIELDS = `
 export async function getCollectionProducts(
   collectionHandle: string
 ): Promise<ShopifyProduct[]> {
-  // cache-bust: v2 — drop001 publish 2026-05-15
+  // cache-bust: v3 — drop001 price fix 2026-05-15
   const query = `
-    query CollectionProductsV2($handle: String!) {
+    query CollectionProductsV3($handle: String!) {
       collection(handle: $handle) {
         products(first: 50) {
           nodes { ${PRODUCT_FIELDS} }
@@ -397,9 +397,9 @@ export async function getCollectionProducts(
 export async function getProductByHandle(
   handle: string
 ): Promise<ShopifyProduct | null> {
-  // cache-bust: v2 — drop001 publish 2026-05-15
+  // cache-bust: v3 — drop001 price fix 2026-05-15
   const query = `
-    query ProductByHandleV2($handle: String!) {
+    query ProductByHandleV3($handle: String!) {
       product(handle: $handle) { ${PRODUCT_FIELDS} }
     }
   `;
