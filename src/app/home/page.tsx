@@ -25,7 +25,7 @@ import {
   PRIVATE_RELEASES_COLLECTION_HANDLE,
   type ShopifyProduct,
 } from "@/lib/shopify";
-import { getExclusiveDropDate } from "@/lib/dropConfig";
+import { FEATURED_DROP, getExclusiveDropDate } from "@/lib/dropConfig";
 import type { ForumPost } from "../community/posts";
 import {
   calculateHandicapIndex,
@@ -685,49 +685,93 @@ export default function HomePage() {
         
 
         {/* ═══════════════════════════════════════════
-           4. THE DROP ZONE — Countdown
+           4. THE DROP ZONE — Featured drop + countdown
            ═══════════════════════════════════════════ */}
-        {dropActive && (
-          <section className="px-6 md:px-12 max-w-6xl mx-auto mb-10">
-            <ScrollReveal delay={0.1}>
-              <div className="relative overflow-hidden rounded-2xl topo-pattern-dark p-6 md:p-8">
-                {/* Grain overlay */}
-                <div className="absolute inset-0 hero-grain opacity-30 pointer-events-none" />
-                <div className="relative z-10">
-                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                    <div>
-                      <p className="text-[10px] tracking-[0.35em] uppercase text-bone/40 font-medium mb-2">Next Exclusive Drop</p>
-                      <h2 className="font-serif text-2xl md:text-3xl text-bone mb-1">Summer Reserve Collection</h2>
-                      <p className="text-sm text-bone/50">Members-only access to limited pieces from top brands.</p>
-                    </div>
-                    <div className="text-center md:text-right">
-                      <p className="text-[10px] tracking-[0.3em] uppercase text-bone/40 mb-2">Dropping In</p>
-                      {countdown === "LIVE NOW" ? (
-                        <div className="flex items-center gap-2">
-                          <span className="w-2.5 h-2.5 rounded-full bg-ember animate-pulse" />
-                          <span className="font-serif text-2xl text-ember font-bold">LIVE NOW</span>
-                        </div>
+        <section className="px-6 md:px-12 max-w-6xl mx-auto mb-10">
+          <ScrollReveal delay={0.1}>
+            <div className="relative overflow-hidden rounded-2xl topo-pattern-dark p-6 md:p-8">
+              {/* Grain overlay */}
+              <div className="absolute inset-0 hero-grain opacity-30 pointer-events-none" />
+              <div className="relative z-10">
+                <div className="flex flex-col md:flex-row md:items-center gap-6 md:gap-8">
+                  {/* Featured product image */}
+                  <Link
+                    href={`/shop/${FEATURED_DROP.productHandle}?from=home`}
+                    className="relative w-full md:w-48 lg:w-56 flex-shrink-0 aspect-square rounded-xl overflow-hidden bg-bone/5 group"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={FEATURED_DROP.image}
+                      alt={FEATURED_DROP.productName}
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+                    />
+                    <span className="absolute top-2 left-2 px-2 py-1 rounded-full bg-bone/90 text-forest text-[10px] font-bold tracking-[0.2em] uppercase">
+                      {FEATURED_DROP.number}
+                    </span>
+                  </Link>
+
+                  {/* Drop copy */}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] tracking-[0.35em] uppercase text-sage font-medium mb-2">
+                      {dropActive ? "Next Exclusive Drop" : "The Drop Is Live"}
+                    </p>
+                    <h2 className="font-serif text-2xl md:text-3xl text-bone mb-1 leading-tight">
+                      {FEATURED_DROP.headline}
+                    </h2>
+                    <p className="text-sm text-bone/55 mb-4">{FEATURED_DROP.subhead}</p>
+                    <div className="flex items-baseline gap-3 mb-4">
+                      {isPaid ? (
+                        <>
+                          <span className="font-serif text-xl text-bone font-medium">${FEATURED_DROP.memberPrice}</span>
+                          <span className="text-xs text-bone/40 line-through">${FEATURED_DROP.retailPrice}</span>
+                          <span className="text-[10px] tracking-[0.2em] uppercase text-sage">Member Price</span>
+                        </>
                       ) : (
-                        <p className="font-mono text-2xl md:text-3xl text-bone font-bold tracking-wider">{countdown}</p>
+                        <>
+                          <span className="font-serif text-xl text-bone font-medium">${FEATURED_DROP.retailPrice}</span>
+                          <span className="text-[10px] tracking-[0.2em] uppercase text-sage">
+                            Members ${FEATURED_DROP.memberPrice}
+                          </span>
+                        </>
                       )}
                     </div>
-                  </div>
-                  <div className="mt-5 flex items-center gap-3">
-                    <Link
-                      href="/dashboard?tab=drops"
-                      className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-bone text-forest text-xs font-medium tracking-wide hover:bg-cream transition-colors btn-press"
-                    >
-                      {countdown === "LIVE NOW" ? "Shop Now" : "View Drops"}
-                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-                      </svg>
-                    </Link>
+
+                    {/* Countdown / Live banner */}
+                    {dropActive ? (
+                      <div className="flex items-center gap-3 mb-5">
+                        <p className="text-[10px] tracking-[0.3em] uppercase text-bone/40">Dropping In</p>
+                        <p className="font-mono text-base md:text-lg text-bone font-bold tracking-wider">{countdown}</p>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 mb-5">
+                        <span className="w-2.5 h-2.5 rounded-full bg-ember animate-pulse" />
+                        <span className="font-serif text-base text-ember font-bold tracking-wide">LIVE NOW</span>
+                      </div>
+                    )}
+
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Link
+                        href={`/shop/${FEATURED_DROP.productHandle}?from=home`}
+                        className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-bone text-forest text-xs font-medium tracking-wide hover:bg-cream transition-colors btn-press"
+                      >
+                        {dropActive ? "Preview Drop" : "Shop the Drop"}
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                        </svg>
+                      </Link>
+                      <Link
+                        href="/dashboard?tab=drops"
+                        className="text-xs text-bone/70 hover:text-bone tracking-wide transition-colors"
+                      >
+                        View Drops →
+                      </Link>
+                    </div>
                   </div>
                 </div>
               </div>
-            </ScrollReveal>
-          </section>
-        )}
+            </div>
+          </ScrollReveal>
+        </section>
 
         {/* ═══════════════════════════════════════════
            5. THE CADDIE'S PICK — Curated Products

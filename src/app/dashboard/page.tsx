@@ -19,7 +19,7 @@ import { UpgradeModal } from "../components/UpgradeModal";
 import { FORUM_TAGS, type ForumPost, type ForumComment } from "../community/posts";
 import type { User as FirebaseUser } from "firebase/auth";
 import { trackEvent } from "@/lib/tracking";
-import { formatExclusiveDropLabel, getExclusiveDropDate } from "@/lib/dropConfig";
+import { FEATURED_DROP, formatExclusiveDropLabel, getExclusiveDropDate } from "@/lib/dropConfig";
 import {
   BENEFIT_CATALOG,
   type ActionableBenefitKey,
@@ -668,12 +668,49 @@ function DropsTab() {
               </span>
             </div>
 
-            <h3 className="font-serif text-xl md:text-2xl text-bone mb-2">
-              Drop 001
+            <h3 className="font-serif text-xl md:text-2xl text-bone mb-1">
+              {FEATURED_DROP.number} · {FEATURED_DROP.brand}
             </h3>
-            <p className="text-sm text-bone/50 mb-8">
-              Our first members-only release. Details revealed at drop time.
+            <p className="text-sm text-bone/50 mb-6">
+              {FEATURED_DROP.subhead}
             </p>
+
+            {/* Featured product preview */}
+            <Link
+              href={`/shop/${FEATURED_DROP.productHandle}?from=dashboard`}
+              className="flex flex-col sm:flex-row gap-5 mb-8 p-4 rounded-xl bg-bone/5 hover:bg-bone/10 transition-colors group"
+            >
+              <div className="relative w-full sm:w-32 md:w-36 aspect-square flex-shrink-0 rounded-lg overflow-hidden bg-bone/10">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={FEATURED_DROP.image}
+                  alt={FEATURED_DROP.productName}
+                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+                />
+              </div>
+              <div className="flex-1 min-w-0 flex flex-col justify-center">
+                <p className="text-[10px] tracking-[0.25em] uppercase text-sage font-medium mb-1">
+                  {FEATURED_DROP.brand}
+                </p>
+                <p className="font-serif text-lg md:text-xl text-bone mb-2 leading-snug">
+                  {FEATURED_DROP.productName}
+                </p>
+                <div className="flex items-baseline gap-2 mb-3">
+                  <span className="font-serif text-lg text-bone font-medium">
+                    ${FEATURED_DROP.memberPrice}
+                  </span>
+                  <span className="text-xs text-bone/40 line-through">
+                    ${FEATURED_DROP.retailPrice}
+                  </span>
+                  <span className="text-[10px] tracking-[0.2em] uppercase text-sage">
+                    Member Price
+                  </span>
+                </div>
+                <p className="text-[11px] text-bone/45 leading-relaxed">
+                  Three colorways. Limited inventory. S – XXL.
+                </p>
+              </div>
+            </Link>
 
             {/* Countdown */}
             {!isLive ? (
@@ -681,7 +718,7 @@ function DropsTab() {
                 <p className="text-[10px] tracking-[0.3em] uppercase text-bone/40 font-medium mb-3">
                   Goes live {dropDateLabel}
                 </p>
-                <div className="grid grid-cols-4 gap-3 max-w-sm">
+                <div className="grid grid-cols-4 gap-3 max-w-sm mb-6">
                   {[
                     { value: days, label: "Days" },
                     { value: hours, label: "Hours" },
@@ -698,12 +735,27 @@ function DropsTab() {
                     </div>
                   ))}
                 </div>
+                <Link
+                  href={`/shop/${FEATURED_DROP.productHandle}?from=dashboard`}
+                  className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-bone text-forest text-xs font-medium tracking-wide hover:bg-cream transition-colors btn-press"
+                >
+                  Preview the Drop
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                  </svg>
+                </Link>
               </>
             ) : (
-              <div className="bg-bone/10 rounded-xl p-6 text-center">
-                <p className="text-lg font-serif text-bone mb-2">The drop is live.</p>
-                <p className="text-sm text-bone/50">Check back here for exclusive deals as they go live.</p>
-              </div>
+              <Link
+                href={`/shop/${FEATURED_DROP.productHandle}?from=dashboard`}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-ember text-bone text-xs font-bold tracking-[0.18em] uppercase hover:bg-ember/90 transition-colors btn-press"
+              >
+                <span className="w-2 h-2 rounded-full bg-bone animate-pulse" />
+                Shop the Drop
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                </svg>
+              </Link>
             )}
           </div>
         </div>

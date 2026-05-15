@@ -98,6 +98,13 @@ export const BRAND_INFO: Record<string, BrandInfo> = {
       "Greyson was founded on the belief that golf apparel should be as considered as anything in your closet. Using Japanese technical fabrics, modern athletic silhouettes, and a design language that draws from fashion as much as sport, Greyson has carved out a unique space in the market. Their iconic wolf motif has become a symbol of the modern golfer — someone who takes the game seriously but doesn't take themselves too seriously. Every piece is designed in New York and crafted with the same attention to detail you'd expect from a luxury fashion house.",
     image: "https://placehold.co/800x500/1a3325/F5F1E8?text=Greyson",
   },
+  "Morning People": {
+    name: "Morning People",
+    blurb: "Independent golf apparel from people who chase first tee times — soft hands, real texture, modern fits.",
+    description:
+      "Morning People is for the players who would rather be on the course than anywhere else. Their flagship piece, the Golforever Polo, is built around a proprietary cotton-poly-spandex blend that delivers the soft hand of a weekend tee with the stretch and recovery of a tour-spec polo. Designed in the U.S. and crafted in South Korea, every piece is engineered to look just as good off the course as it does dialed-in for a Saturday morning round.",
+    image: "https://placehold.co/800x500/1a3325/F5F1E8?text=Morning+People",
+  },
 };
 
 export interface CollectionInfo {
