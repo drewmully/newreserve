@@ -9,15 +9,12 @@ import {
   PRO_SHOP_COLLECTION_HANDLE,
 } from "@/lib/shopify";
 import {
-  ProductImageGallery,
   Accordion,
-  AddToCartButton,
   BackLink,
-  ProductPriceDisplay,
 } from "../components/ShopClient";
+import { ProductDetailClient } from "../components/ProductDetailClient";
 import { ShopHeader } from "../../components/ShopHeader";
 import { getVariantById, getVariantSelection } from "@/lib/productVariants";
-import { orderProductImagesBySelection } from "@/lib/shopDisplay";
 
 // Revalidate ISR every hour
 export const revalidate = 3600;
@@ -93,11 +90,6 @@ export default async function ProductPage({ params, searchParams }: Props) {
     ? getVariantById(product, requestedVariantId)
     : null;
   const initialSelection = getVariantSelection(preferredVariant);
-  const orderedImages =
-    Object.keys(initialSelection).length > 0
-      ? orderProductImagesBySelection(product, initialSelection)
-      : product.images;
-  const initialPriceSource = preferredVariant ?? null;
 
   const accordionItems = [
     { title: "Description", content: product.description },
@@ -117,55 +109,11 @@ export default async function ProductPage({ params, searchParams }: Props) {
         <div className="max-w-6xl mx-auto">
           <BackLink href={backHref}>Back to Shop</BackLink>
 
-          <div className="grid md:grid-cols-2 gap-8 md:gap-14 lg:gap-20">
-            {/* Left - Images */}
-            <div>
-              <ProductImageGallery
-                images={orderedImages}
-                name={product.name}
-              />
-            </div>
-
-            {/* Right - Details */}
-            <div className="flex flex-col">
-              <p className="text-xs tracking-[0.25em] uppercase text-sage font-medium mb-2">
-                {product.brand}
-              </p>
-              <h1 className="font-serif text-2xl md:text-3xl text-obsidian leading-tight mb-4">
-                {product.name}
-              </h1>
-
-              {/* Price */}
-              <div className="mb-6 pb-6 border-b border-taupe/20">
-                <ProductPriceDisplay
-                  price={initialPriceSource?.price ?? product.price}
-                  reservePrice={
-                    initialPriceSource?.reservePrice ?? product.reservePrice
-                  }
-                />
-              </div>
-
-              {/* Short description */}
-              <p className="text-sm text-charcoal/60 leading-relaxed mb-8">
-                {product.description}
-              </p>
-
-              {/* Add to cart */}
-              <div className="mb-8">
-                <AddToCartButton
-                  product={{
-                    ...product,
-                    images: orderedImages,
-                    variantId: preferredVariant?.id ?? product.variantId,
-                    initialSelection,
-                  }}
-                />
-              </div>
-
-              {/* Accordions */}
-              <Accordion items={accordionItems} />
-            </div>
-          </div>
+          <ProductDetailClient
+            product={product}
+            initialSelection={initialSelection}
+            detailsFooter={<Accordion items={accordionItems} />}
+          />
         </div>
       </main>
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, type ReactNode } from "react";
+import { useState, useCallback, useEffect, type ReactNode, type SetStateAction } from "react";
 import Link from "next/link";
 import type { Product } from "../products";
 import { BRAND_INFO, COLLECTION_INFO } from "../products";
@@ -655,22 +655,39 @@ export function ProductImageGallery({ images, name }: { images: string[]; name: 
    ADD TO CART BUTTON
    ═══════════════════════════════════════════ */
 
+interface AddToCartButtonProductInput {
+  slug: string;
+  name: string;
+  brand: string;
+  reservePrice: number;
+  price: number;
+  variantId?: string;
+  images?: string[];
+  options?: Product["options"];
+  variants?: Product["variants"];
+  initialSelection?: Record<string, string>;
+}
+
 export function AddToCartButton({
   product,
+  selection: controlledSelection,
+  onSelectionChange,
 }: {
-  product?: {
-    slug: string;
-    name: string;
-    brand: string;
-    reservePrice: number;
-    price: number;
-    variantId?: string;
-    images?: string[];
-    options?: Product["options"];
-    variants?: Product["variants"];
-    initialSelection?: Record<string, string>;
-  };
+  product?: AddToCartButtonProductInput;
+  selection?: Record<string, string>;
+  onSelectionChange?: (selection: Record<string, string>) => void;
 }) {
+  // If the parent controls selection, we don't need to remount on prop change.
+  if (controlledSelection && onSelectionChange) {
+    return (
+      <AddToCartButtonInner
+        product={product}
+        selection={controlledSelection}
+        onSelectionChange={onSelectionChange}
+      />
+    );
+  }
+
   const productResetKey = product
     ? `${product.slug}:${product.variantId ?? "default"}:${JSON.stringify(
         product.initialSelection ?? {}
@@ -682,25 +699,32 @@ export function AddToCartButton({
 
 function AddToCartButtonInner({
   product,
+  selection: controlledSelection,
+  onSelectionChange,
 }: {
-  product?: {
-    slug: string;
-    name: string;
-    brand: string;
-    reservePrice: number;
-    price: number;
-    variantId?: string;
-    images?: string[];
-    options?: Product["options"];
-    variants?: Product["variants"];
-    initialSelection?: Record<string, string>;
-  };
+  product?: AddToCartButtonProductInput;
+  selection?: Record<string, string>;
+  onSelectionChange?: (selection: Record<string, string>) => void;
 }) {
   const [added, setAdded] = useState(false);
   const ctx = useMembershipSafe();
-  const [selection, setSelection] = useState(() =>
+  const [uncontrolledSelection, setUncontrolledSelection] = useState(() =>
     product ? getInitialVariantSelection(product, product.initialSelection) : {}
   );
+  const selection = controlledSelection ?? uncontrolledSelection;
+  const setSelection = (updater: SetStateAction<Record<string, string>>) => {
+    if (controlledSelection && onSelectionChange) {
+      const next =
+        typeof updater === "function"
+          ? (updater as (prev: Record<string, string>) => Record<string, string>)(
+              controlledSelection
+            )
+          : updater;
+      onSelectionChange(next);
+    } else {
+      setUncontrolledSelection(updater);
+    }
+  };
 
   const selectedVariant =
     product && resolveVariantBySelection(product, selection);
