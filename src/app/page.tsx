@@ -23,15 +23,17 @@ export default async function Home() {
         <div className="relative max-w-7xl mx-auto w-full grid md:grid-cols-[45%_55%] gap-4 md:gap-12 lg:gap-20 items-center z-10">
 
           {/* Mobile hero image — above headline on small screens */}
-          <div className="md:hidden flex justify-center mb-1 animate-fade-up">
-            <Image
-              src="/hero-shelf.png"
-              alt="Premium golf gear on display"
-              width={600}
-              height={500}
-              className="w-full max-w-[260px] object-contain"
-              priority
-            />
+          <div className="md:hidden flex justify-center mb-3 animate-fade-up">
+            <div className="relative w-full max-w-[280px] aspect-[4/5] rounded-2xl overflow-hidden bg-[#162b1e] border border-[#F5F1E8]/10 shadow-xl">
+              <Image
+                src="/reserve-founders-hero.jpg"
+                alt="Mully Reserve box with a striped polo, navy pants, and woven leather belt"
+                fill
+                sizes="280px"
+                className="object-cover"
+                priority
+              />
+            </div>
           </div>
 
           {/* LEFT COLUMN — headline, subtext, value props, CTA */}
@@ -79,16 +81,18 @@ export default async function Home() {
             </div>
           </div>
 
-          {/* RIGHT COLUMN — Desktop hero shelf image */}
+          {/* RIGHT COLUMN — Desktop hero box image */}
           <div className="hidden md:flex items-center justify-center animate-fade-up-delay-2">
-            <Image
-              src="/hero-shelf.png"
-              alt="Premium golf gear on display"
-              width={706}
-              height={658}
-              className="w-full max-w-lg lg:max-w-xl object-contain"
-              priority
-            />
+            <div className="relative w-full max-w-lg lg:max-w-xl aspect-[4/5] rounded-2xl overflow-hidden bg-[#162b1e] border border-[#F5F1E8]/10 shadow-2xl">
+              <Image
+                src="/reserve-founders-hero.jpg"
+                alt="Mully Reserve box with a striped polo, navy pants, and woven leather belt"
+                fill
+                sizes="(min-width: 1024px) 36rem, (min-width: 768px) 32rem, 100vw"
+                className="object-cover"
+                priority
+              />
+            </div>
           </div>
         </div>
 
