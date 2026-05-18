@@ -609,7 +609,7 @@ export default async function Home() {
           <div className="grid md:grid-cols-3 gap-10 md:gap-12">
             <ScrollReveal delay={0}>
               <MemberQuote
-                quote={"I’ve found three brands through Mully I’d never have tried otherwise. Two are now in my regular rotation."}
+                quote={"Every box has more in it than I paid for it. I keep doing the math and it keeps not making sense — in my favor."}
                 name="Andrew"
                 course="Oakland Hills C.C."
                 memberSince={"’24"}
@@ -617,7 +617,7 @@ export default async function Home() {
             </ScrollReveal>
             <ScrollReveal delay={0.12}>
               <MemberQuote
-                quote={"It’s the only pro shop where I trust everything on the rack. They edit the stuff I’d edit out myself."}
+                quote={"It’s basically Uncrate for golfers. I’ve found three brands through Mully I’d never have tried — two are now in my regular rotation."}
                 name="Mason"
                 course="Forest Dunes"
                 memberSince={"’25"}
@@ -625,7 +625,7 @@ export default async function Home() {
             </ScrollReveal>
             <ScrollReveal delay={0.24}>
               <MemberQuote
-                quote={"The fitting day at a course I’d never have gotten on alone is what sold me. The gear is the bonus."}
+                quote={"It’s become my pro shop. I order Tuesday, it’s on my doorstep by Wednesday, and I never wonder if it’s actually good."}
                 name="Whitney"
                 course="Detroit G.C."
                 memberSince={"’24"}
