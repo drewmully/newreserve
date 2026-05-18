@@ -28,6 +28,13 @@ const VALID_EVENTS = new Set([
   "view_item",
   "choose_plan_view",
   "plan_selected",
+  // Landing page A/B tests for Google Ads (PR for /lp/* pages)
+  "lp_subscription_view",
+  "lp_subscription_checkout_clicked",
+  "lp_gift_view",
+  "lp_gift_checkout_clicked",
+  "gift_redemption_started",
+  "gift_redemption_completed",
 ]);
 
 function getBearerToken(request: NextRequest): string | null {
