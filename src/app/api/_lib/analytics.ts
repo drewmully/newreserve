@@ -10,8 +10,10 @@
  *   Meta CAPI:    META_PIXEL_ID, META_ACCESS_TOKEN
  *   GA4:          GA4_MEASUREMENT_ID, GA4_API_SECRET
  *   Google Ads:   GOOGLE_ADS_CONVERSION_ID
- *                 GOOGLE_ADS_LABEL_PAGE_VIEW        (page_view events)
- *                 GOOGLE_ADS_LABEL_CHECKOUT_INIT    (initiate_checkout, checkout_clicked)
+ *                 GOOGLE_ADS_LABEL_PAGE_VIEW         (page_view events)
+ *                 GOOGLE_ADS_LABEL_EMAIL_SUBMITTED   (email_submitted, account_created)
+ *                 GOOGLE_ADS_LABEL_VIEW_ITEM         (view_item, plan_selected, choose_plan_view)
+ *                 GOOGLE_ADS_LABEL_CHECKOUT_INIT     (initiate_checkout, checkout_clicked)
  *                 GOOGLE_ADS_LABEL_FUNNEL_CONVERSION (purchase events)
  *   PostHog:      POSTHOG_PROJECT_API_KEY or NEXT_PUBLIC_POSTHOG_KEY
  *                 POSTHOG_HOST or NEXT_PUBLIC_POSTHOG_HOST
@@ -147,11 +149,27 @@ async function fireGA4(event: AnalyticsEvent): Promise<void> {
 /** Maps event names to the env var key that holds the Google Ads label. */
 const GOOGLE_ADS_LABEL_ENV: Record<string, string> = {
   page_view: "GOOGLE_ADS_LABEL_PAGE_VIEW",
+  email_submitted: "GOOGLE_ADS_LABEL_EMAIL_SUBMITTED",
+  account_created: "GOOGLE_ADS_LABEL_EMAIL_SUBMITTED",
+  view_item: "GOOGLE_ADS_LABEL_VIEW_ITEM",
+  choose_plan_view: "GOOGLE_ADS_LABEL_VIEW_ITEM",
+  plan_selected: "GOOGLE_ADS_LABEL_VIEW_ITEM",
   initiate_checkout: "GOOGLE_ADS_LABEL_CHECKOUT_INIT",
   checkout_clicked: "GOOGLE_ADS_LABEL_CHECKOUT_INIT",
   purchase: "GOOGLE_ADS_LABEL_FUNNEL_CONVERSION",
 };
 
+/**
+ * Fire a Google Ads conversion.
+ *
+ * Carries gclid / gbraid / wbraid (from event.properties) so the conversion
+ * is properly attributed to the original ad click — even when it happens
+ * on a different page or hours later via the Shopify orders/paid webhook.
+ *
+ * Also sends a SHA-256 hashed email (Enhanced Conversions for Leads) so
+ * Google Ads can still attribute the conversion when the gclid is missing
+ * (cookieless / cross-device / Safari ITP / etc.).
+ */
 async function fireGoogleAds(event: AnalyticsEvent): Promise<void> {
   const conversionId = process.env.GOOGLE_ADS_CONVERSION_ID;
   if (!conversionId) return;
@@ -162,16 +180,39 @@ async function fireGoogleAds(event: AnalyticsEvent): Promise<void> {
   const label = process.env[labelEnvKey];
   if (!label) return;
 
+  const props = event.properties ?? {};
+  const gclid = typeof props.gclid === "string" ? props.gclid : undefined;
+  const gbraid = typeof props.gbraid === "string" ? props.gbraid : undefined;
+  const wbraid = typeof props.wbraid === "string" ? props.wbraid : undefined;
+
   const url = new URL(
     `https://www.googleadservices.com/pagead/conversion/${conversionId}/`
   );
   url.searchParams.set("label", label);
 
+  // Attribution carry-through — any of these lets Ads tie the conversion
+  // back to the original click.
+  if (gclid) url.searchParams.set("gclid", gclid);
+  if (gbraid) url.searchParams.set("gbraid", gbraid);
+  if (wbraid) url.searchParams.set("wbraid", wbraid);
+
+  // Enhanced Conversions for Leads — hashed email fallback.
+  // Google Ads accepts the same SHA-256 format we already use for Meta CAPI.
+  if (event.email) {
+    url.searchParams.set(
+      "em",
+      sha256hex(event.email.trim().toLowerCase())
+    );
+  }
+  if (event.phone) {
+    url.searchParams.set("ph", sha256hex(event.phone.replace(/\D/g, "")));
+  }
+
   // Enrich purchase events with transaction data
   if (event.event_name === "purchase") {
-    const value = (event.properties?.value as number) ?? 0;
-    const currency = (event.properties?.currency as string) ?? "USD";
-    const orderId = event.properties?.order_id as string | undefined;
+    const value = (props.value as number) ?? 0;
+    const currency = (props.currency as string) ?? "USD";
+    const orderId = props.order_id as string | undefined;
     url.searchParams.set("value", String(value));
     url.searchParams.set("currency_code", currency);
     if (orderId) url.searchParams.set("transaction_id", orderId);
