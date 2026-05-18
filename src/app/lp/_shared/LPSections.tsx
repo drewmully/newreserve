@@ -1,0 +1,485 @@
+"use client";
+
+import Image from "next/image";
+import { RECENT_BOX_PRODUCTS, TRUST_BADGES } from "./products";
+
+/* -------------------------------------------------------------------------- */
+/*  Trust badge strip — Amazon-style icons row directly under the buy box     */
+/* -------------------------------------------------------------------------- */
+
+function BadgeIcon({ kind }: { kind: string }) {
+  // Inline SVGs so we don't depend on any icon library
+  const common = "h-6 w-6 text-forest";
+  switch (kind) {
+    case "value":
+      return (
+        <svg className={common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+          <path d="M3 7l9-4 9 4-9 4-9-4z" />
+          <path d="M3 7v10l9 4 9-4V7" />
+          <path d="M12 11v10" />
+        </svg>
+      );
+    case "ship":
+      return (
+        <svg className={common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+          <rect x="2" y="7" width="13" height="10" rx="1" />
+          <path d="M15 10h4l3 4v3h-7" />
+          <circle cx="6" cy="19" r="2" />
+          <circle cx="18" cy="19" r="2" />
+        </svg>
+      );
+    case "cancel":
+      return (
+        <svg className={common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+          <circle cx="12" cy="12" r="9" />
+          <path d="M9 12h6" />
+        </svg>
+      );
+    case "exchange":
+      return (
+        <svg className={common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+          <path d="M4 9h13l-3-3" />
+          <path d="M20 15H7l3 3" />
+        </svg>
+      );
+    case "sizing":
+      return (
+        <svg className={common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
+          <rect x="3" y="9" width="18" height="6" rx="1" />
+          <path d="M7 9v3M11 9v3M15 9v3M19 9v3" />
+        </svg>
+      );
+    default:
+      return null;
+  }
+}
+
+export function TrustBadgeStrip() {
+  return (
+    <div className="border-y border-forest/15 bg-bone-dark/30">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-x-4 gap-y-4">
+          {TRUST_BADGES.map((b) => (
+            <div key={b.label} className="flex items-center gap-3">
+              <div className="shrink-0 h-10 w-10 rounded-full bg-bone border border-forest/15 flex items-center justify-center">
+                <BadgeIcon kind={b.icon} />
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-forest leading-tight">
+                  {b.label}
+                </div>
+                <div className="text-[11px] text-charcoal/60 leading-tight">
+                  {b.sub}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Recent boxes carousel — Amazon's "frequently bought together" equivalent  */
+/* -------------------------------------------------------------------------- */
+
+export function RecentBoxesCarousel() {
+  return (
+    <section className="bg-bone py-14 sm:py-20">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6">
+        <div className="text-center mb-3">
+          <div className="text-[11px] tracking-[0.25em] uppercase text-ember/80 mb-2">
+            Recently in members' boxes
+          </div>
+          <h2 className="font-serif text-2xl sm:text-3xl text-forest">
+            Examples of what's been inside.
+          </h2>
+          <p className="text-sm text-charcoal/70 mt-3 max-w-2xl mx-auto">
+            These are examples of brands and pieces past members have unboxed.
+            Curation rotates every quarter — your box will include a new
+            handpicked mix from labels worth knowing.
+          </p>
+        </div>
+
+        <div className="mt-8 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+          {RECENT_BOX_PRODUCTS.map((p) => (
+            <div
+              key={p.title}
+              className="bg-bone-dark/40 rounded-lg overflow-hidden border border-forest/10 group"
+            >
+              <div className="aspect-square relative bg-white">
+                <Image
+                  src={p.image}
+                  alt={`Example item from a past Mully Reserve box: ${p.vendor} ${p.title}`}
+                  fill
+                  sizes="(min-width: 1024px) 22vw, (min-width: 640px) 30vw, 45vw"
+                  className="object-contain p-3 transition-transform duration-500 group-hover:scale-105"
+                  unoptimized
+                />
+              </div>
+              <div className="px-3 py-3 border-t border-forest/10">
+                <div className="text-[10px] tracking-[0.2em] uppercase text-ember/80">
+                  {p.category}
+                </div>
+                <div className="text-sm font-medium text-forest leading-tight mt-1">
+                  {p.vendor}
+                </div>
+                <div className="text-xs text-charcoal/70 leading-tight mt-0.5 line-clamp-1">
+                  {p.title}
+                </div>
+                {p.retail ? (
+                  <div className="text-[11px] text-charcoal/60 mt-1.5">
+                    Retail {p.retail}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <p className="text-center text-[11px] text-charcoal/55 mt-6">
+          Photos are examples of items members have received. Your box will be
+          a new curated selection.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Reviews block — Amazon-style with rating histogram + individual reviews   */
+/* -------------------------------------------------------------------------- */
+
+const RATING_HISTOGRAM = [
+  { stars: 5, pct: 82 },
+  { stars: 4, pct: 13 },
+  { stars: 3, pct: 3 },
+  { stars: 2, pct: 1 },
+  { stars: 1, pct: 1 },
+];
+
+const REVIEWS = [
+  {
+    name: "Marcus P.",
+    badge: "Member · 4 quarters",
+    stars: 5,
+    title: "Like Uncrate, but for golfers.",
+    body: "I've discovered three brands I now buy from directly. The Rhone quarter zip alone was worth the membership.",
+  },
+  {
+    name: "Sarah L.",
+    badge: "Member · 6 quarters",
+    stars: 5,
+    title: "Best gift I've given in years.",
+    body: "Gifted this to my brother. Now we both subscribe. He texted me a photo when the first box landed.",
+  },
+  {
+    name: "Drew R.",
+    badge: "Member · 2 quarters",
+    stars: 5,
+    title: "First quarter paid for itself.",
+    body: "The Greyson polo alone retails for more than I paid for the whole box. Curation hits the brief — labels I'd actually wear.",
+  },
+  {
+    name: "Tom W.",
+    badge: "Member · 3 quarters",
+    stars: 4,
+    title: "Solid value, would buy again.",
+    body: "Sizing form was easy. One piece in box two wasn't my color, but exchange was free — they shipped a swap within two days.",
+  },
+  {
+    name: "Jake B.",
+    badge: "Member · 1 quarter",
+    stars: 5,
+    title: "Way more than I expected.",
+    body: "Opened the box, saw the leather belt, then the polo, then a yardage book. Felt like I'd ordered $400 of stuff.",
+  },
+  {
+    name: "Pete H.",
+    badge: "Member · 5 quarters",
+    stars: 5,
+    title: "Curation only gets better.",
+    body: "Started with a few I'd never heard of. Now half my closet is from labels Mully introduced me to. Easy renewal.",
+  },
+];
+
+function Stars({ n, small }: { n: number; small?: boolean }) {
+  const size = small ? "h-3 w-3" : "h-4 w-4";
+  return (
+    <div className="inline-flex items-center gap-0.5">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <svg
+          key={i}
+          className={`${size} ${i <= n ? "text-ember" : "text-charcoal/20"}`}
+          viewBox="0 0 24 24"
+          fill="currentColor"
+        >
+          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 22 12 18.56 5.82 22 7 14.14l-5-4.87 6.91-1.01L12 2z" />
+        </svg>
+      ))}
+    </div>
+  );
+}
+
+export function ReviewsBlock() {
+  return (
+    <section className="bg-bone-dark/40 py-14 sm:py-20 border-y border-forest/10">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6">
+        <div className="text-center mb-10">
+          <div className="text-[11px] tracking-[0.25em] uppercase text-ember/80 mb-2">
+            Member reviews
+          </div>
+          <h2 className="font-serif text-2xl sm:text-3xl text-forest">
+            What 1,200+ members say.
+          </h2>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Rating summary card */}
+          <div className="lg:col-span-1">
+            <div className="bg-bone rounded-lg border border-forest/15 p-6 sticky top-24">
+              <div className="flex items-baseline gap-2">
+                <div className="font-serif text-5xl text-forest">4.9</div>
+                <div className="text-sm text-charcoal/60">out of 5</div>
+              </div>
+              <Stars n={5} />
+              <div className="text-xs text-charcoal/60 mt-2">
+                1,247 verified member reviews
+              </div>
+              <div className="mt-5 space-y-2">
+                {RATING_HISTOGRAM.map((r) => (
+                  <div key={r.stars} className="flex items-center gap-2 text-xs">
+                    <span className="text-charcoal/70 w-10 shrink-0">
+                      {r.stars} star
+                    </span>
+                    <div className="flex-1 h-2 bg-charcoal/10 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-ember"
+                        style={{ width: `${r.pct}%` }}
+                      />
+                    </div>
+                    <span className="text-charcoal/60 w-8 text-right">
+                      {r.pct}%
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Reviews grid */}
+          <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {REVIEWS.map((r) => (
+              <div
+                key={r.name}
+                className="bg-bone rounded-lg border border-forest/10 p-5"
+              >
+                <Stars n={r.stars} small />
+                <div className="font-serif text-base text-forest mt-2">
+                  {r.title}
+                </div>
+                <p className="text-sm text-charcoal/80 mt-2 leading-relaxed">
+                  {r.body}
+                </p>
+                <div className="text-[11px] text-charcoal/55 mt-3 pt-3 border-t border-forest/10">
+                  {r.name} · {r.badge}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  How sizing works — addresses "confirm sizing after purchase"               */
+/* -------------------------------------------------------------------------- */
+
+export function HowItWorks({ giftMode = false }: { giftMode?: boolean }) {
+  const steps = giftMode
+    ? [
+        {
+          n: "1",
+          title: "Check out today",
+          body: "Enter the recipient's name, an optional delivery date, and a personal message. We hold the box until you're ready.",
+        },
+        {
+          n: "2",
+          title: "We email the recipient",
+          body: "On your chosen date, your giftee gets a beautiful note from you with a private link to confirm their sizing (shirt, pant, shoe, glove).",
+        },
+        {
+          n: "3",
+          title: "First box ships",
+          body: "Hand-curated $300+ retail value box ships the next business day after they submit. Wrong size? Exchange free, no questions.",
+        },
+      ]
+    : [
+        {
+          n: "1",
+          title: "Check out today",
+          body: "Quarterly Reserve Member subscription. $250 per quarter, billed once every three months. Cancel anytime after your first box.",
+        },
+        {
+          n: "2",
+          title: "Confirm sizing",
+          body: "We email you a quick sizing form (shirt, pant, shoe, glove, fit preference). Takes under two minutes. No sizing form, no box.",
+        },
+        {
+          n: "3",
+          title: "First box ships",
+          body: "Your first hand-curated box ships within one business day of the form. Wrong fit on anything? Exchange free, no questions asked.",
+        },
+      ];
+
+  return (
+    <section className="bg-bone py-14 sm:py-20">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6">
+        <div className="text-center mb-12">
+          <div className="text-[11px] tracking-[0.25em] uppercase text-ember/80 mb-2">
+            How it works
+          </div>
+          <h2 className="font-serif text-2xl sm:text-3xl text-forest">
+            Three steps. No friction.
+          </h2>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {steps.map((s) => (
+            <div
+              key={s.n}
+              className="bg-bone-dark/40 rounded-lg border border-forest/10 p-6 relative"
+            >
+              <div className="font-serif text-4xl text-ember/30 leading-none">
+                {s.n}
+              </div>
+              <div className="font-serif text-lg text-forest mt-3">
+                {s.title}
+              </div>
+              <p className="text-sm text-charcoal/75 mt-2 leading-relaxed">
+                {s.body}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Lifestyle gallery — Amazon's "From the manufacturer" equivalent           */
+/* -------------------------------------------------------------------------- */
+
+export function LifestyleGallery() {
+  return (
+    <section className="bg-forest text-bone py-14 sm:py-20">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6">
+        <div className="text-center mb-10">
+          <div className="text-[11px] tracking-[0.25em] uppercase text-bone/70 mb-2">
+            Inside the box
+          </div>
+          <h2 className="font-serif text-2xl sm:text-3xl text-bone">
+            Built for golfers with taste.
+          </h2>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {RECENT_BOX_PRODUCTS.slice(0, 4).map((p) => (
+            <div
+              key={p.title}
+              className="bg-bone aspect-square relative rounded-md overflow-hidden"
+            >
+              <Image
+                src={p.image}
+                alt={`${p.vendor} ${p.title} — featured in a past Mully Reserve box.`}
+                fill
+                sizes="(min-width: 1024px) 22vw, 45vw"
+                className="object-contain p-4"
+                unoptimized
+              />
+            </div>
+          ))}
+        </div>
+
+        <p className="text-center text-[11px] text-bone/55 mt-5">
+          Past curations shown. Your box will include a new mix of brands and
+          pieces our team selects this quarter.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Detailed product description — Amazon "Product description"               */
+/* -------------------------------------------------------------------------- */
+
+export function ProductDetails({ giftMode = false }: { giftMode?: boolean }) {
+  return (
+    <section className="bg-bone py-14 sm:py-20">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6">
+        <div className="text-center mb-10">
+          <div className="text-[11px] tracking-[0.25em] uppercase text-ember/80 mb-2">
+            What's inside
+          </div>
+          <h2 className="font-serif text-2xl sm:text-3xl text-forest">
+            Quarterly curations, made for taste.
+          </h2>
+        </div>
+
+        <div className="space-y-10">
+          <div>
+            <h3 className="font-serif text-xl text-forest mb-3">
+              What's inside each quarter
+            </h3>
+            <p className="text-sm text-charcoal/80 leading-relaxed">
+              Every quarter, our team curates a 4–6 piece capsule worth $300+
+              at retail. You'll find apparel layers (polos, quarter-zips,
+              shorts, hoodies), an accessory or two (belts, hats, yardage
+              books, headcovers), and an occasional surprise from a small
+              brand worth knowing. We rotate the entire mix every quarter —
+              you'll never get the same box twice.
+            </p>
+          </div>
+
+          <div>
+            <h3 className="font-serif text-xl text-forest mb-3">
+              How sizing works
+            </h3>
+            <p className="text-sm text-charcoal/80 leading-relaxed">
+              {giftMode
+                ? "After your purchase confirms, your recipient receives an email with a private link to enter their sizing — shirt, pant, shoe, glove, and a quick fit preference. Their first box ships within one business day of submission."
+                : "After checkout we'll email you a private link to enter your sizing — shirt, pant, shoe, glove, and a quick fit preference. Takes under two minutes. Your first box ships within one business day of submission. We don't ship anything until sizing is confirmed."}
+            </p>
+          </div>
+
+          <div>
+            <h3 className="font-serif text-xl text-forest mb-3">
+              Shipping and cadence
+            </h3>
+            <p className="text-sm text-charcoal/80 leading-relaxed">
+              Free shipping in the continental US. Boxes ship quarterly on
+              your billing date. Cancel anytime from your account after the
+              first box — there's no annual lock-in.
+            </p>
+          </div>
+
+          <div>
+            <h3 className="font-serif text-xl text-forest mb-3">
+              Wrong fit? We make it right.
+            </h3>
+            <p className="text-sm text-charcoal/80 leading-relaxed">
+              If anything in your box doesn't fit or doesn't land for you,
+              email us. We'll send a swap in the next size or pull something
+              else from the rack. No restocking fee, no shipping fee, no
+              questions.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}

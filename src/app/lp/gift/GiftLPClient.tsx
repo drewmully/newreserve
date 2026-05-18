@@ -5,6 +5,15 @@ import { useEffect, useState } from "react";
 import { createMembershipCheckout } from "@/lib/shopifyCheckout";
 import { trackEvent } from "@/lib/tracking";
 import { GlassHeader } from "@/app/components/ClientComponents";
+import { LP_GALLERY } from "../_shared/products";
+import {
+  TrustBadgeStrip,
+  RecentBoxesCarousel,
+  ReviewsBlock,
+  HowItWorks,
+  LifestyleGallery,
+  ProductDetails,
+} from "../_shared/LPSections";
 
 const BRAND_LOGOS = [
   { src: "/brands/greyson.png", alt: "Greyson" },
@@ -18,430 +27,365 @@ const BRAND_LOGOS = [
   { src: "/brands/hyperice.png", alt: "Hyperice" },
 ];
 
-const FAQS = [
-  {
-    q: "When does the box ship?",
-    a: "First box ships within one business day of purchase. Quarterly thereafter on the same cadence — cancel anytime after the first.",
-  },
-  {
-    q: "Can I time it for a birthday or holiday?",
-    a: "Yes. Use the 'Deliver on' field below to schedule the first box for any future date. We'll hold and ship to land on time.",
-  },
-  {
-    q: "Does the recipient need to know my email?",
-    a: "No. We collect their shipping address and sizing directly from them after purchase. Your email is just for receipts.",
-  },
-  {
-    q: "What if they don't like what's in the box?",
-    a: "Members get free exchanges, no questions. Wrong size, wrong color — we'll swap it.",
-  },
-  {
-    q: "Can I include a personal message?",
-    a: "Yes. There's a message field below — we'll include it in the recipient's first box.",
-  },
-  {
-    q: "How is this different from a gift card?",
-    a: "A gift card is forgettable. Mully Reserve is a curated experience — premium brands, hand-picked, delivered to their door.",
-  },
+const ABOUT_BULLETS = [
+  "Give a hand-curated quarterly box of $300+ retail value golf apparel and accessories — without picking sizes blind.",
+  "After you check out, your recipient gets a beautifully designed note from you with a private link to confirm their sizing.",
+  "Brands worth knowing: Rhone, Greyson, Quiet Golf, Will Leather Goods, Field Day, Penfold and more.",
+  "Wrong fit on anything? They exchange free — no questions, no shipping fee.",
+  "Quarterly recurring at $250/qtr — they can cancel anytime after the first box if they prefer a one-and-done gift.",
 ];
 
 export default function GiftLPClient() {
-  const [submitting, setSubmitting] = useState(false);
-  const [openFaq, setOpenFaq] = useState<number | null>(0);
-
-  // Personalization state. Captured as Shopify cart attributes so the
-  // orders/paid webhook can route them to the (future) gift pipeline.
+  const [heroIndex, setHeroIndex] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [recipientName, setRecipientName] = useState("");
   const [deliverOn, setDeliverOn] = useState("");
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    void trackEvent("lp_gift_view", {
-      properties: { source: "lp_gift" },
-    });
-    void trackEvent("view_item", {
-      properties: { item: "mully-reserve-gift", source: "lp_gift" },
-    });
+    trackEvent("lp_gift_view");
   }, []);
 
-  async function handleCheckout() {
-    if (submitting) return;
-    setSubmitting(true);
-
-    void trackEvent("lp_gift_checkout_clicked", {
-      properties: {
-        has_recipient_name: Boolean(recipientName.trim()),
-        has_message: Boolean(message.trim()),
-        has_deliver_on: Boolean(deliverOn),
-      },
-    });
-    void trackEvent("checkout_clicked", {
-      properties: { plan: "member", source: "lp_gift" },
-    });
-    void trackEvent("plan_selected", {
-      properties: { plan: "member", method: "shopify_checkout_gift" },
+  async function handleGift() {
+    setError(null);
+    setLoading(true);
+    trackEvent("lp_gift_checkout_clicked", {
+      properties: { tier: "member", method: "shopify_checkout_gift" },
     });
 
     try {
-      // Always uses the Reserve Member SKU ($250/qtr displayed, $249 charged). Phase 2 will add
-      // logic in the orders/paid webhook to recognize gift=true and route
-      // into the redemption pipeline (auto-cancel + recipient email).
       await createMembershipCheckout("member", {
         returnPath: "/auth/callback",
         attributes: [
           { key: "lp_source", value: "lp_gift" },
-          { key: "ad_group", value: "golf-gifting" },
+          { key: "ad_group", value: "google_ads" },
           { key: "gift", value: "true" },
-          ...(recipientName.trim()
-            ? [{ key: "gift_recipient_name", value: recipientName.trim().slice(0, 100) }]
-            : []),
-          ...(deliverOn
-            ? [{ key: "gift_deliver_on", value: deliverOn }]
-            : []),
-          ...(message.trim()
-            ? [{ key: "gift_message", value: message.trim().slice(0, 500) }]
-            : []),
+          { key: "gift_recipient_name", value: recipientName },
+          { key: "gift_deliver_on", value: deliverOn },
+          { key: "gift_message", value: message },
         ],
       });
-    } catch (err) {
-      console.error("[lp/gift] checkout failed:", err);
-      setSubmitting(false);
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? e.message
+          : "Could not start checkout. Please try again."
+      );
+      setLoading(false);
     }
   }
 
+  const hero = LP_GALLERY[heroIndex];
+
   return (
-    <div className="min-h-screen bg-bone">
+    <div className="min-h-screen bg-bone text-charcoal">
       <GlassHeader />
 
-      {/* ─── HERO / PDP-style above-fold ─── */}
-      <section className="relative px-6 md:px-12 lg:px-20 pt-24 md:pt-32 pb-16">
-        <div className="max-w-7xl mx-auto grid md:grid-cols-[55%_45%] gap-8 md:gap-16 items-start">
-          {/* LEFT — Image stack */}
-          <div>
-            <div className="relative w-full aspect-[4/5] rounded-2xl overflow-hidden bg-[#162b1e] border border-[#F5F1E8]/10 shadow-xl">
-              <Image
-                src="/reserve-founders-hero.jpg"
-                alt="Mully Reserve gift box: curated premium golf brands"
-                fill
-                sizes="(min-width: 768px) 50vw, 100vw"
-                className="object-cover"
-                priority
-              />
-              {/* Gift ribbon badge overlay */}
-              <div className="absolute top-4 left-4 bg-ember text-forest-dark text-[10px] tracking-[0.3em] uppercase font-medium px-3 py-1.5 rounded-full">
-                The Gift
+      {/* ------------------------------- HERO ------------------------------- */}
+      <main className="pt-20 sm:pt-24">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
+            {/* Thumbnail rail */}
+            <div className="hidden lg:flex lg:col-span-1 flex-col gap-2">
+              {LP_GALLERY.map((g, i) => (
+                <button
+                  key={g.src}
+                  type="button"
+                  onMouseEnter={() => setHeroIndex(i)}
+                  onClick={() => setHeroIndex(i)}
+                  className={`relative w-full aspect-square rounded-md overflow-hidden border-2 transition ${
+                    heroIndex === i
+                      ? "border-forest"
+                      : "border-forest/15 hover:border-forest/40"
+                  }`}
+                  aria-label={`Show image ${i + 1}`}
+                >
+                  <Image
+                    src={g.src}
+                    alt={g.alt}
+                    fill
+                    sizes="60px"
+                    className="object-cover"
+                    unoptimized
+                  />
+                </button>
+              ))}
+            </div>
+
+            {/* Main hero */}
+            <div className="lg:col-span-6">
+              <div className="relative aspect-square bg-bone-dark/40 rounded-lg overflow-hidden border border-forest/10">
+                <Image
+                  src={hero.src}
+                  alt={hero.alt}
+                  fill
+                  sizes="(min-width: 1024px) 50vw, 100vw"
+                  className={
+                    heroIndex === 0 ? "object-cover" : "object-contain p-8"
+                  }
+                  priority
+                  unoptimized
+                />
+              </div>
+              <div className="lg:hidden mt-3 grid grid-cols-5 gap-2">
+                {LP_GALLERY.map((g, i) => (
+                  <button
+                    key={g.src}
+                    type="button"
+                    onClick={() => setHeroIndex(i)}
+                    className={`relative aspect-square rounded-md overflow-hidden border-2 ${
+                      heroIndex === i ? "border-forest" : "border-forest/15"
+                    }`}
+                    aria-label={`Show image ${i + 1}`}
+                  >
+                    <Image
+                      src={g.src}
+                      alt={g.alt}
+                      fill
+                      sizes="60px"
+                      className="object-cover"
+                      unoptimized
+                    />
+                  </button>
+                ))}
               </div>
             </div>
-            <div className="grid grid-cols-4 gap-3 mt-3">
-              {[
-                "/hero-shelf.png",
-                "/hero-tee-flag.png",
-                "/hero-chalice.png",
-                "/hero-golf-ball.png",
-              ].map((src) => (
-                <div
-                  key={src}
-                  className="relative aspect-square rounded-lg overflow-hidden bg-bone-dark border border-forest/10"
+
+            {/* Buy box */}
+            <div className="lg:col-span-5 flex flex-col">
+              <div className="text-[11px] tracking-[0.25em] uppercase text-ember/80 mb-2">
+                Mully Reserve · Gift Box
+              </div>
+              <h1 className="font-serif text-3xl sm:text-4xl text-forest leading-[1.1]">
+                The gift for the<br />
+                golfer with taste.
+              </h1>
+
+              <div className="mt-3 flex items-center gap-2 text-sm">
+                <div className="inline-flex items-center gap-0.5 text-ember">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <svg
+                      key={i}
+                      className="h-4 w-4"
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                    >
+                      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 22 12 18.56 5.82 22 7 14.14l-5-4.87 6.91-1.01L12 2z" />
+                    </svg>
+                  ))}
+                </div>
+                <span className="text-charcoal/70 text-xs">
+                  4.9 · 1,247 members
+                </span>
+              </div>
+
+              <p className="text-sm text-charcoal/80 mt-4 leading-relaxed">
+                Hand-curated quarterly box. $300+ retail value. We email your
+                recipient a beautiful note with a private link to confirm
+                their sizing — so the box arrives perfect, not blind-guessed.
+              </p>
+
+              {/* Gift form + Price + CTA */}
+              <div className="mt-5 bg-bone-dark/40 rounded-lg border border-forest/15 p-5">
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] uppercase tracking-[0.15em] text-charcoal/65 mb-1.5">
+                      Recipient name
+                    </label>
+                    <input
+                      type="text"
+                      value={recipientName}
+                      onChange={(e) => setRecipientName(e.target.value)}
+                      placeholder="Their first name"
+                      className="w-full bg-bone border border-forest/20 rounded px-3 py-2.5 text-sm text-charcoal focus:outline-none focus:border-forest"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] uppercase tracking-[0.15em] text-charcoal/65 mb-1.5">
+                      Deliver email on
+                      <span className="text-charcoal/45 ml-1 normal-case tracking-normal">
+                        (optional — leave blank to send today)
+                      </span>
+                    </label>
+                    <input
+                      type="date"
+                      value={deliverOn}
+                      onChange={(e) => setDeliverOn(e.target.value)}
+                      className="w-full bg-bone border border-forest/20 rounded px-3 py-2.5 text-sm text-charcoal focus:outline-none focus:border-forest"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] uppercase tracking-[0.15em] text-charcoal/65 mb-1.5">
+                      Personal message
+                      <span className="text-charcoal/45 ml-1 normal-case tracking-normal">
+                        (optional)
+                      </span>
+                    </label>
+                    <textarea
+                      value={message}
+                      onChange={(e) => setMessage(e.target.value)}
+                      placeholder="A short note that arrives with their gift email"
+                      rows={3}
+                      className="w-full bg-bone border border-forest/20 rounded px-3 py-2.5 text-sm text-charcoal focus:outline-none focus:border-forest resize-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-4 pt-4 border-t border-forest/15 flex items-baseline justify-between">
+                  <div>
+                    <div className="text-[11px] uppercase tracking-[0.2em] text-charcoal/60">
+                      Reserve Member · Gift
+                    </div>
+                    <div className="font-serif text-3xl text-forest mt-1">
+                      $250
+                      <span className="text-base text-charcoal/60 font-sans ml-1">
+                        / quarter
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-right text-[11px] text-charcoal/60">
+                    Quarterly · recipient<br />
+                    cancels anytime
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleGift}
+                  disabled={loading}
+                  className="w-full mt-4 bg-ember hover:bg-ember/90 disabled:opacity-60 text-bone py-3.5 rounded-md text-sm font-medium tracking-wide transition"
                 >
-                  <Image src={src} alt="" fill sizes="120px" className="object-cover" />
+                  {loading ? "Opening checkout…" : "Send the gift"}
+                </button>
+
+                <div className="mt-3 flex items-center justify-center gap-1.5 text-[11px] text-charcoal/60">
+                  <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="3" y="11" width="18" height="11" rx="2" />
+                    <path d="M7 11V7a5 5 0 0110 0v4" />
+                  </svg>
+                  Secure checkout via Shopify
+                </div>
+
+                {error ? (
+                  <div className="mt-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2">
+                    {error}
+                  </div>
+                ) : null}
+
+                <p className="text-[11px] text-charcoal/55 leading-relaxed mt-3 pt-3 border-t border-forest/10">
+                  Gift purchases use the quarterly Reserve Member SKU. Your
+                  recipient can cancel from their account anytime after the
+                  first box if they'd prefer a one-and-done gift.
+                </p>
+              </div>
+
+              <ul className="mt-5 space-y-2.5">
+                {ABOUT_BULLETS.slice(0, 3).map((b) => (
+                  <li
+                    key={b}
+                    className="flex gap-2.5 text-sm text-charcoal/80 leading-snug"
+                  >
+                    <span className="text-ember mt-1 shrink-0">▸</span>
+                    <span>{b}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* ----------------------- TRUST BADGE STRIP ----------------------- */}
+        <div className="mt-10">
+          <TrustBadgeStrip />
+        </div>
+
+        {/* ----------------------- BRAND LOGOS ----------------------- */}
+        <section className="py-8 bg-bone">
+          <div className="max-w-5xl mx-auto px-4 sm:px-6">
+            <div className="text-center text-[11px] tracking-[0.25em] uppercase text-charcoal/55 mb-5">
+              Brands you'll find inside
+            </div>
+            <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-x-4 gap-y-5 items-center">
+              {BRAND_LOGOS.map((b) => (
+                <div key={b.alt} className="relative h-7 sm:h-8">
+                  <Image
+                    src={b.src}
+                    alt={b.alt}
+                    fill
+                    sizes="80px"
+                    className="object-contain opacity-65"
+                  />
                 </div>
               ))}
             </div>
           </div>
+        </section>
 
-          {/* RIGHT — Buy box */}
-          <div className="md:sticky md:top-28">
-            <div className="mb-4">
-              <span className="inline-flex items-center gap-2.5 text-[11px] tracking-[0.38em] uppercase font-medium">
-                <span className="w-10 h-px bg-forest/20" />
-                <span className="gold-shimmer-text">The Gift</span>
-                <span className="w-10 h-px bg-forest/20" />
-              </span>
-            </div>
+        {/* ----------------------- ABOUT THIS GIFT ----------------------- */}
+        <section className="py-12 bg-bone-dark/30 border-y border-forest/10">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6">
+            <h2 className="font-serif text-xl text-forest mb-5">
+              About this gift
+            </h2>
+            <ul className="space-y-3">
+              {ABOUT_BULLETS.map((b) => (
+                <li
+                  key={b}
+                  className="flex gap-3 text-sm text-charcoal/85 leading-relaxed"
+                >
+                  <span className="text-ember mt-1.5 shrink-0 text-xs">●</span>
+                  <span>{b}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
 
-            <h1 className="font-serif text-4xl md:text-5xl lg:text-6xl text-forest leading-[1.05] tracking-tight mb-4">
-              The golf gift<br />that lasts longer<br />than a round.
-            </h1>
+        {/* ----------------------- HOW IT WORKS ----------------------- */}
+        <HowItWorks giftMode />
 
-            <div className="flex items-center gap-3 mb-5 text-sm">
-              <div className="flex items-center gap-0.5 text-ember">
-                {[0, 1, 2, 3, 4].map((i) => (
-                  <span key={i}>★</span>
-                ))}
-              </div>
-              <span className="text-charcoal/70">4.9 · 1,200+ members</span>
-            </div>
+        {/* ----------------------- RECENT BOXES CAROUSEL ----------------------- */}
+        <RecentBoxesCarousel />
 
-            <p className="text-base md:text-lg text-charcoal leading-relaxed mb-6 max-w-md">
-              Hand-curated quarterly box of premium golf brands. More value
-              inside than what you pay. Better than a gift card — they
-              actually use what's in it.
+        {/* ----------------------- LIFESTYLE GALLERY ----------------------- */}
+        <LifestyleGallery />
+
+        {/* ----------------------- PRODUCT DETAILS ----------------------- */}
+        <ProductDetails giftMode />
+
+        {/* ----------------------- REVIEWS ----------------------- */}
+        <ReviewsBlock />
+
+        {/* ----------------------- FINAL CTA ----------------------- */}
+        <section className="bg-forest text-bone py-16 sm:py-20">
+          <div className="max-w-3xl mx-auto px-4 sm:px-6 text-center">
+            <h2 className="font-serif text-3xl sm:text-4xl">
+              The gift you'll be remembered for.
+            </h2>
+            <p className="text-sm sm:text-base text-bone/80 mt-4 max-w-2xl mx-auto leading-relaxed">
+              They confirm their sizing. We curate the box. They get four
+              quarters of brands worth knowing — without the awkward
+              guess-the-shirt-size moment. $250/qtr, cancel anytime.
             </p>
-
-            {/* Single tier card — gift is one option */}
-            <div className="rounded-xl border-2 border-forest bg-forest/5 shadow-sm p-5 mb-6">
-              <div className="flex items-start justify-between gap-3 mb-3">
-                <div>
-                  <div className="font-serif text-xl text-forest">
-                    Mully Reserve Gift
-                  </div>
-                  <div className="text-xs text-charcoal/60 mt-0.5">
-                    Quarterly box · $300+ retail value inside
-                  </div>
-                </div>
-                <div className="shrink-0 text-right">
-                  <div className="font-serif text-xl text-forest">$250</div>
-                  <div className="text-xs text-charcoal/60">/quarter</div>
-                </div>
-              </div>
-              <p className="text-xs text-charcoal/60 leading-relaxed pt-3 border-t border-forest/10">
-                <span className="font-medium text-forest">Heads up:</span>{" "}
-                Quarterly recurring — cancel anytime after the first box.
-                We're rolling out true one-and-done gift purchases soon.
-              </p>
-            </div>
-
-            {/* Personalization form */}
-            <div className="space-y-3 mb-6">
-              <div>
-                <label className="text-xs text-forest/70 tracking-wide mb-1.5 block">
-                  Recipient name (optional)
-                </label>
-                <input
-                  type="text"
-                  value={recipientName}
-                  onChange={(e) => setRecipientName(e.target.value)}
-                  placeholder="Their first name"
-                  maxLength={100}
-                  className="w-full px-3 py-2.5 rounded-lg border border-forest/20 bg-white text-sm focus:border-forest focus:outline-none focus:ring-1 focus:ring-forest"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-forest/70 tracking-wide mb-1.5 block">
-                  Deliver on (optional)
-                </label>
-                <input
-                  type="date"
-                  value={deliverOn}
-                  onChange={(e) => setDeliverOn(e.target.value)}
-                  min={new Date().toISOString().split("T")[0]}
-                  className="w-full px-3 py-2.5 rounded-lg border border-forest/20 bg-white text-sm focus:border-forest focus:outline-none focus:ring-1 focus:ring-forest"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-forest/70 tracking-wide mb-1.5 block">
-                  Personal message (optional)
-                </label>
-                <textarea
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  placeholder="A short note we'll include in their first box."
-                  maxLength={500}
-                  rows={3}
-                  className="w-full px-3 py-2.5 rounded-lg border border-forest/20 bg-white text-sm focus:border-forest focus:outline-none focus:ring-1 focus:ring-forest resize-none"
-                />
-                <div className="text-[11px] text-charcoal/50 mt-1">
-                  {message.length}/500
-                </div>
-              </div>
-            </div>
-
-            {/* Trust badges */}
-            <div className="flex flex-wrap gap-x-5 gap-y-2 mb-6 text-sm text-forest/80">
-              <span className="flex items-center gap-1.5">
-                <span className="text-ember">⛳</span> Free shipping
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="text-ember">✦</span> Cancel anytime
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="text-ember">⟳</span> Free exchanges
-              </span>
-            </div>
-
             <button
               type="button"
-              onClick={handleCheckout}
-              disabled={submitting}
-              className="w-full bg-forest hover:bg-forest-light disabled:opacity-60 text-bone font-medium tracking-wide py-4 rounded-xl transition-colors text-base"
+              onClick={handleGift}
+              disabled={loading}
+              className="mt-7 bg-ember hover:bg-ember/90 disabled:opacity-60 text-bone py-3.5 px-10 rounded-md text-sm font-medium tracking-wide transition"
             >
-              {submitting ? "Loading checkout…" : "Gift Mully Reserve"}
+              {loading ? "Opening checkout…" : "Send the gift · $250/qtr"}
             </button>
-
-            <p className="text-[11px] text-charcoal/50 tracking-wide mt-3 text-center">
-              Hand-curated · Shipped in one business day · Exchanged without question
-            </p>
+            <div className="mt-3 text-[11px] text-bone/55">
+              Sizing confirmed by recipient · Free shipping · Exchange free
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* ─── HOW GIFTING WORKS ─── */}
-      <section className="px-6 md:px-12 lg:px-20 py-16 md:py-24 bg-bone-dark/40 border-y border-forest/10">
-        <div className="max-w-5xl mx-auto">
-          <p className="text-[11px] tracking-[0.38em] uppercase text-sage text-center mb-3">
-            How gifting works
-          </p>
-          <h2 className="font-serif text-3xl md:text-4xl text-forest text-center mb-12">
-            Effortless from start to finish.
-          </h2>
-          <div className="grid md:grid-cols-3 gap-8">
-            {[
-              {
-                n: "1",
-                title: "You buy the gift",
-                body: "Add a personal note and choose when to deliver. Checkout in under a minute.",
-              },
-              {
-                n: "2",
-                title: "We curate the box",
-                body: "Hand-picked premium golf brands worth $300+. Wrapped, shipped, ready.",
-              },
-              {
-                n: "3",
-                title: "They open it",
-                body: "First box arrives on your chosen date. Free shipping. Free exchanges if anything's off.",
-              },
-            ].map((step) => (
-              <div key={step.n} className="text-center">
-                <div className="font-serif text-5xl text-ember mb-3">
-                  {step.n}
-                </div>
-                <div className="font-serif text-xl text-forest mb-2">
-                  {step.title}
-                </div>
-                <p className="text-sm text-charcoal/70 leading-relaxed">
-                  {step.body}
-                </p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ─── BRAND STRIP ─── */}
-      <section className="px-6 md:px-12 lg:px-20 py-12 md:py-16">
-        <div className="max-w-7xl mx-auto">
-          <p className="text-[11px] tracking-[0.38em] uppercase text-forest/60 text-center mb-6">
-            Brands inside
-          </p>
-          <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-9 gap-6 md:gap-10 items-center justify-items-center opacity-80">
-            {BRAND_LOGOS.map((b) => (
-              <div key={b.src} className="relative w-20 h-12">
-                <Image
-                  src={b.src}
-                  alt={b.alt}
-                  fill
-                  sizes="80px"
-                  className="object-contain"
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ─── TESTIMONIALS ─── */}
-      <section className="px-6 md:px-12 lg:px-20 py-16 md:py-20 bg-forest text-bone">
-        <div className="max-w-5xl mx-auto">
-          <p className="text-[11px] tracking-[0.38em] uppercase text-bone/60 text-center mb-3">
-            Reviews from gift recipients
-          </p>
-          <h2 className="font-serif text-3xl md:text-4xl text-bone text-center mb-12">
-            The gift they remember.
-          </h2>
-          <div className="grid md:grid-cols-3 gap-6">
-            {[
-              {
-                quote:
-                  "My wife gifted me Mully Reserve for our anniversary. Two boxes in and I've replaced half my golf wardrobe.",
-                name: "James R.",
-                meta: "Recipient · Anniversary gift",
-              },
-              {
-                quote:
-                  "Beats every gift card I've ever received. The Greyson polo alone was worth more than what she paid.",
-                name: "Tyler M.",
-                meta: "Recipient · Birthday gift",
-              },
-              {
-                quote:
-                  "I gifted this to my dad for Father's Day. He said it's the best gift I've given him in 10 years.",
-                name: "Sarah L.",
-                meta: "Gifter · Father's Day",
-              },
-            ].map((t) => (
-              <div
-                key={t.name}
-                className="bg-forest-light/30 border border-bone/10 rounded-xl p-6"
-              >
-                <div className="text-ember mb-3">★★★★★</div>
-                <p className="text-bone/90 text-sm leading-relaxed mb-4">
-                  &ldquo;{t.quote}&rdquo;
-                </p>
-                <div className="text-xs text-bone/60 tracking-wide">
-                  {t.name} — {t.meta}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ─── FAQ ─── */}
-      <section className="px-6 md:px-12 lg:px-20 py-16 md:py-24">
-        <div className="max-w-3xl mx-auto">
-          <p className="text-[11px] tracking-[0.38em] uppercase text-sage text-center mb-3">
-            Gifting questions
-          </p>
-          <h2 className="font-serif text-3xl md:text-4xl text-forest text-center mb-10">
-            Everything you'd ask.
-          </h2>
-          <div className="space-y-2">
-            {FAQS.map((faq, i) => (
-              <div
-                key={i}
-                className="border border-forest/15 rounded-lg bg-white"
-              >
-                <button
-                  type="button"
-                  onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                  className="w-full text-left px-5 py-4 flex items-center justify-between gap-4"
-                >
-                  <span className="font-medium text-forest">{faq.q}</span>
-                  <span className="text-forest/40 text-xl shrink-0">
-                    {openFaq === i ? "−" : "+"}
-                  </span>
-                </button>
-                {openFaq === i && (
-                  <div className="px-5 pb-4 text-sm text-charcoal/75 leading-relaxed">
-                    {faq.a}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ─── BOTTOM CTA ─── */}
-      <section className="px-6 md:px-12 lg:px-20 py-16 md:py-24 bg-forest text-bone text-center">
-        <div className="max-w-2xl mx-auto">
-          <h2 className="font-serif text-3xl md:text-5xl mb-4 leading-tight">
-            The gift every golfer wants.
-          </h2>
-          <p className="text-bone/75 mb-8">
-            Hand-picked brands. Delivered to their door. Better than a gift card.
-          </p>
-          <button
-            type="button"
-            onClick={handleCheckout}
-            disabled={submitting}
-            className="bg-ember hover:bg-ember/90 disabled:opacity-60 text-forest-dark font-medium tracking-wide py-4 px-10 rounded-xl transition-colors"
-          >
-            {submitting ? "Loading checkout…" : "Gift Mully Reserve"}
-          </button>
-        </div>
-      </section>
+        <footer className="bg-forest-dark text-bone/55 text-xs py-8 text-center">
+          © {new Date().getFullYear()} Mullybox. All rights reserved.
+        </footer>
+      </main>
     </div>
   );
 }
