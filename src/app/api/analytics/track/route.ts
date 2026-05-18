@@ -21,6 +21,13 @@ const VALID_EVENTS = new Set([
   "wallet_viewed",
   "subscription_state",
   "registry_applied",
+  // Google Ads funnel events (PR #22) — must be in this allowlist
+  // so dispatchAnalyticsEvent → fireGoogleAds can pick them up.
+  "email_submitted",
+  "account_created",
+  "view_item",
+  "choose_plan_view",
+  "plan_selected",
 ]);
 
 function getBearerToken(request: NextRequest): string | null {
