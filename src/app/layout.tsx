@@ -7,6 +7,42 @@ import { Providers } from "./context/Providers";
 import { PostHogFlagSync } from "./components/PostHogFlagSync";
 import "./globals.css";
 
+/**
+ * Renders the Google tag (gtag.js) only when at least one Google property
+ * is configured. The same tag handles GA4 hits and Google Ads remarketing.
+ */
+function GoogleTag() {
+  const ga4Id = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
+  const adsId = process.env.NEXT_PUBLIC_GOOGLE_ADS_CONVERSION_ID;
+  const primaryId = ga4Id ?? adsId;
+  if (!primaryId) return null;
+
+  const configCalls: string[] = [];
+  if (ga4Id) configCalls.push(`gtag('config', '${ga4Id}');`);
+  if (adsId) configCalls.push(`gtag('config', '${adsId}');`);
+
+  return (
+    <>
+      <Script
+        id="gtag-src"
+        strategy="afterInteractive"
+        src={`https://www.googletagmanager.com/gtag/js?id=${primaryId}`}
+      />
+      <Script
+        id="gtag-init"
+        strategy="afterInteractive"
+        dangerouslySetInnerHTML={{
+          __html: `window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+window.gtag = gtag;
+gtag('js', new Date());
+${configCalls.join("\n")}`,
+        }}
+      />
+    </>
+  );
+}
+
 export const metadata: Metadata = {
   title: "Mully Reserve | Progress, Earned.",
   description:
@@ -51,6 +87,18 @@ export default async function RootLayout({
             __html: `!function(e,t,n,s,u,a){e.twq||(s=e.twq=function(){s.exe?s.exe.apply(s,arguments):s.queue.push(arguments);},s.version='1.1',s.queue=[],u=t.createElement(n),u.async=!0,u.src='https://static.ads-twitter.com/uwt.js',a=t.getElementsByTagName(n)[0],a.parentNode.insertBefore(u,a))}(window,document,'script');twq('config','od2vz');`,
           }}
         />
+        {/*
+          Google tag (gtag.js) — powers GA4 client-side hits and Google Ads
+          remarketing audiences. Server-side GA4 / Google Ads pings still
+          fire from /api/_lib/analytics.ts; this client tag is what builds
+          audiences ("users who viewed /choose-plan but didn't convert") and
+          captures gclid into the _gcl_aw cookie.
+
+          Renders ONLY when NEXT_PUBLIC_GA_MEASUREMENT_ID or
+          NEXT_PUBLIC_GOOGLE_ADS_CONVERSION_ID is set, so this stays a no-op
+          until you flip the env vars on in Vercel.
+        */}
+        <GoogleTag />
         <Providers>{children}</Providers>
         <Suspense fallback={null}>
           <FlagValuesWithTracking />

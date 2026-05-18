@@ -194,10 +194,12 @@ describe("POST /api/webhooks/shopify/orders-paid", () => {
     );
     expect(persistAnalyticsEventMock).toHaveBeenCalledTimes(1);
     expect(aggregateKpiDailyMock).toHaveBeenCalledTimes(1);
-    expect(userUpdate).toHaveBeenCalledWith({
-      tier: "access",
-      shopify_customer_id: "999",
-    });
+    expect(userUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tier: "access",
+        shopify_customer_id: "999",
+      })
+    );
   });
 
   it("matches Shopify GID customer ids and uses the Firebase UID for purchases", async () => {

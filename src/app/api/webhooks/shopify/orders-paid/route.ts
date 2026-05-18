@@ -259,6 +259,16 @@ export async function POST(request: NextRequest) {
     firebaseUid ??
     email ??
     (shopifyCustomerId ? `shopify-${shopifyCustomerId}` : `shopify-${order.id}`);
+
+  // Pull the ad-click attribution we captured at signup so the purchase
+  // conversion can be tied back to its original Google Ads / Meta click.
+  const signupUtm = (purchaseUserDoc?.data()?.signup_utm ?? null) as
+    | Record<string, unknown>
+    | null;
+  const utmString = (key: string): string | undefined => {
+    const v = signupUtm?.[key];
+    return typeof v === "string" && v.length > 0 ? v : undefined;
+  };
   const shopperIp =
     getClientIp(new Headers({ "x-forwarded-for": order.browser_ip ?? "" })) ??
     getClientIp(
@@ -287,6 +297,17 @@ export async function POST(request: NextRequest) {
         price: parseFloat(item.price),
         variant_id: item.variant_id,
       })),
+      // Attribution carry-through — lets Google Ads / Meta CAPI credit the
+      // original ad click for this purchase even though it landed via a
+      // server-to-server Shopify webhook.
+      gclid: utmString("gclid"),
+      gbraid: utmString("gbraid"),
+      wbraid: utmString("wbraid"),
+      utm_source: utmString("utm_source"),
+      utm_medium: utmString("utm_medium"),
+      utm_campaign: utmString("utm_campaign"),
+      utm_content: utmString("utm_content"),
+      utm_term: utmString("utm_term"),
     },
     timestamp: Math.floor(Date.now() / 1000),
   };

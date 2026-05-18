@@ -100,6 +100,43 @@ function getAttributionProperties(): Record<string, string | null> {
   };
 }
 
+/**
+ * Mirror the event to client-side gtag.js when it's loaded. Server-side
+ * GA4/Google Ads pings always fire from /api/analytics/track. This client
+ * mirror is what populates Google Ads remarketing audiences ("users who hit
+ * /choose-plan but didn't convert") and gives GA4 a real-time event stream.
+ *
+ * Uses a shared `event_id` so the server-side Measurement Protocol hit and
+ * the client-side gtag hit are deduplicated by GA4 (same event, two sources).
+ * No-op when window.gtag is undefined — i.e. when the Google tag in
+ * layout.tsx has not been turned on yet via NEXT_PUBLIC_GA_MEASUREMENT_ID /
+ * NEXT_PUBLIC_GOOGLE_ADS_CONVERSION_ID.
+ */
+function mirrorToGtag(
+  eventName: string,
+  eventId: string,
+  properties: Record<string, unknown>
+): void {
+  if (typeof window === "undefined") return;
+  const gtag = (
+    window as unknown as { gtag?: (...args: unknown[]) => void }
+  ).gtag;
+  if (typeof gtag !== "function") return;
+
+  try {
+    gtag("event", eventName, {
+      ...properties,
+      event_id: eventId,
+      // GA4 transaction_id field doubles as the dedup key for purchase events.
+      // Other events use event_id above.
+      transaction_id:
+        (properties.order_id as string | undefined) ?? undefined,
+    });
+  } catch {
+    // Never let analytics break the page.
+  }
+}
+
 function getBrowserProperties(): Record<string, string | number | undefined> {
   if (typeof window === "undefined") return {};
 
@@ -196,6 +233,23 @@ export async function trackEvent(
       }
     }
 
+    const eventId = createTrackingId("evt");
+    const mergedProperties = {
+      ...getBrowserProperties(),
+      ...getAbVariantProperties(),
+      ...(properties ?? {}),
+      ...propertyLikeFields,
+      anonymous_id,
+      session_id,
+      $session_id: session_id,
+      event_id: eventId,
+      ...getAttributionProperties(),
+    };
+
+    // Mirror to client-side gtag.js (GA4 + Google Ads). No-op when the
+    // Google tag is not configured.
+    mirrorToGtag(eventName, eventId, mergedProperties);
+
     await fetch("/api/analytics/track", {
       method: "POST",
       headers,
@@ -208,16 +262,7 @@ export async function trackEvent(
         anonymous_id,
         page_url:
           typeof window !== "undefined" ? window.location.href : undefined,
-        properties: {
-          ...getBrowserProperties(),
-          ...getAbVariantProperties(),
-          ...(properties ?? {}),
-          ...propertyLikeFields,
-          anonymous_id,
-          session_id,
-          $session_id: session_id,
-          ...getAttributionProperties(),
-        },
+        properties: mergedProperties,
       }),
     });
   } catch {
