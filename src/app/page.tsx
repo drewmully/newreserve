@@ -48,26 +48,26 @@ export default async function Home() {
             </div>
 
             <h1 className="font-serif text-3xl sm:text-5xl md:text-[3.5rem] lg:text-6xl xl:text-7xl text-forest leading-[1.05] tracking-tight mb-3 md:mb-7 animate-fade-up-delay-1">
-              Built for golfers<br />who buy the good brands.
+              Built for golfers<br />with taste.
             </h1>
 
             <p className="text-sm md:text-lg text-charcoal leading-relaxed mb-3 md:mb-4 max-w-sm sm:max-w-md mx-auto md:mx-0 animate-fade-up-delay-2">
-              Member pricing on Greyson, Rhone, Quiet Golf, Penfold, and more. Preview your savings before you choose a tier.
+              Quarterly curations from the brands worth wearing. Hand-picked by editors who play the game.
             </p>
 
-            {/* Value prop bullets — brand-led, no subscription-box framing */}
+            {/* Value prop bullets — curation-led, no savings framing */}
             <ul className="flex flex-col gap-2 mb-5 md:mb-8 max-w-sm sm:max-w-md mx-auto md:mx-0 text-left animate-fade-up-delay-2">
               <li className="text-sm md:text-base text-forest/85 flex items-start gap-2.5">
                 <span className="text-ember shrink-0 mt-[2px]">&#10022;</span>
-                <span>Member pricing on 40+ premium brands</span>
+                <span>Quarterly curated boxes from brands worth knowing</span>
               </li>
               <li className="text-sm md:text-base text-forest/85 flex items-start gap-2.5">
                 <span className="text-ember shrink-0 mt-[2px]">&#10022;</span>
-                <span>Average members save $400+ annually</span>
+                <span>First access to every drop, before they go public</span>
               </li>
               <li className="text-sm md:text-base text-forest/85 flex items-start gap-2.5">
                 <span className="text-ember shrink-0 mt-[2px]">&#10022;</span>
-                <span>Personalized curation, hand-picked and shipped to your door</span>
+                <span>Private course access, fittings, and member experiences</span>
               </li>
             </ul>
 
@@ -76,8 +76,11 @@ export default async function Home() {
                 <AuthAwareHero ctaText="VIEW SAVINGS" />
               </div>
               <p className="text-[11px] text-charcoal/50 tracking-wide mt-2">
-                Complimentary access &middot; No credit card required
+                Curated by hand &middot; Shipped in one business day &middot; Exchanged without question
               </p>
+              <div className="mt-5 md:mt-6 flex justify-center md:justify-start animate-fade-up-delay-3">
+                <ReserveMark />
+              </div>
             </div>
           </div>
 
@@ -107,9 +110,51 @@ export default async function Home() {
         <div className="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-4 relative stats-gold-dividers">
           <StatCounter end={10} suffix="+" label="Products Delivered" dark displayAs="hundreds-k" />
           <StatCounter end={40} suffix="+" label="Brand Partners" dark />
-          <StatCounter end={250} prefix="$" suffix="+" label="Avg. Member Savings" dark />
+          <StatCounter end={4} suffix="×" label="Annual Curations" dark />
           <StatCounter end={96} suffix="%" label="Renewal Rate" dark />
         </div>
+      </section>
+
+      {/* ─── PROBLEM STATEMENT — editorial one-liner ─── */}
+      <section className="py-20 md:py-28 px-6 md:px-12 bg-bone">
+        <ScrollReveal>
+          <p className="font-serif text-2xl md:text-4xl lg:text-[2.75rem] text-obsidian leading-[1.25] tracking-tight text-center max-w-4xl mx-auto">
+            Most golfers don&rsquo;t have time to figure out what&rsquo;s worth wearing.<br className="hidden md:block" /> We do.
+          </p>
+        </ScrollReveal>
+      </section>
+
+      {/* ─── AS FEATURED IN ─── */}
+      <section className="pb-16 md:pb-20 px-6 md:px-12 bg-bone">
+        <ScrollReveal>
+          <div className="max-w-5xl mx-auto">
+            <div className="text-center mb-6">
+              <span className="inline-flex items-center gap-2.5 text-[10px] md:text-[11px] tracking-[0.35em] uppercase text-charcoal/45 font-medium">
+                <span className="w-7 h-px bg-charcoal/20" />
+                As Featured In
+                <span className="w-7 h-px bg-charcoal/20" />
+              </span>
+            </div>
+            <ul className="flex flex-wrap items-center justify-center gap-x-7 gap-y-3 md:gap-x-10">
+              {[
+                "Golf Digest",
+                "MyGolfSpy",
+                "Golf Monthly",
+                "The New York Times",
+                "Wall Street Journal",
+                "Golfweek",
+                "USA Today",
+              ].map((pub) => (
+                <li
+                  key={pub}
+                  className="font-serif text-sm md:text-base text-charcoal/55 tracking-wide"
+                >
+                  {pub}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </ScrollReveal>
       </section>
 
       {/* ─── HOW MULLY RESERVE WORKS — 4-step plain-English explainer (EARLY) ─── */}
@@ -245,6 +290,43 @@ export default async function Home() {
         </div>
       </section>
 
+      {/* ─── THE RESERVE STANDARD — editorial commitments ─── */}
+      <section className="py-24 md:py-32 px-6 md:px-12 bg-bone">
+        <div className="max-w-3xl mx-auto">
+          <ScrollReveal>
+            <div className="text-center mb-12 md:mb-14">
+              <span className="inline-flex items-center gap-2.5 text-xs tracking-[0.35em] uppercase text-sage/80 font-medium mb-5">
+                <span className="w-7 h-px bg-sage/40" />
+                Our Standard
+                <span className="w-7 h-px bg-sage/40" />
+              </span>
+              <h2 className="font-serif text-3xl md:text-5xl text-obsidian leading-tight">
+                How Reserve operates.
+              </h2>
+            </div>
+          </ScrollReveal>
+
+          <ScrollReveal>
+            <ul className="border-t border-taupe/25">
+              {[
+                "Hand-selected by editors who play.",
+                "Shipped within one business day.",
+                "Exchanged at no cost if the fit isn\u2019t right.",
+                "Thirty days, no questions.",
+                "If we miss the mark, we make it right.",
+              ].map((line) => (
+                <li
+                  key={line}
+                  className="border-b border-taupe/25 py-5 md:py-6 font-serif text-lg md:text-xl text-charcoal/80 leading-snug text-center"
+                >
+                  {line}
+                </li>
+              ))}
+            </ul>
+          </ScrollReveal>
+        </div>
+      </section>
+
       {/* ─── MANIFESTO — Full Cinematic Moment ─── */}
       <section className="relative min-h-[55vh] md:min-h-[65vh] flex items-center justify-center px-6 md:px-12 overflow-hidden manifesto-section">
         {/* Grain overlay */}
@@ -330,9 +412,7 @@ export default async function Home() {
             {/* ── Tier 2 — Reserve Access ($99/yr) ── */}
             <ScrollReveal delay={0.08}>
               <div className="rounded-2xl p-7 md:p-8 flex flex-col card-hover h-full glass-card glass-card-light tier-card-shimmer tier-border-forest tier-bg-access">
-                <div className="h-5 mb-3">
-                  <span className="text-[9px] tracking-[0.15em] uppercase text-forest/60 font-semibold">Best Value</span>
-                </div>
+                <div className="h-5 mb-3" />
                 <span className="text-[11px] tracking-[0.25em] uppercase text-forest font-medium">
                   Reserve Access
                 </span>
@@ -360,13 +440,6 @@ export default async function Home() {
             {/* ── Tier 3 — Reserve Member ($249/qtr, THE HERO) ── */}
             <ScrollReveal delay={0.16}>
               <div className="relative h-full tier-member-hero">
-                {/* Badge */}
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-20">
-                  <span className="inline-block badge-gold text-[10px] tracking-[0.2em] uppercase font-semibold px-4 py-1.5 rounded-full whitespace-nowrap badge-shimmer">
-                    Most Popular
-                  </span>
-                </div>
-
                 <div className="rounded-2xl overflow-hidden relative flex flex-col card-hover h-full glass-card glass-card-dark tier-card-shimmer tier-border-gold tier-member-glow">
                   <Image
                     src="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/Untitled_design_17.png?v=1771516197"
@@ -445,7 +518,7 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* ─── RECENT RELEASES ─── */}
+      {/* ─── INSIDE THE RESERVE ─── */}
       <section className="py-24 md:py-36 px-6 md:px-12 bg-cream">
         <div className="max-w-6xl mx-auto">
           <ScrollReveal>
@@ -456,11 +529,10 @@ export default async function Home() {
                 <span className="w-7 h-px bg-sage/40" />
               </span>
               <h2 className="font-serif text-3xl md:text-5xl lg:text-6xl text-obsidian leading-tight mb-6">
-                Recent Releases
+                Inside the Reserve
               </h2>
               <p className="text-lg text-charcoal/65 max-w-xl mx-auto">
-                A look at what Reserve members have accessed. Updated
-                periodically. No&nbsp;spam.
+                A look at what our editors have selected for members.
               </p>
             </div>
           </ScrollReveal>
@@ -498,7 +570,7 @@ export default async function Home() {
                 href="#"
                 className="inline-flex items-center gap-3 text-sm tracking-wider uppercase text-forest font-medium group px-6 py-3 rounded-lg border border-forest/20 hover:bg-forest hover:text-bone transition-all duration-300"
               >
-                <span>View All Past Drops</span>
+                <span>View Past Selections</span>
                 <svg
                   className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1"
                   fill="none"
@@ -515,6 +587,51 @@ export default async function Home() {
               </a>
             </div>
           </ScrollReveal>
+        </div>
+      </section>
+
+      {/* ─── MEMBER VOICES ─── */}
+      <section className="py-24 md:py-32 px-6 md:px-12 bg-bone">
+        <div className="max-w-6xl mx-auto">
+          <ScrollReveal>
+            <div className="text-center mb-16 md:mb-20">
+              <span className="inline-flex items-center gap-2.5 text-xs tracking-[0.35em] uppercase text-sage/80 font-medium mb-5">
+                <span className="w-7 h-px bg-sage/40" />
+                Member Voices
+                <span className="w-7 h-px bg-sage/40" />
+              </span>
+              <h2 className="font-serif text-3xl md:text-5xl text-obsidian leading-tight">
+                In their words.
+              </h2>
+            </div>
+          </ScrollReveal>
+
+          <div className="grid md:grid-cols-3 gap-10 md:gap-12">
+            <ScrollReveal delay={0}>
+              <MemberQuote
+                quote={"I’ve found three brands through Mully I’d never have tried otherwise. Two are now in my regular rotation."}
+                name="Andrew"
+                course="Oakland Hills C.C."
+                memberSince={"’24"}
+              />
+            </ScrollReveal>
+            <ScrollReveal delay={0.12}>
+              <MemberQuote
+                quote={"It’s the only pro shop where I trust everything on the rack. They edit the stuff I’d edit out myself."}
+                name="Mason"
+                course="Forest Dunes"
+                memberSince={"’25"}
+              />
+            </ScrollReveal>
+            <ScrollReveal delay={0.24}>
+              <MemberQuote
+                quote={"The fitting day at a course I’d never have gotten on alone is what sold me. The gear is the bonus."}
+                name="Whitney"
+                course="Detroit G.C."
+                memberSince={"’24"}
+              />
+            </ScrollReveal>
+          </div>
         </div>
       </section>
 
@@ -650,6 +767,11 @@ export default async function Home() {
             </div>
           </div>
 
+          {/* Reserve hallmark */}
+          <div className="mt-10 flex justify-center md:justify-start">
+            <ReserveMark variant="dark" />
+          </div>
+
           {/* Copyright */}
           <div className="mt-8">
             <p className="text-xs text-bone/25">
@@ -717,6 +839,87 @@ function BrandStrip() {
         </div>
       </div>
     </div>
+  );
+}
+
+/* ── Reserve Mark — editorial hallmark seal used sparingly ── */
+function ReserveMark({
+  variant = "light",
+  className,
+}: {
+  variant?: "light" | "dark";
+  className?: string;
+}) {
+  const stroke = variant === "dark" ? "rgba(245,243,239,0.55)" : "rgba(22,43,30,0.55)";
+  const text = variant === "dark" ? "text-bone/55" : "text-forest/65";
+  const accent = variant === "dark" ? "text-bone/35" : "text-forest/40";
+  return (
+    <span
+      aria-label="Mully Reserve hallmark"
+      className={`inline-flex items-center gap-2.5 ${className ?? ""}`}
+    >
+      <svg
+        width="34"
+        height="34"
+        viewBox="0 0 60 60"
+        fill="none"
+        aria-hidden="true"
+      >
+        <circle cx="30" cy="30" r="28" stroke={stroke} strokeWidth="0.8" />
+        <circle cx="30" cy="30" r="23" stroke={stroke} strokeWidth="0.5" />
+        <text
+          x="30"
+          y="35"
+          textAnchor="middle"
+          fontFamily="'Playfair Display', serif"
+          fontStyle="italic"
+          fontSize="18"
+          fill={stroke}
+        >
+          MR
+        </text>
+      </svg>
+      <span className="flex flex-col leading-tight">
+        <span className={`font-serif text-[11px] tracking-[0.3em] uppercase ${text}`}>
+          Mully Reserve
+        </span>
+        <span className={`text-[9px] tracking-[0.35em] uppercase ${accent} mt-0.5`}>
+          Est.&nbsp;2026 &middot; Hallmark
+        </span>
+      </span>
+    </span>
+  );
+}
+
+/* ── Editorial pull-quote testimonial ── */
+function MemberQuote({
+  quote,
+  name,
+  course,
+  memberSince,
+}: {
+  quote: string;
+  name: string;
+  course: string;
+  memberSince: string;
+}) {
+  return (
+    <figure className="flex flex-col h-full">
+      <span
+        aria-hidden="true"
+        className="font-serif text-5xl md:text-6xl text-forest/25 leading-none mb-2"
+      >
+        &ldquo;
+      </span>
+      <blockquote className="font-serif text-lg md:text-xl text-obsidian/85 leading-snug flex-1">
+        {quote}
+      </blockquote>
+      <figcaption className="mt-6 pt-4 border-t border-taupe/25">
+        <span className="block text-[10px] md:text-[11px] tracking-[0.28em] uppercase text-charcoal/55 font-medium">
+          {name} &middot; {course} &middot; Member Since {memberSince}
+        </span>
+      </figcaption>
+    </figure>
   );
 }
 
@@ -1003,7 +1206,7 @@ function ReleaseCard({
   return (
     <div className="group bg-bone rounded-2xl border border-taupe/15 overflow-hidden card-hover h-full relative">
       <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-sage/40 to-transparent z-10" />
-      <div className="release-img-wrap">
+      <div className="release-img-wrap relative">
         {image ? (
           <div className="release-img-inner aspect-[4/3] relative bg-cream">
             <Image
@@ -1022,6 +1225,9 @@ function ReleaseCard({
             <MullyMark className="w-14 h-14 text-bone opacity-10" />
           </div>
         )}
+        <span className="absolute top-3 left-3 inline-block text-[9px] md:text-[10px] tracking-[0.22em] uppercase font-semibold px-2.5 py-1 rounded-sm bg-bone/92 text-forest border border-forest/15 backdrop-blur-sm shadow-sm">
+          Curator&rsquo;s Selection
+        </span>
       </div>
       <div className="p-6">
         <span className="text-xs tracking-[0.2em] uppercase text-forest font-medium">
