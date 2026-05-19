@@ -11,6 +11,14 @@
     {
       "path": "/api/admin/cron/mulligan-to-member",
       "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/gifts/scheduled-send",
+      "schedule": "15 * * * *"
+    },
+    {
+      "path": "/api/gifts/post-first-shipment",
+      "schedule": "45 * * * *"
     }
   ]
 }

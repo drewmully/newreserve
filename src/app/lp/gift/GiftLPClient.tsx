@@ -40,6 +40,7 @@ export default function GiftLPClient() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [recipientName, setRecipientName] = useState("");
+  const [recipientEmail, setRecipientEmail] = useState("");
   const [deliverOn, setDeliverOn] = useState("");
   const [message, setMessage] = useState("");
 
@@ -49,6 +50,17 @@ export default function GiftLPClient() {
 
   async function handleGift() {
     setError(null);
+
+    const trimmedEmail = recipientEmail.trim();
+    if (!trimmedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      setError("Please enter the recipient's email so we can send them the gift.");
+      return;
+    }
+    if (!recipientName.trim()) {
+      setError("Please add the recipient's first name.");
+      return;
+    }
+
     setLoading(true);
     trackEvent("lp_gift_checkout_clicked", {
       properties: { tier: "member", method: "shopify_checkout_gift" },
@@ -61,7 +73,8 @@ export default function GiftLPClient() {
           { key: "lp_source", value: "lp_gift" },
           { key: "ad_group", value: "google_ads" },
           { key: "gift", value: "true" },
-          { key: "gift_recipient_name", value: recipientName },
+          { key: "gift_recipient_name", value: recipientName.trim() },
+          { key: "gift_recipient_email", value: trimmedEmail },
           { key: "gift_deliver_on", value: deliverOn },
           { key: "gift_message", value: message },
         ],
@@ -216,6 +229,21 @@ export default function GiftLPClient() {
                       placeholder="Their first name"
                       className="w-full bg-bone border border-forest/20 rounded px-3 py-2.5 text-sm text-charcoal focus:outline-none focus:border-forest"
                     />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] uppercase tracking-[0.15em] text-charcoal/65 mb-1.5">
+                      Recipient email
+                    </label>
+                    <input
+                      type="email"
+                      value={recipientEmail}
+                      onChange={(e) => setRecipientEmail(e.target.value)}
+                      placeholder="their@email.com"
+                      className="w-full bg-bone border border-forest/20 rounded px-3 py-2.5 text-sm text-charcoal focus:outline-none focus:border-forest"
+                    />
+                    <p className="text-[10px] text-charcoal/55 mt-1">
+                      We email them on the date below with a sizing link — they confirm fit before we ship.
+                    </p>
                   </div>
                   <div>
                     <label className="block text-[11px] uppercase tracking-[0.15em] text-charcoal/65 mb-1.5">

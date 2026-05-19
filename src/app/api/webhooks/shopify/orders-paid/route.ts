@@ -27,6 +27,12 @@ import {
   getLoopRawSubscriptions,
   swapLoopSubscriptionProduct,
 } from "@/app/api/_lib/loopAdmin";
+import {
+  isGiftOrder,
+  readGiftAttribute,
+  createGiftOrderDoc,
+  createSizingToken,
+} from "@/lib/gifts/giftOrder";
 
 const LOOP_VARIANT_BY_TIER: Partial<Record<string, number>> = {
   member: 47601025122496,
@@ -218,6 +224,8 @@ interface ShopifyOrder {
     first_name?: string | null;
   };
   line_items: ShopifyLineItem[];
+  /** Shopify carries cart attributes here on the order. */
+  note_attributes?: Array<{ name: string; value: string }>;
 }
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
@@ -315,7 +323,9 @@ export async function POST(request: NextRequest) {
   const eventId = randomUUID();
 
   // ── Update Firestore user tier + trigger email flow ──────────────────────
-  const tierUpdate = email
+  // For gift orders we skip this entirely — the purchaser is not the
+  // member; the recipient becomes the member once they confirm sizing.
+  const tierUpdate = email && !isGiftOrder(order.note_attributes)
     ? (async () => {
         const tier = resolveTierFromLineItems(order.line_items);
         if (!tier || tier === "free") return;
@@ -392,12 +402,59 @@ export async function POST(request: NextRequest) {
       ? swapLoopSubscription(shopifyCustomerId, resolvedTier)
       : Promise.resolve();
 
+  // ── Gift Phase 2: persist a gift_orders doc if this purchase was a gift ──
+  const giftPersist = (async () => {
+    try {
+      if (!isGiftOrder(order.note_attributes)) return;
+
+      const recipientEmail = readGiftAttribute(
+        order.note_attributes,
+        "gift_recipient_email"
+      );
+      if (!recipientEmail) {
+        console.warn(
+          "[orders-paid] gift order missing recipient email — skipping gift_orders create",
+          { order: order.id }
+        );
+        return;
+      }
+
+      // Don't double-create on webhook retries — Shopify retries trigger
+      // the dedupe path above, but belt-and-suspenders here.
+      const giftDocId = String(order.id);
+      await createGiftOrderDoc({
+        shopify_order_id: giftDocId,
+        shopify_order_number: String(order.order_number),
+        shopify_customer_id: shopifyCustomerId ?? null,
+        purchaser_email: email ?? "",
+        purchaser_first_name: order.customer?.first_name ?? null,
+        recipient_email: recipientEmail,
+        recipient_first_name: readGiftAttribute(
+          order.note_attributes,
+          "gift_recipient_name"
+        ),
+        gift_message: readGiftAttribute(order.note_attributes, "gift_message"),
+        deliver_on: readGiftAttribute(order.note_attributes, "gift_deliver_on"),
+        sizing_token: createSizingToken(),
+        total_price: value,
+        currency: order.currency,
+        status: "pending_recipient_email",
+      });
+      console.log(
+        `[orders-paid] gift_orders created for shopify order ${order.id} (recipient ${recipientEmail})`
+      );
+    } catch (err) {
+      console.error("[orders-paid] gift_orders create failed:", err);
+    }
+  })();
+
   await Promise.allSettled([
     dispatchAnalyticsEvent(event),
     persistAnalyticsEvent(eventId, event),
     aggregateKpiDaily(event),
     tierUpdate,
     loopSwap,
+    giftPersist,
   ]);
 
   // Shopify expects a 200 response quickly or it will retry
