@@ -106,7 +106,9 @@ export const LP_GALLERY: Array<{
     alt: "A spread of forest-green Mully Reserve boxes shot from above on a neutral surface.",
     fit: "cover",
   },
-  ...RECENT_BOX_PRODUCTS.slice(0, 2).map((p) => ({
+  // Last two thumbs are real product photos — Rhone + Quiet Golf for
+  // consistent vendor representation in the hero rail.
+  ...[RECENT_BOX_PRODUCTS[0], RECENT_BOX_PRODUCTS[2]].map((p) => ({
     src: p.image,
     alt: `Example of a piece from a past Mully Reserve box: ${p.vendor} ${p.title}.`,
     isExample: true,
