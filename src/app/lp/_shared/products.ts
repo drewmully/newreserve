@@ -78,16 +78,39 @@ export const RECENT_BOX_PRODUCTS: LPProduct[] = [
   },
 ];
 
-// Hero / lifestyle imagery — used in the thumbnail rail alongside
-// the box-opening hero shot.
-export const LP_GALLERY = [
+// Hero / lifestyle imagery — used in the thumbnail rail. First two are
+// our own brand photography (box-opening + staged box contents from the
+// outings page). Last two are real product examples from our shop,
+// flagged so users know they're examples of what has been inside.
+export const LP_GALLERY: Array<{
+  src: string;
+  alt: string;
+  isExample?: boolean;
+  fit?: "cover" | "contain";
+}> = [
   {
     src: "/reserve-founders-hero.jpg",
     alt: "A Mully Reserve box, opened — neatly folded apparel, a Mully Reserve card, a braided belt, and a striped polo.",
+    fit: "cover",
   },
-  ...RECENT_BOX_PRODUCTS.slice(0, 4).map((p) => ({
+  {
+    // Outings page hero — staged Mully box with quarter zip, leather pouch,
+    // YETI tumbler, and braided belt.
+    src: "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/ChatGPT_Image_Feb_11_2026_11_59_56_AM.png?v=1771257707",
+    alt: "A Mully Reserve box staged open with a navy quarter zip, leather pouch, YETI tumbler, and braided belt inside.",
+    fit: "cover",
+  },
+  {
+    // Outings page unboxing — array of closed Mully boxes from above.
+    src: "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/ChatGPT_Image_Feb_10_2026_04_48_19_PM.png?v=1771257707",
+    alt: "A spread of forest-green Mully Reserve boxes shot from above on a neutral surface.",
+    fit: "cover",
+  },
+  ...RECENT_BOX_PRODUCTS.slice(0, 2).map((p) => ({
     src: p.image,
-    alt: `${p.vendor} ${p.title} — example of an item from a past Mully Reserve box.`,
+    alt: `Example of a piece from a past Mully Reserve box: ${p.vendor} ${p.title}.`,
+    isExample: true,
+    fit: "cover" as const,
   })),
 ];
 

@@ -102,6 +102,11 @@ export default function SubscriptionLPClient() {
                     className="object-cover"
                     unoptimized
                   />
+                  {g.isExample ? (
+                    <span className="absolute top-0.5 left-0.5 bg-forest/90 text-bone text-[7px] tracking-[0.15em] uppercase px-1 py-0.5 rounded-sm">
+                      Ex.
+                    </span>
+                  ) : null}
                 </button>
               ))}
             </div>
@@ -114,14 +119,18 @@ export default function SubscriptionLPClient() {
                   alt={hero.alt}
                   fill
                   sizes="(min-width: 1024px) 50vw, 100vw"
-                  className={
-                    heroIndex === 0
-                      ? "object-cover"
-                      : "object-contain p-8"
-                  }
+                  className="object-cover"
                   priority
                   unoptimized
                 />
+                {hero.isExample ? (
+                  <div className="absolute top-4 left-4 z-10 inline-flex items-center gap-1.5 bg-forest/90 backdrop-blur-sm text-bone text-[10px] tracking-[0.22em] uppercase font-medium px-3 py-1.5 rounded-sm shadow-sm">
+                    <svg className="h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2L2 7v10l10 5 10-5V7L12 2zm0 2.2L19.8 8 12 11.8 4.2 8 12 4.2zM4 9.8l7 3.5v6.4l-7-3.5V9.8zm9 9.9v-6.4l7-3.5v6.4l-7 3.5z"/>
+                    </svg>
+                    Example of past inclusions
+                  </div>
+                ) : null}
               </div>
               {/* Mobile thumbnail strip */}
               <div className="lg:hidden mt-3 grid grid-cols-5 gap-2">
@@ -143,6 +152,11 @@ export default function SubscriptionLPClient() {
                       className="object-cover"
                       unoptimized
                     />
+                    {g.isExample ? (
+                      <span className="absolute top-0.5 left-0.5 bg-forest/90 text-bone text-[7px] tracking-[0.15em] uppercase px-1 py-0.5 rounded-sm">
+                        Ex.
+                      </span>
+                    ) : null}
                   </button>
                 ))}
               </div>

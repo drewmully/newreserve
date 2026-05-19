@@ -108,15 +108,21 @@ export function RecentBoxesCarousel() {
               key={p.title}
               className="bg-bone-dark/40 rounded-lg overflow-hidden border border-forest/10 group"
             >
-              <div className="aspect-square relative bg-white">
+              <div className="aspect-square relative bg-white overflow-hidden">
                 <Image
                   src={p.image}
                   alt={`Example item from a past Mully Reserve box: ${p.vendor} ${p.title}`}
                   fill
                   sizes="(min-width: 1024px) 22vw, (min-width: 640px) 30vw, 45vw"
-                  className="object-contain p-3 transition-transform duration-500 group-hover:scale-105"
+                  className="object-cover transition-transform duration-500 group-hover:scale-105"
                   unoptimized
                 />
+                <div className="absolute top-2 left-2 z-10 inline-flex items-center gap-1 bg-forest/90 backdrop-blur-sm text-bone text-[9px] tracking-[0.18em] uppercase font-medium px-2 py-1 rounded-sm shadow-sm">
+                  <svg className="h-2.5 w-2.5" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2L2 7v10l10 5 10-5V7L12 2zm0 2.2L19.8 8 12 11.8 4.2 8 12 4.2zM4 9.8l7 3.5v6.4l-7-3.5V9.8zm9 9.9v-6.4l7-3.5v6.4l-7 3.5z"/>
+                  </svg>
+                  Example
+                </div>
               </div>
               <div className="px-3 py-3 border-t border-forest/10">
                 <div className="text-[10px] tracking-[0.2em] uppercase text-ember/80">
@@ -397,9 +403,15 @@ export function LifestyleGallery() {
                 alt={`${p.vendor} ${p.title} — featured in a past Mully Reserve box.`}
                 fill
                 sizes="(min-width: 1024px) 22vw, 45vw"
-                className="object-contain p-4"
+                className="object-cover"
                 unoptimized
               />
+              <div className="absolute top-2 left-2 z-10 inline-flex items-center gap-1 bg-forest-dark/85 backdrop-blur-sm text-bone text-[9px] tracking-[0.18em] uppercase font-medium px-2 py-1 rounded-sm">
+                <svg className="h-2.5 w-2.5" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2L2 7v10l10 5 10-5V7L12 2zm0 2.2L19.8 8 12 11.8 4.2 8 12 4.2zM4 9.8l7 3.5v6.4l-7-3.5V9.8zm9 9.9v-6.4l7-3.5v6.4l-7 3.5z"/>
+                </svg>
+                Example
+              </div>
             </div>
           ))}
         </div>
