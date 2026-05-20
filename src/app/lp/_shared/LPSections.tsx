@@ -155,10 +155,12 @@ export function RecentBoxesCarousel() {
 
 /* -------------------------------------------------------------------------- */
 /*  Reviews block — Junip-powered                                             */
-/*  Uses Junip's storewide review section so reviews from both Reserve Access */
-/*  and Member products surface together. Script + store key are loaded once  */
-/*  in src/app/layout.tsx. Junip auto-mounts widgets on DOMContentLoaded; we   */
-/*  also dispatch a window event after mount to trigger a refresh on SPA nav. */
+/*  Renders ONLY reviews for the two Reserve products (Reserve Access +       */
+/*  Reserve Member). Uses per-product widgets so other SKUs (Mullybox,        */
+/*  Starter, Elite, etc.) are excluded. Script + store key load once in       */
+/*  src/app/layout.tsx.                                                       */
+/*    Reserve Access: 8501257175232                                           */
+/*    Reserve Member: 8501257044160                                           */
 /* -------------------------------------------------------------------------- */
 
 export function ReviewsBlock() {
@@ -174,42 +176,31 @@ export function ReviewsBlock() {
           </h2>
         </div>
 
-        {/*
-          Junip storewide review section. data-reviews-type="all" pulls
-          product reviews from every product in the store (incl. both the
-          Reserve Access and Member products) plus any store-level reviews.
-          data-show-summary renders Junip's own rating histogram at the top.
-        */}
-        <div className="junip-reviews-frame">
+        {/* Reserve Member reviews */}
+        <div className="junip-reviews-frame mb-12">
+          <div className="text-center mb-4">
+            <div className="text-[11px] tracking-[0.25em] uppercase text-forest/60">
+              Reserve Member · Quarterly Box
+            </div>
+          </div>
           <span
-            className="junip-review-section"
-            data-layout="grid"
-            data-reviews-type="all"
-            data-show-summary="true"
-            data-reviews-count="12"
-          >
-            <span className="junip-review-section-wrapper" />
-          </span>
+            className="junip-product-review"
+            data-product-id="8501257044160"
+          />
         </div>
 
-        {/*
-          Hidden product-id anchors so Junip can also surface per-product
-          context if we later swap in `junip-product-review` widgets.
-          Reserve Access: 8501257175232
-          Member:         8501257044160
-        */}
-        <span
-          className="junip-product-review"
-          data-product-id="8501257175232"
-          aria-hidden="true"
-          style={{ display: "none" }}
-        />
-        <span
-          className="junip-product-review"
-          data-product-id="8501257044160"
-          aria-hidden="true"
-          style={{ display: "none" }}
-        />
+        {/* Reserve Access reviews */}
+        <div className="junip-reviews-frame">
+          <div className="text-center mb-4">
+            <div className="text-[11px] tracking-[0.25em] uppercase text-forest/60">
+              Reserve Access
+            </div>
+          </div>
+          <span
+            className="junip-product-review"
+            data-product-id="8501257175232"
+          />
+        </div>
       </div>
     </section>
   );

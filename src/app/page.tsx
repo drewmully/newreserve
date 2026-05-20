@@ -592,10 +592,9 @@ export default async function Home() {
 
       {/* ─── MEMBER VOICES (Junip-powered) ─── */}
       {/*
-        Real reviews via Junip. Script + store key live in src/app/layout.tsx;
-        this section just drops the storewide review section widget. Reviews
-        from both Reserve Access (8501257175232) and Member (8501257044160)
-        products surface together via data-reviews-type="all".
+        Real reviews via Junip. Script + store key live in src/app/layout.tsx.
+        Renders ONLY the two Reserve products (Reserve Member 8501257044160 +
+        Reserve Access 8501257175232) — other SKUs are intentionally excluded.
       */}
       <section className="py-24 md:py-32 px-6 md:px-12 bg-bone">
         <div className="max-w-6xl mx-auto">
@@ -613,31 +612,31 @@ export default async function Home() {
           </ScrollReveal>
 
           <ScrollReveal>
-            <div className="junip-reviews-frame">
+            {/* Reserve Member reviews */}
+            <div className="junip-reviews-frame mb-16">
+              <div className="text-center mb-4">
+                <div className="text-[11px] tracking-[0.28em] uppercase text-sage/70">
+                  Reserve Member · Quarterly Box
+                </div>
+              </div>
               <span
-                className="junip-review-section"
-                data-layout="grid"
-                data-reviews-type="all"
-                data-show-summary="true"
-                data-reviews-count="9"
-              >
-                <span className="junip-review-section-wrapper" />
-              </span>
+                className="junip-product-review"
+                data-product-id="8501257044160"
+              />
             </div>
 
-            {/* Hidden product anchors so per-product widgets can be added later */}
-            <span
-              className="junip-product-review"
-              data-product-id="8501257175232"
-              aria-hidden="true"
-              style={{ display: "none" }}
-            />
-            <span
-              className="junip-product-review"
-              data-product-id="8501257044160"
-              aria-hidden="true"
-              style={{ display: "none" }}
-            />
+            {/* Reserve Access reviews */}
+            <div className="junip-reviews-frame">
+              <div className="text-center mb-4">
+                <div className="text-[11px] tracking-[0.28em] uppercase text-sage/70">
+                  Reserve Access
+                </div>
+              </div>
+              <span
+                className="junip-product-review"
+                data-product-id="8501257175232"
+              />
+            </div>
           </ScrollReveal>
         </div>
       </section>
