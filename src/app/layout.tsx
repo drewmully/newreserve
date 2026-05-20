@@ -99,6 +99,23 @@ export default async function RootLayout({
           until you flip the env vars on in Vercel.
         */}
         <GoogleTag />
+        {/*
+          Junip Reviews — loads on every page. The script is named
+          `junip_shopify.js` for legacy reasons but supports custom
+          (non-Shopify) storefronts via the store-key element below.
+          See: https://help.junip.co/en/articles/4607115-custom-html-installation
+        */}
+        <Script
+          id="junip-widgets"
+          strategy="afterInteractive"
+          src="https://widgets.juniphq.com/v1/junip_shopify.js"
+        />
+        <span
+          className="junip-store-key"
+          data-store-key="e53iArcVeJvmee1SUQTErjCM"
+          aria-hidden="true"
+          style={{ display: "none" }}
+        />
         <Providers>{children}</Providers>
         <Suspense fallback={null}>
           <FlagValuesWithTracking />

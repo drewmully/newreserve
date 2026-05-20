@@ -590,7 +590,13 @@ export default async function Home() {
         </div>
       </section>
 
-      {/* ─── MEMBER VOICES ─── */}
+      {/* ─── MEMBER VOICES (Junip-powered) ─── */}
+      {/*
+        Real reviews via Junip. Script + store key live in src/app/layout.tsx;
+        this section just drops the storewide review section widget. Reviews
+        from both Reserve Access (8501257175232) and Member (8501257044160)
+        products surface together via data-reviews-type="all".
+      */}
       <section className="py-24 md:py-32 px-6 md:px-12 bg-bone">
         <div className="max-w-6xl mx-auto">
           <ScrollReveal>
@@ -606,32 +612,33 @@ export default async function Home() {
             </div>
           </ScrollReveal>
 
-          <div className="grid md:grid-cols-3 gap-10 md:gap-12">
-            <ScrollReveal delay={0}>
-              <MemberQuote
-                quote={"Every box has more in it than I paid for it. I keep doing the math and it keeps not making sense — in my favor."}
-                name="Andrew"
-                course="Oakland Hills C.C."
-                memberSince={"’24"}
-              />
-            </ScrollReveal>
-            <ScrollReveal delay={0.12}>
-              <MemberQuote
-                quote={"It’s basically Uncrate for golfers. I’ve found three brands through Mully I’d never have tried — two are now in my regular rotation."}
-                name="Mason"
-                course="Forest Dunes"
-                memberSince={"’25"}
-              />
-            </ScrollReveal>
-            <ScrollReveal delay={0.24}>
-              <MemberQuote
-                quote={"It’s become my pro shop. I order Tuesday, it’s on my doorstep by Wednesday, and I never wonder if it’s actually good."}
-                name="Whitney"
-                course="Detroit G.C."
-                memberSince={"’24"}
-              />
-            </ScrollReveal>
-          </div>
+          <ScrollReveal>
+            <div className="junip-reviews-frame">
+              <span
+                className="junip-review-section"
+                data-layout="grid"
+                data-reviews-type="all"
+                data-show-summary="true"
+                data-reviews-count="9"
+              >
+                <span className="junip-review-section-wrapper" />
+              </span>
+            </div>
+
+            {/* Hidden product anchors so per-product widgets can be added later */}
+            <span
+              className="junip-product-review"
+              data-product-id="8501257175232"
+              aria-hidden="true"
+              style={{ display: "none" }}
+            />
+            <span
+              className="junip-product-review"
+              data-product-id="8501257044160"
+              aria-hidden="true"
+              style={{ display: "none" }}
+            />
+          </ScrollReveal>
         </div>
       </section>
 
@@ -891,37 +898,7 @@ function ReserveMark({
   );
 }
 
-/* ── Editorial pull-quote testimonial ── */
-function MemberQuote({
-  quote,
-  name,
-  course,
-  memberSince,
-}: {
-  quote: string;
-  name: string;
-  course: string;
-  memberSince: string;
-}) {
-  return (
-    <figure className="flex flex-col h-full">
-      <span
-        aria-hidden="true"
-        className="font-serif text-5xl md:text-6xl text-forest/25 leading-none mb-2"
-      >
-        &ldquo;
-      </span>
-      <blockquote className="font-serif text-lg md:text-xl text-obsidian/85 leading-snug flex-1">
-        {quote}
-      </blockquote>
-      <figcaption className="mt-6 pt-4 border-t border-taupe/25">
-        <span className="block text-[10px] md:text-[11px] tracking-[0.28em] uppercase text-charcoal/55 font-medium">
-          {name} &middot; {course} &middot; Member Since {memberSince}
-        </span>
-      </figcaption>
-    </figure>
-  );
-}
+/* MemberQuote retired — Junip widget now renders the Member Voices section. */
 
 function MullyMark({ className }: { className?: string }) {
   return (

@@ -154,79 +154,12 @@ export function RecentBoxesCarousel() {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Reviews block — Amazon-style with rating histogram + individual reviews   */
+/*  Reviews block — Junip-powered                                             */
+/*  Uses Junip's storewide review section so reviews from both Reserve Access */
+/*  and Member products surface together. Script + store key are loaded once  */
+/*  in src/app/layout.tsx. Junip auto-mounts widgets on DOMContentLoaded; we   */
+/*  also dispatch a window event after mount to trigger a refresh on SPA nav. */
 /* -------------------------------------------------------------------------- */
-
-const RATING_HISTOGRAM = [
-  { stars: 5, pct: 82 },
-  { stars: 4, pct: 13 },
-  { stars: 3, pct: 3 },
-  { stars: 2, pct: 1 },
-  { stars: 1, pct: 1 },
-];
-
-const REVIEWS = [
-  {
-    name: "Marcus P.",
-    badge: "Member · 4 quarters",
-    stars: 5,
-    title: "Like Uncrate, but for golfers.",
-    body: "I've discovered three brands I now buy from directly. The Rhone quarter zip alone was worth the membership.",
-  },
-  {
-    name: "Sarah L.",
-    badge: "Member · 6 quarters",
-    stars: 5,
-    title: "Best gift I've given in years.",
-    body: "Gifted this to my brother. Now we both subscribe. He texted me a photo when the first box landed.",
-  },
-  {
-    name: "Drew R.",
-    badge: "Member · 2 quarters",
-    stars: 5,
-    title: "First quarter paid for itself.",
-    body: "The Greyson polo alone retails for more than I paid for the whole box. Curation hits the brief — labels I'd actually wear.",
-  },
-  {
-    name: "Tom W.",
-    badge: "Member · 3 quarters",
-    stars: 4,
-    title: "Solid value, would buy again.",
-    body: "Sizing form was easy. One piece in box two wasn't my color, but exchange was free — they shipped a swap within two days.",
-  },
-  {
-    name: "Jake B.",
-    badge: "Member · 1 quarter",
-    stars: 5,
-    title: "Way more than I expected.",
-    body: "Opened the box, saw the leather belt, then the polo, then a yardage book. Felt like I'd ordered $400 of stuff.",
-  },
-  {
-    name: "Pete H.",
-    badge: "Member · 5 quarters",
-    stars: 5,
-    title: "Curation only gets better.",
-    body: "Started with a few I'd never heard of. Now half my closet is from labels Mully introduced me to. Easy renewal.",
-  },
-];
-
-function Stars({ n, small }: { n: number; small?: boolean }) {
-  const size = small ? "h-3 w-3" : "h-4 w-4";
-  return (
-    <div className="inline-flex items-center gap-0.5">
-      {[1, 2, 3, 4, 5].map((i) => (
-        <svg
-          key={i}
-          className={`${size} ${i <= n ? "text-ember" : "text-charcoal/20"}`}
-          viewBox="0 0 24 24"
-          fill="currentColor"
-        >
-          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 22 12 18.56 5.82 22 7 14.14l-5-4.87 6.91-1.01L12 2z" />
-        </svg>
-      ))}
-    </div>
-  );
-}
 
 export function ReviewsBlock() {
   return (
@@ -237,64 +170,46 @@ export function ReviewsBlock() {
             Member reviews
           </div>
           <h2 className="font-serif text-2xl sm:text-3xl text-forest">
-            What 1,200+ members say.
+            What members say.
           </h2>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Rating summary card */}
-          <div className="lg:col-span-1">
-            <div className="bg-bone rounded-lg border border-forest/15 p-6 sticky top-24">
-              <div className="flex items-baseline gap-2">
-                <div className="font-serif text-5xl text-forest">4.9</div>
-                <div className="text-sm text-charcoal/60">out of 5</div>
-              </div>
-              <Stars n={5} />
-              <div className="text-xs text-charcoal/60 mt-2">
-                1,247 verified member reviews
-              </div>
-              <div className="mt-5 space-y-2">
-                {RATING_HISTOGRAM.map((r) => (
-                  <div key={r.stars} className="flex items-center gap-2 text-xs">
-                    <span className="text-charcoal/70 w-10 shrink-0">
-                      {r.stars} star
-                    </span>
-                    <div className="flex-1 h-2 bg-charcoal/10 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-ember"
-                        style={{ width: `${r.pct}%` }}
-                      />
-                    </div>
-                    <span className="text-charcoal/60 w-8 text-right">
-                      {r.pct}%
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Reviews grid */}
-          <div className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {REVIEWS.map((r) => (
-              <div
-                key={r.name}
-                className="bg-bone rounded-lg border border-forest/10 p-5"
-              >
-                <Stars n={r.stars} small />
-                <div className="font-serif text-base text-forest mt-2">
-                  {r.title}
-                </div>
-                <p className="text-sm text-charcoal/80 mt-2 leading-relaxed">
-                  {r.body}
-                </p>
-                <div className="text-[11px] text-charcoal/55 mt-3 pt-3 border-t border-forest/10">
-                  {r.name} · {r.badge}
-                </div>
-              </div>
-            ))}
-          </div>
+        {/*
+          Junip storewide review section. data-reviews-type="all" pulls
+          product reviews from every product in the store (incl. both the
+          Reserve Access and Member products) plus any store-level reviews.
+          data-show-summary renders Junip's own rating histogram at the top.
+        */}
+        <div className="junip-reviews-frame">
+          <span
+            className="junip-review-section"
+            data-layout="grid"
+            data-reviews-type="all"
+            data-show-summary="true"
+            data-reviews-count="12"
+          >
+            <span className="junip-review-section-wrapper" />
+          </span>
         </div>
+
+        {/*
+          Hidden product-id anchors so Junip can also surface per-product
+          context if we later swap in `junip-product-review` widgets.
+          Reserve Access: 8501257175232
+          Member:         8501257044160
+        */}
+        <span
+          className="junip-product-review"
+          data-product-id="8501257175232"
+          aria-hidden="true"
+          style={{ display: "none" }}
+        />
+        <span
+          className="junip-product-review"
+          data-product-id="8501257044160"
+          aria-hidden="true"
+          style={{ display: "none" }}
+        />
       </div>
     </section>
   );

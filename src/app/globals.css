@@ -1596,3 +1596,32 @@ input:focus-visible {
     animation: none;
   }
 }
+
+/* ─── Junip Reviews widget styling — tone widget to brand palette ─── */
+/*
+  Junip's widget renders in a Shadow DOM. The :where(...) selectors below
+  use Junip's documented CSS custom properties to skin the widget. Anything
+  not exposed as a CSS var has to be left at Junip's defaults — that's fine
+  because their defaults are already clean.
+  Reference: https://help.junip.co/en/articles/how-to-customize-your-on-site-review-stars-through-css
+*/
+.junip-reviews-frame {
+  --junip-color-primary: #1f3a2f;        /* forest */
+  --junip-color-text: #1a1a1a;
+  --junip-color-text-secondary: rgba(26, 26, 26, 0.65);
+  --junip-color-stars: #d96a2c;          /* ember */
+  --junip-color-background: #f7f3eb;     /* bone */
+  --junip-color-background-secondary: #efe8dc; /* bone-dark */
+  --junip-color-border: rgba(31, 58, 47, 0.12);
+  --junip-color-button-primary-background: #1f3a2f;
+  --junip-color-button-primary-text: #f7f3eb;
+  --junip-font-family: var(--font-inter, "Inter", system-ui, sans-serif);
+  --junip-heading-font-family: var(--font-playfair, "Playfair Display", serif);
+}
+
+/* Make the widget container breathe inside our sections */
+.junip-reviews-frame .junip-review-section,
+.junip-reviews-frame .junip-review-section-wrapper {
+  display: block;
+  width: 100%;
+}
