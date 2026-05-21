@@ -9,6 +9,8 @@ import { isAllowedAdminEmail } from "@/lib/adminEmailAllowlist";
 
 const NAV_LINKS = [
   { href: "/admin", label: "Overview", exact: true },
+  { href: "/customers", label: "Customers" },
+  { href: "/ops", label: "Ops" },
   { href: "/admin/users", label: "Users" },
   { href: "/admin/gifts", label: "Gifts" },
   { href: "/admin/sequences", label: "Sequences" },

@@ -19,6 +19,30 @@
     {
       "path": "/api/gifts/post-first-shipment",
       "schedule": "45 * * * *"
+    },
+    {
+      "path": "/api/admin/cron/junip-snapshot",
+      "schedule": "30 11 * * *"
+    },
+    {
+      "path": "/api/admin/cron/google-ads-spend",
+      "schedule": "45 11 * * *"
+    },
+    {
+      "path": "/api/admin/cron/plaid-pull",
+      "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/admin/cron/cash-sheet-pull",
+      "schedule": "15 12 * * *"
+    },
+    {
+      "path": "/api/admin/cron/traffic-pull",
+      "schedule": "30 12 * * *"
+    },
+    {
+      "path": "/api/admin/cron/weekly-rollup",
+      "schedule": "0 18 * * 0"
     }
   ]
 }
