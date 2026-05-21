@@ -5,6 +5,17 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useMembership } from "@/app/context/MembershipContext";
 
+// Globally-typed gtag shim so we can call window.gtag(...) without TS errors.
+declare global {
+  interface Window {
+    gtag?: (
+      command: "event",
+      eventName: string,
+      params?: Record<string, unknown>
+    ) => void;
+  }
+}
+
 /* ═══════════════════════════════════════════
    AUTH CALLBACK PAGE
    Handles the return from Shopify checkout.
@@ -15,6 +26,42 @@ import { useMembership } from "@/app/context/MembershipContext";
 export default function AuthCallbackPage() {
   const router = useRouter();
   const { isSignedIn, authLoading } = useMembership();
+
+  // Fire Google Ads purchase conversion client-side. The server-side
+  // orders-paid webhook also fires — both share the same transaction_id
+  // (mully_txn_id, set on the LP and round-tripped via Shopify note_attributes)
+  // so Google Ads dedupes automatically.
+  useEffect(() => {
+    try {
+      const conversionId =
+        process.env.NEXT_PUBLIC_GOOGLE_ADS_CONVERSION_ID || "";
+      const purchaseLabel =
+        process.env.NEXT_PUBLIC_GOOGLE_ADS_LABEL_PURCHASE || "";
+      if (!conversionId || !purchaseLabel) return;
+      if (typeof window === "undefined" || typeof window.gtag !== "function") return;
+
+      // Prevent double-fire on re-mounts / strict-mode double-invokes.
+      const FIRED_KEY = "mully_ga_conv_fired";
+      if (sessionStorage.getItem(FIRED_KEY)) return;
+
+      const txnId =
+        localStorage.getItem("mully_pending_txn_id") ||
+        `mully-callback-${Date.now()}`;
+
+      window.gtag("event", "conversion", {
+        send_to: `${conversionId}/${purchaseLabel}`,
+        value: 1.0,
+        currency: "USD",
+        transaction_id: txnId,
+      });
+
+      sessionStorage.setItem(FIRED_KEY, "1");
+      // Clear the pending id so the next checkout generates a fresh one.
+      localStorage.removeItem("mully_pending_txn_id");
+    } catch {
+      // Never let analytics break the auth callback flow.
+    }
+  }, []);
 
   // Redirect unauthenticated visitors to login — they came back from Shopify checkout
   useEffect(() => {

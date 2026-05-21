@@ -1,5 +1,9 @@
 import { SHOPIFY_MEMBERSHIP_PLANS } from "./membershipConfig";
 import { buildCheckoutOriginAttributes } from "./shopifyCheckoutOrigin";
+import {
+  getStoredAttribution,
+  attributionToCartAttributes,
+} from "./attribution";
 
 export interface CreateMembershipCheckoutOptions {
   /**
@@ -41,8 +45,29 @@ export async function createMembershipCheckout(
 
   const returnPath = options.returnPath ?? "/auth/callback";
   const returnTo = `${window.location.origin}${returnPath}`;
+  // Pull stored attribution (gclid/gbraid/wbraid/utm_*) from cookie/localStorage
+  // so it lands in order.note_attributes for the orders-paid webhook to use
+  // when firing the Google Ads / Meta CAPI server-side conversion.
+  const attribution = getStoredAttribution();
+  // Generate a stable transaction_id BEFORE checkout so client (/auth/callback)
+  // and server (orders-paid webhook) can both fire the Google Ads conversion
+  // with the same transaction_id — Google dedupes automatically.
+  const txnId = (() => {
+    try {
+      const fresh =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `mully-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      window.localStorage.setItem("mully_pending_txn_id", fresh);
+      return fresh;
+    } catch {
+      return `mully-${Date.now()}`;
+    }
+  })();
   const attributes = [
     ...buildCheckoutOriginAttributes(returnTo),
+    ...attributionToCartAttributes(attribution),
+    { key: "mully_txn_id", value: txnId },
     { key: "new_user", value: "true" },
     ...(options.attributes ?? []),
   ];

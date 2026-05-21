@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useState } from "react";
 import { createMembershipCheckout } from "@/lib/shopifyCheckout";
 import { trackEvent } from "@/lib/tracking";
+import { captureAttributionFromUrl } from "@/lib/attribution";
 import { GlassHeader } from "@/app/components/ClientComponents";
 import { LP_GALLERY } from "../_shared/products";
 import {
@@ -41,6 +42,9 @@ export default function SubscriptionLPClient() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Persist ?gclid / ?utm_* into localStorage + cookie so they survive
+    // the hop to Shopify checkout and back to /auth/callback.
+    captureAttributionFromUrl();
     trackEvent("lp_subscription_view");
   }, []);
 

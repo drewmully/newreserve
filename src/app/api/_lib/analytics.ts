@@ -212,10 +212,15 @@ async function fireGoogleAds(event: AnalyticsEvent): Promise<void> {
   if (event.event_name === "purchase") {
     const value = (props.value as number) ?? 0;
     const currency = (props.currency as string) ?? "USD";
-    const orderId = props.order_id as string | undefined;
+    // Prefer explicit transaction_id (set on LP → carried through cart attrs)
+    // so the client-side gtag fire on /auth/callback and this server-side
+    // fire share the same id and Google dedupes them automatically.
+    const transactionId =
+      (props.transaction_id as string | undefined) ??
+      (props.order_id as string | undefined);
     url.searchParams.set("value", String(value));
     url.searchParams.set("currency_code", currency);
-    if (orderId) url.searchParams.set("transaction_id", orderId);
+    if (transactionId) url.searchParams.set("transaction_id", transactionId);
   }
 
   await fetch(url.toString(), { method: "GET" });

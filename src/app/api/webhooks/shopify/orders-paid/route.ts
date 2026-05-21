@@ -268,12 +268,21 @@ export async function POST(request: NextRequest) {
     email ??
     (shopifyCustomerId ? `shopify-${shopifyCustomerId}` : `shopify-${order.id}`);
 
-  // Pull the ad-click attribution we captured at signup so the purchase
-  // conversion can be tied back to its original Google Ads / Meta click.
+  // Pull the ad-click attribution so the purchase conversion can be tied
+  // back to its original Google Ads / Meta click. Fallback chain:
+  //   1. order.note_attributes  (set on LP via attribution.ts → cart attrs)
+  //   2. purchaseUserDoc.signup_utm  (legacy: captured at user signup)
   const signupUtm = (purchaseUserDoc?.data()?.signup_utm ?? null) as
     | Record<string, unknown>
     | null;
+  const orderAttr = (key: string): string | undefined => {
+    const found = order.note_attributes?.find((a) => a.name === key);
+    const v = found?.value;
+    return typeof v === "string" && v.length > 0 ? v : undefined;
+  };
   const utmString = (key: string): string | undefined => {
+    const fromOrder = orderAttr(key);
+    if (fromOrder) return fromOrder;
     const v = signupUtm?.[key];
     return typeof v === "string" && v.length > 0 ? v : undefined;
   };
@@ -294,6 +303,10 @@ export async function POST(request: NextRequest) {
     properties: {
       order_id: String(order.order_number),
       shopify_order_id: String(order.id),
+      // mully_txn_id is set on the LP at cart-creation time and round-trips
+      // through Shopify in note_attributes. Using it as transaction_id lets
+      // the client-side gtag fire on /auth/callback dedupe against this one.
+      transaction_id: orderAttr("mully_txn_id") ?? String(order.order_number),
       shopify_customer_id: shopifyCustomerId,
       reserve_user_id: firebaseUid,
       value,
