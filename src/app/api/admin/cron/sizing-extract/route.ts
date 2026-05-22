@@ -153,8 +153,9 @@ export async function GET(req: NextRequest) {
     const sb = getSupabaseService();
 
     // 1) Pull all line items that have a non-null properties payload.
-    //    Page through with range — could be tens of thousands.
-    const PAGE = 5000;
+    //    PostgREST caps each request at 1000 rows by default; we paginate
+    //    explicitly until we get a short page. Always order so paging is stable.
+    const PAGE = 1000;
     let from = 0;
     const lineItems: LineRow[] = [];
     while (true) {
@@ -162,6 +163,7 @@ export async function GET(req: NextRequest) {
         .from("order_line_items")
         .select("order_id,properties")
         .not("properties", "is", null)
+        .order("id", { ascending: true })
         .range(from, from + PAGE - 1);
       if (error) throw new Error(`line items page: ${error.message}`);
       if (!data || data.length === 0) break;
