@@ -1,10 +1,9 @@
 /**
  * GET /api/admin/cron/orders-backfill?since=2021-01-01
  *
- * All-time (or windowed) backfill of `order_line_items` from Shopify Admin
- * via bulk operations. The `orders` table is already maintained by another
- * ingestion path — we do NOT touch it; we just link line items to existing
- * order rows via order_id = orders.id (which equals the Shopify numeric id).
+ * All-time (or windowed) backfill of `orders` + `order_line_items` from Shopify
+ * Admin via bulk operations. Orders are upserted first (so subsequent line
+ * items always find their parent), then line items in batches.
  *
  * Default since = '2021-01-01' (covers earliest known order 2021-04-27).
  * Override with ?since=YYYY-MM-DD or ?since=ISO.
@@ -47,14 +46,25 @@ function buildBulkOrdersQuery(sinceIso: string): string {
         processedAt
         cancelledAt
         updatedAt
-        currentTotalPriceSet { shopMoney { amount } }
-        totalRefundedSet      { shopMoney { amount } }
+        currentTotalPriceSet     { shopMoney { amount currencyCode } }
+        currentSubtotalPriceSet  { shopMoney { amount } }
+        totalShippingPriceSet    { shopMoney { amount } }
+        currentTotalTaxSet       { shopMoney { amount } }
+        totalDiscountsSet        { shopMoney { amount } }
+        totalRefundedSet         { shopMoney { amount } }
         displayFinancialStatus
         displayFulfillmentStatus
         email
         phone
+        note
+        sourceName
+        riskLevel
+        discountCode
         customer { id }
         tags
+        shippingLine { title }
+        shippingAddress { city province country }
+        billingAddress  { city province country }
         lineItems {
           edges {
             node {
@@ -81,7 +91,7 @@ function buildBulkOrdersQuery(sinceIso: string): string {
 }`.trim();
 }
 
-interface MoneySet { shopMoney: { amount: string } }
+interface MoneySet { shopMoney: { amount: string; currencyCode?: string } }
 interface BulkOrderNode {
   __typename?: "Order";
   id: string;                                      // gid://shopify/Order/<n>
@@ -91,13 +101,28 @@ interface BulkOrderNode {
   cancelledAt?: string | null;
   updatedAt?: string;
   currentTotalPriceSet?: MoneySet;
+  currentSubtotalPriceSet?: MoneySet;
+  totalShippingPriceSet?: MoneySet;
+  currentTotalTaxSet?: MoneySet;
+  totalDiscountsSet?: MoneySet;
   totalRefundedSet?: MoneySet;
   displayFinancialStatus?: string;
   displayFulfillmentStatus?: string;
   email?: string | null;
   phone?: string | null;
+  note?: string | null;
+  sourceName?: string | null;
+  riskLevel?: string | null;
+  discountCode?: string | null;
   customer?: { id: string } | null;
   tags?: string[];
+  shippingLine?: { title?: string | null } | null;
+  shippingAddress?: { city?: string | null; province?: string | null; country?: string | null } | null;
+  billingAddress?: { city?: string | null; province?: string | null; country?: string | null } | null;
+}
+
+function money(m: MoneySet | undefined | null): string | null {
+  return m?.shopMoney?.amount ?? null;
 }
 interface BulkLineItemNode {
   __typename?: "LineItem";
@@ -140,29 +165,34 @@ export async function GET(req: NextRequest) {
   const result = await withJobRun("orders-backfill", async ({ bumpRows, setMeta, setWatermark }) => {
     const sb = getSupabaseService();
 
-    // Existing orders are keyed by orders.id which IS the Shopify numeric order id.
-    // Build a Set of known IDs so we can skip line items whose parent order
-    // isn't (yet) in Supabase.
-    const { data: existingOrders } = await sb
-      .from("orders")
-      .select("id");
-    const knownOrderIds = new Set<string>();
-    if (existingOrders) {
-      for (const r of existingOrders) knownOrderIds.add(String(r.id));
-    }
-
-    // 2) Bulk query
+    // 1) Bulk query
     const bulk = await runBulkQuery(buildBulkOrdersQuery(since));
     setWatermark(`since=${since},op=${bulk.operationId}`);
     setMeta({ bulk_object_count: bulk.objectCount, since });
 
-    // 3) Stream JSONL. Orders come before their children, so we can flush
-    //    orders first, then process line items in a second small batch.
+    // 2) Two-pass stream:
+    //    Pass A: orders only — upsert into `orders`. Track which order_ids are
+    //            present so line items in pass B always link to a known parent.
+    //    Pass B: line items only — upsert into `order_line_items`.
+    //    JSONL doesn't guarantee order ordering, so we stream twice.
     const BATCH = 500;
+    const knownOrderIds = new Set<string>();
+    let ordersBuf: Array<Record<string, unknown>> = [];
+    let totalOrders = 0;
     let lineItemsBuf: Array<Record<string, unknown>> = [];
     let totalLines = 0;
     let orphanCount = 0;
     const orphanSamples: string[] = [];
+
+    async function flushOrders() {
+      if (ordersBuf.length === 0) return;
+      const { error } = await sb
+        .from("orders")
+        .upsert(ordersBuf, { onConflict: "id" });
+      if (error) throw new Error(`orders upsert: ${error.message}`);
+      totalOrders += ordersBuf.length;
+      ordersBuf = [];
+    }
 
     async function flushLineItems() {
       if (lineItemsBuf.length === 0) return;
@@ -174,8 +204,54 @@ export async function GET(req: NextRequest) {
       lineItemsBuf = [];
     }
 
+    // Pass A — orders
     await streamJsonl<BulkRow>(bulk.jsonlUrl, async (row) => {
-      if (isLineItem(row)) {
+      if (isLineItem(row)) return;
+      const ord = row as BulkOrderNode;
+      const orderShopifyId = shopifyNumericId(ord.id);
+      if (!orderShopifyId) return;
+      const createdAt = ord.createdAt ?? new Date().toISOString();
+      const isSub = (ord.tags ?? []).some((t) => /subscription/i.test(t));
+      ordersBuf.push({
+        id: Number(orderShopifyId),
+        name: ord.name ?? `#${orderShopifyId}`,
+        email: ord.email ?? null,
+        financial_status: ord.displayFinancialStatus ?? null,
+        fulfillment_status: ord.displayFulfillmentStatus ?? null,
+        total: money(ord.currentTotalPriceSet),
+        subtotal: money(ord.currentSubtotalPriceSet),
+        shipping_amount: money(ord.totalShippingPriceSet),
+        taxes: money(ord.currentTotalTaxSet),
+        discount_code: ord.discountCode ?? null,
+        discount_amount: money(ord.totalDiscountsSet),
+        refunded_amount: money(ord.totalRefundedSet) ?? 0,
+        currency: ord.currentTotalPriceSet?.shopMoney?.currencyCode ?? "USD",
+        shipping_method: ord.shippingLine?.title ?? null,
+        tags: (ord.tags ?? []).join(", ") || null,
+        source: ord.sourceName ?? null,
+        risk_level: ord.riskLevel ?? null,
+        notes: ord.note ?? null,
+        cancelled_at: ord.cancelledAt ?? null,
+        paid_at: ord.processedAt ?? null,
+        fulfilled_at: null,
+        created_at: createdAt,
+        is_subscription: isSub,
+        shipping_city: ord.shippingAddress?.city ?? null,
+        shipping_province: ord.shippingAddress?.province ?? null,
+        shipping_country: ord.shippingAddress?.country ?? null,
+        billing_city: ord.billingAddress?.city ?? null,
+        billing_province: ord.billingAddress?.province ?? null,
+        billing_country: ord.billingAddress?.country ?? null,
+      });
+      knownOrderIds.add(orderShopifyId);
+      if (ordersBuf.length >= BATCH) await flushOrders();
+    });
+    await flushOrders();
+
+    // Pass B — line items
+    await streamJsonl<BulkRow>(bulk.jsonlUrl, async (row) => {
+      if (!isLineItem(row)) return;
+      {
         const li = row as BulkLineItemNode;
         const parentShopifyOrderId = shopifyNumericId(li.__parentId);
         if (!parentShopifyOrderId) return;
@@ -214,26 +290,19 @@ export async function GET(req: NextRequest) {
           raw: li,
         });
         if (lineItemsBuf.length >= BATCH) await flushLineItems();
-        return;
-      }
-      // We don't write orders here — that pipeline is owned elsewhere.
-      const ord = row as BulkOrderNode;
-      const orderShopifyId = shopifyNumericId(ord.id);
-      if (orderShopifyId && !knownOrderIds.has(orderShopifyId)) {
-        // Order missing from Supabase — its line items will become orphans.
-        // Counted via orphanCount when their children come through.
       }
     });
-
     await flushLineItems();
 
     setMeta({
       orphans: orphanCount,
       orphan_sample_order_ids: orphanSamples,
+      orders_upserted: totalOrders,
     });
-    bumpRows(bulk.objectCount, totalLines);
+    bumpRows(bulk.objectCount, totalOrders + totalLines);
     return {
       since,
+      orders_upserted: totalOrders,
       line_items_upserted: totalLines,
       orphans: orphanCount,
       orphan_sample_order_ids: orphanSamples,
