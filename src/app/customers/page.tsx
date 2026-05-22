@@ -37,6 +37,9 @@ type LineItem = {
   quantity: number | null;
   price: number | null;
   selling_plan_name: string | null;
+  variant_title: string | null;
+  product_type: string | null;
+  properties: Record<string, string | null> | null;
 };
 type OrderRow = {
   id: number;
@@ -334,15 +337,37 @@ function Dossier({ dossier }: { dossier: Dossier }) {
                 {[o.shipping_city, o.shipping_province].filter(Boolean).join(", ") || "—"}
               </div>
               {o.line_items.length > 0 && (
-                <ul className="mt-1 pl-3 text-xs text-charcoal/70 space-y-0.5">
-                  {o.line_items.map((li, i) => (
-                    <li key={i}>
-                      {li.quantity || 1}× {li.title || li.sku || "(item)"}
-                      {li.sku ? (
-                        <span className="font-mono text-charcoal/40"> · {li.sku}</span>
-                      ) : null}
-                    </li>
-                  ))}
+                <ul className="mt-1 pl-3 text-xs text-charcoal/70 space-y-1">
+                  {o.line_items.map((li, i) => {
+                    const propEntries = li.properties
+                      ? Object.entries(li.properties).filter(
+                          ([, v]) => v != null && String(v).trim() !== "",
+                        )
+                      : [];
+                    return (
+                      <li key={i}>
+                        <div>
+                          {li.quantity || 1}× {li.title || li.sku || "(item)"}
+                          {li.variant_title ? (
+                            <span className="text-charcoal/50"> — {li.variant_title}</span>
+                          ) : null}
+                          {li.sku ? (
+                            <span className="font-mono text-charcoal/40"> · {li.sku}</span>
+                          ) : null}
+                        </div>
+                        {propEntries.length > 0 && (
+                          <div className="pl-3 mt-0.5 flex flex-wrap gap-x-3 gap-y-0 text-[11px] text-charcoal/60">
+                            {propEntries.map(([k, v]) => (
+                              <span key={k}>
+                                <span className="text-charcoal/40">{k}:</span>{" "}
+                                <span className="text-charcoal/80">{String(v)}</span>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
               {o.notes && (

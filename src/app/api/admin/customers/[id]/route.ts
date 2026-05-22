@@ -62,7 +62,7 @@ export async function GET(
       const orderIds = orderRows.map((o) => o.id);
       const { data: items } = await svc
         .from("order_line_items")
-        .select("order_id,sku,product_id,variant_id,selling_plan_name,quantity,price,title,vendor")
+        .select("order_id,sku,product_id,variant_id,selling_plan_name,quantity,price,title,vendor,variant_title,product_type,properties")
         .in("order_id", orderIds);
       lineItems = items || [];
     }

@@ -41,6 +41,14 @@
       "schedule": "30 12 * * *"
     },
     {
+      "path": "/api/admin/cron/sizing-extract",
+      "schedule": "30 17 * * 0"
+    },
+    {
+      "path": "/api/admin/cron/firestore-sourcing",
+      "schedule": "45 17 * * 0"
+    },
+    {
       "path": "/api/admin/cron/weekly-rollup",
       "schedule": "0 18 * * 0"
     }

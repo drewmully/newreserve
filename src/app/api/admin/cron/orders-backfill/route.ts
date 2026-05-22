@@ -66,11 +66,12 @@ function buildBulkOrdersQuery(sinceIso: string): string {
               taxable
               requiresShipping
               fulfillmentStatus
-              variant { id }
-              product { id }
+              variant { id title }
+              product { id productType }
               originalUnitPriceSet { shopMoney { amount } }
               totalDiscountSet     { shopMoney { amount } }
               sellingPlan { name sellingPlanId }
+              customAttributes { key value }
             }
           }
         }
@@ -109,11 +110,12 @@ interface BulkLineItemNode {
   taxable?: boolean;
   requiresShipping?: boolean;
   fulfillmentStatus?: string | null;
-  variant?: { id: string | null } | null;
-  product?: { id: string | null } | null;
+  variant?: { id: string | null; title?: string | null } | null;
+  product?: { id: string | null; productType?: string | null } | null;
   originalUnitPriceSet?: MoneySet;
   totalDiscountSet?: MoneySet;
   sellingPlan?: { name: string | null; sellingPlanId: string | null } | null;
+  customAttributes?: Array<{ key: string; value: string | null }> | null;
 }
 
 type BulkRow = (BulkOrderNode | BulkLineItemNode) & Record<string, unknown>;
@@ -182,11 +184,21 @@ export async function GET(req: NextRequest) {
           if (orphanSamples.length < 10) orphanSamples.push(parentShopifyOrderId);
           return;
         }
+        // Flatten customAttributes into a single { key: value } jsonb object so
+        // downstream queries can filter directly on common keys (Shirt Size,
+        // Glove Size, Style, Gender, Glove Hand). Multiple attributes with the
+        // same key are collapsed; last wins.
+        const props: Record<string, string | null> = {};
+        for (const a of li.customAttributes ?? []) {
+          if (a && typeof a.key === "string") props[a.key] = a.value;
+        }
         lineItemsBuf.push({
           order_id: Number(parentShopifyOrderId),
           shopify_line_id: li.id,
           product_id: shopifyNumericId(li.product?.id ?? null),
           variant_id: shopifyNumericId(li.variant?.id ?? null),
+          variant_title: li.variant?.title ?? null,
+          product_type: li.product?.productType ?? null,
           sku: li.sku ?? null,
           title: li.name ?? null,
           vendor: li.vendor ?? null,
@@ -198,6 +210,7 @@ export async function GET(req: NextRequest) {
           selling_plan_id: li.sellingPlan?.sellingPlanId ?? null,
           selling_plan_name: li.sellingPlan?.name ?? null,
           taxable: li.taxable ?? null,
+          properties: Object.keys(props).length > 0 ? props : null,
           raw: li,
         });
         if (lineItemsBuf.length >= BATCH) await flushLineItems();
