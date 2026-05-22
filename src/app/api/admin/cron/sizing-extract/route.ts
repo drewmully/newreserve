@@ -265,7 +265,7 @@ export async function GET(req: NextRequest) {
     }
 
     const now = new Date().toISOString();
-    const SIZING_TAG = "[shopify-line-properties]";
+    const SIZING_TAG = "shopify-line-properties";
     const upserts: Record<string, unknown>[] = [];
     for (const [cid, agg] of byCustomer.entries()) {
       const prev = existing.get(cid);
@@ -284,14 +284,14 @@ export async function GET(req: NextRequest) {
       if (merged) {
         // Strip any prior block we wrote, preserve the rest.
         const re = new RegExp(
-          `(^|\\n)${SIZING_TAG}[\\s\\S]*?(?=(\\n\\[|$))`,
+          `(^|\\n)\\[${SIZING_TAG}\\][\\s\\S]*?(?=(\\n\\[|$))`,
           "g",
         );
         merged = merged.replace(re, "").trim();
         if (merged.length === 0) merged = null;
       }
       if (noteBlock) {
-        const tagged = `${SIZING_TAG}\n${noteBlock}`;
+        const tagged = `[${SIZING_TAG}]\n${noteBlock}`;
         merged = merged ? `${merged}\n\n${tagged}` : tagged;
       }
 
