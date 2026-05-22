@@ -49,10 +49,10 @@ interface FactsRow {
   size_bottom: string | null;
   size_shoe: string | null;
   fit_notes: string | null;
-  color_preferences: string | null;
-  colors_avoid: string | null;
-  brand_likes: string | null;
-  brand_dislikes: string | null;
+  color_preferences: string[] | null;
+  colors_avoid: string[] | null;
+  brand_likes: string[] | null;
+  brand_dislikes: string[] | null;
   style_tags: string[] | null;
   sourcing_notes: string | null;
   sourcing_summary: string | null;
@@ -67,10 +67,11 @@ interface SourcingHit {
   style_tags: string[];
   // Free-form notes captured verbatim for human review.
   notes: Record<string, string>;
-  // Targeted fields with their own customer_facts columns:
+  // Targeted fields with their own customer_facts columns (which are
+  // Postgres text[] arrays, not text):
   fit_notes_extra: string[];
-  color_preferences: string | null;
-  brand_likes: string | null;
+  color_preferences: string[];
+  brand_likes: string[];
 }
 
 function norm(v: unknown): string | null {
@@ -136,8 +137,8 @@ function extractFromDoc(
     style_tags: [],
     notes: {},
     fit_notes_extra: [],
-    color_preferences: null,
-    brand_likes: null,
+    color_preferences: [],
+    brand_likes: [],
   };
 
   // -------- Sizes (nested paths first, then flat aliases)
@@ -191,21 +192,26 @@ function extractFromDoc(
   );
   hit.style_tags = Array.from(new Set(styleVals));
 
-  // -------- Color preference (single string from style.color_preference, or array)
-  const colorPref =
-    firstNorm(d, ["style.color_preference", "colorPreferences", "color_preferences"]) ||
-    null;
-  const colorArr = firstArr(d, ["colorsLiked", "color_preferences_list"]);
-  hit.color_preferences = colorPref
-    ? colorArr.length > 0
-      ? [colorPref, ...colorArr].join(", ")
-      : colorPref
-    : colorArr.length > 0
-      ? colorArr.join(", ")
-      : null;
+  // -------- Color preferences (Postgres text[] array)
+  const colorSet = new Set<string>();
+  const colorPref = firstNorm(d, [
+    "style.color_preference",
+    "colorPreference",
+    "color_preference",
+  ]);
+  if (colorPref) colorSet.add(colorPref);
+  for (const c of firstArr(d, [
+    "colorsLiked",
+    "color_preferences",
+    "colorPreferences",
+    "color_preferences_list",
+  ])) {
+    colorSet.add(c);
+  }
+  hit.color_preferences = Array.from(colorSet);
 
-  // -------- Brand interest
-  const brandArr = firstArr(d, [
+  // -------- Brand interest (Postgres text[] array)
+  hit.brand_likes = firstArr(d, [
     "style.brand_interest",
     "brandInterest",
     "brand_interest",
@@ -213,7 +219,6 @@ function extractFromDoc(
     "brand_likes",
     "brandsLiked",
   ]);
-  hit.brand_likes = brandArr.length > 0 ? brandArr.join(", ") : null;
 
   // -------- Free-form notes block (everything interesting that doesn't map to
   //          a typed column)
@@ -357,8 +362,8 @@ export async function GET(req: NextRequest) {
             hit.size_bottom ||
             hit.size_shoe ||
             hit.style_tags.length > 0 ||
-            hit.color_preferences ||
-            hit.brand_likes ||
+            hit.color_preferences.length > 0 ||
+            hit.brand_likes.length > 0 ||
             Object.keys(hit.notes).length > 0;
           if (!hasAny) continue;
 
@@ -432,8 +437,8 @@ export async function GET(req: NextRequest) {
       let size_bottom = prev?.size_bottom ?? null;
       let size_shoe = prev?.size_shoe ?? null;
       const styleSet = new Set<string>(prev?.style_tags ?? []);
-      let color_preferences = prev?.color_preferences ?? null;
-      let brand_likes = prev?.brand_likes ?? null;
+      const colorSet2 = new Set<string>(prev?.color_preferences ?? []);
+      const brandSet = new Set<string>(prev?.brand_likes ?? []);
       let sourcing = prev?.sourcing_notes ?? null;
 
       for (const col of ORDER) {
@@ -443,9 +448,8 @@ export async function GET(req: NextRequest) {
         if (!size_bottom && hit.size_bottom) size_bottom = hit.size_bottom;
         if (!size_shoe && hit.size_shoe) size_shoe = hit.size_shoe;
         for (const s of hit.style_tags) styleSet.add(s);
-        if (!color_preferences && hit.color_preferences)
-          color_preferences = hit.color_preferences;
-        if (!brand_likes && hit.brand_likes) brand_likes = hit.brand_likes;
+        for (const c of hit.color_preferences) colorSet2.add(c);
+        for (const b of hit.brand_likes) brandSet.add(b);
         const block = notesToText(hit.notes);
         if (block) {
           sourcing = mergeTaggedNotes(sourcing, `firestore-${col}`, block);
@@ -458,8 +462,8 @@ export async function GET(req: NextRequest) {
         size_bottom,
         size_shoe,
         style_tags: Array.from(styleSet),
-        color_preferences,
-        brand_likes,
+        color_preferences: Array.from(colorSet2),
+        brand_likes: Array.from(brandSet),
         sourcing_notes: sourcing,
         sourcing_facts_updated_at: now,
         sourcing_facts_version: (prev?.sourcing_facts_version ?? 0) + 1,
