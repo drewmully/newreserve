@@ -23,7 +23,7 @@ import { getSupabaseService, withJobRun } from "@/app/api/_lib/supabaseService";
 import { runBulkQuery, streamJsonl } from "@/app/api/_lib/shopifyBulk";
 
 export const runtime = "nodejs";
-export const maxDuration = 900;
+export const maxDuration = 800;
 
 function isAuthorized(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;

@@ -30,7 +30,7 @@ import { runBulkQuery, streamJsonl } from "@/app/api/_lib/shopifyBulk";
 
 export const runtime = "nodejs";
 // Vercel Hobby caps at 60s; Pro/Enterprise can go to 900s.
-export const maxDuration = 900;
+export const maxDuration = 800;
 
 function isAuthorized(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
