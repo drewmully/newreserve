@@ -87,7 +87,19 @@ export const LP_GALLERY: Array<{
   alt: string;
   isExample?: boolean;
   fit?: "cover" | "contain";
+  // "flatlay" → cut-off-edge flat-lay shot. Renders inside the large hero
+  // with a forest-dark backdrop, soft vignette mask that feathers the
+  // clipped edges into shadow, and an editorial caption tag in the top
+  // negative space. In the thumbnail rail, falls back to plain object-cover
+  // (the center of the frame reads fine at 60px).
+  treatment?: "flatlay";
 }> = [
+  {
+    src: "/reserve-flatlay-hero.webp",
+    alt: "An editor's flat-lay of a recent Mully Reserve box on turf — Greyson tee, Rhone quarter-zip, Field Day hoodie, Will Leather wallet and yardage book, Penfold shoe bag, Cuater striped polo, and a Mully box.",
+    fit: "contain",
+    treatment: "flatlay",
+  },
   {
     src: "/reserve-founders-hero.jpg",
     alt: "A Mully Reserve box, opened — neatly folded apparel, a Mully Reserve card, a braided belt, and a striped polo.",

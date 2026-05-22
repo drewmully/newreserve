@@ -8,6 +8,7 @@ import {
   FloatingCTA,
 } from "./components/ClientComponents";
 import { AuthAwareHero, AuthAwareBottomCTA } from "./components/AuthAwareHero";
+import { ReserveHeroImage } from "./components/ReserveHeroImage";
 
 export default async function Home() {
   return (
@@ -25,12 +26,11 @@ export default async function Home() {
           {/* Mobile hero image — above headline on small screens */}
           <div className="md:hidden flex justify-center mb-3 animate-fade-up">
             <div className="relative w-full max-w-[280px] aspect-[4/5] rounded-2xl overflow-hidden bg-[#162b1e] border border-[#F5F1E8]/10 shadow-xl">
-              <Image
-                src="/reserve-founders-hero.jpg"
-                alt="Mully Reserve box with a striped polo, navy pants, and woven leather belt"
-                fill
+              <ReserveHeroImage
+                src="/reserve-flatlay-hero.webp"
+                alt="An editor's flat-lay of a recent Mully Reserve box on turf — Greyson tee, Rhone quarter-zip, Field Day hoodie, Will Leather goods, Penfold shoe bag, Cuater polo, and a Mully box."
+                treatment="flatlay"
                 sizes="280px"
-                className="object-cover"
                 priority
               />
             </div>
@@ -87,12 +87,11 @@ export default async function Home() {
           {/* RIGHT COLUMN — Desktop hero box image */}
           <div className="hidden md:flex items-center justify-center animate-fade-up-delay-2">
             <div className="relative w-full max-w-lg lg:max-w-xl aspect-[4/5] rounded-2xl overflow-hidden bg-[#162b1e] border border-[#F5F1E8]/10 shadow-2xl">
-              <Image
-                src="/reserve-founders-hero.jpg"
-                alt="Mully Reserve box with a striped polo, navy pants, and woven leather belt"
-                fill
+              <ReserveHeroImage
+                src="/reserve-flatlay-hero.webp"
+                alt="An editor's flat-lay of a recent Mully Reserve box on turf — Greyson tee, Rhone quarter-zip, Field Day hoodie, Will Leather goods, Penfold shoe bag, Cuater polo, and a Mully box."
+                treatment="flatlay"
                 sizes="(min-width: 1024px) 36rem, (min-width: 768px) 32rem, 100vw"
-                className="object-cover"
                 priority
               />
             </div>

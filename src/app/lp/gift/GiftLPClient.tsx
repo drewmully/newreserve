@@ -6,6 +6,7 @@ import { createMembershipCheckout } from "@/lib/shopifyCheckout";
 import { trackEvent } from "@/lib/tracking";
 import { captureAttributionFromUrl } from "@/lib/attribution";
 import { GlassHeader } from "@/app/components/ClientComponents";
+import { ReserveHeroImage } from "@/app/components/ReserveHeroImage";
 import { LP_GALLERY } from "../_shared/products";
 import {
   TrustBadgeStrip,
@@ -112,6 +113,8 @@ export default function GiftLPClient() {
                   onMouseEnter={() => setHeroIndex(i)}
                   onClick={() => setHeroIndex(i)}
                   className={`relative w-full aspect-square rounded-md overflow-hidden border-2 transition ${
+                    g.treatment === "flatlay" ? "bg-[#162b1e]" : ""
+                  } ${
                     heroIndex === i
                       ? "border-forest"
                       : "border-forest/15 hover:border-forest/40"
@@ -123,7 +126,7 @@ export default function GiftLPClient() {
                     alt={g.alt}
                     fill
                     sizes="60px"
-                    className="object-cover"
+                    className={g.treatment === "flatlay" ? "object-contain" : "object-cover"}
                     unoptimized
                   />
                   {g.isExample ? (
@@ -136,14 +139,15 @@ export default function GiftLPClient() {
             </div>
 
             {/* Main hero */}
+            { /* Uses ReserveHeroImage so flat-lay-treatment heroes (cut-off-edge
+               imagery with transparent top) feather into a forest backdrop. */ }
             <div className="lg:col-span-6">
               <div className="relative aspect-square bg-bone-dark/40 rounded-lg overflow-hidden border border-forest/10">
-                <Image
+                <ReserveHeroImage
                   src={hero.src}
                   alt={hero.alt}
-                  fill
+                  treatment={hero.treatment === "flatlay" ? "flatlay" : "default"}
                   sizes="(min-width: 1024px) 50vw, 100vw"
-                  className="object-cover"
                   priority
                   unoptimized
                 />
@@ -163,6 +167,8 @@ export default function GiftLPClient() {
                     type="button"
                     onClick={() => setHeroIndex(i)}
                     className={`relative aspect-square rounded-md overflow-hidden border-2 ${
+                      g.treatment === "flatlay" ? "bg-[#162b1e]" : ""
+                    } ${
                       heroIndex === i ? "border-forest" : "border-forest/15"
                     }`}
                     aria-label={`Show image ${i + 1}`}
@@ -172,7 +178,7 @@ export default function GiftLPClient() {
                       alt={g.alt}
                       fill
                       sizes="60px"
-                      className="object-cover"
+                      className={g.treatment === "flatlay" ? "object-contain" : "object-cover"}
                       unoptimized
                     />
                     {g.isExample ? (
