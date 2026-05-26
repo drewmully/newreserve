@@ -30,10 +30,18 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function isAuthorized(req: NextRequest): boolean {
-  const secret = process.env.FOUNDERS_TOKEN_SECRET;
+  const secret = (process.env.FOUNDERS_TOKEN_SECRET ?? "").trim();
   if (!secret) return false;
-  const header = req.headers.get("authorization") ?? "";
-  return header === `Bearer ${secret}`;
+  const header = (req.headers.get("authorization") ?? "").trim();
+  const provided = header.replace(/^Bearer\s+/i, "").trim();
+  if (!provided) return false;
+  // timing-safe compare via length-first guard
+  if (provided.length !== secret.length) return false;
+  let diff = 0;
+  for (let i = 0; i < secret.length; i++) {
+    diff |= secret.charCodeAt(i) ^ provided.charCodeAt(i);
+  }
+  return diff === 0;
 }
 
 export async function POST(req: NextRequest) {
