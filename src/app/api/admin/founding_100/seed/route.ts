@@ -28,47 +28,23 @@ import { FOUNDING_100_DOC_PATH } from "@/lib/foundingHundredConstants";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function isAuthorized(req: NextRequest): {
-  ok: boolean;
-  debug: Record<string, unknown>;
-} {
-  const rawSecret = process.env.FOUNDING_100_SEED_TOKEN ?? "";
-  const secret = rawSecret.trim();
+function isAuthorized(req: NextRequest): boolean {
+  const secret = (process.env.FOUNDING_100_SEED_TOKEN ?? "").trim();
   const header = (req.headers.get("authorization") ?? "").trim();
   const provided = header.replace(/^Bearer\s+/i, "").trim();
-  // Do NOT leak any characters of the secret — only length + match metadata
-  const lengthsMatch = provided.length === secret.length;
-  let charsMatch = 0;
-  const minLen = Math.min(provided.length, secret.length);
-  for (let i = 0; i < minLen; i++) {
-    if (provided.charCodeAt(i) === secret.charCodeAt(i)) charsMatch++;
-  }
-  const debug = {
-    envPresent: rawSecret.length > 0,
-    envRawLen: rawSecret.length,
-    envTrimmedLen: secret.length,
-    headerPresent: header.length > 0,
-    providedLen: provided.length,
-    lengthsMatch,
-    charsMatchCount: charsMatch,
-  };
-  if (!secret) return { ok: false, debug };
-  if (!provided) return { ok: false, debug };
-  if (provided.length !== secret.length) return { ok: false, debug };
+  if (!secret) return false;
+  if (!provided) return false;
+  if (provided.length !== secret.length) return false;
   let diff = 0;
   for (let i = 0; i < secret.length; i++) {
     diff |= secret.charCodeAt(i) ^ provided.charCodeAt(i);
   }
-  return { ok: diff === 0, debug };
+  return diff === 0;
 }
 
 export async function POST(req: NextRequest) {
-  const auth = isAuthorized(req);
-  if (!auth.ok) {
-    return NextResponse.json(
-      { ok: false, error: "Unauthorized", _debug: auth.debug },
-      { status: 401 }
-    );
+  if (!isAuthorized(req)) {
+    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
   let body: {
@@ -122,12 +98,8 @@ export async function POST(req: NextRequest) {
 
 // Also allow GET for read-only verification
 export async function GET(req: NextRequest) {
-  const auth = isAuthorized(req);
-  if (!auth.ok) {
-    return NextResponse.json(
-      { ok: false, error: "Unauthorized", _debug: auth.debug },
-      { status: 401 }
-    );
+  if (!isAuthorized(req)) {
+    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
   const snap = await adminDb.doc(FOUNDING_100_DOC_PATH).get();
   return NextResponse.json({
