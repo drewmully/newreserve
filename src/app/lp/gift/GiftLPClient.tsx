@@ -7,6 +7,7 @@ import { trackEvent } from "@/lib/tracking";
 import { captureAttributionFromUrl } from "@/lib/attribution";
 import { GlassHeader } from "@/app/components/ClientComponents";
 import { ReserveHeroImage } from "@/app/components/ReserveHeroImage";
+import FoundingHundredCard from "@/app/components/FoundingHundredCard";
 import { LP_GALLERY } from "../_shared/products";
 import {
   TrustBadgeStrip,
@@ -224,6 +225,11 @@ export default function GiftLPClient() {
                 recipient a beautiful note with a private link to confirm
                 their sizing — so the box arrives perfect, not blind-guessed.
               </p>
+
+              {/* Founding 100 — the recipient becomes a founding member,
+                  so the rangefinder ships in their first box. Hidden when
+                  sold out / inactive. */}
+              <FoundingHundredCard className="mt-5" />
 
               {/* Gift form + Price + CTA */}
               <div className="mt-5 bg-bone-dark/40 rounded-lg border border-forest/15 p-5">

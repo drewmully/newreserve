@@ -33,6 +33,10 @@ import {
   createGiftOrderDoc,
   createSizingToken,
 } from "@/lib/gifts/giftOrder";
+import {
+  claimFoundingHundred,
+  FOUNDING_100_CART_ATTR_KEY,
+} from "@/lib/foundingHundred";
 
 const LOOP_VARIANT_BY_TIER: Partial<Record<string, number>> = {
   member: 47601025122496,
@@ -415,6 +419,24 @@ export async function POST(request: NextRequest) {
       ? swapLoopSubscription(shopifyCustomerId, resolvedTier)
       : Promise.resolve();
 
+  // ── Founding 100 claim: if the cart was tagged with the gift attribute,
+  // atomically decrement the counter. Idempotent on order id (ring-buffer),
+  // so webhook retries are safe.
+  const foundingClaim = (async () => {
+    try {
+      const tagged = orderAttr(FOUNDING_100_CART_ATTR_KEY) === "true";
+      if (!tagged) return;
+      const newCount = await claimFoundingHundred(String(order.id));
+      if (newCount !== null) {
+        console.log(
+          `[orders-paid] founding_100 claim recorded for order ${order.id} → ${newCount}/100`
+        );
+      }
+    } catch (err) {
+      console.error("[orders-paid] founding_100 claim failed:", err);
+    }
+  })();
+
   // ── Gift Phase 2: persist a gift_orders doc if this purchase was a gift ──
   const giftPersist = (async () => {
     try {
@@ -468,6 +490,7 @@ export async function POST(request: NextRequest) {
     tierUpdate,
     loopSwap,
     giftPersist,
+    foundingClaim,
   ]);
 
   // Shopify expects a 200 response quickly or it will retry
