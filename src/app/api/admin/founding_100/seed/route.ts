@@ -3,8 +3,7 @@
  *
  * One-shot seeder for the Founding 100 counter document.
  *
- * Auth: requires header `Authorization: Bearer <FOUNDERS_TOKEN_SECRET>`.
- * Re-uses the existing secret so we don't need to add another env var.
+ * Auth: requires header `Authorization: Bearer <FOUNDING_100_SEED_TOKEN>`.
  *
  * Body (optional JSON):
  *   {
@@ -30,24 +29,10 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function isAuthorized(req: NextRequest): boolean {
-  const rawSecret = process.env.FOUNDERS_TOKEN_SECRET ?? "";
+  const rawSecret = process.env.FOUNDING_100_SEED_TOKEN ?? "";
   const secret = rawSecret.trim();
   const header = (req.headers.get("authorization") ?? "").trim();
   const provided = header.replace(/^Bearer\s+/i, "").trim();
-  console.log(
-    "[founding_100/seed auth]",
-    JSON.stringify({
-      hasEnvVar: rawSecret.length > 0,
-      envLen: rawSecret.length,
-      envTrimmedLen: secret.length,
-      providedLen: provided.length,
-      lengthsMatch: provided.length === secret.length,
-      envFirst4: secret.slice(0, 4),
-      envLast4: secret.slice(-4),
-      providedFirst4: provided.slice(0, 4),
-      providedLast4: provided.slice(-4),
-    })
-  );
   if (!secret) return false;
   if (!provided) return false;
   if (provided.length !== secret.length) return false;
