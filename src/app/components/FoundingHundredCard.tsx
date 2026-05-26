@@ -3,11 +3,10 @@
 /**
  * FoundingHundredCard
  *
- * Featured under-hero block for /lp/subscription and /lp/gift. Shows
- * the rangefinder image with a quiet progress tracker ("X of 100
- * reserved") and founding-member-benefit copy. Augusta-meets-Soho-House
- * tone: forest + bone palette, serif headline, hairline borders, no
- * urgency language, no FREE, no MSRP / discount framing.
+ * Compact inclusion banner placed inside the LP buy-box column. Sized
+ * to feel like a product detail (not a competing hero). Augusta-meets-
+ * Soho-House tone: forest + bone, hairline borders, no urgency, no FREE,
+ * no MSRP / discount framing.
  *
  * Hidden entirely when status.available is false (cap hit or kill
  * switch off), so the LP gracefully falls back to base messaging.
@@ -50,48 +49,37 @@ export default function FoundingHundredCard({
   const pct = Math.min(100, Math.round((status.claimed / status.cap) * 100));
 
   return (
-    <section
-      className={`bg-forest text-bone rounded-lg overflow-hidden border border-forest/20 shadow-sm ${className}`}
+    <aside
+      className={`bg-forest text-bone rounded-lg border border-forest/40 px-4 py-3.5 ${className}`}
       aria-label="Founding 100 member benefit"
     >
-      <div className="grid md:grid-cols-2 gap-0">
-        {/* Image side */}
-        <div className="relative aspect-[4/5] md:aspect-auto md:min-h-[360px] bg-forest-dark">
+      <div className="flex items-start gap-3.5">
+        {/* Small product thumbnail */}
+        <div className="relative shrink-0 w-14 h-14 rounded-md overflow-hidden bg-bone/95 border border-bone/20">
           <Image
-            src="/founding-100-hero.webp"
-            alt="Precision Pro Nexus rangefinder resting on a closed Mully Reserve box"
+            src="/founding-100-rangefinder.webp"
+            alt="Precision Pro Nexus rangefinder"
             fill
-            sizes="(max-width: 768px) 100vw, 50vw"
-            className="object-cover"
+            sizes="56px"
+            className="object-contain p-1"
             priority={false}
           />
         </div>
 
-        {/* Copy side */}
-        <div className="p-7 sm:p-9 flex flex-col justify-center">
-          <div className="text-[10px] tracking-[0.38em] uppercase font-medium text-bone/70 mb-4 flex items-center gap-2.5">
-            <span className="w-8 h-px bg-bone/25" />
+        {/* Copy + tracker */}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 text-[9.5px] tracking-[0.32em] uppercase text-bone/65">
+            <span className="w-5 h-px bg-bone/25" />
             <span>Founding 100</span>
           </div>
 
-          <h3 className="font-serif text-2xl sm:text-[28px] leading-tight text-bone">
+          <div className="mt-1 font-serif text-[15px] leading-snug text-bone">
             A rangefinder, hand-delivered with the first box.
-          </h3>
+          </div>
 
-          <p className="mt-4 text-[14px] leading-relaxed text-bone/80">
-            The first 100 Reserve Members receive a Precision Pro Nexus rangefinder, included with the opening quarterly shipment. A small thank-you for showing up early.
-          </p>
-
-          {/* Tracker */}
-          <div className="mt-7">
-            <div className="flex items-baseline justify-between text-[11px] tracking-[0.25em] uppercase text-bone/65">
-              <span>
-                {status.claimed} of {status.cap} reserved
-              </span>
-              <span>{status.remaining} remaining</span>
-            </div>
+          <div className="mt-2.5 flex items-center gap-3">
             <div
-              className="mt-2.5 h-[3px] w-full bg-bone/15 rounded-full overflow-hidden"
+              className="flex-1 h-[3px] bg-bone/15 rounded-full overflow-hidden"
               role="progressbar"
               aria-valuenow={status.claimed}
               aria-valuemin={0}
@@ -102,13 +90,12 @@ export default function FoundingHundredCard({
                 style={{ width: `${pct}%` }}
               />
             </div>
-          </div>
-
-          <div className="mt-6 text-[10px] tracking-[0.28em] uppercase text-bone/55">
-            Reserved for founding members. Attaches automatically at checkout.
+            <div className="shrink-0 text-[10px] tracking-[0.22em] uppercase text-bone/75 whitespace-nowrap">
+              {status.claimed} / {status.cap} reserved
+            </div>
           </div>
         </div>
       </div>
-    </section>
+    </aside>
   );
 }
