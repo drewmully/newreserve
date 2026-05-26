@@ -7,6 +7,7 @@ import { trackEvent } from "@/lib/tracking";
 import { captureAttributionFromUrl } from "@/lib/attribution";
 import { GlassHeader } from "@/app/components/ClientComponents";
 import { ReserveHeroImage } from "@/app/components/ReserveHeroImage";
+import FoundingHundredCard from "@/app/components/FoundingHundredCard";
 import { LP_GALLERY } from "../_shared/products";
 import {
   TrustBadgeStrip,
@@ -203,6 +204,9 @@ export default function SubscriptionLPClient() {
                 $300+ retail value per box. Free shipping. Cancel anytime
                 after your first box.
               </p>
+
+              {/* Founding 100 — hidden when sold out / inactive. */}
+              <FoundingHundredCard className="mt-5" />
 
               {/* Price + CTA */}
               <div className="mt-5 bg-bone-dark/40 rounded-lg border border-forest/15 p-5">

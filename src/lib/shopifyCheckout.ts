@@ -4,6 +4,36 @@ import {
   getStoredAttribution,
   attributionToCartAttributes,
 } from "./attribution";
+import { FOUNDING_100_CART_ATTR_KEY } from "./foundingHundredConstants";
+
+/**
+ * Client-side pre-check for the Founding 100 rangefinder gift. We hit the
+ * same public /api/founding_100/status route the LP tracker uses (already
+ * cached at the edge for 30s) and only attach the gift line if the offer
+ * is currently available. Failure-safe: any error returns false so we
+ * never silently promise the gift when we can't verify the counter.
+ */
+async function shouldAttachFoundingHundredGift(): Promise<{
+  attach: boolean;
+  variantGid: string | null;
+}> {
+  try {
+    const res = await fetch("/api/founding_100/status", { cache: "no-store" });
+    if (!res.ok) return { attach: false, variantGid: null };
+    const data = (await res.json()) as {
+      available?: boolean;
+      variantGid?: string | null;
+    };
+    if (!data?.available) return { attach: false, variantGid: null };
+    const variantGid = data.variantGid ?? null;
+    if (!variantGid || !variantGid.startsWith("gid://shopify/ProductVariant/")) {
+      return { attach: false, variantGid: null };
+    }
+    return { attach: true, variantGid };
+  } catch {
+    return { attach: false, variantGid: null };
+  }
+}
 
 export interface CreateMembershipCheckoutOptions {
   /**
@@ -43,6 +73,15 @@ export async function createMembershipCheckout(
   const token = process.env.NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN;
   if (!domain || !token) return;
 
+  // Founding 100 gift: if the offer is active and slots remain, attach the
+  // rangefinder as a second cart line and mark the order with a cart
+  // attribute so the orders-paid webhook can atomically claim a slot.
+  // Only applies to the "member" tier (Reserve Member subscription).
+  const foundingGift =
+    tier === "member"
+      ? await shouldAttachFoundingHundredGift()
+      : { attach: false, variantGid: null };
+
   const returnPath = options.returnPath ?? "/auth/callback";
   const returnTo = `${window.location.origin}${returnPath}`;
   // Pull stored attribution (gclid/gbraid/wbraid/utm_*) from cookie/localStorage
@@ -69,8 +108,24 @@ export async function createMembershipCheckout(
     ...attributionToCartAttributes(attribution),
     { key: "mully_txn_id", value: txnId },
     { key: "new_user", value: "true" },
+    ...(foundingGift.attach
+      ? [{ key: FOUNDING_100_CART_ATTR_KEY, value: "true" }]
+      : []),
     ...(options.attributes ?? []),
   ];
+
+  // Cart lines: subscription line first, optional rangefinder gift second.
+  // The gift is a one-time line (no sellingPlanId). Pricing to $0 is
+  // handled by a Shopify automatic discount targeting this variant when
+  // bundled with a Reserve subscription.
+  const lines: Array<{
+    merchandiseId: string;
+    quantity: number;
+    sellingPlanId?: string;
+  }> = [{ merchandiseId, quantity: 1, sellingPlanId }];
+  if (foundingGift.attach && foundingGift.variantGid) {
+    lines.push({ merchandiseId: foundingGift.variantGid, quantity: 1 });
+  }
 
   const discountCodes = (options.discountCodes ?? [])
     .map((code) => code.trim())
@@ -84,14 +139,13 @@ export async function createMembershipCheckout(
     },
     body: JSON.stringify({
       query: `mutation CreateSubscriptionCart(
-        $merchandiseId: ID!
-        $sellingPlanId: ID!
+        $lines: [CartLineInput!]!
         $attributes: [AttributeInput!]
         $discountCodes: [String!]
         $buyerIdentity: CartBuyerIdentityInput
       ) {
         cartCreate(input: {
-          lines: [{ merchandiseId: $merchandiseId, quantity: 1, sellingPlanId: $sellingPlanId }],
+          lines: $lines,
           attributes: $attributes,
           discountCodes: $discountCodes,
           buyerIdentity: $buyerIdentity
@@ -101,8 +155,7 @@ export async function createMembershipCheckout(
         }
       }`,
       variables: {
-        merchandiseId,
-        sellingPlanId,
+        lines,
         attributes,
         discountCodes: discountCodes.length ? discountCodes : null,
         buyerIdentity: options.email ? { email: options.email } : null,

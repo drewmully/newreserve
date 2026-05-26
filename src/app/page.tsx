@@ -9,6 +9,7 @@ import {
 } from "./components/ClientComponents";
 import { AuthAwareHero, AuthAwareBottomCTA } from "./components/AuthAwareHero";
 import { ReserveHeroImage } from "./components/ReserveHeroImage";
+import FoundingHundredEyebrow from "./components/FoundingHundredEyebrow";
 
 export default async function Home() {
   return (
@@ -45,6 +46,11 @@ export default async function Home() {
                 <span className="w-10 h-px bg-forest/20" />
               </span>
               <span className="gold-accent-line mt-2.5" />
+              {/* Founding 100 — quiet eyebrow above the headline. Renders
+                  nothing unless the offer is currently available. */}
+              <div className="mt-3">
+                <FoundingHundredEyebrow />
+              </div>
             </div>
 
             <h1 className="font-serif text-3xl sm:text-5xl md:text-[3.5rem] lg:text-6xl xl:text-7xl text-forest leading-[1.05] tracking-tight mb-3 md:mb-7 animate-fade-up-delay-1">

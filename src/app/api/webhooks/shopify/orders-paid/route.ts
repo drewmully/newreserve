@@ -33,6 +33,24 @@ import {
   createGiftOrderDoc,
   createSizingToken,
 } from "@/lib/gifts/giftOrder";
+import {
+  claimFoundingHundred,
+  FOUNDING_100_CART_ATTR_KEY,
+  getFoundingHundredVariantGid,
+} from "@/lib/foundingHundred";
+
+/**
+ * Extracts the numeric variant id from the rangefinder variant GID env var,
+ * or returns null if not configured.
+ */
+function getFoundingHundredVariantNumericId(): number | null {
+  const gid = getFoundingHundredVariantGid();
+  if (!gid) return null;
+  const match = gid.match(/(\d+)$/);
+  if (!match) return null;
+  const n = Number(match[1]);
+  return Number.isFinite(n) ? n : null;
+}
 
 const LOOP_VARIANT_BY_TIER: Partial<Record<string, number>> = {
   member: 47601025122496,
@@ -415,6 +433,45 @@ export async function POST(request: NextRequest) {
       ? swapLoopSubscription(shopifyCustomerId, resolvedTier)
       : Promise.resolve();
 
+  // ── Founding 100 claim: defense-in-depth.
+  // Only claim a slot if BOTH:
+  //   (a) the cart was tagged with the gift attribute (set at checkout creation), AND
+  //   (b) the rangefinder variant is actually present in the paid order's line_items.
+  // (b) defends against a customer removing the gift line from checkout — in
+  //     that case we do NOT burn a founding slot.
+  // Idempotent on order id via the ring-buffer in claimFoundingHundred,
+  // so webhook retries are safe.
+  const foundingClaim = (async () => {
+    try {
+      const tagged = orderAttr(FOUNDING_100_CART_ATTR_KEY) === "true";
+      if (!tagged) return;
+      const giftVariantId = getFoundingHundredVariantNumericId();
+      if (!giftVariantId) {
+        console.warn(
+          "[orders-paid] founding_100: gift variant id not configured, skipping claim"
+        );
+        return;
+      }
+      const giftLine = order.line_items.find(
+        (item) => item.variant_id === giftVariantId
+      );
+      if (!giftLine) {
+        console.log(
+          `[orders-paid] founding_100: cart was tagged but gift line not in paid order ${order.id} — not claiming slot (likely removed in checkout)`
+        );
+        return;
+      }
+      const newCount = await claimFoundingHundred(String(order.id));
+      if (newCount !== null) {
+        console.log(
+          `[orders-paid] founding_100 claim recorded for order ${order.id} → ${newCount}/100`
+        );
+      }
+    } catch (err) {
+      console.error("[orders-paid] founding_100 claim failed:", err);
+    }
+  })();
+
   // ── Gift Phase 2: persist a gift_orders doc if this purchase was a gift ──
   const giftPersist = (async () => {
     try {
@@ -468,6 +525,7 @@ export async function POST(request: NextRequest) {
     tierUpdate,
     loopSwap,
     giftPersist,
+    foundingClaim,
   ]);
 
   // Shopify expects a 200 response quickly or it will retry
