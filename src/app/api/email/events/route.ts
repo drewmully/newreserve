@@ -134,9 +134,27 @@ export async function POST(req: NextRequest) {
   if (eventType === "bounced" && event.data.bounce?.message) {
     doc.bounce_message = event.data.bounce.message;
   }
-  if (event.data.tags) {
-    doc.tags = event.data.tags;
+  let tags: Record<string, string> | null = event.data.tags ?? null;
+
+  // Resend omits tags from click/open payloads — inherit from the sent event
+  if (!tags && (eventType === "clicked" || eventType === "opened") && event.data.email_id) {
+    try {
+      const sentSnap = await adminDb
+        .collection("email_events")
+        .where("email_id", "==", event.data.email_id)
+        .where("event_type", "==", "sent")
+        .limit(1)
+        .get();
+      if (!sentSnap.empty) {
+        const sentTags = sentSnap.docs[0].data().tags as Record<string, string> | undefined;
+        if (sentTags) tags = sentTags;
+      }
+    } catch {
+      // Non-blocking — proceed without tags
+    }
   }
+
+  if (tags) doc.tags = tags;
 
   try {
     await adminDb.collection("email_events").add(doc);
