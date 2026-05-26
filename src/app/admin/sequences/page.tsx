@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useMembership } from "@/app/context/MembershipContext";
+import type { Recommendation } from "@/app/api/admin/recommendations/route";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -134,6 +135,67 @@ function TabBar({ active, onChange }: { active: Tab; onChange: (t: Tab) => void 
   );
 }
 
+// ─── Recommendations panel ────────────────────────────────────────────────────
+
+const SEVERITY_STYLES: Record<string, { bar: string; badge: string; label: string }> = {
+  warning: {
+    bar: "bg-ember",
+    badge: "bg-ember/10 text-ember",
+    label: "Issue",
+  },
+  opportunity: {
+    bar: "bg-forest",
+    badge: "bg-forest/10 text-forest",
+    label: "Opportunity",
+  },
+  info: {
+    bar: "bg-taupe/50",
+    badge: "bg-bone text-charcoal/50",
+    label: "Info",
+  },
+};
+
+function RecommendationsPanel({ recs, loading }: { recs: Recommendation[] | null; loading: boolean }) {
+  if (loading) {
+    return (
+      <div className="mt-3 px-5 py-4 border border-taupe/20 rounded-xl bg-bone/30 text-sm text-charcoal/40 animate-pulse">
+        Analyzing flow with Claude…
+      </div>
+    );
+  }
+  if (!recs || recs.length === 0) return null;
+
+  return (
+    <div className="mt-3 border border-taupe/20 rounded-xl overflow-hidden bg-white">
+      <div className="px-5 py-3 border-b border-taupe/10 flex items-center gap-2">
+        <span className="text-xs uppercase tracking-widest text-charcoal/40 font-medium">Insights</span>
+      </div>
+      <div className="divide-y divide-taupe/10">
+        {recs.map((r, i) => {
+          const styles = SEVERITY_STYLES[r.severity] ?? SEVERITY_STYLES.info;
+          return (
+            <div key={i} className="flex gap-0">
+              <div className={`w-1 flex-shrink-0 ${styles.bar}`} />
+              <div className="px-5 py-4 flex-1 min-w-0">
+                <div className="flex items-start gap-3">
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 mt-0.5 ${styles.badge}`}>
+                    {r.step !== null ? `Step ${r.step + 1}` : styles.label}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-obsidian">{r.title}</p>
+                    <p className="text-xs text-charcoal/60 mt-0.5 leading-relaxed">{r.detail}</p>
+                    <p className="text-xs text-forest mt-2 font-medium">→ {r.action}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── Performance tab ──────────────────────────────────────────────────────────
 
 function StepRow({ s }: { s: StepMetrics }) {
@@ -162,10 +224,21 @@ function StepRow({ s }: { s: StepMetrics }) {
   );
 }
 
-function FlowSection({ flowName, flow }: { flowName: string; flow: FlowMetrics }) {
+function FlowSection({
+  flowName,
+  flow,
+  recs,
+  recsLoading,
+}: {
+  flowName: string;
+  flow: FlowMetrics;
+  recs: Recommendation[] | null;
+  recsLoading: boolean;
+}) {
   const { users } = flow;
   const hasData = flow.steps.some((s) => s.sent > 0);
   return (
+    <div>
     <div className="bg-white border border-taupe/20 rounded-xl overflow-hidden">
       <div className="px-5 py-4 border-b border-taupe/10 flex items-center justify-between">
         <h2 className="font-serif text-lg text-obsidian">{FLOW_LABELS[flowName] ?? flowName}</h2>
@@ -197,6 +270,8 @@ function FlowSection({ flowName, flow }: { flowName: string; flow: FlowMetrics }
         </div>
       )}
     </div>
+    <RecommendationsPanel recs={recs} loading={recsLoading} />
+  </div>
   );
 }
 
@@ -205,21 +280,54 @@ function PerformanceTab({
   loading,
   onRefresh,
   error,
+  getHeaders,
 }: {
   data: SequenceData | null;
   loading: boolean;
   onRefresh: () => void;
   error: string | null;
+  getHeaders: () => Promise<HeadersInit>;
 }) {
+  const [recs, setRecs] = useState<Record<string, Recommendation[]> | null>(null);
+  const [recsLoading, setRecsLoading] = useState(false);
+  const [recsError, setRecsError] = useState<string | null>(null);
+
   const flows = data?.flows ?? {};
   const orderedFlows = [
     ...FLOW_ORDER.filter((f) => f in flows),
     ...Object.keys(flows).filter((f) => !FLOW_ORDER.includes(f)),
   ];
 
+  const loadInsights = useCallback(async () => {
+    if (!data || Object.keys(data.flows).length === 0) return;
+    setRecsLoading(true);
+    setRecsError(null);
+    try {
+      const res = await fetch("/api/admin/recommendations", {
+        method: "POST",
+        headers: { ...(await getHeaders()), "Content-Type": "application/json" },
+        body: JSON.stringify({ flows: data.flows }),
+      });
+      const json = await res.json() as { flows?: Record<string, Recommendation[]>; error?: string };
+      if (!res.ok) throw new Error(json.error ?? "Failed to load insights");
+      setRecs(json.flows ?? null);
+    } catch (e) {
+      setRecsError((e as Error).message);
+    } finally {
+      setRecsLoading(false);
+    }
+  }, [data, getHeaders]);
+
   return (
     <div>
-      <div className="flex justify-end mb-4">
+      <div className="flex items-center justify-between mb-4">
+        <button
+          onClick={() => void loadInsights()}
+          disabled={recsLoading || loading || !data}
+          className="text-sm bg-obsidian text-cream px-4 py-1.5 rounded-lg hover:bg-charcoal disabled:opacity-40 transition-colors"
+        >
+          {recsLoading ? "Analyzing…" : recs ? "Refresh insights" : "Get insights"}
+        </button>
         <button
           onClick={onRefresh}
           disabled={loading}
@@ -228,6 +336,9 @@ function PerformanceTab({
           {loading ? "Loading..." : "Refresh"}
         </button>
       </div>
+      {recsError && (
+        <div className="bg-ember/10 border border-ember/20 rounded-xl p-4 text-sm text-ember mb-4">{recsError}</div>
+      )}
       {error && (
         <div className="bg-ember/10 border border-ember/20 rounded-xl p-4 text-sm text-ember mb-6">{error}</div>
       )}
@@ -236,7 +347,13 @@ function PerformanceTab({
       ) : (
         <div className="space-y-6">
           {orderedFlows.map((flowName) => (
-            <FlowSection key={flowName} flowName={flowName} flow={flows[flowName]} />
+            <FlowSection
+              key={flowName}
+              flowName={flowName}
+              flow={flows[flowName]}
+              recs={recs?.[flowName] ?? null}
+              recsLoading={recsLoading}
+            />
           ))}
         </div>
       )}
@@ -562,6 +679,7 @@ export default function AdminSequencesPage() {
           loading={perfLoading}
           onRefresh={() => void loadPerf()}
           error={perfError}
+          getHeaders={getHeaders}
         />
       )}
       {tab === "users" && <UsersTab getHeaders={getHeaders} />}
