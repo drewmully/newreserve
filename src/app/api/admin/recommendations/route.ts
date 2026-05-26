@@ -75,6 +75,50 @@ function analyzeFlow(flowName: string, flow: FlowMetrics): Flag[] {
 
   if (total === 0) return [];
 
+  // Detect missing open/click tracking (Resend webhook not configured)
+  const stepsWithSends = steps.filter((s) => s.sent >= 3);
+  const allZeroEngagement =
+    stepsWithSends.length > 0 &&
+    stepsWithSends.every((s) => s.opened === 0 && s.clicked === 0);
+
+  if (allZeroEngagement) {
+    flags.push({
+      severity: "warning",
+      step: null,
+      description:
+        `0 opens and 0 clicks across all ${stepsWithSends.length} steps with sufficient sends. ` +
+        `This is almost certainly a tracking gap, not real zero engagement — ` +
+        `the Resend webhook (POST /api/email/events) is likely not registered in the Resend dashboard. ` +
+        `Register it to unlock open/click data before drawing any subject line or CTA conclusions.`,
+    });
+    // Still surface high reply rates since those come from the inbound webhook (working)
+    for (const s of stepsWithSends) {
+      const replyRate = s.replied / s.sent;
+      if (replyRate >= 0.08) {
+        flags.push({
+          severity: "opportunity",
+          step: s.step,
+          description: `Step ${s.step + 1}: ${Math.round(replyRate * 100)}% reply rate despite missing open tracking — this email body clearly resonates. Amplify its angle once open tracking is live.`,
+        });
+      }
+    }
+    // Drop-off check still valid since it's based on sent counts
+    for (let i = 1; i < steps.length; i++) {
+      const prev = steps[i - 1];
+      const curr = steps[i];
+      if (prev.sent < 5) continue;
+      const dropPct = 1 - curr.sent / prev.sent;
+      if (dropPct > 0.6) {
+        flags.push({
+          severity: "warning",
+          step: curr.step,
+          description: `Step ${curr.step + 1}: ${Math.round(dropPct * 100)}% drop-off from step ${prev.step + 1} (${prev.sent} → ${curr.sent} sent). Likely a misconfigured trigger or delay — worth checking independent of the tracking issue.`,
+        });
+      }
+    }
+    return flags;
+  }
+
   // High paused ratio
   const pausedPct = users.paused / total;
   if (pausedPct > 0.3) {
