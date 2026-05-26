@@ -4,7 +4,10 @@ import {
   getStoredAttribution,
   attributionToCartAttributes,
 } from "./attribution";
-import { FOUNDING_100_CART_ATTR_KEY } from "./foundingHundredConstants";
+import {
+  FOUNDING_100_CART_ATTR_KEY,
+  FOUNDING_100_DISCOUNT_CODE,
+} from "./foundingHundredConstants";
 
 /**
  * Client-side pre-check for the Founding 100 rangefinder gift. We hit the
@@ -127,7 +130,15 @@ export async function createMembershipCheckout(
     lines.push({ merchandiseId: foundingGift.variantGid, quantity: 1 });
   }
 
-  const discountCodes = (options.discountCodes ?? [])
+  // Auto-apply the Founding 100 rangefinder discount when the gift line is
+  // attached. The Shopify discount is configured to apply only to the
+  // rangefinder variant, so even if a buyer removes the rangefinder in
+  // checkout the code applies nothing. The code is never shown in the UI.
+  const combinedDiscountCodes = [
+    ...(options.discountCodes ?? []),
+    ...(foundingGift.attach ? [FOUNDING_100_DISCOUNT_CODE] : []),
+  ];
+  const discountCodes = combinedDiscountCodes
     .map((code) => code.trim())
     .filter(Boolean);
 
