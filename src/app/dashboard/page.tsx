@@ -27,6 +27,7 @@ import {
   type BenefitCatalogCategory,
   type BenefitKey,
 } from "@/lib/benefits";
+import { SponsorshipsTab } from "./SponsorshipsTab";
 
 /* ═══════════════════════════════════════════
    DASHBOARD — Shop · Community · Club · Benefits
@@ -253,7 +254,7 @@ function DashboardContent() {
           {activeTab === "drops" && (isPaid ? <DropsTab /> : <GatedTab type="drops" onUpgrade={() => setUpgradeOpen(true)} />)}
           {activeTab === "community" && <CommunityTab />}
           {activeTab === "club" && (isPaid ? <ClubTab /> : <GatedTab type="club" onUpgrade={() => setUpgradeOpen(true)} />)}
-          {activeTab === "benefits" && (isPaid ? <BenefitsTab onUpgrade={() => setUpgradeOpen(true)} /> : <GatedTab type="benefits" onUpgrade={() => setUpgradeOpen(true)} />)}
+          {activeTab === "benefits" && (isPaid ? <BenefitsWithSub onUpgrade={() => setUpgradeOpen(true)} /> : <GatedTab type="benefits" onUpgrade={() => setUpgradeOpen(true)} />)}
         </div>
       </main>
 
@@ -836,6 +837,61 @@ const BENEFIT_ICONS: Record<BenefitKey, React.ReactNode> = {
   far_sure_golf_tours_credit: <TravelBenefitIcon />,
   priority_drop_access: <DropBenefitIcon />,
 };
+
+/**
+ * Wraps the Benefits tab with a Benefits / Sponsorships subtab toggle.
+ * The selected sub is mirrored to the URL as ?sub=benefits|sponsorships
+ * so links can deep-link directly to the Sponsorships board.
+ */
+function BenefitsWithSub({ onUpgrade }: { onUpgrade: () => void }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const subParam = (searchParams.get("sub") ?? "benefits").toLowerCase();
+  const activeSub: "benefits" | "sponsorships" =
+    subParam === "sponsorships" ? "sponsorships" : "benefits";
+
+  const setSub = (next: "benefits" | "sponsorships") => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", "benefits");
+    params.set("sub", next);
+    router.replace(`/dashboard?${params.toString()}`, { scroll: false });
+  };
+
+  return (
+    <div>
+      <div className="px-6 md:px-12 mb-6">
+        <div className="max-w-5xl mx-auto">
+          <div className="inline-flex items-center gap-1 p-1 rounded-full bg-cream border border-taupe/20">
+            {([
+              { key: "benefits", label: "Benefits" },
+              { key: "sponsorships", label: "Sponsorships" },
+            ] as const).map((item) => {
+              const isActive = activeSub === item.key;
+              return (
+                <button
+                  key={item.key}
+                  onClick={() => setSub(item.key)}
+                  className={`px-4 h-9 rounded-full text-xs tracking-wider uppercase font-medium transition-colors duration-200 ${
+                    isActive
+                      ? "bg-forest text-bone shadow-sm"
+                      : "text-charcoal/55 hover:text-forest"
+                  }`}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+      {activeSub === "benefits" ? (
+        <BenefitsTab onUpgrade={onUpgrade} />
+      ) : (
+        <SponsorshipsTab />
+      )}
+    </div>
+  );
+}
 
 function BenefitsTab({ onUpgrade }: { onUpgrade: () => void }) {
   const { user, tier, tierLabel, subscriptions } = useMembership();

@@ -38,6 +38,7 @@ import {
   FOUNDING_100_CART_ATTR_KEY,
   getFoundingHundredVariantGid,
 } from "@/lib/foundingHundred";
+import { processSponsorship } from "@/app/api/_lib/sponsorship";
 
 /**
  * Extracts the numeric variant id from the rangefinder variant GID env var,
@@ -472,6 +473,27 @@ export async function POST(request: NextRequest) {
     }
   })();
 
+  // ── Sponsorship attribution ────────────────────────────────────────────
+  // If the cart carried a mully_sponsor attribute AND the order is a paid
+  // membership, attribute the sponsorship, evaluate badges, and fire emails.
+  // Idempotent on shopify_order_id. Never blocks the webhook response.
+  const sponsorshipAttribution = (async () => {
+    try {
+      const result = await processSponsorship(order);
+      if (result.status === "attributed") {
+        console.log(
+          `[orders-paid] sponsorship attributed order=${order.id} id=${result.sponsorshipId} badges=${(result.newBadges ?? []).join(",") || "none"}`,
+        );
+      } else if (result.status === "skipped") {
+        console.log(
+          `[orders-paid] sponsorship skipped order=${order.id} reason=${result.reason}`,
+        );
+      }
+    } catch (err) {
+      console.error("[orders-paid] sponsorship processing failed:", err);
+    }
+  })();
+
   // ── Gift Phase 2: persist a gift_orders doc if this purchase was a gift ──
   const giftPersist = (async () => {
     try {
@@ -526,6 +548,7 @@ export async function POST(request: NextRequest) {
     loopSwap,
     giftPersist,
     foundingClaim,
+    sponsorshipAttribution,
   ]);
 
   // Shopify expects a 200 response quickly or it will retry
