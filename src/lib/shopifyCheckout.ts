@@ -171,6 +171,13 @@ export async function createMembershipCheckout(
     .map((code) => code.trim())
     .filter(Boolean);
 
+  const requestPayload = {
+    lines,
+    attributes,
+    discountCodes: discountCodes.length ? discountCodes : null,
+    buyerIdentity: options.email ? { email: options.email } : null,
+  };
+
   const res = await fetch(`https://${domain}/api/2024-10/graphql.json`, {
     method: "POST",
     headers: {
@@ -191,27 +198,46 @@ export async function createMembershipCheckout(
           buyerIdentity: $buyerIdentity
         }) {
           cart { checkoutUrl }
-          userErrors { field message }
+          userErrors { field message code }
         }
       }`,
-      variables: {
-        lines,
-        attributes,
-        discountCodes: discountCodes.length ? discountCodes : null,
-        buyerIdentity: options.email ? { email: options.email } : null,
-      },
+      variables: requestPayload,
     }),
   });
 
   const json = await res.json();
   const checkoutUrl = json?.data?.cartCreate?.cart?.checkoutUrl;
   if (!checkoutUrl) {
+    // Surface the full error context so we can debug from console logs.
+    // userErrors come from Shopify validation; errors come from GraphQL.
+    const userErrors: Array<{ field?: string[]; message?: string; code?: string }> =
+      json?.data?.cartCreate?.userErrors ?? [];
+    const gqlErrors: Array<{ message?: string }> = json?.errors ?? [];
+
     console.error(
-      "[shopifyCheckout] no checkoutUrl — errors:",
-      json?.data?.cartCreate?.userErrors,
-      json?.errors
+      "[shopifyCheckout] cartCreate failed",
+      JSON.stringify(
+        {
+          userErrors,
+          gqlErrors,
+          payload: {
+            lines: requestPayload.lines,
+            attributeKeys: requestPayload.attributes.map((a) => a.key),
+            discountCodes: requestPayload.discountCodes,
+            hasBuyerIdentity: Boolean(requestPayload.buyerIdentity),
+          },
+        },
+        null,
+        2
+      )
     );
-    return;
+
+    // Build a user-readable error so the caller can surface it.
+    const firstMessage =
+      userErrors[0]?.message ??
+      gqlErrors[0]?.message ??
+      "Could not start checkout. Please try again.";
+    throw new Error(`[shopifyCheckout] ${firstMessage}`);
   }
 
   // Append `?return_url=` (and email pre-fill) the same way UpgradeModal does.

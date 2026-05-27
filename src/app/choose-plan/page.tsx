@@ -76,6 +76,7 @@ export default function ChoosePlanPage() {
   const [submittingTier, setSubmittingTier] = useState<
     "free" | "access" | "member" | null
   >(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [storedEmail, setStoredEmail] = useState<string | null>(null);
 
   // Pull flag overrides + bucket once on mount.
@@ -169,6 +170,8 @@ export default function ChoosePlanPage() {
       properties: { plan, source: "choose_plan" },
     });
 
+    setCheckoutError(null);
+
     try {
       await createMembershipCheckout(plan, {
         email: checkoutEmail,
@@ -179,6 +182,11 @@ export default function ChoosePlanPage() {
     } catch (err) {
       console.error("[choose-plan] checkout failed:", err);
       setSubmittingTier(null);
+      setCheckoutError(
+        err instanceof Error
+          ? err.message.replace(/^\[shopifyCheckout\]\s*/, "")
+          : "Could not start checkout. Please try again."
+      );
     }
   }
 
@@ -280,6 +288,16 @@ export default function ChoosePlanPage() {
           {/* ────────── RESERVE BLACK (ILLUSTRATIVE / INVITE ONLY) ────────── */}
           <ReserveBlackCard />
         </div>
+
+        {checkoutError && (
+          <div
+            role="alert"
+            className="mt-8 rounded-xl border border-ember/40 bg-ember/8 px-5 py-4 text-sm text-ember"
+          >
+            <strong className="font-medium">Checkout couldn&apos;t start:</strong>{" "}
+            {checkoutError}
+          </div>
+        )}
 
         <p className="text-center text-sm text-charcoal/40 mt-8">
           Start free. Upgrade or cancel anytime. No commitments.
