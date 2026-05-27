@@ -28,6 +28,7 @@ import {
   type BenefitKey,
 } from "@/lib/benefits";
 import { SponsorshipsTab } from "./SponsorshipsTab";
+import { prefetchSponsorshipBoard } from "@/lib/sponsorshipClient";
 
 /* ═══════════════════════════════════════════
    DASHBOARD — Shop · Community · Club · Benefits
@@ -69,9 +70,18 @@ function DashboardContent() {
     username,
     back9UX,
     markBack9WelcomeSeen,
+    user,
   } = useMembership();
   const isPaid = tier === "access" || tier === "member" || tier === "black";
   const [upgradeOpen, setUpgradeOpen] = useState(false);
+
+  // Warm the sponsorship board for paid members so the tab feels instant.
+  // Fire and forget; SponsorshipsTab reads from the same module cache.
+  useEffect(() => {
+    if (isPaid && user) {
+      prefetchSponsorshipBoard(user);
+    }
+  }, [isPaid, user]);
 
   // Auto-open upgrade modal when redirected from Back 9 welcome flow
   useEffect(() => {
@@ -183,7 +193,7 @@ function DashboardContent() {
           <div className="flex items-center gap-3 overflow-x-auto py-3 scrollbar-hide">
             <Link
               href="/home"
-              className="flex items-center gap-2 px-5 py-2.5 rounded-full border border-taupe/25 text-charcoal/70 hover:text-forest hover:border-forest/30 hover:bg-forest/5 transition-all duration-300 btn-press whitespace-nowrap"
+              className="flex items-center gap-2 px-5 py-2.5 rounded-full border border-taupe/25 text-charcoal/70 hover:text-forest hover:border-forest/30 hover:bg-forest/5 transition-all duration-300 btn-press whitespace-nowrap cursor-pointer"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d={HOME_ICON} />
@@ -208,7 +218,7 @@ function DashboardContent() {
             ))}
             <Link
               href="/account"
-              className="flex items-center gap-2 px-5 py-2.5 rounded-full border border-taupe/25 text-charcoal/70 hover:text-forest hover:border-forest/30 hover:bg-forest/5 transition-all duration-300 btn-press whitespace-nowrap"
+              className="flex items-center gap-2 px-5 py-2.5 rounded-full border border-taupe/25 text-charcoal/70 hover:text-forest hover:border-forest/30 hover:bg-forest/5 transition-all duration-300 btn-press whitespace-nowrap cursor-pointer"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d={ACCOUNT_ICON} />
@@ -885,7 +895,7 @@ function BenefitsWithSub({ onUpgrade }: { onUpgrade: () => void }) {
                 <button
                   key={item.key}
                   onClick={() => setSub(item.key)}
-                  className={`px-4 h-9 rounded-full text-xs tracking-wider uppercase font-medium transition-colors duration-200 ${
+                  className={`px-4 h-9 rounded-full text-xs tracking-wider uppercase font-medium transition-colors duration-200 cursor-pointer ${
                     isActive
                       ? "bg-forest text-bone shadow-sm"
                       : "text-charcoal/55 hover:text-forest"
