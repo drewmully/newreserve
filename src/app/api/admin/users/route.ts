@@ -7,6 +7,7 @@
  * Query params:
  *   tier     — filter by tier (free | access | member | black)
  *   status   — filter by subscription status (active | paused | cancelled | none)
+ *   email    — exact email lookup (returns at most 1 result, ignores pagination)
  *   limit    — max results (default 50, max 200)
  *   after    — cursor (last uid from previous page)
  */
@@ -38,11 +39,66 @@ export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
   const tierFilter = params.get("tier") ?? null;
   const statusFilter = params.get("status") ?? null;
+  const emailSearch = params.get("email")?.trim().toLowerCase() ?? null;
   const limitN = Math.min(parseInt(params.get("limit") ?? "50", 10), 200);
   const after = params.get("after") ?? null;
 
   try {
     let query = adminDb.collection("users").orderBy("created_at", "desc");
+
+    // Exact email lookup — bypass pagination and other filters
+    if (emailSearch) {
+      const snap = await adminDb
+        .collection("users")
+        .where("email", "==", emailSearch)
+        .limit(1)
+        .get();
+
+      if (snap.empty) {
+        return NextResponse.json({ users: [], count: 0, hasMore: false, nextCursor: null });
+      }
+
+      const seqDocs = await adminDb.getAll(
+        adminDb.collection("email_sequences").doc(snap.docs[0].id)
+      );
+      const seqMap = new Map(
+        seqDocs.map((d) => [d.id, d.exists ? (d.data() as Record<string, unknown>) : null])
+      );
+
+      const toMs = (v: unknown) => {
+        const s = (v as { _seconds?: number } | null)?._seconds;
+        return s ? s * 1000 : null;
+      };
+
+      const doc = snap.docs[0];
+      const d = doc.data() as Record<string, unknown>;
+      const subs = (d.subscriptions ?? {}) as Record<string, unknown>;
+      const credit = (d.store_credit ?? {}) as Record<string, unknown>;
+      const seq = seqMap.get(doc.id);
+
+      return NextResponse.json({
+        users: [{
+          uid: doc.id,
+          email: d.email ?? null,
+          username: d.username ?? null,
+          tier: d.tier ?? "free",
+          created_at: toMs(d.created_at),
+          last_login: toMs(d.last_login),
+          onboarding_completed: d.onboarding_completed ?? false,
+          subscription_status: subs.status ?? "none",
+          mullybox_active: subs.mullybox_active ?? false,
+          store_credit_cents: credit.balance_cents ?? 0,
+          segments: d.segments ?? [],
+          sequence_flow: seq?.flow ?? null,
+          sequence_status: seq?.status ?? null,
+          sequence_last_step: seq?.lastSentStep ?? null,
+          sequence_next_send_at: toMs(seq?.nextSendAt),
+        }],
+        count: 1,
+        hasMore: false,
+        nextCursor: null,
+      });
+    }
 
     if (tierFilter) query = query.where("tier", "==", tierFilter) as typeof query;
     if (statusFilter) query = query.where("subscriptions.status", "==", statusFilter) as typeof query;

@@ -140,8 +140,9 @@ export function UpgradeModal({ open, onClose, currentTier }: UpgradeModalProps) 
         body: JSON.stringify({ variantShopifyId }),
       });
       if (!res.ok) {
-        const data = await res.json().catch(() => ({})) as { error?: string };
-        throw new Error(data.error ?? `Swap failed (${res.status})`);
+        const data = await res.json().catch(() => ({})) as { error?: string; detail?: string };
+        const msg = data.detail ? `${data.error}: ${data.detail}` : (data.error ?? `Swap failed (${res.status})`);
+        throw new Error(msg);
       }
       setTier(targetTier);
       await refreshSubscriptionStatus();

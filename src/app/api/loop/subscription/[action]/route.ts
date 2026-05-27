@@ -216,7 +216,8 @@ export async function POST(
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error(`[loop/subscription/${action}] failed:`, err);
-    return NextResponse.json({ error: "Loop API error" }, { status: 502 });
+    const detail = err instanceof Error ? err.message : String(err);
+    console.error(`[loop/subscription/${action}] failed:`, detail);
+    return NextResponse.json({ error: "Loop API error", detail }, { status: 502 });
   }
 }

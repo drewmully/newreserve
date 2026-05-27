@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useMembership } from "@/app/context/MembershipContext";
 
@@ -64,14 +64,28 @@ export default function AdminUsersPage() {
   const [error, setError] = useState<string | null>(null);
   const [tierFilter, setTierFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [emailSearch, setEmailSearch] = useState(""); // committed search term (on Enter / blur)
   const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   const getHeaders = useCallback(async (): Promise<HeadersInit> => {
     if (!user) throw new Error("Not authenticated");
     const token = await user.getIdToken();
     return { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
   }, [user]);
+
+  // Client-side filter on already-loaded users (instant, no API call)
+  const filteredUsers = emailSearch
+    ? users // server already filtered
+    : searchQuery
+      ? users.filter(
+          (u) =>
+            u.email?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            u.username?.toLowerCase().includes(searchQuery.toLowerCase())
+        )
+      : users;
 
   const load = useCallback(
     async (replace = true) => {
@@ -80,9 +94,13 @@ export default function AdminUsersPage() {
       setError(null);
       try {
         const params = new URLSearchParams({ limit: "50" });
-        if (tierFilter) params.set("tier", tierFilter);
-        if (statusFilter) params.set("status", statusFilter);
-        if (!replace && cursor) params.set("after", cursor);
+        if (emailSearch) {
+          params.set("email", emailSearch);
+        } else {
+          if (tierFilter) params.set("tier", tierFilter);
+          if (statusFilter) params.set("status", statusFilter);
+          if (!replace && cursor) params.set("after", cursor);
+        }
 
         const res = await fetch(`/api/admin/users?${params.toString()}`, {
           headers: await getHeaders(),
@@ -103,13 +121,28 @@ export default function AdminUsersPage() {
         setLoading(false);
       }
     },
-    [authLoading, user, tierFilter, statusFilter, cursor, getHeaders]
+    [authLoading, user, tierFilter, statusFilter, emailSearch, cursor, getHeaders]
   );
 
   useEffect(() => {
     void load(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, user, tierFilter, statusFilter]);
+  }, [authLoading, user, tierFilter, statusFilter, emailSearch]);
+
+  function commitSearch() {
+    const q = searchQuery.trim().toLowerCase();
+    // Hit the API only for a full email address; otherwise filter client-side
+    if (q.includes("@") && q.includes(".")) {
+      setEmailSearch(q);
+    } else {
+      setEmailSearch("");
+    }
+  }
+
+  function clearSearch() {
+    setSearchQuery("");
+    setEmailSearch("");
+  }
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-10">
@@ -118,7 +151,13 @@ export default function AdminUsersPage() {
         <div>
           <h1 className="font-serif text-3xl text-obsidian">Users</h1>
           <p className="text-charcoal/50 text-sm mt-1">
-            {loading ? "Loading..." : `${users.length}${hasMore ? "+" : ""} users`}
+            {loading
+              ? "Loading..."
+              : emailSearch
+                ? `${filteredUsers.length} result${filteredUsers.length !== 1 ? "s" : ""} for "${emailSearch}"`
+                : searchQuery
+                  ? `${filteredUsers.length} match${filteredUsers.length !== 1 ? "es" : ""}`
+                  : `${users.length}${hasMore ? "+" : ""} users`}
           </p>
         </div>
         <button
@@ -129,37 +168,69 @@ export default function AdminUsersPage() {
         </button>
       </div>
 
-      {/* Filters */}
-      <div className="flex items-center gap-3 mb-6">
-        <select
-          value={tierFilter}
-          onChange={(e) => setTierFilter(e.target.value)}
-          className="text-sm border border-taupe/40 rounded-lg px-3 py-2 bg-white text-charcoal focus:outline-none focus:ring-2 focus:ring-forest/30"
-        >
-          <option value="">All tiers</option>
-          <option value="free">Free</option>
-          <option value="access">Reserve Access</option>
-          <option value="member">Reserve Member</option>
-          <option value="black">Reserve Black</option>
-        </select>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="text-sm border border-taupe/40 rounded-lg px-3 py-2 bg-white text-charcoal focus:outline-none focus:ring-2 focus:ring-forest/30"
-        >
-          <option value="">All statuses</option>
-          <option value="active">Active subscription</option>
-          <option value="paused">Paused</option>
-          <option value="cancelled">Cancelled</option>
-          <option value="none">No subscription</option>
-        </select>
-        {(tierFilter || statusFilter) && (
-          <button
-            onClick={() => { setTierFilter(""); setStatusFilter(""); }}
-            className="text-xs text-charcoal/40 hover:text-charcoal/70 transition-colors"
-          >
-            Clear filters
-          </button>
+      {/* Search + Filters */}
+      <div className="flex flex-col gap-3 mb-6">
+        {/* Search bar */}
+        <div className="relative">
+          <input
+            ref={searchRef}
+            type="text"
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              // If user clears the field, reset server search
+              if (!e.target.value.trim()) clearSearch();
+            }}
+            onKeyDown={(e) => { if (e.key === "Enter") commitSearch(); }}
+            onBlur={commitSearch}
+            placeholder="Search by name or email — press Enter for exact email lookup"
+            className="w-full text-sm border border-taupe/40 rounded-lg px-4 py-2.5 pr-9 bg-white text-charcoal placeholder:text-charcoal/30 focus:outline-none focus:ring-2 focus:ring-forest/30"
+          />
+          {searchQuery && (
+            <button
+              onClick={clearSearch}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-charcoal/30 hover:text-charcoal/60 text-lg leading-none"
+              aria-label="Clear search"
+            >
+              ×
+            </button>
+          )}
+        </div>
+
+        {/* Tier / status filters — hidden during email search */}
+        {!emailSearch && (
+          <div className="flex items-center gap-3">
+            <select
+              value={tierFilter}
+              onChange={(e) => setTierFilter(e.target.value)}
+              className="text-sm border border-taupe/40 rounded-lg px-3 py-2 bg-white text-charcoal focus:outline-none focus:ring-2 focus:ring-forest/30"
+            >
+              <option value="">All tiers</option>
+              <option value="free">Free</option>
+              <option value="access">Reserve Access</option>
+              <option value="member">Reserve Member</option>
+              <option value="black">Reserve Black</option>
+            </select>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="text-sm border border-taupe/40 rounded-lg px-3 py-2 bg-white text-charcoal focus:outline-none focus:ring-2 focus:ring-forest/30"
+            >
+              <option value="">All statuses</option>
+              <option value="active">Active subscription</option>
+              <option value="paused">Paused</option>
+              <option value="cancelled">Cancelled</option>
+              <option value="none">No subscription</option>
+            </select>
+            {(tierFilter || statusFilter) && (
+              <button
+                onClick={() => { setTierFilter(""); setStatusFilter(""); }}
+                className="text-xs text-charcoal/40 hover:text-charcoal/70 transition-colors"
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
         )}
       </div>
 
@@ -191,14 +262,14 @@ export default function AdminUsersPage() {
                   Loading...
                 </td>
               </tr>
-            ) : users.length === 0 ? (
+            ) : filteredUsers.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-5 py-10 text-center text-charcoal/40 text-sm">
-                  No users found.
+                  {searchQuery ? `No users matching "${searchQuery}".` : "No users found."}
                 </td>
               </tr>
             ) : (
-              users.map((u) => (
+              filteredUsers.map((u) => (
                 <tr
                   key={u.uid}
                   onClick={() => router.push(`/admin/users/${u.uid}`)}
