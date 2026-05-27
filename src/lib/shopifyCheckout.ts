@@ -8,6 +8,31 @@ import {
   FOUNDING_100_CART_ATTR_KEY,
   FOUNDING_100_DISCOUNT_CODE,
 } from "./foundingHundredConstants";
+import {
+  SPONSORSHIP_CART_ATTR_KEY,
+  SPONSORSHIP_COOKIE_NAME,
+} from "./sponsorship";
+
+/**
+ * Reads the mully_sponsor cookie value, if present. We use cookie storage
+ * (rather than localStorage) for sponsorship because the redirect endpoint
+ * /s/[code] sets the cookie server-side. Returns null when not in a browser
+ * or when the cookie is absent.
+ */
+function getStoredSponsorshipCode(): string | null {
+  if (typeof document === "undefined") return null;
+  try {
+    const match = document.cookie
+      .split(";")
+      .map((c) => c.trim())
+      .find((c) => c.startsWith(`${SPONSORSHIP_COOKIE_NAME}=`));
+    if (!match) return null;
+    const value = decodeURIComponent(match.split("=").slice(1).join("="));
+    return value || null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Client-side pre-check for the Founding 100 rangefinder gift. We hit the
@@ -106,11 +131,15 @@ export async function createMembershipCheckout(
       return `mully-${Date.now()}`;
     }
   })();
+  const sponsorshipCode = getStoredSponsorshipCode();
   const attributes = [
     ...buildCheckoutOriginAttributes(returnTo),
     ...attributionToCartAttributes(attribution),
     { key: "mully_txn_id", value: txnId },
     { key: "new_user", value: "true" },
+    ...(sponsorshipCode
+      ? [{ key: SPONSORSHIP_CART_ATTR_KEY, value: sponsorshipCode }]
+      : []),
     ...(foundingGift.attach
       ? [{ key: FOUNDING_100_CART_ATTR_KEY, value: "true" }]
       : []),
