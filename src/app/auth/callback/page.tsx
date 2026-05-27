@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useMembership } from "@/app/context/MembershipContext";
@@ -9,11 +9,27 @@ import { useMembership } from "@/app/context/MembershipContext";
 declare global {
   interface Window {
     gtag?: (
-      command: "event",
-      eventName: string,
+      command: "event" | "set" | "config" | "js",
+      eventNameOrTarget: string | Date,
       params?: Record<string, unknown>
     ) => void;
+    dataLayer?: unknown[];
   }
+}
+
+/**
+ * Wait until window.gtag exists. gtag.js is loaded via next/script with
+ * strategy="afterInteractive", which means it may not be ready on first paint
+ * of /auth/callback. Poll for up to ~3s (30 × 100ms) then resolve true/false.
+ */
+async function waitForGtag(maxAttempts = 30, intervalMs = 100): Promise<boolean> {
+  for (let i = 0; i < maxAttempts; i++) {
+    if (typeof window !== "undefined" && typeof window.gtag === "function") {
+      return true;
+    }
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  return false;
 }
 
 /* ═══════════════════════════════════════════
@@ -28,39 +44,86 @@ export default function AuthCallbackPage() {
   const { isSignedIn, authLoading } = useMembership();
 
   // Fire Google Ads purchase conversion client-side. The server-side
-  // orders-paid webhook also fires — both share the same transaction_id
-  // (mully_txn_id, set on the LP and round-tripped via Shopify note_attributes)
-  // so Google Ads dedupes automatically.
+  // orders-paid webhook + Shopify Custom Pixel also fire — all three share
+  // the same transaction_id (mully_txn_id, set on the LP and round-tripped
+  // via Shopify note_attributes) so Google Ads dedupes automatically.
+  //
+  // RACE CONDITION FIX: gtag.js is loaded via next/script strategy="afterInteractive"
+  // which means window.gtag may not exist when this useEffect first runs.
+  // We poll for gtag up to ~3s, then fire with event_callback so we can
+  // guarantee the conversion ping leaves the browser before we redirect.
+  const [conversionFired, setConversionFired] = useState(false);
   useEffect(() => {
-    try {
-      const conversionId =
-        process.env.NEXT_PUBLIC_GOOGLE_ADS_CONVERSION_ID || "";
-      const purchaseLabel =
-        process.env.NEXT_PUBLIC_GOOGLE_ADS_LABEL_PURCHASE || "";
-      if (!conversionId || !purchaseLabel) return;
-      if (typeof window === "undefined" || typeof window.gtag !== "function") return;
+    let cancelled = false;
+    const FIRED_KEY = "mully_ga_conv_fired";
 
-      // Prevent double-fire on re-mounts / strict-mode double-invokes.
-      const FIRED_KEY = "mully_ga_conv_fired";
-      if (sessionStorage.getItem(FIRED_KEY)) return;
+    (async () => {
+      try {
+        // Already fired this session — nothing to do.
+        if (sessionStorage.getItem(FIRED_KEY)) {
+          if (!cancelled) setConversionFired(true);
+          return;
+        }
 
-      const txnId =
-        localStorage.getItem("mully_pending_txn_id") ||
-        `mully-callback-${Date.now()}`;
+        const conversionId =
+          process.env.NEXT_PUBLIC_GOOGLE_ADS_CONVERSION_ID || "";
+        const purchaseLabel =
+          process.env.NEXT_PUBLIC_GOOGLE_ADS_LABEL_PURCHASE || "";
+        if (!conversionId || !purchaseLabel) {
+          if (!cancelled) setConversionFired(true); // Nothing to fire — unblock redirect.
+          return;
+        }
 
-      window.gtag("event", "conversion", {
-        send_to: `${conversionId}/${purchaseLabel}`,
-        value: 1.0,
-        currency: "USD",
-        transaction_id: txnId,
-      });
+        const ready = await waitForGtag();
+        if (cancelled) return;
 
-      sessionStorage.setItem(FIRED_KEY, "1");
-      // Clear the pending id so the next checkout generates a fresh one.
-      localStorage.removeItem("mully_pending_txn_id");
-    } catch {
-      // Never let analytics break the auth callback flow.
-    }
+        if (!ready) {
+          // gtag never loaded (adblocker, network failure). Don't block the
+          // user — server-side webhook is our source of truth anyway.
+          console.warn("[gtag] not available after polling — skipping client conversion");
+          if (!cancelled) setConversionFired(true);
+          return;
+        }
+
+        const txnId =
+          localStorage.getItem("mully_pending_txn_id") ||
+          `mully-callback-${Date.now()}`;
+
+        // event_callback fires once the conversion ping has been sent (or
+        // event_timeout elapses). We use it to delay the redirect so gtag
+        // doesn't get interrupted mid-flight by navigation.
+        let callbackFired = false;
+        const finish = () => {
+          if (callbackFired || cancelled) return;
+          callbackFired = true;
+          try {
+            sessionStorage.setItem(FIRED_KEY, "1");
+            localStorage.removeItem("mully_pending_txn_id");
+          } catch {}
+          setConversionFired(true);
+        };
+
+        window.gtag?.("event", "conversion", {
+          send_to: `${conversionId}/${purchaseLabel}`,
+          value: 1.0,
+          currency: "USD",
+          transaction_id: txnId,
+          event_callback: finish,
+          event_timeout: 1500,
+        });
+
+        // Safety net: gtag's event_callback isn't 100% reliable — guarantee
+        // we unblock within 2s even if the callback never fires.
+        setTimeout(finish, 2000);
+      } catch (err) {
+        console.warn("[gtag] conversion fire failed:", err);
+        if (!cancelled) setConversionFired(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   // Redirect unauthenticated visitors to login — they came back from Shopify checkout
@@ -71,13 +134,16 @@ export default function AuthCallbackPage() {
     }
   }, [authLoading, isSignedIn, router]);
 
-  // Auto-redirect authenticated users to dashboard after 3 s
+  // Auto-redirect authenticated users to dashboard ONLY after the Google Ads
+  // conversion has fired (or the safety-net timeout has elapsed). This is the
+  // critical race fix — we used to redirect 3s after sign-in regardless of
+  // whether gtag was ready, which dropped conversions on slow networks.
   useEffect(() => {
-    if (!authLoading && isSignedIn) {
-      const timer = setTimeout(() => router.replace("/home"), 3000);
+    if (!authLoading && isSignedIn && conversionFired) {
+      const timer = setTimeout(() => router.replace("/home"), 1500);
       return () => clearTimeout(timer);
     }
-  }, [authLoading, isSignedIn, router]);
+  }, [authLoading, isSignedIn, conversionFired, router]);
 
   if (authLoading || !isSignedIn) {
     return (

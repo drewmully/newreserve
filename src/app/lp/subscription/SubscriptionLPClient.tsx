@@ -236,7 +236,7 @@ export default function SubscriptionLPClient() {
                   type="button"
                   onClick={handleStart}
                   disabled={loading}
-                  className="w-full mt-5 bg-ember hover:bg-ember/90 disabled:opacity-60 text-bone py-3.5 rounded-md text-sm font-medium tracking-wide transition"
+                  className="w-full mt-5 bg-ember hover:bg-ember/90 disabled:opacity-60 disabled:cursor-not-allowed text-bone py-3.5 rounded-md text-sm font-medium tracking-wide transition cursor-pointer"
                 >
                   {loading ? "Opening checkout…" : "Start membership"}
                 </button>
@@ -349,7 +349,7 @@ export default function SubscriptionLPClient() {
               type="button"
               onClick={handleStart}
               disabled={loading}
-              className="mt-7 bg-ember hover:bg-ember/90 disabled:opacity-60 text-bone py-3.5 px-10 rounded-md text-sm font-medium tracking-wide transition"
+              className="mt-7 bg-ember hover:bg-ember/90 disabled:opacity-60 disabled:cursor-not-allowed text-bone py-3.5 px-10 rounded-md text-sm font-medium tracking-wide transition cursor-pointer"
             >
               {loading ? "Opening checkout…" : "Start membership · $250/qtr"}
             </button>
