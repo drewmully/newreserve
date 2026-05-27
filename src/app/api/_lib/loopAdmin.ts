@@ -12,6 +12,36 @@
 
 const BASE_URL =
   process.env.LOOP_API_BASE_URL ?? "https://api.loopsubscriptions.com/admin/2023-10";
+
+/**
+ * Retry a fetch call up to `maxAttempts` times on socket/network errors.
+ * Loop's API sits behind Cloudflare; Vercel IPs occasionally get connection-
+ * reset before any bytes are received (UND_ERR_SOCKET / "other side closed").
+ */
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  maxAttempts = 3,
+  delayMs = 400
+): Promise<Response> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = await fetch(url, options); // fetchWithRetry inner call — do not replace
+      return res;
+    } catch (err) {
+      lastError = err;
+      const isSocketError =
+        err instanceof TypeError &&
+        (err.message.includes("fetch failed") || err.message.includes("socket"));
+      if (!isSocketError || attempt === maxAttempts) throw err;
+      console.warn(`[loopAdmin] fetch attempt ${attempt} failed (socket error), retrying in ${delayMs}ms…`);
+      await new Promise((r) => setTimeout(r, delayMs * attempt));
+    }
+  }
+  throw lastError;
+}
+
 const LOOP_MANAGE_URL_FALLBACK =
   "https://mullybox-store.myshopify.com/a/loop_subscriptions/auth";
 const LOOP_CUSTOMER_ID_PLACEHOLDER = "{customer_id}";
@@ -64,7 +94,7 @@ export async function getLoopSubscriptionStatus(
   customerIdentifier: string
 ): Promise<LoopSubscriptionStatus> {
   const url = `${BASE_URL}/customer/${encodeURIComponent(customerIdentifier)}/subscription`;
-  const res = await fetch(url, { headers: getLoopHeaders() });
+  const res = await fetchWithRetry(url, { headers: getLoopHeaders() });
 
   if (!res.ok) {
     throw new Error(
@@ -144,7 +174,7 @@ export async function getLoopRawSubscriptions(
   customerIdentifier: string
 ): Promise<LoopSubscription[]> {
   const url = `${BASE_URL}/customer/${encodeURIComponent(customerIdentifier)}/subscription`;
-  const res = await fetch(url, { headers: getLoopHeaders() });
+  const res = await fetchWithRetry(url, { headers: getLoopHeaders() });
   if (!res.ok) {
     throw new Error(`Loop API error ${res.status}: ${await res.text()}`);
   }
@@ -162,7 +192,7 @@ export async function getLoopSubscriptionById(
   subscriptionId: string
 ): Promise<LoopSubscription | null> {
   const url = `${BASE_URL}/subscription/${encodeURIComponent(subscriptionId)}`;
-  const res = await fetch(url, { headers: getLoopHeaders() });
+  const res = await fetchWithRetry(url, { headers: getLoopHeaders() });
   if (!res.ok) {
     throw new Error(`Loop API error ${res.status}: ${await res.text()}`);
   }
@@ -187,7 +217,7 @@ async function loopSubscriptionMutation(
   body?: Record<string, unknown>
 ): Promise<void> {
   const url = `${BASE_URL}/subscription/${subscriptionId}/${action}`;
-  const res = await fetch(url, {
+  const res = await fetchWithRetry(url, {
     method: "POST",
     headers: getLoopHeaders(),
     ...(body ? { body: JSON.stringify(body) } : {}),
@@ -201,7 +231,7 @@ const STOREFRONT_BASE_URL = BASE_URL.replace("/admin/", "/storefront/");
 
 async function generateLoopSessionToken(shopifyCustomerId: string): Promise<string> {
   const url = `${BASE_URL}/customer/${encodeURIComponent(shopifyCustomerId)}/sessionToken`;
-  const res = await fetch(url, { method: "POST", headers: getLoopHeaders() });
+  const res = await fetchWithRetry(url, { method: "POST", headers: getLoopHeaders() });
   if (!res.ok) {
     throw new Error(`Loop sessionToken error ${res.status}: ${await res.text()}`);
   }
@@ -213,7 +243,7 @@ async function generateLoopSessionToken(shopifyCustomerId: string): Promise<stri
 
 async function exchangeLoopSessionTokenForAccessToken(sessionToken: string): Promise<string> {
   const url = `${STOREFRONT_BASE_URL}/auth/refreshToken`;
-  const res = await fetch(url, {
+  const res = await fetchWithRetry(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ sessionToken }),
@@ -244,7 +274,7 @@ export async function swapLoopSubscriptionProduct(params: {
   const body: Record<string, unknown> = { variantShopifyId, quantity };
   if (sellingPlanGroupId != null) body.sellingPlanGroupId = sellingPlanGroupId;
 
-  const res = await fetch(url, {
+  const res = await fetchWithRetry(url, {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
@@ -292,7 +322,7 @@ export async function updateLoopSubscriptionNextBillingDate(
   };
 
   const url = `${BASE_URL}/subscription/${encodeURIComponent(subscriptionId)}/frequency`;
-  const res = await fetch(url, {
+  const res = await fetchWithRetry(url, {
     method: "PUT",
     headers: getLoopHeaders(),
     body: JSON.stringify({ billingPolicy, deliveryPolicy, discountType: "OLD", nextBillingDateEpoch }),
