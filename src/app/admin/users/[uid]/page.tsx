@@ -277,6 +277,10 @@ export default function AdminUserDetailPage() {
             {user.fit_profile?.shirtSize && (
               <Row label="Shirt size" value={user.fit_profile.shirtSize} />
             )}
+            {user.shopify_customer_id && (
+              <CopyRow label="Shopify ID" value={user.shopify_customer_id} />
+            )}
+            <CopyRow label="Firebase UID" value={user.uid} />
             {user.manage_url && (
               <a
                 href={user.manage_url}
@@ -406,6 +410,31 @@ function Row({ label, value }: { label: string; value: string }) {
     <div className="flex items-center justify-between gap-2">
       <span className="text-xs text-charcoal/40">{label}</span>
       <span className="text-xs text-charcoal font-medium text-right">{value}</span>
+    </div>
+  );
+}
+
+function CopyRow({ label, value }: { label: string; value: string }) {
+  const [copied, setCopied] = useState(false);
+  function copy() {
+    void navigator.clipboard.writeText(value).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-xs text-charcoal/40">{label}</span>
+      <button
+        onClick={copy}
+        title="Copy to clipboard"
+        className="flex items-center gap-1 text-xs text-charcoal/60 font-mono hover:text-forest transition-colors"
+      >
+        <span className="truncate max-w-[140px]">{value}</span>
+        <span className="shrink-0 text-charcoal/30 hover:text-forest">
+          {copied ? "✓" : "⎘"}
+        </span>
+      </button>
     </div>
   );
 }
