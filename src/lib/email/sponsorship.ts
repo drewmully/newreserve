@@ -27,8 +27,12 @@ function tag(name: string, value: string): { name: string; value: string } {
 const BASE_TAGS = [tag("category", "sponsorship")];
 
 /**
- * Sent to the sponsor when a friend they sponsored finishes their first
- * paid order. Fires from the orders-paid webhook.
+ * Sent to the sponsor every time a friend they sponsored finishes their
+ * first paid order. Fires from the orders-paid webhook.
+ *
+ * The First Dozen badge has no dedicated email. It ships included in this
+ * note (which fires on every attributed sponsorship, including the first),
+ * with the lead line tuned to mark the first one specifically.
  */
 export async function sendSponsorAttributedEmail(input: {
   to: string;
@@ -38,15 +42,23 @@ export async function sendSponsorAttributedEmail(input: {
   totalCount: number;
 }): Promise<string | null> {
   const greeting = input.sponsorFirstName ?? "there";
-  const subject = `${input.sponsoredEmail} just joined Mully Reserve through your sponsorship.`;
+  const isFirst = input.totalCount === 1;
+  const subject = isFirst
+    ? `Your first sponsorship just landed. The First Dozen is yours.`
+    : `${input.sponsoredEmail} just joined Mully Reserve through your sponsorship.`;
+
+  const opener = isFirst
+    ? `${input.sponsoredEmail} just signed up for Mully Reserve through your sponsorship link, your first one. That unlocks The First Dozen, which means a dozen Pro V1s headed to you and a dozen headed to them.`
+    : `${input.sponsoredEmail} just signed up for Mully Reserve through your sponsorship link. That puts you at ${input.totalCount} paid sponsorships.`;
+
   const text = `Hey ${greeting},
 
-Quick note. ${input.sponsoredEmail} just signed up for Mully Reserve through your sponsorship link. That puts you at ${input.totalCount} paid sponsorship${input.totalCount === 1 ? "" : "s"}.
+${opener}
 
 You can see your full sponsorship board, including badges and progress, here:
 ${ACCOUNT_URL}
 
-Thanks for bringing them in. The Pro V1s are headed your way and theirs, we'll follow up with shipping confirmation.
+Thanks for bringing them in. We'll follow up with shipping confirmation on the Pro V1s.
 
 Drew`;
 
@@ -55,7 +67,7 @@ Drew`;
     subject,
     text,
     idempotencyKey: `sponsor-attributed-${input.sponsorshipId}`,
-    tags: [...BASE_TAGS, tag("event", "attributed")],
+    tags: [...BASE_TAGS, tag("event", "attributed"), tag("is_first", isFirst ? "true" : "false")],
   });
 }
 
@@ -92,20 +104,21 @@ Drew`;
 }
 
 /**
- * Sent when a badge is earned. Both sponsor and (for first_dozen)
- * the sponsored party get a note tailored to the badge.
+ * Sent when a badge is earned. Note that first_dozen has no dedicated
+ * email, it rides inside sendSponsorAttributedEmail on the first attributed
+ * sponsorship instead. Only foursome, path_to_black, and the_18 fire here.
  */
 export async function sendBadgeEarnedEmail(input: {
   to: string;
   recipientFirstName: string | null;
-  badge: SponsorshipBadge;
+  badge: Exclude<SponsorshipBadge, "first_dozen">;
   rewardId: number;
-  /** "sponsor" or "sponsored", drives the role-specific copy on first_dozen. */
+  /** "sponsor" or "sponsored". Currently always "sponsor" for non-first_dozen badges. */
   role: "sponsor" | "sponsored";
 }): Promise<string | null> {
   const def = SPONSORSHIP_BADGES[input.badge];
   const greeting = input.recipientFirstName ?? "there";
-  const { subject, body } = badgeCopy(input.badge, input.role, greeting);
+  const { subject, body } = badgeCopy(input.badge, greeting);
 
   const text = `${body}
 
@@ -131,21 +144,10 @@ ${def.title}. ${def.tagline}`;
 }
 
 function badgeCopy(
-  badge: SponsorshipBadge,
-  role: "sponsor" | "sponsored",
+  badge: Exclude<SponsorshipBadge, "first_dozen">,
   greeting: string,
 ): { subject: string; body: string } {
   switch (badge) {
-    case "first_dozen":
-      return role === "sponsor"
-        ? {
-            subject: "The First Dozen is yours. Pro V1s incoming.",
-            body: `Hey ${greeting},\n\nYou just sponsored your first paid member, which means The First Dozen is unlocked. A dozen Pro V1s are headed to you, and a dozen are headed to them.\n\nKeep going. Every sponsorship from here adds another badge on your board.`,
-          }
-        : {
-            subject: "Welcome to Mully Reserve. A dozen Pro V1s are on their way.",
-            body: `Hey ${greeting},\n\nWelcome in. The person who sent you joined as your sponsor, so we're shipping you a dozen Pro V1s as a hello.\n\nFit profile takes 60 seconds. Get that set and your first quarterly box ships dialed.`,
-          };
     case "foursome":
       return {
         subject: "The Foursome is complete. Tee time on us.",
@@ -163,3 +165,4 @@ function badgeCopy(
       };
   }
 }
+

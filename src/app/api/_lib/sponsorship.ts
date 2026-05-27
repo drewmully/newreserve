@@ -340,7 +340,13 @@ async function fireNotifications(input: {
   }
 
   // Per-badge emails.
+  // first_dozen has no dedicated email. It rides inside the attribution
+  // email (sendSponsorAttributedEmail) on the first attributed sponsorship,
+  // which already fires above. Only foursome, path_to_black, and the_18
+  // fire a badge email.
   for (const badge of input.newBadges) {
+    if (badge === "first_dozen") continue;
+
     // Look up the reward id we just inserted to use as idempotency seed.
     const supabase = getSupabaseService();
     const { data: rewardRow } = await supabase
@@ -361,21 +367,6 @@ async function fireNotifications(input: {
           badge,
           rewardId,
           role: "sponsor",
-        }),
-      );
-    }
-    // For first_dozen we also send a tailored welcome touch to the
-    // sponsored party, but ONLY if the welcome path also exists. We
-    // already send sendSponsoredWelcomeEmail above for the general case,
-    // so we keep the badge email role-specific to the sponsor for now.
-    if (badge === "first_dozen" && input.sponsored?.email) {
-      tasks.push(
-        sendBadgeEarnedEmail({
-          to: input.sponsored.email,
-          recipientFirstName: input.sponsored.first_name,
-          badge,
-          rewardId,
-          role: "sponsored",
         }),
       );
     }
