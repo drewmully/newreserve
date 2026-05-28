@@ -7,11 +7,11 @@ import FoundingPartnerForm from "./components/FoundingPartnerForm";
 export const metadata: Metadata = {
   title: "Mully Boutique | For Simulator Clubs",
   description:
-    "The pro shop your simulator club deserves. Without the buying, the inventory, or the risk. Mully installs and operates a curated retail boutique inside your sim club — selling through your existing POS.",
+    "The pro shop your simulator club deserves. Mully installs and operates a curated retail boutique inside your sim club — selling through your existing POS.",
   openGraph: {
     title: "Mully Boutique | For Simulator Clubs",
     description:
-      "A retail-as-a-service program for private indoor golf simulator clubs. Consigned inventory, embroidery, merchandising — operated by Mully, paid through your existing POS.",
+      "A retail-as-a-service program for private indoor golf simulator clubs. Consigned inventory, embroidery, merchandising — operated by Mully.",
     siteName: "Mully Reserve",
     type: "website",
     images: ["/simulatorclubs/atelier-installation.webp"],
@@ -46,73 +46,30 @@ function EyebrowLeft({ children }: { children: React.ReactNode }) {
 // DATA
 // ─────────────────────────────────────────────────────────────────────────────
 
-const QUOTES = [
-  {
-    text: "Do you sell any of this stuff?",
-    attribution: "A member at a Chicago sim club",
-  },
-  {
-    text: "Can I get this hoodie with the club logo on it?",
-    attribution: "A member at a Nashville sim club",
-  },
-  {
-    text: "Where'd you get those headcovers? Those are sick.",
-    attribution: "A member at a Denver sim club",
-  },
-];
-
 const INSTALL_CARDS = [
   {
     title: "Curated Display Fixture",
-    body:
-      "A merchandised, brand-consistent display unit installed in your space — fit to your footprint and your aesthetic. Not a wire rack. A boutique fixture, designed to belong.",
-    note: "We select the SKUs. We handle the visual merchandising. We refresh it quarterly.",
+    body: "A merchandised, brand-consistent display, sized to your space. Not a wire rack.",
   },
   {
     title: "Consigned Inventory. Zero Capital.",
-    body:
-      "Every piece on your floor is Mully's until a member buys it. No purchase order. No minimum order quantity. No inventory on your books.",
-    note: "You capture margin on sell-through. We absorb the risk if it doesn't move.",
+    body: "Every piece is Mully's until a member buys it. No PO. No MOQ. No inventory on your books.",
   },
   {
     title: "On-Demand Embroidery",
-    body:
-      "The single most requested thing your members never get a clean answer on. Club logo digitized, approved colorways, turnaround defined.",
-    note: "Members order at the point of sale. We handle fulfillment.",
+    body: "Club logo digitized, approved colorways, turnaround defined. Members order at POS.",
   },
   {
     title: "Optional Self-Serve Kiosk",
-    body:
-      "At the Atelier tier, a slim self-serve kiosk lets members browse the catalog, choose embroidery, and complete a transaction without staff involvement.",
-    note: "For clubs with high traffic and minimal front-desk bandwidth.",
+    body: "Atelier tier. Members browse, embroider, check out — without staff.",
   },
 ];
 
 const FLOW_STEPS = [
-  {
-    label: "01",
-    title: "Mully delivers and installs",
-    body:
-      "We ship the fixture, the inventory, and all branded materials. Installation takes two to three weeks. Your team's involvement: access and a thirty-minute walkthrough.",
-  },
-  {
-    label: "02",
-    title: "Members shop through your POS",
-    body:
-      "Every transaction runs through your existing point-of-sale system. No new software. No redirect. From your POS, it is a retail line item like anything else you sell.",
-  },
-  {
-    label: "03",
-    title: "Mully restocks quarterly",
-    body:
-      "We track sell-through remotely. Each quarter, we rotate underperformers, introduce new SKUs, and refresh the merchandising. You do not place orders or talk to reps.",
-  },
-  {
-    label: "04",
-    title: "You get paid on sell-through",
-    body:
-      "At the end of each settlement period, you receive your margin on everything that sold. The inventory that didn't sell goes back to us. No loss. No write-down.",
-  },
+  { label: "01", title: "Mully delivers and installs", body: "Fixture, inventory, branded materials. Two to three weeks. Your involvement: access and a 30-minute walkthrough." },
+  { label: "02", title: "Members shop through your POS", body: "A retail line item like anything else you sell. No new software." },
+  { label: "03", title: "Mully restocks quarterly", body: "We rotate underperformers and refresh merchandising. You never call a rep." },
+  { label: "04", title: "You get paid on sell-through", body: "Margin settled each period. Unsold goes back. No write-down." },
 ];
 
 const TIERS = [
@@ -121,7 +78,7 @@ const TIERS = [
     name: "Starter",
     price: "No monthly fee",
     priceNote: "Revenue share on sell-through.",
-    bestFor: "Sim clubs exploring retail without commitment. Under 100 members.",
+    bestFor: "Sim clubs under 100 members. Retail without commitment.",
     branding: "Mully-branded. Your club name optional.",
     bullets: [
       "Curated Mully gift box at your front desk",
@@ -129,7 +86,6 @@ const TIERS = [
       "Co-branded landing page on request",
       "Quarterly SKU refresh on the gift box",
       "Mully-managed returns and restocking",
-      "Access to embroidery ordering portal",
       "Founding partner pricing locked at sign-up",
     ],
     cta: "Start with the gift box",
@@ -140,18 +96,17 @@ const TIERS = [
     name: "Boutique",
     price: "$995/month",
     priceNote: "Plus revenue share negotiated at signing.",
-    bestFor: "Established sim clubs with 100–500 members. Retail as a real revenue line.",
+    bestFor: "Established sim clubs with 100–500 members.",
     branding: "Co-branded — \"[Your Club] Pro Shop, curated by Mully.\"",
     bullets: [
       "Custom display fixture, installed and merchandised",
       "Full consigned inventory — no capital, no minimums",
       "On-demand embroidery with your logo on file",
       "Quarterly sell-through settlements",
-      "Quarterly inventory refresh and merchandising",
+      "Quarterly inventory refresh",
       "Dedicated club contact at Mully",
-      "Full returns management — handled by Mully",
       "Access to the full 40+ brand roster",
-      "12-month term · 24-month founding partner rate lock",
+      "12-month term · 24-month founding rate lock",
     ],
     cta: "Apply for Boutique",
     highlighted: true,
@@ -160,8 +115,8 @@ const TIERS = [
     key: "atelier" as const,
     name: "Atelier",
     price: "$2,000/month",
-    priceNote: "Plus one-time setup fee, scoped at signing.",
-    bestFor: "Flagship sim clubs with 300+ members. Brand-led operators.",
+    priceNote: "Plus one-time setup, scoped at signing.",
+    bestFor: "Flagship sim clubs with 300+ members.",
     branding: "White-label optional. Full operating silence available.",
     bullets: [
       "Everything in Boutique, plus:",
@@ -172,8 +127,6 @@ const TIERS = [
       "Annual capsule drop — exclusive to your club",
       "Private-label capsule program available",
       "Priority access to new brand additions",
-      "Co-branded signage and packaging",
-      "Quarterly business review with partnership team",
       "White-label option: Mully never appears member-facing",
     ],
     cta: "Inquire about Atelier",
@@ -182,64 +135,45 @@ const TIERS = [
 ];
 
 const BRANDS = [
-  "Rhone",
-  "Greyson",
-  "Quiet Golf",
-  "Penfold",
-  "Cuater",
-  "Field Day",
-  "Will Leather",
-  "Devereux",
-  "Bogey Boys",
-  "Holderness & Bourne",
-  "Linksoul",
-  "Manors",
-  "Eastside Golf",
-  "Malbon",
-  "Birds of Condor",
-  "Random Golf Club",
-  "Roger Federer Collection",
-  "Travis Mathew",
-  "Peter Millar",
-  "G/FORE",
-  "TRENDYGOLF",
-  "Sligo Wear",
-  "Criquet",
-  "Stitch Golf",
+  "Rhone", "Greyson", "Quiet Golf", "Penfold", "Cuater", "Field Day",
+  "Will Leather", "Devereux", "Bogey Boys", "Holderness & Bourne", "Linksoul",
+  "Manors", "Eastside Golf", "Malbon", "Birds of Condor", "Random Golf Club",
+  "Roger Federer Collection", "Travis Mathew", "Peter Millar", "G/FORE",
+  "TRENDYGOLF", "Sligo Wear", "Criquet", "Stitch Golf",
 ];
 
 const FAQ = [
   {
-    q: "Does this require integration with our POS system?",
-    a: "No. Mully Boutique sells through your existing POS as a standard retail SKU. There is no software integration, no API connection, and no new system for staff to learn. We set up the product catalog within your current system during installation. If your system can ring a retail item, it can run the boutique.",
+    q: "Does this require integration with our POS?",
+    a: "No. Mully Boutique sells through your existing POS as a standard retail SKU. We set up the catalog during installation. If your system can ring a retail item, it can run the boutique.",
   },
   {
     q: "Who owns the inventory on the floor?",
-    a: "Mully does — until a member buys it. Every piece in the display is on consignment. It does not appear on your balance sheet or affect your working capital. When a member purchases, ownership transfers at the point of sale and the margin flows to you through our settlement process.",
+    a: "Mully — until a member buys it. Everything is on consignment. It does not appear on your balance sheet or affect your working capital.",
   },
   {
     q: "What if items don't sell?",
-    a: "We rotate them out. At each quarterly refresh, underperforming SKUs go back to Mully and are replaced with new selections. You absorb no loss, no markdown, and no awkward overstock situation. If something isn't moving, that is our problem to solve, not yours.",
+    a: "We rotate them out at the quarterly refresh. You absorb no loss, no markdown, no awkward overstock. If something isn't moving, that is our problem.",
   },
   {
     q: "Can we use our own branding instead of Mully's?",
-    a: "Yes — at the Atelier tier. The full white-label option lets you operate the boutique entirely under your club's name. Mully provides the infrastructure, the inventory, and the operations; your club is the brand your members see. At the Boutique tier, the model is co-branded. At Starter, Mully branding is primary.",
+    a: "Yes — at the Atelier tier. Full white-label lets you operate the boutique entirely under your club's name. Boutique tier is co-branded. Starter is Mully-primary.",
   },
   {
     q: "How long does installation take?",
-    a: "Two to three weeks from contract signing. That includes fixture sourcing, inventory selection and shipment, club logo digitization for the embroidery program, POS catalog setup, and a walkthrough with your team. Atelier installations with custom fixture builds may extend to four to six weeks.",
+    a: "Two to three weeks from contract. Atelier installations with custom fixtures may run four to six weeks.",
   },
   {
     q: "What is the contract length?",
-    a: "Boutique and Atelier require a 12-month minimum term. After the initial term, the agreement converts to month-to-month at current pricing unless renewed. Founding partners receive 24-month rate locks. The Starter tier has no contract minimum.",
+    a: "Boutique and Atelier require a 12-month minimum. Founding partners receive 24-month rate locks. Starter has no contract minimum.",
   },
   {
     q: "Do you handle member returns?",
-    a: "Yes, fully. Your staff processes returns through the POS the same way any return would work — and Mully handles the back-end. The item comes back to us, the member's account is settled, and nothing sits in your back office waiting for resolution.",
+    a: "Yes, fully. Your staff processes returns through the POS. Mully handles the back-end — nothing sits in your office waiting for resolution.",
   },
   {
-    q: "Can we do private-label capsule drops under our own club name?",
-    a: "Yes — at the Atelier tier. The private-label capsule program allows your club to offer a limited collection under your own brand: your logo, your colorways, your creative direction, Mully's sourcing and production. Typically seasonal drops — a spring kit, a holiday gift set — exclusive to your members.",
+    q: "Can we do private-label capsule drops?",
+    a: "Yes — at the Atelier tier. Your logo, your colorways, your direction. Mully's sourcing and production. Seasonal drops exclusive to your members.",
   },
 ];
 
@@ -288,9 +222,8 @@ export default function SimulatorClubsPage() {
             </h1>
 
             <p className="text-sm md:text-lg text-charcoal leading-relaxed mb-6 md:mb-7 max-w-md mx-auto md:mx-0">
-              Mully installs and operates a curated retail boutique inside your sim club —
-              consigned inventory, on-demand embroidery, zero capital — selling directly
-              through your existing POS.
+              A curated retail boutique inside your sim club. Consigned inventory.
+              On-demand embroidery. Sold through your existing POS.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3 sm:items-center mb-6">
@@ -309,8 +242,7 @@ export default function SimulatorClubsPage() {
             </div>
 
             <p className="text-[11px] text-charcoal/50 tracking-wide">
-              Currently onboarding founding simulator club partners for 2026.
-              Ten spots. Locked pricing.
+              Ten founding spots. 2026 cohort. Locked pricing.
             </p>
           </div>
 
@@ -330,72 +262,7 @@ export default function SimulatorClubsPage() {
         </div>
       </section>
 
-      {/* ─── SECTION 2: THE CATEGORY GAP ─── */}
-      <section className="py-20 md:py-28 px-6 md:px-12">
-        <div className="max-w-5xl mx-auto text-center">
-          <div className="mb-6">
-            <Eyebrow>The Retail Gap</Eyebrow>
-          </div>
-          <h2 className="font-serif text-3xl md:text-5xl text-forest leading-[1.1] tracking-tight mb-10 md:mb-12">
-            Country clubs have pro shops.
-            <span className="block text-forest/65">
-              Simulator clubs have a rack of logo hats.
-            </span>
-          </h2>
-          <div className="space-y-6 text-base md:text-lg text-charcoal/75 leading-relaxed max-w-3xl mx-auto text-left">
-            <p>
-              Indoor golf didn&apos;t grow slowly. In three years, the private simulator
-              club model went from a novelty to a legitimate membership category — with
-              dues structures, F&amp;B programs, wait lists, and members who treat the
-              sim bay like a second office.
-            </p>
-            <p>The membership model caught up. The retail experience didn&apos;t.</p>
-            <p>
-              Country clubs have spent decades building pro shop infrastructure — brand
-              relationships, buying calendars, merchandising staff, consignment programs.
-              Their members walk in knowing where to spend. The pro shop is a revenue
-              center and a retention tool.
-            </p>
-            <p>
-              Most simulator clubs inherited none of that. Their members are golfers
-              with taste and money, wearing Greyson and Rhone and Quiet Golf to every
-              session — gear they bought somewhere else, from someone else, with zero
-              margin coming back to the club.
-            </p>
-            <p className="text-forest font-medium">Mully Boutique exists to close that gap.</p>
-          </div>
-        </div>
-      </section>
-
-      {/* ─── SECTION 3: QUOTES (dark) ─── */}
-      <section className="py-20 md:py-28 px-6 md:px-12 bg-forest-dark text-bone">
-        <div className="max-w-6xl mx-auto">
-          <div className="text-center mb-12 md:mb-16">
-            <span className="inline-flex items-center gap-2.5 text-[11px] tracking-[0.32em] uppercase text-ember font-medium">
-              <span className="w-8 h-px bg-ember/40" />
-              <span>What Your Members Are Already Saying</span>
-              <span className="w-8 h-px bg-ember/40" />
-            </span>
-          </div>
-          <div className="grid md:grid-cols-3 gap-6 md:gap-8 mb-12">
-            {QUOTES.map((q) => (
-              <figure key={q.attribution} className="rounded-2xl border border-bone/12 p-7 md:p-8">
-                <blockquote className="font-serif italic text-xl md:text-2xl text-bone leading-snug mb-6">
-                  &ldquo;{q.text}&rdquo;
-                </blockquote>
-                <figcaption className="text-[11px] tracking-[0.22em] uppercase text-bone/45">
-                  — {q.attribution}
-                </figcaption>
-              </figure>
-            ))}
-          </div>
-          <p className="text-center font-serif text-2xl md:text-3xl text-bone/85 max-w-3xl mx-auto leading-snug">
-            Your members are already shopping. They&apos;re just not shopping here.
-          </p>
-        </div>
-      </section>
-
-      {/* ─── SECTION 4: WHAT WE INSTALL ─── */}
+      {/* ─── SECTION 2: THE BOUTIQUE ─── */}
       <section className="py-20 md:py-28 px-6 md:px-12">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-12 md:mb-16">
@@ -406,12 +273,8 @@ export default function SimulatorClubsPage() {
               Everything that makes a pro shop work.
               <span className="block text-forest/65">None of what makes it complicated.</span>
             </h2>
-            <p className="text-base text-charcoal/60 mt-6 max-w-2xl mx-auto leading-relaxed">
-              Four core components — modular, scalable, sized to the space you have.
-            </p>
           </div>
 
-          {/* Atelier image as the visual anchor for this section */}
           <div className="relative w-full aspect-[16/9] rounded-2xl overflow-hidden bg-[#162b1e] mb-12 md:mb-16 shadow-xl">
             <Image
               src="/simulatorclubs/atelier-installation.webp"
@@ -426,30 +289,25 @@ export default function SimulatorClubsPage() {
             {INSTALL_CARDS.map((c) => (
               <article key={c.title} className="rounded-2xl border border-taupe/15 bg-cream p-7 md:p-8">
                 <h3 className="font-serif text-2xl text-obsidian mb-3">{c.title}</h3>
-                <p className="text-sm md:text-base text-charcoal/70 leading-relaxed mb-3">
+                <p className="text-sm md:text-base text-charcoal/70 leading-relaxed">
                   {c.body}
                 </p>
-                <p className="text-sm text-charcoal/50 leading-relaxed italic">{c.note}</p>
               </article>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ─── SECTION 5: HOW INVISIBLE ─── */}
+      {/* ─── SECTION 3: HOW IT WORKS ─── */}
       <section id="how-it-works" className="py-20 md:py-28 px-6 md:px-12 bg-cream">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-12 md:mb-16">
             <div className="mb-5">
               <Eyebrow>Operations</Eyebrow>
             </div>
-            <h2 className="font-serif text-3xl md:text-5xl text-forest leading-[1.1] tracking-tight mb-6">
+            <h2 className="font-serif text-3xl md:text-5xl text-forest leading-[1.1] tracking-tight">
               We run the boutique. You run the club.
             </h2>
-            <p className="text-base md:text-lg text-charcoal/65 max-w-2xl mx-auto leading-relaxed">
-              The model is designed around a single constraint: simulator club operators
-              did not come from golf retail and should not have to act like they did.
-            </p>
           </div>
 
           <div className="grid md:grid-cols-4 gap-5 mb-12">
@@ -480,53 +338,37 @@ export default function SimulatorClubsPage() {
         </div>
       </section>
 
-      {/* ─── SECTION 6: ECONOMICS + CALCULATOR ─── */}
+      {/* ─── SECTION 4: CALCULATOR ─── */}
       <section className="py-20 md:py-28 px-6 md:px-12">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-10 md:mb-14">
             <div className="mb-5">
               <Eyebrow>The Numbers</Eyebrow>
             </div>
-            <h2 className="font-serif text-3xl md:text-5xl text-forest leading-[1.1] tracking-tight mb-6">
-              Retail is the only obvious lever left
-              <span className="block text-forest/65">once your bays are full.</span>
+            <h2 className="font-serif text-3xl md:text-5xl text-forest leading-[1.1] tracking-tight mb-5">
+              Put your numbers in.
+              <span className="block text-forest/65">The figure tends to surprise operators.</span>
             </h2>
-            <div className="max-w-3xl mx-auto space-y-5 text-base md:text-lg text-charcoal/70 leading-relaxed text-left mt-8">
-              <p>
-                Bay capacity is a ceiling. Once you&apos;re at utilization, the only
-                growth levers are dues, F&amp;B, and retail. Dues are politically
-                sensitive. F&amp;B is operationally demanding. Retail, with the right
-                model, is passive margin.
-              </p>
-              <p>
-                Your members spend roughly $1,200 per year on golf apparel. Almost none
-                of that spend happens at the club, because until now the club had
-                nothing worth buying.
-              </p>
-              <p className="text-charcoal/80">
-                Put your numbers in. The figure tends to surprise operators.
-              </p>
-            </div>
+            <p className="text-base md:text-lg text-charcoal/65 max-w-2xl mx-auto leading-relaxed">
+              Members spend roughly $1,200 a year on golf apparel. Almost none of it
+              happens at the club — because until now, the club had nothing worth buying.
+            </p>
           </div>
 
           <BoutiqueCalculator />
         </div>
       </section>
 
-      {/* ─── SECTION 7: TIERS ─── */}
+      {/* ─── SECTION 5: TIERS ─── */}
       <section className="py-20 md:py-28 px-6 md:px-12 bg-cream">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12 md:mb-16">
             <div className="mb-5">
               <Eyebrow>Partnership Tiers</Eyebrow>
             </div>
-            <h2 className="font-serif text-3xl md:text-5xl text-forest leading-[1.1] tracking-tight mb-5">
+            <h2 className="font-serif text-3xl md:text-5xl text-forest leading-[1.1] tracking-tight">
               Three ways in. One operating model.
             </h2>
-            <p className="text-base md:text-lg text-charcoal/60 max-w-2xl mx-auto leading-relaxed">
-              Every tier runs on the same consigned inventory model. The difference
-              is scale, branding, and what Mully brings to your floor.
-            </p>
           </div>
 
           <div className="grid lg:grid-cols-3 gap-5 lg:gap-6 items-stretch">
@@ -603,34 +445,21 @@ export default function SimulatorClubsPage() {
         </div>
       </section>
 
-      {/* ─── SECTION 8: BRAND WALL ─── */}
+      {/* ─── SECTION 6: BRAND WALL ─── */}
       <section className="py-20 md:py-28 px-6 md:px-12">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-10 md:mb-14">
             <div className="mb-5">
               <Eyebrow>The Brands</Eyebrow>
             </div>
-            <h2 className="font-serif text-3xl md:text-5xl text-forest leading-[1.1] tracking-tight mb-6">
+            <h2 className="font-serif text-3xl md:text-5xl text-forest leading-[1.1] tracking-tight mb-5">
               Forty brands worth wearing.
               <span className="block text-forest/65">Assembled by editors who play the game.</span>
             </h2>
-            <div className="space-y-5 text-base md:text-lg text-charcoal/70 leading-relaxed max-w-3xl mx-auto text-left">
-              <p>
-                The hardest part of running a pro shop isn&apos;t the fixture. It&apos;s
-                the buying.
-              </p>
-              <p>
-                Mully has spent four years building those relationships. The brands on
-                our roster work with us because of volume, editorial curation, and a
-                membership base that buys repeatedly. That access doesn&apos;t transfer
-                to a club ordering twelve pieces a quarter through a rep who&apos;s
-                never heard of you.
-              </p>
-              <p>
-                When you open a Mully Boutique, you inherit the roster. No club rep
-                replicates this. No wholesale platform gets you here.
-              </p>
-            </div>
+            <p className="text-base md:text-lg text-charcoal/65 max-w-2xl mx-auto leading-relaxed">
+              The hardest part of running a pro shop isn&apos;t the fixture. It&apos;s the buying.
+              Open a Mully Boutique and you inherit the roster.
+            </p>
           </div>
 
           <div className="rounded-2xl border border-taupe/15 bg-cream p-8 md:p-12">
@@ -651,7 +480,7 @@ export default function SimulatorClubsPage() {
         </div>
       </section>
 
-      {/* ─── SECTION 9: WHY NOW (with member-experience image) ─── */}
+      {/* ─── SECTION 7: WHY NOW (with member-experience image) ─── */}
       <section className="py-20 md:py-28 px-6 md:px-12 bg-forest-dark text-bone">
         <div className="max-w-6xl mx-auto grid md:grid-cols-2 gap-10 md:gap-14 items-center">
           <div>
@@ -662,32 +491,20 @@ export default function SimulatorClubsPage() {
               </span>
             </div>
             <h2 className="font-serif text-3xl md:text-5xl text-bone leading-[1.1] tracking-tight mb-7">
-              Indoor golf grew. Member expectations followed.
+              Indoor golf grew.
               <span className="block text-bone/55">Retail didn&apos;t.</span>
             </h2>
             <div className="space-y-5 text-base text-bone/75 leading-relaxed">
               <p>
-                Indoor golf simulator clubs grew 70% over the past three years. The
-                membership model, once experimental, is now the dominant format for the
-                category. Private sim clubs operate with multi-year wait lists and ARPU
-                that competes with boutique fitness.
+                Sim clubs grew 70% in three years. ARPU competes with boutique fitness.
+                Member expectations followed.
               </p>
               <p>
-                <span className="text-bone font-medium">Member expectations shifted.</span>{" "}
-                The golfer joining a private sim club today has been to Five Iron. They
-                know what a well-run golf space looks like. They expect the experience
-                to be complete.
+                Bay utilization has a ceiling. Dues are political. F&amp;B is operational.
+                Retail, with the right model, is passive margin.
               </p>
-              <p>
-                <span className="text-bone font-medium">Retention is the battleground.</span>{" "}
-                Bay utilization is high. Competition is increasing. Retail, done correctly,
-                is an experience layer — another reason to come in, another thing members
-                associate with your brand.
-              </p>
-              <p>
-                <span className="text-bone font-medium">Apparel is the most under-monetized lever in the category.</span>{" "}
-                Food, beverage, events, referrals — they&apos;re all running. The window
-                to own retail is right now, before it becomes table stakes.
+              <p className="text-bone font-medium">
+                Apparel is the most under-monetized lever in the category.
               </p>
             </div>
           </div>
@@ -703,7 +520,7 @@ export default function SimulatorClubsPage() {
         </div>
       </section>
 
-      {/* ─── SECTION 10: PILOT OFFER + FORM ─── */}
+      {/* ─── SECTION 8: PILOT OFFER + FORM ─── */}
       <section id="apply" className="py-20 md:py-28 px-6 md:px-12 bg-forest text-bone">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-10 md:mb-14">
@@ -714,14 +531,13 @@ export default function SimulatorClubsPage() {
                 <span className="w-8 h-px bg-ember/40" />
               </span>
             </div>
-            <h2 className="font-serif text-3xl md:text-5xl text-bone leading-[1.08] tracking-tight mb-6">
+            <h2 className="font-serif text-3xl md:text-5xl text-bone leading-[1.08] tracking-tight mb-5">
               Ten simulator clubs. Locked pricing.
               <span className="block text-bone/65">A boutique built alongside you.</span>
             </h2>
             <p className="text-base md:text-lg text-bone/70 leading-relaxed max-w-2xl mx-auto">
-              We are onboarding ten founding simulator club partners for 2026. Locked
-              pricing for 24 months, priority access to new brand additions, and the
-              opportunity to shape the Mully Boutique product as we build it.
+              Ten founding partners for 2026. 24-month price lock. Priority on new brands.
+              A say in how the product gets built.
             </p>
           </div>
 
@@ -731,7 +547,7 @@ export default function SimulatorClubsPage() {
         </div>
       </section>
 
-      {/* ─── SECTION 11: FAQ ─── */}
+      {/* ─── SECTION 9: FAQ ─── */}
       <section className="py-20 md:py-28 px-6 md:px-12">
         <div className="max-w-3xl mx-auto">
           <div className="text-center mb-12 md:mb-14">
@@ -739,7 +555,7 @@ export default function SimulatorClubsPage() {
               <Eyebrow>Frequently Asked</Eyebrow>
             </div>
             <h2 className="font-serif text-3xl md:text-5xl text-forest leading-[1.1] tracking-tight">
-              The questions operators ask
+              Questions operators ask
               <span className="block text-forest/65">before they sign.</span>
             </h2>
           </div>
@@ -770,11 +586,11 @@ export default function SimulatorClubsPage() {
         </div>
       </section>
 
-      {/* ─── SECTION 12: FOOTER CTA ─── */}
+      {/* ─── SECTION 10: FOOTER CTA ─── */}
       <section className="py-20 md:py-24 px-6 md:px-12 bg-forest-dark text-bone text-center">
         <div className="max-w-4xl mx-auto">
           <h2 className="font-serif text-3xl md:text-5xl text-bone leading-[1.08] tracking-tight mb-8">
-            Mully is the boutique your members already wear.
+            The boutique your members already wear.
             <span className="block text-bone/55">Now in your clubhouse.</span>
           </h2>
           <a
@@ -784,7 +600,7 @@ export default function SimulatorClubsPage() {
             Apply for a Founding Partnership
           </a>
           <p className="text-[11px] text-bone/40 mt-5 tracking-wide">
-            Ten founding partners. 2026 cohort. Applications reviewed weekly.
+            Ten founding partners. 2026 cohort.
           </p>
         </div>
       </section>
@@ -804,7 +620,7 @@ export default function SimulatorClubsPage() {
             </span>
           </div>
           <p className="text-xs text-bone/35">
-            &copy; {new Date().getFullYear()} Mully Group, Inc. ·{" "}
+            &copy; 2026 Mully Group, Inc. ·{" "}
             <a href="mailto:boutique@mymully.com" className="hover:text-ember transition-colors">
               boutique@mymully.com
             </a>
