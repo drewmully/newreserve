@@ -13,17 +13,26 @@ import { useMemo, useState } from "react";
  * All numbers are illustrative and clearly labeled as such.
  */
 
-type TierKey = "boutique" | "atelier";
+type TierKey = "starter" | "boutique" | "atelier";
 
 type RangePair = { low: number; high: number };
 
-const TIERS: Record<TierKey, { label: string; subscription: number; setup: number; captureLow: number; captureHigh: number; }> = {
+const TIERS: Record<TierKey, { label: string; subscription: number; setup: number; captureLow: number; captureHigh: number; note: string; }> = {
+  starter: {
+    label: "Starter",
+    subscription: 0,
+    setup: 0,
+    captureLow: 0.03,
+    captureHigh: 0.08,
+    note: "Free. Mully gift box at the front desk. Revenue share on sell-through.",
+  },
   boutique: {
     label: "Boutique",
     subscription: 995,
     setup: 0,
     captureLow: 0.10,
     captureHigh: 0.20,
+    note: "Full fixture, consigned inventory, embroidery — co-branded.",
   },
   atelier: {
     label: "Atelier",
@@ -31,6 +40,7 @@ const TIERS: Record<TierKey, { label: string; subscription: number; setup: numbe
     setup: 5000,
     captureLow: 0.18,
     captureHigh: 0.30,
+    note: "Expanded footprint, kiosk option, white-label available.",
   },
 };
 
@@ -133,7 +143,7 @@ export default function BoutiqueCalculator() {
         {/* Tier selector */}
         <div>
           <p className="text-[11px] tracking-[0.28em] uppercase text-sage font-medium mb-3">Tier</p>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             {(Object.keys(TIERS) as TierKey[]).map((key) => {
               const isActive = tier === key;
               return (
@@ -141,7 +151,7 @@ export default function BoutiqueCalculator() {
                   key={key}
                   type="button"
                   onClick={() => setTier(key)}
-                  className={`px-4 py-3 rounded-xl border text-sm font-medium tracking-wider uppercase transition-all duration-300 ${
+                  className={`px-3 py-3 rounded-xl border text-xs sm:text-sm font-medium tracking-wider uppercase transition-all duration-300 ${
                     isActive
                       ? "bg-forest text-bone border-forest"
                       : "bg-bone border-taupe/25 text-charcoal/60 hover:border-forest/40 hover:text-forest"
@@ -153,7 +163,10 @@ export default function BoutiqueCalculator() {
             })}
           </div>
           <p className="text-[11px] text-charcoal/40 mt-3 leading-relaxed">
-            Capture rate range:{" "}
+            {TIERS[tier].note}
+          </p>
+          <p className="text-[11px] text-charcoal/40 mt-1 leading-relaxed">
+            Capture range:{" "}
             <span className="text-charcoal/65 tabular-nums">
               {(result.capture.low * 100).toFixed(0)}% – {(result.capture.high * 100).toFixed(0)}%
             </span>{" "}
@@ -217,7 +230,11 @@ export default function BoutiqueCalculator() {
               {fmt(result.annualFees)}
             </p>
             <p className="text-xs text-charcoal/45 mt-2 leading-relaxed">
-              Subscription{tier === "atelier" ? " + Year 1 setup" : ""}, zero inventory
+              {tier === "starter"
+                ? "No subscription. No setup. Zero inventory."
+                : tier === "atelier"
+                ? "Subscription + Year 1 setup, zero inventory"
+                : "Subscription, zero inventory"}
             </p>
           </div>
         </div>
