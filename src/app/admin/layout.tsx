@@ -15,6 +15,7 @@ const NAV_LINKS = [
   { href: "/admin/gifts", label: "Gifts" },
   { href: "/admin/sequences", label: "Sequences" },
   { href: "/admin/funnel", label: "Funnel" },
+  { href: "/admin/marketing-funnel", label: "Marketing" },
   { href: "/admin/email-replies", label: "Reply queue" },
   { href: "/admin/fix-legacy-tiers", label: "Fix legacy tiers" },
   { href: "/admin/fix-email-sequences", label: "Fix sequences" },
