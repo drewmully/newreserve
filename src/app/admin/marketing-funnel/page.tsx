@@ -1,56 +1,85 @@
 "use client";
 
 /**
- * /admin/marketing-funnel
+ * /admin/marketing-funnel  (v2)
  *
- * Cross-channel marketing dashboard. Data flow:
- *   • signups by tier + channel  ← /api/admin/marketing-funnel.membership_signups
- *   • website funnel              ← .website_funnel
- *   • pro shop by member tier     ← .pro_shop_by_members
- *   • email flow performance      ← .email_flows
- *   • ad spend by channel         ← .ad_spend_by_channel
- *
- * Period defaults to last 7 days; user can pick today/week/month/custom.
+ * Health-first marketing dashboard. Top KPIs reflect NEW customers only.
+ * Sections (top → bottom):
+ *   1. Headline KPIs (new customers, new revenue, ad spend, CAC)
+ *   2. Renewals sub-stat row (separate, not counted in KPIs)
+ *   3. Landing-page funnel (flowchart by pathname)
+ *   4. Ad platforms (live Google Ads + X placeholder)
+ *   5. Channel mix
+ *   6. Email flows — click step to preview the email + see purchases
+ *   7. Pro shop sales
  */
 
 import { useEffect, useState, useCallback } from "react";
 import { useMembership } from "@/app/context/MembershipContext";
 
-// ─── Types (mirror API response) ──────────────────────────────────────────────
-
 type Tier = "free" | "access" | "member" | "back9";
+type Period = "today" | "week" | "month" | "custom";
+
+interface AdPlatform {
+  available: boolean;
+  reason?: string;
+  spend_cents: number;
+  clicks: number;
+  conversions: number;
+  impressions: number;
+}
 
 interface ApiResponse {
   window: { start: string; end: string };
-  membership_signups: {
-    total_by_tier: Record<Tier, number>;
-    by_tier_and_channel: Record<Tier, Record<string, number>>;
+  headline: {
+    brand_new: number;
+    brand_new_revenue_cents: number;
+    returning_resub: number;
+    returning_resub_revenue_cents: number;
+    active_new_sales: number;
+    active_new_revenue_cents: number;
+    renewals: number;
+    renewal_revenue_cents: number;
+    pro_shop_orders: number;
+    pro_shop_revenue_cents: number;
+    ad_spend_cents: number;
+    cac_cents: number;
   };
-  website_funnel: {
+  landing_pages: Array<{
+    path: string;
     page_views: number;
-    wallet_views: number;
-    add_to_cart: number;
     checkout_started: number;
     purchases: number;
-    revenue_cents: number;
+    cvr_pv_to_purchase: number;
+    cvr_pv_to_checkout: number;
+  }>;
+  funnel_totals: {
+    page_views: number;
+    checkout_started: number;
+    purchases: number;
   };
-  pro_shop_by_members: Array<{
-    tier: Tier | "non_member";
-    orders: number;
-    units: number;
-    revenue_cents: number;
-    top_acquisition_channel: string | null;
-    channels: Record<string, number>;
-  }>;
-  email_flows: Record<Tier, {
-    users: { active: number; paused: number; completed: number; total: number };
-    steps: Array<{ step: number; delayDays: number; sent: number; opened: number; clicked: number; replied: number }>;
-  }>;
-  ad_spend_by_channel: Array<{ channel: string; spend_cents: number; days: number }>;
-  meta: { signups_count: number; orders_count: number; kpi_days_loaded: number; email_events_loaded: number; users_indexed: number };
+  channels: Array<{ channel: string; sessions: number }>;
+  ad_platforms: {
+    google_ads: AdPlatform;
+    x_ads: AdPlatform;
+  };
+  email_flows: Record<
+    Tier,
+    {
+      users: { active: number; paused: number; completed: number; total: number };
+      steps: Array<{
+        step: number;
+        delayDays: number;
+        sent: number;
+        opened: number;
+        clicked: number;
+        replied: number;
+        purchased: number;
+      }>;
+    }
+  >;
+  meta: Record<string, number>;
 }
-
-type Period = "week" | "month" | "today" | "custom";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -67,106 +96,192 @@ function num(n: number | null | undefined): string {
   return n.toLocaleString();
 }
 
-function pct(n: number | null | undefined, digits = 0): string {
-  if (n === null || n === undefined || !Number.isFinite(n)) return "—";
-  return `${n.toFixed(digits)}%`;
+function dollars(cents: number | null | undefined): string {
+  if (cents === null || cents === undefined) return "$0";
+  return `$${(cents / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 }
 
-function dollars(cents: number | null | undefined): string {
-  if (cents === null || cents === undefined || cents === 0) return "$0";
-  return `$${(cents / 100).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+function pctStr(n: number, d: number): string {
+  if (!d) return "—";
+  return `${((n / d) * 100).toFixed(1)}%`;
 }
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
-
 function daysAgoISO(days: number): string {
   const d = new Date();
   d.setUTCDate(d.getUTCDate() - days);
   return d.toISOString().slice(0, 10);
 }
-
 function firstOfMonthISO(): string {
   const d = new Date();
   d.setUTCDate(1);
   return d.toISOString().slice(0, 10);
 }
 
-function CHANNEL_COLOR(channel: string): string {
-  // Stable color per channel
-  const palette = [
-    "bg-forest", "bg-ember", "bg-taupe", "bg-charcoal",
-    "bg-forest/70", "bg-ember/70", "bg-taupe/70", "bg-charcoal/70",
-  ];
-  let h = 0;
-  for (let i = 0; i < channel.length; i++) h = (h * 31 + channel.charCodeAt(i)) | 0;
-  return palette[Math.abs(h) % palette.length];
-}
+// ─── Small UI primitives ──────────────────────────────────────────────────────
 
-// ─── KPI card ─────────────────────────────────────────────────────────────────
-
-function KPICard({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function KPICard({
+  label,
+  value,
+  sub,
+  tone = "default",
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  tone?: "default" | "positive" | "warning";
+}) {
+  const accent =
+    tone === "positive"
+      ? "border-forest/40"
+      : tone === "warning"
+      ? "border-ember/40"
+      : "border-taupe/20";
   return (
-    <div className="bg-white border border-taupe/20 rounded-xl p-5">
-      <p className="text-xs uppercase tracking-widest text-charcoal/40 mb-2">{label}</p>
+    <div className={`bg-white border ${accent} rounded-xl p-5`}>
+      <p className="text-xs uppercase tracking-widest text-charcoal/40 mb-2">
+        {label}
+      </p>
       <p className="font-serif text-3xl text-obsidian">{value}</p>
-      {sub && <p className="text-xs text-charcoal/40 mt-1">{sub}</p>}
+      {sub && <p className="text-xs text-charcoal/50 mt-1">{sub}</p>}
     </div>
   );
 }
 
-// ─── Funnel bar ───────────────────────────────────────────────────────────────
-
-function FunnelStep({
-  label, count, maxCount, sublabel,
-}: { label: string; count: number; maxCount: number; sublabel?: string }) {
-  const pctWidth = maxCount > 0 ? (count / maxCount) * 100 : 0;
+function SectionHeading({ title, hint }: { title: string; hint?: string }) {
   return (
-    <div className="space-y-1.5">
-      <div className="flex items-center justify-between text-sm">
-        <span className="text-charcoal/70">{label}</span>
-        <div className="flex items-center gap-3">
-          {sublabel && <span className="text-xs text-charcoal/40">{sublabel}</span>}
-          <span className="font-medium text-obsidian">{num(count)}</span>
-        </div>
-      </div>
-      <div className="h-2 bg-bone rounded-full overflow-hidden">
-        <div
-          className="h-full bg-forest rounded-full transition-all duration-500"
-          style={{ width: `${pctWidth}%` }}
-        />
-      </div>
+    <div className="flex items-baseline justify-between mb-4">
+      <h2 className="font-serif text-xl text-obsidian">{title}</h2>
+      {hint && <p className="text-xs text-charcoal/40">{hint}</p>}
     </div>
   );
 }
 
-// ─── Channel mix bar (stacked) ────────────────────────────────────────────────
+// ─── Landing-page flowchart ───────────────────────────────────────────────────
 
-function ChannelMixBar({ channels }: { channels: Record<string, number> }) {
-  const total = Object.values(channels).reduce((a, b) => a + b, 0);
-  if (total === 0) return <p className="text-xs text-charcoal/40">No signups in this period.</p>;
-  const entries = Object.entries(channels).sort(([, a], [, b]) => b - a);
+function LandingPageFlowchart({ rows }: { rows: ApiResponse["landing_pages"] }) {
+  if (!rows.length) {
+    return (
+      <p className="text-sm text-charcoal/40">
+        No landing-page traffic in this window.
+      </p>
+    );
+  }
+  // Max page_views for proportional bar widths
+  const maxPV = Math.max(...rows.map((r) => r.page_views), 1);
+  return (
+    <div className="space-y-3">
+      {rows.map((r) => {
+        const widthPV = (r.page_views / maxPV) * 100;
+        const widthCO = r.page_views > 0 ? (r.checkout_started / r.page_views) * widthPV : 0;
+        const widthPurch = r.page_views > 0 ? (r.purchases / r.page_views) * widthPV : 0;
+        return (
+          <div
+            key={r.path}
+            className="border border-taupe/15 rounded-lg p-4 bg-bone/40"
+          >
+            <div className="flex items-baseline justify-between mb-3">
+              <p className="font-mono text-sm text-obsidian">{r.path}</p>
+              <p className="text-xs text-charcoal/50">
+                {pctStr(r.purchases, r.page_views)} overall CVR
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              {/* Landing */}
+              <div className="flex items-center gap-3 text-xs">
+                <span className="w-24 text-charcoal/60">Landing</span>
+                <div className="flex-1 h-5 bg-taupe/10 rounded overflow-hidden">
+                  <div
+                    className="h-full bg-forest/80 rounded"
+                    style={{ width: `${widthPV}%` }}
+                  />
+                </div>
+                <span className="w-16 text-right text-obsidian">
+                  {num(r.page_views)}
+                </span>
+              </div>
+              {/* Checkout started */}
+              <div className="flex items-center gap-3 text-xs">
+                <span className="w-24 text-charcoal/60">Checkout</span>
+                <div className="flex-1 h-5 bg-taupe/10 rounded overflow-hidden">
+                  <div
+                    className="h-full bg-forest rounded"
+                    style={{ width: `${widthCO}%` }}
+                  />
+                </div>
+                <span className="w-16 text-right text-obsidian">
+                  {num(r.checkout_started)}
+                  <span className="text-charcoal/40 ml-1">
+                    {pctStr(r.checkout_started, r.page_views)}
+                  </span>
+                </span>
+              </div>
+              {/* Purchase */}
+              <div className="flex items-center gap-3 text-xs">
+                <span className="w-24 text-charcoal/60">Purchase</span>
+                <div className="flex-1 h-5 bg-taupe/10 rounded overflow-hidden">
+                  <div
+                    className="h-full bg-ember rounded"
+                    style={{ width: `${widthPurch}%` }}
+                  />
+                </div>
+                <span className="w-16 text-right text-obsidian font-medium">
+                  {num(r.purchases)}
+                  <span className="text-charcoal/40 ml-1">
+                    {pctStr(r.purchases, r.checkout_started)}
+                  </span>
+                </span>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Channel bar ──────────────────────────────────────────────────────────────
+
+function ChannelBar({ rows }: { rows: ApiResponse["channels"] }) {
+  const total = rows.reduce((acc, r) => acc + r.sessions, 0);
+  if (!total) {
+    return <p className="text-sm text-charcoal/40">No channel data.</p>;
+  }
+  const palette = [
+    "bg-forest",
+    "bg-ember",
+    "bg-taupe",
+    "bg-charcoal",
+    "bg-forest/70",
+    "bg-ember/70",
+    "bg-taupe/70",
+    "bg-charcoal/70",
+  ];
   return (
     <div className="space-y-2">
-      <div className="flex h-2.5 rounded-full overflow-hidden bg-bone">
-        {entries.map(([ch, c]) => (
-          <div
-            key={ch}
-            className={`${CHANNEL_COLOR(ch)}`}
-            style={{ width: `${(c / total) * 100}%` }}
-            title={`${ch}: ${c}`}
-          />
-        ))}
+      <div className="flex w-full h-3 rounded overflow-hidden">
+        {rows.slice(0, 8).map((r, i) => {
+          const w = (r.sessions / total) * 100;
+          return (
+            <div
+              key={r.channel}
+              className={palette[i % palette.length]}
+              style={{ width: `${w}%` }}
+              title={`${r.channel}: ${r.sessions}`}
+            />
+          );
+        })}
       </div>
-      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
-        {entries.map(([ch, c]) => (
-          <div key={ch} className="flex items-center gap-1.5">
-            <div className={`w-2.5 h-2.5 rounded-sm ${CHANNEL_COLOR(ch)}`} />
-            <span className="text-charcoal/70">{ch}</span>
-            <span className="text-charcoal/40">·</span>
-            <span className="text-obsidian font-medium">{c}</span>
-            <span className="text-charcoal/40">({Math.round((c / total) * 100)}%)</span>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-1 text-xs">
+        {rows.slice(0, 8).map((r, i) => (
+          <div key={r.channel} className="flex items-center gap-2">
+            <span
+              className={`w-2 h-2 rounded-sm ${palette[i % palette.length]}`}
+            />
+            <span className="text-charcoal/70 truncate">{r.channel}</span>
+            <span className="text-charcoal/40 ml-auto">{r.sessions}</span>
           </div>
         ))}
       </div>
@@ -174,365 +289,512 @@ function ChannelMixBar({ channels }: { channels: Record<string, number> }) {
   );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+// ─── Ad platform card ─────────────────────────────────────────────────────────
+
+function AdPlatformCard({
+  name,
+  platform,
+}: {
+  name: string;
+  platform: AdPlatform;
+}) {
+  if (!platform.available) {
+    return (
+      <div className="bg-white border border-ember/30 rounded-xl p-5">
+        <p className="text-xs uppercase tracking-widest text-charcoal/40 mb-2">
+          {name}
+        </p>
+        <p className="font-serif text-lg text-ember">Needs config</p>
+        {platform.reason && (
+          <p className="text-xs text-charcoal/50 mt-1">{platform.reason}</p>
+        )}
+      </div>
+    );
+  }
+  return (
+    <div className="bg-white border border-taupe/20 rounded-xl p-5">
+      <p className="text-xs uppercase tracking-widest text-charcoal/40 mb-2">
+        {name}
+      </p>
+      <p className="font-serif text-3xl text-obsidian">
+        {dollars(platform.spend_cents)}
+      </p>
+      <div className="grid grid-cols-3 gap-2 mt-3 text-xs">
+        <div>
+          <p className="text-charcoal/40">Clicks</p>
+          <p className="text-obsidian">{num(platform.clicks)}</p>
+        </div>
+        <div>
+          <p className="text-charcoal/40">Conv.</p>
+          <p className="text-obsidian">{num(Math.round(platform.conversions))}</p>
+        </div>
+        <div>
+          <p className="text-charcoal/40">Impr.</p>
+          <p className="text-obsidian">{num(platform.impressions)}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Email flow table + drill-in modal ────────────────────────────────────────
+
+interface PreviewState {
+  flow: Tier;
+  step: number;
+  loading: boolean;
+  subject?: string;
+  text?: string;
+  error?: string;
+}
+
+function EmailFlowTable({
+  flow,
+  data,
+  onStepClick,
+}: {
+  flow: Tier;
+  data: ApiResponse["email_flows"][Tier];
+  onStepClick: (flow: Tier, step: number) => void;
+}) {
+  const totalSent = data.steps[0]?.sent ?? 0;
+  return (
+    <div className="bg-white border border-taupe/20 rounded-xl p-5">
+      <div className="flex items-baseline justify-between mb-3">
+        <h3 className="font-serif text-lg text-obsidian">{FLOW_LABELS[flow]}</h3>
+        <p className="text-xs text-charcoal/40">
+          {data.users.total} users · {data.users.active} active
+        </p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-[10px] uppercase tracking-widest text-charcoal/40 border-b border-taupe/20">
+              <th className="py-2 font-normal">Step</th>
+              <th className="py-2 font-normal text-right">Sent</th>
+              <th className="py-2 font-normal text-right">Open%</th>
+              <th className="py-2 font-normal text-right">Click%</th>
+              <th className="py-2 font-normal text-right">Replies</th>
+              <th className="py-2 font-normal text-right">Purchased</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.steps.map((s) => {
+              const openPct = s.sent > 0 ? (s.opened / s.sent) * 100 : 0;
+              const clickPct = s.sent > 0 ? (s.clicked / s.sent) * 100 : 0;
+              const lowEngagement =
+                s.sent > 0 && s.opened === 0 && s.clicked === 0;
+              return (
+                <tr
+                  key={s.step}
+                  className="border-b border-taupe/10 hover:bg-cream/50 cursor-pointer"
+                  onClick={() => onStepClick(flow, s.step)}
+                >
+                  <td className="py-2">
+                    <span className="text-obsidian">Day {s.delayDays}</span>
+                    <span className="text-charcoal/40 text-xs ml-2">
+                      #{s.step}
+                    </span>
+                  </td>
+                  <td className="py-2 text-right">{num(s.sent)}</td>
+                  <td
+                    className={`py-2 text-right ${
+                      lowEngagement ? "text-ember" : "text-charcoal/70"
+                    }`}
+                  >
+                    {openPct.toFixed(0)}%
+                  </td>
+                  <td
+                    className={`py-2 text-right ${
+                      lowEngagement ? "text-ember" : "text-charcoal/70"
+                    }`}
+                  >
+                    {clickPct.toFixed(0)}%
+                  </td>
+                  <td className="py-2 text-right text-charcoal/70">
+                    {num(s.replied)}
+                  </td>
+                  <td className="py-2 text-right text-forest font-medium">
+                    {num(s.purchased)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {totalSent > 0 &&
+        data.steps.length >= 4 &&
+        data.steps.slice(2).every((s) => s.sent === 0 || s.opened + s.clicked === 0) && (
+          <p className="text-xs text-ember mt-3">
+            Engagement drops to zero after day {data.steps[2]?.delayDays}. Consider
+            pausing later sends.
+          </p>
+        )}
+    </div>
+  );
+}
+
+function EmailPreviewModal({
+  preview,
+  onClose,
+}: {
+  preview: PreviewState | null;
+  onClose: () => void;
+}) {
+  if (!preview) return null;
+  return (
+    <div
+      className="fixed inset-0 bg-obsidian/60 z-50 flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="border-b border-taupe/20 p-5 flex items-center justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-widest text-charcoal/40">
+              {FLOW_LABELS[preview.flow]} · Step {preview.step}
+            </p>
+            <p className="font-serif text-lg text-obsidian mt-1">
+              {preview.loading
+                ? "Loading…"
+                : preview.error
+                ? "Failed to load"
+                : preview.subject}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-charcoal/40 hover:text-obsidian text-sm"
+          >
+            Close
+          </button>
+        </div>
+        <div className="p-5 overflow-y-auto">
+          {preview.loading && (
+            <p className="text-sm text-charcoal/40">Rendering email…</p>
+          )}
+          {preview.error && (
+            <p className="text-sm text-ember">{preview.error}</p>
+          )}
+          {preview.text && (
+            <pre className="whitespace-pre-wrap text-sm text-obsidian font-sans leading-relaxed">
+              {preview.text}
+            </pre>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function MarketingFunnelPage() {
   const { user: adminUser, authLoading } = useMembership();
-  const [data, setData] = useState<ApiResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState<Period>("week");
-  const [customStart, setCustomStart] = useState(daysAgoISO(6));
-  const [customEnd, setCustomEnd] = useState(todayISO());
+  const [customStart, setCustomStart] = useState<string>(daysAgoISO(6));
+  const [customEnd, setCustomEnd] = useState<string>(todayISO());
+  const [data, setData] = useState<ApiResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<PreviewState | null>(null);
 
-  const getHeaders = useCallback(async (): Promise<HeadersInit> => {
-    if (!adminUser) throw new Error("Not authenticated");
+  const computeWindow = useCallback((): { start: string; end: string } => {
+    if (period === "today") return { start: todayISO(), end: todayISO() };
+    if (period === "week") return { start: daysAgoISO(6), end: todayISO() };
+    if (period === "month") return { start: firstOfMonthISO(), end: todayISO() };
+    return { start: customStart, end: customEnd };
+  }, [period, customStart, customEnd]);
+
+  const authHeaders = useCallback(async (): Promise<HeadersInit | null> => {
+    if (!adminUser) return null;
     const token = await adminUser.getIdToken();
     return { Authorization: `Bearer ${token}` };
   }, [adminUser]);
 
-  const load = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     if (authLoading || !adminUser) return;
     setLoading(true);
     setError(null);
     try {
-      let start: string;
-      let end = todayISO();
-      if (period === "today") { start = todayISO(); }
-      else if (period === "week") { start = daysAgoISO(6); }
-      else if (period === "month") { start = firstOfMonthISO(); }
-      else { start = customStart; end = customEnd; }
-
-      const params = new URLSearchParams({ start, end });
-      const res = await fetch(`/api/admin/marketing-funnel?${params.toString()}`, {
-        headers: await getHeaders(),
-      });
+      const headers = await authHeaders();
+      if (!headers) throw new Error("Not signed in");
+      const { start, end } = computeWindow();
+      const res = await fetch(
+        `/api/admin/marketing-funnel?start=${start}&end=${end}`,
+        { headers }
+      );
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || `Request failed (${res.status})`);
+        const e = await res.json().catch(() => ({}));
+        throw new Error(e.error || `HTTP ${res.status}`);
       }
-      const j = (await res.json()) as ApiResponse;
-      setData(j);
-    } catch (e) {
-      setError((e as Error).message);
+      const json = (await res.json()) as ApiResponse;
+      setData(json);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load");
     } finally {
       setLoading(false);
     }
-  }, [authLoading, adminUser, period, customStart, customEnd, getHeaders]);
+  }, [adminUser, authLoading, authHeaders, computeWindow]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void fetchData();
+  }, [fetchData]);
 
-  // ── Derived ────────────────────────────────────────────────────────────────
-  const websiteFunnel = data?.website_funnel;
-  const maxFunnel = websiteFunnel
-    ? Math.max(websiteFunnel.page_views, websiteFunnel.wallet_views, websiteFunnel.add_to_cart, websiteFunnel.checkout_started, websiteFunnel.purchases, 1)
-    : 1;
-  const totalSignups = data ? Object.values(data.membership_signups.total_by_tier).reduce((a, b) => a + b, 0) : 0;
-  const totalSpendCents = data?.ad_spend_by_channel.reduce((a, c) => a + c.spend_cents, 0) ?? 0;
-  const totalRevenueCents = websiteFunnel?.revenue_cents ?? 0;
-  const roas = totalSpendCents > 0 ? totalRevenueCents / totalSpendCents : null;
-
-  // CAC = spend / paid signups (access + member)
-  const paidSignups = data ? (data.membership_signups.total_by_tier.access + data.membership_signups.total_by_tier.member) : 0;
-  const cacCents = paidSignups > 0 ? Math.round(totalSpendCents / paidSignups) : null;
+  const openPreview = useCallback(
+    async (flow: Tier, step: number) => {
+      if (!adminUser) return;
+      setPreview({ flow, step, loading: true });
+      try {
+        const headers = await authHeaders();
+        if (!headers) throw new Error("Not signed in");
+        const res = await fetch(
+          `/api/admin/marketing-funnel/email-preview?flow=${flow}&step=${step}`,
+          { headers }
+        );
+        if (!res.ok) {
+          const e = await res.json().catch(() => ({}));
+          throw new Error(e.error || `HTTP ${res.status}`);
+        }
+        const json = (await res.json()) as {
+          flow: Tier;
+          step: number;
+          subject: string;
+          text: string;
+        };
+        setPreview({
+          flow,
+          step,
+          loading: false,
+          subject: json.subject,
+          text: json.text,
+        });
+      } catch (err) {
+        setPreview({
+          flow,
+          step,
+          loading: false,
+          error: err instanceof Error ? err.message : "Failed",
+        });
+      }
+    },
+    [adminUser, authHeaders]
+  );
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-10">
-      {/* Header */}
-      <div className="flex items-start justify-between mb-8 gap-4 flex-wrap">
+      {/* Header + period picker */}
+      <div className="flex items-end justify-between mb-8">
         <div>
-          <h1 className="font-serif text-3xl text-obsidian">Marketing Funnel</h1>
-          <p className="text-charcoal/50 text-sm mt-1">
-            {data ? `${data.window.start} → ${data.window.end}` : "Loading…"}
-          </p>
+          <h1 className="font-serif text-3xl text-obsidian">Marketing</h1>
+          {data && (
+            <p className="text-xs text-charcoal/40 mt-1">
+              {data.window.start} → {data.window.end}
+            </p>
+          )}
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
           {(["today", "week", "month", "custom"] as Period[]).map((p) => (
             <button
               key={p}
               onClick={() => setPeriod(p)}
-              className={`text-sm px-3 py-1.5 rounded-lg border transition-colors ${
+              className={`text-xs px-3 py-1.5 rounded border transition-colors ${
                 period === p
                   ? "bg-forest text-white border-forest"
-                  : "bg-white text-charcoal border-taupe/40 hover:border-forest/40"
+                  : "bg-white text-charcoal/70 border-taupe/30 hover:border-charcoal/40"
               }`}
             >
-              {p === "today" ? "Today" : p === "week" ? "7d" : p === "month" ? "MTD" : "Custom"}
+              {p === "today"
+                ? "Today"
+                : p === "week"
+                ? "7 days"
+                : p === "month"
+                ? "Month"
+                : "Custom"}
             </button>
           ))}
           {period === "custom" && (
-            <div className="flex items-center gap-2">
+            <>
               <input
                 type="date"
                 value={customStart}
                 onChange={(e) => setCustomStart(e.target.value)}
-                className="text-sm border border-taupe/40 rounded-lg px-3 py-1.5 bg-white text-charcoal focus:outline-none focus:ring-2 focus:ring-forest/30"
+                className="text-xs border border-taupe/30 rounded px-2 py-1"
               />
-              <span className="text-charcoal/40 text-sm">→</span>
               <input
                 type="date"
                 value={customEnd}
                 onChange={(e) => setCustomEnd(e.target.value)}
-                className="text-sm border border-taupe/40 rounded-lg px-3 py-1.5 bg-white text-charcoal focus:outline-none focus:ring-2 focus:ring-forest/30"
+                className="text-xs border border-taupe/30 rounded px-2 py-1"
               />
-            </div>
+            </>
           )}
           <button
-            onClick={() => void load()}
-            className="text-sm text-forest hover:underline ml-1"
+            onClick={fetchData}
+            className="text-xs px-3 py-1.5 rounded bg-obsidian text-white"
           >
-            Refresh
+            {loading ? "Loading…" : "Refresh"}
           </button>
         </div>
       </div>
 
       {error && (
-        <div className="bg-ember/10 border border-ember/20 rounded-xl p-4 text-sm text-ember mb-6">
-          {error}
+        <div className="bg-ember/10 border border-ember/30 rounded-lg p-4 mb-6">
+          <p className="text-sm text-ember">{error}</p>
         </div>
       )}
 
-      {loading || !data ? (
-        <p className="text-charcoal/40 text-sm">Loading…</p>
-      ) : (
-        <div className="space-y-6">
-          {/* ── Top KPIs ───────────────────────────────────────────────────── */}
-          <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
-            <KPICard
-              label="Signups"
-              value={num(totalSignups)}
-              sub={`${data.membership_signups.total_by_tier.access + data.membership_signups.total_by_tier.member} paid`}
+      {data && (
+        <>
+          {/* ── Headline KPIs (active new sales) ─────────────────────────── */}
+          <section className="mb-3">
+            <SectionHeading
+              title="Active new sales"
+              hint="Auto-renewals excluded"
             />
-            <KPICard
-              label="Revenue"
-              value={dollars(totalRevenueCents)}
-            />
-            <KPICard
-              label="Ad spend"
-              value={dollars(totalSpendCents)}
-            />
-            <KPICard
-              label="ROAS"
-              value={roas !== null ? `${roas.toFixed(1)}x` : "—"}
-              sub="revenue / spend"
-            />
-            <KPICard
-              label="CAC"
-              value={cacCents !== null ? dollars(cacCents) : "—"}
-              sub="spend / paid signup"
-            />
-          </div>
-
-          {/* ── Section 1: Membership Signups by Channel ───────────────────── */}
-          <div className="bg-white border border-taupe/20 rounded-xl p-6">
-            <p className="text-xs uppercase tracking-widest text-charcoal/40 mb-1">
-              1. New signups by tier and channel
-            </p>
-            <p className="text-sm text-charcoal/50 mb-6">
-              {totalSignups} total signups in this window.
-            </p>
-            <div className="grid gap-6 md:grid-cols-2">
-              {FLOW_ORDER.map((tier) => {
-                const total = data.membership_signups.total_by_tier[tier] ?? 0;
-                const channels = data.membership_signups.by_tier_and_channel[tier] ?? {};
-                return (
-                  <div key={tier} className="space-y-3">
-                    <div className="flex items-baseline justify-between">
-                      <h3 className="font-serif text-lg text-obsidian">{FLOW_LABELS[tier]}</h3>
-                      <span className="font-serif text-2xl text-obsidian">{num(total)}</span>
-                    </div>
-                    <ChannelMixBar channels={channels} />
-                  </div>
-                );
-              })}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <KPICard
+                label="Brand new"
+                value={num(data.headline.brand_new)}
+                sub={dollars(data.headline.brand_new_revenue_cents)}
+                tone="positive"
+              />
+              <KPICard
+                label="Returning resub"
+                value={num(data.headline.returning_resub)}
+                sub={dollars(data.headline.returning_resub_revenue_cents)}
+                tone="positive"
+              />
+              <KPICard
+                label="Ad spend"
+                value={dollars(data.headline.ad_spend_cents)}
+                sub={
+                  data.ad_platforms.google_ads.available
+                    ? "Live from Google Ads"
+                    : "Google Ads needs config"
+                }
+                tone={
+                  data.ad_platforms.google_ads.available ? "default" : "warning"
+                }
+              />
+              <KPICard
+                label="CAC"
+                value={
+                  data.headline.cac_cents > 0
+                    ? dollars(data.headline.cac_cents)
+                    : "—"
+                }
+                sub={
+                  data.headline.active_new_sales > 0
+                    ? `${data.headline.active_new_sales} active sales`
+                    : "No active sales"
+                }
+              />
             </div>
-          </div>
+          </section>
 
-          {/* ── Section 2: Website funnel ──────────────────────────────────── */}
-          <div className="bg-white border border-taupe/20 rounded-xl p-6">
-            <p className="text-xs uppercase tracking-widest text-charcoal/40 mb-1">
-              2. Website funnel
-            </p>
-            <p className="text-sm text-charcoal/50 mb-6">
-              All events captured server-side via Firestore <code className="text-xs">kpi_daily</code>.
-            </p>
-            <div className="space-y-5">
-              {websiteFunnel && (
-                <>
-                  <FunnelStep label="Page views" count={websiteFunnel.page_views} maxCount={maxFunnel} />
-                  <FunnelStep
-                    label="Wallet viewed"
-                    count={websiteFunnel.wallet_views}
-                    maxCount={maxFunnel}
-                    sublabel={websiteFunnel.page_views > 0 ? `${((websiteFunnel.wallet_views / websiteFunnel.page_views) * 100).toFixed(0)}% of views` : undefined}
-                  />
-                  <FunnelStep
-                    label="Added to cart"
-                    count={websiteFunnel.add_to_cart}
-                    maxCount={maxFunnel}
-                    sublabel={websiteFunnel.wallet_views > 0 ? `${((websiteFunnel.add_to_cart / websiteFunnel.wallet_views) * 100).toFixed(0)}% of wallet views` : undefined}
-                  />
-                  <FunnelStep
-                    label="Started checkout"
-                    count={websiteFunnel.checkout_started}
-                    maxCount={maxFunnel}
-                    sublabel={websiteFunnel.add_to_cart > 0 ? `${((websiteFunnel.checkout_started / websiteFunnel.add_to_cart) * 100).toFixed(0)}% of carts` : undefined}
-                  />
-                  <FunnelStep
-                    label="Purchased"
-                    count={websiteFunnel.purchases}
-                    maxCount={maxFunnel}
-                    sublabel={websiteFunnel.checkout_started > 0 ? `${((websiteFunnel.purchases / websiteFunnel.checkout_started) * 100).toFixed(0)}% of checkouts` : undefined}
-                  />
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* ── Section 3: Pro Shop purchases by member tier ──────────────── */}
-          <div className="bg-white border border-taupe/20 rounded-xl p-6">
-            <p className="text-xs uppercase tracking-widest text-charcoal/40 mb-1">
-              3. Pro shop orders by member tier
-            </p>
-            <p className="text-sm text-charcoal/50 mb-6">
-              From Shopify orders in window. Membership-billing orders are excluded.
-            </p>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-charcoal/50 text-xs uppercase tracking-wide border-b border-taupe/20">
-                    <th className="text-left py-2 font-medium">Tier</th>
-                    <th className="text-right py-2 font-medium">Orders</th>
-                    <th className="text-right py-2 font-medium">Units</th>
-                    <th className="text-right py-2 font-medium">Revenue</th>
-                    <th className="text-right py-2 font-medium">AOV</th>
-                    <th className="text-left py-2 font-medium pl-6">Top channel</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.pro_shop_by_members.map((row) => {
-                    const aov = row.orders > 0 ? row.revenue_cents / row.orders : 0;
-                    const label = row.tier === "non_member" ? "Non-member" : FLOW_LABELS[row.tier as Tier];
-                    return (
-                      <tr key={row.tier} className="border-b border-taupe/10 last:border-0">
-                        <td className="py-2.5 text-obsidian">{label}</td>
-                        <td className="py-2.5 text-right text-obsidian">{num(row.orders)}</td>
-                        <td className="py-2.5 text-right text-charcoal">{num(row.units)}</td>
-                        <td className="py-2.5 text-right text-obsidian font-medium">{dollars(row.revenue_cents)}</td>
-                        <td className="py-2.5 text-right text-charcoal">{row.orders > 0 ? dollars(aov) : "—"}</td>
-                        <td className="py-2.5 pl-6 text-charcoal/70">{row.top_acquisition_channel ?? "—"}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* ── Section 4: Email flow performance ─────────────────────────── */}
-          <div className="bg-white border border-taupe/20 rounded-xl p-6">
-            <p className="text-xs uppercase tracking-widest text-charcoal/40 mb-1">
-              4. Email flow performance
-            </p>
-            <p className="text-sm text-charcoal/50 mb-6">
-              Sent counts include all current sequence users at-or-past each step; opens/clicks/replies are scoped to the window.
-            </p>
-            <div className="space-y-8">
-              {FLOW_ORDER.map((flow) => {
-                const f = data.email_flows[flow];
-                if (!f) return null;
-                return (
-                  <div key={flow}>
-                    <div className="flex items-baseline justify-between mb-3">
-                      <h3 className="font-serif text-lg text-obsidian">{FLOW_LABELS[flow]}</h3>
-                      <span className="text-xs text-charcoal/50">
-                        {f.users.active} active · {f.users.paused} paused · {f.users.completed} completed
-                      </span>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="text-charcoal/50 text-xs uppercase tracking-wide border-b border-taupe/20">
-                            <th className="text-left py-2 font-medium">Step</th>
-                            <th className="text-right py-2 font-medium">Sent</th>
-                            <th className="text-right py-2 font-medium">Opened</th>
-                            <th className="text-right py-2 font-medium">Open %</th>
-                            <th className="text-right py-2 font-medium">Clicked</th>
-                            <th className="text-right py-2 font-medium">Click %</th>
-                            <th className="text-right py-2 font-medium">Replied</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {f.steps.map((s) => {
-                            const openRate = s.sent > 0 ? (s.opened / s.sent) * 100 : null;
-                            const clickRate = s.sent > 0 ? (s.clicked / s.sent) * 100 : null;
-                            return (
-                              <tr key={s.step} className="border-b border-taupe/10 last:border-0">
-                                <td className="py-2 text-obsidian">#{s.step} <span className="text-charcoal/40">(+{s.delayDays}d)</span></td>
-                                <td className="py-2 text-right text-obsidian">{num(s.sent)}</td>
-                                <td className="py-2 text-right text-charcoal">{num(s.opened)}</td>
-                                <td className="py-2 text-right text-charcoal/70">{pct(openRate)}</td>
-                                <td className="py-2 text-right text-charcoal">{num(s.clicked)}</td>
-                                <td className="py-2 text-right text-charcoal/70">{pct(clickRate)}</td>
-                                <td className="py-2 text-right text-charcoal">{num(s.replied)}</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* ── Section 5: Ad spend by channel ────────────────────────────── */}
-          <div className="bg-white border border-taupe/20 rounded-xl p-6">
-            <p className="text-xs uppercase tracking-widest text-charcoal/40 mb-1">
-              5. Ad spend by channel
-            </p>
-            <p className="text-sm text-charcoal/50 mb-6">
-              From Supabase <code className="text-xs">marketing_spend_daily</code>. Pulled daily by the Google Ads cron.
-            </p>
-            {data.ad_spend_by_channel.length === 0 ? (
-              <p className="text-sm text-charcoal/40">
-                No spend data for this window. Confirm the Google Ads cron has run recently.
-              </p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-charcoal/50 text-xs uppercase tracking-wide border-b border-taupe/20">
-                      <th className="text-left py-2 font-medium">Channel</th>
-                      <th className="text-right py-2 font-medium">Spend</th>
-                      <th className="text-right py-2 font-medium">Days w/ spend</th>
-                      <th className="text-right py-2 font-medium">Avg / day</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[...data.ad_spend_by_channel].sort((a, b) => b.spend_cents - a.spend_cents).map((row) => (
-                      <tr key={row.channel} className="border-b border-taupe/10 last:border-0">
-                        <td className="py-2.5 text-obsidian">{row.channel}</td>
-                        <td className="py-2.5 text-right text-obsidian font-medium">{dollars(row.spend_cents)}</td>
-                        <td className="py-2.5 text-right text-charcoal">{row.days}</td>
-                        <td className="py-2.5 text-right text-charcoal">
-                          {row.days > 0 ? dollars(Math.round(row.spend_cents / row.days)) : "—"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+          {/* Renewals + pro-shop sub-row */}
+          <section className="mb-10">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div className="bg-cream border border-taupe/20 rounded-xl p-4">
+                <p className="text-xs uppercase tracking-widest text-charcoal/40 mb-1">
+                  Auto-renewals
+                </p>
+                <p className="font-serif text-xl text-obsidian">
+                  {num(data.headline.renewals)}
+                </p>
+                <p className="text-xs text-charcoal/50">
+                  {dollars(data.headline.renewal_revenue_cents)}
+                </p>
               </div>
-            )}
-          </div>
+              <div className="bg-cream border border-taupe/20 rounded-xl p-4">
+                <p className="text-xs uppercase tracking-widest text-charcoal/40 mb-1">
+                  Total new revenue
+                </p>
+                <p className="font-serif text-xl text-obsidian">
+                  {dollars(data.headline.active_new_revenue_cents)}
+                </p>
+                <p className="text-xs text-charcoal/50">
+                  Brand new + resubs
+                </p>
+              </div>
+              <div className="bg-cream border border-taupe/20 rounded-xl p-4">
+                <p className="text-xs uppercase tracking-widest text-charcoal/40 mb-1">
+                  Pro shop orders
+                </p>
+                <p className="font-serif text-xl text-obsidian">
+                  {num(data.headline.pro_shop_orders)}
+                </p>
+                <p className="text-xs text-charcoal/50">
+                  {dollars(data.headline.pro_shop_revenue_cents)}
+                </p>
+              </div>
+            </div>
+          </section>
 
-          {/* Meta footer */}
-          <p className="text-xs text-charcoal/30 text-center pt-2">
-            {data.meta.signups_count} signups · {data.meta.orders_count} Shopify orders · {data.meta.kpi_days_loaded} KPI days · {data.meta.email_events_loaded} email events · {data.meta.users_indexed} users indexed
-          </p>
-        </div>
+          {/* ── Landing-page funnel ──────────────────────────────────────── */}
+          <section className="mb-10">
+            <SectionHeading
+              title="Landing-page funnel"
+              hint={`${num(data.funnel_totals.page_views)} page views → ${num(
+                data.funnel_totals.purchases
+              )} purchases`}
+            />
+            <div className="bg-white border border-taupe/20 rounded-xl p-5">
+              <LandingPageFlowchart rows={data.landing_pages} />
+            </div>
+          </section>
+
+          {/* ── Ad platforms ─────────────────────────────────────────────── */}
+          <section className="mb-10">
+            <SectionHeading title="Ad platforms" hint="Live data" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <AdPlatformCard
+                name="Google Ads"
+                platform={data.ad_platforms.google_ads}
+              />
+              <AdPlatformCard name="X Ads" platform={data.ad_platforms.x_ads} />
+            </div>
+          </section>
+
+          {/* ── Channel mix ──────────────────────────────────────────────── */}
+          <section className="mb-10">
+            <SectionHeading
+              title="Channel mix"
+              hint="From analytics events in window"
+            />
+            <div className="bg-white border border-taupe/20 rounded-xl p-5">
+              <ChannelBar rows={data.channels} />
+            </div>
+          </section>
+
+          {/* ── Email flows ──────────────────────────────────────────────── */}
+          <section className="mb-10">
+            <SectionHeading
+              title="Email flows"
+              hint="Click any step to preview"
+            />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {FLOW_ORDER.map((flow) => (
+                <EmailFlowTable
+                  key={flow}
+                  flow={flow}
+                  data={data.email_flows[flow]}
+                  onStepClick={openPreview}
+                />
+              ))}
+            </div>
+          </section>
+        </>
       )}
+
+      <EmailPreviewModal
+        preview={preview}
+        onClose={() => setPreview(null)}
+      />
     </div>
   );
 }
