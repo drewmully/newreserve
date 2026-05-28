@@ -32,12 +32,11 @@ interface AdPlatform {
 interface ApiResponse {
   window: { start: string; end: string };
   headline: {
-    brand_new: number;
-    brand_new_revenue_cents: number;
-    returning_resub: number;
-    returning_resub_revenue_cents: number;
-    active_new_sales: number;
-    active_new_revenue_cents: number;
+    new_reserve_members: number;
+    new_reserve_revenue_cents: number;
+    new_reserve_access: number;
+    new_reserve_member: number;
+    new_reserve_other: number;
     renewals: number;
     renewal_revenue_cents: number;
     pro_shop_orders: number;
@@ -649,23 +648,34 @@ export default function MarketingFunnelPage() {
 
       {data && (
         <>
-          {/* ── Headline KPIs (active new sales) ─────────────────────────── */}
+          {/* ── Headline KPIs (new reserve members) ──────────────────────── */}
           <section className="mb-3">
             <SectionHeading
-              title="Active new sales"
-              hint="Auto-renewals excluded"
+              title="New reserve members"
+              hint="Loop auto-renewals excluded"
             />
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <KPICard
-                label="Brand new"
-                value={num(data.headline.brand_new)}
-                sub={dollars(data.headline.brand_new_revenue_cents)}
+                label="New members"
+                value={num(data.headline.new_reserve_members)}
+                sub={
+                  [
+                    data.headline.new_reserve_access > 0 &&
+                      `${data.headline.new_reserve_access} Access`,
+                    data.headline.new_reserve_member > 0 &&
+                      `${data.headline.new_reserve_member} Member`,
+                    data.headline.new_reserve_other > 0 &&
+                      `${data.headline.new_reserve_other} other`,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ") || "—"
+                }
                 tone="positive"
               />
               <KPICard
-                label="Returning resub"
-                value={num(data.headline.returning_resub)}
-                sub={dollars(data.headline.returning_resub_revenue_cents)}
+                label="New revenue"
+                value={dollars(data.headline.new_reserve_revenue_cents)}
+                sub="From new sign-ups only"
                 tone="positive"
               />
               <KPICard
@@ -688,9 +698,9 @@ export default function MarketingFunnelPage() {
                     : "—"
                 }
                 sub={
-                  data.headline.active_new_sales > 0
-                    ? `${data.headline.active_new_sales} active sales`
-                    : "No active sales"
+                  data.headline.new_reserve_members > 0
+                    ? `${data.headline.new_reserve_members} new members`
+                    : "No new members"
                 }
               />
             </div>
@@ -698,27 +708,16 @@ export default function MarketingFunnelPage() {
 
           {/* Renewals + pro-shop sub-row */}
           <section className="mb-10">
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               <div className="bg-cream border border-taupe/20 rounded-xl p-4">
                 <p className="text-xs uppercase tracking-widest text-charcoal/40 mb-1">
-                  Auto-renewals
+                  Auto-renewals (Loop)
                 </p>
                 <p className="font-serif text-xl text-obsidian">
                   {num(data.headline.renewals)}
                 </p>
                 <p className="text-xs text-charcoal/50">
-                  {dollars(data.headline.renewal_revenue_cents)}
-                </p>
-              </div>
-              <div className="bg-cream border border-taupe/20 rounded-xl p-4">
-                <p className="text-xs uppercase tracking-widest text-charcoal/40 mb-1">
-                  Total new revenue
-                </p>
-                <p className="font-serif text-xl text-obsidian">
-                  {dollars(data.headline.active_new_revenue_cents)}
-                </p>
-                <p className="text-xs text-charcoal/50">
-                  Brand new + resubs
+                  {dollars(data.headline.renewal_revenue_cents)} · boring, not new sales
                 </p>
               </div>
               <div className="bg-cream border border-taupe/20 rounded-xl p-4">
@@ -764,7 +763,7 @@ export default function MarketingFunnelPage() {
           <section className="mb-10">
             <SectionHeading
               title="Channel mix"
-              hint="From analytics events in window"
+              hint="From PostHog page-view sessions"
             />
             <div className="bg-white border border-taupe/20 rounded-xl p-5">
               <ChannelBar rows={data.channels} />

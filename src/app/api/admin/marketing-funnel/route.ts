@@ -1,29 +1,33 @@
 /**
- * GET /api/admin/marketing-funnel  (v2)
+ * GET /api/admin/marketing-funnel  (v3)
  *
- * Health-first marketing dashboard. Data sources:
+ * Health-first marketing dashboard.
+ *
+ * Data sources (only):
  *
  *   1. Shopify Admin REST `/orders.json`  → source of truth for purchases.
- *      Each order is bucketed by Shopify-native signals only:
- *        - tags contain "Subscription" + "Billing cycle #N"
- *        - customer.orders_count = lifetime order count for the customer
- *      Buckets:
- *        • brand_new        : subscription, cycle #1, customer.orders_count == 1
- *        • returning_resub  : subscription, cycle #1, customer.orders_count > 1
- *        • auto_renewal     : subscription, cycle #2+ (Loop recurring)
- *        • pro_shop         : non-subscription order
+ *      Bucketing uses **Shopify tags + line items only** (no orders_count
+ *      since the embedded customer omits it):
  *
- *   2. Firestore `analytics_events` → landing-page funnel.
- *      Three stages only: page_view → checkout_started → purchase.
- *      Purchases are attributed back to landing path via email match to Shopify
- *      orders in the (brand_new + returning_resub) buckets.
+ *        new_reserve_member  : tags include "Subscription First Order"
+ *                              (regardless of customer history)
+ *        auto_renewal        : tags include "Subscription Recurring Order"
+ *        pro_shop            : no subscription tag, total > $1
+ *        skipped             : cancelled / unpaid / freebie ($0-$1)
  *
- *   3. Firestore `email_sequences` / `email_events` / `email_replies`
- *      → per-flow active/paused/completed, per-step sent/open/click/reply
- *      → per-step purchases via email match to (brand_new + returning_resub)
+ *      Tier is read from line item title:
+ *        Reserve Access | Reserve Member | Back 9 (Legacy) | other
  *
- *   4. Google Ads REST API (live)       → spend / clicks / conversions
- *      X Ads                            → placeholder (no connector)
+ *   2. PostHog HogQL (via personal API key)  → landing-page funnel + channel mix.
+ *      Stages: page_view → checkout_clicked / lp_subscription_checkout_clicked
+ *              → purchase
+ *      Property names: $pathname, $current_url, $referring_domain,
+ *                      utm_source, utm_medium, gclid, fbclid, twclid, email
+ *
+ *   3. Firestore email collections — unchanged from v2.
+ *
+ *   4. Google Ads REST (live)  → spend / clicks / conversions
+ *      X Ads                    → placeholder
  *
  * Query params: ?start=YYYY-MM-DD&end=YYYY-MM-DD  (defaults: last 7 days inclusive)
  * Auth: Firebase Bearer token, admin email allowlist.
@@ -68,78 +72,20 @@ function defaultWindow(): { start: string; end: string } {
   return { start: dateKey(start), end: dateKey(end) };
 }
 
-function normalizePath(rawUrl: unknown): string {
-  if (typeof rawUrl !== "string" || !rawUrl) return "(unknown)";
+function normalizePath(p: unknown): string {
+  if (typeof p !== "string" || !p) return "(unknown)";
+  let path = p;
+  // Strip query string if a full URL was passed
   try {
-    const u = new URL(rawUrl);
-    let p = u.pathname || "/";
-    if (p.length > 1 && p.endsWith("/")) p = p.slice(0, -1);
-    return p.toLowerCase();
+    if (path.startsWith("http")) path = new URL(path).pathname;
   } catch {
-    if (rawUrl.startsWith("/")) return rawUrl.split("?")[0].toLowerCase();
-    return "(unknown)";
+    /* noop */
   }
+  if (path.length > 1 && path.endsWith("/")) path = path.slice(0, -1);
+  return path.toLowerCase() || "/";
 }
 
-function classifyChannel(opts: {
-  utm_source?: unknown;
-  utm_medium?: unknown;
-  referrer?: unknown;
-  gclid?: unknown;
-  fbclid?: unknown;
-}): string {
-  const utmSource =
-    typeof opts.utm_source === "string" ? opts.utm_source.toLowerCase() : "";
-  const utmMedium =
-    typeof opts.utm_medium === "string" ? opts.utm_medium.toLowerCase() : "";
-  const referrer =
-    typeof opts.referrer === "string" ? opts.referrer.toLowerCase() : "";
-
-  if (opts.gclid) return "google_ads";
-  if (opts.fbclid) return "meta_ads";
-
-  if (utmSource) {
-    if (utmSource.includes("google") && utmMedium.includes("cpc")) return "google_ads";
-    if (utmSource.includes("google")) return "google_organic";
-    if (
-      utmSource.includes("facebook") ||
-      utmSource.includes("meta") ||
-      utmSource === "ig" ||
-      utmSource === "instagram"
-    ) {
-      return utmMedium.includes("cpc") || utmMedium.includes("paid")
-        ? "meta_ads"
-        : "meta_organic";
-    }
-    if (utmSource.includes("twitter") || utmSource === "x") return "x_ads";
-    if (utmSource.includes("klaviyo") || utmSource === "email" || utmMedium === "email")
-      return "email";
-    if (utmSource.includes("resend")) return "email";
-    if (utmSource === "sms" || utmMedium === "sms") return "sms";
-    if (utmSource === "direct") return "direct";
-    return utmSource;
-  }
-
-  if (referrer) {
-    try {
-      const host = new URL(referrer).hostname.replace(/^www\./, "");
-      if (host.includes("google")) return "google_organic";
-      if (host.includes("facebook") || host.includes("instagram"))
-        return "meta_organic";
-      if (host.includes("twitter") || host.includes("x.com")) return "x_organic";
-      if (host.includes("youtube")) return "youtube";
-      if (host.includes("mymully.com") || host.includes("mullybox"))
-        return "internal";
-      return host;
-    } catch {
-      /* noop */
-    }
-  }
-
-  return "direct";
-}
-
-// ─── Shopify (source of truth for purchases) ──────────────────────────────────
+// ─── Shopify ──────────────────────────────────────────────────────────────────
 
 interface ShopifyOrderRaw {
   id: number;
@@ -154,7 +100,6 @@ interface ShopifyOrderRaw {
     | {
         id: number;
         email: string | null;
-        orders_count?: number;
         created_at?: string;
       }
     | null;
@@ -164,10 +109,6 @@ interface ShopifyOrderRaw {
     price: string;
     product_id: number | null;
   }>;
-  note_attributes?: Array<{ name: string; value: string }>;
-  source_name?: string;
-  referring_site?: string;
-  landing_site?: string;
 }
 
 async function fetchShopifyOrdersInWindow(
@@ -179,7 +120,7 @@ async function fetchShopifyOrdersInWindow(
   const version = process.env.SHOPIFY_ADMIN_API_VERSION ?? "2024-10";
 
   if (!token || !domain) {
-    console.warn("[marketing-funnel v2] missing Shopify creds, skipping orders");
+    console.warn("[marketing-funnel v3] missing Shopify creds, skipping orders");
     return [];
   }
 
@@ -219,74 +160,344 @@ async function fetchShopifyOrdersInWindow(
 }
 
 type OrderBucket =
-  | "brand_new"
-  | "returning_resub"
+  | "new_reserve_member"
   | "auto_renewal"
   | "pro_shop"
   | "skipped";
 
+type ReserveTier = "access" | "member" | "back9" | "other";
+
 interface ClassifiedOrder {
   bucket: OrderBucket;
+  tier: ReserveTier;
   email: string;
   totalCents: number;
   paidAt: string;
-  billingCycle: number | null;
-  ordersCount: number;
+  orderNumber: number;
+  customerCreatedAt: string | null;
+}
+
+function tierFromLineItems(items: ShopifyOrderRaw["line_items"]): ReserveTier {
+  const titles = items.map((li) => (li.title || "").toLowerCase());
+  if (titles.some((t) => t.includes("reserve access"))) return "access";
+  if (titles.some((t) => t.includes("reserve member"))) return "member";
+  if (titles.some((t) => t.includes("back 9"))) return "back9";
+  return "other";
 }
 
 function classifyShopifyOrder(o: ShopifyOrderRaw): ClassifiedOrder {
   const tagsStr = (o.tags ?? "").toLowerCase();
   const tags = tagsStr.split(",").map((t) => t.trim());
-  const isSubscription = tags.some((t) => /^subscription(\b|$)/i.test(t));
-  const cycleTag = tags.find((t) => /^billing cycle #\d+/i.test(t));
-  const billingCycle = cycleTag
-    ? Number(cycleTag.replace(/[^\d]/g, "")) || null
-    : null;
-  const ordersCount = o.customer?.orders_count ?? 0;
+  const isFirstOrder = tags.some((t) => t === "subscription first order");
+  const isRecurring = tags.some((t) => t === "subscription recurring order");
+  const hasSubTag = tags.some((t) => t === "subscription");
+  const tier = tierFromLineItems(o.line_items);
   const email = (o.customer?.email ?? o.email ?? "").toLowerCase();
   const cents = Math.round(parseFloat(o.total_price || "0") * 100);
   const paidAt = o.created_at;
+  const customerCreatedAt = o.customer?.created_at ?? null;
 
-  // exclude cancelled / unpaid orders from headline counts
-  if (o.cancelled_at) {
-    return {
-      bucket: "skipped",
-      email,
-      totalCents: cents,
-      paidAt,
-      billingCycle,
-      ordersCount,
-    };
-  }
-  if (o.financial_status && o.financial_status !== "paid") {
-    return {
-      bucket: "skipped",
-      email,
-      totalCents: cents,
-      paidAt,
-      billingCycle,
-      ordersCount,
-    };
-  }
+  const base = {
+    tier,
+    email,
+    totalCents: cents,
+    paidAt,
+    orderNumber: o.order_number,
+    customerCreatedAt,
+  };
+
+  // exclude cancelled / unpaid orders + freebies (< $5)
+  if (o.cancelled_at) return { ...base, bucket: "skipped" };
+  if (o.financial_status && o.financial_status !== "paid")
+    return { ...base, bucket: "skipped" };
+  if (cents < 500) return { ...base, bucket: "skipped" };
 
   let bucket: OrderBucket;
-  if (!isSubscription) {
-    bucket = "pro_shop";
-  } else if (billingCycle && billingCycle >= 2) {
+  if (isFirstOrder) {
+    bucket = "new_reserve_member";
+  } else if (isRecurring) {
     bucket = "auto_renewal";
-  } else if (billingCycle === 1 || billingCycle === null) {
-    // First-cycle subscription. Use orders_count to split brand_new vs returning.
-    bucket = ordersCount > 1 ? "returning_resub" : "brand_new";
+  } else if (!hasSubTag) {
+    bucket = "pro_shop";
   } else {
-    bucket = "skipped";
+    // subscription order without first/recurring tag — treat as renewal (safer)
+    bucket = "auto_renewal";
   }
 
-  return { bucket, email, totalCents: cents, paidAt, billingCycle, ordersCount };
+  return { ...base, bucket };
+}
+
+// ─── PostHog (HogQL) ──────────────────────────────────────────────────────────
+
+interface PostHogConfig {
+  projectId: string;
+  apiKey: string;
+  host: string;
+}
+
+function getPostHogConfig(): PostHogConfig | null {
+  const projectId = process.env.POSTHOG_PROJECT_ID;
+  const apiKey = process.env.POSTHOG_PERSONAL_API_KEY;
+  const host = process.env.POSTHOG_HOST || "https://us.i.posthog.com";
+  if (!projectId || !apiKey) return null;
+  return { projectId, apiKey, host };
+}
+
+async function runHogQL(
+  cfg: PostHogConfig,
+  query: string
+): Promise<unknown[][]> {
+  const res = await fetch(`${cfg.host}/api/projects/${cfg.projectId}/query/`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${cfg.apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ query: { kind: "HogQLQuery", query } }),
+  });
+  if (!res.ok) {
+    throw new Error(`PostHog HogQL ${res.status}: ${await res.text()}`);
+  }
+  const j = (await res.json()) as { results?: unknown[][] };
+  return j.results ?? [];
+}
+
+interface PathBucket {
+  page_views: number;
+  checkout_started: number;
+  purchases: number;
+}
+
+interface FunnelData {
+  paths: Record<string, PathBucket>;
+  emailToPath: Record<string, string>;
+  channelTotals: Record<string, number>;
+  pageViewSessions: number;
+  errors: string[];
+}
+
+async function fetchPostHogFunnel(
+  cfg: PostHogConfig,
+  start: string,
+  end: string
+): Promise<FunnelData> {
+  const startTs = `${start} 00:00:00`;
+  const endTs = `${end} 23:59:59`;
+  const errors: string[] = [];
+  const paths: Record<string, PathBucket> = {};
+  const ensure = (p: string): PathBucket => {
+    paths[p] ??= { page_views: 0, checkout_started: 0, purchases: 0 };
+    return paths[p];
+  };
+
+  // ── 1. page_view by pathname (sessions) ───────────────────────────────────
+  try {
+    const pvQ = `
+      SELECT properties.$pathname AS path,
+             count(DISTINCT properties.$session_id) AS sessions
+      FROM events
+      WHERE event = 'page_view'
+        AND timestamp >= toDateTime('${startTs}')
+        AND timestamp <= toDateTime('${endTs}')
+        AND properties.$pathname IS NOT NULL
+      GROUP BY path
+      ORDER BY sessions DESC
+      LIMIT 200
+    `;
+    for (const r of await runHogQL(cfg, pvQ)) {
+      const p = normalizePath(r[0]);
+      ensure(p).page_views += Number(r[1] ?? 0);
+    }
+  } catch (err) {
+    errors.push(`page_view: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  // ── 2. checkout events by pathname (unique sessions) ──────────────────────
+  try {
+    const coQ = `
+      SELECT properties.$pathname AS path,
+             count(DISTINCT properties.$session_id) AS sessions
+      FROM events
+      WHERE event IN ('checkout_clicked', 'lp_subscription_checkout_clicked', 'checkout_started')
+        AND timestamp >= toDateTime('${startTs}')
+        AND timestamp <= toDateTime('${endTs}')
+        AND properties.$pathname IS NOT NULL
+      GROUP BY path
+    `;
+    for (const r of await runHogQL(cfg, coQ)) {
+      const p = normalizePath(r[0]);
+      ensure(p).checkout_started += Number(r[1] ?? 0);
+    }
+  } catch (err) {
+    errors.push(`checkout: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  // ── 3. purchase events: attribute to landing path via earliest pageview ───
+  //      For each purchase email, pull the FIRST page_view path in the window.
+  const emailToPath: Record<string, string> = {};
+  try {
+    const purchaseEmailsQ = `
+      SELECT DISTINCT lower(toString(properties.email)) AS eml
+      FROM events
+      WHERE event = 'purchase'
+        AND timestamp >= toDateTime('${startTs}')
+        AND timestamp <= toDateTime('${endTs}')
+        AND properties.email IS NOT NULL
+    `;
+    const emails = (await runHogQL(cfg, purchaseEmailsQ))
+      .map((r) => String(r[0] ?? "").toLowerCase())
+      .filter((e) => e && e !== "null");
+
+    if (emails.length > 0) {
+      // First landing path per email in window (via distinct_id chain)
+      // Approach: for each email, find min(timestamp) page_view of any user
+      // that later identified with that email.
+      const emailListSql = emails.map((e) => `'${e.replace(/'/g, "''")}'`).join(",");
+      const landingQ = `
+        WITH purchase_ids AS (
+          SELECT DISTINCT distinct_id, lower(toString(properties.email)) AS eml
+          FROM events
+          WHERE event IN ('purchase', '$identify', 'email_submitted', 'login', 'account_created')
+            AND lower(toString(properties.email)) IN (${emailListSql})
+            AND timestamp >= toDateTime('${startTs}') - INTERVAL 30 DAY
+            AND timestamp <= toDateTime('${endTs}')
+        ),
+        first_pv AS (
+          SELECT pi.eml AS eml,
+                 argMin(properties.$pathname, e.timestamp) AS path
+          FROM events e
+          INNER JOIN purchase_ids pi ON e.distinct_id = pi.distinct_id
+          WHERE e.event = 'page_view'
+            AND e.timestamp >= toDateTime('${startTs}') - INTERVAL 30 DAY
+            AND e.timestamp <= toDateTime('${endTs}')
+            AND e.properties.$pathname IS NOT NULL
+          GROUP BY pi.eml
+        )
+        SELECT eml, path FROM first_pv
+      `;
+      for (const r of await runHogQL(cfg, landingQ)) {
+        const eml = String(r[0] ?? "").toLowerCase();
+        const path = normalizePath(r[1]);
+        if (eml) emailToPath[eml] = path;
+      }
+    }
+  } catch (err) {
+    errors.push(`purchase: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  // ── 4. Channel mix ────────────────────────────────────────────────────────
+  // Classify each unique session by its first-touch UTM / clid / referrer.
+  const channelTotals: Record<string, number> = {};
+  let pageViewSessions = 0;
+  try {
+    const channelQ = `
+      WITH session_first AS (
+        SELECT properties.$session_id AS sid,
+               argMin(properties.utm_source, timestamp) AS utm_src,
+               argMin(properties.utm_medium, timestamp) AS utm_med,
+               argMin(properties.$referring_domain, timestamp) AS ref,
+               argMin(properties.gclid, timestamp) AS gclid,
+               argMin(properties.fbclid, timestamp) AS fbclid,
+               argMin(properties.twclid, timestamp) AS twclid
+        FROM events
+        WHERE event = 'page_view'
+          AND timestamp >= toDateTime('${startTs}')
+          AND timestamp <= toDateTime('${endTs}')
+          AND properties.$session_id IS NOT NULL
+        GROUP BY sid
+      )
+      SELECT utm_src, utm_med, ref, gclid, fbclid, twclid, count() AS c
+      FROM session_first
+      GROUP BY utm_src, utm_med, ref, gclid, fbclid, twclid
+    `;
+    for (const r of await runHogQL(cfg, channelQ)) {
+      const [utmSrc, utmMed, ref, gclid, fbclid, twclid, cRaw] = r;
+      const c = Number(cRaw ?? 0);
+      const channel = classifyChannel({
+        utm_source: utmSrc,
+        utm_medium: utmMed,
+        referrer: ref,
+        gclid,
+        fbclid,
+        twclid,
+      });
+      channelTotals[channel] = (channelTotals[channel] ?? 0) + c;
+      pageViewSessions += c;
+    }
+  } catch (err) {
+    errors.push(`channels: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  return { paths, emailToPath, channelTotals, pageViewSessions, errors };
+}
+
+function classifyChannel(opts: {
+  utm_source?: unknown;
+  utm_medium?: unknown;
+  referrer?: unknown;
+  gclid?: unknown;
+  fbclid?: unknown;
+  twclid?: unknown;
+}): string {
+  const utmSource =
+    typeof opts.utm_source === "string" ? opts.utm_source.toLowerCase() : "";
+  const utmMedium =
+    typeof opts.utm_medium === "string" ? opts.utm_medium.toLowerCase() : "";
+  const referrer =
+    typeof opts.referrer === "string" ? opts.referrer.toLowerCase() : "";
+
+  const has = (v: unknown) => typeof v === "string" && v.length > 0;
+  if (has(opts.gclid)) return "google_ads";
+  if (has(opts.fbclid)) return "meta_ads";
+  if (has(opts.twclid)) return "x_ads";
+
+  if (utmSource) {
+    if (utmSource.includes("google") && utmMedium.includes("cpc"))
+      return "google_ads";
+    if (utmSource.includes("google") && (utmMedium.includes("paid") || utmMedium === "ads"))
+      return "google_ads";
+    if (utmSource.includes("google")) return "google_organic";
+    if (
+      utmSource.includes("facebook") ||
+      utmSource.includes("meta") ||
+      utmSource === "ig" ||
+      utmSource === "instagram"
+    ) {
+      return utmMedium.includes("cpc") || utmMedium.includes("paid")
+        ? "meta_ads"
+        : "meta_organic";
+    }
+    if (utmSource.includes("twitter") || utmSource === "x") return "x_ads";
+    if (
+      utmSource.includes("klaviyo") ||
+      utmSource === "email" ||
+      utmMedium === "email" ||
+      utmSource.includes("resend")
+    )
+      return "email";
+    if (utmSource === "sms" || utmMedium === "sms") return "sms";
+    if (utmSource === "direct" || utmSource === "$direct") return "direct";
+    return utmSource;
+  }
+
+  if (referrer && referrer !== "$direct") {
+    if (referrer.includes("google")) return "google_organic";
+    if (referrer.includes("facebook") || referrer.includes("instagram"))
+      return "meta_organic";
+    if (referrer.includes("twitter") || referrer.includes("x.com"))
+      return "x_organic";
+    if (referrer.includes("youtube")) return "youtube";
+    if (referrer.includes("mymully") || referrer.includes("mullybox"))
+      return "internal";
+    return referrer.replace(/^www\./, "");
+  }
+
+  return "direct";
 }
 
 // ─── Live Google Ads spend ────────────────────────────────────────────────────
 
-interface GoogleAdsSummary {
+interface AdPlatformSummary {
   available: boolean;
   reason?: string;
   spend_cents: number;
@@ -298,7 +509,7 @@ interface GoogleAdsSummary {
 async function fetchGoogleAdsLive(
   start: string,
   end: string
-): Promise<GoogleAdsSummary> {
+): Promise<AdPlatformSummary> {
   const developerToken = process.env.GOOGLE_ADS_DEVELOPER_TOKEN;
   const loginCustomerId = process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID;
   const customerId = process.env.GOOGLE_ADS_CUSTOMER_ID;
@@ -437,7 +648,7 @@ export async function GET(request: NextRequest) {
     // ── 1. Shopify orders (source of truth) ──────────────────────────────────
     const rawOrders = await fetchShopifyOrdersInWindow(start, end).catch(
       (err) => {
-        console.warn("[marketing-funnel v2] Shopify fetch failed:", err);
+        console.warn("[marketing-funnel v3] Shopify fetch failed:", err);
         return [] as ShopifyOrderRaw[];
       }
     );
@@ -449,33 +660,37 @@ export async function GET(request: NextRequest) {
       classified.push(c);
     }
 
-    let brandNewCount = 0;
-    let brandNewCents = 0;
-    let returningCount = 0;
-    let returningCents = 0;
+    let newCount = 0;
+    let newCents = 0;
+    let newAccessCount = 0;
+    let newMemberCount = 0;
+    let newOtherCount = 0;
     let renewalCount = 0;
     let renewalCents = 0;
     let proShopCount = 0;
     let proShopCents = 0;
 
-    // emails of buyers we consider "active new sales" — used for funnel + email step credit
-    const purchasingEmails = new Map<
+    // emails of "new reserve members" — used for funnel attribution + email step credit
+    const newMemberEmails = new Map<
       string,
-      { bucket: "brand_new" | "returning_resub"; paidAt: string }
+      { tier: ReserveTier; paidAt: string; orderNumber: number }
     >();
 
     for (const c of classified) {
       switch (c.bucket) {
-        case "brand_new":
-          brandNewCount++;
-          brandNewCents += c.totalCents;
-          if (c.email) purchasingEmails.set(c.email, { bucket: "brand_new", paidAt: c.paidAt });
-          break;
-        case "returning_resub":
-          returningCount++;
-          returningCents += c.totalCents;
+        case "new_reserve_member":
+          newCount++;
+          newCents += c.totalCents;
+          if (c.tier === "access") newAccessCount++;
+          else if (c.tier === "member") newMemberCount++;
+          else if (c.tier === "back9") newMemberCount++;
+          else newOtherCount++;
           if (c.email)
-            purchasingEmails.set(c.email, { bucket: "returning_resub", paidAt: c.paidAt });
+            newMemberEmails.set(c.email, {
+              tier: c.tier,
+              paidAt: c.paidAt,
+              orderNumber: c.orderNumber,
+            });
           break;
         case "auto_renewal":
           renewalCount++;
@@ -490,87 +705,31 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const activeNewSales = brandNewCount + returningCount;
-    const activeNewRevenueCents = brandNewCents + returningCents;
-
-    // ── 2. Analytics events: landing-page funnel + channel mix ───────────────
-    let evtDocs: FirebaseFirestore.QueryDocumentSnapshot[] = [];
-    try {
-      const snap = await adminDb
-        .collection("analytics_events")
-        .where("stored_at", ">=", startTs)
-        .where("stored_at", "<=", endTs)
-        .get();
-      evtDocs = snap.docs;
-    } catch (err) {
-      console.warn("[marketing-funnel v2] analytics_events range query failed:", err);
-    }
-
-    interface PathBucket {
-      page_views: number;
-      checkout_started: number;
-      purchases: number;
-    }
-    const pathStats: Record<string, PathBucket> = {};
-    const ensurePath = (p: string): PathBucket => {
-      pathStats[p] ??= { page_views: 0, checkout_started: 0, purchases: 0 };
-      return pathStats[p];
+    // ── 2. PostHog funnel + channel mix ───────────────────────────────────────
+    const phCfg = getPostHogConfig();
+    let funnel: FunnelData = {
+      paths: {},
+      emailToPath: {},
+      channelTotals: {},
+      pageViewSessions: 0,
+      errors: phCfg ? [] : ["POSTHOG_PERSONAL_API_KEY or POSTHOG_PROJECT_ID not set"],
     };
-
-    // email → earliest landing path observed in window
-    interface FirstTouch {
-      path: string;
-      channel: string;
-      ts: number;
-    }
-    const firstTouchByEmail: Record<string, FirstTouch> = {};
-    const channelTotals: Record<string, number> = {};
-
-    for (const doc of evtDocs) {
-      const e = doc.data() as Record<string, unknown>;
-      const eventName = e.event_name as string | undefined;
-      if (!eventName) continue;
-      const props = (e.properties ?? {}) as Record<string, unknown>;
-      const path = normalizePath(
-        e.page_url ?? props.page_url ?? props.pathname
-      );
-      const bucket = ensurePath(path);
-      if (eventName === "page_view") bucket.page_views++;
-      else if (eventName === "checkout_started") bucket.checkout_started++;
-
-      const ts =
-        (e.stored_at as Timestamp | undefined)?.toMillis() ??
-        (typeof e.timestamp === "number" ? e.timestamp * 1000 : 0);
-      const channel = classifyChannel({
-        utm_source: props.utm_source,
-        utm_medium: props.utm_medium,
-        referrer: props.referrer ?? props.$referrer,
-        gclid: props.gclid,
-        fbclid: props.fbclid,
-      });
-
-      const eml =
-        typeof props.email === "string" ? props.email.toLowerCase() : "";
-      if (eml) {
-        const existing = firstTouchByEmail[eml];
-        const isBetter =
-          !existing ||
-          (existing.channel === "direct" && channel !== "direct") ||
-          (existing.channel === channel && ts < existing.ts);
-        if (isBetter) firstTouchByEmail[eml] = { path, channel, ts };
+    if (phCfg) {
+      try {
+        funnel = await fetchPostHogFunnel(phCfg, start, end);
+      } catch (err) {
+        funnel.errors.push(err instanceof Error ? err.message : String(err));
       }
-
-      channelTotals[channel] = (channelTotals[channel] ?? 0) + 1;
     }
 
-    // Attribute Shopify purchases back to landing path via email match
-    for (const email of purchasingEmails.keys()) {
-      const t = firstTouchByEmail[email];
-      if (t) ensurePath(t.path).purchases++;
-      else ensurePath("(unknown)").purchases++;
+    // Attribute Shopify "new reserve member" purchases back to landing path
+    for (const email of newMemberEmails.keys()) {
+      const path = funnel.emailToPath[email] || "(unattributed)";
+      funnel.paths[path] ??= { page_views: 0, checkout_started: 0, purchases: 0 };
+      funnel.paths[path].purchases += 1;
     }
 
-    const landingPages = Object.entries(pathStats)
+    const landingPages = Object.entries(funnel.paths)
       .map(([path, b]) => ({
         path,
         page_views: b.page_views,
@@ -583,10 +742,11 @@ export async function GET(request: NextRequest) {
             ? +(b.checkout_started / b.page_views).toFixed(4)
             : 0,
       }))
+      .filter((r) => r.page_views > 0 || r.purchases > 0)
       .sort((a, b) => b.page_views - a.page_views)
       .slice(0, 12);
 
-    const funnelTotals = Object.values(pathStats).reduce(
+    const funnelTotals = Object.values(funnel.paths).reduce(
       (acc, b) => {
         acc.page_views += b.page_views;
         acc.checkout_started += b.checkout_started;
@@ -638,7 +798,6 @@ export async function GET(request: NextRequest) {
       if (eml) seqUsersByEmail[eml] = { email: eml, flow, lastSentStep };
     }
 
-    // email_events: opens / clicks per step
     let emailEventsDocs: FirebaseFirestore.QueryDocumentSnapshot[] = [];
     try {
       const ev = await adminDb
@@ -648,7 +807,7 @@ export async function GET(request: NextRequest) {
         .get();
       emailEventsDocs = ev.docs;
     } catch (err) {
-      console.warn("[marketing-funnel v2] email_events range query failed:", err);
+      console.warn("[marketing-funnel v3] email_events range query failed:", err);
     }
     const engagementCounts: Record<
       string,
@@ -670,7 +829,6 @@ export async function GET(request: NextRequest) {
       else engagementCounts[flow][step].clicked++;
     }
 
-    // email_replies: replies per step
     let replyDocs: FirebaseFirestore.QueryDocumentSnapshot[] = [];
     try {
       const rep = await adminDb
@@ -680,7 +838,7 @@ export async function GET(request: NextRequest) {
         .get();
       replyDocs = rep.docs;
     } catch (err) {
-      console.warn("[marketing-funnel v2] email_replies range query failed:", err);
+      console.warn("[marketing-funnel v3] email_replies range query failed:", err);
     }
     const replyCounts: Record<string, Record<number, number>> = {};
     for (const doc of replyDocs) {
@@ -693,9 +851,8 @@ export async function GET(request: NextRequest) {
       replyCounts[flow][step] = (replyCounts[flow][step] ?? 0) + 1;
     }
 
-    // Per-step PURCHASES via email match to brand_new + returning_resub
     const purchaseCounts: Record<string, Record<number, number>> = {};
-    for (const email of purchasingEmails.keys()) {
+    for (const email of newMemberEmails.keys()) {
       const seq = seqUsersByEmail[email];
       if (!seq) continue;
       purchaseCounts[seq.flow] ??= {};
@@ -736,7 +893,7 @@ export async function GET(request: NextRequest) {
 
     // ── 4. Live ad spend ─────────────────────────────────────────────────────
     const googleAds = await fetchGoogleAdsLive(start, end).catch((err) => {
-      console.warn("[marketing-funnel v2] Google Ads live fetch failed:", err);
+      console.warn("[marketing-funnel v3] Google Ads live fetch failed:", err);
       return {
         available: false,
         reason: err instanceof Error ? err.message : "unknown",
@@ -744,12 +901,12 @@ export async function GET(request: NextRequest) {
         clicks: 0,
         conversions: 0,
         impressions: 0,
-      } as GoogleAdsSummary;
+      } as AdPlatformSummary;
     });
 
-    const xAds: GoogleAdsSummary = {
+    const xAds: AdPlatformSummary = {
       available: false,
-      reason: "X Ads connector not configured",
+      reason: "X Ads connector not configured (twclid traffic shown in channel mix)",
       spend_cents: 0,
       clicks: 0,
       conversions: 0,
@@ -759,30 +916,28 @@ export async function GET(request: NextRequest) {
     const totalSpendCents = googleAds.spend_cents + xAds.spend_cents;
 
     // ── 5. Response ──────────────────────────────────────────────────────────
+    const channels = Object.entries(funnel.channelTotals)
+      .map(([channel, sessions]) => ({ channel, sessions }))
+      .sort((a, b) => b.sessions - a.sessions);
+
     return NextResponse.json({
       window: { start, end },
       headline: {
-        brand_new: brandNewCount,
-        brand_new_revenue_cents: brandNewCents,
-        returning_resub: returningCount,
-        returning_resub_revenue_cents: returningCents,
-        active_new_sales: activeNewSales,
-        active_new_revenue_cents: activeNewRevenueCents,
+        new_reserve_members: newCount,
+        new_reserve_revenue_cents: newCents,
+        new_reserve_access: newAccessCount,
+        new_reserve_member: newMemberCount,
+        new_reserve_other: newOtherCount,
         renewals: renewalCount,
         renewal_revenue_cents: renewalCents,
         pro_shop_orders: proShopCount,
         pro_shop_revenue_cents: proShopCents,
         ad_spend_cents: totalSpendCents,
-        cac_cents:
-          activeNewSales > 0
-            ? Math.round(totalSpendCents / activeNewSales)
-            : 0,
+        cac_cents: newCount > 0 ? Math.round(totalSpendCents / newCount) : 0,
       },
       landing_pages: landingPages,
       funnel_totals: funnelTotals,
-      channels: Object.entries(channelTotals)
-        .map(([channel, sessions]) => ({ channel, sessions }))
-        .sort((a, b) => b.sessions - a.sessions),
+      channels,
       ad_platforms: {
         google_ads: googleAds,
         x_ads: xAds,
@@ -790,17 +945,18 @@ export async function GET(request: NextRequest) {
       email_flows: emailFlows,
       meta: {
         shopify_orders: rawOrders.length,
-        brand_new: brandNewCount,
-        returning_resub: returningCount,
+        new_reserve_members: newCount,
         auto_renewals: renewalCount,
         pro_shop: proShopCount,
-        analytics_events: evtDocs.length,
+        posthog_page_view_sessions: funnel.pageViewSessions,
+        posthog_paths: Object.keys(funnel.paths).length,
+        posthog_errors: funnel.errors,
         sequences_in_window: seqSnap.size,
         email_events: emailEventsDocs.length,
       },
     });
   } catch (err) {
-    console.error("[admin/marketing-funnel v2] failed:", err);
+    console.error("[admin/marketing-funnel v3] failed:", err);
     const msg = err instanceof Error ? err.message : "Internal error";
     return NextResponse.json({ error: msg }, { status: 500 });
   }
