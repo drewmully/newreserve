@@ -13,7 +13,7 @@
  *  - Ad platforms · Email flows
  */
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useId } from "react";
 import { useMembership } from "@/app/context/MembershipContext";
 
 type Tier = "free" | "access" | "member" | "back9";
@@ -190,150 +190,248 @@ function SectionHeading({
   );
 }
 
-// ─── Funnel row — Sankey-style 3-stage with absolute drop-off ─────────────────
+// ─── Sankey chart — multi-source horizontal flow ─────────────────────────────
+//
+// One compact SVG with N source rows on the left, ribbons flowing rightward
+// through 3 stages (Visits → Checkout → Purchase). Each row's vertical height
+// is proportional to its visits, and the ribbon narrows as users drop off
+// between stages. Drop-off fades into a faint gutter on the right of each
+// stage so the loss is visible without dominating the chart.
 
-function FunnelRow({
-  label,
-  stages,
-  maxVisits,
-  highlight = false,
-}: {
+interface SankeySource {
+  key: string;
   label: string;
   stages: FunnelStages;
-  maxVisits: number;
   highlight?: boolean;
-}) {
-  const { visits, checkouts, purchases } = stages;
-
-  // proportional widths relative to global max
-  const wV = maxVisits > 0 ? (visits / maxVisits) * 100 : 0;
-  const wC = maxVisits > 0 ? (checkouts / maxVisits) * 100 : 0;
-  const wP = maxVisits > 0 ? (purchases / maxVisits) * 100 : 0;
-
-  const cvrCo = visits > 0 ? checkouts / visits : 0;
-  const cvrPu = visits > 0 ? purchases / visits : 0;
-
-  const overallTone = cvrTone(cvrPu, 0.005); // ≥ 0.5% overall is "ok"
-
-  return (
-    <div
-      className={`rounded-xl p-4 border transition-colors ${
-        highlight
-          ? "border-ember/40 bg-ember/5"
-          : "border-taupe/15 bg-white"
-      }`}
-    >
-      <div className="flex items-baseline justify-between mb-3 gap-3">
-        <p className="font-mono text-sm text-obsidian truncate">{label}</p>
-        <div className="flex items-center gap-2">
-          <span
-            className={`text-[10px] uppercase tracking-widest font-medium px-2 py-0.5 rounded-full ${
-              overallTone === "good"
-                ? "bg-forest/10 text-forest"
-                : overallTone === "warn"
-                ? "bg-ember/10 text-ember"
-                : "bg-charcoal/5 text-charcoal/40"
-            }`}
-          >
-            {pctStr(purchases, visits)} CVR
-          </span>
-        </div>
-      </div>
-
-      <div className="space-y-1.5">
-        {/* Visits */}
-        <FunnelBar
-          stageLabel="Visits"
-          count={visits}
-          widthPct={wV}
-          color={STAGE.visits}
-          rightLabel={null}
-        />
-        {/* Checkouts */}
-        <FunnelBar
-          stageLabel="Checkout"
-          count={checkouts}
-          widthPct={wC}
-          color={STAGE.checkouts}
-          rightLabel={`${pctStr(checkouts, visits)} of visits`}
-          rightTone={cvrTone(cvrCo, 0.01)}
-        />
-        {/* Purchases */}
-        <FunnelBar
-          stageLabel="Purchase"
-          count={purchases}
-          widthPct={wP}
-          color={STAGE.purchases}
-          rightLabel={
-            checkouts > 0
-              ? `${pctStr(purchases, checkouts)} of checkouts`
-              : null
-          }
-          rightTone={cvrTone(checkouts > 0 ? purchases / checkouts : 0, 0.2)}
-          bold
-        />
-      </div>
-    </div>
-  );
 }
 
-function FunnelBar({
-  stageLabel,
-  count,
-  widthPct,
-  color,
-  rightLabel,
-  rightTone,
-  bold = false,
+function Sankey({
+  sources,
+  height = 280,
 }: {
-  stageLabel: string;
-  count: number;
-  widthPct: number;
-  color: { bg: string; text: string; light: string };
-  rightLabel: string | null;
-  rightTone?: "good" | "warn" | "bad";
-  bold?: boolean;
+  sources: SankeySource[];
+  height?: number;
 }) {
-  // Ensure tiny bars are still visible
-  const visualWidth = count > 0 ? Math.max(widthPct, 1.5) : 0;
+  // Layout constants
+  const W = 600;
+  const H = height;
+  const PAD_T = 18;
+  const PAD_B = 24;
+  const LABEL_W = 130;
+  const NODE_W = 10;
+  // The three stage "slots" sit to the right of the label column. The
+  // remaining horizontal space is split into 3 equal-width ribbon segments.
+  const chartLeft = LABEL_W;
+  const chartRight = W - 16;
+  const chartW = chartRight - chartLeft;
+  const stageW = (chartW - NODE_W * 4) / 3; // 4 node columns, 3 ribbons between
+  const stageX = [
+    chartLeft, // visits node
+    chartLeft + NODE_W + stageW, // checkout node
+    chartLeft + (NODE_W + stageW) * 2, // purchase node
+    chartLeft + (NODE_W + stageW) * 3 - NODE_W, // (unused trailing)
+  ];
+
+  // Filter out totally empty sources, sort by visits desc
+  const rows = sources
+    .filter((s) => s.stages.visits > 0)
+    .slice()
+    .sort((a, b) => b.stages.visits - a.stages.visits);
+
+  const totalVisits = rows.reduce((s, r) => s + r.stages.visits, 0) || 1;
+  const innerH = H - PAD_T - PAD_B;
+  const rowGap = Math.min(8, innerH / Math.max(rows.length * 4, 8));
+  const usableH = innerH - rowGap * Math.max(rows.length - 1, 0);
+
+  // Compute y-positions per row (height ∝ visits share of total)
+  const placed = rows.reduce<
+    Array<SankeySource & { y: number; h: number }>
+  >((acc, r) => {
+    const h = Math.max(4, (r.stages.visits / totalVisits) * usableH);
+    const prev = acc[acc.length - 1];
+    const y = prev ? prev.y + prev.h + rowGap : PAD_T;
+    acc.push({ ...r, y, h });
+    return acc;
+  }, []);
+
+  const STAGE_COLOR = {
+    visits: STAGE.visits.bg,
+    checkouts: STAGE.checkouts.bg,
+    purchases: STAGE.purchases.bg,
+  };
+
+  // Gradient ID prefix — unique per chart instance so multiple Sankeys on
+  // one page don't collide. useId() gives a stable, SSR-safe unique id.
+  const rawId = useId();
+  const gradId = `sk${rawId.replace(/[^a-zA-Z0-9]/g, "")}`;
+
+  if (placed.length === 0) {
+    return (
+      <p className="text-sm text-charcoal/40 px-2 py-8 text-center">
+        No traffic in window.
+      </p>
+    );
+  }
+
   return (
-    <div className="flex items-center gap-3 text-xs">
-      <span className="w-20 shrink-0" style={{ color: color.text }}>
-        {stageLabel}
-      </span>
-      <div className="flex-1 h-6 rounded-md overflow-hidden relative">
-        <div
-          className="absolute inset-0 rounded-md"
-          style={{ background: color.light }}
-        />
-        <div
-          className="h-full rounded-md transition-all duration-500 ease-out"
-          style={{
-            width: `${visualWidth}%`,
-            background: `linear-gradient(90deg, ${color.bg} 0%, ${color.bg}E0 100%)`,
-          }}
-        />
-      </div>
-      <span
-        className={`w-12 text-right tabular-nums ${
-          bold ? "font-semibold text-obsidian" : "text-obsidian"
-        }`}
+    <div className="w-full overflow-x-auto">
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        width="100%"
+        height={H}
+        role="img"
+        style={{ display: "block" }}
       >
-        {num(count)}
-      </span>
-      <span
-        className={`w-28 text-right text-[10px] ${
-          rightTone === "good"
-            ? "text-forest"
-            : rightTone === "warn"
-            ? "text-ember"
-            : rightTone === "bad"
-            ? "text-charcoal/40"
-            : "text-charcoal/40"
-        }`}
-      >
-        {rightLabel ?? ""}
-      </span>
+        <defs>
+          {/* Gradients per segment, so ribbons feel "flowy" */}
+          <linearGradient id={`${gradId}-vc`} x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor={STAGE_COLOR.visits} stopOpacity="0.85" />
+            <stop offset="100%" stopColor={STAGE_COLOR.checkouts} stopOpacity="0.85" />
+          </linearGradient>
+          <linearGradient id={`${gradId}-cp`} x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor={STAGE_COLOR.checkouts} stopOpacity="0.85" />
+            <stop offset="100%" stopColor={STAGE_COLOR.purchases} stopOpacity="0.9" />
+          </linearGradient>
+        </defs>
+
+        {/* Stage column headers */}
+        <g fontSize="9" fontFamily="ui-monospace, monospace" fill="#9A958A">
+          <text x={stageX[0] + NODE_W / 2} y={10} textAnchor="middle">VISITS</text>
+          <text x={stageX[1] + NODE_W / 2} y={10} textAnchor="middle">CHECKOUT</text>
+          <text x={stageX[2] + NODE_W / 2} y={10} textAnchor="middle">PURCHASE</text>
+        </g>
+
+        {placed.map((r) => {
+          const v = r.stages.visits;
+          const c = r.stages.checkouts;
+          const p = r.stages.purchases;
+
+          // Heights at each stage (proportional to count within this row,
+          // anchored at the top of the row's band).
+          const hV = r.h;
+          const hC = v > 0 ? (c / v) * r.h : 0;
+          const hP = v > 0 ? (p / v) * r.h : 0;
+
+          // Visual minimums so non-zero stages are visible.
+          const visHC = c > 0 ? Math.max(hC, 2) : 0;
+          const visHP = p > 0 ? Math.max(hP, 2) : 0;
+
+          // Vertical centers for ribbon endpoints
+          const y0 = r.y; // row top
+          const yV = y0;
+          const yC = y0;
+          const yP = y0;
+
+          // Ribbon path: cubic bezier from (x1, top) curving to (x2, top), with
+          // bottom edge connecting back from (x2, top+hRight) to (x1, top+hLeft).
+          const ribbon = (
+            x1: number,
+            x2: number,
+            yL: number,
+            yR: number,
+            hL: number,
+            hR: number
+          ) => {
+            const mid = (x1 + x2) / 2;
+            return (
+              `M ${x1} ${yL} ` +
+              `C ${mid} ${yL}, ${mid} ${yR}, ${x2} ${yR} ` +
+              `L ${x2} ${yR + hR} ` +
+              `C ${mid} ${yR + hR}, ${mid} ${yL + hL}, ${x1} ${yL + hL} Z`
+            );
+          };
+
+          // Stage 1 → 2 ribbon (visits → checkouts)
+          const x1 = stageX[0] + NODE_W;
+          const x2 = stageX[1];
+          // Stage 2 → 3 ribbon (checkouts → purchases)
+          const x3 = stageX[1] + NODE_W;
+          const x4 = stageX[2];
+
+          return (
+            <g key={r.key}>
+              {/* Label (left) */}
+              <text
+                x={chartLeft - 10}
+                y={r.y + r.h / 2 + 3}
+                textAnchor="end"
+                fontSize="10"
+                fontFamily="ui-monospace, monospace"
+                fill={r.highlight ? "#D4772C" : "#111111"}
+              >
+                <title>{`${r.label}\n${num(v)} visits · ${num(c)} checkout · ${num(p)} purchase · ${pctStr(p, v)} CVR`}</title>
+                {r.label.length > 18 ? r.label.slice(0, 17) + "…" : r.label}
+              </text>
+              <text
+                x={chartLeft - 10}
+                y={r.y + r.h / 2 + 14}
+                textAnchor="end"
+                fontSize="8"
+                fontFamily="ui-monospace, monospace"
+                fill="#9A958A"
+              >
+                {num(v)} · {pctStr(p, v)}
+              </text>
+
+              {/* Visit node */}
+              <rect
+                x={stageX[0]}
+                y={yV}
+                width={NODE_W}
+                height={hV}
+                fill={STAGE_COLOR.visits}
+                opacity={r.highlight ? 0.95 : 0.85}
+                rx="2"
+              >
+                <title>{`${r.label} — ${num(v)} visits`}</title>
+              </rect>
+              {/* Checkout node */}
+              <rect
+                x={stageX[1]}
+                y={yC}
+                width={NODE_W}
+                height={visHC}
+                fill={STAGE_COLOR.checkouts}
+                opacity="0.9"
+                rx="2"
+              >
+                <title>{`${r.label} — ${num(c)} checkout (${pctStr(c, v)})`}</title>
+              </rect>
+              {/* Purchase node */}
+              <rect
+                x={stageX[2]}
+                y={yP}
+                width={NODE_W}
+                height={visHP}
+                fill={STAGE_COLOR.purchases}
+                opacity="0.95"
+                rx="2"
+              >
+                <title>{`${r.label} — ${num(p)} purchase (${pctStr(p, v)} of visits)`}</title>
+              </rect>
+
+              {/* Visits → Checkout ribbon */}
+              <path
+                d={ribbon(x1, x2, yV, yC, hV, visHC)}
+                fill={`url(#${gradId}-vc)`}
+                opacity="0.55"
+              />
+              {/* Checkout → Purchase ribbon */}
+              <path
+                d={ribbon(x3, x4, yC, yP, visHC, visHP)}
+                fill={`url(#${gradId}-cp)`}
+                opacity="0.7"
+              />
+            </g>
+          );
+        })}
+
+        {/* Footer legend */}
+        <g fontSize="8" fontFamily="ui-monospace, monospace" fill="#9A958A">
+          <text x={chartLeft - 10} y={H - 6} textAnchor="end">source</text>
+          <text x={chartRight} y={H - 6} textAnchor="end">{num(totalVisits)} total visits</text>
+        </g>
+      </svg>
     </div>
   );
 }
@@ -344,7 +442,6 @@ function FunnelSummary({ totals }: { totals: FunnelStages }) {
   const { visits, checkouts, purchases } = totals;
   const cvrV2C = visits > 0 ? checkouts / visits : 0;
   const cvrC2P = checkouts > 0 ? purchases / checkouts : 0;
-  const cvrOverall = visits > 0 ? purchases / visits : 0;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
@@ -754,16 +851,6 @@ export default function MarketingFunnelPage() {
     }));
   }, [data, pathView]);
 
-  const maxPathVisits = useMemo(
-    () => Math.max(1, ...pathRows.map((r) => r.stages.visits)),
-    [pathRows]
-  );
-
-  const maxChannelVisits = useMemo(() => {
-    if (!data) return 1;
-    return Math.max(1, ...data.funnel.channels.map((c) => c.visits));
-  }, [data]);
-
   return (
     <div className="max-w-6xl mx-auto px-6 py-10">
       {/* Header + period picker */}
@@ -933,49 +1020,77 @@ export default function MarketingFunnelPage() {
 
           {/* ── Landing-page funnel ─────────────────────────────────────── */}
           <section className="mb-10">
-            <SectionHeading
-              title="By landing page"
-              hint="First page of session → checkout click → matched Shopify purchase"
-              right={
-                <div className="flex items-center gap-1 bg-bone rounded-md p-0.5">
-                  <button
-                    onClick={() => setPathView("buckets")}
-                    className={`text-[11px] px-2.5 py-1 rounded transition-colors ${
-                      pathView === "buckets"
-                        ? "bg-white text-obsidian shadow-sm"
-                        : "text-charcoal/50 hover:text-obsidian"
-                    }`}
-                  >
-                    Buckets
-                  </button>
-                  <button
-                    onClick={() => setPathView("all")}
-                    className={`text-[11px] px-2.5 py-1 rounded transition-colors ${
-                      pathView === "all"
-                        ? "bg-white text-obsidian shadow-sm"
-                        : "text-charcoal/50 hover:text-obsidian"
-                    }`}
-                  >
-                    All paths
-                  </button>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              {/* Landing-page Sankey */}
+              <div className="bg-white border border-taupe/20 rounded-xl p-4">
+                <div className="flex items-baseline justify-between mb-3 gap-3">
+                  <div>
+                    <h3 className="font-serif text-base text-obsidian">By landing page</h3>
+                    <p className="text-[10px] text-charcoal/40 mt-0.5">
+                      First page → checkout → purchase
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1 bg-bone rounded-md p-0.5">
+                    <button
+                      onClick={() => setPathView("buckets")}
+                      className={`text-[10px] px-2 py-0.5 rounded transition-colors ${
+                        pathView === "buckets"
+                          ? "bg-white text-obsidian shadow-sm"
+                          : "text-charcoal/50 hover:text-obsidian"
+                      }`}
+                    >
+                      Buckets
+                    </button>
+                    <button
+                      onClick={() => setPathView("all")}
+                      className={`text-[10px] px-2 py-0.5 rounded transition-colors ${
+                        pathView === "all"
+                          ? "bg-white text-obsidian shadow-sm"
+                          : "text-charcoal/50 hover:text-obsidian"
+                      }`}
+                    >
+                      All paths
+                    </button>
+                  </div>
                 </div>
-              }
-            />
-            <div className="space-y-3">
-              {pathRows.length === 0 ? (
-                <p className="text-sm text-charcoal/40">No traffic in window.</p>
-              ) : (
-                pathRows.map((r) => (
-                  <FunnelRow
-                    key={r.key}
-                    label={r.label}
-                    stages={r.stages}
-                    maxVisits={maxPathVisits}
-                    highlight={r.highlight}
-                  />
-                ))
-              )}
+                <Sankey
+                  sources={pathRows.map((r) => ({
+                    key: r.key,
+                    label: r.label,
+                    stages: r.stages,
+                    highlight: r.highlight,
+                  }))}
+                  height={pathView === "all" ? 340 : 240}
+                />
+              </div>
+
+              {/* Channel Sankey */}
+              <div className="bg-white border border-taupe/20 rounded-xl p-4">
+                <div className="flex items-baseline justify-between mb-3 gap-3">
+                  <div>
+                    <h3 className="font-serif text-base text-obsidian">By channel</h3>
+                    <p className="text-[10px] text-charcoal/40 mt-0.5">
+                      Acquisition channel → checkout → purchase
+                    </p>
+                  </div>
+                </div>
+                <Sankey
+                  sources={data.funnel.channels.map((c) => ({
+                    key: c.channel,
+                    label: c.label,
+                    stages: {
+                      visits: c.visits,
+                      checkouts: c.checkouts,
+                      purchases: c.purchases,
+                    },
+                    highlight: c.visits > 100 && c.purchases === 0,
+                  }))}
+                  height={240}
+                />
+              </div>
             </div>
+
+            {/* Shared legend below both charts */}
             <div className="mt-3 flex items-center gap-4 text-[10px] text-charcoal/40">
               <span className="flex items-center gap-1.5">
                 <span
@@ -999,37 +1114,12 @@ export default function MarketingFunnelPage() {
                 Purchase
               </span>
               <span className="ml-auto text-ember">
-                Highlighted = needs attention
+                Hover ribbons for details · Orange label = needs attention
               </span>
             </div>
           </section>
 
           {/* ── Channel funnel ───────────────────────────────────────────── */}
-          <section className="mb-10">
-            <SectionHeading
-              title="By channel"
-              hint="Same 3 stages — see which acquisition channel actually converts"
-            />
-            <div className="space-y-3">
-              {data.funnel.channels.length === 0 ? (
-                <p className="text-sm text-charcoal/40">No channel data.</p>
-              ) : (
-                data.funnel.channels.map((c) => (
-                  <FunnelRow
-                    key={c.channel}
-                    label={c.label}
-                    stages={{
-                      visits: c.visits,
-                      checkouts: c.checkouts,
-                      purchases: c.purchases,
-                    }}
-                    maxVisits={maxChannelVisits}
-                    highlight={c.visits > 100 && c.purchases === 0}
-                  />
-                ))
-              )}
-            </div>
-          </section>
 
           {/* ── Ad platforms ─────────────────────────────────────────────── */}
           <section className="mb-10">

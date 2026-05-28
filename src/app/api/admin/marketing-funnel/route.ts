@@ -422,14 +422,12 @@ function classifyChannel(opts: {
 }
 
 // ─── Session-based funnel ─────────────────────────────────────────────────────
-
-interface SessionRow {
-  sid: string;
-  landing: string;
-  email: string | null;
-  channel: Channel;
-  has_checkout: boolean;
-}
+//
+// IMPORTANT: PostHog HogQL has a default LIMIT of 100 on raw SELECTs over the
+// REST API. We CANNOT pull individual session rows — we'd be capped at 100
+// sessions per query. Instead, we aggregate inside HogQL and pull at most a
+// few hundred grouped rows (paths × channels). Emails are returned as a
+// comma-separated string per bucket so we can intersect with Shopify in JS.
 
 interface FunnelStages {
   visits: number;
@@ -452,12 +450,34 @@ interface BucketRow extends FunnelStages {
   label: string;
 }
 
+interface HogQLPathBucket {
+  path: string;
+  visits: number;
+  checkouts: number;
+  emails: string[]; // session-emails seen on this path
+}
+
+interface HogQLChannelBucket {
+  utm_src: unknown;
+  utm_med: unknown;
+  ref: unknown;
+  gclid: unknown;
+  fbclid: unknown;
+  twclid: unknown;
+  visits: number;
+  checkouts: number;
+  emails: string[];
+}
+
 interface FunnelData {
-  sessions: SessionRow[];
+  paths: HogQLPathBucket[];
+  channels: HogQLChannelBucket[];
+  total_sessions: number;
+  total_checkouts: number;
   errors: string[];
 }
 
-async function fetchPostHogSessions(
+async function fetchPostHogFunnel(
   cfg: PostHogConfig,
   start: string,
   end: string
@@ -466,10 +486,9 @@ async function fetchPostHogSessions(
   const endTs = `${end} 23:59:59`;
   const errors: string[] = [];
 
-  // Single query: per session_id, get landing path, channel signals, has_checkout, email.
-  // Email is sourced from any event in the session that has properties.email
-  // (checkout_clicked, email_submitted, login, identify, etc.).
-  const q = `
+  // Shared CTE prefix — pv (per-session landing + first-touch utms),
+  // co (sessions with checkout), em (per-session email)
+  const ctes = `
     WITH pv AS (
       SELECT properties.$session_id AS sid,
              argMin(properties.$pathname, timestamp) AS landing,
@@ -488,14 +507,12 @@ async function fetchPostHogSessions(
       GROUP BY sid
     ),
     co AS (
-      SELECT properties.$session_id AS sid,
-             1 AS has_checkout
+      SELECT DISTINCT properties.$session_id AS sid
       FROM events
       WHERE event IN ('checkout_clicked', 'lp_subscription_checkout_clicked')
         AND timestamp >= toDateTime('${startTs}')
         AND timestamp <= toDateTime('${endTs}')
         AND properties.$session_id IS NOT NULL
-      GROUP BY sid
     ),
     em AS (
       SELECT properties.$session_id AS sid,
@@ -508,46 +525,105 @@ async function fetchPostHogSessions(
         AND toString(properties.email) != ''
       GROUP BY sid
     )
-    SELECT pv.sid,
-           pv.landing,
-           em.email,
-           pv.utm_src, pv.utm_med, pv.ref, pv.gclid, pv.fbclid, pv.twclid,
-           coalesce(co.has_checkout, 0) AS has_checkout
-    FROM pv
-    LEFT JOIN co ON pv.sid = co.sid
-    LEFT JOIN em ON pv.sid = em.sid
   `;
 
-  const sessions: SessionRow[] = [];
+  // ── Totals ────────────────────────────────────────────────────────────────
+  let total_sessions = 0;
+  let total_checkouts = 0;
   try {
-    const rows = await runHogQL(cfg, q);
-    for (const r of rows) {
-      const [sid, landing, email, utmSrc, utmMed, ref, gclid, fbclid, twclid, hasCo] = r;
-      sessions.push({
-        sid: String(sid ?? ""),
-        landing: normalizePath(landing),
-        email:
-          typeof email === "string" && email && email !== "null"
-            ? email.toLowerCase()
-            : null,
-        channel: classifyChannel({
-          utm_source: utmSrc,
-          utm_medium: utmMed,
-          referrer: ref,
-          gclid,
-          fbclid,
-          twclid,
-        }),
-        has_checkout: Number(hasCo ?? 0) > 0,
+    const totQ = `${ctes}
+      SELECT count() AS visits,
+             countIf(co.sid IS NOT NULL) AS checkouts
+      FROM pv LEFT JOIN co ON pv.sid = co.sid
+    `;
+    const rows = await runHogQL(cfg, totQ);
+    if (rows[0]) {
+      total_sessions = Number(rows[0][0] ?? 0);
+      total_checkouts = Number(rows[0][1] ?? 0);
+    }
+  } catch (err) {
+    errors.push(`totals: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  // ── Per-path aggregation ──────────────────────────────────────────────────
+  const paths: HogQLPathBucket[] = [];
+  try {
+    const pathQ = `${ctes}
+      SELECT pv.landing AS path,
+             count() AS visits,
+             countIf(co.sid IS NOT NULL) AS checkouts,
+             arrayStringConcat(arrayDistinct(groupArray(em.email)), ',') AS emails_csv
+      FROM pv
+      LEFT JOIN co ON pv.sid = co.sid
+      LEFT JOIN em ON pv.sid = em.sid
+      GROUP BY pv.landing
+      ORDER BY visits DESC
+      LIMIT 300
+    `;
+    for (const r of await runHogQL(cfg, pathQ)) {
+      const path = normalizePath(r[0]);
+      const visits = Number(r[1] ?? 0);
+      const checkouts = Number(r[2] ?? 0);
+      const emailsCsv = typeof r[3] === "string" ? r[3] : "";
+      const emails = emailsCsv
+        ? emailsCsv
+            .split(",")
+            .map((e) => e.trim().toLowerCase())
+            .filter((e) => e && e !== "null")
+        : [];
+      paths.push({ path, visits, checkouts, emails });
+    }
+  } catch (err) {
+    errors.push(`paths: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  // ── Per-channel aggregation ───────────────────────────────────────────────
+  const channels: HogQLChannelBucket[] = [];
+  try {
+    const chQ = `${ctes}
+      SELECT pv.utm_src AS utm_src,
+             pv.utm_med AS utm_med,
+             pv.ref AS ref,
+             pv.gclid AS gclid,
+             pv.fbclid AS fbclid,
+             pv.twclid AS twclid,
+             count() AS visits,
+             countIf(co.sid IS NOT NULL) AS checkouts,
+             arrayStringConcat(arrayDistinct(groupArray(em.email)), ',') AS emails_csv
+      FROM pv
+      LEFT JOIN co ON pv.sid = co.sid
+      LEFT JOIN em ON pv.sid = em.sid
+      GROUP BY utm_src, utm_med, ref, gclid, fbclid, twclid
+      ORDER BY visits DESC
+      LIMIT 500
+    `;
+    for (const r of await runHogQL(cfg, chQ)) {
+      const emailsCsv = typeof r[8] === "string" ? r[8] : "";
+      const emails = emailsCsv
+        ? emailsCsv
+            .split(",")
+            .map((e) => e.trim().toLowerCase())
+            .filter((e) => e && e !== "null")
+        : [];
+      channels.push({
+        utm_src: r[0],
+        utm_med: r[1],
+        ref: r[2],
+        gclid: r[3],
+        fbclid: r[4],
+        twclid: r[5],
+        visits: Number(r[6] ?? 0),
+        checkouts: Number(r[7] ?? 0),
+        emails,
       });
     }
   } catch (err) {
     errors.push(
-      `sessions: ${err instanceof Error ? err.message : String(err)}`
+      `channels: ${err instanceof Error ? err.message : String(err)}`
     );
   }
 
-  return { sessions, errors };
+  return { paths, channels, total_sessions, total_checkouts, errors };
 }
 
 // ─── Live Google Ads spend ────────────────────────────────────────────────────
@@ -759,17 +835,20 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // ── 2. PostHog sessions + funnel + channel ───────────────────────────────
+    // ── 2. PostHog session funnel (per-path + per-channel) ──────────────────
     const phCfg = getPostHogConfig();
     let phData: FunnelData = {
-      sessions: [],
+      paths: [],
+      channels: [],
+      total_sessions: 0,
+      total_checkouts: 0,
       errors: phCfg
         ? []
         : ["POSTHOG_PERSONAL_API_KEY or POSTHOG_PROJECT_ID not set"],
     };
     if (phCfg) {
       try {
-        phData = await fetchPostHogSessions(phCfg, start, end);
+        phData = await fetchPostHogFunnel(phCfg, start, end);
       } catch (err) {
         phData.errors.push(
           err instanceof Error ? err.message : String(err)
@@ -777,7 +856,6 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Build aggregations from sessions.
     // A session "purchased" if its email matches a new_reserve_member email.
     const purchasedEmails = new Set(newMemberEmails.keys());
     const matchedEmails = new Set<string>();
@@ -790,11 +868,50 @@ export async function GET(request: NextRequest) {
       lp_other: { visits: 0, checkouts: 0, purchases: 0 },
       other: { visits: 0, checkouts: 0, purchases: 0 },
     };
+    // Unique purchase-emails per bucket (so a single email seen on multiple
+    // paths within the bucket counts once).
+    const bucketEmails: Record<PathBucketKey, Set<string>> = {
+      home: new Set(),
+      lp_subscription: new Set(),
+      lp_gift: new Set(),
+      lp_other: new Set(),
+      other: new Set(),
+    };
 
-    // (b) raw per-path (top N) for the "all paths" toggle
-    const pathAgg: Record<string, FunnelStages & { bucket: PathBucketKey }> = {};
+    const allPathRows: PathRow[] = [];
 
-    // (c) per-channel funnel
+    for (const p of phData.paths) {
+      const bucket = bucketPath(p.path);
+      let pathPurchases = 0;
+      const seen = new Set<string>();
+      for (const e of p.emails) {
+        if (seen.has(e)) continue;
+        seen.add(e);
+        if (purchasedEmails.has(e)) {
+          pathPurchases++;
+          matchedEmails.add(e);
+        }
+        bucketEmails[bucket].add(e);
+      }
+
+      bucketAgg[bucket].visits += p.visits;
+      bucketAgg[bucket].checkouts += p.checkouts;
+
+      allPathRows.push({
+        path: p.path,
+        bucket,
+        visits: p.visits,
+        checkouts: p.checkouts,
+        purchases: pathPurchases,
+      });
+    }
+    for (const b of Object.keys(bucketAgg) as PathBucketKey[]) {
+      let count = 0;
+      for (const e of bucketEmails[b]) if (purchasedEmails.has(e)) count++;
+      bucketAgg[b].purchases = count;
+    }
+
+    // (b) per-channel funnel — merge HogQL rows by classified channel
     const channelAgg: Record<Channel, FunnelStages> = {
       google_ads: { visits: 0, checkouts: 0, purchases: 0 },
       meta_ads: { visits: 0, checkouts: 0, purchases: 0 },
@@ -808,36 +925,45 @@ export async function GET(request: NextRequest) {
       direct: { visits: 0, checkouts: 0, purchases: 0 },
       other_referral: { visits: 0, checkouts: 0, purchases: 0 },
     };
+    const channelEmails: Record<Channel, Set<string>> = {
+      google_ads: new Set(),
+      meta_ads: new Set(),
+      x_ads: new Set(),
+      google_organic: new Set(),
+      meta_organic: new Set(),
+      x_organic: new Set(),
+      email: new Set(),
+      sms: new Set(),
+      internal: new Set(),
+      direct: new Set(),
+      other_referral: new Set(),
+    };
 
-    for (const s of phData.sessions) {
-      const bucket = bucketPath(s.landing);
-      const purchased = s.email && purchasedEmails.has(s.email);
-      if (purchased && s.email) matchedEmails.add(s.email);
-
-      // path bucket
-      bucketAgg[bucket].visits += 1;
-      if (s.has_checkout) bucketAgg[bucket].checkouts += 1;
-      if (purchased) bucketAgg[bucket].purchases += 1;
-
-      // raw path
-      pathAgg[s.landing] ??= {
-        visits: 0,
-        checkouts: 0,
-        purchases: 0,
-        bucket,
-      };
-      pathAgg[s.landing].visits += 1;
-      if (s.has_checkout) pathAgg[s.landing].checkouts += 1;
-      if (purchased) pathAgg[s.landing].purchases += 1;
-
-      // channel
-      channelAgg[s.channel].visits += 1;
-      if (s.has_checkout) channelAgg[s.channel].checkouts += 1;
-      if (purchased) channelAgg[s.channel].purchases += 1;
+    for (const c of phData.channels) {
+      const channel = classifyChannel({
+        utm_source: c.utm_src,
+        utm_medium: c.utm_med,
+        referrer: c.ref,
+        gclid: c.gclid,
+        fbclid: c.fbclid,
+        twclid: c.twclid,
+      });
+      channelAgg[channel].visits += c.visits;
+      channelAgg[channel].checkouts += c.checkouts;
+      for (const e of c.emails) channelEmails[channel].add(e);
+    }
+    for (const ch of Object.keys(channelAgg) as Channel[]) {
+      let count = 0;
+      for (const e of channelEmails[ch]) {
+        if (purchasedEmails.has(e)) {
+          count++;
+          matchedEmails.add(e);
+        }
+      }
+      channelAgg[ch].purchases = count;
     }
 
-    // Unattributed new members (had a Shopify order but never showed up in a
-    // tracked session in this window).
+    // Unattributed new members (Shopify order, never appeared in a session).
     const unattributedPurchases = Math.max(
       0,
       newMemberEmails.size - matchedEmails.size
@@ -868,20 +994,13 @@ export async function GET(request: NextRequest) {
       }))
       .sort((a, b) => b.visits - a.visits);
 
-    const allPaths: PathRow[] = Object.entries(pathAgg)
-      .map(([path, v]) => ({
-        path,
-        bucket: v.bucket,
-        visits: v.visits,
-        checkouts: v.checkouts,
-        purchases: v.purchases,
-      }))
+    const allPaths = allPathRows
       .sort((a, b) => b.visits - a.visits)
       .slice(0, 40);
 
     const funnelTotals: FunnelStages = {
-      visits: phData.sessions.length,
-      checkouts: phData.sessions.filter((s) => s.has_checkout).length,
+      visits: phData.total_sessions,
+      checkouts: phData.total_checkouts,
       purchases: matchedEmails.size,
     };
 
@@ -1078,7 +1197,7 @@ export async function GET(request: NextRequest) {
         new_reserve_members: newCount,
         auto_renewals: renewalCount,
         pro_shop: proShopCount,
-        posthog_sessions: phData.sessions.length,
+        posthog_sessions: phData.total_sessions,
         posthog_errors: phData.errors,
         sequences_in_window: seqSnap.size,
         email_events: emailEventsDocs.length,
