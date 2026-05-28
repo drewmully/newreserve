@@ -7,21 +7,16 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { isAllowedAdminEmail } from "@/lib/adminEmailAllowlist";
 
-const NAV_LINKS = [
-  { href: "/admin", label: "Overview", exact: true },
+type NavLink = { href: string; label: string; exact?: boolean };
+
+const NAV_LINKS: NavLink[] = [
+  { href: "/admin/marketing-funnel", label: "Marketing" },
   { href: "/customers", label: "Customers" },
   { href: "/ops", label: "Ops" },
   { href: "/admin/users", label: "Users" },
   { href: "/admin/gifts", label: "Gifts" },
-  { href: "/admin/sequences", label: "Sequences" },
-  { href: "/admin/funnel", label: "Funnel" },
-  { href: "/admin/marketing-funnel", label: "Marketing" },
   { href: "/admin/email-replies", label: "Reply queue" },
-  { href: "/admin/fix-legacy-tiers", label: "Fix legacy tiers" },
-  { href: "/admin/fix-email-sequences", label: "Fix sequences" },
   { href: "/admin/registry", label: "Club Registry" },
-  { href: "/admin/tasks", label: "Tasks" },
-  { href: "/admin/cleanup-reactivated-subs", label: "Cleanup subs" },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
