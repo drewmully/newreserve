@@ -1,35 +1,36 @@
 /**
- * GET /api/admin/marketing-funnel  (v3)
+ * GET /api/admin/marketing-funnel  (v4)
  *
- * Health-first marketing dashboard.
+ * Health-first marketing dashboard — session-based funnel + per-channel funnel.
  *
- * Data sources (only):
+ * Data sources:
  *
  *   1. Shopify Admin REST `/orders.json`  → source of truth for purchases.
- *      Bucketing uses **Shopify tags + line items only** (no orders_count
- *      since the embedded customer omits it):
+ *      Bucketing (tags + line items only — no orders_count):
  *
  *        new_reserve_member  : tags include "Subscription First Order"
- *                              (regardless of customer history)
  *        auto_renewal        : tags include "Subscription Recurring Order"
- *        pro_shop            : no subscription tag, total > $1
- *        skipped             : cancelled / unpaid / freebie ($0-$1)
+ *        pro_shop            : no subscription tag, total ≥ $5
+ *        skipped             : cancelled / unpaid / freebie ($0-$5)
  *
- *      Tier is read from line item title:
- *        Reserve Access | Reserve Member | Back 9 (Legacy) | other
+ *      Tier from line item title: Reserve Access | Reserve Member | Back 9 | other.
  *
- *   2. PostHog HogQL (via personal API key)  → landing-page funnel + channel mix.
- *      Stages: page_view → checkout_clicked / lp_subscription_checkout_clicked
- *              → purchase
- *      Property names: $pathname, $current_url, $referring_domain,
- *                      utm_source, utm_medium, gclid, fbclid, twclid, email
+ *   2. PostHog HogQL  → session-based attribution.
+ *      For each `$session_id` we compute:
+ *        - landing: argMin(page_view.$pathname, timestamp)
+ *        - channel: first-touch utm/clid/referrer
+ *        - has_checkout: session emitted checkout_clicked / lp_subscription_checkout_clicked
+ *        - session_email: any properties.email on any event in that session
+ *      Then we intersect session_email with Shopify new_reserve_member orders
+ *      → purchase stage attributed back to its session's landing path + channel.
  *
- *   3. Firestore email collections — unchanged from v2.
+ *      `purchase` events fire server-side without $session_id/$pathname, so we
+ *      do NOT use them for attribution.
  *
- *   4. Google Ads REST (live)  → spend / clicks / conversions
- *      X Ads                    → placeholder
+ *   3. Firestore email collections — unchanged.
+ *   4. Google Ads REST (live) — unchanged.
  *
- * Query params: ?start=YYYY-MM-DD&end=YYYY-MM-DD  (defaults: last 7 days inclusive)
+ * Query params: ?start=YYYY-MM-DD&end=YYYY-MM-DD (defaults: last 7 days)
  * Auth: Firebase Bearer token, admin email allowlist.
  */
 
@@ -75,7 +76,6 @@ function defaultWindow(): { start: string; end: string } {
 function normalizePath(p: unknown): string {
   if (typeof p !== "string" || !p) return "(unknown)";
   let path = p;
-  // Strip query string if a full URL was passed
   try {
     if (path.startsWith("http")) path = new URL(path).pathname;
   } catch {
@@ -84,6 +84,41 @@ function normalizePath(p: unknown): string {
   if (path.length > 1 && path.endsWith("/")) path = path.slice(0, -1);
   return path.toLowerCase() || "/";
 }
+
+/**
+ * Path bucketing for the dashboard's primary view.
+ *
+ *   '/'                 → 'home'
+ *   '/lp/subscription'  → 'lp_subscription'
+ *   '/lp/subscription.' → 'lp_subscription'   (trailing-dot dup)
+ *   '/lp/gift'          → 'lp_gift'
+ *   '/lp/<other>'       → 'lp_other'
+ *   everything else     → 'other'
+ */
+type PathBucketKey =
+  | "home"
+  | "lp_subscription"
+  | "lp_gift"
+  | "lp_other"
+  | "other";
+
+function bucketPath(path: string): PathBucketKey {
+  const p = normalizePath(path);
+  if (p === "/" || p === "/home") return "home";
+  if (p === "/lp/subscription" || p === "/lp/subscription.")
+    return "lp_subscription";
+  if (p === "/lp/gift" || p.startsWith("/lp/gift/")) return "lp_gift";
+  if (p.startsWith("/lp/")) return "lp_other";
+  return "other";
+}
+
+const PATH_BUCKET_LABEL: Record<PathBucketKey, string> = {
+  home: "/ (Homepage)",
+  lp_subscription: "/lp/subscription",
+  lp_gift: "/lp/gift",
+  lp_other: "/lp/* (Other LPs)",
+  other: "Other pages",
+};
 
 // ─── Shopify ──────────────────────────────────────────────────────────────────
 
@@ -120,7 +155,7 @@ async function fetchShopifyOrdersInWindow(
   const version = process.env.SHOPIFY_ADMIN_API_VERSION ?? "2024-10";
 
   if (!token || !domain) {
-    console.warn("[marketing-funnel v3] missing Shopify creds, skipping orders");
+    console.warn("[marketing-funnel v4] missing Shopify creds, skipping orders");
     return [];
   }
 
@@ -206,7 +241,6 @@ function classifyShopifyOrder(o: ShopifyOrderRaw): ClassifiedOrder {
     customerCreatedAt,
   };
 
-  // exclude cancelled / unpaid orders + freebies (< $5)
   if (o.cancelled_at) return { ...base, bucket: "skipped" };
   if (o.financial_status && o.financial_status !== "paid")
     return { ...base, bucket: "skipped" };
@@ -220,7 +254,6 @@ function classifyShopifyOrder(o: ShopifyOrderRaw): ClassifiedOrder {
   } else if (!hasSubTag) {
     bucket = "pro_shop";
   } else {
-    // subscription order without first/recurring tag — treat as renewal (safer)
     bucket = "auto_renewal";
   }
 
@@ -262,174 +295,48 @@ async function runHogQL(
   return j.results ?? [];
 }
 
-interface PathBucket {
-  page_views: number;
-  checkout_started: number;
-  purchases: number;
-}
+// ─── Channel classification ───────────────────────────────────────────────────
 
-interface FunnelData {
-  paths: Record<string, PathBucket>;
-  emailToPath: Record<string, string>;
-  channelTotals: Record<string, number>;
-  pageViewSessions: number;
-  errors: string[];
-}
+type Channel =
+  | "google_ads"
+  | "meta_ads"
+  | "x_ads"
+  | "google_organic"
+  | "meta_organic"
+  | "x_organic"
+  | "email"
+  | "sms"
+  | "internal"
+  | "direct"
+  | "other_referral";
 
-async function fetchPostHogFunnel(
-  cfg: PostHogConfig,
-  start: string,
-  end: string
-): Promise<FunnelData> {
-  const startTs = `${start} 00:00:00`;
-  const endTs = `${end} 23:59:59`;
-  const errors: string[] = [];
-  const paths: Record<string, PathBucket> = {};
-  const ensure = (p: string): PathBucket => {
-    paths[p] ??= { page_views: 0, checkout_started: 0, purchases: 0 };
-    return paths[p];
-  };
+const CHANNEL_ORDER: Channel[] = [
+  "google_ads",
+  "meta_ads",
+  "x_ads",
+  "google_organic",
+  "meta_organic",
+  "x_organic",
+  "email",
+  "sms",
+  "internal",
+  "direct",
+  "other_referral",
+];
 
-  // ── 1. page_view by pathname (sessions) ───────────────────────────────────
-  try {
-    const pvQ = `
-      SELECT properties.$pathname AS path,
-             count(DISTINCT properties.$session_id) AS sessions
-      FROM events
-      WHERE event = 'page_view'
-        AND timestamp >= toDateTime('${startTs}')
-        AND timestamp <= toDateTime('${endTs}')
-        AND properties.$pathname IS NOT NULL
-      GROUP BY path
-      ORDER BY sessions DESC
-      LIMIT 200
-    `;
-    for (const r of await runHogQL(cfg, pvQ)) {
-      const p = normalizePath(r[0]);
-      ensure(p).page_views += Number(r[1] ?? 0);
-    }
-  } catch (err) {
-    errors.push(`page_view: ${err instanceof Error ? err.message : String(err)}`);
-  }
-
-  // ── 2. checkout events by pathname (unique sessions) ──────────────────────
-  try {
-    const coQ = `
-      SELECT properties.$pathname AS path,
-             count(DISTINCT properties.$session_id) AS sessions
-      FROM events
-      WHERE event IN ('checkout_clicked', 'lp_subscription_checkout_clicked', 'checkout_started')
-        AND timestamp >= toDateTime('${startTs}')
-        AND timestamp <= toDateTime('${endTs}')
-        AND properties.$pathname IS NOT NULL
-      GROUP BY path
-    `;
-    for (const r of await runHogQL(cfg, coQ)) {
-      const p = normalizePath(r[0]);
-      ensure(p).checkout_started += Number(r[1] ?? 0);
-    }
-  } catch (err) {
-    errors.push(`checkout: ${err instanceof Error ? err.message : String(err)}`);
-  }
-
-  // ── 3. purchase events: attribute to landing path via earliest pageview ───
-  //      For each purchase email, pull the FIRST page_view path in the window.
-  const emailToPath: Record<string, string> = {};
-  try {
-    const purchaseEmailsQ = `
-      SELECT DISTINCT lower(toString(properties.email)) AS eml
-      FROM events
-      WHERE event = 'purchase'
-        AND timestamp >= toDateTime('${startTs}')
-        AND timestamp <= toDateTime('${endTs}')
-        AND properties.email IS NOT NULL
-    `;
-    const emails = (await runHogQL(cfg, purchaseEmailsQ))
-      .map((r) => String(r[0] ?? "").toLowerCase())
-      .filter((e) => e && e !== "null");
-
-    if (emails.length > 0) {
-      // First landing path per email in window (via distinct_id chain)
-      // Approach: for each email, find min(timestamp) page_view of any user
-      // that later identified with that email.
-      const emailListSql = emails.map((e) => `'${e.replace(/'/g, "''")}'`).join(",");
-      const landingQ = `
-        WITH purchase_ids AS (
-          SELECT DISTINCT distinct_id, lower(toString(properties.email)) AS eml
-          FROM events
-          WHERE event IN ('purchase', '$identify', 'email_submitted', 'login', 'account_created')
-            AND lower(toString(properties.email)) IN (${emailListSql})
-            AND timestamp >= toDateTime('${startTs}') - INTERVAL 30 DAY
-            AND timestamp <= toDateTime('${endTs}')
-        ),
-        first_pv AS (
-          SELECT pi.eml AS eml,
-                 argMin(properties.$pathname, e.timestamp) AS path
-          FROM events e
-          INNER JOIN purchase_ids pi ON e.distinct_id = pi.distinct_id
-          WHERE e.event = 'page_view'
-            AND e.timestamp >= toDateTime('${startTs}') - INTERVAL 30 DAY
-            AND e.timestamp <= toDateTime('${endTs}')
-            AND e.properties.$pathname IS NOT NULL
-          GROUP BY pi.eml
-        )
-        SELECT eml, path FROM first_pv
-      `;
-      for (const r of await runHogQL(cfg, landingQ)) {
-        const eml = String(r[0] ?? "").toLowerCase();
-        const path = normalizePath(r[1]);
-        if (eml) emailToPath[eml] = path;
-      }
-    }
-  } catch (err) {
-    errors.push(`purchase: ${err instanceof Error ? err.message : String(err)}`);
-  }
-
-  // ── 4. Channel mix ────────────────────────────────────────────────────────
-  // Classify each unique session by its first-touch UTM / clid / referrer.
-  const channelTotals: Record<string, number> = {};
-  let pageViewSessions = 0;
-  try {
-    const channelQ = `
-      WITH session_first AS (
-        SELECT properties.$session_id AS sid,
-               argMin(properties.utm_source, timestamp) AS utm_src,
-               argMin(properties.utm_medium, timestamp) AS utm_med,
-               argMin(properties.$referring_domain, timestamp) AS ref,
-               argMin(properties.gclid, timestamp) AS gclid,
-               argMin(properties.fbclid, timestamp) AS fbclid,
-               argMin(properties.twclid, timestamp) AS twclid
-        FROM events
-        WHERE event = 'page_view'
-          AND timestamp >= toDateTime('${startTs}')
-          AND timestamp <= toDateTime('${endTs}')
-          AND properties.$session_id IS NOT NULL
-        GROUP BY sid
-      )
-      SELECT utm_src, utm_med, ref, gclid, fbclid, twclid, count() AS c
-      FROM session_first
-      GROUP BY utm_src, utm_med, ref, gclid, fbclid, twclid
-    `;
-    for (const r of await runHogQL(cfg, channelQ)) {
-      const [utmSrc, utmMed, ref, gclid, fbclid, twclid, cRaw] = r;
-      const c = Number(cRaw ?? 0);
-      const channel = classifyChannel({
-        utm_source: utmSrc,
-        utm_medium: utmMed,
-        referrer: ref,
-        gclid,
-        fbclid,
-        twclid,
-      });
-      channelTotals[channel] = (channelTotals[channel] ?? 0) + c;
-      pageViewSessions += c;
-    }
-  } catch (err) {
-    errors.push(`channels: ${err instanceof Error ? err.message : String(err)}`);
-  }
-
-  return { paths, emailToPath, channelTotals, pageViewSessions, errors };
-}
+const CHANNEL_LABEL: Record<Channel, string> = {
+  google_ads: "Google Ads",
+  meta_ads: "Meta Ads",
+  x_ads: "X Ads",
+  google_organic: "Google Organic",
+  meta_organic: "Meta Organic",
+  x_organic: "X Organic",
+  email: "Email",
+  sms: "SMS",
+  internal: "Internal / Cross-site",
+  direct: "Direct",
+  other_referral: "Other Referral",
+};
 
 function classifyChannel(opts: {
   utm_source?: unknown;
@@ -438,7 +345,7 @@ function classifyChannel(opts: {
   gclid?: unknown;
   fbclid?: unknown;
   twclid?: unknown;
-}): string {
+}): Channel {
   const utmSource =
     typeof opts.utm_source === "string" ? opts.utm_source.toLowerCase() : "";
   const utmMedium =
@@ -454,7 +361,10 @@ function classifyChannel(opts: {
   if (utmSource) {
     if (utmSource.includes("google") && utmMedium.includes("cpc"))
       return "google_ads";
-    if (utmSource.includes("google") && (utmMedium.includes("paid") || utmMedium === "ads"))
+    if (
+      utmSource.includes("google") &&
+      (utmMedium.includes("paid") || utmMedium === "ads")
+    )
       return "google_ads";
     if (utmSource.includes("google")) return "google_organic";
     if (
@@ -467,7 +377,11 @@ function classifyChannel(opts: {
         ? "meta_ads"
         : "meta_organic";
     }
-    if (utmSource.includes("twitter") || utmSource === "x") return "x_ads";
+    if (utmSource.includes("twitter") || utmSource === "x") {
+      return utmMedium.includes("cpc") || utmMedium.includes("paid")
+        ? "x_ads"
+        : "x_organic";
+    }
     if (
       utmSource.includes("klaviyo") ||
       utmSource === "email" ||
@@ -477,22 +391,163 @@ function classifyChannel(opts: {
       return "email";
     if (utmSource === "sms" || utmMedium === "sms") return "sms";
     if (utmSource === "direct" || utmSource === "$direct") return "direct";
-    return utmSource;
+    return "other_referral";
   }
 
   if (referrer && referrer !== "$direct") {
     if (referrer.includes("google")) return "google_organic";
-    if (referrer.includes("facebook") || referrer.includes("instagram"))
+    if (
+      referrer.includes("facebook") ||
+      referrer.includes("instagram") ||
+      referrer.includes("fb.com")
+    )
       return "meta_organic";
-    if (referrer.includes("twitter") || referrer.includes("x.com"))
+    if (
+      referrer.includes("twitter") ||
+      referrer.includes("x.com") ||
+      referrer.includes("t.co") ||
+      referrer.includes("com.twitter")
+    )
       return "x_organic";
-    if (referrer.includes("youtube")) return "youtube";
-    if (referrer.includes("mymully") || referrer.includes("mullybox"))
+    if (
+      referrer.includes("mymully") ||
+      referrer.includes("mullybox") ||
+      referrer.includes("firebaseapp")
+    )
       return "internal";
-    return referrer.replace(/^www\./, "");
+    return "other_referral";
   }
 
   return "direct";
+}
+
+// ─── Session-based funnel ─────────────────────────────────────────────────────
+
+interface SessionRow {
+  sid: string;
+  landing: string;
+  email: string | null;
+  channel: Channel;
+  has_checkout: boolean;
+}
+
+interface FunnelStages {
+  visits: number;
+  checkouts: number;
+  purchases: number;
+}
+
+interface PathRow extends FunnelStages {
+  path: string;
+  bucket: PathBucketKey;
+}
+
+interface ChannelRow extends FunnelStages {
+  channel: Channel;
+  label: string;
+}
+
+interface BucketRow extends FunnelStages {
+  bucket: PathBucketKey;
+  label: string;
+}
+
+interface FunnelData {
+  sessions: SessionRow[];
+  errors: string[];
+}
+
+async function fetchPostHogSessions(
+  cfg: PostHogConfig,
+  start: string,
+  end: string
+): Promise<FunnelData> {
+  const startTs = `${start} 00:00:00`;
+  const endTs = `${end} 23:59:59`;
+  const errors: string[] = [];
+
+  // Single query: per session_id, get landing path, channel signals, has_checkout, email.
+  // Email is sourced from any event in the session that has properties.email
+  // (checkout_clicked, email_submitted, login, identify, etc.).
+  const q = `
+    WITH pv AS (
+      SELECT properties.$session_id AS sid,
+             argMin(properties.$pathname, timestamp) AS landing,
+             argMin(properties.utm_source, timestamp) AS utm_src,
+             argMin(properties.utm_medium, timestamp) AS utm_med,
+             argMin(properties.$referring_domain, timestamp) AS ref,
+             argMin(properties.gclid, timestamp) AS gclid,
+             argMin(properties.fbclid, timestamp) AS fbclid,
+             argMin(properties.twclid, timestamp) AS twclid
+      FROM events
+      WHERE event = 'page_view'
+        AND timestamp >= toDateTime('${startTs}')
+        AND timestamp <= toDateTime('${endTs}')
+        AND properties.$session_id IS NOT NULL
+        AND properties.$pathname IS NOT NULL
+      GROUP BY sid
+    ),
+    co AS (
+      SELECT properties.$session_id AS sid,
+             1 AS has_checkout
+      FROM events
+      WHERE event IN ('checkout_clicked', 'lp_subscription_checkout_clicked')
+        AND timestamp >= toDateTime('${startTs}')
+        AND timestamp <= toDateTime('${endTs}')
+        AND properties.$session_id IS NOT NULL
+      GROUP BY sid
+    ),
+    em AS (
+      SELECT properties.$session_id AS sid,
+             argMin(lower(toString(properties.email)), timestamp) AS email
+      FROM events
+      WHERE timestamp >= toDateTime('${startTs}')
+        AND timestamp <= toDateTime('${endTs}')
+        AND properties.$session_id IS NOT NULL
+        AND properties.email IS NOT NULL
+        AND toString(properties.email) != ''
+      GROUP BY sid
+    )
+    SELECT pv.sid,
+           pv.landing,
+           em.email,
+           pv.utm_src, pv.utm_med, pv.ref, pv.gclid, pv.fbclid, pv.twclid,
+           coalesce(co.has_checkout, 0) AS has_checkout
+    FROM pv
+    LEFT JOIN co ON pv.sid = co.sid
+    LEFT JOIN em ON pv.sid = em.sid
+  `;
+
+  const sessions: SessionRow[] = [];
+  try {
+    const rows = await runHogQL(cfg, q);
+    for (const r of rows) {
+      const [sid, landing, email, utmSrc, utmMed, ref, gclid, fbclid, twclid, hasCo] = r;
+      sessions.push({
+        sid: String(sid ?? ""),
+        landing: normalizePath(landing),
+        email:
+          typeof email === "string" && email && email !== "null"
+            ? email.toLowerCase()
+            : null,
+        channel: classifyChannel({
+          utm_source: utmSrc,
+          utm_medium: utmMed,
+          referrer: ref,
+          gclid,
+          fbclid,
+          twclid,
+        }),
+        has_checkout: Number(hasCo ?? 0) > 0,
+      });
+    }
+  } catch (err) {
+    errors.push(
+      `sessions: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+
+  return { sessions, errors };
 }
 
 // ─── Live Google Ads spend ────────────────────────────────────────────────────
@@ -648,7 +703,7 @@ export async function GET(request: NextRequest) {
     // ── 1. Shopify orders (source of truth) ──────────────────────────────────
     const rawOrders = await fetchShopifyOrdersInWindow(start, end).catch(
       (err) => {
-        console.warn("[marketing-funnel v3] Shopify fetch failed:", err);
+        console.warn("[marketing-funnel v4] Shopify fetch failed:", err);
         return [] as ShopifyOrderRaw[];
       }
     );
@@ -670,7 +725,6 @@ export async function GET(request: NextRequest) {
     let proShopCount = 0;
     let proShopCents = 0;
 
-    // emails of "new reserve members" — used for funnel attribution + email step credit
     const newMemberEmails = new Map<
       string,
       { tier: ReserveTier; paidAt: string; orderNumber: number }
@@ -705,56 +759,131 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // ── 2. PostHog funnel + channel mix ───────────────────────────────────────
+    // ── 2. PostHog sessions + funnel + channel ───────────────────────────────
     const phCfg = getPostHogConfig();
-    let funnel: FunnelData = {
-      paths: {},
-      emailToPath: {},
-      channelTotals: {},
-      pageViewSessions: 0,
-      errors: phCfg ? [] : ["POSTHOG_PERSONAL_API_KEY or POSTHOG_PROJECT_ID not set"],
+    let phData: FunnelData = {
+      sessions: [],
+      errors: phCfg
+        ? []
+        : ["POSTHOG_PERSONAL_API_KEY or POSTHOG_PROJECT_ID not set"],
     };
     if (phCfg) {
       try {
-        funnel = await fetchPostHogFunnel(phCfg, start, end);
+        phData = await fetchPostHogSessions(phCfg, start, end);
       } catch (err) {
-        funnel.errors.push(err instanceof Error ? err.message : String(err));
+        phData.errors.push(
+          err instanceof Error ? err.message : String(err)
+        );
       }
     }
 
-    // Attribute Shopify "new reserve member" purchases back to landing path
-    for (const email of newMemberEmails.keys()) {
-      const path = funnel.emailToPath[email] || "(unattributed)";
-      funnel.paths[path] ??= { page_views: 0, checkout_started: 0, purchases: 0 };
-      funnel.paths[path].purchases += 1;
+    // Build aggregations from sessions.
+    // A session "purchased" if its email matches a new_reserve_member email.
+    const purchasedEmails = new Set(newMemberEmails.keys());
+    const matchedEmails = new Set<string>();
+
+    // (a) per-path bucket aggregations
+    const bucketAgg: Record<PathBucketKey, FunnelStages> = {
+      home: { visits: 0, checkouts: 0, purchases: 0 },
+      lp_subscription: { visits: 0, checkouts: 0, purchases: 0 },
+      lp_gift: { visits: 0, checkouts: 0, purchases: 0 },
+      lp_other: { visits: 0, checkouts: 0, purchases: 0 },
+      other: { visits: 0, checkouts: 0, purchases: 0 },
+    };
+
+    // (b) raw per-path (top N) for the "all paths" toggle
+    const pathAgg: Record<string, FunnelStages & { bucket: PathBucketKey }> = {};
+
+    // (c) per-channel funnel
+    const channelAgg: Record<Channel, FunnelStages> = {
+      google_ads: { visits: 0, checkouts: 0, purchases: 0 },
+      meta_ads: { visits: 0, checkouts: 0, purchases: 0 },
+      x_ads: { visits: 0, checkouts: 0, purchases: 0 },
+      google_organic: { visits: 0, checkouts: 0, purchases: 0 },
+      meta_organic: { visits: 0, checkouts: 0, purchases: 0 },
+      x_organic: { visits: 0, checkouts: 0, purchases: 0 },
+      email: { visits: 0, checkouts: 0, purchases: 0 },
+      sms: { visits: 0, checkouts: 0, purchases: 0 },
+      internal: { visits: 0, checkouts: 0, purchases: 0 },
+      direct: { visits: 0, checkouts: 0, purchases: 0 },
+      other_referral: { visits: 0, checkouts: 0, purchases: 0 },
+    };
+
+    for (const s of phData.sessions) {
+      const bucket = bucketPath(s.landing);
+      const purchased = s.email && purchasedEmails.has(s.email);
+      if (purchased && s.email) matchedEmails.add(s.email);
+
+      // path bucket
+      bucketAgg[bucket].visits += 1;
+      if (s.has_checkout) bucketAgg[bucket].checkouts += 1;
+      if (purchased) bucketAgg[bucket].purchases += 1;
+
+      // raw path
+      pathAgg[s.landing] ??= {
+        visits: 0,
+        checkouts: 0,
+        purchases: 0,
+        bucket,
+      };
+      pathAgg[s.landing].visits += 1;
+      if (s.has_checkout) pathAgg[s.landing].checkouts += 1;
+      if (purchased) pathAgg[s.landing].purchases += 1;
+
+      // channel
+      channelAgg[s.channel].visits += 1;
+      if (s.has_checkout) channelAgg[s.channel].checkouts += 1;
+      if (purchased) channelAgg[s.channel].purchases += 1;
     }
 
-    const landingPages = Object.entries(funnel.paths)
-      .map(([path, b]) => ({
-        path,
-        page_views: b.page_views,
-        checkout_started: b.checkout_started,
-        purchases: b.purchases,
-        cvr_pv_to_purchase:
-          b.page_views > 0 ? +(b.purchases / b.page_views).toFixed(4) : 0,
-        cvr_pv_to_checkout:
-          b.page_views > 0
-            ? +(b.checkout_started / b.page_views).toFixed(4)
-            : 0,
-      }))
-      .filter((r) => r.page_views > 0 || r.purchases > 0)
-      .sort((a, b) => b.page_views - a.page_views)
-      .slice(0, 12);
-
-    const funnelTotals = Object.values(funnel.paths).reduce(
-      (acc, b) => {
-        acc.page_views += b.page_views;
-        acc.checkout_started += b.checkout_started;
-        acc.purchases += b.purchases;
-        return acc;
-      },
-      { page_views: 0, checkout_started: 0, purchases: 0 }
+    // Unattributed new members (had a Shopify order but never showed up in a
+    // tracked session in this window).
+    const unattributedPurchases = Math.max(
+      0,
+      newMemberEmails.size - matchedEmails.size
     );
+
+    // Shape outputs
+    const bucketRows: BucketRow[] = (
+      [
+        "home",
+        "lp_subscription",
+        "lp_gift",
+        "lp_other",
+        "other",
+      ] as PathBucketKey[]
+    ).map((b) => ({
+      bucket: b,
+      label: PATH_BUCKET_LABEL[b],
+      ...bucketAgg[b],
+    }));
+
+    const channelRows: ChannelRow[] = CHANNEL_ORDER.filter(
+      (c) => channelAgg[c].visits > 0 || channelAgg[c].purchases > 0
+    )
+      .map((c) => ({
+        channel: c,
+        label: CHANNEL_LABEL[c],
+        ...channelAgg[c],
+      }))
+      .sort((a, b) => b.visits - a.visits);
+
+    const allPaths: PathRow[] = Object.entries(pathAgg)
+      .map(([path, v]) => ({
+        path,
+        bucket: v.bucket,
+        visits: v.visits,
+        checkouts: v.checkouts,
+        purchases: v.purchases,
+      }))
+      .sort((a, b) => b.visits - a.visits)
+      .slice(0, 40);
+
+    const funnelTotals: FunnelStages = {
+      visits: phData.sessions.length,
+      checkouts: phData.sessions.filter((s) => s.has_checkout).length,
+      purchases: matchedEmails.size,
+    };
 
     // ── 3. Email sequences ───────────────────────────────────────────────────
     const seqSnap = await adminDb
@@ -807,7 +936,7 @@ export async function GET(request: NextRequest) {
         .get();
       emailEventsDocs = ev.docs;
     } catch (err) {
-      console.warn("[marketing-funnel v3] email_events range query failed:", err);
+      console.warn("[marketing-funnel v4] email_events range query failed:", err);
     }
     const engagementCounts: Record<
       string,
@@ -838,7 +967,7 @@ export async function GET(request: NextRequest) {
         .get();
       replyDocs = rep.docs;
     } catch (err) {
-      console.warn("[marketing-funnel v3] email_replies range query failed:", err);
+      console.warn("[marketing-funnel v4] email_replies range query failed:", err);
     }
     const replyCounts: Record<string, Record<number, number>> = {};
     for (const doc of replyDocs) {
@@ -893,7 +1022,7 @@ export async function GET(request: NextRequest) {
 
     // ── 4. Live ad spend ─────────────────────────────────────────────────────
     const googleAds = await fetchGoogleAdsLive(start, end).catch((err) => {
-      console.warn("[marketing-funnel v3] Google Ads live fetch failed:", err);
+      console.warn("[marketing-funnel v4] Google Ads live fetch failed:", err);
       return {
         available: false,
         reason: err instanceof Error ? err.message : "unknown",
@@ -906,7 +1035,7 @@ export async function GET(request: NextRequest) {
 
     const xAds: AdPlatformSummary = {
       available: false,
-      reason: "X Ads connector not configured (twclid traffic shown in channel mix)",
+      reason: "X Ads connector not configured",
       spend_cents: 0,
       clicks: 0,
       conversions: 0,
@@ -916,10 +1045,6 @@ export async function GET(request: NextRequest) {
     const totalSpendCents = googleAds.spend_cents + xAds.spend_cents;
 
     // ── 5. Response ──────────────────────────────────────────────────────────
-    const channels = Object.entries(funnel.channelTotals)
-      .map(([channel, sessions]) => ({ channel, sessions }))
-      .sort((a, b) => b.sessions - a.sessions);
-
     return NextResponse.json({
       window: { start, end },
       headline: {
@@ -935,9 +1060,14 @@ export async function GET(request: NextRequest) {
         ad_spend_cents: totalSpendCents,
         cac_cents: newCount > 0 ? Math.round(totalSpendCents / newCount) : 0,
       },
-      landing_pages: landingPages,
-      funnel_totals: funnelTotals,
-      channels,
+      funnel: {
+        totals: funnelTotals,
+        path_buckets: bucketRows,
+        channels: channelRows,
+        all_paths: allPaths,
+        unattributed_purchases: unattributedPurchases,
+        shopify_new_members: newMemberEmails.size,
+      },
       ad_platforms: {
         google_ads: googleAds,
         x_ads: xAds,
@@ -948,15 +1078,14 @@ export async function GET(request: NextRequest) {
         new_reserve_members: newCount,
         auto_renewals: renewalCount,
         pro_shop: proShopCount,
-        posthog_page_view_sessions: funnel.pageViewSessions,
-        posthog_paths: Object.keys(funnel.paths).length,
-        posthog_errors: funnel.errors,
+        posthog_sessions: phData.sessions.length,
+        posthog_errors: phData.errors,
         sequences_in_window: seqSnap.size,
         email_events: emailEventsDocs.length,
       },
     });
   } catch (err) {
-    console.error("[admin/marketing-funnel v3] failed:", err);
+    console.error("[admin/marketing-funnel v4] failed:", err);
     const msg = err instanceof Error ? err.message : "Internal error";
     return NextResponse.json({ error: msg }, { status: 500 });
   }
