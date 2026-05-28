@@ -25,6 +25,8 @@ interface DailyKPIs {
   };
 }
 
+type Period = "today" | "week" | "month" | "custom";
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function pct(n: number | null | undefined): string {
@@ -44,6 +46,28 @@ function dollars(cents: number | null | undefined): string {
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+function mondayISO(): string {
+  const d = new Date();
+  const day = d.getDay();
+  const diff = (day === 0 ? -6 : 1 - day);
+  d.setDate(d.getDate() + diff);
+  return d.toISOString().slice(0, 10);
+}
+
+function firstOfMonthISO(): string {
+  const d = new Date();
+  d.setDate(1);
+  return d.toISOString().slice(0, 10);
+}
+
+function periodLabel(period: Period, customStart: string, customEnd: string): string {
+  if (period === "today") return "Today";
+  if (period === "week") return "This week";
+  if (period === "month") return "This month";
+  if (customStart && customEnd) return `${customStart} → ${customEnd}`;
+  return "Custom";
 }
 
 // ─── Funnel bar ───────────────────────────────────────────────────────────────
@@ -98,8 +122,11 @@ export default function AdminFunnelPage() {
   const [kpis, setKpis] = useState<DailyKPIs | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [date, setDate] = useState(todayISO());
   const [refreshing, setRefreshing] = useState(false);
+
+  const [period, setPeriod] = useState<Period>("today");
+  const [customStart, setCustomStart] = useState(todayISO());
+  const [customEnd, setCustomEnd] = useState(todayISO());
 
   const getHeaders = useCallback(async (): Promise<HeadersInit> => {
     if (!adminUser) throw new Error("Not authenticated");
@@ -114,12 +141,20 @@ export default function AdminFunnelPage() {
       else setLoading(true);
       setError(null);
       try {
-        // KPI endpoint uses REPORTING_API_KEY — we pass Firebase token and the
-        // API route will need to be updated to accept it, OR we use the snapshot
-        // endpoint. For now we call the snapshot route which is key-protected.
-        // Since we're in admin context, we call a new admin-wrapped KPI route.
-        const params = new URLSearchParams({ date });
-        if (refresh) params.set("refresh", "1");
+        const params = new URLSearchParams();
+        if (period === "today") {
+          params.set("date", todayISO());
+          if (refresh) params.set("refresh", "1");
+        } else {
+          const start =
+            period === "week" ? mondayISO() :
+            period === "month" ? firstOfMonthISO() :
+            customStart;
+          const end =
+            period === "custom" ? customEnd : todayISO();
+          params.set("startDate", start);
+          params.set("endDate", end);
+        }
         const res = await fetch(`/api/admin/funnel?${params.toString()}`, {
           headers: await getHeaders(),
         });
@@ -133,7 +168,7 @@ export default function AdminFunnelPage() {
         setRefreshing(false);
       }
     },
-    [authLoading, adminUser, date, getHeaders]
+    [authLoading, adminUser, period, customStart, customEnd, getHeaders]
   );
 
   useEffect(() => { void loadKPIs(); }, [loadKPIs]);
@@ -148,25 +183,53 @@ export default function AdminFunnelPage() {
   return (
     <div className="max-w-4xl mx-auto px-6 py-10">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-start justify-between mb-8 gap-4 flex-wrap">
         <div>
           <h1 className="font-serif text-3xl text-obsidian">Funnel</h1>
-          <p className="text-charcoal/50 text-sm mt-1">Daily metrics snapshot</p>
+          <p className="text-charcoal/50 text-sm mt-1">
+            {periodLabel(period, customStart, customEnd)}
+          </p>
         </div>
-        <div className="flex items-center gap-3">
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="text-sm border border-taupe/40 rounded-lg px-3 py-2 bg-white text-charcoal focus:outline-none focus:ring-2 focus:ring-forest/30"
-          />
-          <button
-            onClick={() => void loadKPIs(true)}
-            disabled={refreshing}
-            className="text-sm text-forest hover:underline disabled:opacity-50"
-          >
-            {refreshing ? "Refreshing..." : "Refresh"}
-          </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {(["today", "week", "month", "custom"] as Period[]).map((p) => (
+            <button
+              key={p}
+              onClick={() => setPeriod(p)}
+              className={`text-sm px-3 py-1.5 rounded-lg border transition-colors ${
+                period === p
+                  ? "bg-forest text-white border-forest"
+                  : "bg-white text-charcoal border-taupe/40 hover:border-forest/40"
+              }`}
+            >
+              {p === "today" ? "Today" : p === "week" ? "Week" : p === "month" ? "Month" : "Custom"}
+            </button>
+          ))}
+          {period === "custom" && (
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={customStart}
+                onChange={(e) => setCustomStart(e.target.value)}
+                className="text-sm border border-taupe/40 rounded-lg px-3 py-1.5 bg-white text-charcoal focus:outline-none focus:ring-2 focus:ring-forest/30"
+              />
+              <span className="text-charcoal/40 text-sm">→</span>
+              <input
+                type="date"
+                value={customEnd}
+                onChange={(e) => setCustomEnd(e.target.value)}
+                className="text-sm border border-taupe/40 rounded-lg px-3 py-1.5 bg-white text-charcoal focus:outline-none focus:ring-2 focus:ring-forest/30"
+              />
+            </div>
+          )}
+          {period === "today" && (
+            <button
+              onClick={() => void loadKPIs(true)}
+              disabled={refreshing}
+              className="text-sm text-forest hover:underline disabled:opacity-50 ml-1"
+            >
+              {refreshing ? "Refreshing..." : "Refresh"}
+            </button>
+          )}
         </div>
       </div>
 

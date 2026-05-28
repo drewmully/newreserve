@@ -12,7 +12,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth } from "@/lib/firebase-admin";
 import { isAllowedAdminEmail } from "@/lib/adminEmailAllowlist";
-import { getDailyKPIs, refreshPopulationKPIs } from "@/app/api/_lib/kpiReporting";
+import { getDailyKPIs, getDailyKPIsRange, refreshPopulationKPIs } from "@/app/api/_lib/kpiReporting";
 
 async function verifyAdmin(request: NextRequest): Promise<void> {
   const header = request.headers.get("Authorization") ?? "";
@@ -34,9 +34,15 @@ export async function GET(request: NextRequest) {
 
   const params = request.nextUrl.searchParams;
   const date = params.get("date") ?? undefined;
+  const startDate = params.get("startDate") ?? undefined;
+  const endDate = params.get("endDate") ?? undefined;
   const refresh = params.get("refresh") === "1";
 
   try {
+    if (startDate && endDate) {
+      const kpis = await getDailyKPIsRange(startDate, endDate);
+      return NextResponse.json(kpis);
+    }
     if (refresh) await refreshPopulationKPIs(date);
     const kpis = await getDailyKPIs(date);
     return NextResponse.json(kpis);
