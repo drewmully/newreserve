@@ -24,7 +24,10 @@
  *
  *   Results are cached in-process for 5 minutes.
  */
-import { resolveMemberTierFromVariantId } from "@/lib/membershipConfig";
+import {
+  resolveLegacyFromVariantId,
+  resolveMemberTierFromVariantId,
+} from "@/lib/membershipConfig";
 
 const LOOP_BASE_URL =
   process.env.LOOP_API_BASE_URL ??
@@ -39,11 +42,16 @@ const ROCK_SWAPS_GOAL = 300;
 interface LoopSubLine {
   variantShopifyId?: number | string | null;
 }
+interface LoopCustomer {
+  email?: string | null;
+}
 interface LoopSubRow {
   id: number | string;
   status: string;
   createdAt: string; // ISO
   lines?: LoopSubLine[];
+  customer?: LoopCustomer;
+  originOrderShopifyId?: number | string | null;
 }
 interface LoopPage {
   data: LoopSubRow[];
@@ -113,56 +121,84 @@ async function fetchLoopActivePage(
 function subTier(sub: LoopSubRow): "access" | "member" | null {
   const line = sub.lines?.[0];
   if (!line) return null;
+  // Reject legacy variants (e.g. Back 9 Legacy) — the legacy variant id is
+  // intentionally mapped to "member" in VARIANT_TIER_MAP for downstream
+  // tier display, but for Reserve counting we must exclude it.
+  const legacy = resolveLegacyFromVariantId(line.variantShopifyId);
+  if (legacy.isLegacy) return null;
   const tier = resolveMemberTierFromVariantId(line.variantShopifyId);
   return tier ?? null;
 }
 
-// ─── Rock 2: Swaps from Loop ACTIVE ───────────────────────────────────────────
+// ─── Loop ACTIVE walk (drives BOTH swaps and signup status) ───────────────────
+//
+// Single full walk of Loop status=ACTIVE. Rows are ASC by createdAt.
+//   - Pre-cutoff rows on Reserve tier  ⇒ counted as Reserve swaps (Rock 2).
+//   - Post-cutoff rows                 ⇒ index by Shopify origin order id so
+//     Rock 1 (Shopify signups) can mark each first-order ACTIVE vs CANCELLED.
+//
+// Walking all ~30 pages is the dominant wall-time cost regardless, so doing
+// both jobs in a single pass is a win.
 
 interface SwapResult {
   access: number;
   member: number;
   earliest_active_iso: string | null;
+  activeOriginOrderIds: Set<string>; // post-cutoff active Shopify origin ids
   warnings: string[];
 }
 
-async function countSwaps(cutoffMs: number): Promise<SwapResult> {
-  // Loop /subscription is sorted ASC by createdAt by default. Walk pages
-  // from page 1; the moment we see a row with createdAt >= cutoff we know
-  // every subsequent row is a new signup (not a swap) so we can stop.
+function normalizeOriginId(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  const str = String(value).trim();
+  if (!str) return null;
+  // Strip any Shopify gid:// prefix if present.
+  const match = str.match(/(\d+)\s*$/);
+  return match?.[1] ?? null;
+}
+
+async function walkActiveLoop(cutoffMs: number): Promise<SwapResult> {
   let access = 0;
   let member = 0;
   let earliest: number | null = null;
+  const activeOriginOrderIds = new Set<string>();
   const warnings: string[] = [];
 
   let pageNo = 1;
-  outer: while (pageNo <= 200) {
+  while (pageNo <= 200) {
     const page = await fetchLoopActivePage(pageNo);
     for (const sub of page.data) {
       const createdMs = Date.parse(sub.createdAt);
       if (!Number.isFinite(createdMs)) continue;
-      if (createdMs >= cutoffMs) {
-        // First row at or past the cutoff — done.
-        break outer;
+
+      if (createdMs < cutoffMs) {
+        // Pre-cutoff active Reserve sub = a swap.
+        const tier = subTier(sub);
+        if (!tier) continue; // skip non-Reserve (Back 9 legacy etc.)
+        if (tier === "access") access++;
+        else member++;
+        earliest =
+          earliest === null ? createdMs : Math.min(earliest, createdMs);
+      } else {
+        // Post-cutoff active sub — index by origin order id so signup
+        // counter can flag this signup as ACTIVE.
+        const originId = normalizeOriginId(sub.originOrderShopifyId);
+        if (originId) activeOriginOrderIds.add(originId);
       }
-      const tier = subTier(sub);
-      if (!tier) continue; // skip non-Reserve active subs (e.g. Back 9 legacy)
-      if (tier === "access") access++;
-      else member++;
-      earliest = earliest === null ? createdMs : Math.min(earliest, createdMs);
     }
     if (!page.pageInfo?.hasNextPage) break;
     pageNo++;
   }
 
   if (pageNo >= 200) {
-    warnings.push("Loop swap scan stopped at safety cap (200 pages)");
+    warnings.push("Loop active scan stopped at safety cap (200 pages)");
   }
 
   return {
     access,
     member,
     earliest_active_iso: earliest ? new Date(earliest).toISOString() : null,
+    activeOriginOrderIds,
     warnings,
   };
 }
@@ -171,6 +207,8 @@ async function countSwaps(cutoffMs: number): Promise<SwapResult> {
 
 interface ShopifyOrderNode {
   id: string;
+  legacyResourceId?: string | null;
+  name?: string | null;
   createdAt: string;
   tags: string[];
   displayFinancialStatus: string | null;
@@ -204,7 +242,10 @@ interface SignupResult {
   warnings: string[];
 }
 
-async function countNewSignups(cutoffIso: string): Promise<SignupResult> {
+async function countNewSignups(
+  cutoffIso: string,
+  activeOriginOrderIds: Set<string>
+): Promise<SignupResult> {
   const token =
     process.env.SHOPIFY_ADMIN_TOKEN ?? process.env.SHOPIFY_CLIENT_SECRET;
   const domain = process.env.SHOPIFY_STORE_DOMAIN;
@@ -238,6 +279,7 @@ async function countNewSignups(cutoffIso: string): Promise<SignupResult> {
           cursor
           node {
             id
+            legacyResourceId
             createdAt
             tags
             displayFinancialStatus
@@ -276,13 +318,17 @@ async function countNewSignups(cutoffIso: string): Promise<SignupResult> {
       if (tier === "access") access++;
       else member++;
 
-      // Status bucket — Shopify doesn't carry the live Loop sub status on
-      // the original first-order. We approximate using the order's
-      // cancelled state as a proxy: cancelled order ≈ subscription likely
-      // cancelled. This won't catch later cancellations or pauses, but
-      // it's a useful "how many of these stuck?" signal.
-      if (node.cancelledAt) byStatus.CANCELLED++;
-      else byStatus.ACTIVE++;
+      // Status bucket — cross-reference with Loop ACTIVE walk by origin
+      // order id. If the signup's Shopify order id appears in the active
+      // set, the sub is currently active. Otherwise it's been cancelled
+      // (or paused — Loop doesn't expose this without an extra walk).
+      const originId =
+        node.legacyResourceId ?? normalizeOriginId(node.id) ?? "";
+      if (originId && activeOriginOrderIds.has(originId)) {
+        byStatus.ACTIVE++;
+      } else {
+        byStatus.CANCELLED++;
+      }
 
       const createdMs = Date.parse(node.createdAt);
       if (Number.isFinite(createdMs)) {
@@ -324,11 +370,13 @@ export async function getRocksProgress(
 
   const cutoffMs = new Date(cutoffIso).getTime();
 
-  // Run both rocks in parallel — they hit different APIs.
-  const [signupsRes, swapsRes] = await Promise.all([
-    countNewSignups(cutoffIso),
-    countSwaps(cutoffMs),
-  ]);
+  // Order matters: the Loop ACTIVE walk produces the post-cutoff active
+  // origin-order-id set that the Shopify signup counter needs to compute
+  // ACTIVE vs CANCELLED. We still parallelize the Shopify fetch with the
+  // bulk of the Loop walk by kicking both off and joining on the active
+  // walk before finalizing signup status buckets.
+  const swapsRes = await walkActiveLoop(cutoffMs);
+  const signupsRes = await countNewSignups(cutoffIso, swapsRes.activeOriginOrderIds);
 
   const data: RocksData = {
     cutoff_iso: cutoffIso,
