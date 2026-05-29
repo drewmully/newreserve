@@ -18,7 +18,8 @@ import { useMembership } from "@/app/context/MembershipContext";
 
 type Tier = "free" | "access" | "member" | "back9";
 type Period = "today" | "week" | "month" | "custom";
-type PathView = "buckets" | "all";
+type PathView = "buckets" | "all" | "other";
+type PctMode = "step" | "start";
 
 interface FunnelStages {
   visits: number;
@@ -73,6 +74,12 @@ interface ApiResponse {
         channel_label: string;
       }
     >;
+    other_paths?: Array<
+      FunnelStages & {
+        path: string;
+        bucket: "home" | "lp_subscription" | "lp_gift" | "lp_other" | "other";
+      }
+    >;
     attribution_health?: {
       gclid_pct: number;
       fbclid_pct: number;
@@ -88,6 +95,28 @@ interface ApiResponse {
     google_ads: AdPlatform;
     x_ads: AdPlatform;
   };
+  rocks: {
+    cutoff_iso: string;
+    generated_at: string;
+    new_signups: {
+      goal: number;
+      total: number;
+      access: number;
+      member: number;
+      by_status: { ACTIVE: number; CANCELLED: number; PAUSED: number };
+      first_signup_iso: string | null;
+      latest_signup_iso: string | null;
+    };
+    swaps: {
+      goal: number;
+      total: number;
+      access: number;
+      member: number;
+      earliest_active_iso: string | null;
+    };
+    warnings: string[];
+  } | null;
+  rocks_error?: string | null;
   email_flows: Record<
     Tier,
     {
@@ -224,14 +253,16 @@ interface SankeySource {
 function Sankey({
   sources,
   height = 280,
+  pctMode = "start",
 }: {
   sources: SankeySource[];
   height?: number;
+  pctMode?: PctMode;
 }) {
   // Layout constants
   const W = 600;
   const H = height;
-  const PAD_T = 18;
+  const PAD_T = 22;
   const PAD_B = 24;
   const LABEL_W = 130;
   const NODE_W = 10;
@@ -338,6 +369,22 @@ function Sankey({
           const yC = y0;
           const yP = y0;
 
+          // Percentages — toggle between step-to-step and from-start.
+          const cPctStep = v > 0 ? (c / v) * 100 : 0;
+          const pPctStep = c > 0 ? (p / c) * 100 : 0;
+          const cPctStart = v > 0 ? (c / v) * 100 : 0;
+          const pPctStart = v > 0 ? (p / v) * 100 : 0;
+          const cPct = pctMode === "step" ? cPctStep : cPctStart;
+          const pPct = pctMode === "step" ? pPctStep : pPctStart;
+          const fmt = (n: number) => (n >= 10 ? n.toFixed(0) : n.toFixed(1));
+          // Vertical position for inline percentage label — center of node
+          // when it exists, otherwise the row's vertical center so empty
+          // stages still show a faint 0%.
+          const labelYC = yC + (visHC > 0 ? visHC / 2 : r.h / 2) + 3;
+          const labelYP = yP + (visHP > 0 ? visHP / 2 : r.h / 2) + 3;
+          // Show labels only when the row is tall enough to read them.
+          const showLabels = r.h >= 14;
+
           // Ribbon path: cubic bezier from (x1, top) curving to (x2, top), with
           // bottom edge connecting back from (x2, top+hRight) to (x1, top+hLeft).
           const ribbon = (
@@ -438,6 +485,35 @@ function Sankey({
                 fill={`url(#${gradId}-cp)`}
                 opacity="0.7"
               />
+
+              {/* Inline % labels — to the right of each downstream node so they
+                  read "X% to checkout" / "Y% to purchase" per source. */}
+              {showLabels && (
+                <>
+                  <text
+                    x={stageX[1] - 3}
+                    y={labelYC}
+                    fontSize="9"
+                    textAnchor="end"
+                    fontFamily="ui-monospace, monospace"
+                    fill={c > 0 ? STAGE_COLOR.checkouts : "#BAB9B4"}
+                    fontWeight="600"
+                  >
+                    {fmt(cPct)}%
+                  </text>
+                  <text
+                    x={stageX[2] - 3}
+                    y={labelYP}
+                    fontSize="9"
+                    textAnchor="end"
+                    fontFamily="ui-monospace, monospace"
+                    fill={p > 0 ? STAGE_COLOR.purchases : "#BAB9B4"}
+                    fontWeight="700"
+                  >
+                    {fmt(pPct)}%
+                  </text>
+                </>
+              )}
             </g>
           );
         })}
@@ -445,7 +521,9 @@ function Sankey({
         {/* Footer legend */}
         <g fontSize="8" fontFamily="ui-monospace, monospace" fill="#9A958A">
           <text x={chartLeft - 10} y={H - 6} textAnchor="end">source</text>
-          <text x={chartRight} y={H - 6} textAnchor="end">{num(totalVisits)} total visits</text>
+          <text x={chartRight} y={H - 6} textAnchor="end">
+            {num(totalVisits)} total visits · {pctMode === "step" ? "% step-to-step" : "% from start"}
+          </text>
         </g>
       </svg>
     </div>
@@ -798,6 +876,251 @@ function EmailPreviewModal({
   );
 }
 
+// ─── Rocks: 300 New Reserve signups + 300 Reserve Swaps ───────────────────────
+//
+// Hero block at the top of the page — bold, in-your-face progress toward the
+// two top-of-mind quarterly goals. Reads counters from the Loop-backed
+// `rocks` block on the API response. Designed to be celebratory when on
+// track and unmistakably loud when behind.
+
+function RockCard({
+  title,
+  emojiAscii,
+  total,
+  goal,
+  primary,
+  accent,
+  breakdown,
+  footnote,
+}: {
+  title: string;
+  emojiAscii: string;
+  total: number;
+  goal: number;
+  primary: string;
+  accent: string;
+  breakdown: Array<{ label: string; value: number }>;
+  footnote?: string;
+}) {
+  const pct = goal > 0 ? Math.min(100, (total / goal) * 100) : 0;
+  const remaining = Math.max(0, goal - total);
+  const done = total >= goal;
+
+  const totalStr = total.toLocaleString();
+  const goalStr = goal.toLocaleString();
+
+  return (
+    <div
+      className="relative overflow-hidden rounded-2xl border p-6 md:p-7"
+      style={{
+        borderColor: `${primary}40`,
+        background: `linear-gradient(135deg, ${primary}0D 0%, ${accent}14 100%)`,
+      }}
+    >
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -right-6 -top-6 select-none font-serif"
+        style={{
+          fontSize: "180px",
+          lineHeight: 1,
+          color: primary,
+          opacity: 0.06,
+          letterSpacing: "-0.05em",
+        }}
+      >
+        {emojiAscii}
+      </div>
+
+      <div className="relative">
+        <div className="flex items-baseline justify-between gap-3 mb-4">
+          <p
+            className="text-[10px] uppercase tracking-[0.2em] font-medium"
+            style={{ color: primary }}
+          >
+            Rock · {title}
+          </p>
+          <span
+            className="text-[10px] uppercase tracking-widest px-2 py-0.5 rounded-full"
+            style={{
+              background: done ? primary : `${primary}1F`,
+              color: done ? "#FFFFFF" : primary,
+            }}
+          >
+            {done ? "Goal hit" : `${remaining.toLocaleString()} to go`}
+          </span>
+        </div>
+
+        <div className="flex items-end gap-2">
+          <p
+            className="font-serif tabular-nums leading-none"
+            style={{
+              fontSize: "clamp(56px, 9vw, 92px)",
+              color: primary,
+              letterSpacing: "-0.04em",
+            }}
+          >
+            {totalStr}
+          </p>
+          <p
+            className="font-serif tabular-nums text-charcoal/40 pb-2"
+            style={{ fontSize: "clamp(20px, 2.5vw, 28px)", letterSpacing: "-0.02em" }}
+          >
+            / {goalStr}
+          </p>
+        </div>
+
+        <div
+          className="mt-5 h-3 rounded-full overflow-hidden bg-white border"
+          style={{ borderColor: `${primary}30` }}
+        >
+          <div
+            className="h-full rounded-full transition-all duration-700 ease-out"
+            style={{
+              width: `${Math.max(pct, 1.5)}%`,
+              background: `linear-gradient(90deg, ${primary} 0%, ${accent} 100%)`,
+            }}
+          />
+        </div>
+        <div className="flex items-baseline justify-between mt-1.5">
+          <p className="text-[10px] font-mono uppercase tracking-widest text-charcoal/40">
+            {pct.toFixed(1)}% of goal
+          </p>
+          {footnote && (
+            <p className="text-[10px] font-mono text-charcoal/40">{footnote}</p>
+          )}
+        </div>
+
+        {breakdown.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mt-4">
+            {breakdown.map((b) => (
+              <span
+                key={b.label}
+                className="text-[10px] font-mono uppercase tracking-widest px-2 py-1 rounded-md tabular-nums"
+                style={{
+                  background: "#FFFFFF",
+                  border: `1px solid ${primary}26`,
+                  color: primary,
+                }}
+              >
+                {b.label} <span className="text-charcoal/60">{b.value.toLocaleString()}</span>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RocksHero({
+  rocks,
+  rocksError,
+}: {
+  rocks: ApiResponse["rocks"];
+  rocksError?: string | null;
+}) {
+  if (rocksError) {
+    return (
+      <section className="mb-8">
+        <div className="rounded-xl border border-ember/30 bg-ember/5 p-4">
+          <p className="text-xs uppercase tracking-widest text-ember mb-1">
+            Rocks unavailable
+          </p>
+          <p className="text-xs text-charcoal/60 font-mono">{rocksError}</p>
+        </div>
+      </section>
+    );
+  }
+  if (!rocks) {
+    return (
+      <section className="mb-8">
+        <div className="rounded-xl border border-taupe/20 bg-bone p-4">
+          <p className="text-xs uppercase tracking-widest text-charcoal/40">
+            Loading Rocks…
+          </p>
+        </div>
+      </section>
+    );
+  }
+
+  const cutoffLabel = new Date(rocks.cutoff_iso).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+  const generatedLabel = new Date(rocks.generated_at).toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  return (
+    <section className="mb-10">
+      <div className="flex items-baseline justify-between mb-4 gap-3">
+        <div className="flex items-baseline gap-3">
+          <h2
+            className="font-serif text-obsidian"
+            style={{ fontSize: "clamp(28px, 4vw, 40px)", letterSpacing: "-0.02em" }}
+          >
+            Rocks.
+          </h2>
+          <p className="text-xs text-charcoal/40 font-mono">
+            300 + 300 · the only two numbers that matter
+          </p>
+        </div>
+        <p className="text-[10px] text-charcoal/40 font-mono uppercase tracking-widest">
+          Cutoff {cutoffLabel} · refreshed {generatedLabel}
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <RockCard
+          title="New Reserve signups"
+          emojiAscii="▲"
+          total={rocks.new_signups.total}
+          goal={rocks.new_signups.goal}
+          primary="#20808D"
+          accent="#1B474D"
+          breakdown={[
+            { label: "Access", value: rocks.new_signups.access },
+            { label: "Member", value: rocks.new_signups.member },
+            { label: "Active", value: rocks.new_signups.by_status.ACTIVE },
+            { label: "Cancelled", value: rocks.new_signups.by_status.CANCELLED },
+            { label: "Paused", value: rocks.new_signups.by_status.PAUSED },
+          ]}
+          footnote={
+            rocks.new_signups.latest_signup_iso
+              ? `Latest · ${new Date(rocks.new_signups.latest_signup_iso).toLocaleDateString(undefined, { month: "short", day: "numeric" })}`
+              : undefined
+          }
+        />
+        <RockCard
+          title="Reserve Swaps"
+          emojiAscii="↻"
+          total={rocks.swaps.total}
+          goal={rocks.swaps.goal}
+          primary="#D4772C"
+          accent="#A84B2F"
+          breakdown={[
+            { label: "Access", value: rocks.swaps.access },
+            { label: "Member", value: rocks.swaps.member },
+          ]}
+          footnote={
+            rocks.swaps.earliest_active_iso
+              ? `Oldest active · ${new Date(rocks.swaps.earliest_active_iso).toLocaleDateString(undefined, { month: "short", year: "numeric" })}`
+              : undefined
+          }
+        />
+      </div>
+
+      {rocks.warnings.length > 0 && (
+        <div className="mt-3 text-[10px] font-mono text-charcoal/40">
+          {rocks.warnings.join(" · ")}
+        </div>
+      )}
+    </section>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function MarketingFunnelPage() {
@@ -810,6 +1133,8 @@ export default function MarketingFunnelPage() {
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<PreviewState | null>(null);
   const [pathView, setPathView] = useState<PathView>("buckets");
+  const [pathPctMode, setPathPctMode] = useState<PctMode>("start");
+  const [channelPctMode, setChannelPctMode] = useState<PctMode>("start");
 
   const computeWindow = useCallback((): { start: string; end: string } => {
     if (period === "today") return { start: todayISO(), end: todayISO() };
@@ -905,6 +1230,15 @@ export default function MarketingFunnelPage() {
           b.visits > 100 && b.purchases === 0 && b.checkouts < 2,
       }));
     }
+    if (pathView === "other") {
+      const rows = data.funnel.other_paths ?? [];
+      return rows.map((p) => ({
+        key: p.path,
+        label: p.path,
+        stages: { visits: p.visits, checkouts: p.checkouts, purchases: p.purchases },
+        highlight: p.visits > 100 && p.purchases === 0 && p.checkouts < 2,
+      }));
+    }
     return data.funnel.all_paths.map((p) => ({
       key: p.path,
       label: p.path,
@@ -978,6 +1312,9 @@ export default function MarketingFunnelPage() {
 
       {data && (
         <>
+          {/* ── Rocks hero (top of page) ───────────────────────────────────── */}
+          <RocksHero rocks={data.rocks} rocksError={data.rocks_error} />
+
           {/* ── Headline KPIs ─────────────────────────────────────────────── */}
           <section className="mb-3">
             <SectionHeading
@@ -1092,27 +1429,44 @@ export default function MarketingFunnelPage() {
                       First page → checkout → purchase
                     </p>
                   </div>
-                  <div className="flex items-center gap-1 bg-bone rounded-md p-0.5">
-                    <button
-                      onClick={() => setPathView("buckets")}
-                      className={`text-[10px] px-2 py-0.5 rounded transition-colors ${
-                        pathView === "buckets"
-                          ? "bg-white text-obsidian shadow-sm"
-                          : "text-charcoal/50 hover:text-obsidian"
-                      }`}
-                    >
-                      Buckets
-                    </button>
-                    <button
-                      onClick={() => setPathView("all")}
-                      className={`text-[10px] px-2 py-0.5 rounded transition-colors ${
-                        pathView === "all"
-                          ? "bg-white text-obsidian shadow-sm"
-                          : "text-charcoal/50 hover:text-obsidian"
-                      }`}
-                    >
-                      All paths
-                    </button>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1 bg-bone rounded-md p-0.5">
+                      {([
+                        { v: "buckets" as const, label: "Buckets" },
+                        { v: "all" as const, label: "All" },
+                        { v: "other" as const, label: "Other" },
+                      ]).map(({ v, label }) => (
+                        <button
+                          key={v}
+                          onClick={() => setPathView(v)}
+                          className={`text-[10px] px-2 py-0.5 rounded transition-colors ${
+                            pathView === v
+                              ? "bg-white text-obsidian shadow-sm"
+                              : "text-charcoal/50 hover:text-obsidian"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-1 bg-bone rounded-md p-0.5">
+                      {([
+                        { v: "start" as const, label: "% start" },
+                        { v: "step" as const, label: "% step" },
+                      ]).map(({ v, label }) => (
+                        <button
+                          key={v}
+                          onClick={() => setPathPctMode(v)}
+                          className={`text-[10px] px-2 py-0.5 rounded transition-colors ${
+                            pathPctMode === v
+                              ? "bg-white text-obsidian shadow-sm"
+                              : "text-charcoal/50 hover:text-obsidian"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
                 <Sankey
@@ -1122,7 +1476,8 @@ export default function MarketingFunnelPage() {
                     stages: r.stages,
                     highlight: r.highlight,
                   }))}
-                  height={pathView === "all" ? 340 : 240}
+                  height={pathView === "buckets" ? 280 : 420}
+                  pctMode={pathPctMode}
                 />
               </div>
 
@@ -1134,6 +1489,24 @@ export default function MarketingFunnelPage() {
                     <p className="text-[10px] text-charcoal/40 mt-0.5">
                       Acquisition channel → checkout → purchase
                     </p>
+                  </div>
+                  <div className="flex items-center gap-1 bg-bone rounded-md p-0.5">
+                    {([
+                      { v: "start" as const, label: "% start" },
+                      { v: "step" as const, label: "% step" },
+                    ]).map(({ v, label }) => (
+                      <button
+                        key={v}
+                        onClick={() => setChannelPctMode(v)}
+                        className={`text-[10px] px-2 py-0.5 rounded transition-colors ${
+                          channelPctMode === v
+                            ? "bg-white text-obsidian shadow-sm"
+                            : "text-charcoal/50 hover:text-obsidian"
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
                   </div>
                 </div>
                 <Sankey
@@ -1147,7 +1520,8 @@ export default function MarketingFunnelPage() {
                     },
                     highlight: c.visits > 100 && c.purchases === 0,
                   }))}
-                  height={240}
+                  height={400}
+                  pctMode={channelPctMode}
                 />
               </div>
             </div>

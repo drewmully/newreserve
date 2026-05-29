@@ -39,6 +39,7 @@ import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { isAllowedAdminEmail } from "@/lib/adminEmailAllowlist";
 import { Timestamp } from "firebase-admin/firestore";
 import { FLOW_STEPS, type EmailFlow } from "@/lib/email/sequences";
+import { getRocksProgress, type RocksData } from "@/app/api/_lib/loopRocks";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -1081,6 +1082,13 @@ export async function GET(request: NextRequest) {
       .sort((a, b) => b.visits - a.visits)
       .slice(0, 40);
 
+    // Top 12 paths inside the catch-all "Other pages" bucket — so the dashboard
+    // can tell us _what_ is generating those visits (blog posts, /back-9, etc.)
+    const otherPaths = allPathRows
+      .filter((p) => p.bucket === "other")
+      .sort((a, b) => b.visits - a.visits)
+      .slice(0, 12);
+
     // (c) per-campaign rollup (Resend broadcasts / flows / etc.)
     // We classify each campaign by its (utm_src, utm_med-unknown→email) so the
     // UI can group by channel. Purchases = unique session-emails on the
@@ -1318,6 +1326,17 @@ export async function GET(request: NextRequest) {
 
     const totalSpendCents = googleAds.spend_cents + xAds.spend_cents;
 
+    // ── 4b. Rocks (Loop-backed) ────────────────────────────────────────
+    // Don't fail the whole page if Loop is unreachable.
+    let rocks: RocksData | null = null;
+    let rocksError: string | null = null;
+    try {
+      rocks = await getRocksProgress();
+    } catch (err) {
+      rocksError = err instanceof Error ? err.message : String(err);
+      console.warn("[marketing-funnel v4] rocks fetch failed:", rocksError);
+    }
+
     // ── 5. Response ──────────────────────────────────────────────────────────
     return NextResponse.json({
       window: { start, end },
@@ -1339,6 +1358,7 @@ export async function GET(request: NextRequest) {
         path_buckets: bucketRows,
         channels: channelRows,
         all_paths: allPaths,
+        other_paths: otherPaths,
         campaigns: campaignRows,
         attribution_health: attributionHealth,
         unattributed_purchases: unattributedPurchases,
@@ -1348,6 +1368,8 @@ export async function GET(request: NextRequest) {
         google_ads: googleAds,
         x_ads: xAds,
       },
+      rocks,
+      rocks_error: rocksError,
       email_flows: emailFlows,
       meta: {
         shopify_orders: rawOrders.length,
