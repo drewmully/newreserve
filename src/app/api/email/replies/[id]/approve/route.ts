@@ -179,6 +179,7 @@ export async function POST(
       subject,
       text: state.textToSend,
       idempotencyKey: state.sendAttemptId,
+      utmCampaign: "reply_drew",
     });
 
     await replyRef.update({

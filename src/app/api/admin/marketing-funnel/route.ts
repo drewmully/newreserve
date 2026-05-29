@@ -445,6 +445,23 @@ interface ChannelRow extends FunnelStages {
   label: string;
 }
 
+interface CampaignRow extends FunnelStages {
+  utm_campaign: string;
+  utm_source: string;
+  channel: Channel;
+  channel_label: string;
+}
+
+interface AttributionHealth {
+  // Each is a fraction 0..1 of sessions (in window) carrying that signal.
+  gclid_pct: number;
+  fbclid_pct: number;
+  twclid_pct: number;
+  utm_source_pct: number;
+  utm_campaign_pct: number;
+  total_sessions: number;
+}
+
 interface BucketRow extends FunnelStages {
   bucket: PathBucketKey;
   label: string;
@@ -469,9 +486,28 @@ interface HogQLChannelBucket {
   emails: string[];
 }
 
+/**
+ * One row per (utm_source, utm_campaign) seen on a session's first page_view
+ * in the window. utm_source is included so we can split e.g. resend vs
+ * klaviyo campaigns that happen to share a name. utm_content carries the
+ * recipient id from the email link (for per-person attribution drill-in
+ * later); we don't aggregate by it here.
+ *
+ * NOTE: this row is only useful if email links carry UTMs. Pre-fix
+ * broadcasts won't show up here — they'll roll into the "direct" channel.
+ */
+interface HogQLCampaignBucket {
+  utm_src: string;
+  utm_camp: string;
+  visits: number;
+  checkouts: number;
+  emails: string[];
+}
+
 interface FunnelData {
   paths: HogQLPathBucket[];
   channels: HogQLChannelBucket[];
+  campaigns: HogQLCampaignBucket[];
   total_sessions: number;
   total_checkouts: number;
   errors: string[];
@@ -487,13 +523,16 @@ async function fetchPostHogFunnel(
   const errors: string[] = [];
 
   // Shared CTE prefix — pv (per-session landing + first-touch utms),
-  // co (sessions with checkout), em (per-session email)
+  // co (sessions with checkout), em (per-session email).
+  // utm_campaign is added so we can break out specific Resend broadcasts
+  // and lifecycle flows (now that mymully.com links carry attribution).
   const ctes = `
     WITH pv AS (
       SELECT properties.$session_id AS sid,
              argMin(properties.$pathname, timestamp) AS landing,
              argMin(properties.utm_source, timestamp) AS utm_src,
              argMin(properties.utm_medium, timestamp) AS utm_med,
+             argMin(properties.utm_campaign, timestamp) AS utm_camp,
              argMin(properties.$referring_domain, timestamp) AS ref,
              argMin(properties.gclid, timestamp) AS gclid,
              argMin(properties.fbclid, timestamp) AS fbclid,
@@ -623,7 +662,50 @@ async function fetchPostHogFunnel(
     );
   }
 
-  return { paths, channels, total_sessions, total_checkouts, errors };
+  // ── Per-campaign aggregation ────────────────────────────────────────
+  // One row per (utm_source, utm_campaign) on first page_view. Empty
+  // campaign values are coalesced to '(none)' so HogQL groups them
+  // together rather than dropping them. Empty utm_source rolls into the
+  // "direct" bucket for the chart.
+  const campaigns: HogQLCampaignBucket[] = [];
+  try {
+    const campQ = `${ctes}
+      SELECT coalesce(toString(pv.utm_src), '') AS utm_src,
+             coalesce(toString(pv.utm_camp), '') AS utm_camp,
+             count() AS visits,
+             countIf(co.sid IS NOT NULL) AS checkouts,
+             arrayStringConcat(arrayDistinct(groupArray(em.email)), ',') AS emails_csv
+      FROM pv
+      LEFT JOIN co ON pv.sid = co.sid
+      LEFT JOIN em ON pv.sid = em.sid
+      WHERE toString(pv.utm_camp) != ''
+      GROUP BY utm_src, utm_camp
+      ORDER BY visits DESC
+      LIMIT 200
+    `;
+    for (const r of await runHogQL(cfg, campQ)) {
+      const emailsCsv = typeof r[4] === "string" ? r[4] : "";
+      const emails = emailsCsv
+        ? emailsCsv
+            .split(",")
+            .map((e) => e.trim().toLowerCase())
+            .filter((e) => e && e !== "null")
+        : [];
+      campaigns.push({
+        utm_src: String(r[0] ?? ""),
+        utm_camp: String(r[1] ?? ""),
+        visits: Number(r[2] ?? 0),
+        checkouts: Number(r[3] ?? 0),
+        emails,
+      });
+    }
+  } catch (err) {
+    errors.push(
+      `campaigns: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+
+  return { paths, channels, campaigns, total_sessions, total_checkouts, errors };
 }
 
 // ─── Live Google Ads spend ────────────────────────────────────────────────────
@@ -840,6 +922,7 @@ export async function GET(request: NextRequest) {
     let phData: FunnelData = {
       paths: [],
       channels: [],
+      campaigns: [],
       total_sessions: 0,
       total_checkouts: 0,
       errors: phCfg
@@ -997,6 +1080,78 @@ export async function GET(request: NextRequest) {
     const allPaths = allPathRows
       .sort((a, b) => b.visits - a.visits)
       .slice(0, 40);
+
+    // (c) per-campaign rollup (Resend broadcasts / flows / etc.)
+    // We classify each campaign by its (utm_src, utm_med-unknown→email) so the
+    // UI can group by channel. Purchases = unique session-emails on the
+    // campaign that also bought in the window.
+    const campaignRows: CampaignRow[] = [];
+    for (const c of phData.campaigns) {
+      // Most resend/email campaigns carry utm_medium=email already; if it's
+      // missing we still want to classify them as email when the source is
+      // resend/klaviyo/postmark. classifyChannel handles utm_source=resend
+      // → email already.
+      const channel = classifyChannel({
+        utm_source: c.utm_src,
+        utm_medium: "email",
+        referrer: null,
+        gclid: null,
+        fbclid: null,
+        twclid: null,
+      });
+      let purchases = 0;
+      const seen = new Set<string>();
+      for (const e of c.emails) {
+        if (seen.has(e)) continue;
+        seen.add(e);
+        if (purchasedEmails.has(e)) purchases++;
+      }
+      campaignRows.push({
+        utm_campaign: c.utm_camp || "(none)",
+        utm_source: c.utm_src || "(none)",
+        channel,
+        channel_label: CHANNEL_LABEL[channel],
+        visits: c.visits,
+        checkouts: c.checkouts,
+        purchases,
+      });
+    }
+    campaignRows.sort((a, b) => b.visits - a.visits);
+
+    // (d) attribution-health: % of sessions carrying each ID type. Computed
+    // from per-channel rows (one row per unique utm/click-id combo, weighted
+    // by visits). gclid/fbclid/twclid columns are HogQL string-or-null.
+    let gclidSessions = 0;
+    let fbclidSessions = 0;
+    let twclidSessions = 0;
+    let utmSrcSessions = 0;
+    for (const c of phData.channels) {
+      const hasGclid =
+        typeof c.gclid === "string" && c.gclid && c.gclid !== "null";
+      const hasFbclid =
+        typeof c.fbclid === "string" && c.fbclid && c.fbclid !== "null";
+      const hasTwclid =
+        typeof c.twclid === "string" && c.twclid && c.twclid !== "null";
+      const hasUtmSrc =
+        typeof c.utm_src === "string" && c.utm_src && c.utm_src !== "null";
+      if (hasGclid) gclidSessions += c.visits;
+      if (hasFbclid) fbclidSessions += c.visits;
+      if (hasTwclid) twclidSessions += c.visits;
+      if (hasUtmSrc) utmSrcSessions += c.visits;
+    }
+    const utmCampSessions = phData.campaigns.reduce(
+      (sum, c) => sum + (c.utm_camp ? c.visits : 0),
+      0
+    );
+    const denom = phData.total_sessions || 1;
+    const attributionHealth: AttributionHealth = {
+      gclid_pct: gclidSessions / denom,
+      fbclid_pct: fbclidSessions / denom,
+      twclid_pct: twclidSessions / denom,
+      utm_source_pct: utmSrcSessions / denom,
+      utm_campaign_pct: utmCampSessions / denom,
+      total_sessions: phData.total_sessions,
+    };
 
     const funnelTotals: FunnelStages = {
       visits: phData.total_sessions,
@@ -1184,6 +1339,8 @@ export async function GET(request: NextRequest) {
         path_buckets: bucketRows,
         channels: channelRows,
         all_paths: allPaths,
+        campaigns: campaignRows,
+        attribution_health: attributionHealth,
         unattributed_purchases: unattributedPurchases,
         shopify_new_members: newMemberEmails.size,
       },

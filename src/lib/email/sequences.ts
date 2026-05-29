@@ -266,6 +266,10 @@ export async function processSequence(uid: string): Promise<void> {
     to: seq.email,
     subject,
     text,
+    // utmCampaign auto-derives to `flow_{seq.flow}` from the tags below.
+    // utmContent identifies which step in the flow drove the click — lets
+    // us A/B step copy and see which email actually converts.
+    utmContent: `step_${step}`,
     tags: [
       { name: "flow", value: seq.flow },
       { name: "step", value: String(step) },
@@ -369,6 +373,7 @@ export async function triggerEventStep(
     to: seq.email,
     subject,
     text,
+    utmContent: `step_${stepIndex}`,
     tags: [
       { name: "flow", value: seq.flow },
       { name: "step", value: String(stepIndex) },
