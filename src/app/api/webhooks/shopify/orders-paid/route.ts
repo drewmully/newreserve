@@ -343,6 +343,15 @@ export async function POST(request: NextRequest) {
       gclid: utmString("gclid"),
       gbraid: utmString("gbraid"),
       wbraid: utmString("wbraid"),
+      // Meta Pixel browser identifiers — captured client-side from the
+      // _fbp/_fbc cookies on the LP and round-tripped through Shopify
+      // checkout via cart note_attributes. dispatchAnalyticsEvent reads
+      // these from event.properties and passes them into Meta CAPI's
+      // user_data block, bumping match quality from ~30% (hashed email/IP
+      // only) to ~80% (with browser identity).
+      fbp: utmString("fbp"),
+      fbc: utmString("fbc"),
+      fbclid: utmString("fbclid"),
       utm_source: utmString("utm_source"),
       utm_medium: utmString("utm_medium"),
       utm_campaign: utmString("utm_campaign"),

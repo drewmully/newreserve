@@ -8,6 +8,31 @@ import { PostHogFlagSync } from "./components/PostHogFlagSync";
 import "./globals.css";
 
 /**
+ * Renders the Meta Pixel (fbevents.js) only when NEXT_PUBLIC_META_PIXEL_ID
+ * is configured. The pixel is what creates the _fbp first-party cookie that
+ * Meta CAPI's server-side events (fired from /api/_lib/analytics.ts) use as
+ * a high-quality browser-identity match key. Without it, Meta event match
+ * quality is ~30% (hashed email/IP only) vs ~80% with fbp+fbc.
+ *
+ * It also fires a client-side PageView on every page load, which builds
+ * the same retargeting audiences that CAPI alone cannot populate.
+ */
+function MetaPixel() {
+  const pixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID;
+  if (!pixelId) return null;
+
+  return (
+    <Script
+      id="meta-pixel"
+      strategy="afterInteractive"
+      dangerouslySetInnerHTML={{
+        __html: `!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');fbq('init','${pixelId}');fbq('track','PageView');`,
+      }}
+    />
+  );
+}
+
+/**
  * Renders the Google tag (gtag.js) only when at least one Google property
  * is configured. The same tag handles GA4 hits and Google Ads remarketing.
  */
@@ -99,6 +124,17 @@ export default async function RootLayout({
           until you flip the env vars on in Vercel.
         */}
         <GoogleTag />
+        {/*
+          Meta Pixel (fbevents.js) — sets the _fbp first-party cookie that
+          server-side Meta CAPI events use as a match key. Also fires a
+          client-side PageView that builds retargeting audiences ("users who
+          viewed /lp/subscription but didn't convert") which CAPI alone
+          cannot populate.
+
+          Renders ONLY when NEXT_PUBLIC_META_PIXEL_ID is set, so this stays
+          a no-op until you flip the env var on in Vercel.
+        */}
+        <MetaPixel />
         {/*
           Junip Reviews — loads on every page. The script is named
           `junip_shopify.js` for legacy reasons but supports custom

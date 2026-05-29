@@ -26,6 +26,10 @@ export interface AttributionPayload {
   gbraid?: string;
   wbraid?: string;
   fbclid?: string;
+  /** Meta Pixel browser identifier cookie (_fbp). High-quality CAPI match key. */
+  fbp?: string;
+  /** Meta Pixel click identifier cookie (_fbc). Derived from fbclid. */
+  fbc?: string;
   utm_source?: string;
   utm_medium?: string;
   utm_campaign?: string;
@@ -37,7 +41,7 @@ export interface AttributionPayload {
   captured_at?: number;
 }
 
-const TRACKED_KEYS: (keyof AttributionPayload)[] = [
+const URL_TRACKED_KEYS: (keyof AttributionPayload)[] = [
   "gclid",
   "gbraid",
   "wbraid",
@@ -49,12 +53,51 @@ const TRACKED_KEYS: (keyof AttributionPayload)[] = [
   "utm_term",
 ];
 
+/**
+ * Keys forwarded into Shopify cart `note_attributes`. This is the superset
+ * of URL-tracked keys plus the Meta Pixel cookie identifiers (fbp/fbc),
+ * which are read from `document.cookie` rather than the URL.
+ */
+const CART_FORWARDED_KEYS: (keyof AttributionPayload)[] = [
+  ...URL_TRACKED_KEYS,
+  "fbp",
+  "fbc",
+];
+
+function readCookie(name: string): string | undefined {
+  if (typeof document === "undefined") return undefined;
+  try {
+    const match = document.cookie
+      .split(";")
+      .map((c) => c.trim())
+      .find((c) => c.startsWith(`${name}=`));
+    if (!match) return undefined;
+    const value = match.split("=").slice(1).join("=");
+    return value && value.trim().length > 0 ? value.trim() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Read Meta Pixel cookies (_fbp/_fbc) which are set by the client-side
+ * pixel in layout.tsx. These are short-lived (~90 days) but the freshest
+ * available copy is always preferable, so we re-read them on every call
+ * rather than freezing the value captured at first landing.
+ */
+function readMetaCookies(): { fbp?: string; fbc?: string } {
+  return {
+    fbp: readCookie("_fbp"),
+    fbc: readCookie("_fbc"),
+  };
+}
+
 function readParamsFromUrl(): AttributionPayload {
   if (typeof window === "undefined") return {};
   try {
     const params = new URLSearchParams(window.location.search);
     const result: Record<string, string> = {};
-    for (const key of TRACKED_KEYS) {
+    for (const key of URL_TRACKED_KEYS) {
       const value = params.get(key as string);
       if (value && value.trim().length > 0) {
         result[key as string] = value.trim();
@@ -163,9 +206,20 @@ export function getStoredAttribution(): AttributionPayload {
 export function attributionToCartAttributes(
   attr: AttributionPayload
 ): Array<{ key: string; value: string }> {
+  // Always layer the freshest Meta Pixel cookies on top of whatever's in
+  // the payload — _fbp/_fbc are set/refreshed by the pixel on every page
+  // load, so the value at checkout time is more accurate than the one
+  // captured at first landing.
+  const meta = readMetaCookies();
+  const merged: AttributionPayload = {
+    ...attr,
+    fbp: meta.fbp ?? attr.fbp,
+    fbc: meta.fbc ?? attr.fbc,
+  };
+
   const out: Array<{ key: string; value: string }> = [];
-  for (const key of TRACKED_KEYS) {
-    const value = attr[key];
+  for (const key of CART_FORWARDED_KEYS) {
+    const value = merged[key];
     if (typeof value === "string" && value.length > 0) {
       out.push({ key, value });
     }
