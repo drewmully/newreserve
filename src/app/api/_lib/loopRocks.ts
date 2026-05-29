@@ -88,11 +88,25 @@ function getHeaders(): Record<string, string> {
   return { "X-Loop-Token": token, "Content-Type": "application/json" };
 }
 
+// Global token-bucket rate limiter across all Loop calls in this process.
+// Loop allows 3 req/sec; we space requests ~340ms apart to stay under it
+// even with three parallel status walks sharing this gate.
+const REQ_SPACING_MS = 340;
+let nextSlot = 0;
+async function loopGate(): Promise<void> {
+  const now = Date.now();
+  const slot = Math.max(now, nextSlot);
+  nextSlot = slot + REQ_SPACING_MS;
+  const wait = slot - now;
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+}
+
 async function fetchLoopPage(
   status: LoopStatus,
   pageNo: number,
   attempt = 0
 ): Promise<LoopPage> {
+  await loopGate();
   const url = `${BASE_URL}/subscription?status=${status}&pageNo=${pageNo}`;
   const res = await fetch(url, { headers: getHeaders() });
   if (res.status === 429 && attempt < 5) {
@@ -126,8 +140,6 @@ async function walkStatus(
     }
     if (!page.pageInfo?.hasNextPage) return;
     pageNo++;
-    // ~3 req/sec ceiling
-    await new Promise((r) => setTimeout(r, 380));
   }
 }
 
@@ -174,46 +186,50 @@ export async function getRocksProgress(
   let swapMember = 0;
   let earliestActive: number | null = null;
 
-  for (const status of LOOP_STATUSES_FOR_SIGNUPS) {
-    let sawBelowCutoff = 0;
-    await walkStatus(status, (sub) => {
-      const createdMs = Date.parse(sub.createdAt);
-      if (!Number.isFinite(createdMs)) return;
-      const tier = subTier(sub);
-      if (!tier) return;
+  // Walk all three statuses concurrently. Each status walks ~3 req/sec on
+  // its own; running them in parallel triples throughput against Loop and
+  // keeps total wall time under Vercel's gateway timeout.
+  await Promise.all(
+    LOOP_STATUSES_FOR_SIGNUPS.map(async (status) => {
+      let sawBelowCutoff = 0;
+      await walkStatus(status, (sub) => {
+        const createdMs = Date.parse(sub.createdAt);
+        if (!Number.isFinite(createdMs)) return;
+        const tier = subTier(sub);
+        if (!tier) return;
 
-      if (createdMs >= cutoff) {
-        // Rock 1
-        newSignupsByStatus[status]++;
-        if (tier === "access") newAccess++;
-        else newMember++;
-        firstSignup =
-          firstSignup === null ? createdMs : Math.min(firstSignup, createdMs);
-        latestSignup =
-          latestSignup === null ? createdMs : Math.max(latestSignup, createdMs);
-        sawBelowCutoff = 0;
-      } else {
-        // Below the cutoff
-        sawBelowCutoff++;
-        if (status === "ACTIVE") {
-          // Rock 2
-          if (tier === "access") swapAccess++;
-          else swapMember++;
-          earliestActive =
-            earliestActive === null
-              ? createdMs
-              : Math.min(earliestActive, createdMs);
+        if (createdMs >= cutoff) {
+          // Rock 1
+          newSignupsByStatus[status]++;
+          if (tier === "access") newAccess++;
+          else newMember++;
+          firstSignup =
+            firstSignup === null ? createdMs : Math.min(firstSignup, createdMs);
+          latestSignup =
+            latestSignup === null ? createdMs : Math.max(latestSignup, createdMs);
+          sawBelowCutoff = 0;
+        } else {
+          sawBelowCutoff++;
+          if (status === "ACTIVE") {
+            // Rock 2 — active subs created before cutoff still on Reserve.
+            if (tier === "access") swapAccess++;
+            else swapMember++;
+            earliestActive =
+              earliestActive === null
+                ? createdMs
+                : Math.min(earliestActive, createdMs);
+          }
+          // For CANCELLED / PAUSED we can stop scanning once we've seen 80
+          // consecutive sub-cutoff rows (one full page + safety margin) since
+          // Loop sorts DESC. ACTIVE we keep walking — we need every row for
+          // Rock 2.
+          if (status !== "ACTIVE" && sawBelowCutoff > 80) {
+            return false;
+          }
         }
-        // For CANCELLED / PAUSED we can stop scanning once we've seen 80
-        // consecutive sub-cutoff rows (one full page + safety margin) since
-        // Loop sorts DESC. ACTIVE we keep walking — we need every row for
-        // Rock 2.
-        if (status !== "ACTIVE" && sawBelowCutoff > 80) {
-          return false;
-        }
-      }
-    });
-  }
+      });
+    })
+  );
 
   const data: RocksData = {
     cutoff_iso: cutoffIso,
