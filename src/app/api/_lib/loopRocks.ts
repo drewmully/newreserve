@@ -1,77 +1,67 @@
 /**
- * Loop-backed "Rocks" counters for /admin/marketing-funnel.
+ * Rocks counters for /admin/marketing-funnel.
  *
  *   Rock 1 — New Reserve signups
- *     A Reserve Access or Reserve Member subscription that was created
- *     on/after the cutoff date (default 2026-04-22). Any current status
- *     counts (ACTIVE, CANCELLED, PAUSED) — the signup itself counts.
+ *     A Shopify order tagged "Subscription First Order" with a Reserve
+ *     Access or Reserve Member line item, placed on/after the cutoff
+ *     (default 2026-04-22). Pulled from Shopify GraphQL (one request,
+ *     tag-filtered server-side) — much faster than scanning Loop.
  *
  *   Rock 2 — Reserve Swaps
- *     A subscription that was created BEFORE the cutoff but is currently
- *     ACTIVE on Reserve Access or Reserve Member. This captures customers
- *     who came in on an older plan and are now on Reserve.
+ *     A Loop subscription that is currently ACTIVE on Reserve Access or
+ *     Reserve Member but was created BEFORE the cutoff. This captures
+ *     customers who came in on an older plan and are now on Reserve.
  *
- * Both counters require enumerating subscriptions across pages on Loop's
- * `/subscription` endpoint:
- *   - Rock 1 needs ACTIVE + CANCELLED + PAUSED with createdAt >= cutoff.
- *   - Rock 2 needs ACTIVE with createdAt < cutoff.
+ *   The data sources are split because they answer different questions:
+ *     - Signups are an order-level event (best from Shopify).
+ *     - Swaps are a subscription-state question (only Loop knows current
+ *       sub status by tier).
  *
- * Loop has no created-date filter, but it does sort by createdAt DESC by
- * default — which means once we walk into a page where every row has
- * createdAt < cutoff, we can stop early for Rock 1. (Rock 2 needs all
- * ACTIVE subs but that's only ~30 pages at ~50/page.)
+ *   Loop sorts /subscription ASC by createdAt by default, so for swaps we
+ *   can walk pages from page 1 (oldest first) and stop the moment we see
+ *   a row with createdAt >= cutoff — everything after that point is a new
+ *   signup, not a swap.
  *
- * Loop rate limit: 3 req/sec, so we sleep ~400 ms between page fetches.
- *
- * Results are cached in-process for 5 minutes to avoid hammering Loop on
- * every dashboard refresh.
+ *   Results are cached in-process for 5 minutes.
  */
 import { resolveMemberTierFromVariantId } from "@/lib/membershipConfig";
 
-const BASE_URL =
+const LOOP_BASE_URL =
   process.env.LOOP_API_BASE_URL ??
   "https://api.loopsubscriptions.com/admin/2023-10";
 
 const DEFAULT_CUTOFF_ISO = "2026-04-22T00:00:00.000Z";
-
 const ROCK_NEW_SIGNUPS_GOAL = 300;
 const ROCK_SWAPS_GOAL = 300;
 
-const LOOP_STATUSES_FOR_SIGNUPS = ["ACTIVE", "CANCELLED", "PAUSED"] as const;
-type LoopStatus = (typeof LOOP_STATUSES_FOR_SIGNUPS)[number];
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface LoopSubLine {
   variantShopifyId?: number | string | null;
-  productTitle?: string | null;
 }
-
 interface LoopSubRow {
   id: number | string;
   status: string;
   createdAt: string; // ISO
   lines?: LoopSubLine[];
-  customer?: { id?: number | string; email?: string | null } | null;
 }
-
 interface LoopPage {
   data: LoopSubRow[];
-  pageInfo: { hasNextPage?: boolean; hasPreviousPage?: boolean };
+  pageInfo: { hasNextPage?: boolean };
 }
 
 export interface RocksData {
   cutoff_iso: string;
   generated_at: string;
-  // Rock 1: new signups (any state) created >= cutoff on Reserve tier
   new_signups: {
     goal: number;
     total: number;
     access: number;
     member: number;
-    by_status: Record<LoopStatus, number>;
+    by_status: { ACTIVE: number; CANCELLED: number; PAUSED: number };
     first_signup_iso: string | null;
     latest_signup_iso: string | null;
   };
-  // Rock 2: swaps (active on Reserve, sub created < cutoff)
   swaps: {
     goal: number;
     total: number;
@@ -82,65 +72,42 @@ export interface RocksData {
   warnings: string[];
 }
 
-function getHeaders(): Record<string, string> {
+// ─── Loop helpers (used for swaps only) ───────────────────────────────────────
+
+function loopHeaders(): Record<string, string> {
   const token = process.env.LOOP_ADMIN_API_TOKEN;
   if (!token) throw new Error("Missing LOOP_ADMIN_API_TOKEN");
   return { "X-Loop-Token": token, "Content-Type": "application/json" };
 }
 
-// Global token-bucket rate limiter across all Loop calls in this process.
-// Loop allows 3 req/sec; we space requests ~340ms apart to stay under it
-// even with three parallel status walks sharing this gate.
-const REQ_SPACING_MS = 340;
-let nextSlot = 0;
+// Loop allows 3 req/sec. Space pages 340 ms apart.
+const LOOP_SPACING_MS = 340;
+let loopNextSlot = 0;
 async function loopGate(): Promise<void> {
   const now = Date.now();
-  const slot = Math.max(now, nextSlot);
-  nextSlot = slot + REQ_SPACING_MS;
+  const slot = Math.max(now, loopNextSlot);
+  loopNextSlot = slot + LOOP_SPACING_MS;
   const wait = slot - now;
   if (wait > 0) await new Promise((r) => setTimeout(r, wait));
 }
 
-async function fetchLoopPage(
-  status: LoopStatus,
+async function fetchLoopActivePage(
   pageNo: number,
   attempt = 0
 ): Promise<LoopPage> {
   await loopGate();
-  const url = `${BASE_URL}/subscription?status=${status}&pageNo=${pageNo}`;
-  const res = await fetch(url, { headers: getHeaders() });
+  const url = `${LOOP_BASE_URL}/subscription?status=ACTIVE&pageNo=${pageNo}`;
+  const res = await fetch(url, { headers: loopHeaders() });
   if (res.status === 429 && attempt < 5) {
-    const backoff = 1500 * (attempt + 1);
-    await new Promise((r) => setTimeout(r, backoff));
-    return fetchLoopPage(status, pageNo, attempt + 1);
+    await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+    return fetchLoopActivePage(pageNo, attempt + 1);
   }
   if (!res.ok) {
     throw new Error(
-      `Loop /subscription ${status} pageNo=${pageNo} → ${res.status}: ${await res.text()}`
+      `Loop /subscription ACTIVE pageNo=${pageNo} → ${res.status}: ${await res.text()}`
     );
   }
   return (await res.json()) as LoopPage;
-}
-
-/**
- * Walk all pages of a given status, calling `handle` for each subscription.
- * `handle` may return `false` to stop early.
- */
-async function walkStatus(
-  status: LoopStatus,
-  handle: (sub: LoopSubRow) => boolean | void
-): Promise<void> {
-  let pageNo = 1;
-  // Safety cap — Loop has well under 10k subs total today; 500 pages * 50 = 25k.
-  while (pageNo <= 500) {
-    const page = await fetchLoopPage(status, pageNo);
-    for (const sub of page.data) {
-      const cont = handle(sub);
-      if (cont === false) return;
-    }
-    if (!page.pageInfo?.hasNextPage) return;
-    pageNo++;
-  }
 }
 
 function subTier(sub: LoopSubRow): "access" | "member" | null {
@@ -150,13 +117,203 @@ function subTier(sub: LoopSubRow): "access" | "member" | null {
   return tier ?? null;
 }
 
+// ─── Rock 2: Swaps from Loop ACTIVE ───────────────────────────────────────────
+
+interface SwapResult {
+  access: number;
+  member: number;
+  earliest_active_iso: string | null;
+  warnings: string[];
+}
+
+async function countSwaps(cutoffMs: number): Promise<SwapResult> {
+  // Loop /subscription is sorted ASC by createdAt by default. Walk pages
+  // from page 1; the moment we see a row with createdAt >= cutoff we know
+  // every subsequent row is a new signup (not a swap) so we can stop.
+  let access = 0;
+  let member = 0;
+  let earliest: number | null = null;
+  const warnings: string[] = [];
+
+  let pageNo = 1;
+  outer: while (pageNo <= 200) {
+    const page = await fetchLoopActivePage(pageNo);
+    for (const sub of page.data) {
+      const createdMs = Date.parse(sub.createdAt);
+      if (!Number.isFinite(createdMs)) continue;
+      if (createdMs >= cutoffMs) {
+        // First row at or past the cutoff — done.
+        break outer;
+      }
+      const tier = subTier(sub);
+      if (!tier) continue; // skip non-Reserve active subs (e.g. Back 9 legacy)
+      if (tier === "access") access++;
+      else member++;
+      earliest = earliest === null ? createdMs : Math.min(earliest, createdMs);
+    }
+    if (!page.pageInfo?.hasNextPage) break;
+    pageNo++;
+  }
+
+  if (pageNo >= 200) {
+    warnings.push("Loop swap scan stopped at safety cap (200 pages)");
+  }
+
+  return {
+    access,
+    member,
+    earliest_active_iso: earliest ? new Date(earliest).toISOString() : null,
+    warnings,
+  };
+}
+
+// ─── Rock 1: New signups from Shopify GraphQL ─────────────────────────────────
+
+interface ShopifyOrderNode {
+  id: string;
+  createdAt: string;
+  tags: string[];
+  displayFinancialStatus: string | null;
+  lineItems: { edges: Array<{ node: { title: string } }> };
+  cancelledAt?: string | null;
+}
+
+interface ShopifyOrdersResponse {
+  data?: {
+    orders: {
+      edges: Array<{ node: ShopifyOrderNode; cursor: string }>;
+      pageInfo: { hasNextPage: boolean; endCursor: string | null };
+    };
+  };
+  errors?: Array<{ message: string }>;
+}
+
+function tierFromTitles(titles: string[]): "access" | "member" | null {
+  const lc = titles.map((t) => t.toLowerCase());
+  if (lc.some((t) => t.includes("reserve access"))) return "access";
+  if (lc.some((t) => t.includes("reserve member"))) return "member";
+  return null;
+}
+
+interface SignupResult {
+  access: number;
+  member: number;
+  by_status: { ACTIVE: number; CANCELLED: number; PAUSED: number };
+  first_signup_iso: string | null;
+  latest_signup_iso: string | null;
+  warnings: string[];
+}
+
+async function countNewSignups(cutoffIso: string): Promise<SignupResult> {
+  const token =
+    process.env.SHOPIFY_ADMIN_TOKEN ?? process.env.SHOPIFY_CLIENT_SECRET;
+  const domain = process.env.SHOPIFY_STORE_DOMAIN;
+  const version = process.env.SHOPIFY_ADMIN_API_VERSION ?? "2024-10";
+  if (!token || !domain) {
+    throw new Error("Missing Shopify credentials");
+  }
+
+  // Shopify search syntax: tag:"Subscription First Order" created_at:>=YYYY-MM-DD
+  // The date portion of the ISO is sufficient.
+  const cutoffDate = cutoffIso.slice(0, 10);
+  const searchQuery = `tag:"Subscription First Order" created_at:>=${cutoffDate}`;
+
+  const url = `https://${domain}/admin/api/${version}/graphql.json`;
+
+  let access = 0;
+  let member = 0;
+  const byStatus = { ACTIVE: 0, CANCELLED: 0, PAUSED: 0 };
+  let firstMs: number | null = null;
+  let latestMs: number | null = null;
+  const warnings: string[] = [];
+
+  let cursor: string | null = null;
+  let pages = 0;
+  // 250 orders per page; cap at 8 pages = 2000 orders (way more than needed)
+  while (pages < 8) {
+    const after: string = cursor ? `, after: "${cursor}"` : "";
+    const gqlQuery = `query {
+      orders(first: 250, query: ${JSON.stringify(searchQuery)}, sortKey: CREATED_AT, reverse: true${after}) {
+        edges {
+          cursor
+          node {
+            id
+            createdAt
+            tags
+            displayFinancialStatus
+            cancelledAt
+            lineItems(first: 10) {
+              edges { node { title } }
+            }
+          }
+        }
+        pageInfo { hasNextPage endCursor }
+      }
+    }`;
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "X-Shopify-Access-Token": token,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ query: gqlQuery }),
+    });
+    if (!res.ok) {
+      throw new Error(`Shopify GraphQL → ${res.status}: ${await res.text()}`);
+    }
+    const json = (await res.json()) as ShopifyOrdersResponse;
+    if (json.errors && json.errors.length > 0) {
+      throw new Error(
+        `Shopify GraphQL errors: ${json.errors.map((e) => e.message).join("; ")}`
+      );
+    }
+    const edges = json.data?.orders?.edges ?? [];
+    for (const { node } of edges) {
+      const titles = node.lineItems.edges.map((e) => e.node.title);
+      const tier = tierFromTitles(titles);
+      if (!tier) continue; // Not a Reserve signup (e.g. Back 9 first order)
+      if (tier === "access") access++;
+      else member++;
+
+      // Status bucket — Shopify doesn't carry the live Loop sub status on
+      // the original first-order. We approximate using the order's
+      // cancelled state as a proxy: cancelled order ≈ subscription likely
+      // cancelled. This won't catch later cancellations or pauses, but
+      // it's a useful "how many of these stuck?" signal.
+      if (node.cancelledAt) byStatus.CANCELLED++;
+      else byStatus.ACTIVE++;
+
+      const createdMs = Date.parse(node.createdAt);
+      if (Number.isFinite(createdMs)) {
+        firstMs = firstMs === null ? createdMs : Math.min(firstMs, createdMs);
+        latestMs = latestMs === null ? createdMs : Math.max(latestMs, createdMs);
+      }
+    }
+    const pi = json.data?.orders?.pageInfo;
+    if (!pi?.hasNextPage || !pi.endCursor) break;
+    cursor = pi.endCursor;
+    pages++;
+  }
+
+  if (pages >= 8) {
+    warnings.push("Shopify signup scan stopped at safety cap (8 pages)");
+  }
+
+  return {
+    access,
+    member,
+    by_status: byStatus,
+    first_signup_iso: firstMs ? new Date(firstMs).toISOString() : null,
+    latest_signup_iso: latestMs ? new Date(latestMs).toISOString() : null,
+    warnings,
+  };
+}
+
 // ─── In-process cache ─────────────────────────────────────────────────────────
 let CACHED: { at: number; data: RocksData } | null = null;
 const TTL_MS = 5 * 60 * 1000;
 
-/**
- * Compute current Rock progress. Cached for 5 minutes.
- */
 export async function getRocksProgress(
   cutoffIso: string = DEFAULT_CUTOFF_ISO
 ): Promise<RocksData> {
@@ -165,96 +322,34 @@ export async function getRocksProgress(
     return CACHED.data;
   }
 
-  const cutoff = new Date(cutoffIso).getTime();
-  const warnings: string[] = [];
+  const cutoffMs = new Date(cutoffIso).getTime();
 
-  // Rock 1 — new signups (any state) created >= cutoff
-  // Loop returns sorted by createdAt DESC by default, so we walk forward and
-  // stop the first time we see an entire page below the cutoff.
-  const newSignupsByStatus: Record<LoopStatus, number> = {
-    ACTIVE: 0,
-    CANCELLED: 0,
-    PAUSED: 0,
-  };
-  let newAccess = 0;
-  let newMember = 0;
-  let firstSignup: number | null = null;
-  let latestSignup: number | null = null;
-
-  // Rock 2 — swaps (active, created < cutoff, on Reserve tier)
-  let swapAccess = 0;
-  let swapMember = 0;
-  let earliestActive: number | null = null;
-
-  // Walk all three statuses concurrently. Each status walks ~3 req/sec on
-  // its own; running them in parallel triples throughput against Loop and
-  // keeps total wall time under Vercel's gateway timeout.
-  await Promise.all(
-    LOOP_STATUSES_FOR_SIGNUPS.map(async (status) => {
-      let sawBelowCutoff = 0;
-      await walkStatus(status, (sub) => {
-        const createdMs = Date.parse(sub.createdAt);
-        if (!Number.isFinite(createdMs)) return;
-        const tier = subTier(sub);
-        if (!tier) return;
-
-        if (createdMs >= cutoff) {
-          // Rock 1
-          newSignupsByStatus[status]++;
-          if (tier === "access") newAccess++;
-          else newMember++;
-          firstSignup =
-            firstSignup === null ? createdMs : Math.min(firstSignup, createdMs);
-          latestSignup =
-            latestSignup === null ? createdMs : Math.max(latestSignup, createdMs);
-          sawBelowCutoff = 0;
-        } else {
-          sawBelowCutoff++;
-          if (status === "ACTIVE") {
-            // Rock 2 — active subs created before cutoff still on Reserve.
-            if (tier === "access") swapAccess++;
-            else swapMember++;
-            earliestActive =
-              earliestActive === null
-                ? createdMs
-                : Math.min(earliestActive, createdMs);
-          }
-          // For CANCELLED / PAUSED we can stop scanning once we've seen 80
-          // consecutive sub-cutoff rows (one full page + safety margin) since
-          // Loop sorts DESC. ACTIVE we keep walking — we need every row for
-          // Rock 2.
-          if (status !== "ACTIVE" && sawBelowCutoff > 80) {
-            return false;
-          }
-        }
-      });
-    })
-  );
+  // Run both rocks in parallel — they hit different APIs.
+  const [signupsRes, swapsRes] = await Promise.all([
+    countNewSignups(cutoffIso),
+    countSwaps(cutoffMs),
+  ]);
 
   const data: RocksData = {
     cutoff_iso: cutoffIso,
     generated_at: new Date().toISOString(),
     new_signups: {
       goal: ROCK_NEW_SIGNUPS_GOAL,
-      total: newAccess + newMember,
-      access: newAccess,
-      member: newMember,
-      by_status: newSignupsByStatus,
-      first_signup_iso: firstSignup ? new Date(firstSignup).toISOString() : null,
-      latest_signup_iso: latestSignup
-        ? new Date(latestSignup).toISOString()
-        : null,
+      total: signupsRes.access + signupsRes.member,
+      access: signupsRes.access,
+      member: signupsRes.member,
+      by_status: signupsRes.by_status,
+      first_signup_iso: signupsRes.first_signup_iso,
+      latest_signup_iso: signupsRes.latest_signup_iso,
     },
     swaps: {
       goal: ROCK_SWAPS_GOAL,
-      total: swapAccess + swapMember,
-      access: swapAccess,
-      member: swapMember,
-      earliest_active_iso: earliestActive
-        ? new Date(earliestActive).toISOString()
-        : null,
+      total: swapsRes.access + swapsRes.member,
+      access: swapsRes.access,
+      member: swapsRes.member,
+      earliest_active_iso: swapsRes.earliest_active_iso,
     },
-    warnings,
+    warnings: [...signupsRes.warnings, ...swapsRes.warnings],
   };
 
   CACHED = { at: now, data };
