@@ -67,6 +67,7 @@ Drew`;
     subject,
     text,
     idempotencyKey: `sponsor-attributed-${input.sponsorshipId}`,
+    utmContent: isFirst ? "sponsor_attributed_first" : "sponsor_attributed",
     tags: [...BASE_TAGS, tag("event", "attributed"), tag("is_first", isFirst ? "true" : "false")],
   });
 }
@@ -99,6 +100,7 @@ Drew`;
     subject,
     text,
     idempotencyKey: `sponsor-welcome-${input.sponsorshipId}`,
+    utmContent: "sponsored_welcome",
     tags: [...BASE_TAGS, tag("event", "welcome")],
   });
 }
@@ -134,6 +136,7 @@ ${def.title}. ${def.tagline}`;
     subject,
     text,
     idempotencyKey: `reward-${input.badge}-${input.rewardId}-${input.role}`,
+    utmContent: `badge_${input.badge}_${input.role}`,
     tags: [
       ...BASE_TAGS,
       tag("event", "badge_earned"),

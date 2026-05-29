@@ -72,6 +72,7 @@ export async function POST(req: NextRequest) {
       to: TO_ADDRESS,
       subject,
       text,
+      utmCampaign: "simulatorclubs_apply",
       tags: [
         { name: "form", value: "simulatorclubs_apply" },
         { name: "tier", value: tierInterest.toLowerCase().includes("atelier") ? "atelier" : tierInterest.toLowerCase().includes("boutique") ? "boutique" : tierInterest.toLowerCase().includes("starter") ? "starter" : "unknown" },

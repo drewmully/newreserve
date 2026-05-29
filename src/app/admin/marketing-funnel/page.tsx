@@ -65,6 +65,22 @@ interface ApiResponse {
         bucket: "home" | "lp_subscription" | "lp_gift" | "lp_other" | "other";
       }
     >;
+    campaigns?: Array<
+      FunnelStages & {
+        utm_campaign: string;
+        utm_source: string;
+        channel: string;
+        channel_label: string;
+      }
+    >;
+    attribution_health?: {
+      gclid_pct: number;
+      fbclid_pct: number;
+      twclid_pct: number;
+      utm_source_pct: number;
+      utm_campaign_pct: number;
+      total_sessions: number;
+    };
     unattributed_purchases: number;
     shopify_new_members: number;
   };
@@ -579,6 +595,52 @@ function AdPlatformCard({
           <p className="text-obsidian">{num(platform.impressions)}</p>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Attribution pct card ────────────────────────────────────────────────
+function AttributionPct({
+  label,
+  pct,
+  hint,
+}: {
+  label: string;
+  pct: number;
+  hint: string;
+}) {
+  const clamped = Math.max(0, Math.min(1, pct));
+  const label_pct = `${(clamped * 100).toFixed(1)}%`;
+  // Color tier: ≥5% green-ish (teal), ≥1% gold, else ember.
+  const tier =
+    clamped >= 0.05 ? "good" : clamped >= 0.01 ? "warn" : "bad";
+  const color =
+    tier === "good"
+      ? { bar: "#20808D", text: "#1B474D" } // teal
+      : tier === "warn"
+      ? { bar: "#FFC553", text: "#7A5400" } // gold
+      : { bar: "#D4772C", text: "#D4772C" }; // ember
+  return (
+    <div className="bg-white border border-taupe/20 rounded-xl p-3">
+      <p className="text-[10px] uppercase tracking-widest text-charcoal/40 font-mono">
+        {label}
+      </p>
+      <p
+        className="font-serif text-2xl mt-1 tabular-nums"
+        style={{ color: color.text }}
+      >
+        {label_pct}
+      </p>
+      <div className="mt-2 h-1.5 bg-bone rounded-full overflow-hidden">
+        <div
+          className="h-full rounded-full transition-all"
+          style={{
+            width: `${Math.max(2, clamped * 100)}%`,
+            background: color.bar,
+          }}
+        />
+      </div>
+      <p className="text-[10px] text-charcoal/40 mt-1.5">{hint}</p>
     </div>
   );
 }
@@ -1120,6 +1182,122 @@ export default function MarketingFunnelPage() {
           </section>
 
           {/* ── Channel funnel ───────────────────────────────────────────── */}
+
+          {/* ── Attribution health ──────────────────────────────────────── */}
+          {data.funnel.attribution_health && (
+            <section className="mb-10">
+              <SectionHeading
+                title="Attribution health"
+                hint={`Share of ${num(
+                  data.funnel.attribution_health.total_sessions
+                )} sessions carrying each ID`}
+              />
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                <AttributionPct
+                  label="utm_source"
+                  pct={data.funnel.attribution_health.utm_source_pct}
+                  hint="first-touch source set"
+                />
+                <AttributionPct
+                  label="utm_campaign"
+                  pct={data.funnel.attribution_health.utm_campaign_pct}
+                  hint="e.g. broadcast_…, flow_…"
+                />
+                <AttributionPct
+                  label="gclid"
+                  pct={data.funnel.attribution_health.gclid_pct}
+                  hint="Google Ads click ID"
+                />
+                <AttributionPct
+                  label="fbclid"
+                  pct={data.funnel.attribution_health.fbclid_pct}
+                  hint="Meta click ID"
+                />
+                <AttributionPct
+                  label="twclid"
+                  pct={data.funnel.attribution_health.twclid_pct}
+                  hint="X (Twitter) click ID"
+                />
+              </div>
+            </section>
+          )}
+
+          {/* ── Resend campaigns ────────────────────────────────────────── */}
+          {data.funnel.campaigns && data.funnel.campaigns.length > 0 && (
+            <section className="mb-10">
+              <SectionHeading
+                title="Resend campaigns & flows"
+                hint={`${num(
+                  data.funnel.campaigns.length
+                )} utm_campaign values seen on first page_view`}
+              />
+              <div className="bg-white border border-taupe/20 rounded-xl overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead className="bg-bone text-charcoal/50 uppercase tracking-widest">
+                      <tr>
+                        <th className="text-left font-normal px-3 py-2">utm_campaign</th>
+                        <th className="text-left font-normal px-3 py-2">Source</th>
+                        <th className="text-left font-normal px-3 py-2">Channel</th>
+                        <th className="text-right font-normal px-3 py-2">Visits</th>
+                        <th className="text-right font-normal px-3 py-2">Checkouts</th>
+                        <th className="text-right font-normal px-3 py-2">Purchases</th>
+                        <th className="text-right font-normal px-3 py-2">V→C</th>
+                        <th className="text-right font-normal px-3 py-2">C→P</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-taupe/10">
+                      {data.funnel.campaigns.slice(0, 50).map((c) => (
+                        <tr
+                          key={`${c.utm_source}|${c.utm_campaign}`}
+                          className="hover:bg-cream/40"
+                        >
+                          <td className="px-3 py-2 font-mono text-obsidian truncate max-w-[260px]">
+                            {c.utm_campaign}
+                          </td>
+                          <td className="px-3 py-2 text-charcoal/70">
+                            {c.utm_source}
+                          </td>
+                          <td className="px-3 py-2 text-charcoal/70">
+                            {c.channel_label}
+                          </td>
+                          <td
+                            className="px-3 py-2 text-right tabular-nums"
+                            style={{ color: STAGE.visits.text }}
+                          >
+                            {num(c.visits)}
+                          </td>
+                          <td
+                            className="px-3 py-2 text-right tabular-nums"
+                            style={{ color: STAGE.checkouts.text }}
+                          >
+                            {num(c.checkouts)}
+                          </td>
+                          <td
+                            className="px-3 py-2 text-right tabular-nums"
+                            style={{ color: STAGE.purchases.text }}
+                          >
+                            {num(c.purchases)}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums text-charcoal/50">
+                            {pctStr(c.checkouts, c.visits)}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums text-charcoal/50">
+                            {pctStr(c.purchases, c.checkouts)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {data.funnel.campaigns.length > 50 && (
+                  <div className="text-[10px] text-charcoal/40 px-3 py-2 border-t border-taupe/10">
+                    Showing top 50 of {num(data.funnel.campaigns.length)} campaigns.
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
 
           {/* ── Ad platforms ─────────────────────────────────────────────── */}
           <section className="mb-10">
