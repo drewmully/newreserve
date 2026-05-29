@@ -21,6 +21,33 @@ type Period = "today" | "week" | "month" | "custom";
 type PathView = "buckets" | "all" | "other";
 type PctMode = "step" | "start";
 
+interface RocksData {
+  cutoff_iso: string;
+  generated_at: string;
+  new_signups: {
+    goal: number;
+    total: number;
+    access: number;
+    member: number;
+    by_status: { ACTIVE: number; CANCELLED: number; PAUSED: number };
+    first_signup_iso: string | null;
+    latest_signup_iso: string | null;
+  };
+  swaps: {
+    goal: number;
+    total: number;
+    access: number;
+    member: number;
+    earliest_active_iso: string | null;
+  };
+  warnings: string[];
+}
+
+interface RocksApiResponse {
+  rocks: RocksData | null;
+  rocks_error: string | null;
+}
+
 interface FunnelStages {
   visits: number;
   checkouts: number;
@@ -1015,10 +1042,51 @@ function RockCard({
 function RocksHero({
   rocks,
   rocksError,
+  loading,
 }: {
-  rocks: ApiResponse["rocks"];
+  rocks: RocksData | null;
   rocksError?: string | null;
+  loading?: boolean;
 }) {
+  if (loading && !rocks && !rocksError) {
+    return (
+      <section className="mb-10">
+        <div className="flex items-baseline justify-between mb-4 gap-3">
+          <div className="flex items-baseline gap-3">
+            <h2
+              className="font-serif text-obsidian"
+              style={{ fontSize: "clamp(28px, 4vw, 40px)", letterSpacing: "-0.02em" }}
+            >
+              Rocks.
+            </h2>
+            <p className="text-xs text-charcoal/40 font-mono">
+              300 + 300 · the only two numbers that matter
+            </p>
+          </div>
+          <p className="text-[10px] text-charcoal/40 font-mono uppercase tracking-widest">
+            Scanning Loop…
+          </p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {["#20808D", "#D4772C"].map((c) => (
+            <div
+              key={c}
+              className="rounded-2xl border p-6 md:p-7 animate-pulse"
+              style={{
+                borderColor: `${c}40`,
+                background: `linear-gradient(135deg, ${c}0D 0%, ${c}14 100%)`,
+                minHeight: 220,
+              }}
+            >
+              <div className="h-3 w-24 rounded bg-white/70 mb-6" />
+              <div className="h-16 w-40 rounded bg-white/70 mb-5" />
+              <div className="h-3 w-full rounded-full bg-white/70" />
+            </div>
+          ))}
+        </div>
+      </section>
+    );
+  }
   if (rocksError) {
     return (
       <section className="mb-8">
@@ -1135,6 +1203,9 @@ export default function MarketingFunnelPage() {
   const [pathView, setPathView] = useState<PathView>("buckets");
   const [pathPctMode, setPathPctMode] = useState<PctMode>("start");
   const [channelPctMode, setChannelPctMode] = useState<PctMode>("start");
+  const [rocks, setRocks] = useState<RocksData | null>(null);
+  const [rocksError, setRocksError] = useState<string | null>(null);
+  const [rocksLoading, setRocksLoading] = useState(false);
 
   const computeWindow = useCallback((): { start: string; end: string } => {
     if (period === "today") return { start: todayISO(), end: todayISO() };
@@ -1177,6 +1248,35 @@ export default function MarketingFunnelPage() {
   useEffect(() => {
     void fetchData();
   }, [fetchData]);
+
+  // Rocks load in parallel and don't depend on the period window — they're
+  // an all-time goal counter. Fetch once on mount (and on Refresh) and
+  // let the API's 5-min in-process cache absorb repeat calls.
+  const fetchRocks = useCallback(async () => {
+    if (authLoading || !adminUser) return;
+    setRocksLoading(true);
+    setRocksError(null);
+    try {
+      const headers = await authHeaders();
+      if (!headers) throw new Error("Not signed in");
+      const res = await fetch(`/api/admin/marketing-funnel/rocks`, { headers });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        throw new Error(e.error || `HTTP ${res.status}`);
+      }
+      const json = (await res.json()) as RocksApiResponse;
+      setRocks(json.rocks);
+      setRocksError(json.rocks_error);
+    } catch (err) {
+      setRocksError(err instanceof Error ? err.message : "Failed to load rocks");
+    } finally {
+      setRocksLoading(false);
+    }
+  }, [adminUser, authLoading, authHeaders]);
+
+  useEffect(() => {
+    void fetchRocks();
+  }, [fetchRocks]);
 
   const openPreview = useCallback(
     async (flow: Tier, step: number) => {
@@ -1296,7 +1396,10 @@ export default function MarketingFunnelPage() {
             </>
           )}
           <button
-            onClick={fetchData}
+            onClick={() => {
+              void fetchData();
+              void fetchRocks();
+            }}
             className="text-xs px-3 py-1.5 rounded bg-obsidian text-white"
           >
             {loading ? "Loading…" : "Refresh"}
@@ -1313,7 +1416,7 @@ export default function MarketingFunnelPage() {
       {data && (
         <>
           {/* ── Rocks hero (top of page) ───────────────────────────────────── */}
-          <RocksHero rocks={data.rocks} rocksError={data.rocks_error} />
+          <RocksHero rocks={rocks} rocksError={rocksError} loading={rocksLoading} />
 
           {/* ── Headline KPIs ─────────────────────────────────────────────── */}
           <section className="mb-3">

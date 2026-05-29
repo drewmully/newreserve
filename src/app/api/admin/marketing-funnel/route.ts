@@ -39,7 +39,8 @@ import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { isAllowedAdminEmail } from "@/lib/adminEmailAllowlist";
 import { Timestamp } from "firebase-admin/firestore";
 import { FLOW_STEPS, type EmailFlow } from "@/lib/email/sequences";
-import { getRocksProgress, type RocksData } from "@/app/api/_lib/loopRocks";
+// Rocks moved to /api/admin/marketing-funnel/rocks so the slow Loop scan
+// doesn't block this route. See ./rocks/route.ts.
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -1326,18 +1327,8 @@ export async function GET(request: NextRequest) {
 
     const totalSpendCents = googleAds.spend_cents + xAds.spend_cents;
 
-    // ── 4b. Rocks (Loop-backed) ────────────────────────────────────────
-    // Don't fail the whole page if Loop is unreachable.
-    let rocks: RocksData | null = null;
-    let rocksError: string | null = null;
-    try {
-      rocks = await getRocksProgress();
-    } catch (err) {
-      rocksError = err instanceof Error ? err.message : String(err);
-      console.warn("[marketing-funnel v4] rocks fetch failed:", rocksError);
-    }
-
     // ── 5. Response ──────────────────────────────────────────────────────────
+    // Rocks are fetched in parallel by the client via /rocks subroute.
     return NextResponse.json({
       window: { start, end },
       headline: {
@@ -1368,8 +1359,6 @@ export async function GET(request: NextRequest) {
         google_ads: googleAds,
         x_ads: xAds,
       },
-      rocks,
-      rocks_error: rocksError,
       email_flows: emailFlows,
       meta: {
         shopify_orders: rawOrders.length,
