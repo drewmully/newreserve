@@ -11,6 +11,7 @@ type NavLink = { href: string; label: string; exact?: boolean };
 
 const NAV_LINKS: NavLink[] = [
   { href: "/admin/marketing-funnel", label: "Marketing" },
+  { href: "/admin/site-health", label: "Site Health" },
   { href: "/customers", label: "Customers" },
   { href: "/ops", label: "Ops" },
   { href: "/admin/users", label: "Users" },

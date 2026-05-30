@@ -21,6 +21,7 @@
     "flags": "^4.0.6",
     "next": "16.1.6",
     "nodemailer": "^8.0.3",
+    "pdf-lib": "^1.17.1",
     "posthog-js": "^1.363.2",
     "posthog-node": "^5.21.2",
     "react": "19.2.3",

@@ -51,6 +51,18 @@
     {
       "path": "/api/admin/cron/weekly-rollup",
       "schedule": "0 18 * * 0"
+    },
+    {
+      "path": "/api/admin/cron/site-health-sweep",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/admin/cron/site-health-digest",
+      "schedule": "0 10 * * 5"
+    },
+    {
+      "path": "/api/admin/cron/site-health-digest",
+      "schedule": "0 11 * * 5"
     }
   ]
 }
