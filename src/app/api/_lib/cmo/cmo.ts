@@ -75,7 +75,9 @@ PLAY SELECTION:
 - Use the play's exact id/title/hypothesis/projection/etc as-is. Do NOT invent new plays here.
 
 ARTIFACTS:
-- For each FinalPlay, draft 1-3 artifacts the play actually needs.
+- For each FinalPlay, draft 1-2 artifacts the play actually needs. Keep artifact 'body' under ~250 words each. Quality > quantity.
+- For 'how_to_ship', cap at 5 steps. Be tight.
+- Across the entire response, output AT MOST 7 FinalPlays total (e.g. 3 this_week + 3 next_30_days + 1 quarterly_bet).
   * Acquisition plays → ad_copy (headline + body + CTA + ad meta) + optional page_copy
   * Retention plays → email (with subject_line in meta) or experiment (test plan)
   * Site plays → page_copy with exact H1, subhead, bullets, CTA
@@ -144,7 +146,7 @@ Now: pick winners, group into this_week / next_30_days / quarterly_bet, and draf
     system: CMO_SYSTEM,
     user: userPrompt,
     ledger,
-    maxTokens: 12000,
+    maxTokens: 16000,
     temperature: 0.4,
     validate: (v) => {
       if (!v || typeof v !== "object") return false;
