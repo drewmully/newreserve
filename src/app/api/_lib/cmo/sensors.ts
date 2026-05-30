@@ -23,6 +23,23 @@ import type {
 import { getSupabaseService } from "@/app/api/_lib/supabaseService";
 import { buildFunnelCacheKey } from "@/app/api/_lib/funnelSnapshot";
 
+async function fetchFunnelLive(start: string, end: string): Promise<Record<string, unknown>> {
+  // Live recompute through the marketing-funnel route. We hit it server-side
+  // with CRON_SECRET. The base URL falls back to the public site.
+  const base =
+    process.env.VERCEL_URL
+      ? `https://${process.env.VERCEL_URL}`
+      : process.env.NEXT_PUBLIC_SITE_URL ?? "https://www.mymully.com";
+  const secret = process.env.CRON_SECRET ?? "";
+  const url = `${base}/api/admin/marketing-funnel?start=${start}&end=${end}`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${secret}` },
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`marketing-funnel live: ${res.status}`);
+  return (await res.json()) as Record<string, unknown>;
+}
+
 export async function collectFunnel(
   start: string,
   end: string
@@ -38,8 +55,15 @@ export async function collectFunnel(
     .limit(1)
     .maybeSingle();
   if (error) throw new Error(`funnel snapshot read: ${error.message}`);
-  if (!data) throw new Error(`no funnel snapshot for ${cacheKey}`);
-  const p = data.payload as Record<string, unknown>;
+
+  let p: Record<string, unknown>;
+  if (data) {
+    p = data.payload as Record<string, unknown>;
+  } else {
+    // No snapshot — fall back to live recompute. Slower but always works.
+    console.log(`[cmo/sensors] no snapshot for ${cacheKey}, falling back to live fetch`);
+    p = await fetchFunnelLive(start, end);
+  }
 
   const headline = (p.headline ?? {}) as Record<string, number>;
   const funnel = (p.funnel ?? {}) as Record<string, unknown>;
