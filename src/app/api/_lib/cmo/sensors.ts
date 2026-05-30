@@ -272,14 +272,20 @@ export async function collectRetention(): Promise<RetentionSensorData> {
 // session-conversion is joined per-path. No browser — server-side `fetch`
 // and a tiny HTML parser keep this < 5s.
 
+// Routes that actually exist in this Next.js app. Shopify hosts the real
+// cart/checkout off-domain so we don't probe those — they would always 404
+// on www and trick the analyst into flagging fake broken pages.
 const TOP_PATHS = [
   "/",
   "/lp/subscription",
-  "/lp/subscription-checkout",
-  "/cart",
-  "/products",
-  "/checkouts",
+  "/lp/gift",
+  "/reserve/founders",
+  "/shop",
+  "/back9-welcome",
+  "/handoff",
+  "/choose-plan",
   "/account",
+  "/faq",
 ];
 
 function extractTag(html: string, tag: string): string {
