@@ -507,7 +507,7 @@ export default function CMOPage() {
   const { user: adminUser, authLoading } = useMembership();
   const [run, setRun] = useState<RunRow | null>(null);
   const [history, setHistory] = useState<RunSummary[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true); // start loading so we don't flash the empty state
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -519,7 +519,12 @@ export default function CMOPage() {
 
   const fetchLatest = useCallback(
     async (id?: number) => {
-      if (authLoading || !adminUser) return;
+      if (authLoading) return; // wait for auth state to resolve
+      if (!adminUser) {
+        setLoading(false);
+        setError("Not signed in — refresh the page");
+        return;
+      }
       setLoading(true);
       setError(null);
       try {
@@ -529,7 +534,10 @@ export default function CMOPage() {
           ? `/api/admin/cmo/latest?id=${id}`
           : "/api/admin/cmo/latest";
         const r = await fetch(url, { headers });
-        if (!r.ok) throw new Error(`Fetch failed: ${r.status}`);
+        if (!r.ok) {
+          const body = await r.text().catch(() => "");
+          throw new Error(`Fetch failed (${r.status}): ${body.slice(0, 200)}`);
+        }
         const j = (await r.json()) as { run: RunRow | null };
         setRun(j.run);
       } catch (e) {
@@ -635,10 +643,12 @@ export default function CMOPage() {
       )}
 
       {loading && !run && (
-        <div className="text-sm text-charcoal/50">Loading...</div>
+        <div className="rounded-2xl border border-taupe/20 bg-white p-10 text-center text-sm text-charcoal/50">
+          Loading latest run…
+        </div>
       )}
 
-      {!loading && !run && (
+      {!loading && !run && !error && (
         <div className="rounded-2xl border border-dashed border-taupe/40 bg-white p-10 text-center">
           <p className="text-charcoal/70 mb-4">
             No runs yet. Hit &quot;Run now&quot; to fire the first pass.
