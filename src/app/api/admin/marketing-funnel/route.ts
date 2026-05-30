@@ -39,6 +39,11 @@ import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { isAllowedAdminEmail } from "@/lib/adminEmailAllowlist";
 import { Timestamp } from "firebase-admin/firestore";
 import { FLOW_STEPS, type EmailFlow } from "@/lib/email/sequences";
+import {
+  buildFunnelCacheKey,
+  latestSnapshot,
+  writeSnapshot,
+} from "@/app/api/_lib/funnelSnapshot";
 // Rocks moved to /api/admin/marketing-funnel/rocks so the slow Loop scan
 // doesn't block this route. See ./rocks/route.ts.
 
@@ -53,6 +58,15 @@ async function verifyAdmin(request: NextRequest): Promise<void> {
   const header = request.headers.get("Authorization") ?? "";
   const token = header.replace(/^Bearer\s+/i, "").trim();
   if (!token) throw new Error("Missing Authorization header");
+
+  // Cron / internal callers use CRON_SECRET so we don't need a Firebase
+  // session for server-to-server snapshot refreshes.
+  const cronSecret = process.env.CRON_SECRET;
+  if (cronSecret && token === cronSecret) return;
+  if (cronSecret && request.headers.get("user-agent")?.includes("vercel-cron")) {
+    return;
+  }
+
   const decoded = await adminAuth.verifyIdToken(token, true);
   if (!decoded.email || !isAllowedAdminEmail(decoded.email)) {
     throw new Error("Forbidden");
@@ -838,6 +852,105 @@ async function fetchGoogleAdsLive(
   };
 }
 
+// ─── Shopify ground-truth "sessions reaching checkout" ────────────────────────
+//
+// PostHog only sees mymully.com sessions. Anyone hitting checkout via a
+// direct cart link, retargeting email, or any Shopify-hosted entry point
+// is invisible to PostHog. We therefore augment the funnel with a Shopify-
+// side count: every checkout that reached payment shows up either as a
+// completed order or as an abandonedCheckout. The sum is the ground-truth
+// "sessions reaching checkout" for the window.
+
+interface ShopifyCheckoutGroundTruth {
+  abandoned_checkouts: number;
+  orders: number;
+  total: number;
+  error: string | null;
+}
+
+async function fetchShopifyCheckoutGroundTruth(
+  start: string,
+  end: string
+): Promise<ShopifyCheckoutGroundTruth> {
+  const domain = process.env.SHOPIFY_STORE_DOMAIN;
+  const token =
+    process.env.SHOPIFY_ADMIN_TOKEN ?? process.env.SHOPIFY_CLIENT_SECRET;
+  const apiVersion = process.env.SHOPIFY_ADMIN_API_VERSION ?? "2024-10";
+  const empty: ShopifyCheckoutGroundTruth = {
+    abandoned_checkouts: 0,
+    orders: 0,
+    total: 0,
+    error: null,
+  };
+  if (!domain || !token) {
+    return { ...empty, error: "Missing Shopify credentials" };
+  }
+
+  // GraphQL ordersCount + abandonedCheckouts pagination.
+  const dateRange = `created_at:>=${start} created_at:<=${end}`;
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Shopify-Access-Token": token,
+  };
+  const endpoint = `https://${domain}/admin/api/${apiVersion}/graphql.json`;
+
+  // Orders count — cheap.
+  let orders = 0;
+  try {
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        query: `query { ordersCount(query: ${JSON.stringify(dateRange)}) { count } }`,
+      }),
+    });
+    const j = (await res.json()) as {
+      data?: { ordersCount?: { count?: number } };
+    };
+    orders = Number(j.data?.ordersCount?.count ?? 0);
+  } catch (err) {
+    return { ...empty, error: `orders: ${err}` };
+  }
+
+  // Abandoned checkouts — paginate through GIDs (id only, cheapest cost).
+  let abandoned = 0;
+  let cursor: string | null = null;
+  try {
+    for (let i = 0; i < 50; i++) {
+      const afterArg: string = cursor ? `, after: ${JSON.stringify(cursor)}` : "";
+      const q = `query { abandonedCheckouts(first: 250, query: ${JSON.stringify(dateRange)}${afterArg}) { edges { cursor node { id } } pageInfo { hasNextPage endCursor } } }`;
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ query: q }),
+      });
+      const j = (await res.json()) as {
+        data?: {
+          abandonedCheckouts?: {
+            edges?: Array<{ cursor: string; node: { id: string } }>;
+            pageInfo?: { hasNextPage?: boolean; endCursor?: string | null };
+          };
+        };
+      };
+      const edges = j.data?.abandonedCheckouts?.edges ?? [];
+      abandoned += edges.length;
+      const hasNext = j.data?.abandonedCheckouts?.pageInfo?.hasNextPage;
+      const endCursor = j.data?.abandonedCheckouts?.pageInfo?.endCursor ?? null;
+      if (!hasNext || !endCursor) break;
+      cursor = endCursor;
+    }
+  } catch (err) {
+    return { abandoned_checkouts: 0, orders, total: orders, error: `abandoned: ${err}` };
+  }
+
+  return {
+    abandoned_checkouts: abandoned,
+    orders,
+    total: orders + abandoned,
+    error: null,
+  };
+}
+
 // ─── Main GET ─────────────────────────────────────────────────────────────────
 
 export async function GET(request: NextRequest) {
@@ -855,9 +968,35 @@ export async function GET(request: NextRequest) {
   const { start: defaultStart, end: defaultEnd } = defaultWindow();
   const start = url.searchParams.get("start") || defaultStart;
   const end = url.searchParams.get("end") || defaultEnd;
+  const wantsCached = url.searchParams.get("snapshot") === "cached";
+  const cacheKey = buildFunnelCacheKey(start, end);
+
+  // ─── Cached read ──────────────────────────────────────────────────────
+  // The dashboard fires this first for instant load (~50ms read), then
+  // fires a fresh recompute in the background to update the snapshot.
+  if (wantsCached) {
+    try {
+      const snap = await latestSnapshot<Record<string, unknown>>(
+        "funnel",
+        cacheKey
+      );
+      if (snap) {
+        return NextResponse.json({
+          ...snap.payload,
+          generated_at: snap.generated_at,
+          computed_in_ms: snap.computed_in_ms,
+          snapshot: { age_ms: Date.now() - Date.parse(snap.generated_at) },
+        });
+      }
+    } catch (err) {
+      console.warn("[marketing-funnel] snapshot read failed:", err);
+    }
+    // Fall through to live compute when no snapshot yet.
+  }
 
   const startTs = Timestamp.fromDate(new Date(`${start}T00:00:00Z`));
   const endTs = Timestamp.fromDate(new Date(`${end}T23:59:59Z`));
+  const startedAt = Date.now();
 
   try {
     // ── 1. Shopify orders (source of truth) ──────────────────────────────────
@@ -919,7 +1058,15 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // ── 2. PostHog session funnel (per-path + per-channel) ──────────────────
+    // ── 2. PostHog session funnel + Shopify ground-truth checkouts ──────────────────
+    //
+    // PostHog only sees sessions on mymully.com — it misses everyone who
+    // jumps straight to a Shopify-hosted cart/checkout (e.g. via email
+    // links, retargeting ads, direct URL). Shopify's own data is the
+    // ground truth for "sessions reaching checkout": every checkout that
+    // gets to the payment screen materializes as either a completed order
+    // or an abandoned checkout. We surface this alongside PostHog so the
+    // dashboard shows the real upper bound and the gap PostHog is missing.
     const phCfg = getPostHogConfig();
     let phData: FunnelData = {
       paths: [],
@@ -931,14 +1078,26 @@ export async function GET(request: NextRequest) {
         ? []
         : ["POSTHOG_PERSONAL_API_KEY or POSTHOG_PROJECT_ID not set"],
     };
-    if (phCfg) {
-      try {
-        phData = await fetchPostHogFunnel(phCfg, start, end);
-      } catch (err) {
-        phData.errors.push(
-          err instanceof Error ? err.message : String(err)
-        );
-      }
+    const [phResult, shopifyCheckouts] = await Promise.all([
+      phCfg ? fetchPostHogFunnel(phCfg, start, end).then(
+        (d) => ({ ok: true as const, data: d }),
+        (err: unknown) => ({ ok: false as const, err })
+      ) : Promise.resolve({ ok: false as const, err: null }),
+      fetchShopifyCheckoutGroundTruth(start, end).catch((err) => ({
+        abandoned_checkouts: 0,
+        orders: 0,
+        total: 0,
+        error: err instanceof Error ? err.message : String(err),
+      })),
+    ]);
+    if (phResult.ok) {
+      phData = phResult.data;
+    } else if (phCfg && phResult.err) {
+      phData.errors.push(
+        phResult.err instanceof Error
+          ? phResult.err.message
+          : String(phResult.err)
+      );
     }
 
     // A session "purchased" if its email matches a new_reserve_member email.
@@ -1329,7 +1488,9 @@ export async function GET(request: NextRequest) {
 
     // ── 5. Response ──────────────────────────────────────────────────────────
     // Rocks are fetched in parallel by the client via /rocks subroute.
-    return NextResponse.json({
+    const computedInMs = Date.now() - startedAt;
+    const generatedAtIso = new Date().toISOString();
+    const responseBody = {
       window: { start, end },
       headline: {
         new_reserve_members: newCount,
@@ -1354,6 +1515,14 @@ export async function GET(request: NextRequest) {
         attribution_health: attributionHealth,
         unattributed_purchases: unattributedPurchases,
         shopify_new_members: newMemberEmails.size,
+        // Shopify ground truth — captures sessions that bypass PostHog
+        // (direct cart links, email retargeting, etc.). PostHog only sees
+        // mymully.com pageviews; Shopify-hosted checkout is invisible to it.
+        shopify_checkouts_initiated:
+          shopifyCheckouts.total,
+        shopify_abandoned_checkouts: shopifyCheckouts.abandoned_checkouts,
+        shopify_completed_orders: shopifyCheckouts.orders,
+        shopify_checkouts_error: shopifyCheckouts.error,
       },
       ad_platforms: {
         google_ads: googleAds,
@@ -1370,7 +1539,21 @@ export async function GET(request: NextRequest) {
         sequences_in_window: seqSnap.size,
         email_events: emailEventsDocs.length,
       },
-    });
+      generated_at: generatedAtIso,
+      computed_in_ms: computedInMs,
+      snapshot: { age_ms: 0 },
+    };
+
+    // Fire-and-forget snapshot persistence so subsequent reads with
+    // ?snapshot=cached return in ~50ms.
+    void writeSnapshot("funnel", cacheKey, responseBody, {
+      computedInMs,
+      source: "live",
+    }).catch((err) =>
+      console.warn("[marketing-funnel] snapshot write failed:", err)
+    );
+
+    return NextResponse.json(responseBody);
   } catch (err) {
     console.error("[admin/marketing-funnel v4] failed:", err);
     const msg = err instanceof Error ? err.message : "Internal error";

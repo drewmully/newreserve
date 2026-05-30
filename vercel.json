@@ -51,6 +51,10 @@
     {
       "path": "/api/admin/cron/weekly-rollup",
       "schedule": "0 18 * * 0"
+    },
+    {
+      "path": "/api/admin/cron/marketing-funnel-snapshot",
+      "schedule": "5 * * * *"
     }
   ]
 }

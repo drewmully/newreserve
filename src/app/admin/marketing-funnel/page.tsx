@@ -46,6 +46,9 @@ interface RocksData {
 interface RocksApiResponse {
   rocks: RocksData | null;
   rocks_error: string | null;
+  generated_at?: string;
+  computed_in_ms?: number;
+  snapshot?: { age_ms: number };
 }
 
 interface FunnelStages {
@@ -117,6 +120,10 @@ interface ApiResponse {
     };
     unattributed_purchases: number;
     shopify_new_members: number;
+    shopify_checkouts_initiated?: number;
+    shopify_abandoned_checkouts?: number;
+    shopify_completed_orders?: number;
+    shopify_checkouts_error?: string | null;
   };
   ad_platforms: {
     google_ads: AdPlatform;
@@ -160,6 +167,9 @@ interface ApiResponse {
     }
   >;
   meta: Record<string, number | string[]>;
+  generated_at?: string;
+  computed_in_ms?: number;
+  snapshot?: { age_ms: number };
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -213,6 +223,81 @@ function cvrTone(rate: number, target = 0.02): "good" | "warn" | "bad" {
 }
 
 // ─── Small UI primitives ──────────────────────────────────────────────────────
+
+// Human-readable age relative to now (e.g. "just now", "5m ago", "2h ago").
+// `nowMs` is passed in so callers can drive re-renders via state instead of
+// calling Date.now() during render (which would be an impure operation).
+function formatAge(generatedAt: string | null, nowMs: number): string {
+  if (!generatedAt) return "—";
+  const t = Date.parse(generatedAt);
+  if (!Number.isFinite(t)) return "—";
+  const seconds = Math.max(0, Math.round((nowMs - t) / 1000));
+  if (seconds < 30) return "just now";
+  if (seconds < 60) return `${seconds}s ago`;
+  const m = Math.round(seconds / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.round(h / 24);
+  return `${d}d ago`;
+}
+
+function FreshnessChip({
+  generatedAt,
+  refreshing,
+}: {
+  generatedAt: string | null;
+  refreshing: boolean;
+}) {
+  // Re-render every 30s so the "5m ago" label stays accurate without
+  // forcing a network round-trip. `now` is state — not Date.now() called
+  // during render — so the component stays pure under React Compiler.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+
+  if (refreshing) {
+    return (
+      <span
+        className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full bg-teal/10 text-teal border border-teal/30"
+        title="Recomputing in the background…"
+      >
+        <span
+          aria-hidden
+          className="inline-block w-2 h-2 rounded-full bg-teal animate-pulse"
+        />
+        Refreshing…
+      </span>
+    );
+  }
+  if (!generatedAt) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full bg-taupe/15 text-charcoal/60 border border-taupe/30">
+        No data yet
+      </span>
+    );
+  }
+  const age = formatAge(generatedAt, now);
+  const ageMs = now - Date.parse(generatedAt);
+  // Visual cue: green when fresh (<15m), teal when recent (<2h), amber when stale.
+  const tone =
+    ageMs < 15 * 60_000
+      ? "bg-forest/10 text-forest border-forest/30"
+      : ageMs < 2 * 3600_000
+        ? "bg-teal/10 text-teal border-teal/30"
+        : "bg-ember/10 text-ember border-ember/30";
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full border ${tone}`}
+      title={`Snapshot generated ${new Date(generatedAt).toLocaleString()}`}
+    >
+      <span aria-hidden className="inline-block w-2 h-2 rounded-full bg-current opacity-70" />
+      Updated {age}
+    </span>
+  );
+}
 
 function KPICard({
   label,
@@ -1206,6 +1291,11 @@ export default function MarketingFunnelPage() {
   const [rocks, setRocks] = useState<RocksData | null>(null);
   const [rocksError, setRocksError] = useState<string | null>(null);
   const [rocksLoading, setRocksLoading] = useState(false);
+  // Freshness: when did the rendered payload originate, and is there a
+  // live recompute running in the background right now?
+  const [funnelGeneratedAt, setFunnelGeneratedAt] = useState<string | null>(null);
+  const [rocksGeneratedAt, setRocksGeneratedAt] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const computeWindow = useCallback((): { start: string; end: string } => {
     if (period === "today") return { start: todayISO(), end: todayISO() };
@@ -1220,62 +1310,115 @@ export default function MarketingFunnelPage() {
     return { Authorization: `Bearer ${token}` };
   }, [adminUser]);
 
-  const fetchData = useCallback(async () => {
-    if (authLoading || !adminUser) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const headers = await authHeaders();
-      if (!headers) throw new Error("Not signed in");
-      const { start, end } = computeWindow();
-      const res = await fetch(
-        `/api/admin/marketing-funnel?start=${start}&end=${end}`,
-        { headers }
-      );
-      if (!res.ok) {
-        const e = await res.json().catch(() => ({}));
-        throw new Error(e.error || `HTTP ${res.status}`);
+  // Two-phase fetch:
+  //   1. ?snapshot=cached — returns the latest pre-computed snapshot row in
+  //      ~50ms so the page renders instantly with the freshness chip.
+  //   2. Live recompute in the background — swaps in fresh numbers and
+  //      writes a new snapshot row (auto-pruned to 14d).
+  const fetchData = useCallback(
+    async ({ live = false }: { live?: boolean } = {}) => {
+      if (authLoading || !adminUser) return;
+      if (live) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
       }
-      const json = (await res.json()) as ApiResponse;
-      setData(json);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load");
-    } finally {
-      setLoading(false);
-    }
-  }, [adminUser, authLoading, authHeaders, computeWindow]);
+      setError(null);
+      try {
+        const headers = await authHeaders();
+        if (!headers) throw new Error("Not signed in");
+        const { start, end } = computeWindow();
+        const cachedQs = live ? "" : "&snapshot=cached";
+        const res = await fetch(
+          `/api/admin/marketing-funnel?start=${start}&end=${end}${cachedQs}`,
+          { headers }
+        );
+        if (!res.ok) {
+          const e = await res.json().catch(() => ({}));
+          throw new Error(e.error || `HTTP ${res.status}`);
+        }
+        const json = (await res.json()) as ApiResponse;
+        setData(json);
+        if (json.generated_at) setFunnelGeneratedAt(json.generated_at);
+      } catch (err) {
+        // Don't surface a cached-miss error if a live fetch is about to
+        // succeed — just let the live path take over silently.
+        if (live) {
+          setError(err instanceof Error ? err.message : "Failed to load");
+        }
+      } finally {
+        if (live) setRefreshing(false);
+        else setLoading(false);
+      }
+    },
+    [adminUser, authLoading, authHeaders, computeWindow]
+  );
 
   useEffect(() => {
-    void fetchData();
+    let cancelled = false;
+    void (async () => {
+      // Instant render from snapshot, then upgrade with a live recompute.
+      await fetchData({ live: false });
+      if (!cancelled) void fetchData({ live: true });
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [fetchData]);
 
   // Rocks load in parallel and don't depend on the period window — they're
   // an all-time goal counter. Fetch once on mount (and on Refresh) and
   // let the API's 5-min in-process cache absorb repeat calls.
-  const fetchRocks = useCallback(async () => {
-    if (authLoading || !adminUser) return;
-    setRocksLoading(true);
-    setRocksError(null);
-    try {
-      const headers = await authHeaders();
-      if (!headers) throw new Error("Not signed in");
-      const res = await fetch(`/api/admin/marketing-funnel/rocks`, { headers });
-      if (!res.ok) {
-        const e = await res.json().catch(() => ({}));
-        throw new Error(e.error || `HTTP ${res.status}`);
+  const fetchRocks = useCallback(
+    async ({ live = false }: { live?: boolean } = {}) => {
+      if (authLoading || !adminUser) return;
+      if (!live) setRocksLoading(true);
+      setRocksError(null);
+      try {
+        const headers = await authHeaders();
+        if (!headers) throw new Error("Not signed in");
+        const cachedQs = live ? "" : "?snapshot=cached";
+        const res = await fetch(
+          `/api/admin/marketing-funnel/rocks${cachedQs}`,
+          { headers }
+        );
+        if (!res.ok) {
+          const e = await res.json().catch(() => ({}));
+          throw new Error(e.error || `HTTP ${res.status}`);
+        }
+        const json = (await res.json()) as RocksApiResponse;
+        // Only overwrite rocks data if we got something — a cached miss
+        // returns {rocks:null} and we want the live fetch to fill it in.
+        if (json.rocks) {
+          setRocks(json.rocks);
+          setRocksError(json.rocks_error);
+          if (json.generated_at) setRocksGeneratedAt(json.generated_at);
+        } else if (live) {
+          setRocks(null);
+          setRocksError(json.rocks_error);
+        }
+      } catch (err) {
+        if (live) {
+          setRocksError(
+            err instanceof Error ? err.message : "Failed to load rocks"
+          );
+        }
+      } finally {
+        if (!live) setRocksLoading(false);
       }
-      const json = (await res.json()) as RocksApiResponse;
-      setRocks(json.rocks);
-      setRocksError(json.rocks_error);
-    } catch (err) {
-      setRocksError(err instanceof Error ? err.message : "Failed to load rocks");
-    } finally {
-      setRocksLoading(false);
-    }
-  }, [adminUser, authLoading, authHeaders]);
+    },
+    [adminUser, authLoading, authHeaders]
+  );
 
   useEffect(() => {
-    void fetchRocks();
+    let cancelled = false;
+    void (async () => {
+      await fetchRocks({ live: false });
+      if (!cancelled) void fetchRocks({ live: true });
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [fetchRocks]);
 
   const openPreview = useCallback(
@@ -1395,14 +1538,20 @@ export default function MarketingFunnelPage() {
               />
             </>
           )}
+          <FreshnessChip
+            generatedAt={funnelGeneratedAt ?? rocksGeneratedAt}
+            refreshing={refreshing || loading}
+          />
           <button
             onClick={() => {
-              void fetchData();
-              void fetchRocks();
+              void fetchData({ live: true });
+              void fetchRocks({ live: true });
             }}
-            className="text-xs px-3 py-1.5 rounded bg-obsidian text-white"
+            disabled={refreshing}
+            className="text-xs px-3 py-1.5 rounded bg-obsidian text-white disabled:opacity-60"
+            title="Recompute now (writes a fresh snapshot)"
           >
-            {loading ? "Loading…" : "Refresh"}
+            {refreshing ? "Refreshing…" : loading ? "Loading…" : "Refresh now"}
           </button>
         </div>
       </div>
@@ -1518,6 +1667,50 @@ export default function MarketingFunnelPage() {
               }`}
             />
             <FunnelSummary totals={data.funnel.totals} />
+            {/* Shopify ground truth — captures sessions that bypass PostHog
+                (direct cart links, email retargeting, Shopify-hosted checkout). */}
+            {typeof data.funnel.shopify_checkouts_initiated === "number" && (
+              <div className="mt-4 grid grid-cols-3 gap-3">
+                <div className="bg-teal/5 border border-teal/20 rounded-lg p-3">
+                  <p className="text-[10px] uppercase tracking-wide text-charcoal/50 font-medium">
+                    Shopify checkouts initiated
+                  </p>
+                  <p className="font-serif text-xl text-teal mt-1">
+                    {num(data.funnel.shopify_checkouts_initiated)}
+                  </p>
+                  <p className="text-[10px] text-charcoal/40 mt-1">
+                    Ground truth (orders + abandoned)
+                  </p>
+                </div>
+                <div className="bg-ember/5 border border-ember/20 rounded-lg p-3">
+                  <p className="text-[10px] uppercase tracking-wide text-charcoal/50 font-medium">
+                    Abandoned
+                  </p>
+                  <p className="font-serif text-xl text-ember mt-1">
+                    {num(data.funnel.shopify_abandoned_checkouts)}
+                  </p>
+                  <p className="text-[10px] text-charcoal/40 mt-1">
+                    Started checkout, didn’t complete
+                  </p>
+                </div>
+                <div className="bg-forest/5 border border-forest/20 rounded-lg p-3">
+                  <p className="text-[10px] uppercase tracking-wide text-charcoal/50 font-medium">
+                    Completed orders
+                  </p>
+                  <p className="font-serif text-xl text-forest mt-1">
+                    {num(data.funnel.shopify_completed_orders)}
+                  </p>
+                  <p className="text-[10px] text-charcoal/40 mt-1">
+                    Includes all Shopify-paid orders
+                  </p>
+                </div>
+              </div>
+            )}
+            {data.funnel.shopify_checkouts_error && (
+              <p className="mt-2 text-[11px] text-ember/80">
+                Shopify ground-truth error: {data.funnel.shopify_checkouts_error}
+              </p>
+            )}
           </section>
 
           {/* ── Landing-page funnel ─────────────────────────────────────── */}
