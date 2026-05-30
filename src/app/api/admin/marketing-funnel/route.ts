@@ -887,21 +887,30 @@ async function fetchShopifyCheckoutGroundTruth(
   }
 
   // GraphQL ordersCount + abandonedCheckouts pagination.
+  //
+  // "Completed orders" here means **headless subscription first-orders only**
+  // — the orders that actually flowed through the storefront checkout
+  // funnel and became new reserve members. This excludes:
+  //   - Loop auto-renewals (tag: 'Subscription Recurring Order')
+  //   - Pro-shop one-offs, gifts, anything that isn't a new subscription
+  // The matching positive filter is tag: 'Subscription First Order', which
+  // is the same tag the headline `new_reserve_members` count keys on.
   const dateRange = `created_at:>=${start} created_at:<=${end}`;
+  const headlessFirstOrderRange = `${dateRange} tag:"Subscription First Order"`;
   const headers = {
     "Content-Type": "application/json",
     "X-Shopify-Access-Token": token,
   };
   const endpoint = `https://${domain}/admin/api/${apiVersion}/graphql.json`;
 
-  // Orders count — cheap.
+  // Orders count — cheap. Headless subscription first-orders only.
   let orders = 0;
   try {
     const res = await fetch(endpoint, {
       method: "POST",
       headers,
       body: JSON.stringify({
-        query: `query { ordersCount(query: ${JSON.stringify(dateRange)}) { count } }`,
+        query: `query { ordersCount(query: ${JSON.stringify(headlessFirstOrderRange)}) { count } }`,
       }),
     });
     const j = (await res.json()) as {

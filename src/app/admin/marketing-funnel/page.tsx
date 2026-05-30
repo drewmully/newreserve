@@ -1679,7 +1679,7 @@ export default function MarketingFunnelPage() {
                     {num(data.funnel.shopify_checkouts_initiated)}
                   </p>
                   <p className="text-[10px] text-charcoal/40 mt-1">
-                    Ground truth (orders + abandoned)
+                    New subs + abandoned (no renewals)
                   </p>
                 </div>
                 <div className="bg-ember/5 border border-ember/20 rounded-lg p-3">
@@ -1695,13 +1695,13 @@ export default function MarketingFunnelPage() {
                 </div>
                 <div className="bg-forest/5 border border-forest/20 rounded-lg p-3">
                   <p className="text-[10px] uppercase tracking-wide text-charcoal/50 font-medium">
-                    Completed orders
+                    New subscription orders
                   </p>
                   <p className="font-serif text-xl text-forest mt-1">
                     {num(data.funnel.shopify_completed_orders)}
                   </p>
                   <p className="text-[10px] text-charcoal/40 mt-1">
-                    Includes all Shopify-paid orders
+                    Headless checkouts only (excl. Loop renewals)
                   </p>
                 </div>
               </div>
