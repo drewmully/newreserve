@@ -562,12 +562,36 @@ async function fetchPostHogFunnel(
       GROUP BY sid
     ),
     co AS (
+      -- A session counts as "reached checkout" if EITHER:
+      --   1. it fired our internal checkout-click event, OR
+      --   2. it loaded a cart/checkout pathname (handles direct cart
+      --      links from retargeting emails, Shopify cart pages still
+      --      tagged with PostHog, and sessions where the click event
+      --      got eaten by adblockers/bots), OR
+      --   3. it fired the standard Shopify checkout_started event
+      --      that the storefront pixel emits.
+      -- Without this, paid ad channels look like 0 checkouts because
+      -- their users tend to deep-link straight into checkout.
       SELECT DISTINCT properties.$session_id AS sid
       FROM events
-      WHERE event IN ('checkout_clicked', 'lp_subscription_checkout_clicked')
-        AND timestamp >= toDateTime('${startTs}')
+      WHERE timestamp >= toDateTime('${startTs}')
         AND timestamp <= toDateTime('${endTs}')
         AND properties.$session_id IS NOT NULL
+        AND (
+          event IN (
+            'checkout_clicked',
+            'lp_subscription_checkout_clicked',
+            'checkout_started',
+            '$checkout_started',
+            'begin_checkout',
+            'InitiateCheckout',
+            'initiate_checkout'
+          )
+          OR match(coalesce(toString(properties.$pathname), ''),
+                   '(?i)^/(cart|checkout|checkouts)(/|$|\\?)')
+          OR match(coalesce(toString(properties.$current_url), ''),
+                   '(?i)/(cart|checkout|checkouts)(/|$|\\?)')
+        )
     ),
     em AS (
       SELECT properties.$session_id AS sid,
