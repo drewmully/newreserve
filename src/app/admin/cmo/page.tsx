@@ -23,36 +23,97 @@ interface PlayArtifact {
   meta?: Record<string, string>;
 }
 
-interface ICE {
-  impact: number;
-  confidence: number;
-  ease: number;
-  score: number;
-}
-
+// All synthesis-output fields are 'loose' because the LLM occasionally
+// paraphrases shapes; rendering uses tolerant accessors below.
 interface FinalPlay {
   id: string;
   title: string;
   hypothesis: string;
   funnel_stage: string;
-  expected_lift: { metric: string; low_pct: number; high_pct: number };
-  effort: "S" | "M" | "L";
-  ice: ICE;
-  depends_on: string[];
-  risks: string[];
-  projection: {
-    baseline_value: number;
-    projected_low: number;
-    projected_high: number;
-    incremental_revenue_90d_cents: { low: number; high: number };
-    notes: string;
-  };
-  roi_score: number;
-  why_now: string;
-  how_to_ship: string[];
-  success_metric: string;
-  rollback_trigger: string;
-  artifacts: PlayArtifact[];
+  expected_lift: unknown;
+  effort: string;
+  ice: unknown;
+  depends_on?: string[];
+  risks?: string[];
+  projection?: unknown;
+  roi_score?: number;
+  why_now?: string;
+  how_to_ship?: string[];
+  success_metric?: string;
+  rollback_trigger?: string;
+  artifacts?: PlayArtifact[];
+}
+
+// ─── Tolerant accessors ─────────────────────────────────────────────────
+function iceScore(ice: unknown): number {
+  if (typeof ice === "number") return ice;
+  if (ice && typeof ice === "object") {
+    const o = ice as Record<string, unknown>;
+    const s = o.score;
+    if (typeof s === "number") return s;
+  }
+  return 0;
+}
+function iceBreakdown(ice: unknown): { impact: number; confidence: number; ease: number } | null {
+  if (ice && typeof ice === "object") {
+    const o = ice as Record<string, unknown>;
+    if (typeof o.impact === "number" && typeof o.confidence === "number" && typeof o.ease === "number") {
+      return { impact: o.impact, confidence: o.confidence, ease: o.ease };
+    }
+  }
+  return null;
+}
+function liftMetric(lift: unknown): { metric: string; low: number | null; high: number | null } {
+  if (typeof lift === "string") {
+    // "metric_name +X-Ypp" form
+    const m = lift.match(/(\S+)\s*\+?(-?\d+(?:\.\d+)?)-(-?\d+(?:\.\d+)?)/);
+    if (m) return { metric: m[1], low: parseFloat(m[2]), high: parseFloat(m[3]) };
+    return { metric: lift, low: null, high: null };
+  }
+  if (lift && typeof lift === "object") {
+    const o = lift as Record<string, unknown>;
+    return {
+      metric: typeof o.metric === "string" ? o.metric : "",
+      low: typeof o.low_pct === "number" ? o.low_pct : null,
+      high: typeof o.high_pct === "number" ? o.high_pct : null,
+    };
+  }
+  return { metric: "", low: null, high: null };
+}
+function projectionInc(projection: unknown): { low: number; high: number } {
+  if (!projection || typeof projection !== "object") return { low: 0, high: 0 };
+  const o = projection as Record<string, unknown>;
+  // canonical shape
+  const inc = o.incremental_revenue_90d_cents;
+  if (inc && typeof inc === "object") {
+    const i = inc as Record<string, unknown>;
+    return {
+      low: typeof i.low === "number" ? i.low : 0,
+      high: typeof i.high === "number" ? i.high : 0,
+    };
+  }
+  // alternative flat shape
+  if (typeof o.low_cents === "number" || typeof o.high_cents === "number") {
+    return {
+      low: typeof o.low_cents === "number" ? o.low_cents : 0,
+      high: typeof o.high_cents === "number" ? o.high_cents : 0,
+    };
+  }
+  return { low: 0, high: 0 };
+}
+function projectionNotes(projection: unknown): string {
+  if (projection && typeof projection === "object") {
+    const o = projection as Record<string, unknown>;
+    if (typeof o.notes === "string") return o.notes;
+  }
+  return "";
+}
+function projectionBaseline(projection: unknown): number | null {
+  if (projection && typeof projection === "object") {
+    const o = projection as Record<string, unknown>;
+    if (typeof o.baseline_value === "number") return o.baseline_value;
+  }
+  return null;
 }
 
 interface CMOOutput {
@@ -126,9 +187,13 @@ function PlayCard({ play, index }: { play: FinalPlay; index: number }) {
   const [tab, setTab] = useState<"bet" | "math" | "evidence" | "artifacts">("bet");
   const [copied, setCopied] = useState<string | null>(null);
 
-  const mid = (play.projection.incremental_revenue_90d_cents.low +
-    play.projection.incremental_revenue_90d_cents.high) /
-    2;
+  const inc = projectionInc(play.projection);
+  const mid = (inc.low + inc.high) / 2;
+  const lift = liftMetric(play.expected_lift);
+  const iceVal = iceScore(play.ice);
+  const iceParts = iceBreakdown(play.ice);
+  const artifacts = play.artifacts ?? [];
+  const baseline = projectionBaseline(play.projection);
 
   const copy = async (key: string, text: string) => {
     try {
@@ -154,7 +219,7 @@ function PlayCard({ play, index }: { play: FinalPlay; index: number }) {
                 effort {play.effort}
               </span>
               <span className="text-xs px-2 py-0.5 bg-white/60 rounded-full font-medium">
-                ICE {play.ice.score}
+                ICE {iceVal}
               </span>
             </div>
             <h3 className="font-serif text-lg font-medium leading-tight">
@@ -188,7 +253,7 @@ function PlayCard({ play, index }: { play: FinalPlay; index: number }) {
               ? "Math"
               : t === "evidence"
               ? "Evidence"
-              : `Ship it (${play.artifacts.length})`}
+              : `Ship it (${artifacts.length})`}
           </button>
         ))}
       </div>
@@ -203,18 +268,22 @@ function PlayCard({ play, index }: { play: FinalPlay; index: number }) {
               </div>
               <p className="leading-relaxed">{play.why_now}</p>
             </div>
-            <div>
-              <div className="text-xs uppercase tracking-wider text-charcoal/60 mb-1">
-                Success metric
+            {play.success_metric && (
+              <div>
+                <div className="text-xs uppercase tracking-wider text-charcoal/60 mb-1">
+                  Success metric
+                </div>
+                <p>{play.success_metric}</p>
               </div>
-              <p>{play.success_metric}</p>
-            </div>
-            <div>
-              <div className="text-xs uppercase tracking-wider text-charcoal/60 mb-1">
-                Rollback if
+            )}
+            {play.rollback_trigger && (
+              <div>
+                <div className="text-xs uppercase tracking-wider text-charcoal/60 mb-1">
+                  Rollback if
+                </div>
+                <p className="text-rose-700">{play.rollback_trigger}</p>
               </div>
-              <p className="text-rose-700">{play.rollback_trigger}</p>
-            </div>
+            )}
           </>
         )}
 
@@ -223,105 +292,108 @@ function PlayCard({ play, index }: { play: FinalPlay; index: number }) {
             <div className="grid grid-cols-3 gap-3 text-center">
               <div className="rounded-lg bg-emerald-50 p-3">
                 <div className="text-xs uppercase text-emerald-700 mb-1">Low</div>
-                <div className="text-lg font-medium tabular-nums">
-                  {dollars(play.projection.incremental_revenue_90d_cents.low)}
-                </div>
+                <div className="text-lg font-medium tabular-nums">{dollars(inc.low)}</div>
               </div>
               <div className="rounded-lg bg-emerald-100 p-3">
                 <div className="text-xs uppercase text-emerald-800 mb-1">Mid</div>
-                <div className="text-lg font-medium tabular-nums">
-                  {dollars(mid)}
-                </div>
+                <div className="text-lg font-medium tabular-nums">{dollars(mid)}</div>
               </div>
               <div className="rounded-lg bg-emerald-200 p-3">
                 <div className="text-xs uppercase text-emerald-900 mb-1">High</div>
-                <div className="text-lg font-medium tabular-nums">
-                  {dollars(play.projection.incremental_revenue_90d_cents.high)}
-                </div>
+                <div className="text-lg font-medium tabular-nums">{dollars(inc.high)}</div>
               </div>
             </div>
-            <div className="text-xs text-charcoal/60 italic">
-              {play.projection.notes}
-            </div>
+            {projectionNotes(play.projection) && (
+              <div className="text-xs text-charcoal/60 italic">{projectionNotes(play.projection)}</div>
+            )}
             <div className="text-xs grid grid-cols-2 gap-2 text-charcoal/70">
               <div>
-                <span className="uppercase mr-1">Metric:</span>
-                {play.expected_lift.metric}
+                <span className="uppercase mr-1">Metric:</span>{lift.metric || "—"}
               </div>
               <div>
-                <span className="uppercase mr-1">Lift:</span>+
-                {play.expected_lift.low_pct}–{play.expected_lift.high_pct} pp
+                <span className="uppercase mr-1">Lift:</span>
+                {lift.low !== null && lift.high !== null ? `+${lift.low}–${lift.high} pp` : "—"}
               </div>
-              <div>
-                <span className="uppercase mr-1">Baseline:</span>
-                {play.projection.baseline_value.toFixed(2)}
-              </div>
-              <div>
-                <span className="uppercase mr-1">ROI:</span>
-                {play.roi_score}x
-              </div>
+              {baseline !== null && (
+                <div>
+                  <span className="uppercase mr-1">Baseline:</span>{baseline.toFixed(2)}
+                </div>
+              )}
+              {typeof play.roi_score === "number" && (
+                <div>
+                  <span className="uppercase mr-1">ROI:</span>{play.roi_score}x
+                </div>
+              )}
             </div>
           </>
         )}
 
         {tab === "evidence" && (
           <>
-            <div>
-              <div className="text-xs uppercase tracking-wider text-charcoal/60 mb-1">
-                Depends on
-              </div>
-              <ul className="list-disc pl-5 space-y-1">
-                {play.depends_on.map((d, i) => (
-                  <li key={i}>{d}</li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <div className="text-xs uppercase tracking-wider text-charcoal/60 mb-1">
-                Risks
-              </div>
-              <ul className="list-disc pl-5 space-y-1 text-rose-700">
-                {play.risks.map((r, i) => (
-                  <li key={i}>{r}</li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <div className="text-xs uppercase tracking-wider text-charcoal/60 mb-1">
-                ICE breakdown
-              </div>
-              <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                <div className="rounded bg-stone-100 p-2">
-                  <div className="opacity-60">Impact</div>
-                  <div className="text-base font-medium">{play.ice.impact}</div>
+            {(play.depends_on?.length ?? 0) > 0 && (
+              <div>
+                <div className="text-xs uppercase tracking-wider text-charcoal/60 mb-1">
+                  Depends on
                 </div>
-                <div className="rounded bg-stone-100 p-2">
-                  <div className="opacity-60">Confidence</div>
-                  <div className="text-base font-medium">{play.ice.confidence}</div>
+                <ul className="list-disc pl-5 space-y-1">
+                  {(play.depends_on ?? []).map((d, i) => (
+                    <li key={i}>{d}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {(play.risks?.length ?? 0) > 0 && (
+              <div>
+                <div className="text-xs uppercase tracking-wider text-charcoal/60 mb-1">
+                  Risks
                 </div>
-                <div className="rounded bg-stone-100 p-2">
-                  <div className="opacity-60">Ease</div>
-                  <div className="text-base font-medium">{play.ice.ease}</div>
+                <ul className="list-disc pl-5 space-y-1 text-rose-700">
+                  {(play.risks ?? []).map((r, i) => (
+                    <li key={i}>{r}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {iceParts && (
+              <div>
+                <div className="text-xs uppercase tracking-wider text-charcoal/60 mb-1">
+                  ICE breakdown
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                  <div className="rounded bg-stone-100 p-2">
+                    <div className="opacity-60">Impact</div>
+                    <div className="text-base font-medium">{iceParts.impact}</div>
+                  </div>
+                  <div className="rounded bg-stone-100 p-2">
+                    <div className="opacity-60">Confidence</div>
+                    <div className="text-base font-medium">{iceParts.confidence}</div>
+                  </div>
+                  <div className="rounded bg-stone-100 p-2">
+                    <div className="opacity-60">Ease</div>
+                    <div className="text-base font-medium">{iceParts.ease}</div>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </>
         )}
 
         {tab === "artifacts" && (
           <>
-            <div>
-              <div className="text-xs uppercase tracking-wider text-charcoal/60 mb-2">
-                How to ship
+            {(play.how_to_ship?.length ?? 0) > 0 && (
+              <div>
+                <div className="text-xs uppercase tracking-wider text-charcoal/60 mb-2">
+                  How to ship
+                </div>
+                <ol className="list-decimal pl-5 space-y-1">
+                  {(play.how_to_ship ?? []).map((s, i) => (
+                    <li key={i}>{s}</li>
+                  ))}
+                </ol>
               </div>
-              <ol className="list-decimal pl-5 space-y-1">
-                {play.how_to_ship.map((s, i) => (
-                  <li key={i}>{s}</li>
-                ))}
-              </ol>
-            </div>
+            )}
             <div className="space-y-3 pt-2">
-              {play.artifacts.map((a, i) => {
+              {artifacts.map((a, i) => {
                 const key = `${play.id}-${i}`;
                 return (
                   <div
