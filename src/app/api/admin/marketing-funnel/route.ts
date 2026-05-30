@@ -38,6 +38,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { isAllowedAdminEmail } from "@/lib/adminEmailAllowlist";
 import { Timestamp } from "firebase-admin/firestore";
+import { mintGoogleAccessToken } from "@/app/api/_lib/googleAuth";
 import { FLOW_STEPS, type EmailFlow } from "@/lib/email/sequences";
 import {
   buildFunnelCacheKey,
@@ -759,35 +760,43 @@ interface AdPlatformSummary {
   impressions: number;
 }
 
-async function fetchGoogleAdsLive(
-  start: string,
-  end: string
-): Promise<AdPlatformSummary> {
-  const developerToken = process.env.GOOGLE_ADS_DEVELOPER_TOKEN;
-  const loginCustomerId = process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID;
-  const customerId = process.env.GOOGLE_ADS_CUSTOMER_ID;
+async function mintGoogleAdsAccessToken(): Promise<{
+  token: string | null;
+  reason: string | null;
+}> {
+  // Preferred: domain-wide-delegated service-account JSON. Cleaner ops,
+  // no per-user refresh tokens to rotate.
+  const saB64 =
+    process.env.GOOGLE_ADS_SERVICE_ACCOUNT_JSON_BASE64 ??
+    process.env.GOOGLE_SERVICE_ACCOUNT_JSON_BASE64;
+  const impersonate = process.env.GOOGLE_ADS_IMPERSONATE_EMAIL;
+  if (saB64) {
+    try {
+      const token = await mintGoogleAccessToken({
+        scope: "https://www.googleapis.com/auth/adwords",
+        sub: impersonate,
+      });
+      if (token) return { token, reason: null };
+      return { token: null, reason: "Service-account JSON unreadable" };
+    } catch (err) {
+      return {
+        token: null,
+        reason: `Service-account token: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  }
+
+  // Fallback: legacy OAuth refresh-token flow.
   const refreshToken = process.env.GOOGLE_ADS_REFRESH_TOKEN;
   const clientId = process.env.GOOGLE_ADS_OAUTH_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_ADS_OAUTH_CLIENT_SECRET;
-
-  if (
-    !developerToken ||
-    !loginCustomerId ||
-    !customerId ||
-    !refreshToken ||
-    !clientId ||
-    !clientSecret
-  ) {
+  if (!refreshToken || !clientId || !clientSecret) {
     return {
-      available: false,
-      reason: "Missing Google Ads env vars",
-      spend_cents: 0,
-      clicks: 0,
-      conversions: 0,
-      impressions: 0,
+      token: null,
+      reason:
+        "Set GOOGLE_ADS_SERVICE_ACCOUNT_JSON_BASE64 (+ optionally GOOGLE_ADS_IMPERSONATE_EMAIL) or the OAuth refresh-token trio",
     };
   }
-
   const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -800,15 +809,48 @@ async function fetchGoogleAdsLive(
   });
   if (!tokenRes.ok) {
     return {
-      available: false,
+      token: null,
       reason: `OAuth refresh failed: ${tokenRes.status}`,
+    };
+  }
+  return {
+    token: ((await tokenRes.json()) as { access_token: string }).access_token,
+    reason: null,
+  };
+}
+
+async function fetchGoogleAdsLive(
+  start: string,
+  end: string
+): Promise<AdPlatformSummary> {
+  const developerToken = process.env.GOOGLE_ADS_DEVELOPER_TOKEN;
+  const loginCustomerId = process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID;
+  const customerId = process.env.GOOGLE_ADS_CUSTOMER_ID;
+
+  if (!developerToken || !loginCustomerId || !customerId) {
+    return {
+      available: false,
+      reason:
+        "Missing Google Ads env vars (GOOGLE_ADS_DEVELOPER_TOKEN, GOOGLE_ADS_LOGIN_CUSTOMER_ID, GOOGLE_ADS_CUSTOMER_ID)",
       spend_cents: 0,
       clicks: 0,
       conversions: 0,
       impressions: 0,
     };
   }
-  const { access_token } = (await tokenRes.json()) as { access_token: string };
+
+  const { token: access_token, reason: authReason } =
+    await mintGoogleAdsAccessToken();
+  if (!access_token) {
+    return {
+      available: false,
+      reason: authReason ?? "Google Ads auth unavailable",
+      spend_cents: 0,
+      clicks: 0,
+      conversions: 0,
+      impressions: 0,
+    };
+  }
 
   const query = `
     SELECT segments.date,
@@ -869,6 +911,190 @@ async function fetchGoogleAdsLive(
   }
   return {
     available: true,
+    spend_cents: Math.round(micros / 10_000),
+    clicks,
+    conversions,
+    impressions,
+  };
+}
+
+// ─── X (Twitter) Ads ──────────────────────────────────────────────────────────
+//
+// OAuth 1.0a HMAC-SHA1 signed request against the X Ads API. Pulls
+// spend/impressions/clicks/conversions for the configured account over the
+// supplied window. Returns `available: false` (with a helpful reason) when
+// any credential or response prerequisite is missing — never throws.
+
+function percentEncode(v: string): string {
+  return encodeURIComponent(v).replace(
+    /[!*'()]/g,
+    (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`
+  );
+}
+
+async function signOAuth1aGet(
+  url: string,
+  params: Record<string, string>,
+  creds: {
+    consumerKey: string;
+    consumerSecret: string;
+    accessToken: string;
+    accessTokenSecret: string;
+  }
+): Promise<string> {
+  const { createHmac, randomBytes } = await import("node:crypto");
+  const oauthParams: Record<string, string> = {
+    oauth_consumer_key: creds.consumerKey,
+    oauth_nonce: randomBytes(16).toString("hex"),
+    oauth_signature_method: "HMAC-SHA1",
+    oauth_timestamp: Math.floor(Date.now() / 1000).toString(),
+    oauth_token: creds.accessToken,
+    oauth_version: "1.0",
+  };
+  // Combine query params + oauth params, sort, encode
+  const all: Record<string, string> = { ...params, ...oauthParams };
+  const paramString = Object.keys(all)
+    .sort()
+    .map((k) => `${percentEncode(k)}=${percentEncode(all[k])}`)
+    .join("&");
+  const signatureBase = [
+    "GET",
+    percentEncode(url),
+    percentEncode(paramString),
+  ].join("&");
+  const signingKey = `${percentEncode(creds.consumerSecret)}&${percentEncode(
+    creds.accessTokenSecret
+  )}`;
+  const signature = createHmac("sha1", signingKey)
+    .update(signatureBase)
+    .digest("base64");
+  oauthParams.oauth_signature = signature;
+  // Build Authorization header — only oauth_* params, percent-encoded, quoted
+  return (
+    "OAuth " +
+    Object.keys(oauthParams)
+      .sort()
+      .map(
+        (k) => `${percentEncode(k)}="${percentEncode(oauthParams[k])}"`
+      )
+      .join(", ")
+  );
+}
+
+async function fetchXAdsLive(
+  start: string,
+  end: string
+): Promise<AdPlatformSummary> {
+  const consumerKey = process.env.X_ADS_CONSUMER_KEY;
+  const consumerSecret = process.env.X_ADS_CONSUMER_SECRET;
+  const accessToken = process.env.X_ADS_ACCESS_TOKEN;
+  const accessTokenSecret = process.env.X_ADS_ACCESS_TOKEN_SECRET;
+  const accountId = process.env.X_ADS_ACCOUNT_ID;
+
+  if (
+    !consumerKey ||
+    !consumerSecret ||
+    !accessToken ||
+    !accessTokenSecret ||
+    !accountId
+  ) {
+    return {
+      available: false,
+      reason:
+        "Missing X Ads env vars (X_ADS_CONSUMER_KEY, X_ADS_CONSUMER_SECRET, X_ADS_ACCESS_TOKEN, X_ADS_ACCESS_TOKEN_SECRET, X_ADS_ACCOUNT_ID)",
+      spend_cents: 0,
+      clicks: 0,
+      conversions: 0,
+      impressions: 0,
+    };
+  }
+
+  // X Ads stats API requires ISO-8601 with hour granularity (UTC). Use
+  // 00:00Z for start, end-exclusive 00:00Z next-day for end.
+  const startIso = `${start}T00:00:00Z`;
+  const endDate = new Date(`${end}T00:00:00Z`);
+  endDate.setUTCDate(endDate.getUTCDate() + 1);
+  const endIso = endDate.toISOString().replace(/\.\d{3}Z$/, "Z");
+
+  const url = `https://ads-api.x.com/12/stats/accounts/${accountId}`;
+  const params: Record<string, string> = {
+    entity: "ACCOUNT",
+    entity_ids: accountId,
+    metric_groups: "BILLING,ENGAGEMENT",
+    start_time: startIso,
+    end_time: endIso,
+    granularity: "TOTAL",
+    placement: "ALL_ON_TWITTER",
+  };
+
+  let authHeader: string;
+  try {
+    authHeader = await signOAuth1aGet(url, params, {
+      consumerKey,
+      consumerSecret,
+      accessToken,
+      accessTokenSecret,
+    });
+  } catch (err) {
+    return {
+      available: false,
+      reason: `X Ads signing failed: ${err instanceof Error ? err.message : String(err)}`,
+      spend_cents: 0,
+      clicks: 0,
+      conversions: 0,
+      impressions: 0,
+    };
+  }
+
+  const qs = new URLSearchParams(params).toString();
+  const res = await fetch(`${url}?${qs}`, {
+    method: "GET",
+    headers: { Authorization: authHeader, Accept: "application/json" },
+  });
+  if (!res.ok) {
+    return {
+      available: false,
+      reason: `X Ads query failed: ${res.status}`,
+      spend_cents: 0,
+      clicks: 0,
+      conversions: 0,
+      impressions: 0,
+    };
+  }
+  const payload = (await res.json()) as {
+    data?: Array<{
+      id_data?: Array<{
+        metrics?: {
+          billed_charge_local_micro?: Array<number | null> | null;
+          impressions?: Array<number | null> | null;
+          clicks?: Array<number | null> | null;
+          conversion_purchases?: Array<number | null> | null;
+        };
+      }>;
+    }>;
+  };
+
+  const sumFirst = (arr?: Array<number | null> | null): number =>
+    Array.isArray(arr)
+      ? arr.reduce<number>((acc, v) => acc + (typeof v === "number" ? v : 0), 0)
+      : 0;
+
+  let micros = 0;
+  let clicks = 0;
+  let conversions = 0;
+  let impressions = 0;
+  for (const row of payload.data ?? []) {
+    for (const idd of row.id_data ?? []) {
+      const m = idd.metrics ?? {};
+      micros += sumFirst(m.billed_charge_local_micro);
+      clicks += sumFirst(m.clicks);
+      conversions += sumFirst(m.conversion_purchases);
+      impressions += sumFirst(m.impressions);
+    }
+  }
+  return {
+    available: true,
+    // X Ads returns local-currency micros (1e6). cents = micros / 10_000.
     spend_cents: Math.round(micros / 10_000),
     clicks,
     conversions,
@@ -1508,14 +1734,17 @@ export async function GET(request: NextRequest) {
       } as AdPlatformSummary;
     });
 
-    const xAds: AdPlatformSummary = {
-      available: false,
-      reason: "X Ads connector not configured",
-      spend_cents: 0,
-      clicks: 0,
-      conversions: 0,
-      impressions: 0,
-    };
+    const xAds = await fetchXAdsLive(start, end).catch((err) => {
+      console.warn("[marketing-funnel v4] X Ads live fetch failed:", err);
+      return {
+        available: false,
+        reason: err instanceof Error ? err.message : "unknown",
+        spend_cents: 0,
+        clicks: 0,
+        conversions: 0,
+        impressions: 0,
+      } as AdPlatformSummary;
+    });
 
     const totalSpendCents = googleAds.spend_cents + xAds.spend_cents;
 
