@@ -1715,7 +1715,7 @@ export default function MarketingFunnelPage() {
 
           {/* ── Landing-page funnel ─────────────────────────────────────── */}
           <section className="mb-10">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 gap-5">
               {/* Landing-page Sankey */}
               <div className="bg-white border border-taupe/20 rounded-xl p-4">
                 <div className="flex items-baseline justify-between mb-3 gap-3">
