@@ -63,6 +63,16 @@ export interface FunnelSensorData {
       checkout_to_order_pct: number;
       visit_to_order_pct: number;
     }>;
+    per_bucket: Array<{
+      bucket: string;
+      label: string;
+      visits: number;
+      checkouts: number;
+      orders: number;
+      visit_to_checkout_pct: number;
+      checkout_to_order_pct: number;
+      visit_to_order_pct: number;
+    }>;
     benchmarks: {
       visit_to_checkout_healthy_min_pct: number;
       visit_to_checkout_alert_max_pct: number;
