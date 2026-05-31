@@ -175,6 +175,23 @@ export interface AnalystFinding {
   severity: "critical" | "major" | "minor";
   // Tags that help Layer 3 route to the right researcher.
   tags: string[];
+  // Best theory of WHY the metric looks the way it does. Concrete cause,
+  // not a restatement of the symptom. May be wrong — it's a hypothesis.
+  // Example: "Hero CTA reads 'mully.' which gives no value prop, so visitors
+  // bounce before reading the offer."
+  hypothesis: string;
+  // A cheap, falsifiable check the CEO can run — or schedule — to validate
+  // the hypothesis BEFORE shipping a real fix. Should be hours, not weeks.
+  // Example: "Add console.log in /choose-plan submit handler and walk one
+  // checkout; OR open Network tab and confirm POST /api/checkout returns 2xx."
+  recommended_test: string;
+  // The smallest concrete change to ship if the test confirms the hypothesis.
+  // Should name the file/page/setting/asset to change, not a vague direction.
+  // Example: "Replace H1 'mully.' with 'Quarterly box of premium golf apparel,
+  // $249/qtr' and the CTA with 'Start my first box' in app/lp/subscription/page.tsx"
+  recommended_fix: string;
+  // Optional: where the analyst is least sure. Helps Strategist/Simulator.
+  confidence?: "high" | "medium" | "low";
 }
 
 export interface AnalystOutput {
