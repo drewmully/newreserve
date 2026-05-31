@@ -154,12 +154,66 @@ export interface SessionSensorData {
   device_split: { desktop_pct: number; mobile_pct: number; tablet_pct: number };
 }
 
+// ─── Intent Sensor ─────────────────────────────────────────────────────────
+//
+// The intent sensor answers "why aren't people even trying to check out?"
+// for each high-traffic LP. Per-LP breakdown of traffic source, device,
+// hero-area click counts, and (when available) dwell time. The analysts
+// use this to reason about top-of-funnel intent gap vs. mid-funnel friction.
+export interface IntentSensorData {
+  per_lp: Array<{
+    path: string;                                  // /lp/subscription, /choose-plan, /, etc.
+    visits_human: number;                          // bots excluded
+    checkouts: number;                             // initiate-checkout count
+    visit_to_checkout_pct: number;
+    devices: { desktop_pct: number; mobile_pct: number; tablet_pct: number };
+    visit_to_checkout_by_device_pct: {
+      desktop: number | null;                      // null if sample < 50
+      mobile: number | null;
+      tablet: number | null;
+    };
+    top_referrers: Array<{
+      domain: string;                              // $direct, com.twitter.android, x.com, etc.
+      visits: number;
+      pct: number;                                 // share of LP traffic
+    }>;
+    utm_sources: Array<{
+      source: string;                              // 'google', 'twitter', null=='(no utm)'
+      visits: number;
+      checkouts: number;
+      visit_to_checkout_pct: number;
+    }>;
+    hero_engagement: {
+      // % of sessions that fire at least ONE custom event after page_view —
+      // a coarse proxy for "did they engage at all or just bounce on hero?".
+      // If pct_engaged is < 10% and visit→checkout is < 1%, the page is
+      // failing the 5-second test, not the checkout pipe.
+      pct_engaged: number;
+      sample_size: number;
+    };
+  }>;
+  // Audience snapshot across all LPs combined — useful for the
+  // CompetitiveAnalyst's framing.
+  audience: {
+    mobile_pct: number;
+    desktop_pct: number;
+    top_referrer: string;
+    top_referrer_pct: number;
+    paid_share_pct: number;                        // utm_medium IN (cpc, ppc, paid, paidsocial)
+  };
+  // Diagnostic so the analysts can tell when this sensor is empty / broken
+  // instead of confidently asserting things based on zeros.
+  available: boolean;
+  reason?: string;
+}
+
 export interface SensorBundle {
   funnel: FunnelSensorData;
   retention: RetentionSensorData;
   site: SiteSensorData;
   ads: AdsSensorData;
   sessions: SessionSensorData;
+  intent: IntentSensorData;
   collected_at: string;
   errors: Array<{ sensor: string; error: string }>;
 }

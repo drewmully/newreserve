@@ -12,6 +12,7 @@ import type {
   SiteSensorData,
   AdsSensorData,
   SessionSensorData,
+  IntentSensorData,
   SensorBundle,
 } from "./types";
 
@@ -738,6 +739,241 @@ export async function collectSessions(
   };
 }
 
+// ─── Intent Sensor ─────────────────────────────────────────────────────────
+//
+// "Why aren't people even trying to check out?" — per-LP intent breakdown.
+// All queries gated on `is_bot != true`. Reads PostHog directly (event name
+// is `page_view`, NOT the PostHog default `$pageview`). Returns
+// `available: false` with a reason if PostHog is unreachable so the
+// analysts can tell the difference between "no signal" and "empty data".
+
+const INTENT_LPS = [
+  "/",
+  "/lp/subscription",
+  "/choose-plan",
+  "/lp/gift",
+  "/reserve/founders",
+];
+
+function safePct(n: number, d: number, digits = 2): number {
+  if (d <= 0) return 0;
+  const f = Math.pow(10, digits);
+  return Math.round((n / d) * 100 * f) / f;
+}
+
+export async function collectIntent(
+  start: string,
+  end: string
+): Promise<IntentSensorData> {
+  const projectId = process.env.POSTHOG_PROJECT_ID;
+  const apiKey = process.env.POSTHOG_PERSONAL_API_KEY;
+  if (!projectId || !apiKey) {
+    return {
+      per_lp: [],
+      audience: {
+        mobile_pct: 0,
+        desktop_pct: 0,
+        top_referrer: "",
+        top_referrer_pct: 0,
+        paid_share_pct: 0,
+      },
+      available: false,
+      reason: "POSTHOG_PROJECT_ID or POSTHOG_PERSONAL_API_KEY missing",
+    };
+  }
+
+  const startDt = `toDateTime('${start}T00:00:00')`;
+  const endDt = `toDateTime('${end}T23:59:59') + INTERVAL 1 DAY`;
+
+  const perLp = await Promise.all(
+    INTENT_LPS.map(async (path) => {
+      // Session rollup for sessions that included this LP as a page_view.
+      const visitsSql = `
+        WITH s AS (
+          SELECT properties.$session_id AS sid,
+                 argMin(properties.$device_type, timestamp) AS device,
+                 max(if(event IN ('checkout_clicked','lp_subscription_checkout_clicked','InitiateCheckout'), 1, 0)) AS checked_out,
+                 countIf(event != 'page_view' AND event NOT LIKE '$%') AS engagement_events
+          FROM events
+          WHERE timestamp >= ${startDt}
+            AND timestamp <  ${endDt}
+            AND properties.is_bot != true
+            AND properties.$session_id IN (
+              SELECT properties.$session_id
+              FROM events
+              WHERE event = 'page_view'
+                AND properties.$pathname = '${path}'
+                AND timestamp >= ${startDt}
+                AND timestamp <  ${endDt}
+                AND properties.is_bot != true
+            )
+          GROUP BY sid
+        )
+        SELECT count() AS sessions,
+               sum(checked_out) AS checkouts,
+               countIf(device = 'Desktop') AS desktop,
+               countIf(device = 'Mobile')  AS mobile,
+               countIf(device = 'Tablet')  AS tablet,
+               sumIf(checked_out, device = 'Desktop') AS co_desktop,
+               sumIf(checked_out, device = 'Mobile')  AS co_mobile,
+               sumIf(checked_out, device = 'Tablet')  AS co_tablet,
+               countIf(engagement_events > 0) AS engaged
+        FROM s
+      `;
+      const visitsRes = await runHogQL<{ results: Array<unknown[]> }>(visitsSql);
+      const row = (visitsRes?.results?.[0] ?? []) as number[];
+      const sessions = Number(row[0] ?? 0);
+      const checkouts = Number(row[1] ?? 0);
+      const desktop = Number(row[2] ?? 0);
+      const mobile = Number(row[3] ?? 0);
+      const tablet = Number(row[4] ?? 0);
+      const coDesktop = Number(row[5] ?? 0);
+      const coMobile = Number(row[6] ?? 0);
+      const coTablet = Number(row[7] ?? 0);
+      const engaged = Number(row[8] ?? 0);
+
+      // Top referrers — anchored on page_view of this path.
+      const refSql = `
+        SELECT properties.$referring_domain AS ref, count() AS n
+        FROM events
+        WHERE event = 'page_view'
+          AND properties.$pathname = '${path}'
+          AND timestamp >= ${startDt}
+          AND timestamp <  ${endDt}
+          AND properties.is_bot != true
+        GROUP BY ref
+        ORDER BY n DESC
+        LIMIT 8
+      `;
+      const refRes = await runHogQL<{ results: Array<[string | null, number]> }>(
+        refSql
+      );
+      const refRows = refRes?.results ?? [];
+      const refTotal = refRows.reduce((a, [, n]) => a + Number(n), 0);
+      const topReferrers = refRows.map(([d, n]) => ({
+        domain: d || "(none)",
+        visits: Number(n),
+        pct: safePct(Number(n), refTotal),
+      }));
+
+      // UTM-source split + V→C per UTM source.
+      const utmSql = `
+        WITH s AS (
+          SELECT properties.$session_id AS sid,
+                 argMin(properties.utm_source, timestamp) AS utm_source,
+                 max(if(event IN ('checkout_clicked','lp_subscription_checkout_clicked','InitiateCheckout'), 1, 0)) AS checked_out
+          FROM events
+          WHERE timestamp >= ${startDt}
+            AND timestamp <  ${endDt}
+            AND properties.is_bot != true
+            AND properties.$session_id IN (
+              SELECT properties.$session_id
+              FROM events
+              WHERE event = 'page_view'
+                AND properties.$pathname = '${path}'
+                AND timestamp >= ${startDt}
+                AND timestamp <  ${endDt}
+                AND properties.is_bot != true
+            )
+          GROUP BY sid
+        )
+        SELECT coalesce(utm_source, '(none)') AS src,
+               count() AS sessions,
+               sum(checked_out) AS checkouts
+        FROM s
+        GROUP BY src
+        ORDER BY sessions DESC
+        LIMIT 8
+      `;
+      const utmRes = await runHogQL<{ results: Array<[string, number, number]> }>(
+        utmSql
+      );
+      const utmRows = utmRes?.results ?? [];
+      const utmSources = utmRows.map(([src, s, c]) => ({
+        source: String(src ?? "(none)"),
+        visits: Number(s),
+        checkouts: Number(c),
+        visit_to_checkout_pct: safePct(Number(c), Number(s)),
+      }));
+
+      // 50-session minimum for device-level V→C — anything less is noise.
+      const conv = (n: number, d: number) =>
+        d >= 50 ? safePct(n, d) : null;
+
+      return {
+        path,
+        visits_human: sessions,
+        checkouts,
+        visit_to_checkout_pct: safePct(checkouts, sessions),
+        devices: {
+          desktop_pct: safePct(desktop, sessions),
+          mobile_pct: safePct(mobile, sessions),
+          tablet_pct: safePct(tablet, sessions),
+        },
+        visit_to_checkout_by_device_pct: {
+          desktop: conv(coDesktop, desktop),
+          mobile: conv(coMobile, mobile),
+          tablet: conv(coTablet, tablet),
+        },
+        top_referrers: topReferrers,
+        utm_sources: utmSources,
+        hero_engagement: {
+          pct_engaged: safePct(engaged, sessions),
+          sample_size: sessions,
+        },
+      };
+    })
+  );
+
+  // Audience aggregate — one query across the whole window.
+  const audSql = `
+    SELECT properties.$device_type AS dev,
+           properties.$referring_domain AS ref,
+           properties.utm_medium AS medium,
+           count(DISTINCT properties.$session_id) AS s
+    FROM events
+    WHERE event = 'page_view'
+      AND timestamp >= ${startDt}
+      AND timestamp <  ${endDt}
+      AND properties.is_bot != true
+    GROUP BY dev, ref, medium
+  `;
+  const audRes = await runHogQL<{
+    results: Array<[string | null, string | null, string | null, number]>;
+  }>(audSql);
+  const audRows = audRes?.results ?? [];
+  let mobile = 0, desktop = 0, tablet = 0, paid = 0, total = 0;
+  const refCounts = new Map<string, number>();
+  for (const [dev, ref, medium, s] of audRows) {
+    const n = Number(s);
+    total += n;
+    if (dev === "Mobile") mobile += n;
+    else if (dev === "Desktop") desktop += n;
+    else if (dev === "Tablet") tablet += n;
+    const refKey = ref || "(none)";
+    refCounts.set(refKey, (refCounts.get(refKey) ?? 0) + n);
+    if (medium && /cpc|ppc|paid|paidsocial/i.test(medium)) paid += n;
+  }
+  void tablet;
+  let topRef = "";
+  let topRefN = 0;
+  for (const [k, v] of refCounts) {
+    if (v > topRefN) { topRefN = v; topRef = k; }
+  }
+
+  return {
+    per_lp: perLp,
+    audience: {
+      mobile_pct: safePct(mobile, total),
+      desktop_pct: safePct(desktop, total),
+      top_referrer: topRef,
+      top_referrer_pct: safePct(topRefN, total),
+      paid_share_pct: safePct(paid, total),
+    },
+    available: true,
+  };
+}
+
 // ─── Orchestrator ──────────────────────────────────────────────────────────
 
 export async function collectAllSensors(
@@ -764,7 +1000,7 @@ export async function collectAllSensors(
   // Funnel must succeed — it's the foundation. Run it first.
   const funnel = await collectFunnel(start, end);
 
-  const [retention, site, ads, sessions] = await Promise.all([
+  const [retention, site, ads, sessions, intent] = await Promise.all([
     wrap("retention", () => collectRetention(), {
       cohorts: [],
       avg_renewal_rate_pct: 0,
@@ -796,6 +1032,18 @@ export async function collectAllSensors(
       top_entries: [],
       device_split: { desktop_pct: 0, mobile_pct: 0, tablet_pct: 0 },
     }),
+    wrap("intent", () => collectIntent(start, end), {
+      per_lp: [],
+      audience: {
+        mobile_pct: 0,
+        desktop_pct: 0,
+        top_referrer: "",
+        top_referrer_pct: 0,
+        paid_share_pct: 0,
+      },
+      available: false,
+      reason: "intent sensor error",
+    }),
   ]);
 
   return {
@@ -804,6 +1052,7 @@ export async function collectAllSensors(
     site,
     ads,
     sessions,
+    intent,
     collected_at: new Date().toISOString(),
     errors,
   };
