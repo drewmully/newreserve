@@ -120,7 +120,9 @@ export default function SubscriptionLPClient() {
             </div>
 
             {/* Main hero image — smaller, square-ish */}
-            <div className="lg:col-span-6">
+            {/* Mobile order=2 pushes the image BELOW the buy box on small screens
+                so price + CTA are visible above the fold. Desktop unchanged. */}
+            <div className="lg:col-span-6 order-2 lg:order-none">
               <div className="relative aspect-square bg-bone-dark/40 rounded-lg overflow-hidden border border-forest/10">
                 <ReserveHeroImage
                   src={hero.src}
@@ -172,7 +174,8 @@ export default function SubscriptionLPClient() {
             </div>
 
             {/* Buy box */}
-            <div className="lg:col-span-5 flex flex-col">
+            {/* Mobile order=1 places the buy box (price + CTA) at the top on small screens. */}
+            <div className="lg:col-span-5 flex flex-col order-1 lg:order-none">
               <div className="text-[11px] tracking-[0.25em] uppercase text-ember/80 mb-2">
                 Mully Reserve · Quarterly Box
               </div>
@@ -359,10 +362,37 @@ export default function SubscriptionLPClient() {
           </div>
         </section>
 
-        <footer className="bg-forest-dark text-bone/55 text-xs py-8 text-center">
+        <footer className="bg-forest-dark text-bone/55 text-xs pt-8 pb-24 lg:pb-8 text-center">
           © {new Date().getFullYear()} Mullybox. All rights reserved.
         </footer>
       </main>
+
+      {/* ----------------------- MOBILE STICKY CTA ----------------------- */}
+      {/* Pinned to the bottom of the viewport on small screens so a CTA is
+          always one tap away regardless of scroll depth. Hidden on lg+. */}
+      <div
+        className="lg:hidden fixed bottom-0 inset-x-0 z-40 border-t border-forest/15 bg-bone/95 backdrop-blur-md shadow-[0_-4px_16px_-8px_rgba(0,0,0,0.15)]"
+        style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+      >
+        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[10px] tracking-[0.18em] uppercase text-charcoal/55">
+              Reserve Member
+            </div>
+            <div className="font-serif text-lg text-forest leading-tight">
+              $250<span className="text-xs text-charcoal/60 font-sans ml-1">/qtr</span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleStart}
+            disabled={loading}
+            className="flex-1 max-w-[60%] bg-ember hover:bg-ember/90 disabled:opacity-60 disabled:cursor-not-allowed text-bone py-3 rounded-md text-sm font-medium tracking-wide transition cursor-pointer"
+          >
+            {loading ? "Opening…" : "Start membership"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
