@@ -53,12 +53,12 @@ export default async function Home() {
               </div>
             </div>
 
-            <h1 className="font-serif text-3xl sm:text-5xl md:text-[3.5rem] lg:text-6xl xl:text-7xl text-forest leading-[1.05] tracking-tight mb-3 md:mb-7 animate-fade-up-delay-1">
-              Built for golfers<br />with taste.
+            <h1 className="font-serif text-3xl sm:text-5xl md:text-[3.5rem] lg:text-6xl xl:text-7xl text-forest leading-[1.05] tracking-tight mb-3 md:mb-5 animate-fade-up-delay-1">
+              The quarterly box<br />for golfers with taste.
             </h1>
 
             <p className="text-sm md:text-lg text-charcoal leading-relaxed mb-3 md:mb-4 max-w-sm sm:max-w-md mx-auto md:mx-0 animate-fade-up-delay-2">
-              Quarterly curations from the brands worth wearing. Hand-picked by editors who play the game.
+              4&ndash;6 hand-picked pieces from Rhone, Greyson, Quiet Golf and more. <span className="text-forest font-medium">$300+ retail value, $250/qtr.</span> Free shipping. Cancel anytime.
             </p>
 
             {/* Value prop bullets — curation-led, no savings framing */}
@@ -84,6 +84,15 @@ export default async function Home() {
               <p className="text-[11px] text-charcoal/50 tracking-wide mt-2">
                 Curated by hand &middot; Shipped in one business day &middot; Exchanged without question
               </p>
+              <div className="mt-3 max-w-xs sm:max-w-md mx-auto md:mx-0 text-center md:text-left">
+                <a
+                  href="/choose-plan"
+                  className="inline-flex items-center gap-1.5 text-[12px] tracking-wide text-forest/75 hover:text-forest underline underline-offset-4 decoration-forest/30 hover:decoration-forest transition-colors duration-200"
+                >
+                  See plans &amp; pricing
+                  <span aria-hidden="true">&rarr;</span>
+                </a>
+              </div>
               <div className="mt-5 md:mt-6 flex justify-center md:justify-start animate-fade-up-delay-3">
                 <ReserveMark />
               </div>
