@@ -55,6 +55,10 @@
     {
       "path": "/api/admin/cron/marketing-funnel-snapshot",
       "schedule": "5 * * * *"
+    },
+    {
+      "path": "/api/admin/cron/cmo-brain-resume",
+      "schedule": "*/10 * * * *"
     }
   ]
 }
