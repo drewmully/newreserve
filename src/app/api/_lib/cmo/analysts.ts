@@ -37,6 +37,24 @@ const ANALYST_OUTPUT_SHAPE = `
 }
 `;
 
+// Rejects findings that violate the "checkout works" rule. The CEO has
+// confirmed checkout is functional — any claim otherwise is hallucination.
+// Catches the most common phrasings.
+const BANNED_CHECKOUT_BROKEN_PATTERNS: RegExp[] = [
+  /checkout\s+(is\s+)?broken/i,
+  /checkout\s+button\s+(doesn'?t|does\s+not|isn'?t|is\s+not)/i,
+  /checkout\s+(pipe|pipeline|flow|handoff)\s+(is\s+)?(broken|down|failing|misconfigured|missing|misfir)/i,
+  /shopify\s+(handoff|integration)\s+(is\s+)?(broken|down|pending|missing|not\s+working)/i,
+  /button\s+(isn'?t|is\s+not|doesn'?t|does\s+not)\s+(working|wired|firing|configured)/i,
+  /payment\s+(pipe|flow|gateway)\s+(is\s+)?(broken|down|failing)/i,
+  /button\s+likely\s+(posts|points)\s+to\s+a\s+(broken|dead|unconfigured)/i,
+  /storefront\s+endpoint\s+(that'?s\s+)?(unconfigured|broken|missing)/i,
+];
+
+function violatesCheckoutRule(text: string): boolean {
+  return BANNED_CHECKOUT_BROKEN_PATTERNS.some((re) => re.test(text));
+}
+
 function validateAnalystOutput(v: unknown): boolean {
   if (!v || typeof v !== "object") return false;
   const o = v as Record<string, unknown>;
@@ -64,6 +82,16 @@ function validateAnalystOutput(v: unknown): boolean {
     ) {
       return false;
     }
+    // The CEO has banned "checkout is broken" claims — reject any finding
+    // whose finding/hypothesis/fix asserts the checkout pipe is broken.
+    const blob = [
+      String(ff.finding),
+      String(ff.hypothesis),
+      String(ff.recommended_fix),
+    ].join(" \n ");
+    if (violatesCheckoutRule(blob)) {
+      return false;
+    }
   }
   return true;
 }
@@ -77,6 +105,31 @@ RULES:
 - Be specific. "Bounce rate is high" is not a finding. "Bounce rate on /lp/subscription is 78% versus 45% on /products" is.
 - Find 3-7 findings. Quality over quantity. Skip placeholder findings.
 - Output ONLY valid JSON. No prose before or after. No code fences.
+
+HARD RULES — violation makes the finding worthless to the CEO:
+
+A) CHECKOUT IS VERIFIED WORKING. The CEO has personally walked the checkout
+   pipe end-to-end and confirmed it processes orders. You MUST NOT write a
+   finding that claims checkout is broken, checkout buttons don't work, the
+   payment pipe is down, or the Shopify handoff is broken — even if a single
+   page shows zero orders. Zero-orders-on-a-page is almost always an INTENT or
+   SAMPLE-SIZE problem, not a plumbing problem. If V→C is low, the leak is
+   top-of-funnel: hero copy, CTA clarity, audience-LP mismatch, mobile
+   layout, social-traffic intent. If C→O is low, ask whether the sample is
+   even big enough to draw a conclusion.
+
+B) PIPE-HEALTH MATH GATE. Before claiming any drop-off in the funnel is a
+   "bug" or "broken", compute checkout→order on the bucket with the largest
+   sample. If checkout→order ≥ 15% on N ≥ 25 checkouts in the funnel
+   overall, the pipe works. Any zero-order page is either (i) low sample size,
+   (ii) attribution noise, or (iii) the page's specific button mis-wired —
+   never the whole checkout. Phrase findings accordingly.
+
+C) FRAME FINDINGS AS INTENT FIRST. When V→C is below benchmark on a page,
+   the default hypothesis is one of: hero doesn't answer "what is this" in
+   5 seconds, CTA copy is non-imperative, the audience hitting the page is
+   wrong (cold social traffic vs. high-intent search), or the mobile layout
+   buries the offer. Do NOT default to "checkout broken" — it's banned.
 
 EVERY FINDING MUST INCLUDE (non-negotiable, the CEO will reject the run otherwise):
   1. \`finding\` — the problem statement with the metric.
@@ -119,39 +172,53 @@ export async function runPerformanceAnalyst(
     conversion_rates: sensors.funnel.conversion_rates,
     channels: sensors.funnel.channels,
     path_buckets: sensors.funnel.path_buckets,
+    intent: sensors.intent,
   };
   return chatJSON<AnalystOutput>({
     ledger,
     validate: validateAnalystOutput,
     system: `${SHARED_RULES}
 
-YOUR ROLE: PerformanceAnalyst. Rank the funnel's biggest revenue leaks dollar-weighted.
+YOUR ROLE: PerformanceAnalyst. Diagnose WHY visitors aren't even reaching
+checkout on each landing page. The CEO has banned "checkout broken" claims
+(see Rule A) — your job is to dissect TOP-OF-FUNNEL INTENT, not plumbing.
 
-MANDATORY LEAD FINDING (must always appear, even if other findings are bigger dollar impact):
-Your FIRST finding MUST report the visit→checkout conversion rate per landing page,
-drawn from \`conversion_rates.per_path\` and \`conversion_rates.overall\`. Format the
-finding so the CEO can read it in one line, e.g. "Visit→checkout is 0.40% on /lp/subscription
-(7 of 1,729) vs healthy benchmark of 2%+ — the LP is leaking the entire top of funnel."
-If any high-traffic LP (≥200 visits) sits below \`conversion_rates.benchmarks.visit_to_checkout_alert_max_pct\`,
-that finding is severity="critical" regardless of dollar math. The CEO has explicitly
-flagged this metric as the baseline insight he expects from a CMO without being asked.
+MANDATORY LEAD FINDING (must always appear):
+Your FIRST finding MUST report (a) overall checkout→order to PROVE the pipe
+works before saying anything else, and (b) the visit→checkout rate on the
+weakest high-traffic LP. State BOTH numbers explicitly. E.g.
+  "Overall checkout→order is 15.15% on 66 checkouts — the pipe is healthy.
+   Visit→checkout on /lp/subscription is 0.62% (11 of 1,780) vs 2%+ benchmark
+   — the page isn't generating buying intent."
+Severity="critical" if any LP with ≥1,000 visits sits below
+\`conversion_rates.benchmarks.visit_to_checkout_alert_max_pct\`.
 
-For the lead finding's hypothesis, choose the most likely culprit from this menu and
-commit (don't list all of them):
-  - Hero/H1 doesn't articulate value or price
-  - CTA copy is non-actionable ("mully." instead of "Start my first box")
-  - No social proof above the fold
-  - Price shock: $249/qtr stated up front with no value anchor
-  - Above-the-fold layout buries the offer or asks for email before showing product
-  - Mobile experience pushes the CTA below several screens
-  - Page weight / slow LCP losing mobile users before paint
-For recommended_test, give the CEO a concrete observation he can do in 10 minutes
-(walk the LP in incognito on his phone, check PageSpeed score, inspect a specific
-CTA in Network tab, etc.). For recommended_fix, name the exact file/component to edit.
+USE \`intent.per_lp\` to commit to ONE hypothesis. It includes per-LP
+audience composition (top_referrers, utm_sources), device split, V→C by
+device, and hero_engagement (pct_engaged = % of sessions that fire any
+non-pageview event). Match the data to ONE of these intent hypotheses:
+  - AUDIENCE MISMATCH: top_referrers shows one source >40% (e.g. social,
+    direct from social-app) and that traffic is cold/curiosity-driven.
+  - HERO FAILS 5-SECOND TEST: hero_engagement.pct_engaged < 15% — visitors
+    land, don't click anything, leave (the hero doesn't sell what we sell).
+  - MOBILE LAYOUT BREAKS: devices.mobile_pct > 70% AND
+    visit_to_checkout_by_device_pct.mobile is meaningfully lower than
+    .desktop — the page wasn't designed for the device most visitors use.
+  - CTA COPY IS BRAND-VOICE NOT IMPERATIVE: pct_engaged is decent but
+    checkouts are tiny — visitors read but don't act because the visible
+    button doesn't promise the next step.
+  - PRICE-ANCHOR ABSENT ABOVE THE FOLD: hero doesn't state $249/qtr, so the
+    qualified audience can't self-select.
 
-Subsequent findings: CAC vs revenue, channel mix leaks, gaps between PostHog and Shopify
-ground truth (which signals missing tracking), and the largest dollar leaks elsewhere
-in the funnel — each with its own hypothesis + test + fix.
+For recommended_test give a 10-minute observation (open the LP in incognito
+on phone, count CTAs in first viewport, watch what % of words above the fold
+are value-prop vs brand voice). For recommended_fix name the file/component
+to edit. NEVER suggest wiring the checkout button or fixing the checkout
+pipe — those claims are banned.
+
+Subsequent findings: paid spend efficiency, channel mix leaks, tracking gaps
+between PostHog and Shopify ground truth, and dollar leaks elsewhere — each
+with its own hypothesis + test + fix.
 
 You set analyst="performance" in output.`,
     user: `Here is the funnel data:\n\n${JSON.stringify(data, null, 2)}\n\nProduce the JSON output.`,
@@ -172,6 +239,13 @@ export async function runAcquisitionAnalyst(
     google_ads: sensors.ads.google_ads,
     x_ads: sensors.ads.x_ads,
     channels: sensors.funnel.channels,
+    audience: sensors.intent.audience,
+    lp_referrers: sensors.intent.per_lp.map((lp) => ({
+      path: lp.path,
+      top_referrers: lp.top_referrers,
+      utm_sources: lp.utm_sources,
+      visit_to_checkout_pct: lp.visit_to_checkout_pct,
+    })),
   };
   return chatJSON<AnalystOutput>({
     ledger,
@@ -239,24 +313,44 @@ export async function runSiteAnalyst(
     worst_paths: sensors.sessions.worst_paths,
     top_entries: sensors.sessions.top_entries,
     device_split: sensors.sessions.device_split,
+    intent: sensors.intent,
   };
   return chatJSON<AnalystOutput>({
     ledger,
     validate: validateAnalystOutput,
     system: `${SHARED_RULES}
 
-YOUR ROLE: SiteAnalyst. Audit pages for conversion problems via copy, CTA clarity, hierarchy.
-Look at: H1 specificity, CTA verb strength, pages with high traffic + low conversion, mismatches between landing-page promise and post-click experience, mobile-share signals.
-For each finding, hypothesis menu (commit to the most likely one):
-  - Headline doesn't pass the 5-second test (visitor can't say what we sell)
-  - CTA is non-actionable / brand-voice instead of imperative
-  - Above-the-fold has no proof element (review, member count, brand logo)
-  - Page hierarchy buries the offer (feature list before value prop)
-  - Mobile layout reflow breaks the CTA visibility
-  - Form/checkout asks for too many fields before commitment
-recommended_test must be a 10-minute observation (open page in incognito, check
-on phone, run a Lighthouse score, paste H1 into a 5-second test).
-recommended_fix must name the exact file/component/string to change.
+YOUR ROLE: SiteAnalyst. Audit pages for INTENT problems via copy, CTA clarity,
+and hero-audience fit. The CEO has confirmed checkout works (Rule A). Your job
+is to explain why visitors don't even reach checkout.
+
+For each finding, USE \`intent.per_lp\` to back the hypothesis with numbers —
+not just inspection of the H1/CTA strings. Combine the static page audit
+(pages[].h1, pages[].primary_cta, pages[].body_excerpt) with the live
+behavioral signal (intent.per_lp[].hero_engagement.pct_engaged,
+intent.per_lp[].devices, intent.per_lp[].top_referrers).
+
+Hypothesis menu (commit to ONE per finding):
+  - Headline doesn't pass the 5-second test — evidence: hero_engagement.
+    pct_engaged is low AND H1 is brand-voice ("Built for golfers with taste")
+    rather than offer-voice ("Quarterly golf box — $249/qtr").
+  - CTA is non-actionable / brand-voice instead of imperative — evidence:
+    primary_cta is the brand wordmark ("mully.") or a weak label.
+  - Above-the-fold has no proof or price — evidence: body_excerpt's first
+    ~200 chars contain no review count, member count, or dollar figure.
+  - Mobile layout reflow breaks the hero — evidence: devices.mobile_pct > 70%
+    AND visit_to_checkout_by_device_pct.mobile is much lower than .desktop.
+  - Audience→LP mismatch — evidence: top_referrers concentrated in one
+    cold source (e.g. com.twitter.android) that doesn't fit the LP's pitch.
+  - Hero buries the offer — evidence: H1 is generic, value prop only
+    appears below the fold.
+
+recommended_test must be a 10-minute observation: open the page in incognito
+on a phone, screenshot above-the-fold, count what % of the words sell the
+product vs name the brand. recommended_fix must name the exact
+file/component/string to change. DO NOT recommend wiring the checkout
+button or fixing the checkout pipe — those claims are banned.
+
 You set analyst="site" in output.`,
     user: `Here is the site data:\n\n${JSON.stringify(data, null, 2)}\n\nProduce the JSON output.`,
   });
@@ -279,6 +373,7 @@ export async function runCompetitiveAnalyst(
     primary_lp_cta:
       sensors.site.pages.find((p) => p.url.endsWith("/lp/subscription"))
         ?.primary_cta,
+    audience: sensors.intent.audience,
   };
   return chatJSON<AnalystOutput>({
     ledger,
