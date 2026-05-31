@@ -68,10 +68,22 @@ export async function collectFunnel(
   const headline = (p.headline ?? {}) as Record<string, number>;
   const funnel = (p.funnel ?? {}) as Record<string, unknown>;
   const totals = (funnel.totals ?? {}) as Record<string, number>;
-  const pathBuckets = (funnel.path_buckets ?? []) as Array<
+  // NOTE: marketing-funnel route emits `visits/checkouts/purchases`
+  // (NOT `landed/initiated/completed`). Earlier versions of this sensor
+  // read the wrong keys and silently produced all zeros. We also prefer
+  // `all_paths` (one row per real path) over `path_buckets` (5 coarse
+  // labelled buckets) so the analyst sees per-LP detail.
+  const allPaths = (funnel.all_paths ?? []) as Array<Record<string, unknown>>;
+  const coarseBuckets = (funnel.path_buckets ?? []) as Array<
     Record<string, unknown>
   >;
   const channels = (funnel.channels ?? []) as Array<Record<string, unknown>>;
+  const totalVisits = Number(totals.visits ?? 0);
+  const totalCheckouts = Number(totals.checkouts ?? 0);
+  const totalPurchases = Number(totals.purchases ?? 0);
+  const shopifyCompleted = Number(funnel.shopify_completed_orders ?? 0);
+  const shopifyAbandoned = Number(funnel.shopify_abandoned_checkouts ?? 0);
+  const shopifyInitiated = Number(funnel.shopify_checkouts_initiated ?? 0);
 
   return {
     window: { start, end },
@@ -86,27 +98,27 @@ export async function collectFunnel(
       cac_cents: headline.cac_cents ?? 0,
     },
     funnel_totals: {
-      landed: totals.landed ?? 0,
-      initiated: totals.initiated ?? 0,
-      abandoned: totals.abandoned ?? 0,
-      completed: totals.completed ?? 0,
+      landed: totalVisits,
+      initiated: totalCheckouts,
+      abandoned: Math.max(totalCheckouts - totalPurchases, 0),
+      completed: totalPurchases,
     },
-    path_buckets: pathBuckets.map((b) => ({
+    path_buckets: allPaths.map((b) => ({
       path: String(b.path ?? ""),
-      landed: Number(b.landed ?? 0),
-      initiated: Number(b.initiated ?? 0),
-      completed: Number(b.completed ?? 0),
+      landed: Number(b.visits ?? 0),
+      initiated: Number(b.checkouts ?? 0),
+      completed: Number(b.purchases ?? 0),
     })),
     channels: channels.map((c) => ({
       channel: String(c.channel ?? ""),
-      landed: Number(c.landed ?? 0),
-      initiated: Number(c.initiated ?? 0),
-      completed: Number(c.completed ?? 0),
+      landed: Number(c.visits ?? c.landed ?? 0),
+      initiated: Number(c.checkouts ?? c.initiated ?? 0),
+      completed: Number(c.purchases ?? c.completed ?? 0),
     })),
     shopify_ground_truth: {
-      initiated: Number(funnel.shopify_checkouts_initiated ?? 0),
-      abandoned: Number(funnel.shopify_abandoned_checkouts ?? 0),
-      completed: Number(funnel.shopify_completed_orders ?? 0),
+      initiated: shopifyInitiated,
+      abandoned: shopifyAbandoned,
+      completed: shopifyCompleted,
     },
     // ──────────────────────────────────────────────────────────────────────
     // CONVERSION RATES — the headline insight a CMO must surface unprompted.
@@ -117,16 +129,13 @@ export async function collectFunnel(
     // ignores PostHog purchase event drop-off from adblockers/Shopify pixel.
     // ──────────────────────────────────────────────────────────────────────
     conversion_rates: (() => {
-      const totalLanded = Number(totals.landed ?? 0);
-      const totalInitiated = Number(totals.initiated ?? 0);
-      const shopifyCompleted = Number(funnel.shopify_completed_orders ?? 0);
       const rate = (n: number, d: number) =>
         d > 0 ? Math.round((n / d) * 10000) / 100 : 0;
-      const perPath = pathBuckets
+      const perPath = allPaths
         .map((b) => {
-          const visits = Number(b.landed ?? 0);
-          const checkouts = Number(b.initiated ?? 0);
-          const orders = Number(b.completed ?? 0);
+          const visits = Number(b.visits ?? 0);
+          const checkouts = Number(b.checkouts ?? 0);
+          const orders = Number(b.purchases ?? 0);
           return {
             path: String(b.path ?? ""),
             visits,
@@ -140,19 +149,37 @@ export async function collectFunnel(
         .filter((r) => r.visits >= 25) // suppress long-tail noise
         .sort((a, b) => b.visits - a.visits)
         .slice(0, 15);
+      // Also expose the coarse LP buckets the funnel route already
+      // computes (home / lp_subscription / lp_gift / lp_other / other).
+      const perBucket = coarseBuckets.map((b) => {
+        const visits = Number(b.visits ?? 0);
+        const checkouts = Number(b.checkouts ?? 0);
+        const orders = Number(b.purchases ?? 0);
+        return {
+          bucket: String(b.bucket ?? ""),
+          label: String(b.label ?? b.bucket ?? ""),
+          visits,
+          checkouts,
+          orders,
+          visit_to_checkout_pct: rate(checkouts, visits),
+          checkout_to_order_pct: rate(orders, checkouts),
+          visit_to_order_pct: rate(orders, visits),
+        };
+      });
       return {
         overall: {
-          visits: totalLanded,
-          checkouts: totalInitiated,
+          visits: totalVisits,
+          checkouts: totalCheckouts,
           orders_shopify: shopifyCompleted,
-          visit_to_checkout_pct: rate(totalInitiated, totalLanded),
+          visit_to_checkout_pct: rate(totalCheckouts, totalVisits),
           checkout_to_order_shopify_pct: rate(
             shopifyCompleted,
-            totalInitiated
+            totalCheckouts
           ),
-          visit_to_order_shopify_pct: rate(shopifyCompleted, totalLanded),
+          visit_to_order_shopify_pct: rate(shopifyCompleted, totalVisits),
         },
         per_path: perPath,
+        per_bucket: perBucket,
         benchmarks: {
           // Healthy DTC subscription LPs typically land at 2–5% visit→checkout
           // and 25–40% checkout→order. Anything under 1% visit→checkout is
