@@ -108,6 +108,61 @@ export async function collectFunnel(
       abandoned: Number(funnel.shopify_abandoned_checkouts ?? 0),
       completed: Number(funnel.shopify_completed_orders ?? 0),
     },
+    // ──────────────────────────────────────────────────────────────────────
+    // CONVERSION RATES — the headline insight a CMO must surface unprompted.
+    // Visit→checkout is what the CEO measures every LP against. We compute
+    // it both globally and per landing path so the analyst can spotlight
+    // which pages are leaking funnel volume and which are converting.
+    // Visit→order uses Shopify ground truth (completed first orders) so it
+    // ignores PostHog purchase event drop-off from adblockers/Shopify pixel.
+    // ──────────────────────────────────────────────────────────────────────
+    conversion_rates: (() => {
+      const totalLanded = Number(totals.landed ?? 0);
+      const totalInitiated = Number(totals.initiated ?? 0);
+      const shopifyCompleted = Number(funnel.shopify_completed_orders ?? 0);
+      const rate = (n: number, d: number) =>
+        d > 0 ? Math.round((n / d) * 10000) / 100 : 0;
+      const perPath = pathBuckets
+        .map((b) => {
+          const visits = Number(b.landed ?? 0);
+          const checkouts = Number(b.initiated ?? 0);
+          const orders = Number(b.completed ?? 0);
+          return {
+            path: String(b.path ?? ""),
+            visits,
+            checkouts,
+            orders,
+            visit_to_checkout_pct: rate(checkouts, visits),
+            checkout_to_order_pct: rate(orders, checkouts),
+            visit_to_order_pct: rate(orders, visits),
+          };
+        })
+        .filter((r) => r.visits >= 25) // suppress long-tail noise
+        .sort((a, b) => b.visits - a.visits)
+        .slice(0, 15);
+      return {
+        overall: {
+          visits: totalLanded,
+          checkouts: totalInitiated,
+          orders_shopify: shopifyCompleted,
+          visit_to_checkout_pct: rate(totalInitiated, totalLanded),
+          checkout_to_order_shopify_pct: rate(
+            shopifyCompleted,
+            totalInitiated
+          ),
+          visit_to_order_shopify_pct: rate(shopifyCompleted, totalLanded),
+        },
+        per_path: perPath,
+        benchmarks: {
+          // Healthy DTC subscription LPs typically land at 2–5% visit→checkout
+          // and 25–40% checkout→order. Anything under 1% visit→checkout is
+          // a red alert and should drive the lead recommendation.
+          visit_to_checkout_healthy_min_pct: 2,
+          visit_to_checkout_alert_max_pct: 1,
+          checkout_to_order_healthy_min_pct: 25,
+        },
+      };
+    })(),
   };
 }
 

@@ -589,9 +589,9 @@ async function fetchPostHogFunnel(
             'initiate_checkout'
           )
           OR match(coalesce(toString(properties.$pathname), ''),
-                   '(?i)^/(cart|checkout|checkouts)(/|$|\\?)')
+                   '(?i)^/(cart|checkout|checkouts)(/|$|[?])')
           OR match(coalesce(toString(properties.$current_url), ''),
-                   '(?i)/(cart|checkout|checkouts)(/|$|\\?)')
+                   '(?i)/(cart|checkout|checkouts)(/|$|[?])')
         )
     ),
     em AS (

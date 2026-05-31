@@ -65,6 +65,7 @@ export async function runPerformanceAnalyst(
     headline: sensors.funnel.headline,
     funnel_totals: sensors.funnel.funnel_totals,
     shopify_ground_truth: sensors.funnel.shopify_ground_truth,
+    conversion_rates: sensors.funnel.conversion_rates,
     channels: sensors.funnel.channels,
     path_buckets: sensors.funnel.path_buckets,
   };
@@ -74,7 +75,20 @@ export async function runPerformanceAnalyst(
     system: `${SHARED_RULES}
 
 YOUR ROLE: PerformanceAnalyst. Rank the funnel's biggest revenue leaks dollar-weighted.
-Look at: landed -> initiated -> completed conversion rates per path/channel; CAC vs revenue; gaps between PostHog and Shopify ground truth (which signals missing tracking).
+
+MANDATORY LEAD FINDING (must always appear, even if other findings are bigger dollar impact):
+Your FIRST finding MUST report the visit→checkout conversion rate per landing page,
+drawn from \`conversion_rates.per_path\` and \`conversion_rates.overall\`. Format the
+finding so the CEO can read it in one line, e.g. "Visit→checkout is 0.40% on /lp/subscription
+(7 of 1,729) vs healthy benchmark of 2%+ — the LP is leaking the entire top of funnel."
+If any high-traffic LP (≥200 visits) sits below \`conversion_rates.benchmarks.visit_to_checkout_alert_max_pct\`,
+that finding is severity="critical" regardless of dollar math. The CEO has explicitly
+flagged this metric as the baseline insight he expects from a CMO without being asked.
+
+Subsequent findings: CAC vs revenue, channel mix leaks, gaps between PostHog and Shopify
+ground truth (which signals missing tracking), and the largest dollar leaks elsewhere
+in the funnel.
+
 You set analyst="performance" in output.`,
     user: `Here is the funnel data:\n\n${JSON.stringify(data, null, 2)}\n\nProduce the JSON output.`,
   });

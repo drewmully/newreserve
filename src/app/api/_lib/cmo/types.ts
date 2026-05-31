@@ -42,6 +42,33 @@ export interface FunnelSensorData {
     abandoned: number;
     completed: number;
   };
+  // Pre-computed conversion rates so the PerformanceAnalyst doesn't have to
+  // re-derive them from raw counts. Per-path is the headline insight the CEO
+  // expects unprompted: "what % of visitors to <LP> reach checkout?".
+  conversion_rates: {
+    overall: {
+      visits: number;
+      checkouts: number;
+      orders_shopify: number;
+      visit_to_checkout_pct: number;
+      checkout_to_order_shopify_pct: number;
+      visit_to_order_shopify_pct: number;
+    };
+    per_path: Array<{
+      path: string;
+      visits: number;
+      checkouts: number;
+      orders: number;
+      visit_to_checkout_pct: number;
+      checkout_to_order_pct: number;
+      visit_to_order_pct: number;
+    }>;
+    benchmarks: {
+      visit_to_checkout_healthy_min_pct: number;
+      visit_to_checkout_alert_max_pct: number;
+      checkout_to_order_healthy_min_pct: number;
+    };
+  };
 }
 
 export interface RetentionSensorData {
