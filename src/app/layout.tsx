@@ -5,6 +5,7 @@ import { FlagValues } from "flags/react";
 import { heroHeadline, heroCta } from "../flags";
 import { Providers } from "./context/Providers";
 import { PostHogFlagSync } from "./components/PostHogFlagSync";
+import { AnalyticsTracker } from "./components/AnalyticsTracker";
 import "./globals.css";
 
 /**
@@ -153,6 +154,7 @@ export default async function RootLayout({
           style={{ display: "none" }}
         />
         <Providers>{children}</Providers>
+        <AnalyticsTracker />
         <Suspense fallback={null}>
           <FlagValuesWithTracking />
         </Suspense>
