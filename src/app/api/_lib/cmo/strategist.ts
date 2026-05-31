@@ -60,10 +60,19 @@ function compactAnalysts(analysts: AnalystOutput[]): string {
   return analysts
     .map((a) => {
       const findings = a.findings
-        .map(
-          (f, i) =>
-            `  ${a.analyst}.${i + 1} [${f.severity}] ${f.finding} — evidence: ${f.evidence.metric}=${f.evidence.value} (${f.evidence.source}) — est $${(f.dollar_impact_estimate_cents / 100).toFixed(0)}/period`
-        )
+        .map((f, i) => {
+          const id = `${a.analyst}.${i + 1}`;
+          const dollars = `$${(f.dollar_impact_estimate_cents / 100).toFixed(0)}/period`;
+          const conf = f.confidence ? ` conf=${f.confidence}` : "";
+          const hyp = f.hypothesis ? `\n      hypothesis: ${f.hypothesis}` : "";
+          const test = f.recommended_test
+            ? `\n      test: ${f.recommended_test}`
+            : "";
+          const fix = f.recommended_fix
+            ? `\n      fix: ${f.recommended_fix}`
+            : "";
+          return `  ${id} [${f.severity}${conf}] ${f.finding}\n      evidence: ${f.evidence.metric}=${f.evidence.value} (${f.evidence.source}) — est ${dollars}${hyp}${test}${fix}`;
+        })
         .join("\n");
       return `## ${a.analyst.toUpperCase()} ANALYST\n${a.summary}\n${findings}`;
     })
