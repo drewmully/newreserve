@@ -10,6 +10,7 @@ import {
 import { AuthAwareHero, AuthAwareBottomCTA } from "./components/AuthAwareHero";
 import { ReserveHeroImage } from "./components/ReserveHeroImage";
 import FoundingHundredEyebrow from "./components/FoundingHundredEyebrow";
+import { GuaranteedValue } from "./components/GuaranteedValue";
 
 export default async function Home() {
   return (
@@ -185,7 +186,7 @@ export default async function Home() {
                 A membership for golfers<br className="hidden md:block" /> who want better gear and access.
               </h2>
               <p className="text-base md:text-lg text-charcoal/65 max-w-2xl mx-auto">
-                Four steps. No initiation fee. Cancel anytime.
+                Four steps. No initiation fee. Cancel anytime. Exchange anything, free.
               </p>
             </div>
           </ScrollReveal>
@@ -194,8 +195,8 @@ export default async function Home() {
             <ScrollReveal delay={0}>
               <SimpleStep
                 number="1"
-                title="Join free"
-                description="Enter your email to unlock Reserve Access. No credit card required. Upgrade anytime."
+                title="Pick your membership"
+                description="Digital Membership for insider pricing, or the Curated Box for premium gear delivered every quarter."
               />
             </ScrollReveal>
             <ScrollReveal delay={0.08}>
@@ -247,8 +248,8 @@ export default async function Home() {
                     description="You’ll be first in line when the next curated release goes live to members."
                   />
                   <ImmediateBenefit
-                    label="No credit card required"
-                    description="Start free, upgrade when you’re ready. Cancel anytime. No commitments."
+                    label="Exchange anything, free"
+                    description="If a piece doesn’t hit, send it back — no questions asked. Cancel anytime."
                   />
                 </div>
               </div>
@@ -396,39 +397,13 @@ export default async function Home() {
             </div>
           </ScrollReveal>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5 lg:gap-4 items-end">
-            {/* ── Tier 1 — Free ── */}
+          <div className="grid md:grid-cols-2 gap-5 lg:gap-6 items-stretch max-w-4xl mx-auto">
+            {/* ── Tier 1 — Digital Membership ($99/yr) ── */}
             <ScrollReveal delay={0}>
-              <div className="rounded-2xl p-7 md:p-8 flex flex-col card-hover h-full glass-card glass-card-light tier-card-shimmer tier-border-sage tier-bg-free">
-                <div className="h-5 mb-3" />
-                <span className="text-[11px] tracking-[0.25em] uppercase text-sage font-medium">
-                  Free
-                </span>
-                <div className="mt-2 mb-5">
-                  <span className="font-serif text-3xl text-obsidian">$0</span>
-                </div>
-                <div className="border-t border-taupe/12 pt-5 flex-1 flex flex-col">
-                  <ul className="space-y-3 flex-1">
-                    <TierFeature text="Browse Reserve pricing" />
-                    <TierFeature text="Drop notifications" />
-                    <TierFeature text="Community access" />
-                  </ul>
-                  <a
-                    href="/login"
-                    className="mt-8 block w-full text-center h-12 leading-[3rem] rounded-xl border border-forest/80 text-forest text-sm font-medium tracking-wider uppercase hover:bg-forest hover:text-bone transition-all duration-300 btn-press"
-                  >
-                    Start Free
-                  </a>
-                </div>
-              </div>
-            </ScrollReveal>
-
-            {/* ── Tier 2 — Reserve Access ($99/yr) ── */}
-            <ScrollReveal delay={0.08}>
               <div className="rounded-2xl p-7 md:p-8 flex flex-col card-hover h-full glass-card glass-card-light tier-card-shimmer tier-border-forest tier-bg-access">
                 <div className="h-5 mb-3" />
                 <span className="text-[11px] tracking-[0.25em] uppercase text-forest font-medium">
-                  Reserve Access
+                  Digital Membership
                 </span>
                 <div className="mt-2 mb-5">
                   <span className="font-serif text-3xl text-obsidian">$99</span>
@@ -436,23 +411,23 @@ export default async function Home() {
                 </div>
                 <div className="border-t border-taupe/12 pt-5 flex-1 flex flex-col">
                   <ul className="space-y-3 flex-1">
-                    <TierFeature text="Reserve pricing on all gear" />
-                    <TierFeature text="Early drop access" />
-                    <TierFeature text="Partner benefits" />
+                    <TierFeature text="Insider pricing on every curation" />
+                    <TierFeature text="Early access to every drop" />
+                    <TierFeature text="Partner brand benefits" />
                     <TierFeature text="Free 2-day shipping" />
                   </ul>
                   <a
-                    href="/login"
-                    className="mt-8 block w-full text-center h-12 leading-[3rem] rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-all duration-300 btn-press"
+                    href="/choose-plan"
+                    className="mt-8 block w-full text-center h-12 leading-[3rem] rounded-xl border border-forest/80 text-forest text-sm font-medium tracking-wider uppercase hover:bg-forest hover:text-bone transition-all duration-300 btn-press"
                   >
-                    Get Reserve Access
+                    Get Digital Membership
                   </a>
                 </div>
               </div>
             </ScrollReveal>
 
-            {/* ── Tier 3 — Reserve Member ($249/qtr, THE HERO) ── */}
-            <ScrollReveal delay={0.16}>
+            {/* ── Tier 2 — Curated Box Membership ($250/qtr, THE HERO) ── */}
+            <ScrollReveal delay={0.08}>
               <div className="relative h-full tier-member-hero">
                 <div className="rounded-2xl overflow-hidden relative flex flex-col card-hover h-full glass-card glass-card-dark tier-card-shimmer tier-border-gold tier-member-glow">
                   <Image
@@ -467,66 +442,48 @@ export default async function Home() {
                   />
 
                   <div className="relative z-10 p-7 md:p-9 flex flex-col flex-1">
-                    <div className="h-5 mb-3" />
+                    <div className="h-5 mb-3">
+                      <span className="text-[10px] tracking-[0.25em] uppercase text-ember font-semibold">
+                        Most Popular
+                      </span>
+                    </div>
                     <span className="text-[11px] tracking-[0.25em] uppercase text-bone/80 font-medium">
-                      Reserve Member
+                      Curated Box Membership
                     </span>
                     <div className="mt-2 mb-5">
-                      <span className="font-serif text-3xl text-bone">$249</span>
+                      <span className="font-serif text-3xl text-bone">$250</span>
                       <span className="text-bone/45 text-sm ml-1">/quarter</span>
                     </div>
                     <div className="border-t border-bone/10 pt-5 flex-1 flex flex-col">
                       <ul className="space-y-3 flex-1">
-                        <TierFeature text="Everything in Access" light />
-                        <TierFeature text="Quarterly curated box" light />
-                        <TierFeature text="Guaranteed access windows" light />
-                        <TierFeature text="Concierge support" light />
-                        <TierFeature text="Invite-only events" light />
+                        <TierFeature text="Everything in Digital Membership" light />
+                        <TierFeature text="Quarterly curated box ($300+ retail value)" light />
+                        <TierFeature text="Premium gear from Rhone, Greyson, Quiet Golf" light />
+                        <TierFeature text="Free exchanges &amp; returns, no questions asked" light />
+                        <TierFeature text="Invite-only member events" light />
                       </ul>
                       <a
-                        href="/login"
+                        href="/choose-plan"
                         className="mt-8 block w-full text-center h-12 leading-[3rem] rounded-xl bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-all duration-300 btn-press"
                       >
-                        Become a Member
+                        Start the Curated Box
                       </a>
                     </div>
                   </div>
                 </div>
               </div>
             </ScrollReveal>
-
-            {/* ── Tier 4 — Reserve Black ── */}
-            <ScrollReveal delay={0.24}>
-              <div className="rounded-2xl p-7 md:p-8 flex flex-col card-hover h-full relative overflow-hidden tier-black-glass tier-card-shimmer tier-black-gold-border">
-                <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-ember/30 to-transparent" />
-                <div className="h-5 mb-3">
-                  <span className="text-[9px] tracking-[0.15em] uppercase text-bone/30 font-semibold">Invite Only</span>
-                </div>
-                <span className="text-[11px] tracking-[0.25em] uppercase text-bone/50 font-medium">
-                  Reserve Black
-                </span>
-                <div className="mt-2 mb-5">
-                  <span className="font-serif text-3xl text-bone/90">By Invitation</span>
-                </div>
-                <div className="border-t border-bone/8 pt-5 flex-1 flex flex-col">
-                  <ul className="space-y-3 flex-1">
-                    <TierFeature text="Everything in Member" dark />
-                    <TierFeature text="$1,000 quarterly credit" dark />
-                    <TierFeature text="Personal stylist" dark />
-                    <TierFeature text="Concierge phone line" dark />
-                    <TierFeature text="Invite-only experiences" dark />
-                  </ul>
-                  <div className="mt-8 block w-full text-center h-12 leading-[3rem] rounded-xl border border-bone/12 text-bone/35 text-sm font-medium tracking-wider uppercase cursor-default">
-                    Request Invite
-                  </div>
-                </div>
-              </div>
-            </ScrollReveal>
           </div>
 
+          <ScrollReveal delay={0.2}>
+            <div className="max-w-2xl mx-auto mt-10">
+              <GuaranteedValue />
+            </div>
+          </ScrollReveal>
+
           <ScrollReveal delay={0.3}>
-            <p className="text-center text-sm text-charcoal/40 mt-12">
-              Start free. Upgrade or cancel anytime. No commitments.
+            <p className="text-center text-sm text-charcoal/40 mt-8">
+              Cancel anytime. Exchange anything, free.
             </p>
           </ScrollReveal>
         </div>
@@ -681,10 +638,10 @@ export default async function Home() {
               {/* Right: CTA Card */}
               <div className="rounded-2xl p-8 md:p-10 bottom-cta-card-glass">
                 <h3 className="font-serif text-xl text-bone mb-2">
-                  Unlock Reserve Access
+                  Pick your membership
                 </h3>
                 <p className="text-sm text-bone/45 mb-6">
-                  Complimentary. No credit card required.
+                  Cancel anytime. Exchange anything, free.
                 </p>
                 <AuthAwareBottomCTA />
                 <p className="text-xs text-bone/30 mt-4 text-center">

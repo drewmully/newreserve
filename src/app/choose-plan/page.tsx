@@ -3,24 +3,21 @@
 /**
  * /choose-plan
  *
- * Replaces the legacy /onboarding plan-selection step. The new low-friction
- * flow is:
+ * Two-tier decision page. Free tier and illustrative Reserve Black removed
+ * 2026-06 to eliminate decision fatigue; only Digital Membership ($99/yr)
+ * and Curated Box Membership ($250/qtr) remain.
  *
+ * Flow:
  *   1. Visitor enters email on the homepage EmailCTA.
  *   2. EmailCTA calls /api/auth/start-account, signs them in with a Firebase
  *      custom token (NO password), and sends them here.
- *   3. They pick "Continue free" or one of the paid tiers.
- *   4. Free  -> immediately to /home, where a one-time password / magic-link
- *              gate prompts them on first visit.
- *      Paid  -> Shopify checkout via createMembershipCheckout (Leo's
- *              ?return_url=/auth/callback pattern). Post-checkout they land
- *              authenticated on /home with the welcome experience.
+ *   3. They pick Digital ($99/yr) or Curated Box ($250/qtr).
+ *   4. Either choice -> Shopify checkout via createMembershipCheckout (Leo's
+ *      ?return_url=/auth/callback pattern). Post-checkout they land
+ *      authenticated on /home with the welcome experience.
  *
  * No fit profile, no SMS opt-in, no required username at this step. Profile
  * data is collected after payment via the welcome drawers in /home.
- *
- * Reserve Black is intentionally illustrative only ("invite only / earned
- * through spend") per Drew's spec, modeled after Delta diamond medallion.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -28,62 +25,21 @@ import { useRouter } from "next/navigation";
 import { useMembership } from "../context/MembershipContext";
 import { createMembershipCheckout } from "@/lib/shopifyCheckout";
 import { trackEvent } from "@/lib/tracking";
-import {
-  fetchClientFlagOverrides,
-  getABBucket,
-  type FlagOverrideMap,
-} from "@/lib/clientFlagOverrides";
 import { PENDING_ONBOARDING_EMAIL_KEY } from "../components/EmailCTA";
-import { auth } from "@/lib/firebase";
-import { doc, updateDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
-
-/* ─── Variant copy for the existing ob-plan-* A/B keys ─── */
-
-const PLAN_VARIANTS = {
-  planHeadline: {
-    control: "Choose your membership.",
-    "variant-a": "Your membership is ready.",
-  },
-  planSubtext: {
-    control:
-      "Start free or unlock the full Reserve experience. Upgrade anytime.",
-    "variant-a":
-      "Every tier includes Reserve pricing. Pick the level that fits your game.",
-  },
-} as const;
-
-function pickVariant(
-  key: keyof typeof PLAN_VARIANTS,
-  bucket: number,
-  overrides: FlagOverrideMap
-): string {
-  const flagKey = key === "planHeadline" ? "ob-plan-headline" : "ob-plan-subtext";
-  const forced = overrides[flagKey];
-  const v = PLAN_VARIANTS[key];
-  if (forced === "control") return v.control;
-  if (forced === "variant-a") return v["variant-a"];
-  return bucket < 50 ? v.control : v["variant-a"];
-}
+import { GuaranteedValue } from "../components/GuaranteedValue";
 
 /* ═══════════════════════════════════════════════════════════════ */
 
 export default function ChoosePlanPage() {
   const router = useRouter();
-  const { user, tier, refreshSubscriptionStatus } = useMembership();
-  const [overrides, setOverrides] = useState<FlagOverrideMap>({});
-  const [bucket, setBucket] = useState(0);
+  const { user, tier } = useMembership();
   const [submittingTier, setSubmittingTier] = useState<
-    "free" | "access" | "member" | null
+    "access" | "member" | null
   >(null);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [storedEmail, setStoredEmail] = useState<string | null>(null);
 
-  // Pull flag overrides + bucket once on mount.
   useEffect(() => {
-    setBucket(getABBucket());
-    void fetchClientFlagOverrides().then(setOverrides);
-
     try {
       const e = sessionStorage.getItem(PENDING_ONBOARDING_EMAIL_KEY);
       if (e) setStoredEmail(e);
@@ -107,54 +63,12 @@ export default function ChoosePlanPage() {
     }
   }, [user, tier, router]);
 
-  const headline = useMemo(
-    () => pickVariant("planHeadline", bucket, overrides),
-    [bucket, overrides]
-  );
-  const subtext = useMemo(
-    () => pickVariant("planSubtext", bucket, overrides),
-    [bucket, overrides]
-  );
-
   const checkoutEmail = useMemo(
     () => user?.email ?? storedEmail ?? undefined,
     [user, storedEmail]
   );
 
   /* ─── Handlers ─── */
-
-  async function handleStartFree() {
-    if (submittingTier) return;
-    setSubmittingTier("free");
-
-    void trackEvent("plan_selected", {
-      properties: { plan: "free", method: "no_payment" },
-    });
-    void trackEvent("subscription_state", {
-      properties: { plan: "free", state: "selected" },
-    });
-
-    // The user already has tier='free' from /api/auth/start-account. Just
-    // make sure Firestore reflects that, then route to /home where the
-    // welcome drawer + password gate prompts on first visit.
-    if (user?.uid) {
-      try {
-        await updateDoc(doc(db, "users", user.uid), {
-          tier: "free",
-          updated_at: Date.now(),
-        });
-      } catch (err) {
-        console.error("[choose-plan] free tier write failed:", err);
-      }
-      try {
-        await refreshSubscriptionStatus?.();
-      } catch {
-        // Best effort.
-      }
-    }
-
-    router.push("/home");
-  }
 
   async function handlePaid(plan: "access" | "member") {
     if (submittingTier) return;
@@ -202,26 +116,34 @@ export default function ChoosePlanPage() {
         </span>
 
         <h1 className="font-serif text-3xl md:text-4xl text-obsidian leading-tight mb-3">
-          {headline}
+          Pick your membership.
         </h1>
-        <p className="text-base text-charcoal/55 leading-relaxed mb-10">
-          {subtext}
+        <p className="text-base text-charcoal/55 leading-relaxed mb-8">
+          Two ways in: get insider pricing on our curations, or get the
+          curated box delivered every quarter.
         </p>
 
+        {/* ─── Guarantee — Above the cards so it frames the choice ─── */}
+        <GuaranteedValue className="mb-8" />
+
         <div className="space-y-5">
-          {/* ────────── RESERVE ACCESS ────────── */}
+          {/* ────────── DIGITAL MEMBERSHIP (RESERVE ACCESS) ────────── */}
           <div className="bg-cream rounded-2xl p-7 md:p-8 border border-taupe/20">
             <span className="text-[11px] tracking-[0.25em] uppercase text-forest font-medium">
-              Reserve Access
+              Digital Membership
             </span>
             <div className="mt-2 mb-5">
               <span className="font-serif text-3xl text-obsidian">$99</span>
               <span className="text-charcoal/40 text-sm ml-1">/year</span>
             </div>
+            <p className="text-sm text-charcoal/65 mb-5 leading-relaxed">
+              Insider pricing on every curation. Shop the brands we curate at
+              member prices and get first access to every drop.
+            </p>
             <div className="border-t border-taupe/12 pt-5">
               <ul className="grid grid-cols-2 gap-x-6 gap-y-2.5 mb-6">
-                <FeatureItem text="Reserve pricing unlocked" />
-                <FeatureItem text="Early access to drops" />
+                <FeatureItem text="Reserve pricing on all gear" />
+                <FeatureItem text="First access to drops" />
                 <FeatureItem text="USGA Handicap (coming soon)" />
                 <FeatureItem text="Partner benefit access" />
                 <FeatureItem text="Free 2-day shipping" />
@@ -233,12 +155,12 @@ export default function ChoosePlanPage() {
               >
                 {submittingTier === "access"
                   ? "Loading checkout..."
-                  : "Join Reserve Access"}
+                  : "Get Digital Membership"}
               </button>
             </div>
           </div>
 
-          {/* ────────── RESERVE MEMBER (FEATURED) ────────── */}
+          {/* ────────── CURATED BOX (RESERVE MEMBER, FEATURED) ────────── */}
           <div className="relative">
             <div className="absolute -top-3 left-7 z-20">
               <span className="inline-block bg-sage text-bone text-[10px] tracking-[0.2em] uppercase font-semibold px-4 py-1.5 rounded-full shadow-sm">
@@ -256,19 +178,24 @@ export default function ChoosePlanPage() {
               />
               <div className="relative z-10 p-7 md:p-8">
                 <span className="text-[11px] tracking-[0.25em] uppercase text-sage font-medium">
-                  Reserve Member
+                  Curated Box Membership
                 </span>
                 <div className="mt-2 mb-5">
-                  <span className="font-serif text-3xl text-bone">$249</span>
+                  <span className="font-serif text-3xl text-bone">$250</span>
                   <span className="text-bone/45 text-sm ml-1">/quarter</span>
                 </div>
+                <p className="text-sm text-bone/70 mb-5 leading-relaxed">
+                  4&ndash;6 hand-picked pieces from Rhone, Greyson, Quiet Golf
+                  and more. $300+ retail value, every quarter. Free shipping.
+                  Cancel anytime after your first box.
+                </p>
                 <div className="border-t border-bone/10 pt-5">
                   <ul className="grid grid-cols-2 gap-x-6 gap-y-2.5 mb-6">
-                    <FeatureItem text="Everything in Access" light />
-                    <FeatureItem text="Quarterly Reserve Box" light />
-                    <FeatureItem text="Guaranteed access windows" light />
-                    <FeatureItem text="Priority release access" light />
-                    <FeatureItem text="Concierge booking support" light />
+                    <FeatureItem text="Quarterly curated box" light />
+                    <FeatureItem text="Everything in Digital" light />
+                    <FeatureItem text="Free shipping" light />
+                    <FeatureItem text="Exchange anything, free" light />
+                    <FeatureItem text="Concierge support" light />
                     <FeatureItem text="Invite-only events" light />
                   </ul>
                   <button
@@ -278,15 +205,12 @@ export default function ChoosePlanPage() {
                   >
                     {submittingTier === "member"
                       ? "Loading checkout..."
-                      : "Join Reserve Member"}
+                      : "Start the Curated Box"}
                   </button>
                 </div>
               </div>
             </div>
           </div>
-
-          {/* ────────── RESERVE BLACK (ILLUSTRATIVE / INVITE ONLY) ────────── */}
-          <ReserveBlackCard />
         </div>
 
         {checkoutError && (
@@ -300,18 +224,8 @@ export default function ChoosePlanPage() {
         )}
 
         <p className="text-center text-sm text-charcoal/40 mt-8">
-          Start free. Upgrade or cancel anytime. No commitments.
+          Cancel anytime. Exchange anything, free.
         </p>
-
-        <div className="mt-4 text-center">
-          <button
-            onClick={handleStartFree}
-            disabled={submittingTier !== null}
-            className="text-sm text-charcoal/50 hover:text-charcoal/70 underline underline-offset-4 decoration-charcoal/25 hover:decoration-charcoal/50 transition-all duration-300 cursor-pointer disabled:opacity-60"
-          >
-            {submittingTier === "free" ? "Setting things up..." : "Continue free"}
-          </button>
-        </div>
       </div>
     </main>
   );
@@ -338,54 +252,3 @@ function FeatureItem({ text, light }: { text: string; light?: boolean }) {
   );
 }
 
-/**
- * Reserve Black is illustrative only. The card is visually muted, the action
- * is greyed out and non-interactive ("Invite Only"), and we surface the
- * "Earned through spend" micro-copy that mirrors how Delta promotes Diamond
- * Medallion. There is no path to self-purchase Reserve Black.
- */
-function ReserveBlackCard() {
-  return (
-    <div
-      aria-disabled="true"
-      className="relative rounded-2xl p-7 md:p-8 border border-obsidian/15 bg-cream/60 overflow-hidden"
-      style={{ filter: "saturate(0.85)" }}
-    >
-      <div className="absolute top-0 left-0 right-0 h-1 bg-obsidian" />
-
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-[11px] tracking-[0.25em] uppercase text-charcoal/45 font-medium">
-          Reserve Black
-        </span>
-        <span className="text-[10px] tracking-[0.2em] uppercase text-charcoal/35 font-medium border border-charcoal/15 rounded-full px-2.5 py-1">
-          Illustrative
-        </span>
-      </div>
-
-      <div className="mt-1 mb-1">
-        <span className="font-serif text-3xl text-charcoal/60">Invite Only</span>
-      </div>
-      <p className="text-xs text-charcoal/45 mb-5 italic">
-        Earned through spend. Like Delta&apos;s Diamond Medallion.
-      </p>
-
-      <div className="border-t border-taupe/12 pt-5">
-        <ul className="grid grid-cols-2 gap-x-6 gap-y-2.5 mb-6">
-          <FeatureItem text="Everything in Member" />
-          <FeatureItem text="$1,000 quarterly credit" />
-          <FeatureItem text="Personal stylist" />
-          <FeatureItem text="Concierge phone line" />
-          <FeatureItem text="Invite-only experiences" />
-        </ul>
-        <button
-          type="button"
-          disabled
-          aria-label="Reserve Black is invite only"
-          className="h-12 px-10 rounded-xl border border-charcoal/15 text-charcoal/40 text-sm font-medium tracking-wider uppercase cursor-not-allowed bg-cream/40"
-        >
-          Invite Only
-        </button>
-      </div>
-    </div>
-  );
-}

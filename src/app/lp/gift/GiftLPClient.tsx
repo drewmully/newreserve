@@ -8,6 +8,7 @@ import { captureAttributionFromUrl } from "@/lib/attribution";
 import { GlassHeader } from "@/app/components/ClientComponents";
 import { ReserveHeroImage } from "@/app/components/ReserveHeroImage";
 import FoundingHundredCard from "@/app/components/FoundingHundredCard";
+import { GuaranteedValue } from "@/app/components/GuaranteedValue";
 import { LP_GALLERY } from "../_shared/products";
 import {
   TrustBadgeStrip,
@@ -399,6 +400,9 @@ export default function GiftLPClient() {
                 </li>
               ))}
             </ul>
+            <div className="mt-6">
+              <GuaranteedValue />
+            </div>
           </div>
         </section>
 
