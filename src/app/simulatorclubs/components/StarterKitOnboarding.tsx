@@ -77,6 +77,7 @@ interface FormState {
   state: string;
   // Step 2
   bayCount: string;
+  locationCount: string;
   memberCountRange: string;
   staffingType: string;
   currentMerch: string;
@@ -101,6 +102,7 @@ const INITIAL_FORM: FormState = {
   city: "",
   state: "",
   bayCount: "",
+  locationCount: "1",
   memberCountRange: "",
   staffingType: "",
   currentMerch: "",
@@ -200,6 +202,7 @@ export default function StarterKitOnboarding({ open, onClose }: Props) {
       if (currentStep >= 2) {
         Object.assign(base, {
           bayCount: form.bayCount,
+          locationCount: form.locationCount,
           memberCountRange: form.memberCountRange,
           staffingType: form.staffingType,
           currentMerch: form.currentMerch,
@@ -265,6 +268,12 @@ export default function StarterKitOnboarding({ open, onClose }: Props) {
       }
       if (currentStep === 2) {
         if (!form.bayCount) errs.bayCount = "How many simulator bays do you have?";
+        const loc = parseInt(form.locationCount, 10);
+        if (!form.locationCount || !Number.isFinite(loc) || loc < 1) {
+          errs.locationCount = "How many locations are you ordering for?";
+        } else if (loc > 25) {
+          errs.locationCount = "For 25 or more locations, email drew@mymully.com so we can set you up directly.";
+        }
         if (!form.memberCountRange) errs.memberCountRange = "Pick a member count range.";
         if (!form.staffingType) errs.staffingType = "Pick how the club is staffed.";
         if (!form.currentMerch) errs.currentMerch = "Pick what you sell today.";
@@ -363,6 +372,7 @@ export default function StarterKitOnboarding({ open, onClose }: Props) {
           email: form.email,
           applicationId,
           clubName: form.clubName,
+          locationCount: parseInt(form.locationCount, 10) || 1,
         }),
       });
       const data = await res.json();
@@ -664,6 +674,23 @@ function Step2({
           <FieldError msg={errors.bayCount} />
         </div>
         <div>
+          <Label required>Number of locations</Label>
+          <input
+            type="number"
+            min={1}
+            max={25}
+            step={1}
+            className={cn(inputCls, errorInputCls, !!errors.locationCount)}
+            value={form.locationCount}
+            onChange={(e) => update("locationCount", e.target.value)}
+            placeholder="1"
+          />
+          <p className="mt-1.5 text-[11px] text-charcoal/55 leading-relaxed">
+            One kit per location. All kits ship to one address; you distribute internally.
+          </p>
+          <FieldError msg={errors.locationCount} />
+        </div>
+        <div>
           <Label required>Approximate member count</Label>
           <select
             className={cn(selectCls, errorSelectCls, !!errors.memberCountRange)}
@@ -929,12 +956,15 @@ function Step4({
 }
 
 function Step5({ form }: { form: FormState }) {
+  const locations = Math.max(1, parseInt(form.locationCount, 10) || 1);
+  const firstQuarterTotal = locations * 2000;
   const rows: Array<[string, string]> = [
     ["Club", form.clubName || "-"],
     ["Contact", `${form.contactName}${form.contactTitle ? `, ${form.contactTitle}` : ""}`],
     ["Phone", form.phone || "-"],
     ["Email", form.email || "-"],
     ["Location", `${form.city}, ${form.state}`],
+    ["Locations / kits", String(locations)],
     ["Simulator bays", form.bayCount || "-"],
     [
       "Member count",
@@ -963,13 +993,22 @@ function Step5({ form }: { form: FormState }) {
     <div className="space-y-6">
       <div className="rounded-xl bg-forest text-bone p-6">
         <p className="text-[10px] tracking-[0.32em] uppercase text-ember font-medium mb-3">
-          Your Q1 kit
+          Your Q1 order
         </p>
         <p className="font-serif text-2xl md:text-3xl leading-tight mb-2">
-          Ships in 1 to 2 weeks
+          {locations === 1
+            ? "1 kit, ships in 1 to 2 weeks"
+            : `${locations} kits, ship in 1 to 2 weeks`}
         </p>
         <p className="text-sm text-bone/75 leading-relaxed">
-          Quarterly billing of $2,000 begins at shipment. Cancel anytime.
+          {locations === 1 ? (
+            <>Quarterly billing of $2,000 begins at shipment. Cancel anytime.</>
+          ) : (
+            <>
+              {locations} × $2,000 = ${firstQuarterTotal.toLocaleString()} billed at shipment, then
+              every quarter. All kits ship to one address. Cancel anytime.
+            </>
+          )}
         </p>
       </div>
 
