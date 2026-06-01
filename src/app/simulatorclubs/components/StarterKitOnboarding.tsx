@@ -10,8 +10,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
  * Steps:
  *   1. Club basics       (club name, contact, phone, email, city/state)
  *   2. Your club         (bays, member count, staffing, current merch)
- *   3. Your members      (size breakdown, demographic, brands worn)
- *   4. Your storefront   (logo upload, accent color, storefront preference)
+ *   3. Your members      (demographic, brands worn)
+ *   4. Your storefront   (optional logo upload, accent color, storefront preference)
  *   5. Confirm & pay     (review → POST /checkout → window.location to Shopify)
  *
  * Every "Continue" click POSTs to /api/simulatorclubs/apply with the current
@@ -20,17 +20,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
  *
  * Use the parent controller via the `open` and `onClose` props.
  */
-
-type SizeBreakdown = Record<"XS" | "S" | "M" | "L" | "XL" | "XXL", number>;
-
-const DEFAULT_SIZES: SizeBreakdown = {
-  XS: 5,
-  S: 15,
-  M: 35,
-  L: 30,
-  XL: 12,
-  XXL: 3,
-};
 
 const BRAND_OPTIONS = [
   "Rhone",
@@ -92,7 +81,6 @@ interface FormState {
   staffingType: string;
   currentMerch: string;
   // Step 3
-  sizeBreakdown: SizeBreakdown;
   memberDemographic: string;
   brandsWorn: string[];
   // Step 4
@@ -116,7 +104,6 @@ const INITIAL_FORM: FormState = {
   memberCountRange: "",
   staffingType: "",
   currentMerch: "",
-  sizeBreakdown: { ...DEFAULT_SIZES },
   memberDemographic: "",
   brandsWorn: [],
   logoUrl: "",
@@ -147,6 +134,7 @@ export default function StarterKitOnboarding({ open, onClose }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const dialogRef = useRef<HTMLDivElement>(null);
 
   // Lock body scroll when open
@@ -171,13 +159,13 @@ export default function StarterKitOnboarding({ open, onClose }: Props) {
 
   const update = useCallback(<K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
-  }, []);
-
-  const updateSize = useCallback((size: keyof SizeBreakdown, value: number) => {
-    setForm((prev) => ({
-      ...prev,
-      sizeBreakdown: { ...prev.sizeBreakdown, [size]: value },
-    }));
+    // Clear field error as soon as the user starts entering a value
+    setFieldErrors((prev) => {
+      if (!prev[key as string]) return prev;
+      const next = { ...prev };
+      delete next[key as string];
+      return next;
+    });
   }, []);
 
   const toggleBrand = useCallback((brand: string) => {
@@ -191,11 +179,6 @@ export default function StarterKitOnboarding({ open, onClose }: Props) {
       };
     });
   }, []);
-
-  const sizeTotal = useMemo(
-    () => Object.values(form.sizeBreakdown).reduce((acc, n) => acc + n, 0),
-    [form.sizeBreakdown]
-  );
 
   /** Build the JSON payload for /api/simulatorclubs/apply at a given step. */
   const buildApplyPayload = useCallback(
@@ -224,7 +207,6 @@ export default function StarterKitOnboarding({ open, onClose }: Props) {
       }
       if (currentStep >= 3) {
         Object.assign(base, {
-          sizeBreakdown: form.sizeBreakdown,
           memberDemographic: form.memberDemographic,
           brandsWorn: form.brandsWorn,
         });
@@ -263,42 +245,60 @@ export default function StarterKitOnboarding({ open, onClose }: Props) {
     [buildApplyPayload]
   );
 
-  // Step validation - guards the Continue button
-  const stepValid = useMemo(() => {
-    switch (step) {
-      case 1:
-        return Boolean(
-          form.clubName.trim() &&
-            form.contactName.trim() &&
-            form.phone.trim() &&
-            form.email.trim() &&
-            form.email.includes("@") &&
-            form.city.trim() &&
-            form.state.trim()
-        );
-      case 2:
-        return Boolean(
-          form.bayCount &&
-            form.memberCountRange &&
-            form.staffingType &&
-            form.currentMerch
-        );
-      case 3:
-        return Boolean(
-          form.memberDemographic && sizeTotal >= 95 && sizeTotal <= 105
-        );
-      case 4:
-        return Boolean(form.accentColor && form.wantsStorefront);
-      case 5:
-        return true;
-      default:
-        return false;
-    }
-  }, [step, form, sizeTotal]);
+  /**
+   * Validate the current step. Returns a map of fieldKey -> human-friendly error
+   * message. Empty object means the step is valid and the user can continue.
+   */
+  const validateStep = useCallback(
+    (currentStep: number): Record<string, string> => {
+      const errs: Record<string, string> = {};
+      const isEmail = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s.trim());
+
+      if (currentStep === 1) {
+        if (!form.clubName.trim()) errs.clubName = "Add your club name.";
+        if (!form.contactName.trim()) errs.contactName = "Tell us who you are.";
+        if (!form.phone.trim()) errs.phone = "Add a phone number so we can call.";
+        if (!form.email.trim()) errs.email = "Add your email.";
+        else if (!isEmail(form.email)) errs.email = "That email does not look right.";
+        if (!form.city.trim()) errs.city = "Add your city.";
+        if (!form.state.trim()) errs.state = "Add your state.";
+      }
+      if (currentStep === 2) {
+        if (!form.bayCount) errs.bayCount = "How many simulator bays do you have?";
+        if (!form.memberCountRange) errs.memberCountRange = "Pick a member count range.";
+        if (!form.staffingType) errs.staffingType = "Pick how the club is staffed.";
+        if (!form.currentMerch) errs.currentMerch = "Pick what you sell today.";
+      }
+      if (currentStep === 3) {
+        if (!form.memberDemographic)
+          errs.memberDemographic = "Pick the closest match for your members.";
+      }
+      if (currentStep === 4) {
+        if (!form.accentColor) errs.accentColor = "Pick an accent color.";
+        if (!form.wantsStorefront)
+          errs.wantsStorefront = "Let us know if you want the online storefront.";
+      }
+      return errs;
+    },
+    [form]
+  );
+
+  // For disabling the Continue button visual state (no error surfacing until click)
+  const stepValid = useMemo(
+    () => Object.keys(validateStep(step)).length === 0,
+    [step, validateStep]
+  );
 
   const handleContinue = useCallback(async () => {
-    if (!stepValid || submitting) return;
+    if (submitting) return;
+    const errs = validateStep(step);
+    if (Object.keys(errs).length > 0) {
+      setFieldErrors(errs);
+      setError("Please complete the highlighted fields before continuing.");
+      return;
+    }
     setError(null);
+    setFieldErrors({});
     setSubmitting(true);
     try {
       await persistStep(step);
@@ -308,10 +308,11 @@ export default function StarterKitOnboarding({ open, onClose }: Props) {
     } finally {
       setSubmitting(false);
     }
-  }, [step, stepValid, submitting, persistStep]);
+  }, [step, submitting, persistStep, validateStep]);
 
   const handleBack = useCallback(() => {
     setError(null);
+    setFieldErrors({});
     setStep((s) => Math.max(1, s - 1));
   }, []);
 
@@ -436,18 +437,17 @@ export default function StarterKitOnboarding({ open, onClose }: Props) {
         {/* Body */}
         <div className="px-6 md:px-8 py-7 md:py-9 flex-1 overflow-y-auto">
           {step === 1 && (
-            <Step1 form={form} update={update} />
+            <Step1 form={form} update={update} errors={fieldErrors} />
           )}
           {step === 2 && (
-            <Step2 form={form} update={update} />
+            <Step2 form={form} update={update} errors={fieldErrors} />
           )}
           {step === 3 && (
             <Step3
               form={form}
               update={update}
-              updateSize={updateSize}
               toggleBrand={toggleBrand}
-              sizeTotal={sizeTotal}
+              errors={fieldErrors}
             />
           )}
           {step === 4 && (
@@ -456,6 +456,7 @@ export default function StarterKitOnboarding({ open, onClose }: Props) {
               update={update}
               uploadingLogo={uploadingLogo}
               onLogoSelect={handleLogoUpload}
+              errors={fieldErrors}
             />
           )}
           {step === 5 && <Step5 form={form} />}
@@ -481,8 +482,13 @@ export default function StarterKitOnboarding({ open, onClose }: Props) {
             <button
               type="button"
               onClick={handleContinue}
-              disabled={!stepValid || submitting}
-              className="inline-flex items-center justify-center h-11 px-7 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={submitting}
+              aria-disabled={!stepValid}
+              className={`inline-flex items-center justify-center h-11 px-7 rounded-xl text-sm font-medium tracking-wider uppercase transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                stepValid
+                  ? "bg-forest text-bone hover:bg-forest-dark"
+                  : "bg-forest/55 text-bone hover:bg-forest"
+              }`}
             >
               {submitting ? "Saving…" : "Continue"}
             </button>
@@ -519,13 +525,29 @@ const inputCls =
   "w-full h-11 px-3.5 rounded-lg bg-bone border border-taupe/30 text-sm text-charcoal placeholder:text-charcoal/35 focus:border-forest focus:outline-none focus:ring-1 focus:ring-forest/30 transition-colors";
 const selectCls =
   "w-full h-11 px-3 rounded-lg bg-bone border border-taupe/30 text-sm text-charcoal focus:border-forest focus:outline-none focus:ring-1 focus:ring-forest/30 transition-colors";
+const errorInputCls =
+  "w-full h-11 px-3.5 rounded-lg bg-ember/5 border border-ember/60 text-sm text-charcoal placeholder:text-charcoal/35 focus:border-ember focus:outline-none focus:ring-1 focus:ring-ember/30 transition-colors";
+const errorSelectCls =
+  "w-full h-11 px-3 rounded-lg bg-ember/5 border border-ember/60 text-sm text-charcoal focus:border-ember focus:outline-none focus:ring-1 focus:ring-ember/30 transition-colors";
+
+function FieldError({ msg }: { msg?: string }) {
+  if (!msg) return null;
+  return (
+    <p className="text-[11px] text-ember mt-1.5 leading-snug">{msg}</p>
+  );
+}
+
+const cn = (base: string, err: string, hasError: boolean) =>
+  hasError ? err : base;
 
 function Step1({
   form,
   update,
+  errors,
 }: {
   form: FormState;
   update: <K extends keyof FormState>(key: K, value: FormState[K]) => void;
+  errors: Record<string, string>;
 }) {
   return (
     <div className="space-y-5">
@@ -537,20 +559,22 @@ function Step1({
         <div>
           <Label required>Club name</Label>
           <input
-            className={inputCls}
+            className={cn(inputCls, errorInputCls, !!errors.clubName)}
             value={form.clubName}
             onChange={(e) => update("clubName", e.target.value)}
             placeholder="The Bay Club"
           />
+          <FieldError msg={errors.clubName} />
         </div>
         <div>
           <Label required>Your name</Label>
           <input
-            className={inputCls}
+            className={cn(inputCls, errorInputCls, !!errors.contactName)}
             value={form.contactName}
             onChange={(e) => update("contactName", e.target.value)}
             placeholder="Jordan Smith"
           />
+          <FieldError msg={errors.contactName} />
         </div>
         <div>
           <Label>Title</Label>
@@ -565,43 +589,50 @@ function Step1({
           <Label required>Phone</Label>
           <input
             type="tel"
-            className={inputCls}
+            className={cn(inputCls, errorInputCls, !!errors.phone)}
             value={form.phone}
             onChange={(e) => update("phone", e.target.value)}
             placeholder="(555) 555-5555"
           />
-          <p className="text-[11px] text-charcoal/45 mt-1.5 leading-relaxed">
-            We will call to confirm your kit details.
-          </p>
+          {errors.phone ? (
+            <FieldError msg={errors.phone} />
+          ) : (
+            <p className="text-[11px] text-charcoal/45 mt-1.5 leading-relaxed">
+              We will call to confirm your kit details.
+            </p>
+          )}
         </div>
         <div className="sm:col-span-2">
           <Label required>Email</Label>
           <input
             type="email"
-            className={inputCls}
+            className={cn(inputCls, errorInputCls, !!errors.email)}
             value={form.email}
             onChange={(e) => update("email", e.target.value)}
             placeholder="you@yourclub.com"
             autoComplete="email"
           />
+          <FieldError msg={errors.email} />
         </div>
         <div>
           <Label required>City</Label>
           <input
-            className={inputCls}
+            className={cn(inputCls, errorInputCls, !!errors.city)}
             value={form.city}
             onChange={(e) => update("city", e.target.value)}
             placeholder="Detroit"
           />
+          <FieldError msg={errors.city} />
         </div>
         <div>
           <Label required>State</Label>
           <input
-            className={inputCls}
+            className={cn(inputCls, errorInputCls, !!errors.state)}
             value={form.state}
             onChange={(e) => update("state", e.target.value)}
             placeholder="MI"
           />
+          <FieldError msg={errors.state} />
         </div>
       </div>
     </div>
@@ -611,9 +642,11 @@ function Step1({
 function Step2({
   form,
   update,
+  errors,
 }: {
   form: FormState;
   update: <K extends keyof FormState>(key: K, value: FormState[K]) => void;
+  errors: Record<string, string>;
 }) {
   return (
     <div className="space-y-5">
@@ -623,16 +656,17 @@ function Step2({
           <input
             type="number"
             min={1}
-            className={inputCls}
+            className={cn(inputCls, errorInputCls, !!errors.bayCount)}
             value={form.bayCount}
             onChange={(e) => update("bayCount", e.target.value)}
             placeholder="4"
           />
+          <FieldError msg={errors.bayCount} />
         </div>
         <div>
           <Label required>Approximate member count</Label>
           <select
-            className={selectCls}
+            className={cn(selectCls, errorSelectCls, !!errors.memberCountRange)}
             value={form.memberCountRange}
             onChange={(e) => update("memberCountRange", e.target.value)}
           >
@@ -643,11 +677,12 @@ function Step2({
               </option>
             ))}
           </select>
+          <FieldError msg={errors.memberCountRange} />
         </div>
         <div>
           <Label required>Is your club staffed or self-serve?</Label>
           <select
-            className={selectCls}
+            className={cn(selectCls, errorSelectCls, !!errors.staffingType)}
             value={form.staffingType}
             onChange={(e) => update("staffingType", e.target.value)}
           >
@@ -658,11 +693,12 @@ function Step2({
               </option>
             ))}
           </select>
+          <FieldError msg={errors.staffingType} />
         </div>
         <div>
           <Label required>Do you currently sell any merchandise?</Label>
           <select
-            className={selectCls}
+            className={cn(selectCls, errorSelectCls, !!errors.currentMerch)}
             value={form.currentMerch}
             onChange={(e) => update("currentMerch", e.target.value)}
           >
@@ -673,6 +709,7 @@ function Step2({
               </option>
             ))}
           </select>
+          <FieldError msg={errors.currentMerch} />
         </div>
       </div>
     </div>
@@ -682,62 +719,24 @@ function Step2({
 function Step3({
   form,
   update,
-  updateSize,
   toggleBrand,
-  sizeTotal,
+  errors,
 }: {
   form: FormState;
   update: <K extends keyof FormState>(key: K, value: FormState[K]) => void;
-  updateSize: (size: keyof SizeBreakdown, value: number) => void;
   toggleBrand: (brand: string) => void;
-  sizeTotal: number;
+  errors: Record<string, string>;
 }) {
-  const sizes: (keyof SizeBreakdown)[] = ["XS", "S", "M", "L", "XL", "XXL"];
-  const totalOk = sizeTotal >= 95 && sizeTotal <= 105;
   return (
     <div className="space-y-7">
-      <div>
-        <Label required>How do your members generally size?</Label>
-        <p className="text-[11px] text-charcoal/55 mb-3 leading-relaxed">
-          Move the sliders so the percentages sum to roughly 100%. We use this
-          to size your first box.
-        </p>
-        <div className="space-y-3">
-          {sizes.map((size) => (
-            <div key={size} className="flex items-center gap-4">
-              <span className="font-serif text-sm text-obsidian w-10 tabular-nums">{size}</span>
-              <input
-                type="range"
-                min={0}
-                max={70}
-                step={1}
-                value={form.sizeBreakdown[size]}
-                onChange={(e) => updateSize(size, Number(e.target.value))}
-                className="flex-1 accent-forest cursor-pointer"
-                aria-label={`${size} percentage`}
-              />
-              <span className="text-sm text-charcoal tabular-nums w-12 text-right">
-                {form.sizeBreakdown[size]}%
-              </span>
-            </div>
-          ))}
-        </div>
-        <div className="mt-3 flex items-center justify-between text-[11px]">
-          <span className="text-charcoal/55">Total</span>
-          <span
-            className={`tabular-nums font-medium ${
-              totalOk ? "text-forest" : "text-ember"
-            }`}
-          >
-            {sizeTotal}% {totalOk ? "✓" : "(aim for ~100%)"}
-          </span>
-        </div>
-      </div>
+      <p className="text-sm text-charcoal/65 leading-relaxed">
+        Two quick questions to help us tune your starter assortment to the people walking through your bays.
+      </p>
 
       <div>
         <Label required>Primary member demographic</Label>
         <select
-          className={selectCls}
+          className={cn(selectCls, errorSelectCls, !!errors.memberDemographic)}
           value={form.memberDemographic}
           onChange={(e) => update("memberDemographic", e.target.value)}
         >
@@ -748,12 +747,13 @@ function Step3({
             </option>
           ))}
         </select>
+        <FieldError msg={errors.memberDemographic} />
       </div>
 
       <div>
         <Label>What brands do your members already wear?</Label>
         <p className="text-[11px] text-charcoal/55 mb-3 leading-relaxed">
-          Select all that apply. Helps us tune the box to their taste.
+          Select all that apply. Helps us tune the assortment to their taste. Optional.
         </p>
         <div className="flex flex-wrap gap-2">
           {BRAND_OPTIONS.map((brand) => {
@@ -784,19 +784,25 @@ function Step4({
   update,
   uploadingLogo,
   onLogoSelect,
+  errors,
 }: {
   form: FormState;
   update: <K extends keyof FormState>(key: K, value: FormState[K]) => void;
   uploadingLogo: boolean;
   onLogoSelect: (file: File) => void;
+  errors: Record<string, string>;
 }) {
   return (
     <div className="space-y-7">
       <div>
-        <Label>Club logo</Label>
+        <div className="flex items-baseline justify-between gap-3 mb-2">
+          <Label>Club logo</Label>
+          <span className="text-[10px] tracking-[0.24em] uppercase text-charcoal/50">
+            Optional
+          </span>
+        </div>
         <p className="text-[11px] text-charcoal/55 mb-3 leading-relaxed">
-          We use this for your laser-cut signage and the "Powered by Mully" acrylic.
-          PNG, JPG, WebP, or SVG. Max 5 MB.
+          Used for your laser-cut signage. Skip this if you would rather send it to us later by email. PNG, JPG, WebP, or SVG. Max 5 MB.
         </p>
         <label className="flex items-center justify-between gap-4 h-14 px-4 rounded-lg border border-dashed border-taupe/40 hover:border-forest/40 hover:bg-cream cursor-pointer transition-colors">
           <span className="text-sm text-charcoal/70 truncate">
@@ -826,7 +832,11 @@ function Step4({
 
       <div>
         <Label required>Preferred accent color for signage</Label>
-        <div className="grid grid-cols-5 gap-2">
+        <div
+          className={`grid grid-cols-5 gap-2 ${
+            errors.accentColor ? "p-2 -m-2 rounded-lg bg-ember/5" : ""
+          }`}
+        >
           {ACCENT_COLORS.map((c) => {
             const active = form.accentColor === c.value;
             return (
@@ -852,6 +862,7 @@ function Step4({
             );
           })}
         </div>
+        <FieldError msg={errors.accentColor} />
       </div>
 
       <div>
@@ -859,7 +870,11 @@ function Step4({
         <p className="text-[11px] text-charcoal/55 mb-3 leading-relaxed">
           Branded online store, dropshipped from Mully. You earn 25% commission on every sale.
         </p>
-        <div className="grid sm:grid-cols-2 gap-2">
+        <div
+          className={`grid sm:grid-cols-2 gap-2 ${
+            errors.wantsStorefront ? "p-2 -m-2 rounded-lg bg-ember/5" : ""
+          }`}
+        >
           {[
             { value: "yes", label: "Yes, set it up" },
             { value: "not_yet", label: "Not yet" },
@@ -881,6 +896,7 @@ function Step4({
             );
           })}
         </div>
+        <FieldError msg={errors.wantsStorefront} />
       </div>
 
       {form.wantsStorefront === "yes" ? (

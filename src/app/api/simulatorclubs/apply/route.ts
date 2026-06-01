@@ -14,7 +14,7 @@
  *   email, step                              // step 1..5 (the step being saved)
  *   clubName, contactName, contactTitle, phone, city, state
  *   bayCount, memberCountRange, staffingType, currentMerch
- *   sizeBreakdown (object), memberDemographic, brandsWorn (string[])
+ *   memberDemographic, brandsWorn (string[])
  *   logoUrl, accentColor, wantsStorefront (boolean), clubWebsite, emailListSize
  *   shopifyCheckoutUrl, converted (boolean)
  */
