@@ -35,6 +35,27 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
+  // Verify the variant belongs to the expected product and see all variants
+  const variantInfo = await admin<{
+    data?: {
+      product: {
+        id: string;
+        title: string;
+        variants: { edges: { node: { id: string; title: string; price: string; sku: string | null } }[] };
+        sellingPlanGroups: { edges: { node: { id: string; name: string } }[] };
+      } | null;
+    };
+  }>(
+    `query {
+      product(id: "gid://shopify/Product/8592710435008") {
+        id
+        title
+        variants(first: 10) { edges { node { id title price sku } } }
+        sellingPlanGroups(first: 5) { edges { node { id name } } }
+      }
+    }`
+  );
+
   // 1. Inspect the group: get its child SellingPlan ids and current products
   const inspect = await admin<{
     data?: {
@@ -98,6 +119,7 @@ export async function GET(req: Request) {
   );
 
   return NextResponse.json({
+    product: variantInfo.data?.product ?? null,
     inspect: inspect.data?.sellingPlanGroup ?? null,
     inspect_errors: inspect.errors ?? null,
     link_result: link.data?.sellingPlanGroupAddProductVariants ?? null,
