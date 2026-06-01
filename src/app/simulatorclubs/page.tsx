@@ -42,34 +42,144 @@ function EyebrowLeft({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * Top-of-hero brand lockup: the Mully wordmark sitting above the page subtitle,
+ * reads as "Mully  /  for simulator clubs".
+ */
+function MullyLockup() {
+  return (
+    <Link
+      href="/"
+      className="inline-flex items-center gap-3 text-bone hover:text-ember transition-colors duration-300"
+      aria-label="Back to Mully home"
+    >
+      <svg
+        viewBox="0 0 1002 540"
+        fill="currentColor"
+        className="h-4 md:h-5 w-auto"
+        aria-hidden="true"
+      >
+        <path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" />
+      </svg>
+      <span className="font-serif text-lg md:text-xl font-bold tracking-wide leading-none">
+        mully.
+      </span>
+      <span className="hidden sm:inline-flex items-center gap-3 ml-1">
+        <span className="w-8 h-px bg-bone/30" />
+        <span className="text-[10px] md:text-[11px] tracking-[0.32em] uppercase text-bone/55 font-medium">
+          for simulator clubs
+        </span>
+      </span>
+    </Link>
+  );
+}
+
+/**
+ * Inline icon set for the kit inclusions. Single-color, 24x24, currentColor.
+ */
+function KitIcon({ name, className }: { name: string; className?: string }) {
+  const common = {
+    width: 28,
+    height: 28,
+    viewBox: "0 0 24 24",
+    fill: "none" as const,
+    stroke: "currentColor",
+    strokeWidth: 1.5,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true,
+    className,
+  };
+  switch (name) {
+    case "slatwall":
+      // Wall with horizontal slats and a hanging tag
+      return (
+        <svg {...common}>
+          <rect x="3" y="3" width="18" height="18" rx="1.5" />
+          <path d="M3 8h18M3 12h18M3 16h18" />
+          <path d="M14 5.5v3M14 8.5l-1.5 2.5h3z" />
+        </svg>
+      );
+    case "signage":
+      // Mounted plaque
+      return (
+        <svg {...common}>
+          <rect x="3" y="7" width="18" height="10" rx="1.5" />
+          <path d="M12 7V4M9 4h6" />
+          <path d="M7 12h10" />
+        </svg>
+      );
+    case "pos":
+      // Card reader / terminal
+      return (
+        <svg {...common}>
+          <rect x="5" y="3" width="14" height="18" rx="2" />
+          <path d="M8 7h8" />
+          <rect x="8" y="10" width="8" height="5" rx="0.5" />
+          <circle cx="12" cy="18" r="0.8" fill="currentColor" stroke="none" />
+        </svg>
+      );
+    case "box":
+      // Subscription box
+      return (
+        <svg {...common}>
+          <path d="M3 7l9-4 9 4-9 4-9-4z" />
+          <path d="M3 7v10l9 4 9-4V7" />
+          <path d="M12 11v10" />
+          <path d="M8 5l8 4" />
+        </svg>
+      );
+    case "book":
+      // Field guide / open book
+      return (
+        <svg {...common}>
+          <path d="M3 5a2 2 0 0 1 2-2h5v17H5a2 2 0 0 0-2 2V5z" />
+          <path d="M21 5a2 2 0 0 0-2-2h-5v17h5a2 2 0 0 1 2 2V5z" />
+          <path d="M6 8h2M6 11h2M16 8h2M16 11h2" />
+        </svg>
+      );
+    case "inventory":
+      // Stacked apparel
+      return (
+        <svg {...common}>
+          <path d="M4 8l4-3 2 1.5h4L16 5l4 3-2 1.5v9H6v-9L4 8z" />
+          <path d="M10 5a2 2 0 0 0 4 0" />
+        </svg>
+      );
+    default:
+      return null;
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // DATA
 // ─────────────────────────────────────────────────────────────────────────────
 
-const KIT_ITEMS = [
+const FREE_INCLUSIONS = [
   {
+    icon: "slatwall",
     title: "Slatwall display fixture",
     body: "A merchandised, brand-consistent wall, sized to your space. Installed by Mully.",
   },
   {
-    title: "$3,000 in starter inventory",
-    body: "Curated apparel and accessories tuned to your club. Restocked at the start of each quarter.",
-  },
-  {
+    icon: "signage",
     title: "Laser-cut acrylic signage",
     body: "Your club's mark, paired with the Powered by Mully signature. Built to live above the rack.",
   },
   {
+    icon: "pos",
     title: "Square POS reader",
     body: "Tap, chip, or swipe. Pre-paired to your account so members buy without leaving the bay.",
   },
   {
+    icon: "box",
     title: "Mullybox quarterly display",
     body: "An always-on shelf for the seasonal box. Members touch the product before they subscribe.",
   },
   {
+    icon: "book",
     title: "Mully Field Guide",
-    body: "A printed playbook for staff. Pricing, restock requests, embroidery, returns, and the rest.",
+    body: "A printed playbook for staff. Pricing, restock requests, embroidery, returns, and ideas for moving slow pieces.",
   },
 ];
 
@@ -139,15 +249,15 @@ const PORTAL_FEATURES = [
 const FAQ = [
   {
     q: "What does $2,000 per quarter cover?",
-    a: "The hardware install in quarter one, $3,000 in starter inventory, all quarterly restocks for the year, the Square reader, the Mullybox display, your portal access, and Mully support. There are no setup fees and no per-item charges.",
+    a: "$3,000 of retail-ready inventory tuned to your members, plus the slatwall fixture, your laser-cut signage, a Square reader, the Mullybox display, your portal access, and Mully support. The hardware and signage are a free inclusion for founding partners. No setup fees, no per-item charges.",
   },
   {
     q: "Do I need to buy inventory?",
-    a: "No. The starter inventory and every quarterly restock are included in the $2,000 fee. You are not carrying inventory on your books.",
+    a: "The $3,000 of starter inventory is yours, on your books, included in the kit. You keep the full markup on every sale. When pieces move, restock anytime from your portal, or push more units through your online storefront to keep the rack fresh.",
   },
   {
     q: "Who owns the hardware?",
-    a: "You do. Quarter one ships the slatwall, signage, POS, and Mullybox display. Quarters two through four ship fresh inventory only. The hardware stays with the club.",
+    a: "You do, for as long as you are an active partner. The slatwall, signage, POS, and Mullybox display are a free inclusion for founding partners. Quarters two through four ship fresh inventory only.",
   },
   {
     q: "How does the POS connect to my existing system?",
@@ -155,7 +265,7 @@ const FAQ = [
   },
   {
     q: "What if a piece does not sell?",
-    a: "Tell us in the portal. We swap it on the next quarterly ship. You are not stuck with dead stock.",
+    a: "The Field Guide ships with proven plays for moving slower inventory, from staff incentives and bay-side bundles to embroidery promos and member emails. If something still will not move, swap it from the portal on your next ship.",
   },
   {
     q: "How are Mullybox and online commissions paid?",
@@ -167,7 +277,7 @@ const FAQ = [
   },
   {
     q: "What if I want to cancel?",
-    a: "The annual commitment is one year. After that, the program continues quarter to quarter and you can pause anytime between shipments.",
+    a: "Cancel anytime. We ask that you either return the kit hardware in working condition or pay a $1,000 hardware buyout. Inventory you have already purchased stays yours.",
   },
 ];
 
@@ -190,17 +300,22 @@ export default function SimulatorClubsPage() {
         />
         <div className="absolute inset-0 bg-gradient-to-b from-obsidian/55 via-obsidian/40 to-obsidian/85" />
 
-        <div className="relative max-w-6xl mx-auto px-6 md:px-12 pt-28 md:pt-40 pb-28 md:pb-40">
+        {/* Top-right brand lockup */}
+        <div className="relative max-w-6xl mx-auto px-6 md:px-12 pt-7 md:pt-9 flex justify-end">
+          <MullyLockup />
+        </div>
+
+        <div className="relative max-w-6xl mx-auto px-6 md:px-12 pt-20 md:pt-32 pb-28 md:pb-40">
           <div className="max-w-3xl">
-            <EyebrowLeft>For simulator clubs</EyebrowLeft>
+            <EyebrowLeft>The Mully Starter Kit</EyebrowLeft>
             <h1 className="mt-7 font-serif text-[40px] md:text-[68px] leading-[1.04] tracking-tight text-bone">
-              A pro shop in a box.
+              $3,000 of retail inventory
               <span className="block text-bone/65">
-                One quarterly fee. Three revenue streams.
+                for $2,000 a quarter.
               </span>
             </h1>
             <p className="mt-7 max-w-xl text-base md:text-lg leading-relaxed text-bone/75">
-              The Mully Starter Kit installs a complete merchandising program inside your club. Hardware, fresh inventory each quarter, and a portal that runs it all. Two thousand dollars per quarter, billed quarterly.
+              Buy the inventory, keep the markup. Founding partners get the slatwall, signage, POS, and Mullybox display as a free inclusion. Three revenue streams from one wall.
             </p>
 
             <div className="mt-10 flex flex-col sm:flex-row sm:items-center gap-4">
@@ -214,10 +329,6 @@ export default function SimulatorClubsPage() {
                 Run the numbers
               </a>
             </div>
-
-            <p className="mt-8 text-[11px] tracking-[0.28em] uppercase text-bone/45">
-              Powered by Mully
-            </p>
           </div>
         </div>
       </section>
@@ -231,9 +342,9 @@ export default function SimulatorClubsPage() {
             <p className="mt-2 text-sm text-bone/65 leading-relaxed">Billed at the start of each quarter.</p>
           </div>
           <div>
-            <p className="text-[11px] tracking-[0.28em] uppercase text-sage">Starter inventory</p>
+            <p className="text-[11px] tracking-[0.28em] uppercase text-sage">You receive</p>
             <p className="mt-3 font-serif text-3xl md:text-4xl text-bone">$3,000</p>
-            <p className="mt-2 text-sm text-bone/65 leading-relaxed">Shipped in quarter one. Included.</p>
+            <p className="mt-2 text-sm text-bone/65 leading-relaxed">Of retail-ready inventory, yours to sell.</p>
           </div>
           <div>
             <p className="text-[11px] tracking-[0.28em] uppercase text-sage">Revenue streams</p>
@@ -242,8 +353,8 @@ export default function SimulatorClubsPage() {
           </div>
           <div>
             <p className="text-[11px] tracking-[0.28em] uppercase text-sage">Commitment</p>
-            <p className="mt-3 font-serif text-3xl md:text-4xl text-bone">1 year</p>
-            <p className="mt-2 text-sm text-bone/65 leading-relaxed">Then quarter to quarter, pause anytime.</p>
+            <p className="mt-3 font-serif text-3xl md:text-4xl text-bone">None</p>
+            <p className="mt-2 text-sm text-bone/65 leading-relaxed">Cancel anytime. Return the kit, or keep it for $1,000.</p>
           </div>
         </div>
       </section>
@@ -252,32 +363,82 @@ export default function SimulatorClubsPage() {
       <section className="py-24 md:py-32 px-6 md:px-12 bg-bone">
         <div className="max-w-6xl mx-auto">
           <div className="max-w-2xl">
-            <Eyebrow>What ships in quarter one</Eyebrow>
+            <Eyebrow>What you are buying</Eyebrow>
             <h2 className="mt-6 font-serif text-3xl md:text-5xl leading-[1.08] tracking-tight text-forest-dark">
-              Everything you need to open the boutique.
+              $3,000 of inventory.
+              <span className="block text-forest-dark/55">Plus a free pro shop around it.</span>
             </h2>
             <p className="mt-5 text-base md:text-lg text-forest-dark/70 leading-relaxed">
-              Quarter one installs the full kit. Quarters two through four ship fresh inventory only. The hardware stays with the club.
+              Your quarterly fee buys $3,000 of retail-ready apparel and accessories, tuned to your members. The fixtures, signage, and POS that surround it are a free inclusion for founding partners.
             </p>
           </div>
 
-          <div className="mt-16 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {KIT_ITEMS.map((item, i) => (
-              <div
-                key={item.title}
-                className="bg-white border border-forest-dark/8 rounded-2xl p-7 hover:border-forest-dark/20 transition-colors duration-300"
-              >
-                <p className="font-serif text-xl text-ember mb-1">
-                  {String(i + 1).padStart(2, "0")}
-                </p>
-                <h3 className="font-serif text-xl text-forest-dark leading-tight mb-2">
-                  {item.title}
+          {/* Headline card: the inventory you are buying */}
+          <div className="mt-14 rounded-2xl bg-forest-dark text-bone overflow-hidden border border-forest-dark/10">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 p-8 md:p-12">
+              <div className="lg:col-span-7">
+                <span className="inline-flex items-center gap-2 text-[11px] tracking-[0.32em] uppercase text-ember font-medium">
+                  <span className="w-6 h-px bg-ember/50" />
+                  What you pay for
+                </span>
+                <h3 className="mt-5 font-serif text-3xl md:text-4xl leading-tight text-bone">
+                  $3,000 of retail-ready inventory
                 </h3>
-                <p className="text-sm text-forest-dark/65 leading-relaxed">
-                  {item.body}
+                <p className="mt-4 text-base text-bone/70 leading-relaxed max-w-xl">
+                  Curated apparel and accessories, picked by Mully to match your members. The inventory is yours, on your books, and you keep the full markup on every sale. Restock anytime from the portal.
                 </p>
               </div>
-            ))}
+              <div className="lg:col-span-5 flex items-center justify-center lg:justify-end">
+                <div className="text-right">
+                  <p className="font-serif text-6xl md:text-7xl text-bone leading-none">$3K</p>
+                  <p className="mt-3 text-[11px] tracking-[0.32em] uppercase text-bone/55">
+                    Of inventory you own
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Free inclusions grid */}
+          <div className="mt-16">
+            <div className="flex items-end justify-between flex-wrap gap-4 mb-8">
+              <div>
+                <span className="inline-flex items-center gap-2 text-[11px] tracking-[0.32em] uppercase text-ember font-medium">
+                  <span className="w-6 h-px bg-ember/50" />
+                  Free inclusion for founding partners
+                </span>
+                <h3 className="mt-4 font-serif text-2xl md:text-3xl text-forest-dark leading-tight">
+                  Everything else you need to open the shop.
+                </h3>
+              </div>
+              <p className="text-xs md:text-sm text-forest-dark/55 italic max-w-xs">
+                Quarters two through four ship fresh inventory only. The hardware stays with the club.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {FREE_INCLUSIONS.map((item) => (
+                <div
+                  key={item.title}
+                  className="bg-white border border-forest-dark/8 rounded-2xl p-7 hover:border-forest-dark/20 transition-colors duration-300"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="w-11 h-11 rounded-full bg-cream flex items-center justify-center text-forest">
+                      <KitIcon name={item.icon} />
+                    </div>
+                    <span className="text-[10px] tracking-[0.28em] uppercase text-ember/80 font-medium">
+                      Included
+                    </span>
+                  </div>
+                  <h4 className="font-serif text-lg text-forest-dark leading-tight mb-2">
+                    {item.title}
+                  </h4>
+                  <p className="text-sm text-forest-dark/65 leading-relaxed">
+                    {item.body}
+                  </p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
@@ -438,7 +599,7 @@ export default function SimulatorClubsPage() {
             Apply for a founding kit
           </StarterKitApplyButton>
           <p className="text-[11px] text-bone/40 mt-5 tracking-wide">
-            $2,000 per quarter. One year commitment.
+            $2,000 per quarter. Cancel anytime.
           </p>
         </div>
       </section>
