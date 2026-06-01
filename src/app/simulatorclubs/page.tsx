@@ -157,6 +157,12 @@ function KitIcon({ name, className }: { name: string; className?: string }) {
 
 const FREE_INCLUSIONS = [
   {
+    icon: "inventory",
+    title: "$3,000 of retail-ready inventory",
+    body: "Ships in your first kit. Curated by Mully to match your members. Yours, on your books, full markup yours to keep.",
+    badge: "First kit",
+  },
+  {
     icon: "slatwall",
     title: "Slatwall display fixture",
     body: "A merchandised, brand-consistent wall, sized to your space. Installed by Mully.",
@@ -276,8 +282,12 @@ const FAQ = [
     a: "The starter assortment is curated by Mully. We will absolutely feature pieces your members already wear when we plan your quarters.",
   },
   {
+    q: "What is your return policy?",
+    a: "Inventory can be returned within 30 days of purchase for a refund, no questions asked. The POS reader, slatwall fixture, signage, and Mullybox display can be returned anytime for a full refund of the hardware, in working condition.",
+  },
+  {
     q: "What if I want to cancel?",
-    a: "Cancel anytime. We ask that you either return the kit hardware in working condition or pay a $1,000 hardware buyout. Inventory you have already purchased stays yours.",
+    a: "Cancel anytime. We ask that you either return the kit hardware in working condition or pay a $1,000 hardware buyout. Inventory you have already purchased stays yours, or you can return any inventory within 30 days for a refund.",
   },
 ];
 
@@ -405,10 +415,10 @@ export default function SimulatorClubsPage() {
               <div>
                 <span className="inline-flex items-center gap-2 text-[11px] tracking-[0.32em] uppercase text-ember font-medium">
                   <span className="w-6 h-px bg-ember/50" />
-                  Free inclusion for founding partners
+                  What ships in your first kit
                 </span>
                 <h3 className="mt-4 font-serif text-2xl md:text-3xl text-forest-dark leading-tight">
-                  Everything else you need to open the shop.
+                  Everything you need to open the shop, in one box.
                 </h3>
               </div>
               <p className="text-xs md:text-sm text-forest-dark/55 italic max-w-xs">
@@ -427,7 +437,7 @@ export default function SimulatorClubsPage() {
                       <KitIcon name={item.icon} />
                     </div>
                     <span className="text-[10px] tracking-[0.28em] uppercase text-ember/80 font-medium">
-                      Included
+                      {item.badge ?? "Included"}
                     </span>
                   </div>
                   <h4 className="font-serif text-lg text-forest-dark leading-tight mb-2">
