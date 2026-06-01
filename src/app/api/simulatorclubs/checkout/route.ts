@@ -30,6 +30,12 @@ interface CheckoutBody {
   email?: string;
   applicationId?: string | number;
   clubName?: string;
+  /**
+   * Number of locations the buyer is ordering for. Becomes the `quantity` of
+   * the single Starter Kit line in the Shopify cart, so the subscription bills
+   * locations × $2,000 each quarter. Clamped server-side to 1..25.
+   */
+  locationCount?: number | string;
 }
 
 export async function POST(req: Request) {
@@ -70,9 +76,20 @@ export async function POST(req: Request) {
     );
   }
 
+  // Quantity = number of locations. One Starter Kit per location, one
+  // subscription contract, billed locations × $2,000 each quarter.
+  const rawLocationCount =
+    typeof body.locationCount === "number"
+      ? body.locationCount
+      : parseInt(String(body.locationCount ?? "1"), 10);
+  const locationCount = Number.isFinite(rawLocationCount)
+    ? Math.min(25, Math.max(1, Math.trunc(rawLocationCount)))
+    : 1;
+
   const attributes: Array<{ key: string; value: string }> = [
     { key: "starter_kit", value: "true" },
     { key: "source", value: "simulatorclubs_lp" },
+    { key: "location_count", value: String(locationCount) },
   ];
   if (body.applicationId !== undefined && body.applicationId !== null) {
     attributes.push({ key: "application_id", value: String(body.applicationId) });
@@ -82,7 +99,11 @@ export async function POST(req: Request) {
   }
 
   const lines = [
-    { merchandiseId: variantGid, quantity: 1, sellingPlanId: sellingPlanGid },
+    {
+      merchandiseId: variantGid,
+      quantity: locationCount,
+      sellingPlanId: sellingPlanGid,
+    },
   ];
 
   const res = await fetch(

@@ -36,6 +36,7 @@ type ApplyBody = {
   state?: string;
 
   bayCount?: number | string;
+  locationCount?: number | string;
   memberCountRange?: string;
   staffingType?: string;
   currentMerch?: string;
@@ -87,6 +88,11 @@ export async function POST(req: Request) {
   if (body.state !== undefined) row.state = body.state?.trim() || null;
 
   if (body.bayCount !== undefined) row.bay_count = toInt(body.bayCount);
+  if (body.locationCount !== undefined) {
+    const n = toInt(body.locationCount);
+    // Server-side clamp: 1..25, fallback to 1 when missing/invalid.
+    row.location_count = n === null ? 1 : Math.min(25, Math.max(1, n));
+  }
   if (body.memberCountRange !== undefined) row.member_count_range = body.memberCountRange || null;
   if (body.staffingType !== undefined) row.staffing_type = body.staffingType || null;
   if (body.currentMerch !== undefined) row.current_merch = body.currentMerch || null;
@@ -164,6 +170,9 @@ export async function POST(req: Request) {
       `Email:   ${email}`,
       `Phone:   ${row.phone ?? "(not provided)"}`,
       `Location:${row.city ?? "(not provided)"}${row.state ? `, ${row.state}` : ""}`,
+      row.location_count !== undefined
+        ? `Locations:${row.location_count} (kits = ${row.location_count} × $2,000 = $${Number(row.location_count) * 2000})`
+        : "",
       "",
       `Step completed: ${nextStepCompleted}/5`,
       `Application id: ${saved?.id}`,
