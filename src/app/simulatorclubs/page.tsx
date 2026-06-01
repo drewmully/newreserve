@@ -309,13 +309,13 @@ export default function SimulatorClubsPage() {
           <div className="max-w-3xl">
             <EyebrowLeft>The Mully Starter Kit</EyebrowLeft>
             <h1 className="mt-7 font-serif text-[40px] md:text-[68px] leading-[1.04] tracking-tight text-bone">
-              $3,000 of retail inventory
+              A pro shop in a box,
               <span className="block text-bone/65">
-                for $2,000 a quarter.
+                designed for simulator owners.
               </span>
             </h1>
             <p className="mt-7 max-w-xl text-base md:text-lg leading-relaxed text-bone/75">
-              Buy the inventory, keep the markup. Founding partners get the slatwall, signage, POS, and Mullybox display as a free inclusion. Three revenue streams from one wall.
+              One click. We ship the fixtures, signage, POS reader, and Mullybox display already built for your wall, plus $3,000 of retail-ready inventory for $2,000. Touchless to install, touchless to restock.
             </p>
 
             <div className="mt-10 flex flex-col sm:flex-row sm:items-center gap-4">
