@@ -329,7 +329,7 @@ async function applyBranding(profileId: string, input: ReturnType<typeof buildBr
           }
           customizations {
             favicon { image { url altText } }
-            header { logo { image { image { url altText } } } }
+            header { logo { image { url altText } } }
           }
         }
         userErrors { field message code }
