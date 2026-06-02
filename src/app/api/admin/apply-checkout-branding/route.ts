@@ -22,7 +22,12 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/app/api/_lib/adminAuth";
-import { FAVICON_PNG_BASE64, LOGO_PNG_BASE64 } from "./assets";
+
+// Publicly-hosted asset URLs. Shopify's fileCreate downloads from these directly,
+// which avoids needing the write_files scope that stagedUploadsCreate requires.
+const PUBLIC_ORIGIN = process.env.NEXT_PUBLIC_SITE_URL || "https://www.mymully.com";
+const FAVICON_URL = `${PUBLIC_ORIGIN}/checkout-branding/favicon.png`;
+const LOGO_URL = `${PUBLIC_ORIGIN}/checkout-branding/header-logo.png`;
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -84,57 +89,10 @@ async function gql<T>(query: string, variables: Record<string, unknown> = {}): P
 }
 
 // ============================================================
-// 1. Upload a PNG via stagedUploadsCreate -> POST -> fileCreate
+// 1. Register an image with Shopify by URL (no write_files scope needed).
+//    fileCreate downloads the image from `originalSource` itself.
 // ============================================================
-type StagedTarget = {
-  url: string;
-  resourceUrl: string;
-  parameters: Array<{ name: string; value: string }>;
-};
-
-async function uploadPng(buffer: Buffer, filename: string, alt: string): Promise<string> {
-  const stagedQuery = `
-    mutation stagedUploadsCreate($input: [StagedUploadInput!]!) {
-      stagedUploadsCreate(input: $input) {
-        stagedTargets { url resourceUrl parameters { name value } }
-        userErrors { field message }
-      }
-    }
-  `;
-  type StagedResp = {
-    stagedUploadsCreate: {
-      stagedTargets: StagedTarget[];
-      userErrors: Array<{ field?: string[]; message: string }>;
-    };
-  };
-  const staged = await gql<StagedResp>(stagedQuery, {
-    input: [
-      {
-        resource: "FILE",
-        filename,
-        mimeType: "image/png",
-        httpMethod: "POST",
-        fileSize: String(buffer.length),
-      },
-    ],
-  });
-  if (staged.stagedUploadsCreate.userErrors.length) {
-    throw new Error(
-      "stagedUploadsCreate: " + JSON.stringify(staged.stagedUploadsCreate.userErrors)
-    );
-  }
-  const target = staged.stagedUploadsCreate.stagedTargets[0];
-
-  // POST to staged (Google Cloud Storage) URL
-  const form = new FormData();
-  for (const p of target.parameters) form.append(p.name, p.value);
-  form.append("file", new Blob([new Uint8Array(buffer)], { type: "image/png" }), filename);
-  const uploadRes = await fetch(target.url, { method: "POST", body: form });
-  if (!uploadRes.ok) {
-    const text = await uploadRes.text();
-    throw new Error(`Staged POST ${uploadRes.status}: ${text.slice(0, 400)}`);
-  }
-
+async function registerImageFromUrl(url: string, alt: string): Promise<string> {
   const fileCreateQuery = `
     mutation fileCreate($files: [FileCreateInput!]!) {
       fileCreate(files: $files) {
@@ -154,16 +112,13 @@ async function uploadPng(buffer: Buffer, filename: string, alt: string): Promise
     };
   };
   const created = await gql<FileCreateResp>(fileCreateQuery, {
-    files: [{ alt, contentType: "IMAGE", originalSource: target.resourceUrl }],
+    files: [{ alt, contentType: "IMAGE", originalSource: url }],
   });
   if (created.fileCreate.userErrors.length) {
     throw new Error("fileCreate: " + JSON.stringify(created.fileCreate.userErrors));
   }
   const file = created.fileCreate.files[0];
-
-  // Poll until READY
-  const ready = await waitForReady(file.id);
-  return ready;
+  return await waitForReady(file.id);
 }
 
 async function waitForReady(fileId: string, timeoutMs = 60_000): Promise<string> {
@@ -426,24 +381,20 @@ export async function POST(req: NextRequest) {
   };
 
   try {
-    const faviconBuffer = Buffer.from(FAVICON_PNG_BASE64, "base64");
-    const logoBuffer = Buffer.from(LOGO_PNG_BASE64, "base64");
-    log.faviconBytes = faviconBuffer.length;
-    log.logoBytes = logoBuffer.length;
+    log.faviconUrl = FAVICON_URL;
+    log.logoUrl = LOGO_URL;
 
     const profile = await getProfile(profileTarget);
     log.profile = profile;
 
-    const faviconMediaId = await uploadPng(
-      faviconBuffer,
-      "mully-checkout-favicon.png",
+    const faviconMediaId = await registerImageFromUrl(
+      FAVICON_URL,
       "Mully checkout favicon"
     );
     log.faviconMediaId = faviconMediaId;
 
-    const logoMediaId = await uploadPng(
-      logoBuffer,
-      "mully-checkout-logo.png",
+    const logoMediaId = await registerImageFromUrl(
+      LOGO_URL,
       "Mully checkout header logo"
     );
     log.logoMediaId = logoMediaId;
