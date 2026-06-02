@@ -201,7 +201,7 @@ function buildBrandingInput(faviconMediaId: string, logoMediaId: string) {
               },
             },
             secondaryButton: {
-              background: "TRANSPARENT",
+              background: COLORS.bone,
               text: COLORS.forest,
               border: COLORS.forest,
               hover: {
@@ -238,7 +238,7 @@ function buildBrandingInput(faviconMediaId: string, logoMediaId: string) {
               },
             },
             secondaryButton: {
-              background: "TRANSPARENT",
+              background: COLORS.cream,
               text: COLORS.forest,
               border: COLORS.forest,
               hover: {
