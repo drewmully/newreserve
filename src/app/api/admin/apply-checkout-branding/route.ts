@@ -328,8 +328,8 @@ async function applyBranding(profileId: string, input: ReturnType<typeof buildBr
             typography { primary { name } secondary { name } }
           }
           customizations {
-            favicon { mediaImage { id image { url } } }
-            header { logo { image { mediaImage { id image { url } } } } }
+            favicon { image { url altText } }
+            header { logo { image { image { url altText } } } }
           }
         }
         userErrors { field message code }
