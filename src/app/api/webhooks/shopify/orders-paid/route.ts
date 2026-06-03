@@ -29,10 +29,6 @@ import {
 } from "@/lib/email/sequences";
 import { markProfilesConvertedByEmail } from "@/lib/styleProfiles/admin";
 import {
-  getLoopRawSubscriptions,
-  swapLoopSubscriptionProduct,
-} from "@/app/api/_lib/loopAdmin";
-import {
   isGiftOrder,
   readGiftAttribute,
   createGiftOrderDoc,
@@ -56,47 +52,6 @@ function getFoundingHundredVariantNumericId(): number | null {
   if (!match) return null;
   const n = Number(match[1]);
   return Number.isFinite(n) ? n : null;
-}
-
-const LOOP_VARIANT_BY_TIER: Partial<Record<string, number>> = {
-  member: 47601025122496,
-  access: 47601025482944,
-};
-
-async function swapLoopSubscription(
-  shopifyCustomerId: string,
-  tier: string
-): Promise<void> {
-  const variantShopifyId = LOOP_VARIANT_BY_TIER[tier];
-  if (!variantShopifyId) return;
-
-  try {
-    const subs = await getLoopRawSubscriptions(shopifyCustomerId);
-    const activeSub = subs.find((s) => s.status === "ACTIVE");
-    if (!activeSub) {
-      console.log(`[orders-paid] no active Loop sub for customer ${shopifyCustomerId} — skipping swap`);
-      return;
-    }
-
-    const lines = activeSub.lines as Array<{ id: string | number }> | undefined;
-    const lineId = String(lines?.[0]?.id ?? "");
-    if (!lineId) {
-      console.warn(`[orders-paid] active Loop sub has no line for customer ${shopifyCustomerId}`);
-      return;
-    }
-
-    await swapLoopSubscriptionProduct({
-      shopifyCustomerId,
-      subscriptionId: activeSub.id,
-      lineId,
-      variantShopifyId,
-      quantity: 1,
-    });
-
-    console.log(`[orders-paid] Loop swap → ${tier} for customer ${shopifyCustomerId}`);
-  } catch (err) {
-    console.error(`[orders-paid] Loop swap failed for customer ${shopifyCustomerId}:`, err);
-  }
 }
 
 async function triggerEmailFlow(
@@ -443,11 +398,16 @@ export async function POST(request: NextRequest) {
       })()
     : Promise.resolve();
 
-  const resolvedTier = email ? resolveTierFromLineItems(order.line_items) : null;
-  const loopSwap =
-    resolvedTier && shopifyCustomerId && LOOP_VARIANT_BY_TIER[resolvedTier]
-      ? swapLoopSubscription(shopifyCustomerId, resolvedTier)
-      : Promise.resolve();
+  // NOTE: This webhook intentionally does NOT swap the customer's Loop
+  // subscription product. The orders-paid webhook fires on every paid order,
+  // including recurring renewals, so resolving a tier here and swapping would
+  // silently migrate subscribers onto a different plan on every billing cycle
+  // — including grandfathered legacy (Back 9) subscribers, whose renewal line
+  // items resolve to the "member" tier for benefit purposes. The ONLY place a
+  // plan upgrade swap may occur is the reservecard-to-member cron, which acts
+  // exclusively on customers who explicitly chose selected_plan="member" in the
+  // reservecard form. See bug: legacy renewals auto-flipping subscribers to the
+  // Reserve Member plan at ~2am ET.
 
   // ── Founding 100 claim: defense-in-depth.
   // Only claim a slot if BOTH:
@@ -584,7 +544,6 @@ export async function POST(request: NextRequest) {
     persistAnalyticsEvent(eventId, event),
     aggregateKpiDaily(event),
     tierUpdate,
-    loopSwap,
     giftPersist,
     foundingClaim,
     sponsorshipAttribution,
