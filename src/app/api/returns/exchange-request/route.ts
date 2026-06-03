@@ -1,7 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Lazy-init: instantiating Resend at module load fails the build on Preview
+// (and any environment) where RESEND_API_KEY isn't set, because Next.js'
+// "Collecting page data" phase evaluates every route module. Defer until
+// the handler actually runs.
+let resendClient: Resend | null = null;
+function getResend(): Resend {
+  resendClient ??= new Resend(process.env.RESEND_API_KEY);
+  return resendClient;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,7 +23,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    await resend.emails.send({
+    await getResend().emails.send({
       from: "Mully Returns <info@mymully.com>",
       to: "info@mymully.com",
       replyTo: customerEmail,
