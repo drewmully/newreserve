@@ -25,7 +25,6 @@ import { trackEvent } from "@/lib/tracking";
 import { captureAttributionFromUrl } from "@/lib/attribution";
 import { GlassHeader } from "@/app/components/ClientComponents";
 import { ReserveHeroImage } from "@/app/components/ReserveHeroImage";
-import FoundingHundredCard from "@/app/components/FoundingHundredCard";
 import { LP_GALLERY } from "../_shared/products";
 import { ReviewsBlock } from "../_shared/LPSections";
 import { QuizLauncher } from "../_shared/QuizLauncher";
@@ -323,9 +322,6 @@ export default function SubscriptionLPClient() {
           </div>
         </div>
       </section>
-
-      {/* =========================== FOUNDING ============================= */}
-      <FoundingHundredCard className="max-w-3xl mx-auto px-4 sm:px-6 mt-12" />
 
       {/* ============================ REVIEWS ============================= */}
       <ReviewsBlock />
