@@ -83,7 +83,7 @@ function QuizOverlay({
   source: string;
 }) {
   return (
-    <div className="fixed inset-0 z-[60] overflow-y-auto bg-white">
+    <div className="fixed inset-0 z-[60] overflow-y-auto bg-bone">
       <div className="min-h-screen px-4 py-10 sm:py-16">
         <QuizModal source={source} onClose={onClose} />
       </div>

@@ -80,6 +80,18 @@ export interface CreateMembershipCheckoutOptions {
   discountCodes?: string[];
   /** Optional extra cart attributes (campaign id, invite token, tier, etc.). */
   attributes?: Array<{ key: string; value: string }>;
+  /**
+   * Optional Shopify cart **line item properties** to attach to the
+   * subscription line (NOT the gift line). These show up on the order as
+   * line item properties on the Reserve subscription line and are
+   * surfaced in Shopify admin + the order webhook. Use this to carry quiz
+   * answers (style, fit, sizes, brand affinities) so fulfillment can see
+   * them next to the SKU.
+   *
+   * Convention: prefix with an underscore (e.g. `_quiz_style`) to make the
+   * property hidden on the storefront but still visible in admin/order data.
+   */
+  subscriptionLineAttributes?: Array<{ key: string; value: string }>;
 }
 
 export async function createMembershipCheckout(
@@ -150,11 +162,32 @@ export async function createMembershipCheckout(
   // The gift is a one-time line (no sellingPlanId). Pricing to $0 is
   // handled by a Shopify automatic discount targeting this variant when
   // bundled with a Reserve subscription.
+  // Sanitize line attributes — Shopify caps keys at 100 chars + values at
+  // 32k; we keep a tighter cap so a malformed payload can never blow up
+  // the cart. Empty values are dropped.
+  const subscriptionLineAttrs = (options.subscriptionLineAttributes ?? [])
+    .filter((a) => a && a.key && a.value !== undefined && a.value !== null)
+    .map((a) => ({
+      key: String(a.key).slice(0, 100),
+      value: String(a.value).slice(0, 1000),
+    }))
+    .filter((a) => a.value.length > 0);
+
   const lines: Array<{
     merchandiseId: string;
     quantity: number;
     sellingPlanId?: string;
-  }> = [{ merchandiseId, quantity: 1, sellingPlanId }];
+    attributes?: Array<{ key: string; value: string }>;
+  }> = [
+    {
+      merchandiseId,
+      quantity: 1,
+      sellingPlanId,
+      ...(subscriptionLineAttrs.length
+        ? { attributes: subscriptionLineAttrs }
+        : {}),
+    },
+  ];
   if (foundingGift.attach && foundingGift.variantGid) {
     lines.push({ merchandiseId: foundingGift.variantGid, quantity: 1 });
   }

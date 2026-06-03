@@ -1,21 +1,27 @@
 "use client";
 
 /**
- * Style quiz — the top-of-funnel pre-checkout component for Mully Reserve.
+ * Style quiz — top-of-funnel pre-checkout component for Mully Reserve.
  *
- * 6 steps, image cards, ONE question per screen, mobile-first, no scroll
- * tax on each step. After step 6, the email gate is gated by an explicit
- * consent checkbox. On completion → redirect to /lp/reserve/reveal/{profileId}.
+ * 7 steps (0-6), ONE question per screen, mobile-first.
+ * Brand palette throughout: bone bg, forest primary, ember accent, charcoal body.
+ * Step 1 (categories) uses brand-matched SVG icons, NOT emoji.
+ * Style cards are contained — no oversized images.
  *
  * Persistence model:
- *   - Step 1 answer creates the profile via /api/quiz/start; the response
+ *   - Step 0 answer creates the profile via /api/quiz/start; the response
  *     profileId is stored in localStorage so reloads can resume.
  *   - Each subsequent answer is saved via /api/quiz/step (fire-and-forget).
  *   - Step 6 (email gate) calls /api/quiz/complete and routes to /reveal.
  *   - If the user navigates away mid-quiz, a sendBeacon to /api/quiz/abandon
  *     fires for the drop-off funnel in PostHog.
+ *
+ * Tracking allowlist events fired here:
+ *   quiz_view, quiz_step_completed, quiz_email_captured, quiz_completed.
+ *   (quiz_started is fired by QuizLauncher; quiz_abandoned by the server.)
  */
 
+import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { trackEvent } from "@/lib/tracking";
@@ -82,16 +88,70 @@ const STYLE_CARDS: StyleCard[] = [
   },
 ];
 
+// ─── Brand-matched SVG icons for the category step ────────────────────────────
+
+function PoloIcon(props: { className?: string }) {
+  return (
+    <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={props.className}>
+      <path d="M11 5l-6 3 2 6 3-1v14h16V13l3 1 2-6-6-3-3 3-2-1-2 1-2-1-2 1-3-3z" />
+      <path d="M16 6v4" />
+      <path d="M14 6l2 3 2-3" />
+    </svg>
+  );
+}
+
+function LayerIcon(props: { className?: string }) {
+  return (
+    <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={props.className}>
+      <path d="M9 5l-5 4 3 6 2-1v14h14V14l2 1 3-6-5-4-3 3h-2v22" />
+      <path d="M16 8v18" />
+      <path d="M16 11l1 1" />
+      <path d="M16 16l1 1" />
+    </svg>
+  );
+}
+
+function PantsIcon(props: { className?: string }) {
+  return (
+    <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={props.className}>
+      <path d="M7 4h18l-1 8-2 16h-5l-1-13h-1l-1 13H9L7 12z" />
+      <path d="M7 4h18" />
+    </svg>
+  );
+}
+
+function OuterwearIcon(props: { className?: string }) {
+  return (
+    <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={props.className}>
+      <path d="M10 4L4 8l3 7 3-1v14h12V14l3 1 3-7-6-4-3 3h-6z" />
+      <path d="M16 7v20" />
+      <circle cx="16" cy="13" r=".6" fill="currentColor" />
+      <circle cx="16" cy="18" r=".6" fill="currentColor" />
+      <circle cx="16" cy="23" r=".6" fill="currentColor" />
+    </svg>
+  );
+}
+
+function HatIcon(props: { className?: string }) {
+  return (
+    <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={props.className}>
+      <path d="M6 20c0-6 4.5-10 10-10s10 4 10 10" />
+      <path d="M3 20h26" />
+      <path d="M6 20l5-2 5 1 5-1 5 2" />
+    </svg>
+  );
+}
+
 const CATEGORY_CARDS: Array<{
   value: CategoryPref;
   label: string;
-  icon: string;
+  Icon: (p: { className?: string }) => ReactNode;
 }> = [
-  { value: "polos", label: "Polos & shirts", icon: "👔" },
-  { value: "layers", label: "Layers & 1/4 zips", icon: "🧥" },
-  { value: "shorts_pants", label: "Shorts & pants", icon: "👖" },
-  { value: "outerwear", label: "Outerwear", icon: "🧥" },
-  { value: "accessories", label: "Hats & accessories", icon: "🧢" },
+  { value: "polos", label: "Polos & shirts", Icon: PoloIcon },
+  { value: "layers", label: "Layers & 1/4 zips", Icon: LayerIcon },
+  { value: "shorts_pants", label: "Shorts & pants", Icon: PantsIcon },
+  { value: "outerwear", label: "Outerwear", Icon: OuterwearIcon },
+  { value: "accessories", label: "Hats & accessories", Icon: HatIcon },
 ];
 
 const FIT_CARDS: Array<{ value: FitPreference; label: string; blurb: string }> = [
@@ -127,14 +187,12 @@ const PLAY_CARDS: Array<{ value: PlayFrequency; label: string }> = [
 
 const QUIZ_STORAGE_KEY = "mully_quiz_profileId";
 const QUIZ_ANSWERS_KEY = "mully_quiz_answers";
-const TOTAL_STEPS = 7; // 6 quiz steps + email gate (we display 0/7 → 7/7)
+const TOTAL_STEPS = 7;
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export interface QuizModalProps {
-  /** Optional analytics context for the LP that mounted it. */
   source?: string;
-  /** Called when the visitor explicitly closes the quiz before completing. */
   onClose?: () => void;
 }
 
@@ -178,7 +236,6 @@ export function QuizModal({ source = "lp_subscription", onClose }: QuizModalProp
     ).catch(() => {});
   }, [source]);
 
-  // Persist answers locally on every change so a reload mid-quiz doesn't lose work.
   useEffect(() => {
     try {
       localStorage.setItem(QUIZ_ANSWERS_KEY, JSON.stringify(answers));
@@ -195,7 +252,7 @@ export function QuizModal({ source = "lp_subscription", onClose }: QuizModalProp
     function handleUnload() {
       const pid = profileIdRef.current;
       if (!pid) return;
-      if (stepRef.current >= TOTAL_STEPS - 1) return; // already completed
+      if (stepRef.current >= TOTAL_STEPS - 1) return;
       try {
         const blob = new Blob(
           [JSON.stringify({ profileId: pid, step: stepRef.current, reason: "unload" })],
@@ -254,7 +311,6 @@ export function QuizModal({ source = "lp_subscription", onClose }: QuizModalProp
       if (patch.playFrequency !== undefined)
         apiAnswer.playFrequency = patch.playFrequency;
 
-      // Empty patches (just navigation) skip the API call.
       if (Object.keys(apiAnswer).length === 0) return;
 
       const res = await fetch("/api/quiz/step", {
@@ -263,8 +319,6 @@ export function QuizModal({ source = "lp_subscription", onClose }: QuizModalProp
         body: JSON.stringify({ profileId: pid, step: stepIndex, answer: apiAnswer }),
       });
       if (!res.ok) {
-        // Step save failures are non-fatal — we keep state locally and the
-        // user can continue. Log so we see them in dev/console.
         // eslint-disable-next-line no-console
         console.warn("[quiz] step save failed", await res.text().catch(() => ""));
       }
@@ -340,6 +394,25 @@ export function QuizModal({ source = "lp_subscription", onClose }: QuizModalProp
     [answers, profileId, saveStep, source, step]
   );
 
+  // Track email-captured exactly once per profile (when user types a valid
+  // email and blurs the field). Fires BEFORE the consent-gated submit so we
+  // measure the email capture rate independently of conversion.
+  const emailCapturedRef = useRef(false);
+  const handleEmailBlur = useCallback(() => {
+    if (emailCapturedRef.current) return;
+    if (!profileId) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(answers.email)) return;
+    emailCapturedRef.current = true;
+    trackEvent(
+      "quiz_email_captured",
+      {
+        email: answers.email,
+        properties: { source, profileId, styleBucket: answers.golfStyle },
+      },
+      { includeAuth: false }
+    ).catch(() => {});
+  }, [answers.email, answers.golfStyle, profileId, source]);
+
   const submitEmail = useCallback(async () => {
     setError(null);
     if (!profileId) {
@@ -353,6 +426,19 @@ export function QuizModal({ source = "lp_subscription", onClose }: QuizModalProp
     if (!answers.consent) {
       setError("Tick the consent box to see your edit.");
       return;
+    }
+    // Safety net: if the user typed-then-submitted without blur (mobile keyboard
+    // "go" button), still fire quiz_email_captured once.
+    if (!emailCapturedRef.current) {
+      emailCapturedRef.current = true;
+      trackEvent(
+        "quiz_email_captured",
+        {
+          email: answers.email,
+          properties: { source, profileId, styleBucket: answers.golfStyle },
+        },
+        { includeAuth: false }
+      ).catch(() => {});
     }
     setSubmitting(true);
     try {
@@ -404,23 +490,23 @@ export function QuizModal({ source = "lp_subscription", onClose }: QuizModalProp
   return (
     <div className="mx-auto w-full max-w-2xl px-4 sm:px-6">
       <header className="mb-6 flex items-center justify-between">
-        <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">
+        <div className="text-[11px] uppercase tracking-[0.22em] text-ember/90">
           Build your Reserve edit
         </div>
         {onClose && (
           <button
             type="button"
             onClick={onClose}
-            className="text-sm text-zinc-500 hover:text-zinc-900"
+            className="text-xs uppercase tracking-[0.18em] text-charcoal/55 hover:text-forest transition"
           >
             Close
           </button>
         )}
       </header>
 
-      <div className="mb-8 h-1 w-full overflow-hidden rounded-full bg-zinc-200">
+      <div className="mb-8 h-[3px] w-full overflow-hidden rounded-full bg-forest/10">
         <div
-          className="h-1 bg-zinc-900 transition-[width] duration-300 ease-out"
+          className="h-full bg-ember transition-[width] duration-300 ease-out"
           style={{ width: `${progressPct}%` }}
         />
       </div>
@@ -470,12 +556,12 @@ export function QuizModal({ source = "lp_subscription", onClose }: QuizModalProp
         <StepBrands
           submitting={submitting}
           selected={answers.favoriteBrands}
+          play={answers.playFrequency}
           onChange={(v) => setAnswers((a) => ({ ...a, favoriteBrands: v }))}
+          onChangePlay={(v) => setAnswers((a) => ({ ...a, playFrequency: v }))}
           onNext={() =>
             goNext({
               favoriteBrands: answers.favoriteBrands,
-              // playFrequency is optional — we default it here and let the user
-              // skip the question to keep the quiz under 60s.
               playFrequency: answers.playFrequency,
             })
           }
@@ -491,12 +577,13 @@ export function QuizModal({ source = "lp_subscription", onClose }: QuizModalProp
           onChangeEmail={(email) => setAnswers((a) => ({ ...a, email }))}
           onChangeName={(firstName) => setAnswers((a) => ({ ...a, firstName }))}
           onChangeConsent={(consent) => setAnswers((a) => ({ ...a, consent }))}
+          onEmailBlur={handleEmailBlur}
           onSubmit={submitEmail}
         />
       )}
 
       {error && (
-        <p className="mt-6 text-center text-sm text-red-600" role="alert">
+        <p className="mt-6 text-center text-sm text-red-700" role="alert">
           {error}
         </p>
       )}
@@ -517,10 +604,10 @@ function StepStyle({
 }) {
   return (
     <section>
-      <h2 className="mb-1 text-3xl font-medium tracking-tight text-zinc-900 sm:text-4xl">
+      <h2 className="mb-1 font-serif text-3xl text-forest sm:text-4xl leading-tight">
         Which one looks like you?
       </h2>
-      <p className="mb-6 text-sm text-zinc-500">Pick the closest.</p>
+      <p className="mb-6 text-sm text-charcoal/65">Pick the closest.</p>
       <div className="grid grid-cols-2 gap-3 sm:gap-4">
         {STYLE_CARDS.map((card) => (
           <button
@@ -529,15 +616,15 @@ function StepStyle({
             onClick={() => onSelect(card.value)}
             disabled={submitting}
             className={[
-              "group relative overflow-hidden rounded-xl border bg-white text-left transition",
-              "hover:border-zinc-900 hover:shadow-lg",
+              "group relative overflow-hidden rounded-md border bg-bone text-left transition",
+              "hover:border-forest hover:shadow-md",
               "disabled:cursor-not-allowed disabled:opacity-60",
               selected === card.value
-                ? "border-zinc-900 ring-2 ring-zinc-900"
-                : "border-zinc-200",
+                ? "border-forest ring-2 ring-forest"
+                : "border-forest/15",
             ].join(" ")}
           >
-            <div className="relative aspect-[4/5] w-full bg-zinc-100">
+            <div className="relative aspect-[3/4] w-full bg-bone-dark/40">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={card.imageSrc}
@@ -546,9 +633,13 @@ function StepStyle({
                 loading="lazy"
               />
             </div>
-            <div className="px-4 py-3">
-              <div className="text-base font-medium text-zinc-900">{card.label}</div>
-              <div className="text-xs text-zinc-500">{card.blurb}</div>
+            <div className="px-3 py-2.5 sm:px-4 sm:py-3">
+              <div className="font-serif text-base text-forest sm:text-lg">
+                {card.label}
+              </div>
+              <div className="text-xs text-charcoal/60 mt-0.5 leading-snug">
+                {card.blurb}
+              </div>
             </div>
           </button>
         ))}
@@ -574,28 +665,31 @@ function StepCategories({
   }
   return (
     <section>
-      <h2 className="mb-1 text-3xl font-medium tracking-tight text-zinc-900 sm:text-4xl">
+      <h2 className="mb-1 font-serif text-3xl text-forest sm:text-4xl leading-tight">
         What do you reach for most?
       </h2>
-      <p className="mb-6 text-sm text-zinc-500">Pick a few — we'll weight your edit accordingly.</p>
+      <p className="mb-6 text-sm text-charcoal/65">
+        Pick a few — we'll weight your edit accordingly.
+      </p>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {CATEGORY_CARDS.map((c) => {
           const isOn = selected.includes(c.value);
+          const Icon = c.Icon;
           return (
             <button
               key={c.value}
               type="button"
               onClick={() => toggle(c.value)}
               className={[
-                "rounded-xl border px-4 py-5 text-left transition",
-                "hover:border-zinc-900",
+                "rounded-md border px-4 py-5 text-left transition",
+                "hover:border-forest",
                 isOn
-                  ? "border-zinc-900 bg-zinc-900 text-white"
-                  : "border-zinc-200 bg-white text-zinc-900",
+                  ? "border-forest bg-forest text-bone"
+                  : "border-forest/15 bg-bone text-forest",
               ].join(" ")}
             >
-              <div className="text-2xl">{c.icon}</div>
-              <div className="mt-2 text-sm font-medium">{c.label}</div>
+              <Icon className={`h-8 w-8 ${isOn ? "text-ember" : "text-forest/85"}`} />
+              <div className="mt-3 text-sm font-medium">{c.label}</div>
             </button>
           );
         })}
@@ -618,10 +712,12 @@ function StepFit({
 }) {
   return (
     <section>
-      <h2 className="mb-1 text-3xl font-medium tracking-tight text-zinc-900 sm:text-4xl">
+      <h2 className="mb-1 font-serif text-3xl text-forest sm:text-4xl leading-tight">
         How do you like your fit?
       </h2>
-      <p className="mb-6 text-sm text-zinc-500">Sizing's confirmed after checkout — this just sets the baseline.</p>
+      <p className="mb-6 text-sm text-charcoal/65">
+        Sizing's confirmed after checkout — this just sets the baseline.
+      </p>
       <div className="grid gap-3">
         {FIT_CARDS.map((f) => (
           <button
@@ -630,13 +726,15 @@ function StepFit({
             disabled={submitting}
             onClick={() => onSelect(f.value)}
             className={[
-              "rounded-xl border bg-white px-5 py-4 text-left transition hover:border-zinc-900",
+              "rounded-md border bg-bone px-5 py-4 text-left transition hover:border-forest",
               "disabled:cursor-not-allowed disabled:opacity-60",
-              selected === f.value ? "border-zinc-900 ring-2 ring-zinc-900" : "border-zinc-200",
+              selected === f.value
+                ? "border-forest ring-2 ring-forest"
+                : "border-forest/15",
             ].join(" ")}
           >
-            <div className="text-lg font-medium text-zinc-900">{f.label}</div>
-            <div className="text-sm text-zinc-500">{f.blurb}</div>
+            <div className="font-serif text-lg text-forest">{f.label}</div>
+            <div className="text-sm text-charcoal/65">{f.blurb}</div>
           </button>
         ))}
       </div>
@@ -655,10 +753,12 @@ function StepTopSize({
 }) {
   return (
     <section>
-      <h2 className="mb-1 text-3xl font-medium tracking-tight text-zinc-900 sm:text-4xl">
+      <h2 className="mb-1 font-serif text-3xl text-forest sm:text-4xl leading-tight">
         Your top size?
       </h2>
-      <p className="mb-6 text-sm text-zinc-500">Closest is fine. We'll dial it in after checkout.</p>
+      <p className="mb-6 text-sm text-charcoal/65">
+        Closest is fine. We'll dial it in after checkout.
+      </p>
       <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
         {TOP_SIZES.map((s) => (
           <button
@@ -667,9 +767,11 @@ function StepTopSize({
             disabled={submitting}
             onClick={() => onSelect(s)}
             className={[
-              "rounded-xl border bg-white py-5 text-center text-lg font-medium transition hover:border-zinc-900",
+              "rounded-md border bg-bone py-5 text-center font-serif text-lg text-forest transition hover:border-forest",
               "disabled:cursor-not-allowed disabled:opacity-60",
-              selected === s ? "border-zinc-900 ring-2 ring-zinc-900" : "border-zinc-200",
+              selected === s
+                ? "border-forest ring-2 ring-forest bg-forest text-bone"
+                : "border-forest/15",
             ].join(" ")}
           >
             {s}
@@ -691,10 +793,10 @@ function StepWaistSize({
 }) {
   return (
     <section>
-      <h2 className="mb-1 text-3xl font-medium tracking-tight text-zinc-900 sm:text-4xl">
+      <h2 className="mb-1 font-serif text-3xl text-forest sm:text-4xl leading-tight">
         Your waist?
       </h2>
-      <p className="mb-6 text-sm text-zinc-500">Closest inch is fine.</p>
+      <p className="mb-6 text-sm text-charcoal/65">Closest inch is fine.</p>
       <div className="grid grid-cols-4 gap-3 sm:grid-cols-7">
         {WAIST_SIZES.map((s) => (
           <button
@@ -703,9 +805,11 @@ function StepWaistSize({
             disabled={submitting}
             onClick={() => onSelect(s)}
             className={[
-              "rounded-xl border bg-white py-5 text-center text-lg font-medium transition hover:border-zinc-900",
+              "rounded-md border bg-bone py-5 text-center font-serif text-lg text-forest transition hover:border-forest",
               "disabled:cursor-not-allowed disabled:opacity-60",
-              selected === s ? "border-zinc-900 ring-2 ring-zinc-900" : "border-zinc-200",
+              selected === s
+                ? "border-forest ring-2 ring-forest bg-forest text-bone"
+                : "border-forest/15",
             ].join(" ")}
           >
             {s}
@@ -719,12 +823,16 @@ function StepWaistSize({
 function StepBrands({
   submitting,
   selected,
+  play,
   onChange,
+  onChangePlay,
   onNext,
 }: {
   submitting: boolean;
   selected: string[];
+  play: PlayFrequency | null;
   onChange: (v: string[]) => void;
+  onChangePlay: (v: PlayFrequency) => void;
   onNext: () => void;
 }) {
   function toggle(b: string) {
@@ -733,10 +841,10 @@ function StepBrands({
   }
   return (
     <section>
-      <h2 className="mb-1 text-3xl font-medium tracking-tight text-zinc-900 sm:text-4xl">
+      <h2 className="mb-1 font-serif text-3xl text-forest sm:text-4xl leading-tight">
         Brands you like?
       </h2>
-      <p className="mb-6 text-sm text-zinc-500">Optional. Helps us prioritize.</p>
+      <p className="mb-6 text-sm text-charcoal/65">Optional. Helps us prioritize.</p>
       <div className="flex flex-wrap gap-2">
         {BRAND_CHIPS.map((b) => {
           const isOn = selected.includes(b);
@@ -748,8 +856,8 @@ function StepBrands({
               className={[
                 "rounded-full border px-4 py-2 text-sm transition",
                 isOn
-                  ? "border-zinc-900 bg-zinc-900 text-white"
-                  : "border-zinc-200 bg-white text-zinc-700 hover:border-zinc-900",
+                  ? "border-forest bg-forest text-bone"
+                  : "border-forest/15 bg-bone text-charcoal hover:border-forest",
               ].join(" ")}
             >
               {b}
@@ -757,6 +865,33 @@ function StepBrands({
           );
         })}
       </div>
+
+      <div className="mt-8">
+        <div className="text-[11px] tracking-[0.22em] uppercase text-ember/90 mb-3">
+          How often do you play?
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {PLAY_CARDS.map((p) => {
+            const isOn = play === p.value;
+            return (
+              <button
+                key={p.value}
+                type="button"
+                onClick={() => onChangePlay(p.value)}
+                className={[
+                  "rounded-md border px-4 py-3 text-left text-sm transition",
+                  isOn
+                    ? "border-forest bg-forest text-bone"
+                    : "border-forest/15 bg-bone text-charcoal hover:border-forest",
+                ].join(" ")}
+              >
+                {p.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       <PrimaryButton onClick={onNext} disabled={submitting}>
         Continue
       </PrimaryButton>
@@ -772,6 +907,7 @@ function StepEmailGate({
   onChangeEmail,
   onChangeName,
   onChangeConsent,
+  onEmailBlur,
   onSubmit,
 }: {
   submitting: boolean;
@@ -781,15 +917,17 @@ function StepEmailGate({
   onChangeEmail: (v: string) => void;
   onChangeName: (v: string) => void;
   onChangeConsent: (v: boolean) => void;
+  onEmailBlur: () => void;
   onSubmit: () => void;
 }) {
   return (
     <section>
-      <h2 className="mb-1 text-3xl font-medium tracking-tight text-zinc-900 sm:text-4xl">
+      <h2 className="mb-1 font-serif text-3xl text-forest sm:text-4xl leading-tight">
         Where do we send your edit?
       </h2>
-      <p className="mb-6 text-sm text-zinc-500">
-        We'll show you the four pieces and the welcome-gift rangefinder on the next screen.
+      <p className="mb-6 text-sm text-charcoal/65">
+        We'll show you the four pieces and the welcome-gift rangefinder on the
+        next screen.
       </p>
       <div className="grid gap-3">
         <input
@@ -798,7 +936,7 @@ function StepEmailGate({
           value={firstName}
           onChange={(e) => onChangeName(e.target.value)}
           placeholder="First name (optional)"
-          className="rounded-xl border border-zinc-200 bg-white px-5 py-4 text-base text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900"
+          className="rounded-md border border-forest/15 bg-bone px-5 py-4 text-base text-charcoal placeholder:text-charcoal/40 focus:border-forest focus:outline-none focus:ring-2 focus:ring-forest/30"
         />
         <input
           type="email"
@@ -806,26 +944,28 @@ function StepEmailGate({
           autoComplete="email"
           value={email}
           onChange={(e) => onChangeEmail(e.target.value)}
+          onBlur={onEmailBlur}
           placeholder="you@email.com"
           required
-          className="rounded-xl border border-zinc-200 bg-white px-5 py-4 text-base text-zinc-900 placeholder:text-zinc-400 focus:border-zinc-900 focus:outline-none focus:ring-2 focus:ring-zinc-900"
+          className="rounded-md border border-forest/15 bg-bone px-5 py-4 text-base text-charcoal placeholder:text-charcoal/40 focus:border-forest focus:outline-none focus:ring-2 focus:ring-forest/30"
         />
-        <label className="mt-1 flex items-start gap-3 text-sm text-zinc-600">
+        <label className="mt-1 flex items-start gap-3 text-sm text-charcoal/70">
           <input
             type="checkbox"
             checked={consent}
             onChange={(e) => onChangeConsent(e.target.checked)}
-            className="mt-1 h-4 w-4 accent-zinc-900"
+            className="mt-1 h-4 w-4 accent-forest"
           />
           <span>
-            Send me my Reserve edit and occasional emails from Drew. Unsubscribe anytime.
+            Send me my Reserve edit and occasional emails from Drew. Unsubscribe
+            anytime.
           </span>
         </label>
       </div>
       <PrimaryButton onClick={onSubmit} disabled={submitting}>
         {submitting ? "Building your edit…" : "See my edit"}
       </PrimaryButton>
-      <p className="mt-4 text-center text-xs text-zinc-400">
+      <p className="mt-4 text-center text-xs text-charcoal/50">
         No charge to see your edit. Free welcome gift if you join.
       </p>
     </section>
@@ -849,7 +989,7 @@ function PrimaryButton({
         type="button"
         onClick={onClick}
         disabled={disabled}
-        className="w-full rounded-xl bg-zinc-900 py-4 text-base font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
+        className="w-full rounded-md bg-ember py-4 text-base font-medium text-bone transition hover:bg-ember/90 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {children}
       </button>

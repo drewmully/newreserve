@@ -7,8 +7,9 @@
  * Why a client island instead of a server form?
  *   `createMembershipCheckout` reads attribution from localStorage + sets
  *   cart attributes for the Shopify checkout origin. It must run in the
- *   browser. We pass only the profileId + styleBucket from the server so
- *   the CTA can stamp them onto the cart for later attribution joins.
+ *   browser. We pass only the profileId + styleBucket + line-item-property
+ *   payload from the server so the CTA can stamp them onto the cart for
+ *   later attribution + fulfillment.
  */
 
 import { useCallback, useState } from "react";
@@ -16,12 +17,27 @@ import { createMembershipCheckout } from "@/lib/shopifyCheckout";
 import { trackEvent } from "@/lib/tracking";
 import type { StyleBucket } from "@/lib/styleProfiles/types";
 
+export interface QuizLineItemPropsInput {
+  styleBucket: StyleBucket | null;
+  styleLabel: string | null;
+  categoryPrefs: string[];
+  fit: string | null;
+  topSize: string | null;
+  bottomSize: string | null;
+  favoriteBrands: string[];
+  playFrequency: string | null;
+}
+
 export function ReserveCheckoutCTA({
   profileId,
   styleBucket,
+  quizLineItemProps,
 }: {
   profileId: string;
   styleBucket: StyleBucket;
+  /** Quiz answers to stamp onto the Reserve subscription line as Shopify
+   *  line item properties. Visible in admin + order webhook. */
+  quizLineItemProps: QuizLineItemPropsInput;
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +58,44 @@ export function ReserveCheckoutCTA({
       { includeAuth: false }
     ).catch(() => {});
 
+    // Build line item properties. Underscore prefix hides them from the
+    // storefront checkout summary but keeps them visible in Shopify admin
+    // and the orders/paid webhook payload.
+    const lineProps: Array<{ key: string; value: string }> = [
+      { key: "_quiz_profile_id", value: profileId },
+      {
+        key: "Style",
+        value: quizLineItemProps.styleLabel ?? styleBucket,
+      },
+    ];
+    if (quizLineItemProps.fit) {
+      lineProps.push({ key: "Fit", value: quizLineItemProps.fit });
+    }
+    if (quizLineItemProps.topSize) {
+      lineProps.push({ key: "Top size", value: quizLineItemProps.topSize });
+    }
+    if (quizLineItemProps.bottomSize) {
+      lineProps.push({ key: "Waist", value: quizLineItemProps.bottomSize });
+    }
+    if (quizLineItemProps.categoryPrefs.length) {
+      lineProps.push({
+        key: "Categories",
+        value: quizLineItemProps.categoryPrefs.join(", "),
+      });
+    }
+    if (quizLineItemProps.favoriteBrands.length) {
+      lineProps.push({
+        key: "Favorite brands",
+        value: quizLineItemProps.favoriteBrands.join(", "),
+      });
+    }
+    if (quizLineItemProps.playFrequency) {
+      lineProps.push({
+        key: "_play_frequency",
+        value: quizLineItemProps.playFrequency,
+      });
+    }
+
     try {
       await createMembershipCheckout("member", {
         returnPath: "/auth/callback",
@@ -50,6 +104,7 @@ export function ReserveCheckoutCTA({
           { key: "quiz_profile_id", value: profileId },
           { key: "style_bucket", value: styleBucket },
         ],
+        subscriptionLineAttributes: lineProps,
       });
     } catch (e) {
       setError(
@@ -59,7 +114,7 @@ export function ReserveCheckoutCTA({
       );
       setLoading(false);
     }
-  }, [profileId, styleBucket]);
+  }, [profileId, styleBucket, quizLineItemProps]);
 
   return (
     <div>
@@ -67,12 +122,12 @@ export function ReserveCheckoutCTA({
         type="button"
         onClick={onClick}
         disabled={loading}
-        className="w-full rounded-xl bg-zinc-900 py-5 text-lg font-medium text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
+        className="w-full rounded-md bg-ember py-4 text-base font-medium tracking-wide text-bone transition hover:bg-ember/90 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {loading ? "Opening checkout…" : "Start your Reserve — $250"}
+        {loading ? "Opening checkout…" : "Start your Reserve — $250 / quarter"}
       </button>
       {error && (
-        <p className="mt-3 text-center text-sm text-red-600" role="alert">
+        <p className="mt-3 text-center text-sm text-red-700" role="alert">
           {error}
         </p>
       )}

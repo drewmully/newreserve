@@ -1,5 +1,23 @@
 "use client";
 
+/**
+ * Mully Reserve — landing page.
+ *
+ * Magazine-style, visual-first, minimal copy. Brand palette:
+ *   bone (page bg) / forest (primary) / ember (accents) / charcoal (body)
+ *
+ * Primary CTA is ALWAYS the style quiz. "Start membership" is a secondary
+ * skip-link, never visually competing with the quiz CTA.
+ *
+ * Wedge: "a guy who handles your golf wardrobe" — trusted-taste framing
+ * for men 35+. Gift framing is prominent (rangefinder yours to keep).
+ *
+ * Strategic constraints (do NOT change without product sign-off):
+ *   - NEVER use the word "box" — it's "edit", "quarter", "curation", "Reserve".
+ *   - Gift is welcome gift, never a discount.
+ *   - Quiz CTA wins every CTA collision.
+ */
+
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { createMembershipCheckout } from "@/lib/shopifyCheckout";
@@ -8,16 +26,8 @@ import { captureAttributionFromUrl } from "@/lib/attribution";
 import { GlassHeader } from "@/app/components/ClientComponents";
 import { ReserveHeroImage } from "@/app/components/ReserveHeroImage";
 import FoundingHundredCard from "@/app/components/FoundingHundredCard";
-import { GuaranteedValue } from "@/app/components/GuaranteedValue";
 import { LP_GALLERY } from "../_shared/products";
-import {
-  TrustBadgeStrip,
-  RecentBoxesCarousel,
-  ReviewsBlock,
-  HowItWorks,
-  LifestyleGallery,
-  ProductDetails,
-} from "../_shared/LPSections";
+import { ReviewsBlock } from "../_shared/LPSections";
 import { QuizLauncher } from "../_shared/QuizLauncher";
 
 const BRAND_LOGOS = [
@@ -32,34 +42,52 @@ const BRAND_LOGOS = [
   { src: "/brands/hyperice.png", alt: "Hyperice" },
 ];
 
-const ABOUT_BULLETS = [
-  "A hand-curated quarterly edit for golfers with taste — 4 to 6 pieces, $300+ retail value, every quarter.",
-  "Brands worth knowing: Rhone, Greyson, Quiet Golf, Will Leather Goods, Field Day, Penfold, Morning People and more.",
-  "Sizing confirmed after purchase — quick 2-minute form covers shirt, pant, shoe, glove and fit preference. Nothing ships until you're set.",
-  "Free shipping in the continental US, every quarter. Wrong fit? Exchange free, no questions, no shipping fee.",
-  "$250 per quarter, billed every 3 months. Cancel anytime after your first quarter — no annual lock-in.",
-  "Welcome gift on your first quarter: a rangefinder — yours to keep even if you cancel.",
+const HOW_IT_WORKS = [
+  {
+    n: "01",
+    title: "Take the quiz",
+    body: "60 seconds. Style, fit, sizes.",
+  },
+  {
+    n: "02",
+    title: "See your edit",
+    body: "We show you what we'd send before you commit.",
+  },
+  {
+    n: "03",
+    title: "Get your quarter",
+    body: "$300+ retail, hand-curated, every 3 months.",
+  },
+];
+
+const PROOF_STATS = [
+  { stat: "96%", label: "Renewal rate" },
+  { stat: "$300+", label: "Retail per quarter" },
+  { stat: "4–6", label: "Pieces per shipment" },
+  { stat: "Free", label: "Returns & exchanges" },
 ];
 
 export default function SubscriptionLPClient() {
-  const [heroIndex, setHeroIndex] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Pick the first non-flatlay editorial shot for the hero.
+  const heroShot =
+    LP_GALLERY.find((g) => g.treatment !== "flatlay") ?? LP_GALLERY[0];
+  // Pick four supporting shots for the editorial grid.
+  const gridShots = LP_GALLERY.filter((g) => g.src !== heroShot.src).slice(0, 4);
+
   useEffect(() => {
-    // Persist ?gclid / ?utm_* into localStorage + cookie so they survive
-    // the hop to Shopify checkout and back to /auth/callback.
     captureAttributionFromUrl();
     trackEvent("lp_subscription_view");
   }, []);
 
-  async function handleStart() {
+  async function handleSkipToCheckout() {
     setError(null);
     setLoading(true);
     trackEvent("lp_subscription_checkout_clicked", {
       properties: { tier: "member", method: "shopify_checkout" },
     });
-
     try {
       await createMembershipCheckout("member", {
         returnPath: "/auth/callback",
@@ -78,329 +106,274 @@ export default function SubscriptionLPClient() {
     }
   }
 
-  const hero = LP_GALLERY[heroIndex];
-
   return (
     <div className="min-h-screen bg-bone text-charcoal">
       <GlassHeader />
 
-      {/* ------------------------------- HERO ------------------------------- */}
-      <main className="pt-20 sm:pt-24">
+      {/* ============================== HERO ============================== */}
+      <section className="pt-20 sm:pt-24">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8">
-            {/* Thumbnail rail */}
-            <div className="hidden lg:flex lg:col-span-1 flex-col gap-2">
-              {LP_GALLERY.map((g, i) => (
-                <button
-                  key={g.src}
-                  type="button"
-                  onMouseEnter={() => setHeroIndex(i)}
-                  onClick={() => setHeroIndex(i)}
-                  className={`relative w-full aspect-square rounded-md overflow-hidden border-2 transition ${
-                    g.treatment === "flatlay" ? "bg-[#162b1e]" : ""
-                  } ${
-                    heroIndex === i
-                      ? "border-forest"
-                      : "border-forest/15 hover:border-forest/40"
-                  }`}
-                  aria-label={`Show image ${i + 1}`}
-                >
-                  <Image
-                    src={g.src}
-                    alt={g.alt}
-                    fill
-                    sizes="60px"
-                    className={g.treatment === "flatlay" ? "object-contain" : "object-cover"}
-                    unoptimized
-                  />
-                  {g.isExample ? (
-                    <span className="absolute top-0.5 left-0.5 bg-forest/90 text-bone text-[7px] tracking-[0.15em] uppercase px-1 py-0.5 rounded-sm">
-                      Ex.
-                    </span>
-                  ) : null}
-                </button>
-              ))}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+            {/* Copy column */}
+            <div className="lg:col-span-5 order-2 lg:order-none">
+              <div className="text-[11px] tracking-[0.28em] uppercase text-ember/90 mb-4">
+                Mully Reserve
+              </div>
+              <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl text-forest leading-[1.02]">
+                A guy who handles
+                <br />
+                your golf wardrobe.
+              </h1>
+              <p className="text-base sm:text-lg text-charcoal/75 mt-5 leading-relaxed max-w-md">
+                Quarterly editorial curation for golfers with taste. Four to six
+                pieces, $300+ retail, every three months.
+              </p>
+
+              {/* Primary CTA — quiz */}
+              <div className="mt-7 max-w-sm">
+                <QuizLauncher
+                  variant="primary-large"
+                  label="See what we'd send you · 60s"
+                  source="lp_subscription_hero"
+                />
+                <div className="mt-3 text-[11px] tracking-[0.18em] uppercase text-charcoal/55 text-center">
+                  No charge to see your edit
+                </div>
+              </div>
+
+              {/* Tertiary skip link */}
+              <button
+                type="button"
+                onClick={handleSkipToCheckout}
+                disabled={loading}
+                className="mt-4 text-xs underline text-charcoal/55 hover:text-charcoal/90 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? "Opening checkout…" : "Skip the quiz — start membership"}
+              </button>
+
+              {error ? (
+                <div className="mt-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2 max-w-sm">
+                  {error}
+                </div>
+              ) : null}
             </div>
 
-            {/* Main hero image — smaller, square-ish */}
-            {/* Mobile order=2 pushes the image BELOW the buy box on small screens
-                so price + CTA are visible above the fold. Desktop unchanged. */}
-            <div className="lg:col-span-6 order-2 lg:order-none">
-              <div className="relative aspect-square bg-bone-dark/40 rounded-lg overflow-hidden border border-forest/10">
+            {/* Hero image */}
+            <div className="lg:col-span-7 order-1 lg:order-none">
+              <div className="relative aspect-[4/5] sm:aspect-[5/4] lg:aspect-[4/5] bg-bone-dark/40 rounded-sm overflow-hidden">
                 <ReserveHeroImage
-                  src={hero.src}
-                  alt={hero.alt}
-                  treatment={hero.treatment === "flatlay" ? "flatlay" : "default"}
-                  sizes="(min-width: 1024px) 50vw, 100vw"
+                  src={heroShot.src}
+                  alt={heroShot.alt}
+                  treatment={heroShot.treatment === "flatlay" ? "flatlay" : "default"}
+                  sizes="(min-width: 1024px) 58vw, 100vw"
                   priority
                   unoptimized
                 />
-                {hero.isExample ? (
-                  <div className="absolute top-4 left-4 z-10 inline-flex items-center gap-1.5 bg-forest/90 backdrop-blur-sm text-bone text-[10px] tracking-[0.22em] uppercase font-medium px-3 py-1.5 rounded-sm shadow-sm">
-                    <svg className="h-3 w-3" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M12 2L2 7v10l10 5 10-5V7L12 2zm0 2.2L19.8 8 12 11.8 4.2 8 12 4.2zM4 9.8l7 3.5v6.4l-7-3.5V9.8zm9 9.9v-6.4l7-3.5v6.4l-7 3.5z"/>
-                    </svg>
-                    Example of past inclusions
-                  </div>
-                ) : null}
               </div>
-              {/* Mobile thumbnail strip */}
-              <div className="lg:hidden mt-3 grid grid-cols-5 gap-2">
-                {LP_GALLERY.map((g, i) => (
-                  <button
-                    key={g.src}
-                    type="button"
-                    onClick={() => setHeroIndex(i)}
-                    className={`relative aspect-square rounded-md overflow-hidden border-2 ${
-                      g.treatment === "flatlay" ? "bg-[#162b1e]" : ""
-                    } ${
-                      heroIndex === i ? "border-forest" : "border-forest/15"
-                    }`}
-                    aria-label={`Show image ${i + 1}`}
-                  >
-                    <Image
-                      src={g.src}
-                      alt={g.alt}
-                      fill
-                      sizes="60px"
-                      className={g.treatment === "flatlay" ? "object-contain" : "object-cover"}
-                      unoptimized
-                    />
-                    {g.isExample ? (
-                      <span className="absolute top-0.5 left-0.5 bg-forest/90 text-bone text-[7px] tracking-[0.15em] uppercase px-1 py-0.5 rounded-sm">
-                        Ex.
-                      </span>
-                    ) : null}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Buy box */}
-            {/* Mobile order=1 places the buy box (price + CTA) at the top on small screens. */}
-            <div className="lg:col-span-5 flex flex-col order-1 lg:order-none">
-              <div className="text-[11px] tracking-[0.25em] uppercase text-ember/80 mb-2">
-                Mully Reserve · Quarterly Curation
-              </div>
-              <h1 className="font-serif text-3xl sm:text-4xl text-forest leading-[1.1]">
-                A guy who handles<br />
-                your golf wardrobe.
-              </h1>
-
-              <div className="mt-3 flex items-center gap-2 text-sm">
-                <div className="inline-flex items-center gap-0.5 text-ember">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <svg
-                      key={i}
-                      className="h-4 w-4"
-                      viewBox="0 0 24 24"
-                      fill="currentColor"
-                    >
-                      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 22 12 18.56 5.82 22 7 14.14l-5-4.87 6.91-1.01L12 2z" />
-                    </svg>
-                  ))}
-                </div>
-                <span className="text-charcoal/70 text-xs">
-                  4.9 · 1,247 members
-                </span>
-              </div>
-
-              <p className="text-sm text-charcoal/80 mt-4 leading-relaxed">
-                Quarterly curation from the brands worth knowing. $300+ retail
-                value every quarter, plus a rangefinder welcome gift on your
-                first quarter. Take the 60-second style quiz to see what we'd
-                send you.
-              </p>
-
-              {/* Founding 100 — hidden when sold out / inactive. */}
-              <FoundingHundredCard className="mt-5" />
-
-              {/* Price + CTA */}
-              <div className="mt-5 bg-bone-dark/40 rounded-lg border border-forest/15 p-5">
-                <div className="flex items-baseline justify-between">
-                  <div>
-                    <div className="text-[11px] uppercase tracking-[0.2em] text-charcoal/60">
-                      Reserve Member
-                    </div>
-                    <div className="font-serif text-3xl text-forest mt-1">
-                      $250
-                      <span className="text-base text-charcoal/60 font-sans ml-1">
-                        / quarter
-                      </span>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-xs text-ember font-medium">
-                      MOST POPULAR
-                    </div>
-                    <div className="text-[11px] text-charcoal/60 mt-0.5">
-                      Billed every 3 months
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-5">
-                  <QuizLauncher
-                    variant="primary-large"
-                    label="See what we'd send you — 60 seconds"
-                    source="lp_subscription_hero"
-                  />
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleStart}
-                  disabled={loading}
-                  className="w-full mt-2 text-xs underline text-charcoal/60 hover:text-charcoal/90 py-2 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading ? "Opening checkout…" : "Skip the quiz — start membership now"}
-                </button>
-
-                <div className="mt-3 flex items-center justify-center gap-1.5 text-[11px] text-charcoal/60">
-                  <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <rect x="3" y="11" width="18" height="11" rx="2" />
-                    <path d="M7 11V7a5 5 0 0110 0v4" />
-                  </svg>
-                  Free to see your edit · No charge until checkout
-                </div>
-
-                {error ? (
-                  <div className="mt-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2">
-                    {error}
-                  </div>
-                ) : null}
-              </div>
-
-              {/* In-box quick facts */}
-              <ul className="mt-5 space-y-2.5">
-                {ABOUT_BULLETS.slice(0, 3).map((b) => (
-                  <li
-                    key={b}
-                    className="flex gap-2.5 text-sm text-charcoal/80 leading-snug"
-                  >
-                    <span className="text-ember mt-1 shrink-0">▸</span>
-                    <span>{b}</span>
-                  </li>
-                ))}
-              </ul>
             </div>
           </div>
         </div>
+      </section>
 
-        {/* ----------------------- TRUST BADGE STRIP ----------------------- */}
-        <div className="mt-10">
-          <TrustBadgeStrip />
+      {/* ====================== WEDGE / VALUE STRIP ====================== */}
+      <section className="mt-16 sm:mt-24 border-y border-forest/10 bg-bone-dark/30 py-10">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 grid grid-cols-2 sm:grid-cols-4 gap-6">
+          {PROOF_STATS.map((p) => (
+            <div key={p.label} className="text-center">
+              <div className="font-serif text-3xl sm:text-4xl text-forest">
+                {p.stat}
+              </div>
+              <div className="text-[11px] sm:text-xs tracking-[0.18em] uppercase text-charcoal/60 mt-1.5">
+                {p.label}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ========================= "HAVE A GUY" =========================== */}
+      <section className="py-16 sm:py-24">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 text-center">
+          <div className="text-[11px] tracking-[0.28em] uppercase text-ember/90 mb-4">
+            The pitch
+          </div>
+          <h2 className="font-serif text-3xl sm:text-4xl text-forest leading-tight">
+            You should have a guy who handles your golf wardrobe.
+          </h2>
+          <p className="text-base sm:text-lg text-charcoal/75 mt-6 leading-relaxed">
+            Four times a year we send the pieces we'd put on ourselves. Brands
+            worth knowing — Greyson, Rhone, Quiet Golf, Field Day, Penfold.
+            Fit confirmed before anything ships.
+          </p>
         </div>
 
-        {/* ----------------------- BRAND LOGOS ----------------------- */}
-        <section className="py-8 bg-bone">
-          <div className="max-w-5xl mx-auto px-4 sm:px-6">
-            <div className="text-center text-[11px] tracking-[0.25em] uppercase text-charcoal/55 mb-5">
-              Brands you'll find inside
-            </div>
-            <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-x-4 gap-y-5 items-center">
-              {BRAND_LOGOS.map((b) => (
-                <div key={b.alt} className="relative h-7 sm:h-8">
-                  <Image
-                    src={b.src}
-                    alt={b.alt}
-                    fill
-                    sizes="80px"
-                    className="object-contain opacity-65"
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* ----------------------- ABOUT RESERVE ----------------------- */}
-        <section className="py-12 bg-bone-dark/30 border-y border-forest/10">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6">
-            <h2 className="font-serif text-xl text-forest mb-5">
-              About Reserve
-            </h2>
-            <ul className="space-y-3">
-              {ABOUT_BULLETS.map((b) => (
-                <li
-                  key={b}
-                  className="flex gap-3 text-sm text-charcoal/85 leading-relaxed"
-                >
-                  <span className="text-ember mt-1.5 shrink-0 text-xs">●</span>
-                  <span>{b}</span>
-                </li>
-              ))}
-            </ul>
-            <div className="mt-6">
-              <GuaranteedValue />
-            </div>
-          </div>
-        </section>
-
-        {/* ----------------------- HOW IT WORKS ----------------------- */}
-        <HowItWorks />
-
-        {/* ----------------------- RECENT BOXES CAROUSEL ----------------------- */}
-        <RecentBoxesCarousel />
-
-        {/* ----------------------- LIFESTYLE GALLERY ----------------------- */}
-        <LifestyleGallery />
-
-        {/* ----------------------- PRODUCT DETAILS ----------------------- */}
-        <ProductDetails />
-
-        {/* ----------------------- REVIEWS ----------------------- */}
-        <ReviewsBlock />
-
-        {/* ----------------------- FINAL CTA ----------------------- */}
-        <section className="bg-forest text-bone py-16 sm:py-20">
-          <div className="max-w-3xl mx-auto px-4 sm:px-6 text-center">
-            <h2 className="font-serif text-3xl sm:text-4xl">
-              See your quarterly edit before you commit.
-            </h2>
-            <p className="text-sm sm:text-base text-bone/80 mt-4 max-w-2xl mx-auto leading-relaxed">
-              60-second style quiz. We'll show you the four pieces we'd send
-              this quarter plus the rangefinder welcome gift — then it's your
-              call. No charge to see it.
-            </p>
-            <div className="mt-7 inline-block">
-              <QuizLauncher
-                variant="primary-pill"
-                label="Build my Reserve edit"
-                source="lp_subscription_final"
-              />
-            </div>
-            <div className="mt-3 text-[11px] text-bone/55">
-              96% renewal · $300+ retail value · Welcome-gift rangefinder yours to keep
-            </div>
-            <div className="mt-6">
-              <button
-                type="button"
-                onClick={handleStart}
-                disabled={loading}
-                className="text-xs underline text-bone/60 hover:text-bone py-2 transition disabled:opacity-50"
+        {/* Editorial grid — supporting shots */}
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 mt-12">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            {gridShots.map((g) => (
+              <div
+                key={g.src}
+                className={`relative aspect-[3/4] rounded-sm overflow-hidden ${
+                  g.treatment === "flatlay" ? "bg-[#162b1e]" : "bg-bone-dark/40"
+                }`}
               >
-                {loading ? "Opening checkout…" : "Skip the quiz — start membership now"}
-              </button>
+                <Image
+                  src={g.src}
+                  alt={g.alt}
+                  fill
+                  sizes="(min-width: 1024px) 24vw, 50vw"
+                  className={
+                    g.treatment === "flatlay"
+                      ? "object-contain p-3"
+                      : "object-cover"
+                  }
+                  unoptimized
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ============================ GIFT ================================ */}
+      <section className="py-16 sm:py-20 bg-forest text-bone">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
+          <div className="relative aspect-[4/3] rounded-sm overflow-hidden bg-forest-dark">
+            <Image
+              src="/lp/quiz/rangefinder-gift.jpg"
+              alt="Rangefinder welcome gift"
+              fill
+              sizes="(min-width: 1024px) 40vw, 100vw"
+              className="object-cover"
+              unoptimized
+            />
+          </div>
+          <div>
+            <div className="text-[11px] tracking-[0.28em] uppercase text-ember mb-4">
+              Welcome gift
+            </div>
+            <h2 className="font-serif text-3xl sm:text-4xl leading-tight">
+              A rangefinder, on us.
+            </h2>
+            <p className="text-base sm:text-lg text-bone/80 mt-5 leading-relaxed">
+              Every new Reserve member gets a precision rangefinder with their
+              first quarter. Yours to keep — even if you cancel.
+            </p>
+            <div className="mt-7 inline-flex items-center gap-2 text-[11px] tracking-[0.22em] uppercase text-bone/65 border border-bone/25 rounded-sm px-3 py-2">
+              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M20 6L9 17l-5-5" />
+              </svg>
+              Yours to keep
             </div>
           </div>
-        </section>
+        </div>
+      </section>
 
-        <footer className="bg-forest-dark text-bone/55 text-xs pt-8 pb-24 lg:pb-8 text-center">
-          © {new Date().getFullYear()} Mullybox. All rights reserved.
-        </footer>
-      </main>
+      {/* ========================= HOW IT WORKS =========================== */}
+      <section className="py-16 sm:py-24 bg-bone">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6">
+          <div className="text-center mb-12">
+            <div className="text-[11px] tracking-[0.28em] uppercase text-ember/90 mb-3">
+              How it works
+            </div>
+            <h2 className="font-serif text-3xl sm:text-4xl text-forest">
+              Three steps. Sixty seconds.
+            </h2>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 sm:gap-10">
+            {HOW_IT_WORKS.map((s) => (
+              <div key={s.n} className="text-center sm:text-left">
+                <div className="font-serif text-5xl text-ember/80 mb-3 leading-none">
+                  {s.n}
+                </div>
+                <div className="font-serif text-xl text-forest">{s.title}</div>
+                <div className="text-sm text-charcoal/70 mt-2 leading-relaxed">
+                  {s.body}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
-      {/* ----------------------- MOBILE STICKY CTA ----------------------- */}
-      {/* Pinned to the bottom of the viewport on small screens so a CTA is
-          always one tap away regardless of scroll depth. Hidden on lg+. */}
+      {/* ========================== BRAND LOGOS =========================== */}
+      <section className="py-12 sm:py-16 border-y border-forest/10 bg-bone-dark/30">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6">
+          <div className="text-center text-[11px] tracking-[0.28em] uppercase text-charcoal/55 mb-7">
+            Brands you'll find inside
+          </div>
+          <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-x-5 gap-y-6 items-center">
+            {BRAND_LOGOS.map((b) => (
+              <div key={b.alt} className="relative h-8 sm:h-9">
+                <Image
+                  src={b.src}
+                  alt={b.alt}
+                  fill
+                  sizes="80px"
+                  className="object-contain opacity-70"
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* =========================== FOUNDING ============================= */}
+      <FoundingHundredCard className="max-w-3xl mx-auto px-4 sm:px-6 mt-12" />
+
+      {/* ============================ REVIEWS ============================= */}
+      <ReviewsBlock />
+
+      {/* =========================== FINAL CTA ============================ */}
+      <section className="bg-forest text-bone py-20 sm:py-24">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 text-center">
+          <div className="text-[11px] tracking-[0.28em] uppercase text-ember mb-4">
+            $250 / quarter · billed every 3 months
+          </div>
+          <h2 className="font-serif text-3xl sm:text-5xl leading-[1.05]">
+            See your edit before
+            <br />
+            you commit.
+          </h2>
+          <p className="text-base sm:text-lg text-bone/75 mt-6 max-w-xl mx-auto leading-relaxed">
+            We'll show you the four pieces we'd send this quarter, plus the
+            welcome-gift rangefinder. Then it's your call.
+          </p>
+          <div className="mt-9 inline-block w-full max-w-sm">
+            <QuizLauncher
+              variant="primary-large"
+              label="Build my Reserve edit"
+              source="lp_subscription_final"
+            />
+          </div>
+          <div className="mt-4 text-[11px] tracking-[0.18em] uppercase text-bone/55">
+            96% renewal · Free shipping · Cancel after Q1
+          </div>
+          <div className="mt-6">
+            <button
+              type="button"
+              onClick={handleSkipToCheckout}
+              disabled={loading}
+              className="text-xs underline text-bone/55 hover:text-bone py-2 transition disabled:opacity-50"
+            >
+              {loading ? "Opening checkout…" : "Skip the quiz — start membership"}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <footer className="bg-forest-dark text-bone/55 text-xs pt-8 pb-24 lg:pb-8 text-center">
+        © {new Date().getFullYear()} Mullybox. All rights reserved.
+      </footer>
+
+      {/* ====================== MOBILE STICKY CTA ========================= */}
       <div
         className="lg:hidden fixed bottom-0 inset-x-0 z-40 border-t border-forest/15 bg-bone/95 backdrop-blur-md shadow-[0_-4px_16px_-8px_rgba(0,0,0,0.15)]"
         style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       >
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <div className="text-[10px] tracking-[0.18em] uppercase text-charcoal/55">
+            <div className="text-[10px] tracking-[0.2em] uppercase text-charcoal/55">
               Reserve · 60-second quiz
             </div>
             <div className="font-serif text-base text-forest leading-tight">

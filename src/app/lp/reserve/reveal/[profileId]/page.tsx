@@ -4,16 +4,13 @@
  * The middle-of-funnel destination after the visitor completes the style quiz.
  * Renders the personalized edit (2 apparel + 2 accessories + rangefinder gift)
  * pulled live from Shopify, with the $300+ value math and a single primary
- * CTA → Shopify membership checkout.
+ * CTA → Shopify membership checkout (with quiz answers attached as line
+ * item properties).
  *
  * Gating:
  *   - 404 if the profileId doesn't exist in Firestore.
  *   - Renders an "already a member" friendly state if the profile was already
  *     converted (Shopify orders-paid webhook had already matched the email).
- *   - Anyone can hit the URL directly (it's a personalized page, not an
- *     auth-gated one) — but the content is built only from the profile's
- *     stored answers + Shopify catalog, so there's no PII leakage beyond
- *     what the visitor entered.
  */
 
 import { notFound } from "next/navigation";
@@ -30,7 +27,7 @@ import {
   STYLE_BUCKET_VOICE,
   type StyleBucket,
 } from "@/lib/styleProfiles/types";
-import { ReserveCheckoutCTA } from "./ReserveCheckoutCTA";
+import { ReserveCheckoutCTA, type QuizLineItemPropsInput } from "./ReserveCheckoutCTA";
 import { RevealPageView } from "./RevealPageView";
 
 export const dynamic = "force-dynamic";
@@ -46,6 +43,27 @@ export const metadata: Metadata = {
 interface PageProps {
   params: Promise<{ profileId: string }>;
 }
+
+const FIT_LABEL: Record<string, string> = {
+  tailored: "Tailored",
+  regular: "Regular",
+  relaxed: "Relaxed",
+};
+
+const CATEGORY_LABEL: Record<string, string> = {
+  polos: "Polos & shirts",
+  layers: "Layers & 1/4 zips",
+  shorts_pants: "Shorts & pants",
+  outerwear: "Outerwear",
+  accessories: "Hats & accessories",
+};
+
+const PLAY_LABEL: Record<string, string> = {
+  weekly_plus: "Multiple times a week",
+  weekly: "About once a week",
+  monthly: "A few times a month",
+  occasional: "Now and then",
+};
 
 export default async function ReserveRevealPage({ params }: PageProps) {
   const { profileId } = await params;
@@ -74,18 +92,35 @@ export default async function ReserveRevealPage({ params }: PageProps) {
 
   const alreadyConverted = profile.status === "converted";
 
+  // Build the LIP payload from the profile's stored answers. These flow into
+  // Shopify as line item properties on the Reserve subscription line.
+  const quizLineItemProps: QuizLineItemPropsInput = {
+    styleBucket: profile.styleBucket,
+    styleLabel: profile.styleBucket ? STYLE_BUCKET_LABELS[profile.styleBucket] : null,
+    categoryPrefs: (profile.answers?.categoryPrefs ?? []).map(
+      (c) => CATEGORY_LABEL[c] ?? c
+    ),
+    fit: profile.answers?.fit ? FIT_LABEL[profile.answers.fit] ?? profile.answers.fit : null,
+    topSize: profile.answers?.topSize ?? null,
+    bottomSize: profile.answers?.bottomSize ?? null,
+    favoriteBrands: profile.answers?.favoriteBrands ?? [],
+    playFrequency: profile.answers?.playFrequency
+      ? PLAY_LABEL[profile.answers.playFrequency] ?? profile.answers.playFrequency
+      : null,
+  };
+
   return (
-    <main className="min-h-screen bg-white text-zinc-900">
+    <main className="min-h-screen bg-bone text-charcoal">
       <RevealPageView profileId={profileId} bucket={bucket} />
 
-      <section className="mx-auto max-w-4xl px-4 pb-16 pt-12 sm:px-6 sm:pt-20">
-        <p className="mb-3 text-xs uppercase tracking-[0.22em] text-zinc-500">
+      <section className="mx-auto max-w-4xl px-4 pb-10 pt-12 sm:px-6 sm:pt-20">
+        <p className="mb-3 text-[11px] uppercase tracking-[0.25em] text-ember/85">
           {bucketLabel} · Your Reserve edit
         </p>
-        <h1 className="text-3xl font-medium tracking-tight text-zinc-900 sm:text-5xl">
+        <h1 className="font-serif text-3xl text-forest leading-[1.1] sm:text-5xl">
           {voice.headline}
         </h1>
-        <p className="mt-4 max-w-2xl text-base text-zinc-600 sm:text-lg">
+        <p className="mt-4 max-w-2xl text-base text-charcoal/75 sm:text-lg">
           {voice.oneLiner}
         </p>
       </section>
@@ -96,7 +131,11 @@ export default async function ReserveRevealPage({ params }: PageProps) {
         <>
           <EditGrid edit={edit} />
           <ValueBlock edit={edit} />
-          <CheckoutBlock profileId={profileId} bucket={bucket} />
+          <CheckoutBlock
+            profileId={profileId}
+            bucket={bucket}
+            quizLineItemProps={quizLineItemProps}
+          />
           <ProofBlock />
         </>
       )}
@@ -114,7 +153,7 @@ function EditGrid({ edit }: { edit: RevealEdit }) {
   return (
     <section className="mx-auto max-w-6xl px-4 pb-8 sm:px-6">
       {apparel.length + accessories.length === 0 && (
-        <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-8 text-center text-zinc-600">
+        <div className="rounded-lg border border-forest/15 bg-bone-dark/40 p-8 text-center text-charcoal/70">
           Your edit is being prepared. Refresh in a moment.
         </div>
       )}
@@ -155,10 +194,8 @@ function SubBlock({
   return (
     <div className="mb-12">
       <div className="mb-4 flex items-baseline justify-between gap-4">
-        <h2 className="text-xl font-medium tracking-tight text-zinc-900 sm:text-2xl">
-          {title}
-        </h2>
-        <p className="text-sm text-zinc-500">{subtitle}</p>
+        <h2 className="font-serif text-xl text-forest sm:text-2xl">{title}</h2>
+        <p className="text-xs text-charcoal/65 sm:text-sm">{subtitle}</p>
       </div>
       {children}
     </div>
@@ -196,11 +233,13 @@ function ProductCard({
   return (
     <article
       className={[
-        "overflow-hidden rounded-2xl border bg-white",
-        highlight ? "border-amber-300 shadow-sm" : "border-zinc-200",
+        "overflow-hidden rounded-lg border bg-bone",
+        highlight
+          ? "border-ember/40 shadow-[0_4px_24px_-12px_rgba(212,119,44,0.35)]"
+          : "border-forest/15",
       ].join(" ")}
     >
-      <div className="relative aspect-[4/5] w-full bg-zinc-100">
+      <div className="relative aspect-square w-full bg-bone-dark/40">
         {product.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -212,23 +251,23 @@ function ProductCard({
         ) : null}
       </div>
       <div className="px-5 py-4">
-        <div className="text-xs uppercase tracking-wide text-zinc-500">
+        <div className="text-[10px] uppercase tracking-[0.2em] text-ember/85">
           {product.vendor ?? product.productType ?? "Mully"}
         </div>
-        <div className="mt-1 line-clamp-2 text-base font-medium text-zinc-900">
+        <div className="mt-1 line-clamp-2 text-sm font-medium text-forest sm:text-base">
           {product.title}
         </div>
         <div className="mt-2 flex items-baseline gap-2">
-          <span className="text-sm font-medium text-zinc-900">
+          <span className="text-sm font-medium text-charcoal">
             {product.priceDisplay}
           </span>
           {product.compareAtDisplay && (
-            <span className="text-xs text-zinc-400 line-through">
+            <span className="text-xs text-charcoal/45 line-through">
               {product.compareAtDisplay}
             </span>
           )}
           {highlight && (
-            <span className="ml-auto rounded-full bg-amber-100 px-2 py-0.5 text-[10px] uppercase tracking-wide text-amber-800">
+            <span className="ml-auto rounded-full bg-ember/15 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-ember">
               Gift
             </span>
           )}
@@ -242,33 +281,33 @@ function ValueBlock({ edit }: { edit: RevealEdit }) {
   if (edit.totalRetailCents === 0) return null;
   return (
     <section className="mx-auto max-w-4xl px-4 pb-12 sm:px-6">
-      <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-6 sm:p-8">
+      <div className="rounded-lg border border-forest/15 bg-bone-dark/40 p-6 sm:p-8">
         <div className="grid items-baseline gap-4 sm:grid-cols-3">
           <div>
-            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">
+            <div className="text-[10px] uppercase tracking-[0.22em] text-charcoal/60">
               Retail value
             </div>
-            <div className="mt-1 text-3xl font-medium text-zinc-900">
+            <div className="mt-1 font-serif text-3xl text-forest">
               {formatCentsUSD(edit.totalRetailCents)}+
             </div>
           </div>
           <div>
-            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">
+            <div className="text-[10px] uppercase tracking-[0.22em] text-charcoal/60">
               You pay
             </div>
-            <div className="mt-1 text-3xl font-medium text-zinc-900">
+            <div className="mt-1 font-serif text-3xl text-forest">
               {formatCentsUSD(edit.reservePriceCents)}
             </div>
-            <div className="text-xs text-zinc-500">/ quarter</div>
+            <div className="text-xs text-charcoal/60">/ quarter</div>
           </div>
           <div>
-            <div className="text-xs uppercase tracking-[0.18em] text-zinc-500">
+            <div className="text-[10px] uppercase tracking-[0.22em] text-charcoal/60">
               Plus
             </div>
-            <div className="mt-1 text-base font-medium text-zinc-900">
+            <div className="mt-1 text-base font-medium text-forest">
               Rangefinder welcome gift
             </div>
-            <div className="text-xs text-zinc-500">Yours to keep.</div>
+            <div className="text-xs text-charcoal/60">Yours to keep.</div>
           </div>
         </div>
       </div>
@@ -279,15 +318,21 @@ function ValueBlock({ edit }: { edit: RevealEdit }) {
 function CheckoutBlock({
   profileId,
   bucket,
+  quizLineItemProps,
 }: {
   profileId: string;
   bucket: StyleBucket;
+  quizLineItemProps: QuizLineItemPropsInput;
 }) {
   return (
     <section className="mx-auto max-w-2xl px-4 pb-16 sm:px-6">
-      <ReserveCheckoutCTA profileId={profileId} styleBucket={bucket} />
-      <p className="mt-4 text-center text-xs text-zinc-500">
-        Sizing is confirmed after checkout. Free shipping. Cancel anytime after the first quarter.
+      <ReserveCheckoutCTA
+        profileId={profileId}
+        styleBucket={bucket}
+        quizLineItemProps={quizLineItemProps}
+      />
+      <p className="mt-4 text-center text-xs text-charcoal/65">
+        Your quiz answers travel with your order. Sizing confirmed after checkout. Free shipping. Cancel anytime after the first quarter.
       </p>
     </section>
   );
@@ -295,7 +340,7 @@ function CheckoutBlock({
 
 function ProofBlock() {
   return (
-    <section className="mx-auto max-w-4xl border-t border-zinc-200 px-4 py-16 sm:px-6">
+    <section className="mx-auto max-w-4xl border-t border-forest/15 px-4 py-16 sm:px-6">
       <div className="grid gap-8 sm:grid-cols-3 sm:gap-12">
         <Stat label="Renewal rate" value="96%" />
         <Stat label="Quarterly retail value" value="$300+" />
@@ -308,10 +353,18 @@ function ProofBlock() {
 function Stat({ label, value, small }: { label: string; value: string; small?: boolean }) {
   return (
     <div>
-      <div className={small ? "text-xl font-medium text-zinc-900" : "text-4xl font-medium text-zinc-900"}>
+      <div
+        className={
+          small
+            ? "font-serif text-xl text-forest"
+            : "font-serif text-4xl text-forest"
+        }
+      >
         {value}
       </div>
-      <div className="mt-1 text-xs uppercase tracking-[0.18em] text-zinc-500">{label}</div>
+      <div className="mt-1 text-[10px] uppercase tracking-[0.22em] text-charcoal/60">
+        {label}
+      </div>
     </div>
   );
 }
@@ -319,14 +372,14 @@ function Stat({ label, value, small }: { label: string; value: string; small?: b
 function ConvertedState() {
   return (
     <section className="mx-auto max-w-2xl px-4 pb-24 sm:px-6">
-      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-8 text-center">
-        <div className="text-xs uppercase tracking-[0.22em] text-emerald-700">
+      <div className="rounded-lg border border-forest/30 bg-forest/5 p-8 text-center">
+        <div className="text-[11px] uppercase tracking-[0.22em] text-forest/80">
           You're in
         </div>
-        <h2 className="mt-2 text-2xl font-medium tracking-tight text-emerald-900">
+        <h2 className="mt-2 font-serif text-2xl text-forest">
           Looks like you've already joined Reserve.
         </h2>
-        <p className="mt-3 text-sm text-emerald-900/80">
+        <p className="mt-3 text-sm text-charcoal/75">
           Check your inbox for the next steps. If you don't see anything, reply to drew@mymully.com
           and I'll sort it out personally.
         </p>
