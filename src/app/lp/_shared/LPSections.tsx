@@ -154,44 +154,25 @@ export function RecentBoxesCarousel() {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Reviews block — service/care/taste proof + single Junip widget            */
+/*  Reviews block — live Junip widget only, framed by editorial header        */
 /*                                                                             */
-/*  Strategy: Reserve's #1 proof is being TAKEN CARE OF. We render hand-       */
-/*  picked service-emphasis testimonials as large-type designed quotes ABOVE   */
-/*  the live widget, then show ONE widget (Reserve Member — the lead SKU)     */
-/*  underneath for ongoing social proof. The old layout stacked two widgets    */
-/*  and surfaced "perfect gift for my teenage son" style reviews that don't    */
-/*  match our 35+ buyer.                                                       */
+/*  We used to render three hand-picked pull-quotes above the Junip widget.   */
+/*  Per Drew, the live Junip reviews already cover the proof; the hand-       */
+/*  written quotes were redundant. We keep the editorial "Why members stay /  */
+/*  Taken care of." header (it sets the emotional frame) and let Junip do     */
+/*  the rest.                                                                  */
 /*                                                                             */
 /*  Product IDs (Junip):                                                       */
 /*    Reserve Member: 8501257044160                                            */
-/*    Reserve Access: 8501257175232  (suppressed on LP — still rendered on    */
+/*    Reserve Access: 8501257175232  (suppressed on LP — still rendered on   */
 /*                                    /reservecard and product detail pages)   */
 /* -------------------------------------------------------------------------- */
-
-const FEATURED_TESTIMONIALS = [
-  {
-    quote:
-      "When something wasn’t right, Jack the COO personally resolved it. That’s the kind of care you don’t get anywhere else.",
-    attribution: "Verified member",
-  },
-  {
-    quote:
-      "Excellent customer service and pieces I’d actually wear on the course. They get the brief.",
-    attribution: "Verified member",
-  },
-  {
-    quote:
-      "Better than anything I would have put together myself. Fit was confirmed before it shipped — it just worked.",
-    attribution: "Verified member",
-  },
-];
 
 export function ReviewsBlock() {
   return (
     <section className="bg-bone-dark/40 py-16 sm:py-24 border-y border-forest/10">
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
-        <div className="text-center mb-12">
+        <div className="text-center mb-10 sm:mb-12">
           <div className="text-[11px] tracking-[0.25em] uppercase text-ember/80 mb-2">
             Why members stay
           </div>
@@ -200,38 +181,9 @@ export function ReviewsBlock() {
           </h2>
         </div>
 
-        {/* Featured service testimonials — large editorial pull-quotes */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-10 mb-16">
-          {FEATURED_TESTIMONIALS.map((t, i) => (
-            <figure
-              key={i}
-              className="bg-bone rounded-sm border border-forest/10 p-7 sm:p-8 flex flex-col"
-            >
-              <svg
-                className="h-6 w-6 text-ember/80 mb-4"
-                viewBox="0 0 32 32"
-                fill="currentColor"
-                aria-hidden="true"
-              >
-                <path d="M11 8H6a2 2 0 00-2 2v6a4 4 0 004 4v3l5-3V10a2 2 0 00-2-2zm14 0h-5a2 2 0 00-2 2v6a4 4 0 004 4v3l5-3V10a2 2 0 00-2-2z" />
-              </svg>
-              <blockquote className="font-serif text-lg sm:text-xl text-forest leading-snug flex-1">
-                “{t.quote}”
-              </blockquote>
-              <figcaption className="mt-5 text-[10px] tracking-[0.22em] uppercase text-charcoal/55">
-                {t.attribution}
-              </figcaption>
-            </figure>
-          ))}
-        </div>
-
-        {/* Single live Junip widget — Reserve Member (lead SKU) */}
+        {/* Live Junip widget — Reserve Member (lead SKU). The widget brings
+            its own header/star rating, so no extra eyebrow needed here. */}
         <div className="junip-reviews-frame">
-          <div className="text-center mb-6">
-            <div className="text-[11px] tracking-[0.25em] uppercase text-forest/60">
-              More from Reserve Members
-            </div>
-          </div>
           <span
             className="junip-product-review"
             data-product-id="8501257044160"

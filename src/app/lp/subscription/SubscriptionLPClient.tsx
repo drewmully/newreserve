@@ -32,6 +32,7 @@ import { GlassHeader } from "@/app/components/ClientComponents";
 import { ReserveHeroImage } from "@/app/components/ReserveHeroImage";
 import { LP_GALLERY, RECENT_BOX_PRODUCTS } from "../_shared/products";
 import { ReviewsBlock } from "../_shared/LPSections";
+import { CuratorStrip } from "../_shared/CuratorStrip";
 import { QuizLauncher } from "../_shared/QuizLauncher";
 
 const BRAND_LOGOS = [
@@ -312,6 +313,10 @@ export default function SubscriptionLPClient() {
 
       {/* ============================ REVIEWS ============================= */}
       <ReviewsBlock />
+
+      {/* ========================== CURATOR STRIP ========================= */}
+      {/* Trust accent below the testimonials: who's actually behind Reserve. */}
+      <CuratorStrip />
 
       {/* =========================== FINAL CTA ============================ */}
       <section className="bg-forest text-bone py-20 sm:py-24">
