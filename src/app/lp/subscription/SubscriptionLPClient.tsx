@@ -71,11 +71,11 @@ export default function SubscriptionLPClient() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Pick the first non-flatlay editorial shot for the hero.
-  const heroShot =
-    LP_GALLERY.find((g) => g.treatment !== "flatlay") ?? LP_GALLERY[0];
-  // Pick four supporting shots for the editorial grid.
-  const gridShots = LP_GALLERY.filter((g) => g.src !== heroShot.src).slice(0, 4);
+  // Match the original LP behavior — hero defaults to LP_GALLERY[0], which is
+  // the editorial flat-lay shot of a Reserve quarter on turf.
+  const heroShot = LP_GALLERY[0];
+  // Supporting shots for the editorial grid — everything else.
+  const gridShots = LP_GALLERY.slice(1, 5);
 
   useEffect(() => {
     captureAttributionFromUrl();
@@ -158,9 +158,15 @@ export default function SubscriptionLPClient() {
               ) : null}
             </div>
 
-            {/* Hero image */}
+            {/* Hero image — original flat-lay editorial shot. */}
             <div className="lg:col-span-7 order-1 lg:order-none">
-              <div className="relative aspect-[4/5] sm:aspect-[5/4] lg:aspect-[4/5] bg-bone-dark/40 rounded-sm overflow-hidden">
+              <div
+                className={`relative aspect-[4/5] sm:aspect-[5/4] lg:aspect-[4/5] rounded-sm overflow-hidden ${
+                  heroShot.treatment === "flatlay"
+                    ? "bg-[#162b1e]"
+                    : "bg-bone-dark/40"
+                }`}
+              >
                 <ReserveHeroImage
                   src={heroShot.src}
                   alt={heroShot.alt}
