@@ -21,14 +21,14 @@ import type { Metadata } from "next";
 import SubscriptionLPClient from "./SubscriptionLPClient";
 
 export const metadata: Metadata = {
-  title: "Mully Reserve — The Golf Subscription Box for Discerning Golfers",
+  title: "Mully Reserve — Your Golf Style, Handled",
   description:
-    "Quarterly curations from the brands worth wearing. Hand-picked by editors who play the game. More value inside than what members pay.",
+    "Quarterly editorial curation for golfers with taste. Four to six pieces, $300+ retail, hand-picked by editors who play the game.",
   openGraph: {
-    title: "Mully Reserve — Quarterly Golf Box",
+    title: "Mully Reserve — Quarterly Golf Curation",
     description:
-      "Hand-curated boxes of premium golf brands. More value inside than what members pay. Cancel anytime.",
-    images: ["/reserve-founders-hero.jpg"],
+      "A curator who handles your golf wardrobe. Premium brands, hand-picked, four to six pieces every quarter.",
+    images: ["/reserve-flatlay-hero.webp"],
   },
 };
 

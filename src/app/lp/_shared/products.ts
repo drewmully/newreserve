@@ -1,7 +1,7 @@
 // Real product images pulled from mullybox-store.myshopify.com.
 // Used on /lp/subscription and /lp/gift as examples of what
 // members have received. Captioned as examples — the curation
-// rotates quarterly, so future boxes will not be identical.
+// rotates quarterly, so future quarters will not be identical.
 
 export type LPProduct = {
   title: string;
@@ -96,42 +96,42 @@ export const LP_GALLERY: Array<{
 }> = [
   {
     src: "/reserve-flatlay-hero.webp",
-    alt: "An editor's flat-lay of a recent Mully Reserve box on turf — Greyson tee, Rhone quarter-zip, Field Day hoodie, Will Leather wallet and yardage book, Penfold shoe bag, Cuater striped polo, and a Mully box.",
+    alt: "An editor's flat-lay of a recent Mully Reserve quarter on turf — Greyson tee, Rhone quarter-zip, Field Day hoodie, Will Leather wallet and yardage book, Penfold shoe bag, Cuater striped polo.",
     fit: "contain",
     treatment: "flatlay",
   },
   {
     src: "/reserve-founders-hero.jpg",
-    alt: "A Mully Reserve box, opened — neatly folded apparel, a Mully Reserve card, a braided belt, and a striped polo.",
+    alt: "A Mully Reserve quarter laid out — neatly folded apparel, a Reserve card, a braided belt, and a striped polo.",
     fit: "cover",
   },
   {
     // Outings page hero — staged Mully box with quarter zip, leather pouch,
     // YETI tumbler, and braided belt.
     src: "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/ChatGPT_Image_Feb_11_2026_11_59_56_AM.png?v=1771257707",
-    alt: "A Mully Reserve box staged open with a navy quarter zip, leather pouch, YETI tumbler, and braided belt inside.",
+    alt: "A Mully Reserve quarter staged — navy quarter zip, leather pouch, YETI tumbler, and braided belt.",
     fit: "cover",
   },
   {
     // Outings page unboxing — array of closed Mully boxes from above.
     src: "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/ChatGPT_Image_Feb_10_2026_04_48_19_PM.png?v=1771257707",
-    alt: "A spread of forest-green Mully Reserve boxes shot from above on a neutral surface.",
+    alt: "An overhead spread of Mully Reserve quarterly editions on a neutral surface.",
     fit: "cover",
   },
   // Last two thumbs are real product photos — Rhone + Quiet Golf for
   // consistent vendor representation in the hero rail.
   ...[RECENT_BOX_PRODUCTS[0], RECENT_BOX_PRODUCTS[2]].map((p) => ({
     src: p.image,
-    alt: `Example of a piece from a past Mully Reserve box: ${p.vendor} ${p.title}.`,
+    alt: `Example of a piece from a past Mully Reserve quarter: ${p.vendor} ${p.title}.`,
     isExample: true,
     fit: "cover" as const,
   })),
 ];
 
 export const TRUST_BADGES = [
-  { icon: "value", label: "$300+ Retail", sub: "Inside every box" },
+  { icon: "value", label: "$300+ Retail", sub: "Every quarter" },
   { icon: "ship", label: "Free Shipping", sub: "Continental US" },
-  { icon: "cancel", label: "Cancel Anytime", sub: "After your first box" },
+  { icon: "cancel", label: "Cancel Anytime", sub: "After your first quarter" },
   { icon: "exchange", label: "Wrong Fit?", sub: "We swap, no questions" },
   { icon: "sizing", label: "Sizing Confirmed", sub: "After your purchase" },
 ] as const;

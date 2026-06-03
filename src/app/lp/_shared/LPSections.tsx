@@ -154,51 +154,87 @@ export function RecentBoxesCarousel() {
 }
 
 /* -------------------------------------------------------------------------- */
-/*  Reviews block — Junip-powered                                             */
-/*  Renders ONLY reviews for the two Reserve products (Reserve Access +       */
-/*  Reserve Member). Uses per-product widgets so other SKUs (Mullybox,        */
-/*  Starter, Elite, etc.) are excluded. Script + store key load once in       */
-/*  src/app/layout.tsx.                                                       */
-/*    Reserve Access: 8501257175232                                           */
-/*    Reserve Member: 8501257044160                                           */
+/*  Reviews block — service/care/taste proof + single Junip widget            */
+/*                                                                             */
+/*  Strategy: Reserve's #1 proof is being TAKEN CARE OF. We render hand-       */
+/*  picked service-emphasis testimonials as large-type designed quotes ABOVE   */
+/*  the live widget, then show ONE widget (Reserve Member — the lead SKU)     */
+/*  underneath for ongoing social proof. The old layout stacked two widgets    */
+/*  and surfaced "perfect gift for my teenage son" style reviews that don't    */
+/*  match our 35+ buyer.                                                       */
+/*                                                                             */
+/*  Product IDs (Junip):                                                       */
+/*    Reserve Member: 8501257044160                                            */
+/*    Reserve Access: 8501257175232  (suppressed on LP — still rendered on    */
+/*                                    /reservecard and product detail pages)   */
 /* -------------------------------------------------------------------------- */
+
+const FEATURED_TESTIMONIALS = [
+  {
+    quote:
+      "When something wasn’t right, Jack the COO personally resolved it. That’s the kind of care you don’t get anywhere else.",
+    attribution: "Verified member",
+  },
+  {
+    quote:
+      "Excellent customer service and pieces I’d actually wear on the course. They get the brief.",
+    attribution: "Verified member",
+  },
+  {
+    quote:
+      "Better than anything I would have put together myself. Fit was confirmed before it shipped — it just worked.",
+    attribution: "Verified member",
+  },
+];
 
 export function ReviewsBlock() {
   return (
-    <section className="bg-bone-dark/40 py-14 sm:py-20 border-y border-forest/10">
+    <section className="bg-bone-dark/40 py-16 sm:py-24 border-y border-forest/10">
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
-        <div className="text-center mb-10">
+        <div className="text-center mb-12">
           <div className="text-[11px] tracking-[0.25em] uppercase text-ember/80 mb-2">
-            Member reviews
+            Why members stay
           </div>
-          <h2 className="font-serif text-2xl sm:text-3xl text-forest">
-            What members say.
+          <h2 className="font-serif text-3xl sm:text-4xl text-forest">
+            Taken care of.
           </h2>
         </div>
 
-        {/* Reserve Member reviews */}
-        <div className="junip-reviews-frame mb-12">
-          <div className="text-center mb-4">
+        {/* Featured service testimonials — large editorial pull-quotes */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-10 mb-16">
+          {FEATURED_TESTIMONIALS.map((t, i) => (
+            <figure
+              key={i}
+              className="bg-bone rounded-sm border border-forest/10 p-7 sm:p-8 flex flex-col"
+            >
+              <svg
+                className="h-6 w-6 text-ember/80 mb-4"
+                viewBox="0 0 32 32"
+                fill="currentColor"
+                aria-hidden="true"
+              >
+                <path d="M11 8H6a2 2 0 00-2 2v6a4 4 0 004 4v3l5-3V10a2 2 0 00-2-2zm14 0h-5a2 2 0 00-2 2v6a4 4 0 004 4v3l5-3V10a2 2 0 00-2-2z" />
+              </svg>
+              <blockquote className="font-serif text-lg sm:text-xl text-forest leading-snug flex-1">
+                “{t.quote}”
+              </blockquote>
+              <figcaption className="mt-5 text-[10px] tracking-[0.22em] uppercase text-charcoal/55">
+                {t.attribution}
+              </figcaption>
+            </figure>
+          ))}
+        </div>
+
+        {/* Single live Junip widget — Reserve Member (lead SKU) */}
+        <div className="junip-reviews-frame">
+          <div className="text-center mb-6">
             <div className="text-[11px] tracking-[0.25em] uppercase text-forest/60">
-              Reserve Member · Quarterly Edit
+              More from Reserve Members
             </div>
           </div>
           <span
             className="junip-product-review"
             data-product-id="8501257044160"
-          />
-        </div>
-
-        {/* Reserve Access reviews */}
-        <div className="junip-reviews-frame">
-          <div className="text-center mb-4">
-            <div className="text-[11px] tracking-[0.25em] uppercase text-forest/60">
-              Reserve Access
-            </div>
-          </div>
-          <span
-            className="junip-product-review"
-            data-product-id="8501257175232"
           />
         </div>
       </div>

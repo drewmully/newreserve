@@ -74,7 +74,7 @@ export default function FoundingHundredCard({
           </div>
 
           <div className="mt-1 font-serif text-[15px] leading-snug text-bone">
-            A rangefinder, hand-delivered with the first box.
+            A rangefinder, hand-delivered with your first quarter.
           </div>
 
           <div className="mt-2.5 flex items-center gap-3">

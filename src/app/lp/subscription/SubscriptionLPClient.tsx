@@ -6,26 +6,31 @@
  * Magazine-style, visual-first, minimal copy. Brand palette:
  *   bone (page bg) / forest (primary) / ember (accents) / charcoal (body)
  *
- * Primary CTA is ALWAYS the style quiz. "Start membership" is a secondary
- * skip-link, never visually competing with the quiz CTA.
+ * Positioning: a CURATOR who handles your golf wardrobe. We are EXITING
+ * the subscription-box category — the product is the CARE and the TASTE,
+ * not the packaging. Buyer is 35+, affluent.
  *
- * Wedge: "a guy who handles your golf wardrobe" — trusted-taste framing
- * for men 35+. Gift framing is prominent (rangefinder yours to keep).
+ * Hero headline (locked): "Your golf style, handled."
+ * The "have a guy who handles your golf wardrobe" line lives ONLY in the
+ * pitch section as warmth — never as the H1.
+ *
+ * Primary CTA everywhere is the style quiz. No skip-to-checkout links —
+ * those leak intent past email capture and into the hard $250 ask.
  *
  * Strategic constraints (do NOT change without product sign-off):
  *   - NEVER use the word "box" — it's "edit", "quarter", "curation", "Reserve".
+ *   - Hero imagery must read "wardrobe," not "package." No closed/stacked boxes.
  *   - Gift is welcome gift, never a discount.
- *   - Quiz CTA wins every CTA collision.
+ *   - Quiz CTA wins every CTA collision; attention ratio stays near 1:1.
  */
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
-import { createMembershipCheckout } from "@/lib/shopifyCheckout";
 import { trackEvent } from "@/lib/tracking";
 import { captureAttributionFromUrl } from "@/lib/attribution";
 import { GlassHeader } from "@/app/components/ClientComponents";
 import { ReserveHeroImage } from "@/app/components/ReserveHeroImage";
-import { LP_GALLERY } from "../_shared/products";
+import { LP_GALLERY, RECENT_BOX_PRODUCTS } from "../_shared/products";
 import { ReviewsBlock } from "../_shared/LPSections";
 import { QuizLauncher } from "../_shared/QuizLauncher";
 
@@ -67,43 +72,33 @@ const PROOF_STATS = [
 ];
 
 export default function SubscriptionLPClient() {
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Match the original LP behavior — hero defaults to LP_GALLERY[0], which is
-  // the editorial flat-lay shot of a Reserve quarter on turf.
+  // Hero: editorial flat-lay of a quarter, presented as an outfit/edit.
+  // (The asset includes a small Mully box element at the bottom of the frame;
+  // when a worn-apparel/member shot becomes available, swap heroShot.src to it.)
   const heroShot = LP_GALLERY[0];
-  // Supporting shots for the editorial grid — everything else.
-  const gridShots = LP_GALLERY.slice(1, 5);
+
+  // Editorial grid — apparel detail only. No staged/stacked boxes. We pull
+  // individual product photography from RECENT_BOX_PRODUCTS so the grid reads
+  // "wardrobe pieces," not "package contents."
+  const gridShots = [
+    RECENT_BOX_PRODUCTS[0], // Rhone Quarter Zip — Layer
+    RECENT_BOX_PRODUCTS[2], // Quiet Golf Vintage Polo — Polo
+    RECENT_BOX_PRODUCTS[4], // Field Day Repel Hoodie — Outerwear
+    RECENT_BOX_PRODUCTS[3], // Will Leather Braided Belt — Accessory
+  ].filter(Boolean);
 
   useEffect(() => {
     captureAttributionFromUrl();
     trackEvent("lp_subscription_view");
   }, []);
 
-  async function handleSkipToCheckout() {
-    setError(null);
-    setLoading(true);
-    trackEvent("lp_subscription_checkout_clicked", {
-      properties: { tier: "member", method: "shopify_checkout" },
-    });
-    try {
-      await createMembershipCheckout("member", {
-        returnPath: "/auth/callback",
-        attributes: [
-          { key: "lp_source", value: "lp_subscription" },
-          { key: "ad_group", value: "google_ads" },
-        ],
-      });
-    } catch (e) {
-      setError(
-        e instanceof Error
-          ? e.message
-          : "Could not start checkout. Please try again or use the form on our homepage."
-      );
-      setLoading(false);
-    }
-  }
+  // NOTE: the previous "Skip the quiz — start membership" links were removed
+  // intentionally. They leaked visitors past email capture into the $250 ask
+  // and tanked segmentation. The quiz IS the funnel. If a future bypass is
+  // ever needed, it should be ONE low-contrast "already sold? start here"
+  // link — not repeated buttons that compete with the quiz CTA.
 
   return (
     <div className="min-h-screen bg-bone text-charcoal">
@@ -119,9 +114,9 @@ export default function SubscriptionLPClient() {
                 Mully Reserve
               </div>
               <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl text-forest leading-[1.02]">
-                A guy who handles
+                Your golf style,
                 <br />
-                your golf wardrobe.
+                handled.
               </h1>
               <p className="text-base sm:text-lg text-charcoal/75 mt-5 leading-relaxed max-w-md">
                 Quarterly editorial curation for golfers with taste. Four to six
@@ -139,16 +134,6 @@ export default function SubscriptionLPClient() {
                   No charge to see your edit
                 </div>
               </div>
-
-              {/* Tertiary skip link */}
-              <button
-                type="button"
-                onClick={handleSkipToCheckout}
-                disabled={loading}
-                className="mt-4 text-xs underline text-charcoal/55 hover:text-charcoal/90 transition disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? "Opening checkout…" : "Skip the quiz — start membership"}
-              </button>
 
               {error ? (
                 <div className="mt-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2 max-w-sm">
@@ -212,29 +197,29 @@ export default function SubscriptionLPClient() {
           </p>
         </div>
 
-        {/* Editorial grid — supporting shots */}
+        {/* Editorial grid — individual apparel product photography, no
+            staged packages. Each tile is a piece you might receive. */}
         <div className="max-w-6xl mx-auto px-4 sm:px-6 mt-12">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-            {gridShots.map((g) => (
-              <div
-                key={g.src}
-                className={`relative aspect-[3/4] rounded-sm overflow-hidden ${
-                  g.treatment === "flatlay" ? "bg-[#162b1e]" : "bg-bone-dark/40"
-                }`}
+            {gridShots.map((p) => (
+              <figure
+                key={p.image}
+                className="relative"
               >
-                <Image
-                  src={g.src}
-                  alt={g.alt}
-                  fill
-                  sizes="(min-width: 1024px) 24vw, 50vw"
-                  className={
-                    g.treatment === "flatlay"
-                      ? "object-contain p-3"
-                      : "object-cover"
-                  }
-                  unoptimized
-                />
-              </div>
+                <div className="relative aspect-[3/4] rounded-sm overflow-hidden bg-bone-dark/40">
+                  <Image
+                    src={p.image}
+                    alt={`${p.vendor} ${p.title}`}
+                    fill
+                    sizes="(min-width: 1024px) 24vw, 50vw"
+                    className="object-cover"
+                    unoptimized
+                  />
+                </div>
+                <figcaption className="mt-3 text-[10px] tracking-[0.2em] uppercase text-charcoal/55">
+                  {p.vendor} · {p.category}
+                </figcaption>
+              </figure>
             ))}
           </div>
         </div>
@@ -349,17 +334,7 @@ export default function SubscriptionLPClient() {
             />
           </div>
           <div className="mt-4 text-[11px] tracking-[0.18em] uppercase text-bone/55">
-            96% renewal · Free shipping · Cancel after Q1
-          </div>
-          <div className="mt-6">
-            <button
-              type="button"
-              onClick={handleSkipToCheckout}
-              disabled={loading}
-              className="text-xs underline text-bone/55 hover:text-bone py-2 transition disabled:opacity-50"
-            >
-              {loading ? "Opening checkout…" : "Skip the quiz — start membership"}
-            </button>
+            96% renewal · Free shipping · Cancel anytime after your first quarter
           </div>
         </div>
       </section>
