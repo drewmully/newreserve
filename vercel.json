@@ -29,10 +29,6 @@
       "schedule": "45 11 * * *"
     },
     {
-      "path": "/api/admin/cron/plaid-pull",
-      "schedule": "0 12 * * *"
-    },
-    {
       "path": "/api/admin/cron/cash-sheet-pull",
       "schedule": "15 12 * * *"
     },
@@ -55,10 +51,6 @@
     {
       "path": "/api/admin/cron/marketing-funnel-snapshot",
       "schedule": "5 * * * *"
-    },
-    {
-      "path": "/api/admin/cron/cmo-brain-resume",
-      "schedule": "*/10 * * * *"
     }
   ]
 }
