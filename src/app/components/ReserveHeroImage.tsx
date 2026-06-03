@@ -38,6 +38,12 @@ export function ReserveHeroImage({
    *  reserve-flatlay-hero.webp moves below the visible frame. Default false
    *  to preserve homepage usage; opt-in on the LP hero. */
   tightCrop = false,
+  /** Art-direction overrides. When provided, the component renders a
+   *  native <picture> element with <source media="..."> entries so each
+   *  viewport gets the asset shot for its aspect ratio. SSR-perfect,
+   *  no JS, no layout shift. Only applies to treatment="default". */
+  mobileSrc,
+  tabletSrc,
 }: {
   src: string;
   alt: string;
@@ -47,6 +53,8 @@ export function ReserveHeroImage({
   caption?: string;
   unoptimized?: boolean;
   tightCrop?: boolean;
+  mobileSrc?: string;
+  tabletSrc?: string;
 }) {
   if (treatment === "flatlay") {
     return (
@@ -116,6 +124,38 @@ export function ReserveHeroImage({
           <span className="w-8 h-px bg-bone/25" />
         </div>
       </>
+    );
+  }
+
+  // When art-direction sources are supplied, render a native <picture>.
+  // We bypass next/image here because next/image doesn't expose the
+  // <source media="..."> API — it only varies by srcset density/width.
+  // For aspect-ratio-driven art direction, <picture> is the correct tool.
+  if (mobileSrc || tabletSrc) {
+    return (
+      <picture className="absolute inset-0 block h-full w-full">
+        {/* Mobile: portrait viewport — use the 4:5 portrait shot. */}
+        {mobileSrc && (
+          <source media="(max-width: 639px)" srcSet={mobileSrc} />
+        )}
+        {/* Tablet (sm): landscape-ish container — use the 4:3 landscape shot. */}
+        {tabletSrc && (
+          <source
+            media="(min-width: 640px) and (max-width: 1023px)"
+            srcSet={tabletSrc}
+          />
+        )}
+        {/* Desktop (lg+) falls through to the base src. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={src}
+          alt={alt}
+          loading={priority ? "eager" : "lazy"}
+          fetchPriority={priority ? "high" : "auto"}
+          decoding="async"
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      </picture>
     );
   }
 

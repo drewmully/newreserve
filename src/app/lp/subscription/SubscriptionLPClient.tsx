@@ -30,7 +30,7 @@ import { trackEvent } from "@/lib/tracking";
 import { captureAttributionFromUrl } from "@/lib/attribution";
 import { GlassHeader } from "@/app/components/ClientComponents";
 import { ReserveHeroImage } from "@/app/components/ReserveHeroImage";
-import { LP_GALLERY, RECENT_BOX_PRODUCTS } from "../_shared/products";
+import { RECENT_BOX_PRODUCTS } from "../_shared/products";
 import { ReviewsBlock } from "../_shared/LPSections";
 import { CuratorStrip } from "../_shared/CuratorStrip";
 import { QuizLauncher } from "../_shared/QuizLauncher";
@@ -75,13 +75,11 @@ const PROOF_STATS = [
 export default function SubscriptionLPClient() {
   const [error, setError] = useState<string | null>(null);
 
-  // Hero: editorial flat-lay of a quarter, presented as an outfit/edit.
-  // (Source asset includes a small package element at the bottom of the frame;
-  // we crop tighter on apparel via the ReserveHeroImage `flatlay` treatment.
-  // When a worn-apparel/member shot becomes available, swap heroShot.src to it.)
-  const heroShot = LP_GALLERY[0];
+  // Hero: new editorial product-set shoot on a forest-green backdrop.
+  // Art-directed per breakpoint inside the JSX via ReserveHeroImage's
+  // <picture>-based mobileSrc/tabletSrc/src trio (see the hero block below).
 
-  // Editorial grid — apparel detail only. No staged/stacked boxes. We pull
+  // Editorial grid — apparel detail only. We pull
   // individual product photography from RECENT_BOX_PRODUCTS so the grid reads
   // "wardrobe pieces," not "package contents."
   const gridShots = [
@@ -144,23 +142,25 @@ export default function SubscriptionLPClient() {
               ) : null}
             </div>
 
-            {/* Hero image — original flat-lay editorial shot. */}
+            {/* Hero image — new editorial shoot on forest backdrop.
+                Art-directed per breakpoint via <picture>:
+                  mobile (4:5 container)  → hero-portrait-4x5.webp
+                  tablet (5:4 container)  → hero-landscape-4x3.webp
+                  desktop (4:5 container) → hero-portrait-4x5.webp (base)
+                The dark green background on these shots IS the editorial
+                backdrop — no flatlay vignette/caption overlay needed.
+                Per Drew (2026-06-03): the prior 'no closed boxes in hero'
+                rule has been retired in favor of this new product-set
+                imagery. */}
             <div className="lg:col-span-7 order-1 lg:order-none">
-              <div
-                className={`relative aspect-[4/5] sm:aspect-[5/4] lg:aspect-[4/5] rounded-sm overflow-hidden ${
-                  heroShot.treatment === "flatlay"
-                    ? "bg-[#162b1e]"
-                    : "bg-bone-dark/40"
-                }`}
-              >
+              <div className="relative aspect-[4/5] sm:aspect-[5/4] lg:aspect-[4/5] rounded-sm overflow-hidden bg-[#1d3526]">
                 <ReserveHeroImage
-                  src={heroShot.src}
-                  alt={heroShot.alt}
-                  treatment={heroShot.treatment === "flatlay" ? "flatlay" : "default"}
-                  sizes="(min-width: 1024px) 58vw, 100vw"
+                  src="/lp/hero/hero-portrait-4x5.webp"
+                  mobileSrc="/lp/hero/hero-portrait-4x5.webp"
+                  tabletSrc="/lp/hero/hero-landscape-4x3.webp"
+                  alt="A Mully Reserve quarter laid out on a forest-green editorial surface — Rhone navy quarter-zip, Field Day blue knit, Greyson tee, Will Leather plaid wallet, Penfold canvas bag, and a Will Leather golf shoe carrier."
+                  treatment="default"
                   priority
-                  unoptimized
-                  tightCrop
                 />
               </div>
             </div>
