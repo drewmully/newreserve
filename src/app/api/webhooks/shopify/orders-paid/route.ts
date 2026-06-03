@@ -370,7 +370,10 @@ export async function POST(request: NextRequest) {
               to: email,
               subject: "Unlock your Mully account",
               text: `Hey${firstName ? ` ${firstName}` : ""},\n\nYour membership is confirmed. Click the link below to unlock your dashboard:\n\n${magicLink}\n\nSee you inside,\nDrew`,
-              utmCampaign: "magic_link",
+              // Single-use Firebase sign-in link: send text-only with no click/
+              // open tracking so mailbox link-scanners can't pre-consume the
+              // one-time oobCode ("This link has expired" bug).
+              disableTracking: true,
             });
 
             await triggerEmailFlow(uid, email, firstName, emailFlow);

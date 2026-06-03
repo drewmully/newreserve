@@ -24,6 +24,21 @@ export interface PlainTextEmail {
    * campaign — e.g. `"step_2"`, `"reminder"`). Omitted from the URL if absent.
    */
   utmContent?: string;
+  /**
+   * Disable ALL link/UTM rewriting and Resend click/open tracking for this
+   * send. Required for emails that contain single-use security links —
+   * Firebase magic sign-in links, password resets, etc.
+   *
+   * Why: Firebase email-link `oobCode`s are single-use. If the link is wrapped
+   * for click-tracking (Resend) or rewritten with extra query params, the
+   * recipient's mail provider link-scanner (Gmail/Yahoo/Outlook safe-links)
+   * pre-fetches the redirect and CONSUMES the one-time code before the human
+   * clicks — so the real click returns `auth/invalid-action-code` /
+   * `auth/expired-action-code` ("This link has expired"). Sending the bare URL
+   * in a text-only email with tracking off prevents the code from being burned
+   * in transit.
+   */
+  disableTracking?: boolean;
 }
 
 function getResendClient(): Resend {
@@ -185,6 +200,41 @@ function rewriteFirstPartyUrlsInPlainText(
 }
 
 export async function sendPlainText(email: PlainTextEmail): Promise<string | null> {
+  const resend = getResendClient();
+
+  if (email.disableTracking) {
+    // Security-link mode for single-use URLs (Firebase magic sign-in / password
+    // reset). Resend's click-tracking only rewrites links that appear inside an
+    // HTML body — it routes them through a track.resend.com redirect that
+    // mailbox link-scanners (Gmail/Yahoo/Outlook) pre-fetch, which consumes the
+    // one-time Firebase oobCode and yields "This link has expired".
+    //
+    // The Resend Node SDK v6 has NO per-send tracking toggle (open_tracking /
+    // click_tracking live on DomainApiOptions, i.e. the domain dashboard, not
+    // CreateEmailOptions). The reliable per-message fix is to send TEXT ONLY
+    // (no `html`): with no anchors to rewrite, Resend leaves the raw URL
+    // untouched and the code reaches the user un-consumed. We also skip the
+    // first-party UTM rewrite so the URL is delivered byte-for-byte.
+    const { data, error } = await resend.emails.send(
+      {
+        from: FROM,
+        replyTo: REPLY_TO,
+        to: email.to,
+        subject: email.subject,
+        text: email.text,
+        headers: {
+          "X-Entity-Ref-ID": email.idempotencyKey ?? "",
+        },
+        ...(email.tags ? { tags: email.tags } : {}),
+      },
+      email.idempotencyKey ? { idempotencyKey: email.idempotencyKey } : undefined
+    );
+    if (error) {
+      throw new Error(`Resend error: ${JSON.stringify(error)}`);
+    }
+    return data?.id ?? null;
+  }
+
   const utmCampaign = resolveUtmCampaign(email.utmCampaign, email.tags);
   const rewrittenText = rewriteFirstPartyUrlsInPlainText(
     email.text,
@@ -192,7 +242,6 @@ export async function sendPlainText(email: PlainTextEmail): Promise<string | nul
     email.utmContent
   );
 
-  const resend = getResendClient();
   const { data, error } = await resend.emails.send(
     {
       from: FROM,
