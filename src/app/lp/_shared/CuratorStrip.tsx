@@ -21,9 +21,10 @@
  *
  * AVATARS: Stored at /public/founders/{drew,jack}.webp. Built so swapping
  *          in real photographer headshots later is trivial — change the
- *          `src` prop on Avatar. Current images are AI-generated placeholders
- *          intended to read as warm environmental founder portraits, NOT
- *          as glossy studio headshots.
+ *          `src` prop on Avatar. Current images are AI-generated CARTOON/
+ *          illustrated placeholders (clearly stylized, not photoreal) so
+ *          there's no risk of a reader mistaking them for actual photos
+ *          of the founders before real portraits are commissioned.
  */
 
 import Image from "next/image";
@@ -49,7 +50,7 @@ export function CuratorStrip() {
           <FounderCard
             name="Drew"
             avatarSrc="/founders/drew.webp"
-            avatarAlt="Drew, Reserve co-curator, photographed on a golf course at golden hour."
+            avatarAlt="Illustrated portrait of Drew, Reserve co-curator — placeholder cartoon avatar."
             bio={
               <>
                 A venture investor who spent his career spotting what&rsquo;s
@@ -63,7 +64,7 @@ export function CuratorStrip() {
           <FounderCard
             name="Jack"
             avatarSrc="/founders/jack.webp"
-            avatarAlt="Jack, Reserve co-curator and operations lead, photographed on a golf course at golden hour."
+            avatarAlt="Illustrated portrait of Jack, Reserve co-curator and operations lead — placeholder cartoon avatar."
             bio={
               <>
                 Ran large-scale digital operations, so every Reserve ships
