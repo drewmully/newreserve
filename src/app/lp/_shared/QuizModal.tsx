@@ -969,7 +969,7 @@ function StepEmailGate({
         {submitting ? "Building your edit…" : "See my edit"}
       </PrimaryButton>
       <p className="mt-4 text-center text-xs text-charcoal/50">
-        No charge to see your edit. Free welcome gift if you join.
+        No charge to see. Love it or exchange anything. Free welcome gift if you join.
       </p>
     </section>
   );

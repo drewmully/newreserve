@@ -10,9 +10,13 @@
  * the subscription-box category — the product is the CARE and the TASTE,
  * not the packaging. Buyer is 35+, affluent.
  *
- * Hero headline (locked): "Your golf style, handled."
+ * Hero headline (current): "Premium golf gear. Zero guesswork."
  * The "have a guy who handles your golf wardrobe" line lives ONLY in the
  * pitch section as warmth — never as the H1.
+ *
+ * (Previous headline "Your golf style, handled." was rotated out 2026-06-03
+ * to lean into premium/luxury search intent; the "style, handled" framing
+ * is preserved in the AG2 paid-search RSA copy.)
  *
  * Primary CTA everywhere is the style quiz. No skip-to-checkout links —
  * those leak intent past email capture and into the hard $250 ask.
@@ -114,9 +118,9 @@ export default function SubscriptionLPClient() {
                 Mully Reserve
               </div>
               <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl text-forest leading-[1.02]">
-                Your golf style,
+                Premium golf gear.
                 <br />
-                handled.
+                Zero guesswork.
               </h1>
               <p className="text-base sm:text-lg text-charcoal/75 mt-5 leading-relaxed max-w-md">
                 Quarterly editorial curation for golfers with taste. Four to six
@@ -131,7 +135,7 @@ export default function SubscriptionLPClient() {
                   source="lp_subscription_hero"
                 />
                 <div className="mt-3 text-[11px] tracking-[0.18em] uppercase text-charcoal/55 text-center">
-                  No charge to see your edit
+                  No charge to see. Love it or exchange anything.
                 </div>
               </div>
 
