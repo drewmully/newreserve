@@ -30,6 +30,44 @@ import {
 import { ReserveCheckoutCTA, type QuizLineItemPropsInput } from "./ReserveCheckoutCTA";
 import { RevealPageView } from "./RevealPageView";
 
+/**
+ * Per-style "editions have run" retail figure. We tie the retail anchor to
+ * the STYLE BUCKET, not the 4 specific SKUs currently surfaced — the actual
+ * shipment rotates and we cannot guarantee specific items. This number
+ * represents the floor of recent editions for that style.
+ *
+ * Updating: bump these as new quarters ship and average retail moves.
+ */
+const BUCKET_TYPICAL_RETAIL_DISPLAY: Record<StyleBucket, string> = {
+  classic: "$430+",
+  modern: "$410+",
+  bold: "$420+",
+  quiet: "$440+",
+};
+
+/**
+ * Editorial structure-promise headline (per bucket).
+ * Promises STRUCTURE + VALUE, never specific SKUs.
+ */
+const BUCKET_EDIT_STRUCTURE: Record<StyleBucket, { lead: string; structure: string }> = {
+  classic: {
+    lead: "Your Classic edit:",
+    structure: "4\u20136 pieces \u2014 layers, a polo or two, an accessory \u2014 $300+ retail, picked for you.",
+  },
+  modern: {
+    lead: "Your Modern edit:",
+    structure: "4\u20136 pieces \u2014 tech polo, a layer, athletic-cut bottom, an accessory \u2014 $300+ retail, picked for you.",
+  },
+  bold: {
+    lead: "Your Bold edit:",
+    structure: "4\u20136 pieces \u2014 a statement polo, a layer that holds its own, an accessory with personality \u2014 $300+ retail, picked for you.",
+  },
+  quiet: {
+    lead: "Your Quiet edit:",
+    structure: "4\u20136 pieces \u2014 considered fabrics, clean lines, no-logo basics done right \u2014 $300+ retail, picked for you.",
+  },
+};
+
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
@@ -109,6 +147,9 @@ export default async function ReserveRevealPage({ params }: PageProps) {
       : null,
   };
 
+  const structure = BUCKET_EDIT_STRUCTURE[bucket];
+  const typicalRetail = BUCKET_TYPICAL_RETAIL_DISPLAY[bucket];
+
   return (
     <main className="min-h-screen bg-bone text-charcoal">
       <RevealPageView profileId={profileId} bucket={bucket} />
@@ -123,14 +164,20 @@ export default async function ReserveRevealPage({ params }: PageProps) {
         <p className="mt-4 max-w-2xl text-base text-charcoal/75 sm:text-lg">
           {voice.oneLiner}
         </p>
+
+        {/* Structure-promise — what your edit will be, not a SKU list. */}
+        <p className="mt-6 max-w-2xl text-sm text-forest/85 sm:text-base">
+          <span className="font-serif text-base text-forest sm:text-lg">{structure.lead}</span>{" "}
+          {structure.structure}
+        </p>
       </section>
 
       {alreadyConverted ? (
         <ConvertedState />
       ) : (
         <>
-          <EditGrid edit={edit} />
-          <ValueBlock edit={edit} />
+          <EditGrid edit={edit} bucketLabel={bucketLabel} />
+          <ValueBlock edit={edit} bucket={bucket} typicalRetail={typicalRetail} />
           <CheckoutBlock
             profileId={profileId}
             bucket={bucket}
@@ -145,7 +192,7 @@ export default async function ReserveRevealPage({ params }: PageProps) {
 
 // ─── Sections ────────────────────────────────────────────────────────────────
 
-function EditGrid({ edit }: { edit: RevealEdit }) {
+function EditGrid({ edit, bucketLabel }: { edit: RevealEdit; bucketLabel: string }) {
   const apparel = edit.apparel;
   const accessories = edit.accessories;
   const rangefinder = edit.rangefinder;
@@ -159,21 +206,27 @@ function EditGrid({ edit }: { edit: RevealEdit }) {
       )}
 
       {apparel.length > 0 && (
-        <SubBlock title="Apparel" subtitle="Two pieces from this quarter's drop.">
+        <SubBlock
+          title={`Recent ${bucketLabel} apparel`}
+          subtitle="Style + structure of what we'd send. Yours will be a fresh mix."
+        >
           <ProductRow products={apparel} />
         </SubBlock>
       )}
 
       {accessories.length > 0 && (
-        <SubBlock title="Accessories" subtitle="Built to live in your bag.">
+        <SubBlock
+          title="Recent accessories"
+          subtitle="The kind of piece that lives in your bag — your quarter will include one."
+        >
           <ProductRow products={accessories} />
         </SubBlock>
       )}
 
       {rangefinder && (
         <SubBlock
-          title="Welcome gift"
-          subtitle="Yours to keep. Even if you cancel after the first quarter."
+          title="Welcome gift — rangefinder"
+          subtitle="Included with your first quarter. Yours to keep, even if you cancel."
         >
           <ProductRow products={[rangefinder]} highlight />
         </SubBlock>
@@ -277,18 +330,29 @@ function ProductCard({
   );
 }
 
-function ValueBlock({ edit }: { edit: RevealEdit }) {
+function ValueBlock({
+  edit,
+  bucket,
+  typicalRetail,
+}: {
+  edit: RevealEdit;
+  bucket: StyleBucket;
+  typicalRetail: string;
+}) {
+  // Suppress block entirely if we have no edit at all (Shopify down etc.).
   if (edit.totalRetailCents === 0) return null;
+  const bucketLabel = STYLE_BUCKET_LABELS[bucket];
   return (
     <section className="mx-auto max-w-4xl px-4 pb-12 sm:px-6">
       <div className="rounded-lg border border-forest/15 bg-bone-dark/40 p-6 sm:p-8">
         <div className="grid items-baseline gap-4 sm:grid-cols-3">
           <div>
             <div className="text-[10px] uppercase tracking-[0.22em] text-charcoal/60">
-              Retail value
+              Typical retail
             </div>
-            <div className="mt-1 font-serif text-3xl text-forest">
-              {formatCentsUSD(edit.totalRetailCents)}+
+            <div className="mt-1 font-serif text-3xl text-forest">{typicalRetail}</div>
+            <div className="text-xs text-charcoal/60">
+              {bucketLabel} editions have run this much retail.
             </div>
           </div>
           <div>
@@ -331,8 +395,9 @@ function CheckoutBlock({
         styleBucket={bucket}
         quizLineItemProps={quizLineItemProps}
       />
-      <p className="mt-4 text-center text-xs text-charcoal/65">
-        Your quiz answers travel with your order. Sizing confirmed after checkout. Free shipping. Cancel anytime after the first quarter.
+      {/* One compact reassurance line. No secondary CTAs. */}
+      <p className="mt-4 text-center text-xs leading-relaxed text-charcoal/65">
+        Sizing confirmed after checkout · free shipping · cancel anytime after your first quarter · gift yours to keep.
       </p>
     </section>
   );

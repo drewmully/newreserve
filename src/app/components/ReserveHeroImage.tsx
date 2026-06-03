@@ -33,6 +33,11 @@ export function ReserveHeroImage({
   priority,
   caption,
   unoptimized,
+  /** Crop tighter on apparel by scaling the contained image up and shifting
+   *  the object-position so the small package element at the bottom of
+   *  reserve-flatlay-hero.webp moves below the visible frame. Default false
+   *  to preserve homepage usage; opt-in on the LP hero. */
+  tightCrop = false,
 }: {
   src: string;
   alt: string;
@@ -41,6 +46,7 @@ export function ReserveHeroImage({
   priority?: boolean;
   caption?: string;
   unoptimized?: boolean;
+  tightCrop?: boolean;
 }) {
   if (treatment === "flatlay") {
     return (
@@ -60,13 +66,31 @@ export function ReserveHeroImage({
 
         {/* The flat-lay itself — contained, anchored to the bottom so the
             turf hits the floor of the card. Source PNG has the white
-            background already keyed out to transparency. */}
+            background already keyed out to transparency.
+            tightCrop: scale up + nudge upward so the small package element at
+            the very bottom of the source asset drops below the visible frame.
+            We never alter pixels; this is pure CSS framing. */}
         <Image
           src={src}
           alt={alt}
           fill
           sizes={sizes ?? "(min-width: 1024px) 36rem, (min-width: 768px) 32rem, 100vw"}
-          className="object-contain object-bottom"
+          className={
+            tightCrop
+              ? "object-contain"
+              : "object-contain object-bottom"
+          }
+          style={
+            tightCrop
+              ? {
+                  // Scale up and anchor higher in the frame so the
+                  // bottom 18% of the source (which contains the package
+                  // element) is pushed below the visible card.
+                  transform: "scale(1.18)",
+                  transformOrigin: "50% 28%",
+                }
+              : undefined
+          }
           priority={priority}
           unoptimized={unoptimized}
         />

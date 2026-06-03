@@ -82,9 +82,12 @@ function QuizOverlay({
   onClose: () => void;
   source: string;
 }) {
+  // Use 100svh (small viewport height) so the modal sizing is correct when
+  // the mobile keyboard is open or the address bar collapses. Tight top
+  // padding so the first step (style cards) fits a single mobile viewport.
   return (
     <div className="fixed inset-0 z-[60] overflow-y-auto bg-bone">
-      <div className="min-h-screen px-4 py-10 sm:py-16">
+      <div className="min-h-[100svh] px-4 pt-5 pb-10 sm:pt-12 sm:pb-16">
         <QuizModal source={source} onClose={onClose} />
       </div>
     </div>

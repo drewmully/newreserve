@@ -75,8 +75,9 @@ export default function SubscriptionLPClient() {
   const [error, setError] = useState<string | null>(null);
 
   // Hero: editorial flat-lay of a quarter, presented as an outfit/edit.
-  // (The asset includes a small Mully box element at the bottom of the frame;
-  // when a worn-apparel/member shot becomes available, swap heroShot.src to it.)
+  // (Source asset includes a small package element at the bottom of the frame;
+  // we crop tighter on apparel via the ReserveHeroImage `flatlay` treatment.
+  // When a worn-apparel/member shot becomes available, swap heroShot.src to it.)
   const heroShot = LP_GALLERY[0];
 
   // Editorial grid — apparel detail only. No staged/stacked boxes. We pull
@@ -158,6 +159,7 @@ export default function SubscriptionLPClient() {
                   sizes="(min-width: 1024px) 58vw, 100vw"
                   priority
                   unoptimized
+                  tightCrop
                 />
               </div>
             </div>

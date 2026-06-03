@@ -489,7 +489,7 @@ export function QuizModal({ source = "lp_subscription", onClose }: QuizModalProp
 
   return (
     <div className="mx-auto w-full max-w-2xl px-4 sm:px-6">
-      <header className="mb-6 flex items-center justify-between">
+      <header className="mb-3 flex items-center justify-between sm:mb-6">
         <div className="text-[11px] uppercase tracking-[0.22em] text-ember/90">
           Build your Reserve edit
         </div>
@@ -504,7 +504,7 @@ export function QuizModal({ source = "lp_subscription", onClose }: QuizModalProp
         )}
       </header>
 
-      <div className="mb-8 h-[3px] w-full overflow-hidden rounded-full bg-forest/10">
+      <div className="mb-4 h-[3px] w-full overflow-hidden rounded-full bg-forest/10 sm:mb-8">
         <div
           className="h-full bg-ember transition-[width] duration-300 ease-out"
           style={{ width: `${progressPct}%` }}
@@ -602,12 +602,15 @@ function StepStyle({
   selected: StyleBucket | null;
   onSelect: (v: StyleBucket) => void;
 }) {
+  // Compact crop ratios so the four cards fit a single mobile viewport.
+  // 4:5 on phones (slightly portrait, all four visible above the fold);
+  // 3:4 on sm+ where there's more vertical room.
   return (
     <section>
-      <h2 className="mb-1 font-serif text-3xl text-forest sm:text-4xl leading-tight">
+      <h2 className="mb-1 font-serif text-2xl text-forest sm:text-4xl leading-tight">
         Which one looks like you?
       </h2>
-      <p className="mb-6 text-sm text-charcoal/65">Pick the closest.</p>
+      <p className="mb-4 text-sm text-charcoal/65 sm:mb-6">Pick the closest.</p>
       <div className="grid grid-cols-2 gap-3 sm:gap-4">
         {STYLE_CARDS.map((card) => (
           <button
@@ -624,20 +627,20 @@ function StepStyle({
                 : "border-forest/15",
             ].join(" ")}
           >
-            <div className="relative aspect-[3/4] w-full bg-bone-dark/40">
+            <div className="relative aspect-[4/5] w-full bg-bone-dark/40 sm:aspect-[3/4]">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={card.imageSrc}
                 alt={card.label}
                 className="h-full w-full object-cover"
-                loading="lazy"
+                loading="eager"
               />
             </div>
-            <div className="px-3 py-2.5 sm:px-4 sm:py-3">
+            <div className="px-3 py-2 sm:px-4 sm:py-3">
               <div className="font-serif text-base text-forest sm:text-lg">
                 {card.label}
               </div>
-              <div className="text-xs text-charcoal/60 mt-0.5 leading-snug">
+              <div className="text-[11px] text-charcoal/60 mt-0.5 leading-snug sm:text-xs">
                 {card.blurb}
               </div>
             </div>

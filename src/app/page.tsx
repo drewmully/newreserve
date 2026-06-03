@@ -30,7 +30,7 @@ export default async function Home() {
             <div className="relative w-full max-w-[280px] aspect-[4/5] rounded-2xl overflow-hidden bg-[#162b1e] border border-[#F5F1E8]/10 shadow-xl">
               <ReserveHeroImage
                 src="/reserve-flatlay-hero.webp"
-                alt="An editor's flat-lay of a recent Mully Reserve box on turf — Greyson tee, Rhone quarter-zip, Field Day hoodie, Will Leather goods, Penfold shoe bag, Cuater polo, and a Mully box."
+                alt="An editor's flat-lay of a recent Mully Reserve edit — Greyson tee, Rhone quarter-zip, Field Day hoodie, Will Leather goods, Penfold shoe bag, Cuater polo."
                 treatment="flatlay"
                 sizes="280px"
                 priority
@@ -55,7 +55,7 @@ export default async function Home() {
             </div>
 
             <h1 className="font-serif text-3xl sm:text-5xl md:text-[3.5rem] lg:text-6xl xl:text-7xl text-forest leading-[1.05] tracking-tight mb-3 md:mb-5 animate-fade-up-delay-1">
-              The quarterly box<br />for golfers with taste.
+              Your golf style,<br />handled.
             </h1>
 
             <p className="text-sm md:text-lg text-charcoal leading-relaxed mb-3 md:mb-4 max-w-sm sm:max-w-md mx-auto md:mx-0 animate-fade-up-delay-2">
@@ -66,7 +66,7 @@ export default async function Home() {
             <ul className="flex flex-col gap-2 mb-5 md:mb-8 max-w-sm sm:max-w-md mx-auto md:mx-0 text-left animate-fade-up-delay-2">
               <li className="text-sm md:text-base text-forest/85 flex items-start gap-2.5">
                 <span className="text-ember shrink-0 mt-[2px]">&#10022;</span>
-                <span>Quarterly curated boxes from brands worth knowing</span>
+                <span>Quarterly editorial curation from brands worth knowing</span>
               </li>
               <li className="text-sm md:text-base text-forest/85 flex items-start gap-2.5">
                 <span className="text-ember shrink-0 mt-[2px]">&#10022;</span>
@@ -105,7 +105,7 @@ export default async function Home() {
             <div className="relative w-full max-w-lg lg:max-w-xl aspect-[4/5] rounded-2xl overflow-hidden bg-[#162b1e] border border-[#F5F1E8]/10 shadow-2xl">
               <ReserveHeroImage
                 src="/reserve-flatlay-hero.webp"
-                alt="An editor's flat-lay of a recent Mully Reserve box on turf — Greyson tee, Rhone quarter-zip, Field Day hoodie, Will Leather goods, Penfold shoe bag, Cuater polo, and a Mully box."
+                alt="An editor's flat-lay of a recent Mully Reserve edit — Greyson tee, Rhone quarter-zip, Field Day hoodie, Will Leather goods, Penfold shoe bag, Cuater polo."
                 treatment="flatlay"
                 sizes="(min-width: 1024px) 36rem, (min-width: 768px) 32rem, 100vw"
                 priority
