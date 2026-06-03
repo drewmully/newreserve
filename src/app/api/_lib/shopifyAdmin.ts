@@ -49,7 +49,7 @@ function getAdminHeaders(): Record<string, string> {
   };
 }
 
-async function shopifyGraphQL<T>(
+export async function shopifyGraphQL<T>(
   query: string,
   variables?: Record<string, unknown>
 ): Promise<T> {

@@ -9,9 +9,10 @@ import { FREE_TEMPLATES } from "./templates/free";
 import { ACCESS_TEMPLATES } from "./templates/access";
 import { MEMBER_TEMPLATES } from "./templates/member";
 import { BACK9_TEMPLATES } from "./templates/back9";
+import { RESERVE_TEMPLATES } from "./templates/reserve";
 import { sendPlainText } from "./resend";
 
-export type EmailFlow = "free" | "access" | "member" | "back9";
+export type EmailFlow = "free" | "access" | "member" | "back9" | "reserve";
 export type SequenceStatus = "active" | "paused" | "completed";
 
 export type SkipCondition =
@@ -61,6 +62,16 @@ export const FLOW_STEPS: Record<EmailFlow, EmailStepConfig[]> = {
     { step: 4, triggerType: "schedule", delayDays: 16 },
     { step: 5, triggerType: "schedule", delayDays: 22 },
   ],
+  // Mully Reserve pre-checkout acquisition nurture. Started by /api/quiz/complete
+  // when a visitor finishes the style quiz with email consent and is NOT an
+  // active subscriber. Halted by the Shopify orders/paid webhook when the same
+  // email converts (see markProfilesConvertedByEmail + the webhook handler).
+  reserve: [
+    { step: 0, triggerType: "schedule", delayDays: 0 },   // immediate reveal
+    { step: 1, triggerType: "schedule", delayDays: 2 },   // care + service
+    { step: 2, triggerType: "schedule", delayDays: 5 },   // value math
+    { step: 3, triggerType: "schedule", delayDays: 9 },   // "have a guy" + gift reminder
+  ],
 };
 
 const TEMPLATES = {
@@ -68,6 +79,7 @@ const TEMPLATES = {
   access: ACCESS_TEMPLATES,
   member: MEMBER_TEMPLATES,
   back9: BACK9_TEMPLATES,
+  reserve: RESERVE_TEMPLATES,
 };
 
 export interface EmailSequenceDoc {

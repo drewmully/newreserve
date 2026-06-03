@@ -15,6 +15,7 @@ import { FREE_TEMPLATES } from "@/lib/email/templates/free";
 import { ACCESS_TEMPLATES } from "@/lib/email/templates/access";
 import { MEMBER_TEMPLATES } from "@/lib/email/templates/member";
 import { BACK9_TEMPLATES } from "@/lib/email/templates/back9";
+import { RESERVE_TEMPLATES } from "@/lib/email/templates/reserve";
 
 export const runtime = "nodejs";
 
@@ -25,6 +26,7 @@ const TEMPLATES: Record<EmailFlow, EmailTemplate[]> = {
   access: ACCESS_TEMPLATES,
   member: MEMBER_TEMPLATES,
   back9: BACK9_TEMPLATES,
+  reserve: RESERVE_TEMPLATES,
 };
 
 async function verifyAdmin(request: NextRequest): Promise<void> {

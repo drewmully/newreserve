@@ -90,14 +90,14 @@ export function RecentBoxesCarousel() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
         <div className="text-center mb-3">
           <div className="text-[11px] tracking-[0.25em] uppercase text-ember/80 mb-2">
-            Recently in members' boxes
+            Recently in members' curations
           </div>
           <h2 className="font-serif text-2xl sm:text-3xl text-forest">
             Examples of what's been inside.
           </h2>
           <p className="text-sm text-charcoal/70 mt-3 max-w-2xl mx-auto">
-            These are examples of brands and pieces past members have unboxed.
-            Curation rotates every quarter — your box will include a new
+            These are examples of brands and pieces past members have received.
+            Curation rotates every quarter — your edit will include a new
             handpicked mix from labels worth knowing.
           </p>
         </div>
@@ -111,7 +111,7 @@ export function RecentBoxesCarousel() {
               <div className="aspect-square relative bg-white overflow-hidden">
                 <Image
                   src={p.image}
-                  alt={`Example item from a past Mully Reserve box: ${p.vendor} ${p.title}`}
+                  alt={`Example item from a past Mully Reserve curation: ${p.vendor} ${p.title}`}
                   fill
                   sizes="(min-width: 1024px) 22vw, (min-width: 640px) 30vw, 45vw"
                   className="object-cover transition-transform duration-500 group-hover:scale-105"
@@ -145,8 +145,8 @@ export function RecentBoxesCarousel() {
         </div>
 
         <p className="text-center text-[11px] text-charcoal/55 mt-6">
-          Photos are examples of items members have received. Your box will be
-          a new curated selection.
+          Photos are examples of items members have received. Your edit will
+          be a new curated selection.
         </p>
       </div>
     </section>
@@ -180,7 +180,7 @@ export function ReviewsBlock() {
         <div className="junip-reviews-frame mb-12">
           <div className="text-center mb-4">
             <div className="text-[11px] tracking-[0.25em] uppercase text-forest/60">
-              Reserve Member · Quarterly Box
+              Reserve Member · Quarterly Edit
             </div>
           </div>
           <span
@@ -216,7 +216,7 @@ export function HowItWorks({ giftMode = false }: { giftMode?: boolean }) {
         {
           n: "1",
           title: "Check out today",
-          body: "Enter the recipient's name, an optional delivery date, and a personal message. We hold the box until you're ready.",
+          body: "Enter the recipient's name, an optional delivery date, and a personal message. We hold the shipment until you're ready.",
         },
         {
           n: "2",
@@ -225,25 +225,25 @@ export function HowItWorks({ giftMode = false }: { giftMode?: boolean }) {
         },
         {
           n: "3",
-          title: "First box ships",
-          body: "Hand-curated $300+ retail value box ships the next business day after they submit. Wrong size? Exchange free, no questions.",
+          title: "First quarter ships",
+          body: "Their hand-curated $300+ retail value edit ships the next business day after they submit. Wrong size? Exchange free, no questions.",
         },
       ]
     : [
         {
           n: "1",
           title: "Check out today",
-          body: "Quarterly Reserve Member subscription. $250 per quarter, billed once every three months. Cancel anytime after your first box.",
+          body: "Quarterly Reserve Member subscription. $250 per quarter, billed once every three months. Cancel anytime after your first quarter.",
         },
         {
           n: "2",
           title: "Confirm sizing",
-          body: "We email you a quick sizing form (shirt, pant, shoe, glove, fit preference). Takes under two minutes. No sizing form, no box.",
+          body: "We email you a quick sizing form (shirt, pant, shoe, glove, fit preference). Takes under two minutes. No sizing form, no shipment.",
         },
         {
           n: "3",
-          title: "First box ships",
-          body: "Your first hand-curated box ships within one business day of the form. Wrong fit on anything? Exchange free, no questions asked.",
+          title: "First quarter ships",
+          body: "Your first hand-curated edit ships within one business day of the form. Wrong fit on anything? Exchange free, no questions asked.",
         },
       ];
 
@@ -291,7 +291,7 @@ export function LifestyleGallery() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
         <div className="text-center mb-10">
           <div className="text-[11px] tracking-[0.25em] uppercase text-bone/70 mb-2">
-            Inside the box
+            Inside Reserve
           </div>
           <h2 className="font-serif text-2xl sm:text-3xl text-bone">
             Built for golfers with taste.
@@ -306,7 +306,7 @@ export function LifestyleGallery() {
             >
               <Image
                 src={p.image}
-                alt={`${p.vendor} ${p.title} — featured in a past Mully Reserve box.`}
+                alt={`${p.vendor} ${p.title} — featured in a past Mully Reserve curation.`}
                 fill
                 sizes="(min-width: 1024px) 22vw, 45vw"
                 className="object-cover"
@@ -323,7 +323,7 @@ export function LifestyleGallery() {
         </div>
 
         <p className="text-center text-[11px] text-bone/55 mt-5">
-          Past curations shown. Your box will include a new mix of brands and
+          Past curations shown. Your edit will include a new mix of brands and
           pieces our team selects this quarter.
         </p>
       </div>
@@ -359,7 +359,7 @@ export function ProductDetails({ giftMode = false }: { giftMode?: boolean }) {
               shorts, hoodies), an accessory or two (belts, hats, yardage
               books, headcovers), and an occasional surprise from a small
               brand worth knowing. We rotate the entire mix every quarter —
-              you'll never get the same box twice.
+              you'll never get the same edit twice.
             </p>
           </div>
 
@@ -369,8 +369,8 @@ export function ProductDetails({ giftMode = false }: { giftMode?: boolean }) {
             </h3>
             <p className="text-sm text-charcoal/80 leading-relaxed">
               {giftMode
-                ? "After your purchase confirms, your recipient receives an email with a private link to enter their sizing — shirt, pant, shoe, glove, and a quick fit preference. Their first box ships within one business day of submission."
-                : "After checkout we'll email you a private link to enter your sizing — shirt, pant, shoe, glove, and a quick fit preference. Takes under two minutes. Your first box ships within one business day of submission. We don't ship anything until sizing is confirmed."}
+                ? "After your purchase confirms, your recipient receives an email with a private link to enter their sizing — shirt, pant, shoe, glove, and a quick fit preference. Their first edit ships within one business day of submission."
+                : "After checkout we'll email you a private link to enter your sizing — shirt, pant, shoe, glove, and a quick fit preference. Takes under two minutes. Your first edit ships within one business day of submission. We don't ship anything until sizing is confirmed."}
             </p>
           </div>
 
@@ -379,9 +379,9 @@ export function ProductDetails({ giftMode = false }: { giftMode?: boolean }) {
               Shipping and cadence
             </h3>
             <p className="text-sm text-charcoal/80 leading-relaxed">
-              Free shipping in the continental US. Boxes ship quarterly on
-              your billing date. Cancel anytime from your account after the
-              first box — there's no annual lock-in.
+              Free shipping in the continental US. Shipments arrive quarterly
+              on your billing date. Cancel anytime from your account after the
+              first quarter — there's no annual lock-in.
             </p>
           </div>
 
@@ -390,7 +390,7 @@ export function ProductDetails({ giftMode = false }: { giftMode?: boolean }) {
               Wrong fit? We make it right.
             </h3>
             <p className="text-sm text-charcoal/80 leading-relaxed">
-              If anything in your box doesn't fit or doesn't land for you,
+              If anything in your edit doesn't fit or doesn't land for you,
               email us. We'll send a swap in the next size or pull something
               else from the rack. No restocking fee, no shipping fee, no
               questions.

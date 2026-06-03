@@ -22,7 +22,12 @@ import {
 import { adminDb, adminAuth } from "@/lib/firebase-admin";
 import { sendPlainText } from "@/lib/email/resend";
 import { resolveMemberTierFromVariantId } from "@/lib/membershipConfig";
-import { startFlow, type EmailFlow } from "@/lib/email/sequences";
+import {
+  startFlow,
+  completeSequence,
+  type EmailFlow,
+} from "@/lib/email/sequences";
+import { markProfilesConvertedByEmail } from "@/lib/styleProfiles/admin";
 import {
   getLoopRawSubscriptions,
   swapLoopSubscriptionProduct,
@@ -504,6 +509,30 @@ export async function POST(request: NextRequest) {
     }
   })();
 
+  // ── Mully Reserve: halt the abandoned-quiz nurture for this buyer ────────
+  // If this purchaser was running through the Reserve acquisition funnel
+  // (style quiz → reveal → checkout), flip their styleProfile(s) to
+  // `converted` and call completeSequence() on each so the email engine
+  // stops scheduling reserve-flow nudges. Idempotent + non-fatal.
+  const reserveConversion = (async () => {
+    if (!email) return;
+    try {
+      const convertedIds = await markProfilesConvertedByEmail({
+        email,
+        shopifyOrderId: String(order.id),
+      });
+      if (convertedIds.length === 0) return;
+      await Promise.allSettled(
+        convertedIds.map((profileId) => completeSequence(profileId))
+      );
+      console.log(
+        `[orders-paid] reserve: converted=${convertedIds.length} profiles for email=${email} order=${order.id}`
+      );
+    } catch (err) {
+      console.error("[orders-paid] reserve conversion halt failed:", err);
+    }
+  })();
+
   // ── Gift Phase 2: persist a gift_orders doc if this purchase was a gift ──
   const giftPersist = (async () => {
     try {
@@ -559,6 +588,7 @@ export async function POST(request: NextRequest) {
     giftPersist,
     foundingClaim,
     sponsorshipAttribution,
+    reserveConversion,
   ]);
 
   // Shopify expects a 200 response quickly or it will retry

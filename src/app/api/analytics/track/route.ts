@@ -35,6 +35,15 @@ const VALID_EVENTS = new Set([
   "lp_gift_checkout_clicked",
   "gift_redemption_started",
   "gift_redemption_completed",
+  // Mully Reserve acquisition funnel (quiz → reveal → checkout)
+  "quiz_view",
+  "quiz_started",
+  "quiz_step_completed",
+  "quiz_email_captured",
+  "quiz_completed",
+  "quiz_abandoned",
+  "reveal_viewed",
+  "reveal_cta_clicked",
 ]);
 
 function getBearerToken(request: NextRequest): string | null {

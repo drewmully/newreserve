@@ -18,6 +18,7 @@ import {
   LifestyleGallery,
   ProductDetails,
 } from "../_shared/LPSections";
+import { QuizLauncher } from "../_shared/QuizLauncher";
 
 const BRAND_LOGOS = [
   { src: "/brands/greyson.png", alt: "Greyson" },
@@ -32,11 +33,12 @@ const BRAND_LOGOS = [
 ];
 
 const ABOUT_BULLETS = [
-  "Hand-curated quarterly box for golfers with taste — 4 to 6 pieces, $300+ retail value, every quarter.",
+  "A hand-curated quarterly edit for golfers with taste — 4 to 6 pieces, $300+ retail value, every quarter.",
   "Brands worth knowing: Rhone, Greyson, Quiet Golf, Will Leather Goods, Field Day, Penfold, Morning People and more.",
   "Sizing confirmed after purchase — quick 2-minute form covers shirt, pant, shoe, glove and fit preference. Nothing ships until you're set.",
   "Free shipping in the continental US, every quarter. Wrong fit? Exchange free, no questions, no shipping fee.",
-  "$250 per quarter, billed every 3 months. Cancel anytime after your first box — no annual lock-in.",
+  "$250 per quarter, billed every 3 months. Cancel anytime after your first quarter — no annual lock-in.",
+  "Welcome gift on your first quarter: a rangefinder — yours to keep even if you cancel.",
 ];
 
 export default function SubscriptionLPClient() {
@@ -178,11 +180,11 @@ export default function SubscriptionLPClient() {
             {/* Mobile order=1 places the buy box (price + CTA) at the top on small screens. */}
             <div className="lg:col-span-5 flex flex-col order-1 lg:order-none">
               <div className="text-[11px] tracking-[0.25em] uppercase text-ember/80 mb-2">
-                Mully Reserve · Quarterly Box
+                Mully Reserve · Quarterly Curation
               </div>
               <h1 className="font-serif text-3xl sm:text-4xl text-forest leading-[1.1]">
-                Quarterly box.<br />
-                Built for golfers with taste.
+                A guy who handles<br />
+                your golf wardrobe.
               </h1>
 
               <div className="mt-3 flex items-center gap-2 text-sm">
@@ -204,9 +206,10 @@ export default function SubscriptionLPClient() {
               </div>
 
               <p className="text-sm text-charcoal/80 mt-4 leading-relaxed">
-                Hand-curated quarterly boxes from the brands worth knowing.
-                $300+ retail value per box. Free shipping. Cancel anytime
-                after your first box.
+                Quarterly curation from the brands worth knowing. $300+ retail
+                value every quarter, plus a rangefinder welcome gift on your
+                first quarter. Take the 60-second style quiz to see what we'd
+                send you.
               </p>
 
               {/* Founding 100 — hidden when sold out / inactive. */}
@@ -236,13 +239,21 @@ export default function SubscriptionLPClient() {
                   </div>
                 </div>
 
+                <div className="mt-5">
+                  <QuizLauncher
+                    variant="primary-large"
+                    label="See what we'd send you — 60 seconds"
+                    source="lp_subscription_hero"
+                  />
+                </div>
+
                 <button
                   type="button"
                   onClick={handleStart}
                   disabled={loading}
-                  className="w-full mt-5 bg-ember hover:bg-ember/90 disabled:opacity-60 disabled:cursor-not-allowed text-bone py-3.5 rounded-md text-sm font-medium tracking-wide transition cursor-pointer"
+                  className="w-full mt-2 text-xs underline text-charcoal/60 hover:text-charcoal/90 py-2 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {loading ? "Opening checkout…" : "Start membership"}
+                  {loading ? "Opening checkout…" : "Skip the quiz — start membership now"}
                 </button>
 
                 <div className="mt-3 flex items-center justify-center gap-1.5 text-[11px] text-charcoal/60">
@@ -250,7 +261,7 @@ export default function SubscriptionLPClient() {
                     <rect x="3" y="11" width="18" height="11" rx="2" />
                     <path d="M7 11V7a5 5 0 0110 0v4" />
                   </svg>
-                  Secure checkout via Shopify
+                  Free to see your edit · No charge until checkout
                 </div>
 
                 {error ? (
@@ -303,11 +314,11 @@ export default function SubscriptionLPClient() {
           </div>
         </section>
 
-        {/* ----------------------- ABOUT THIS BOX ----------------------- */}
+        {/* ----------------------- ABOUT RESERVE ----------------------- */}
         <section className="py-12 bg-bone-dark/30 border-y border-forest/10">
           <div className="max-w-4xl mx-auto px-4 sm:px-6">
             <h2 className="font-serif text-xl text-forest mb-5">
-              About this box
+              About Reserve
             </h2>
             <ul className="space-y-3">
               {ABOUT_BULLETS.map((b) => (
@@ -345,23 +356,32 @@ export default function SubscriptionLPClient() {
         <section className="bg-forest text-bone py-16 sm:py-20">
           <div className="max-w-3xl mx-auto px-4 sm:px-6 text-center">
             <h2 className="font-serif text-3xl sm:text-4xl">
-              Built for golfers with taste.
+              See your quarterly edit before you commit.
             </h2>
             <p className="text-sm sm:text-base text-bone/80 mt-4 max-w-2xl mx-auto leading-relaxed">
-              Quarterly curations. $300+ retail value inside. Sizing confirmed
-              after purchase so nothing ships that doesn't fit. Cancel anytime
-              after your first box.
+              60-second style quiz. We'll show you the four pieces we'd send
+              this quarter plus the rangefinder welcome gift — then it's your
+              call. No charge to see it.
             </p>
-            <button
-              type="button"
-              onClick={handleStart}
-              disabled={loading}
-              className="mt-7 bg-ember hover:bg-ember/90 disabled:opacity-60 disabled:cursor-not-allowed text-bone py-3.5 px-10 rounded-md text-sm font-medium tracking-wide transition cursor-pointer"
-            >
-              {loading ? "Opening checkout…" : "Start membership · $250/qtr"}
-            </button>
+            <div className="mt-7 inline-block">
+              <QuizLauncher
+                variant="primary-pill"
+                label="Build my Reserve edit"
+                source="lp_subscription_final"
+              />
+            </div>
             <div className="mt-3 text-[11px] text-bone/55">
-              Free shipping · Cancel anytime · Exchange without question
+              96% renewal · $300+ retail value · Welcome-gift rangefinder yours to keep
+            </div>
+            <div className="mt-6">
+              <button
+                type="button"
+                onClick={handleStart}
+                disabled={loading}
+                className="text-xs underline text-bone/60 hover:text-bone py-2 transition disabled:opacity-50"
+              >
+                {loading ? "Opening checkout…" : "Skip the quiz — start membership now"}
+              </button>
             </div>
           </div>
         </section>
@@ -381,20 +401,19 @@ export default function SubscriptionLPClient() {
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="text-[10px] tracking-[0.18em] uppercase text-charcoal/55">
-              Reserve Member
+              Reserve · 60-second quiz
             </div>
-            <div className="font-serif text-lg text-forest leading-tight">
-              $250<span className="text-xs text-charcoal/60 font-sans ml-1">/qtr</span>
+            <div className="font-serif text-base text-forest leading-tight">
+              See your edit
             </div>
           </div>
-          <button
-            type="button"
-            onClick={handleStart}
-            disabled={loading}
-            className="flex-1 max-w-[60%] bg-ember hover:bg-ember/90 disabled:opacity-60 disabled:cursor-not-allowed text-bone py-3 rounded-md text-sm font-medium tracking-wide transition cursor-pointer"
-          >
-            {loading ? "Opening…" : "Start membership"}
-          </button>
+          <div className="flex-1 max-w-[60%]">
+            <QuizLauncher
+              variant="primary-large"
+              label="Build my edit"
+              source="lp_subscription_sticky"
+            />
+          </div>
         </div>
       </div>
     </div>
