@@ -246,11 +246,11 @@ export default function SubscriptionLPClient() {
         <div className="max-w-5xl mx-auto px-4 sm:px-6 grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
           <div className="relative aspect-[4/3] rounded-sm overflow-hidden bg-forest-dark">
             <Image
-              src="/lp/quiz/rangefinder-gift.jpg"
+              src="/founding-100-rangefinder.webp"
               alt="Rangefinder welcome gift"
               fill
               sizes="(min-width: 1024px) 40vw, 100vw"
-              className="object-cover"
+              className="object-contain p-6 sm:p-10"
               unoptimized
             />
           </div>
