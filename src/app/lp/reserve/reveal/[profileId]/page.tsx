@@ -29,6 +29,7 @@ import {
 } from "@/lib/styleProfiles/types";
 import { ReserveCheckoutCTA, type QuizLineItemPropsInput } from "./ReserveCheckoutCTA";
 import { RevealPageView } from "./RevealPageView";
+import { StickyCheckoutBar } from "./StickyCheckoutBar";
 
 /**
  * Per-style "editions have run" retail figure. We tie the retail anchor to
@@ -151,10 +152,10 @@ export default async function ReserveRevealPage({ params }: PageProps) {
   const typicalRetail = BUCKET_TYPICAL_RETAIL_DISPLAY[bucket];
 
   return (
-    <main className="min-h-screen bg-bone text-charcoal">
+    <main className="min-h-screen bg-bone pb-28 text-charcoal sm:pb-32">
       <RevealPageView profileId={profileId} bucket={bucket} />
 
-      <section className="mx-auto max-w-4xl px-4 pb-10 pt-12 sm:px-6 sm:pt-20">
+      <section className="mx-auto max-w-4xl px-4 pb-8 pt-8 sm:px-6 sm:pb-10 sm:pt-12">
         <p className="mb-3 text-[11px] uppercase tracking-[0.25em] text-ember/85">
           {bucketLabel} · Your Reserve edit
         </p>
@@ -170,6 +171,21 @@ export default async function ReserveRevealPage({ params }: PageProps) {
           <span className="font-serif text-base text-forest sm:text-lg">{structure.lead}</span>{" "}
           {structure.structure}
         </p>
+
+        {/* Above-the-fold CTA — visible without scrolling. Reduces friction
+            for visitors who don't need to browse the recent-editions grid. */}
+        {!alreadyConverted && (
+          <div className="mt-7 max-w-md">
+            <ReserveCheckoutCTA
+              profileId={profileId}
+              styleBucket={bucket}
+              quizLineItemProps={quizLineItemProps}
+            />
+            <p className="mt-3 text-xs leading-relaxed text-charcoal/65">
+              {typicalRetail} typical retail · Rangefinder welcome gift · Cancel anytime after Q1.
+            </p>
+          </div>
+        )}
       </section>
 
       {alreadyConverted ? (
@@ -184,6 +200,14 @@ export default async function ReserveRevealPage({ params }: PageProps) {
             quizLineItemProps={quizLineItemProps}
           />
           <ProofBlock />
+          {/* Sticky bottom CTA bar — visible on all breakpoints once you
+              scroll past the hero. Ensures a CTA is always within reach. */}
+          <StickyCheckoutBar
+            profileId={profileId}
+            bucket={bucket}
+            quizLineItemProps={quizLineItemProps}
+            typicalRetail={typicalRetail}
+          />
         </>
       )}
     </main>
@@ -223,15 +247,94 @@ function EditGrid({ edit, bucketLabel }: { edit: RevealEdit; bucketLabel: string
         </SubBlock>
       )}
 
-      {rangefinder && (
-        <SubBlock
-          title="Welcome gift — rangefinder"
-          subtitle="Included with your first quarter. Yours to keep, even if you cancel."
-        >
-          <ProductRow products={[rangefinder]} highlight />
-        </SubBlock>
-      )}
+      <SubBlock
+        title="Welcome gift — rangefinder"
+        subtitle="Included with your first quarter. Yours to keep, even if you cancel."
+      >
+        {rangefinder ? (
+          <CompactGiftCard product={rangefinder} />
+        ) : (
+          <CompactGiftFallback />
+        )}
+      </SubBlock>
     </section>
+  );
+}
+
+/**
+ * Compact gift card — image + copy side-by-side, capped width.
+ * Replaces the previous full-width square card which was visually enormous
+ * on desktop and pushed the CTA below the fold.
+ */
+function CompactGiftCard({ product }: { product: ReserveProductCard }) {
+  return (
+    <article className="mx-auto flex max-w-2xl items-stretch overflow-hidden rounded-lg border border-ember/40 bg-bone shadow-[0_4px_24px_-12px_rgba(212,119,44,0.35)]">
+      <div className="relative aspect-square w-32 flex-shrink-0 bg-bone-dark/40 sm:w-44">
+        {product.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={product.imageUrl}
+            alt={product.imageAlt ?? product.title}
+            className="h-full w-full object-cover"
+            loading="lazy"
+          />
+        ) : null}
+      </div>
+      <div className="flex flex-1 flex-col justify-center px-4 py-3 sm:px-6 sm:py-4">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] uppercase tracking-[0.2em] text-ember/85">
+            {product.vendor ?? "Mully"}
+          </span>
+          <span className="rounded-full bg-ember/15 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-ember">
+            Gift
+          </span>
+        </div>
+        <div className="mt-1 line-clamp-2 text-sm font-medium text-forest sm:text-base">
+          {product.title}
+        </div>
+        <div className="mt-1 text-xs text-charcoal/65">
+          Yours to keep, even if you cancel.
+        </div>
+      </div>
+    </article>
+  );
+}
+
+/**
+ * Static fallback gift block. Used when no rangefinder is currently in
+ * the active Shopify catalog — we still want to make the welcome-gift
+ * promise visible. Image is local (/founding-100-rangefinder.webp) so the
+ * block never "goes missing" if Shopify hiccups.
+ */
+function CompactGiftFallback() {
+  return (
+    <article className="mx-auto flex max-w-2xl items-stretch overflow-hidden rounded-lg border border-ember/40 bg-bone shadow-[0_4px_24px_-12px_rgba(212,119,44,0.35)]">
+      <div className="relative aspect-square w-32 flex-shrink-0 bg-bone-dark/40 sm:w-44">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/founding-100-rangefinder.webp"
+          alt="Rangefinder welcome gift"
+          className="h-full w-full object-cover"
+          loading="lazy"
+        />
+      </div>
+      <div className="flex flex-1 flex-col justify-center px-4 py-3 sm:px-6 sm:py-4">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] uppercase tracking-[0.2em] text-ember/85">
+            Mully
+          </span>
+          <span className="rounded-full bg-ember/15 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-ember">
+            Gift
+          </span>
+        </div>
+        <div className="mt-1 text-sm font-medium text-forest sm:text-base">
+          Laser rangefinder
+        </div>
+        <div className="mt-1 text-xs text-charcoal/65">
+          Ships with your first quarter. Yours to keep, even if you cancel.
+        </div>
+      </div>
+    </article>
   );
 }
 

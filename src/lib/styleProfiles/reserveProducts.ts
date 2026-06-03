@@ -59,7 +59,21 @@ export interface RevealEdit {
 
 // ─── Classification heuristics ───────────────────────────────────────────────
 
-const RANGEFINDER_KEYWORDS = ["rangefinder", "range finder", "laser", "yardage"];
+// Rangefinder keywords — kept narrow on purpose. "yardage" was previously
+// included here and incorrectly matched the "Will Leather Goods Yardage Book"
+// product, causing the yardage book to surface as the welcome gift. The
+// classifier now requires a true rangefinder term, and explicitly excludes
+// the yardage-book pattern.
+const RANGEFINDER_KEYWORDS = [
+  "rangefinder",
+  "range finder",
+  "range-finder",
+  "laser rangefinder",
+];
+// Anti-pattern: titles matching any of these are NEVER classified as
+// rangefinder, even if a rangefinder keyword would otherwise match.
+const RANGEFINDER_ANTIPATTERNS = ["yardage book", "yardage-book"];
+
 const APPAREL_KEYWORDS = [
   "polo", "shirt", "tee", "henley", "pullover", "quarter-zip", "quarter zip",
   "qzip", "sweater", "vest", "jacket", "hoodie", "crewneck", "outerwear",
@@ -68,6 +82,7 @@ const APPAREL_KEYWORDS = [
 const ACCESSORY_KEYWORDS = [
   "hat", "cap", "bag", "headcover", "belt", "glove", "ball marker", "divot",
   "tee", "towel", "umbrella", "marker", "wallet", "keychain", "sock",
+  "yardage book", "yardage-book", "notebook", "journal",
 ];
 
 function lowerSet(values: Array<string | null | undefined>): string {
@@ -82,7 +97,11 @@ function classify(args: {
   const haystack = lowerSet([args.productType, args.title, ...args.tags]);
 
   // Rangefinder check FIRST — these are accessories too, so order matters.
-  if (RANGEFINDER_KEYWORDS.some((k) => haystack.includes(k))) {
+  // BUT respect anti-patterns: e.g. a "Yardage Book" must never surface as
+  // the rangefinder welcome gift, even if a future keyword loosely matches.
+  const matchesRangefinder = RANGEFINDER_KEYWORDS.some((k) => haystack.includes(k));
+  const matchesAntiPattern = RANGEFINDER_ANTIPATTERNS.some((k) => haystack.includes(k));
+  if (matchesRangefinder && !matchesAntiPattern) {
     return "rangefinder";
   }
   if (APPAREL_KEYWORDS.some((k) => haystack.includes(k))) {
