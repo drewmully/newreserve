@@ -13,6 +13,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { auth } from "@/lib/firebase";
+import EmailView from "./EmailView";
 
 // ─── Types matching the API response ────────────────────────────────────────
 
@@ -476,7 +477,7 @@ export default function AdPerformancePage() {
   const [adGroupFocus, setAdGroupFocus] = useState<string | null>(null);
   // Top-level Paid/Organic tab. Organic is its own self-contained view —
   // separate data fetch, no benchmarks, no cost metrics.
-  const [tab, setTab] = useState<"paid" | "organic">("paid");
+  const [tab, setTab] = useState<"paid" | "organic" | "email">("paid");
 
   const load = async (live = false) => {
     setLoading(true);
@@ -679,7 +680,7 @@ export default function AdPerformancePage() {
         </div>
       </div>
 
-      {/* Paid / Organic tab toggle */}
+      {/* Paid / Organic / Email tab toggle */}
       <div className="max-w-[1400px] mx-auto mb-6 flex items-center gap-2">
         <button
           onClick={() => setTab("paid")}
@@ -701,6 +702,16 @@ export default function AdPerformancePage() {
         >
           Organic
         </button>
+        <button
+          onClick={() => setTab("email")}
+          className={`px-4 py-2 text-xs tracking-[0.16em] uppercase rounded-md transition ${
+            tab === "email"
+              ? "bg-zinc-100 text-zinc-900"
+              : "bg-zinc-900 text-zinc-400 ring-1 ring-zinc-800 hover:text-zinc-200"
+          }`}
+        >
+          Email
+        </button>
       </div>
 
       {tab === "paid" && error ? (
@@ -711,6 +722,10 @@ export default function AdPerformancePage() {
 
       {tab === "organic" ? (
         <OrganicView start={start} end={end} />
+      ) : null}
+
+      {tab === "email" ? (
+        <EmailView start={start} end={end} />
       ) : null}
 
       {tab === "paid" ? (
