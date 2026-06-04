@@ -32,9 +32,13 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const query = `
     SELECT
       ad_group.id, ad_group.name,
-      ad_group_ad.ad.id, ad_group_ad.ad.type,
+      ad_group_ad.ad.id, ad_group_ad.ad.type, ad_group_ad.ad.name,
       ad_group_ad.ad.final_urls,
       ad_group_ad.ad.tracking_url_template,
+      ad_group_ad.ad.responsive_search_ad.headlines,
+      ad_group_ad.ad.responsive_search_ad.descriptions,
+      ad_group_ad.ad.responsive_search_ad.path1,
+      ad_group_ad.ad.responsive_search_ad.path2,
       ad_group_ad.status
     FROM ad_group_ad
     WHERE campaign.id = 23901702384
