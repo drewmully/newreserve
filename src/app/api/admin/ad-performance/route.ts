@@ -98,63 +98,74 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     snapshots: snapsRes.data ?? [],
     keywords: kwRes.data ?? [],
     ad_group_map: AD_GROUP_UTM_BY_ID,
-    // Industry benchmarks for the UI (apparel / e-commerce search, 2026).
-    // Sources: Wordstream 2026, Digital Applied 2026, WebFX, Polar Analytics,
-    // Rivo, First Page Sage. Rate bands are fractions (0–1); cost bands are
-    // USD dollars per event.
+    // Benchmarks are STEP-TO-STEP (each rate is % advancing from the PREVIOUS
+    // stage, not from clicks). Cost-per bands are reverse-engineered from CAC:
+    // anchor CAC at industry $40–$80, assume 50% checkout→purchase, then daisy
+    // chain backward with assumed step rates so the math is internally
+    // consistent. CPC and CTR remain anchored to industry sources.
+    // Sources for the anchors: Wordstream 2026, Digital Applied 2026, WebFX,
+    // Polar Analytics, Rivo, First Page Sage.
+    //   CAC                  $40–$80   (anchor: apparel ecom CAC)
+    //   Checkout→Purchase    50%       (Drew assumption)
+    //   Cost/checkout        $20–$40   = CAC × 0.5
+    //   Profile→Checkout     30–50%    (quiz finishers who hit checkout)
+    //   Cost/profile         $6–$20    = Cost/checkout × profile→checkout
+    //   Click→Profile        20–40%    (ad clicks who finish style quiz)
+    //   CPC                  $1–$2.50  (anchor: apparel/retail search)
+    //   CTR                  2.5–3.8%  (anchor: industry)
     benchmarks: {
-      // Click-through rate on the ad itself.
+      // Click-through rate on the ad itself (anchor: industry).
       ctr: {
         kind: "rate",
         low: 0.025,
         high: 0.038,
         label: "Ad CTR (e-commerce search)",
       },
-      // Cost per click on Google Search, apparel/retail.
+      // Cost per click on Google Search, apparel/retail (anchor: industry).
       cpc: {
         kind: "currency",
         low: 1.0,
         high: 2.5,
         label: "Cost per click (retail/apparel search)",
       },
-      // Click → profile completed (a.k.a. quiz_completed).
+      // STEP: clicks → profile completed.
       click_to_profile: {
         kind: "rate",
-        low: 0.03,
-        high: 0.10,
-        label: "Click \u2192 profile completed",
+        low: 0.2,
+        high: 0.4,
+        label: "Click \u2192 profile (step)",
       },
       cost_per_profile: {
         kind: "currency",
-        low: 20,
-        high: 60,
+        low: 6,
+        high: 20,
         label: "Cost per profile completed",
       },
-      // Click → checkout started.
+      // STEP: profile completed → checkout started.
       click_to_checkout: {
         kind: "rate",
-        low: 0.015,
-        high: 0.04,
-        label: "Click \u2192 checkout started",
+        low: 0.3,
+        high: 0.5,
+        label: "Profile \u2192 checkout (step)",
       },
       cost_per_checkout: {
         kind: "currency",
-        low: 40,
-        high: 90,
+        low: 20,
+        high: 40,
         label: "Cost per checkout started",
       },
-      // Click → purchase (CAC).
+      // STEP: checkout started → purchase.
       click_to_purchase: {
         kind: "rate",
-        low: 0.005,
-        high: 0.02,
-        label: "Click \u2192 purchase (apparel ecom)",
+        low: 0.4,
+        high: 0.6,
+        label: "Checkout \u2192 purchase (step)",
       },
       cost_per_purchase: {
         kind: "currency",
         low: 40,
         high: 80,
-        label: "Cost per purchase (CAC, apparel)",
+        label: "CAC \u00b7 cost per purchase (apparel)",
       },
     },
   });

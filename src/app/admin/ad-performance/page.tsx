@@ -268,6 +268,9 @@ interface FunnelStage {
   // Up to two metrics to render under the stage value (rate, cost-per).
   metrics?: StageMetric[];
   color: string;
+  // If true, render the stage as a label + number only (no colored rectangle,
+  // no flow ribbon). Used for the Impressions stage which dwarfs the others.
+  numberOnly?: boolean;
 }
 
 function FunnelChart({
@@ -298,27 +301,34 @@ function FunnelChart({
       className="w-full h-auto"
       preserveAspectRatio="xMidYMid meet"
     >
-      {stages.map((s, i) => {
-        const next = stages[i + 1];
-        const ratio = s.count / maxCount;
+      {/* Recompute maxCount excluding number-only stages so the visualized
+          bars use the largest *boxed* stage as the scale anchor. */}
+      {(() => {
+        const boxed = stages.filter((s) => !s.numberOnly);
+        const visMax = Math.max(1, ...boxed.map((s) => s.count));
+        return stages.map((s, i) => {
+        const next = stages.slice(i + 1).find((n) => !n.numberOnly);
+        const ratio = s.count / visMax;
         const h = Math.max(28, ratio * (chartH - 24));
         const x = padX + i * segW;
         const y = yCenter - h / 2;
 
         return (
           <g key={s.label}>
-            <rect
-              x={x + 4}
-              y={y}
-              width={segW - 8}
-              height={h}
-              rx={6}
-              fill={s.color}
-              opacity={0.9}
-            />
-            {/* Connecting flow polygon */}
-            {next ? (() => {
-              const nextRatio = next.count / maxCount;
+            {!s.numberOnly ? (
+              <rect
+                x={x + 4}
+                y={y}
+                width={segW - 8}
+                height={h}
+                rx={6}
+                fill={s.color}
+                opacity={0.9}
+              />
+            ) : null}
+            {/* Connecting flow polygon — only between consecutive boxed stages */}
+            {!s.numberOnly && next ? (() => {
+              const nextRatio = next.count / visMax;
               const nextH = Math.max(28, nextRatio * (chartH - 24));
               const nextY = yCenter - nextH / 2;
               const xRight = x + segW - 4;
@@ -393,7 +403,8 @@ function FunnelChart({
             })}
           </g>
         );
-      })}
+      });
+      })()}
     </svg>
   );
 }
@@ -416,6 +427,9 @@ export default function AdPerformancePage() {
   const [{ start, end }, setRange] = useState(defaultWindow());
   const [campaignFilter, setCampaignFilter] = useState<string>("all");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  // When set, the funnel chart aggregates only this ad group. Clicking the
+  // selected row toggles back to "all".
+  const [adGroupFocus, setAdGroupFocus] = useState<string | null>(null);
 
   const load = async (live = false) => {
     setLoading(true);
@@ -461,7 +475,20 @@ export default function AdPerformancePage() {
   }, [data, campaignFilter]);
 
   const rows = useMemo(() => aggregateByAdGroup(filteredSnapshots), [filteredSnapshots]);
-  const total = useMemo(() => totals(rows), [rows]);
+  // `total` drives the funnel chart + KPI strip. When an ad group is focused,
+  // only that row's metrics roll up — everything else (the ad-group table
+  // below) keeps showing all rows.
+  const total = useMemo(() => {
+    if (adGroupFocus) {
+      const r = rows.find((x) => x.ad_group_id === adGroupFocus);
+      if (r) return totals([r]);
+    }
+    return totals(rows);
+  }, [rows, adGroupFocus]);
+  const focusedRow = useMemo(
+    () => (adGroupFocus ? rows.find((r) => r.ad_group_id === adGroupFocus) ?? null : null),
+    [rows, adGroupFocus]
+  );
 
   // Get list of campaigns for the dropdown (exclude sentinel buckets)
   const campaigns = useMemo(() => {
@@ -491,11 +518,15 @@ export default function AdPerformancePage() {
   const funnelStages: FunnelStage[] = useMemo(() => {
     if (!benchmarks) return [];
     const safeDiv = (n: number, d: number) => (d > 0 ? n / d : 0);
+    // Rates are STEP-TO-STEP (each % is of the previous boxed stage), not of
+    // ad clicks. Cost-per stays "spend ÷ stage count" since spend is a single
+    // pool that funds the entire pipeline.
     return [
       {
         label: "Impressions",
         count: total.impressions,
         color: STAGE_COLORS[0],
+        numberOnly: true,
       },
       {
         label: "Ad clicks",
@@ -538,7 +569,7 @@ export default function AdPerformancePage() {
         metrics: [
           {
             label: "Checkout %",
-            value: pct(checkoutCount, total.clicks),
+            value: pct(checkoutCount, profileCount),
             band: benchmarks.click_to_checkout,
           },
           {
@@ -555,7 +586,7 @@ export default function AdPerformancePage() {
         metrics: [
           {
             label: "Purchase %",
-            value: pct(total.new_purchases, total.clicks),
+            value: pct(total.new_purchases, checkoutCount),
             band: benchmarks.click_to_purchase,
           },
           {
@@ -660,7 +691,21 @@ export default function AdPerformancePage() {
       {/* Funnel chart */}
       <div className="max-w-[1400px] mx-auto mb-8 p-6 rounded-xl bg-zinc-900 ring-1 ring-zinc-800">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm tracking-[0.18em] uppercase text-zinc-400">Funnel flow</h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-sm tracking-[0.18em] uppercase text-zinc-400">Funnel flow</h2>
+            {focusedRow ? (
+              <button
+                onClick={() => setAdGroupFocus(null)}
+                className="flex items-center gap-2 text-xs px-2.5 py-1 rounded-md bg-blue-500/15 ring-1 ring-blue-500/40 text-blue-200 hover:bg-blue-500/25 transition"
+                title="Clear ad-group focus"
+              >
+                <span className="font-medium">{focusedRow.ad_group_name}</span>
+                <span className="text-blue-300/80">×</span>
+              </button>
+            ) : (
+              <span className="text-xs text-zinc-600">All ad groups · click a row to focus</span>
+            )}
+          </div>
           <div className="text-xs text-zinc-500">
             {loading ? "Loading…" : data ? `${data.start} → ${data.end}` : ""}
           </div>
@@ -716,11 +761,16 @@ export default function AdPerformancePage() {
                   );
                   const rCac = r.new_purchases ? r.cost_cents / r.new_purchases / 100 : null;
                   const isOpen = expanded.has(r.ad_group_id);
+                  const isFocused = adGroupFocus === r.ad_group_id;
                   return (
                     <>
                       <tr
                         key={r.ad_group_id}
                         onClick={() => {
+                          // Two clicks here: (1) focus the funnel chart on this
+                          // ad group (or clear focus if it's already focused),
+                          // (2) toggle keyword expansion below.
+                          setAdGroupFocus((cur) => (cur === r.ad_group_id ? null : r.ad_group_id));
                           setExpanded((s) => {
                             const n = new Set(s);
                             if (n.has(r.ad_group_id)) n.delete(r.ad_group_id);
@@ -728,7 +778,10 @@ export default function AdPerformancePage() {
                             return n;
                           });
                         }}
-                        className="border-t border-zinc-800/60 hover:bg-zinc-800/40 cursor-pointer"
+                        className={
+                          "border-t border-zinc-800/60 hover:bg-zinc-800/40 cursor-pointer transition-colors" +
+                          (isFocused ? " bg-blue-500/10 hover:bg-blue-500/15 ring-1 ring-blue-500/30" : "")
+                        }
                       >
                         <td className="px-4 py-2.5">
                           <div className="flex items-center gap-2">
