@@ -52,9 +52,22 @@ interface Keyword {
 }
 
 interface BenchmarkBand {
+  // "rate" → fractions (0–1) rendered as %; "currency" → USD dollars per event.
+  kind: "rate" | "currency";
   low: number;
   high: number;
   label: string;
+}
+
+interface Benchmarks {
+  ctr: BenchmarkBand;
+  cpc: BenchmarkBand;
+  click_to_profile: BenchmarkBand;
+  cost_per_profile: BenchmarkBand;
+  click_to_checkout: BenchmarkBand;
+  cost_per_checkout: BenchmarkBand;
+  click_to_purchase: BenchmarkBand;
+  cost_per_purchase: BenchmarkBand;
 }
 
 interface ApiPayload {
@@ -63,14 +76,7 @@ interface ApiPayload {
   snapshots: Snapshot[];
   keywords: Keyword[];
   ad_group_map: Record<string, { campaign_slug: string; ad_group_slug: string }>;
-  benchmarks: {
-    ctr: BenchmarkBand;
-    lp_to_quiz: BenchmarkBand;
-    quiz_to_email: BenchmarkBand;
-    email_to_checkout: BenchmarkBand;
-    checkout_to_purchase: BenchmarkBand;
-    click_to_purchase: BenchmarkBand;
-  };
+  benchmarks: Benchmarks;
 }
 
 // ─── Aggregation helpers ────────────────────────────────────────────────────
@@ -204,12 +210,34 @@ function fmtPct(p: number, digits = 1): string {
   return `${(p * 100).toFixed(digits)}%`;
 }
 
-// Color a metric vs. a benchmark band: red < low, yellow [low, high), green ≥ high
+// Color a metric vs. a benchmark band.
+// For rates: higher = better → green ≥ high, yellow [low, high), red < low.
+// For currency (cost-per): lower = better, so the polarity is inverted
+// (green ≤ low, yellow (low, high], red > high).
 function bandColor(value: number, band: BenchmarkBand): "green" | "yellow" | "red" {
   if (!isFinite(value) || value <= 0) return "red";
+  if (band.kind === "currency") {
+    if (value <= band.low) return "green";
+    if (value <= band.high) return "yellow";
+    return "red";
+  }
   if (value >= band.high) return "green";
   if (value >= band.low) return "yellow";
   return "red";
+}
+
+// Format a band's low/high pair, respecting its kind.
+function fmtBandRange(band: BenchmarkBand): string {
+  if (band.kind === "currency") {
+    return `${fmtMoneyWhole.format(band.low)} – ${fmtMoneyWhole.format(band.high)}`;
+  }
+  return `${fmtPct(band.low, 0)} – ${fmtPct(band.high, 0)}`;
+}
+
+// Format a single value for the band’s kind.
+function fmtBandValue(value: number, band: BenchmarkBand): string {
+  if (band.kind === "currency") return fmtMoneyWhole.format(value);
+  return fmtPct(value);
 }
 const BAND_CLASS: Record<"green" | "yellow" | "red", string> = {
   green: "text-emerald-400",
@@ -226,19 +254,25 @@ const BAND_BG: Record<"green" | "yellow" | "red", string> = {
 // Five trapezoid stages with widths proportional to volume. Each stage shows
 // the count, the % advancing from the prior stage, and a benchmark badge.
 
+interface StageMetric {
+  // Computed metric value. Format depends on `band.kind`.
+  value: number;
+  band: BenchmarkBand;
+  // Optional short label (e.g. "CTR", "Cost/click"). Defaults to band.label.
+  label?: string;
+}
+
 interface FunnelStage {
   label: string;
   count: number;
-  // % advancing from previous stage (display only)
-  advancePct?: number;
-  // Benchmark band to color the advancePct against
-  band?: BenchmarkBand;
+  // Up to two metrics to render under the stage value (rate, cost-per).
+  metrics?: StageMetric[];
   color: string;
 }
 
 function FunnelChart({
   stages,
-  height = 240,
+  height = 320,
 }: {
   stages: FunnelStage[];
   height?: number;
@@ -247,6 +281,16 @@ function FunnelChart({
   const padX = 24;
   const segW = (width - 2 * padX) / stages.length;
   const maxCount = Math.max(1, ...stages.map((s) => s.count));
+
+  // Reserve a chunk at the bottom for label + count + up to two metric rows
+  // (each metric uses one value line + one grey benchmark line).
+  // Label → 16, count → 28, metric block ≈ 38 per metric.
+  const metricsBlockH = Math.max(
+    ...stages.map((s) => (s.metrics?.length ?? 0) * 38)
+  );
+  const bottomReserve = 70 + metricsBlockH; // label + count band + metrics
+  const chartH = height - bottomReserve;
+  const yCenter = chartH / 2;
 
   return (
     <svg
@@ -257,12 +301,10 @@ function FunnelChart({
       {stages.map((s, i) => {
         const next = stages[i + 1];
         const ratio = s.count / maxCount;
-        const h = Math.max(28, ratio * (height - 100));
+        const h = Math.max(28, ratio * (chartH - 24));
         const x = padX + i * segW;
-        const yCenter = height / 2;
         const y = yCenter - h / 2;
 
-        // Stage block
         return (
           <g key={s.label}>
             <rect
@@ -277,7 +319,7 @@ function FunnelChart({
             {/* Connecting flow polygon */}
             {next ? (() => {
               const nextRatio = next.count / maxCount;
-              const nextH = Math.max(28, nextRatio * (height - 100));
+              const nextH = Math.max(28, nextRatio * (chartH - 24));
               const nextY = yCenter - nextH / 2;
               const xRight = x + segW - 4;
               const xNextLeft = x + segW + 4;
@@ -298,7 +340,7 @@ function FunnelChart({
             {/* Stage label */}
             <text
               x={x + segW / 2}
-              y={height - 56}
+              y={chartH + 18}
               textAnchor="middle"
               className="fill-zinc-400 text-[11px] tracking-[0.18em] uppercase"
             >
@@ -308,30 +350,47 @@ function FunnelChart({
             {/* Count */}
             <text
               x={x + segW / 2}
-              y={height - 30}
+              y={chartH + 46}
               textAnchor="middle"
               className="fill-zinc-100 text-2xl font-medium"
             >
               {fmtInt.format(s.count)}
             </text>
 
-            {/* Advance % vs prior — only if defined */}
-            {s.advancePct !== undefined && s.band ? (
-              <text
-                x={x + segW / 2}
-                y={height - 10}
-                textAnchor="middle"
-                className={`text-[11px] ${
-                  bandColor(s.advancePct, s.band) === "green"
-                    ? "fill-emerald-400"
-                    : bandColor(s.advancePct, s.band) === "yellow"
-                    ? "fill-amber-400"
-                    : "fill-rose-400"
-                }`}
-              >
-                {fmtPct(s.advancePct)} of prev · benchmark {fmtPct(s.band.low, 0)}–{fmtPct(s.band.high, 0)}
-              </text>
-            ) : null}
+            {/* Stage metrics: each metric is two lines (value, then benchmark in grey). */}
+            {s.metrics?.map((m, mi) => {
+              const blockTop = chartH + 70 + mi * 38;
+              const color = bandColor(m.value, m.band);
+              const colorClass =
+                color === "green"
+                  ? "fill-emerald-400"
+                  : color === "yellow"
+                  ? "fill-amber-400"
+                  : "fill-rose-400";
+              const valueText = m.label
+                ? `${m.label} ${fmtBandValue(m.value, m.band)}`
+                : fmtBandValue(m.value, m.band);
+              return (
+                <g key={mi}>
+                  <text
+                    x={x + segW / 2}
+                    y={blockTop}
+                    textAnchor="middle"
+                    className={`text-[12px] ${colorClass}`}
+                  >
+                    {valueText}
+                  </text>
+                  <text
+                    x={x + segW / 2}
+                    y={blockTop + 14}
+                    textAnchor="middle"
+                    className="fill-zinc-500 text-[10px]"
+                  >
+                    bench {fmtBandRange(m.band)}
+                  </text>
+                </g>
+              );
+            })}
           </g>
         );
       })}
@@ -420,43 +479,94 @@ export default function AdPerformancePage() {
 
   const benchmarks = data?.benchmarks;
 
+  // Funnel stages: Impressions → Ad clicks (CTR, CPC) → Profile completed
+  // (% of clicks, $/profile) → Checkout started (% of clicks, $/checkout)
+  // → Purchase (% of clicks, $/purchase). LP views are intentionally
+  // dropped — they're implied by ad clicks, and a separate `lp_views` row
+  // confuses the dashboard when redirects or org/direct traffic skew it.
+  const dollarSpend = total.cost_cents / 100;
+  const checkoutCount = total.checkout_clicked || total.begin_checkout;
+  const profileCount = total.quiz_completed;
+
   const funnelStages: FunnelStage[] = useMemo(() => {
     if (!benchmarks) return [];
+    const safeDiv = (n: number, d: number) => (d > 0 ? n / d : 0);
     return [
-      { label: "Ad clicks", count: total.clicks, color: STAGE_COLORS[0] },
       {
-        label: "LP views",
-        count: total.lp_views,
-        advancePct: pct(total.lp_views, total.clicks),
-        band: { low: 0.7, high: 0.95, label: "Click \u2192 LP view" },
-        color: STAGE_COLORS[1],
+        label: "Impressions",
+        count: total.impressions,
+        color: STAGE_COLORS[0],
       },
       {
-        label: "Quiz completed",
-        count: total.quiz_completed,
-        advancePct: pct(total.quiz_completed, total.clicks),
-        band: benchmarks.lp_to_quiz,
+        label: "Ad clicks",
+        count: total.clicks,
+        color: STAGE_COLORS[1],
+        metrics: [
+          {
+            label: "CTR",
+            value: pct(total.clicks, total.impressions),
+            band: benchmarks.ctr,
+          },
+          {
+            label: "CPC",
+            value: safeDiv(dollarSpend, total.clicks),
+            band: benchmarks.cpc,
+          },
+        ],
+      },
+      {
+        label: "Profile completed",
+        count: profileCount,
         color: STAGE_COLORS[2],
+        metrics: [
+          {
+            label: "Profile %",
+            value: pct(profileCount, total.clicks),
+            band: benchmarks.click_to_profile,
+          },
+          {
+            label: "Cost/profile",
+            value: safeDiv(dollarSpend, profileCount),
+            band: benchmarks.cost_per_profile,
+          },
+        ],
       },
       {
         label: "Checkout started",
-        count: total.checkout_clicked || total.begin_checkout,
-        advancePct: pct(total.checkout_clicked || total.begin_checkout, total.quiz_completed),
-        band: benchmarks.email_to_checkout,
+        count: checkoutCount,
         color: STAGE_COLORS[3],
+        metrics: [
+          {
+            label: "Checkout %",
+            value: pct(checkoutCount, total.clicks),
+            band: benchmarks.click_to_checkout,
+          },
+          {
+            label: "Cost/checkout",
+            value: safeDiv(dollarSpend, checkoutCount),
+            band: benchmarks.cost_per_checkout,
+          },
+        ],
       },
       {
-        label: "New purchases",
+        label: "Purchase",
         count: total.new_purchases,
-        advancePct: pct(
-          total.new_purchases,
-          total.checkout_clicked || total.begin_checkout || 1
-        ),
-        band: benchmarks.checkout_to_purchase,
         color: STAGE_COLORS[4],
+        metrics: [
+          {
+            label: "Purchase %",
+            value: pct(total.new_purchases, total.clicks),
+            band: benchmarks.click_to_purchase,
+          },
+          {
+            label: "CAC",
+            value: safeDiv(dollarSpend, total.new_purchases),
+            band: benchmarks.cost_per_purchase,
+          },
+        ],
       },
     ];
-  }, [total, benchmarks]);
+  }, [total, benchmarks, dollarSpend, profileCount, checkoutCount]);
 
   const ctr = pct(total.clicks, total.impressions);
   const cpc = total.clicks ? total.cost_cents / total.clicks / 100 : 0;
@@ -475,14 +585,14 @@ export default function AdPerformancePage() {
         </div>
         <div className="flex items-center gap-3">
           <DateInput value={start} onChange={(v) => setRange((r) => ({ ...r, start: v }))} />
-          <span className="text-zinc-600">\u2192</span>
+          <span className="text-zinc-600">→</span>
           <DateInput value={end} onChange={(v) => setRange((r) => ({ ...r, end: v }))} />
           <button
             onClick={() => load(true)}
             disabled={loading}
             className="px-3 py-1.5 text-xs rounded-md bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 ring-1 ring-zinc-700 transition"
           >
-            {loading ? "Refreshing\u2026" : "Refresh now"}
+            {loading ? "Refreshing…" : "Refresh now"}
           </button>
         </div>
       </div>
@@ -517,15 +627,16 @@ export default function AdPerformancePage() {
           label="CTR"
           value={fmtPct(ctr, 2)}
           band={benchmarks?.ctr ? bandColor(ctr, benchmarks.ctr) : undefined}
-          sub={
-            benchmarks?.ctr
-              ? `bench ${fmtPct(benchmarks.ctr.low, 1)}\u2013${fmtPct(benchmarks.ctr.high, 1)}`
-              : undefined
-          }
+          sub={benchmarks?.ctr ? `bench ${fmtBandRange(benchmarks.ctr)}` : undefined}
         />
-        <Kpi label="Avg CPC" value={fmtMoney.format(cpc)} />
         <Kpi
-          label="Click \u2192 purchase"
+          label="Avg CPC"
+          value={fmtMoney.format(cpc)}
+          band={benchmarks?.cpc ? bandColor(cpc, benchmarks.cpc) : undefined}
+          sub={benchmarks?.cpc ? `bench ${fmtBandRange(benchmarks.cpc)}` : undefined}
+        />
+        <Kpi
+          label="Click → purchase"
           value={fmtPct(clickToPurchase, 2)}
           band={
             benchmarks?.click_to_purchase
@@ -534,15 +645,15 @@ export default function AdPerformancePage() {
           }
           sub={
             benchmarks?.click_to_purchase
-              ? `bench ${fmtPct(benchmarks.click_to_purchase.low, 1)}\u2013${fmtPct(benchmarks.click_to_purchase.high, 1)}`
+              ? `bench ${fmtBandRange(benchmarks.click_to_purchase)}`
               : undefined
           }
         />
         <Kpi label="New purchases" value={fmtInt.format(total.new_purchases)} />
         <Kpi
           label="CAC"
-          value={cac !== null ? fmtMoneyWhole.format(cac) : "\u2014"}
-          sub="cost \u00f7 new purchases"
+          value={cac !== null ? fmtMoneyWhole.format(cac) : "—"}
+          sub="cost ÷ new purchases"
         />
       </div>
 
@@ -551,7 +662,7 @@ export default function AdPerformancePage() {
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm tracking-[0.18em] uppercase text-zinc-400">Funnel flow</h2>
           <div className="text-xs text-zinc-500">
-            {loading ? "Loading\u2026" : data ? `${data.start} \u2192 ${data.end}` : ""}
+            {loading ? "Loading…" : data ? `${data.start} → ${data.end}` : ""}
           </div>
         </div>
         {funnelStages.length > 0 ? (
@@ -580,9 +691,9 @@ export default function AdPerformancePage() {
                 <Th align="right">CTR</Th>
                 <Th align="right">CPC</Th>
                 <Th align="right">Quiz done</Th>
-                <Th align="right">Click \u2192 Quiz</Th>
+                <Th align="right">Click → Quiz</Th>
                 <Th align="right">Checkout</Th>
-                <Th align="right">Quiz \u2192 CO</Th>
+                <Th align="right">Quiz → CO</Th>
                 <Th align="right">Purchases</Th>
                 <Th align="right">CAC</Th>
               </tr>
@@ -591,7 +702,7 @@ export default function AdPerformancePage() {
               {rows.length === 0 ? (
                 <tr>
                   <td colSpan={12} className="text-center py-8 text-zinc-600">
-                    {loading ? "Loading\u2026" : "No data."}
+                    {loading ? "Loading…" : "No data."}
                   </td>
                 </tr>
               ) : (
@@ -622,7 +733,7 @@ export default function AdPerformancePage() {
                         <td className="px-4 py-2.5">
                           <div className="flex items-center gap-2">
                             <span className="text-zinc-500 text-xs w-3 inline-block">
-                              {isOpen ? "\u25be" : "\u25b8"}
+                              {isOpen ? "▾" : "▸"}
                             </span>
                             <div>
                               <div className="text-zinc-100">{r.ad_group_name}</div>
@@ -644,7 +755,9 @@ export default function AdPerformancePage() {
                         <Td
                           align="right"
                           className={
-                            benchmarks ? BAND_CLASS[bandColor(rClickToQuiz, benchmarks.lp_to_quiz)] : undefined
+                            benchmarks
+                              ? BAND_CLASS[bandColor(rClickToQuiz, benchmarks.click_to_profile)]
+                              : undefined
                           }
                         >
                           {fmtPct(rClickToQuiz, 1)}
@@ -656,14 +769,14 @@ export default function AdPerformancePage() {
                           align="right"
                           className={
                             benchmarks
-                              ? BAND_CLASS[bandColor(rQuizToCheckout, benchmarks.email_to_checkout)]
+                              ? BAND_CLASS[bandColor(rQuizToCheckout, benchmarks.click_to_checkout)]
                               : undefined
                           }
                         >
                           {fmtPct(rQuizToCheckout, 1)}
                         </Td>
                         <Td align="right">{fmtInt.format(r.new_purchases)}</Td>
-                        <Td align="right">{rCac !== null ? fmtMoneyWhole.format(rCac) : "\u2014"}</Td>
+                        <Td align="right">{rCac !== null ? fmtMoneyWhole.format(rCac) : "—"}</Td>
                       </tr>
                       {isOpen ? (
                         <KeywordSubrow
@@ -696,7 +809,7 @@ export default function AdPerformancePage() {
                     {fmtPct(pct(total.checkout_clicked || total.begin_checkout, total.quiz_completed), 1)}
                   </Td>
                   <Td align="right">{fmtInt.format(total.new_purchases)}</Td>
-                  <Td align="right">{cac !== null ? fmtMoneyWhole.format(cac) : "\u2014"}</Td>
+                  <Td align="right">{cac !== null ? fmtMoneyWhole.format(cac) : "—"}</Td>
                 </tr>
               </tfoot>
             ) : null}
@@ -714,14 +827,12 @@ export default function AdPerformancePage() {
             {Object.entries(benchmarks).map(([k, v]) => (
               <div key={k} className="flex items-center justify-between">
                 <span>{v.label}</span>
-                <span className="text-zinc-400">
-                  {fmtPct(v.low, 1)} \u2013 {fmtPct(v.high, 1)}
-                </span>
+                <span className="text-zinc-400">{fmtBandRange(v)}</span>
               </div>
             ))}
           </div>
           <div className="mt-3 text-zinc-600">
-            Green: at/above high benchmark \u00b7 Amber: in band \u00b7 Red: below low
+            Green: better than high benchmark · Amber: inside band · Red: worse than low
           </div>
         </div>
       ) : null}
@@ -872,7 +983,7 @@ function KeywordSubrow({ keywords }: { keywords: Keyword[] }) {
               const kCpc = k.clicks ? k.cost_micros / k.clicks / 1_000_000 : 0;
               return (
                 <tr key={k.criterion_id} className="border-t border-zinc-800/30">
-                  <td className="py-1.5 text-zinc-300">{k.keyword_text ?? "\u2014"}</td>
+                  <td className="py-1.5 text-zinc-300">{k.keyword_text ?? "—"}</td>
                   <td className="text-zinc-500">{(k.match_type || "").toLowerCase()}</td>
                   <td className="text-right tabular-nums text-zinc-300">
                     {fmtInt.format(k.impressions)}

@@ -98,15 +98,64 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     snapshots: snapsRes.data ?? [],
     keywords: kwRes.data ?? [],
     ad_group_map: AD_GROUP_UTM_BY_ID,
-    // Industry benchmarks for the UI (e-commerce search, 2026).
-    // Sources: Wordstream 2026, Terra 2026, Blend Commerce 2026, Shopify.
+    // Industry benchmarks for the UI (apparel / e-commerce search, 2026).
+    // Sources: Wordstream 2026, Digital Applied 2026, WebFX, Polar Analytics,
+    // Rivo, First Page Sage. Rate bands are fractions (0–1); cost bands are
+    // USD dollars per event.
     benchmarks: {
-      ctr: { low: 0.025, high: 0.038, label: "E-commerce search CTR" },
-      lp_to_quiz: { low: 0.05, high: 0.20, label: "Landing \u2192 quiz start" },
-      quiz_to_email: { low: 0.40, high: 0.70, label: "Quiz \u2192 email capture" },
-      email_to_checkout: { low: 0.15, high: 0.35, label: "Email \u2192 checkout click" },
-      checkout_to_purchase: { low: 0.20, high: 0.40, label: "Checkout \u2192 purchase" },
-      click_to_purchase: { low: 0.019, high: 0.03, label: "Click \u2192 purchase (Shopify avg)" },
+      // Click-through rate on the ad itself.
+      ctr: {
+        kind: "rate",
+        low: 0.025,
+        high: 0.038,
+        label: "Ad CTR (e-commerce search)",
+      },
+      // Cost per click on Google Search, apparel/retail.
+      cpc: {
+        kind: "currency",
+        low: 1.0,
+        high: 2.5,
+        label: "Cost per click (retail/apparel search)",
+      },
+      // Click → profile completed (a.k.a. quiz_completed).
+      click_to_profile: {
+        kind: "rate",
+        low: 0.03,
+        high: 0.10,
+        label: "Click \u2192 profile completed",
+      },
+      cost_per_profile: {
+        kind: "currency",
+        low: 20,
+        high: 60,
+        label: "Cost per profile completed",
+      },
+      // Click → checkout started.
+      click_to_checkout: {
+        kind: "rate",
+        low: 0.015,
+        high: 0.04,
+        label: "Click \u2192 checkout started",
+      },
+      cost_per_checkout: {
+        kind: "currency",
+        low: 40,
+        high: 90,
+        label: "Cost per checkout started",
+      },
+      // Click → purchase (CAC).
+      click_to_purchase: {
+        kind: "rate",
+        low: 0.005,
+        high: 0.02,
+        label: "Click \u2192 purchase (apparel ecom)",
+      },
+      cost_per_purchase: {
+        kind: "currency",
+        low: 40,
+        high: 80,
+        label: "Cost per purchase (CAC, apparel)",
+      },
     },
   });
 }
