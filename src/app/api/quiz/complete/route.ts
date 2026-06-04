@@ -36,6 +36,22 @@ interface CompleteBody {
   email?: string;
   consent?: boolean;
   firstName?: string;
+  // Client's localStorage anonymous_id. When present, we use it as the
+  // PostHog distinct_id for server-side dispatch so the server-fired event
+  // shares the same person as the client-fired trackEvent('quiz_completed').
+  // Without this, the route falls back to the quiz cookie anonId, which is a
+  // different UUID than localStorage anon-* — causing duplicate PostHog
+  // persons and broken alias chains (see commit fixing anon-id unification).
+  client_anonymous_id?: string;
+}
+
+function sanitizeClientAnonId(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const t = raw.trim();
+  if (!t || t.length > 128) return undefined;
+  // Accept the canonical client format (anon-<uuid>) and bare UUIDs.
+  if (!/^[A-Za-z0-9_.:-]+$/.test(t)) return undefined;
+  return t;
 }
 
 function normalizeEmail(raw: string): string | null {
@@ -83,6 +99,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const rawEmail = typeof body.email === "string" ? body.email : "";
   const consent = body.consent === true;
   const firstName = trimName(body.firstName);
+  const clientAnonId = sanitizeClientAnonId(body.client_anonymous_id);
 
   if (!profileId || profileId.length < 8) {
     return NextResponse.json({ error: "invalid_profile_id" }, { status: 400 });
@@ -107,11 +124,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const updated = await markProfileCompleted({ profileId, email, consent });
   const styleBucket = updated?.styleBucket ?? existing.styleBucket;
 
-  // Server-side analytics
+  // Server-side analytics. Prefer the client's localStorage anonymous_id when
+  // provided so the server-fired event and the client-fired trackEvent both
+  // land on the same PostHog distinct_id → same person. Falls back to the
+  // quiz cookie anonId for legacy clients.
+  const dispatchAnonId = clientAnonId ?? existing.anonId;
+
   dispatchAnalyticsEvent({
     event_name: "quiz_email_captured",
     email,
-    anonymous_id: existing.anonId,
+    anonymous_id: dispatchAnonId,
     user_agent: req.headers.get("user-agent") ?? undefined,
     properties: { profileId, consent, styleBucket },
   }).catch((err) =>
@@ -121,7 +143,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   dispatchAnalyticsEvent({
     event_name: "quiz_completed",
     email,
-    anonymous_id: existing.anonId,
+    anonymous_id: dispatchAnonId,
     user_agent: req.headers.get("user-agent") ?? undefined,
     properties: { profileId, styleBucket },
   }).catch((err) =>

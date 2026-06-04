@@ -24,7 +24,7 @@
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { trackEvent } from "@/lib/tracking";
+import { trackEvent, getClientAnonymousId } from "@/lib/tracking";
 import { captureAttributionFromUrl } from "@/lib/attribution";
 
 // ─── Types (mirror server-side enums; kept inline to avoid client/server import) ──
@@ -255,7 +255,12 @@ export function QuizModal({ source = "lp_subscription", onClose }: QuizModalProp
       if (stepRef.current >= TOTAL_STEPS - 1) return;
       try {
         const blob = new Blob(
-          [JSON.stringify({ profileId: pid, step: stepRef.current, reason: "unload" })],
+          [JSON.stringify({
+            profileId: pid,
+            step: stepRef.current,
+            reason: "unload",
+            client_anonymous_id: getClientAnonymousId(),
+          })],
           { type: "application/json" }
         );
         navigator.sendBeacon("/api/quiz/abandon", blob);
@@ -278,6 +283,7 @@ export function QuizModal({ source = "lp_subscription", onClose }: QuizModalProp
           utm,
           referrer: document.referrer || null,
           landingPath: window.location.pathname + window.location.search,
+          client_anonymous_id: getClientAnonymousId(),
         }),
       });
       if (!res.ok) {
@@ -450,6 +456,11 @@ export function QuizModal({ source = "lp_subscription", onClose }: QuizModalProp
           email: answers.email,
           consent: answers.consent,
           firstName: answers.firstName || undefined,
+          // Forward the localStorage anon so server-side PostHog dispatch uses
+          // the same distinct_id as client-side trackEvent. Without this, the
+          // route falls back to the quiz cookie anonId and PostHog ends up
+          // with two anons → broken alias to email → lost UTM attribution.
+          client_anonymous_id: getClientAnonymousId(),
         }),
       });
       if (!res.ok) {

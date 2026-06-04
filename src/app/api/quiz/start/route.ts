@@ -32,6 +32,18 @@ interface StartBody {
   utm?: Partial<StyleProfileDoc["utm"]>;
   referrer?: string;
   landingPath?: string;
+  // Client localStorage anonymous_id. Preferred over the cookie-minted anon
+  // for analytics dispatch so client trackEvent and server dispatchAnalyticsEvent
+  // share the same PostHog distinct_id → same person on later identify.
+  client_anonymous_id?: string;
+}
+
+function sanitizeClientAnonId(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const t = raw.trim();
+  if (!t || t.length > 128) return undefined;
+  if (!/^[A-Za-z0-9_.:-]+$/.test(t)) return undefined;
+  return t;
 }
 
 function isStyleBucket(v: unknown): v is StyleBucket {
@@ -76,7 +88,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const { anonId, minted } = readAnonId(req);
+  const { anonId: cookieAnonId, minted: cookieMinted } = readAnonId(req);
+  const clientAnonId = sanitizeClientAnonId(body.client_anonymous_id);
+  // Prefer the client localStorage anon so cookie + localStorage + analytics
+  // all share one identifier. Falls back to the cookie anon for clients that
+  // haven't sent it yet (legacy / no-JS edge cases).
+  const anonId = clientAnonId ?? cookieAnonId;
+  // Refresh the cookie whenever it was minted just now OR whenever we just
+  // adopted a different client anon, so the cookie tracks the canonical id.
+  const minted = cookieMinted || (clientAnonId !== undefined && clientAnonId !== cookieAnonId);
   const utm = sanitizeUtm(
     body.utm,
     typeof body.referrer === "string" ? body.referrer : null,

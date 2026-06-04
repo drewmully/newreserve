@@ -22,6 +22,15 @@ interface AbandonBody {
   profileId?: string;
   step?: number;
   reason?: string;
+  client_anonymous_id?: string;
+}
+
+function sanitizeClientAnonId(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const t = raw.trim();
+  if (!t || t.length > 128) return undefined;
+  if (!/^[A-Za-z0-9_.:-]+$/.test(t)) return undefined;
+  return t;
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
@@ -42,10 +51,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   if (!profile) return NextResponse.json({ ok: true });
   // No need to alter Firestore — `updatedAt` is the cron's signal.
 
+  const clientAnonId = sanitizeClientAnonId(body.client_anonymous_id);
+
   dispatchAnalyticsEvent({
     event_name: "quiz_abandoned",
     email: profile.email ?? undefined,
-    anonymous_id: profile.anonId,
+    anonymous_id: clientAnonId ?? profile.anonId,
     user_agent: req.headers.get("user-agent") ?? undefined,
     properties: {
       profileId,

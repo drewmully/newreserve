@@ -24,6 +24,17 @@ function createTrackingId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+/**
+ * Returns the persistent localStorage anonymous_id used by every client
+ * trackEvent call. Exported so server-bound POSTs (e.g. /api/quiz/complete)
+ * can forward the SAME anon to the server, which prevents PostHog from
+ * creating duplicate persons when both client and server fire the same
+ * funnel event.
+ */
+export function getClientAnonymousId(): string {
+  return getOrCreateAnonId();
+}
+
 function getOrCreateAnonId(): string {
   try {
     const existing = localStorage.getItem(ANON_ID_KEY);
