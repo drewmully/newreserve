@@ -10,10 +10,11 @@
  * Auth: Firebase Bearer token + admin email allowlist.
  *
  * Benchmarks: % step-rates only (no cost-per — organic has no spend).
- * - LP view rate (session → LP view): 25–50% — sessions are noisy on organic
- *   (homepage hits, blog reads), only a chunk land on the Reserve LP.
- * - Profile rate (LP view → profile completed): 20–40% — identical post-LP
- *   UX to paid, so we reuse the paid click-to-profile band.
+ * Funnel is collapsed — LP views removed at Drew's request, so step 1 is
+ * session → profile directly.
+ * - Profile rate (session → profile completed): 5–15% — organic sessions are
+ *   noisy (homepage, blog, social hops); only a small share actually finishes
+ *   the style profile. Drew can tighten this once we see 30–60 days of data.
  * - Checkout rate (profile → checkout started): 30–50% — reuses paid band.
  * - Purchase rate (checkout → purchase): 40–60% — anchored to Drew's 50%
  *   close-rate assumption.
@@ -99,19 +100,14 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     snapshots: snapsRes.data ?? [],
     sources: ORGANIC_SOURCES,
     source_labels: SOURCE_LABEL_BY_SLUG,
-    // Step-rate benchmarks only. No cost-per on organic.
+    // Step-rate benchmarks only. No cost-per on organic. Funnel is
+    // session → profile → checkout → purchase (LP views dropped).
     benchmarks: {
-      lp_view_rate: {
-        kind: "rate" as const,
-        low: 0.25,
-        high: 0.5,
-        label: "Session \u2192 LP view",
-      },
       profile_rate: {
         kind: "rate" as const,
-        low: 0.2,
-        high: 0.4,
-        label: "LP view \u2192 profile (step)",
+        low: 0.05,
+        high: 0.15,
+        label: "Session \u2192 profile (step)",
       },
       checkout_rate: {
         kind: "rate" as const,

@@ -1165,7 +1165,8 @@ interface OrganicSource {
 }
 
 interface OrganicBenchmarks {
-  lp_view_rate: BenchmarkBand;
+  // LP views were intentionally dropped from the organic funnel — sessions
+  // now feeds profile completed directly.
   profile_rate: BenchmarkBand;
   checkout_rate: BenchmarkBand;
   purchase_rate: BenchmarkBand;
@@ -1426,13 +1427,17 @@ function OrganicView({ start, end }: { start: string; end: string }) {
     [rows, sourceFocus]
   );
 
-  const lpViewRate = pct(total.lp_views, total.sessions);
-  const profileRate = pct(total.quiz_completed, total.lp_views);
+  // Funnel is collapsed — session → profile → checkout → purchase. LP views
+  // are still stored in Supabase but no longer surface in the UI.
+  const profileRate = pct(total.quiz_completed, total.sessions);
   const checkoutCount = total.checkout_clicked || total.begin_checkout;
   const checkoutRate = pct(checkoutCount, total.quiz_completed);
   const purchaseRate = pct(total.new_purchases, checkoutCount);
 
   const benchmarks = data?.benchmarks;
+  // 4-stage funnel: Sessions → Profile completed → Checkout started → Purchase.
+  // Colors picked to keep visual parity with the paid funnel (skip the
+  // second STAGE_COLORS slot so the bars don't read identically).
   const funnelStages: OrganicFunnelStage[] = [
     {
       label: "Sessions",
@@ -1441,16 +1446,9 @@ function OrganicView({ start, end }: { start: string; end: string }) {
       color: STAGE_COLORS[0],
     },
     {
-      label: "LP views",
-      count: total.lp_views,
-      stepRate: pct(total.lp_views, total.sessions),
-      band: benchmarks?.lp_view_rate,
-      color: STAGE_COLORS[1],
-    },
-    {
       label: "Profile completed",
       count: total.quiz_completed,
-      stepRate: pct(total.quiz_completed, total.lp_views),
+      stepRate: pct(total.quiz_completed, total.sessions),
       band: benchmarks?.profile_rate,
       color: STAGE_COLORS[2],
     },
@@ -1496,16 +1494,10 @@ function OrganicView({ start, end }: { start: string; end: string }) {
       <div className="max-w-[1400px] mx-auto grid grid-cols-2 md:grid-cols-6 gap-3 mb-6">
         <Kpi label="Sessions" value={fmtInt.format(total.sessions)} />
         <Kpi
-          label="LP view rate"
-          value={fmtPct(lpViewRate, 1)}
-          band={benchmarks?.lp_view_rate ? bandColor(lpViewRate, benchmarks.lp_view_rate) : undefined}
-          sub={benchmarks?.lp_view_rate ? `bench ${fmtBandRange(benchmarks.lp_view_rate)}` : "of sessions"}
-        />
-        <Kpi
           label="Profile rate"
           value={fmtPct(profileRate, 1)}
           band={benchmarks?.profile_rate ? bandColor(profileRate, benchmarks.profile_rate) : undefined}
-          sub={benchmarks?.profile_rate ? `bench ${fmtBandRange(benchmarks.profile_rate)}` : "of LP views"}
+          sub={benchmarks?.profile_rate ? `bench ${fmtBandRange(benchmarks.profile_rate)}` : "of sessions"}
         />
         <Kpi
           label="Checkout rate"
@@ -1566,8 +1558,6 @@ function OrganicView({ start, end }: { start: string; end: string }) {
               <tr>
                 <Th>Source</Th>
                 <Th align="right">Sessions</Th>
-                <Th align="right">LP views</Th>
-                <Th align="right">LP %</Th>
                 <Th align="right">Profile done</Th>
                 <Th align="right">Profile %</Th>
                 <Th align="right">Checkout</Th>
@@ -1579,14 +1569,13 @@ function OrganicView({ start, end }: { start: string; end: string }) {
             <tbody>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="text-center py-8 text-zinc-600">
+                  <td colSpan={8} className="text-center py-8 text-zinc-600">
                     {loading ? "Loading…" : "No data."}
                   </td>
                 </tr>
               ) : (
                 rows.map((r) => {
-                  const rLpRate = pct(r.lp_views, r.sessions);
-                  const rProfileRate = pct(r.quiz_completed, r.lp_views);
+                  const rProfileRate = pct(r.quiz_completed, r.sessions);
                   const rCheckoutCount = r.checkout_clicked || r.begin_checkout;
                   const rCheckoutRate = pct(rCheckoutCount, r.quiz_completed);
                   const isFocused = sourceFocus === r.source;
@@ -1605,17 +1594,6 @@ function OrganicView({ start, end }: { start: string; end: string }) {
                         <div className="text-zinc-100">{r.source_label}</div>
                       </td>
                       <Td align="right">{fmtInt.format(r.sessions)}</Td>
-                      <Td align="right">{fmtInt.format(r.lp_views)}</Td>
-                      <Td
-                        align="right"
-                        className={
-                          benchmarks?.lp_view_rate
-                            ? BAND_CLASS[bandColor(rLpRate, benchmarks.lp_view_rate)]
-                            : undefined
-                        }
-                      >
-                        {fmtPct(rLpRate, 1)}
-                      </Td>
                       <Td align="right">{fmtInt.format(r.quiz_completed)}</Td>
                       <Td
                         align="right"
@@ -1650,8 +1628,6 @@ function OrganicView({ start, end }: { start: string; end: string }) {
                 <tr className="border-t-2 border-zinc-700 bg-zinc-900/80 font-medium">
                   <td className="px-4 py-3 text-zinc-300">Total</td>
                   <Td align="right">{fmtInt.format(total.sessions)}</Td>
-                  <Td align="right">{fmtInt.format(total.lp_views)}</Td>
-                  <Td align="right">{fmtPct(lpViewRate, 1)}</Td>
                   <Td align="right">{fmtInt.format(total.quiz_completed)}</Td>
                   <Td align="right">{fmtPct(profileRate, 1)}</Td>
                   <Td align="right">{fmtInt.format(checkoutCount)}</Td>
@@ -1676,9 +1652,10 @@ function OrganicView({ start, end }: { start: string; end: string }) {
         </p>
         <p className="mt-2 text-zinc-600">
           Step-rate benchmarks reuse the paid funnel’s reverse-engineered bands (anchored at
-          CAC $40–$80, 50% checkout→purchase). LP-view rate is widened to 25–50% since organic
-          sessions include non-LP entry points like the homepage and blog.
-          Direct/untagged traffic is excluded — only tracked referrers count here.
+          CAC $40–$80, 50% checkout→purchase). The funnel runs session → profile directly, with
+          the profile rate widened to 5–15% since organic sessions include non-LP entry points
+          like the homepage and blog. Direct/untagged traffic is excluded — only tracked
+          referrers count here.
         </p>
       </div>
     </>
