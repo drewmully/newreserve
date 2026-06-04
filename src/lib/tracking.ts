@@ -2,9 +2,12 @@
  * Client-side analytics tracking helper.
  * POSTs to /api/analytics/track with attribution data collected from:
  *   - localStorage  → anonymous_id  (generated once per browser)
- *   - URL params    → gclid / gbraid / wbraid
+ *   - URL params    → gclid / gbraid / wbraid (first event of the landing)
+ *   - mully_attr    → persisted utm params + gclid (every subsequent event)
  *   - cookies       → _fbp / _fbc
  */
+
+import { getStoredAttribution } from "@/lib/attribution";
 
 const ANON_ID_KEY = "mully_anon_id";
 const SESSION_ID_KEY = "mully_session_id";
@@ -86,15 +89,36 @@ function getAbVariantProperties(): Record<string, string> {
 }
 
 function getAttributionProperties(): Record<string, string | null> {
+  // URL-first (covers the very first event of a landing, before
+  // captureAttributionFromUrl has had a chance to persist), then fall back
+  // to the persisted attribution (covers every subsequent navigation and
+  // event where the URL no longer carries ?gclid / ?utm_*).
+  //
+  // Previously this function ONLY read getUrlParam(...) — which meant GA4
+  // received utm_* and gclid on the very first /lp/subscription page_view
+  // and then `null` on every quiz_completed / quiz_email_captured /
+  // begin_checkout event that followed, because by then the user had
+  // navigated to /lp/subscription/quiz/... and the params were gone. As a
+  // result every funnel event downstream of the landing showed up in GA4
+  // as session source `(not set)` / channel `Unassigned` and was
+  // impossible to attribute back to the originating ad group.
+  const stored =
+    typeof window !== "undefined" ? getStoredAttribution() : ({} as Record<string, string | undefined>);
+  const pick = (key: string): string | null => {
+    const fromUrl = getUrlParam(key);
+    if (fromUrl) return fromUrl;
+    const fromStore = (stored as Record<string, string | undefined>)[key];
+    return fromStore && fromStore.length > 0 ? fromStore : null;
+  };
   return {
-    utm_source: getUrlParam("utm_source"),
-    utm_medium: getUrlParam("utm_medium"),
-    utm_campaign: getUrlParam("utm_campaign"),
-    utm_term: getUrlParam("utm_term"),
-    utm_content: getUrlParam("utm_content"),
-    gclid: getUrlParam("gclid"),
-    gbraid: getUrlParam("gbraid"),
-    wbraid: getUrlParam("wbraid"),
+    utm_source: pick("utm_source"),
+    utm_medium: pick("utm_medium"),
+    utm_campaign: pick("utm_campaign"),
+    utm_term: pick("utm_term"),
+    utm_content: pick("utm_content"),
+    gclid: pick("gclid"),
+    gbraid: pick("gbraid"),
+    wbraid: pick("wbraid"),
     fbp: getCookie("_fbp"),
     fbc: getCookie("_fbc"),
   };
