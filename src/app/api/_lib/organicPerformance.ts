@@ -45,7 +45,6 @@ export const ORGANIC_SOURCES = [
   { slug: "reddit", label: "Reddit" },
   { slug: "linkedin", label: "LinkedIn" },
   { slug: "ai", label: "AI (ChatGPT/Perplexity)" },
-  { slug: "direct", label: "Direct" },
   { slug: "referral", label: "Other Referral" },
 ] as const;
 
@@ -126,7 +125,9 @@ const SOURCE_CASE = `
     rd in ('linkedin.com','www.linkedin.com','lnkd.in'), 'linkedin',
     rd in ('chatgpt.com','chat.openai.com','perplexity.ai','www.perplexity.ai',
            'claude.ai','gemini.google.com','copilot.microsoft.com'), 'ai',
-    rd = '$direct' or rd is null, 'direct',
+    -- Direct/null referrers are excluded from the organic tab entirely —
+    -- they're not a tracked source. NULL here gets filtered downstream.
+    rd = '$direct' or rd is null, NULL,
     'referral'
   )`;
 
@@ -178,6 +179,7 @@ export async function fetchOrganicFunnel(
     from src
     where sid is not null
     group by date, source
+    having source is not null
   `;
 
   // Step 2: per (date, source) counts for each funnel event. Attribution:
@@ -235,9 +237,11 @@ export async function fetchOrganicFunnel(
   // attribution path (since we joined on person, not a pre-bucketed source).
   const byKey = new Map<string, OrganicFunnelRow>();
 
-  function bucketDomain(rd: string | null): string {
-    if (!rd || rd === "$direct") return "direct";
-    if (INTERNAL_DOMAINS.includes(rd)) return "direct"; // shouldn't occur (filtered), but defensive
+  // Returns null for direct/internal so the caller can skip the event —
+  // direct traffic is intentionally excluded from the organic tab.
+  function bucketDomain(rd: string | null): string | null {
+    if (!rd || rd === "$direct") return null;
+    if (INTERNAL_DOMAINS.includes(rd)) return null;
     if (
       [
         "google.com",
@@ -334,6 +338,7 @@ export async function fetchOrganicFunnel(
   for (const r of evRes.results ?? []) {
     const [date, rd, event, n] = r as [string, string, string, number];
     const source = bucketDomain(rd);
+    if (!source) continue; // skip direct/internal
     const row = ensureRow(date, source);
     const count = Number(n);
     switch (event) {
@@ -463,8 +468,10 @@ export async function fetchOrganicPurchases(
     if (email) attribByEmail.set(email, rd ?? "$direct");
   }
 
-  function bucket(rd: string | null): string {
-    if (!rd || rd === "$direct") return "direct";
+  // Returns null for direct so the caller skips the purchase — direct
+  // purchasers are not attributed to the organic tab.
+  function bucket(rd: string | null): string | null {
+    if (!rd || rd === "$direct") return null;
     if (
       [
         "google.com",
@@ -539,10 +546,11 @@ export async function fetchOrganicPurchases(
     const rd = (o.email && attribByEmail.get(o.email)) || null;
     // If we have no organic attribution for this purchaser, they were paid
     // (or we never saw them in PostHog at all). Skip — paid funnel handles
-    // those, and we don't want to inflate "Direct" with paid-attributed
+    // those, and we don't want to inflate organic with paid-attributed
     // buyers.
     if (!rd) continue;
     const source = bucket(rd);
+    if (!source) continue; // direct purchases are not tracked organic
     const key = `${o.createdAtDate}|${source}`;
     let row = byKey.get(key);
     if (!row) {

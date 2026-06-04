@@ -283,7 +283,6 @@ function FunnelChart({
   const width = 1100;
   const padX = 24;
   const segW = (width - 2 * padX) / stages.length;
-  const maxCount = Math.max(1, ...stages.map((s) => s.count));
 
   // Reserve a chunk at the bottom for label + count + up to two metric rows
   // (each metric uses one value line + one grey benchmark line).
@@ -306,15 +305,60 @@ function FunnelChart({
       {(() => {
         const boxed = stages.filter((s) => !s.numberOnly);
         const visMax = Math.max(1, ...boxed.map((s) => s.count));
+        // The full visual height available for a stage rectangle.
+        const fullH = chartH - 24;
         return stages.map((s, i) => {
         const next = stages.slice(i + 1).find((n) => !n.numberOnly);
         const ratio = s.count / visMax;
-        const h = Math.max(28, ratio * (chartH - 24));
+        const h = Math.max(28, ratio * fullH);
         const x = padX + i * segW;
         const y = yCenter - h / 2;
 
         return (
           <g key={s.label}>
+            {/* Number-only stage — render as an intake trapezoid that pours
+                into the next boxed stage. Left edge is the full chart height
+                ('open mouth'), right edge matches the next stage's height.
+                Filled with the next stage's color at low opacity so it reads
+                as a stream of intake, not a separate bar. */}
+            {s.numberOnly && next ? (() => {
+              const nextRatio = next.count / visMax;
+              const nextH = Math.max(28, nextRatio * fullH);
+              const nextY = yCenter - nextH / 2;
+              const xLeft = x + 4;
+              const xRight = x + segW - 4;
+              const topLeft = yCenter - fullH / 2;
+              const botLeft = yCenter + fullH / 2;
+              return (
+                <>
+                  <polygon
+                    points={`
+                      ${xLeft},${topLeft}
+                      ${xRight},${nextY}
+                      ${xRight},${nextY + nextH}
+                      ${xLeft},${botLeft}
+                    `}
+                    fill={next.color}
+                    opacity={0.22}
+                  />
+                  {/* Subtle outline so the mouth of the funnel reads as a shape */}
+                  <polyline
+                    points={`${xLeft},${topLeft} ${xRight},${nextY}`}
+                    stroke={next.color}
+                    strokeOpacity={0.55}
+                    strokeWidth={1.5}
+                    fill="none"
+                  />
+                  <polyline
+                    points={`${xLeft},${botLeft} ${xRight},${nextY + nextH}`}
+                    stroke={next.color}
+                    strokeOpacity={0.55}
+                    strokeWidth={1.5}
+                    fill="none"
+                  />
+                </>
+              );
+            })() : null}
             {!s.numberOnly ? (
               <rect
                 x={x + 4}
@@ -329,7 +373,7 @@ function FunnelChart({
             {/* Connecting flow polygon — only between consecutive boxed stages */}
             {!s.numberOnly && next ? (() => {
               const nextRatio = next.count / visMax;
-              const nextH = Math.max(28, nextRatio * (chartH - 24));
+              const nextH = Math.max(28, nextRatio * fullH);
               const nextY = yCenter - nextH / 2;
               const xRight = x + segW - 4;
               const xNextLeft = x + segW + 4;
@@ -1120,12 +1164,20 @@ interface OrganicSource {
   label: string;
 }
 
+interface OrganicBenchmarks {
+  lp_view_rate: BenchmarkBand;
+  profile_rate: BenchmarkBand;
+  checkout_rate: BenchmarkBand;
+  purchase_rate: BenchmarkBand;
+}
+
 interface OrganicPayload {
   start: string;
   end: string;
   snapshots: OrganicSnapshot[];
   sources: OrganicSource[];
   source_labels: Record<string, string>;
+  benchmarks: OrganicBenchmarks;
 }
 
 interface OrganicRow {
@@ -1201,6 +1253,9 @@ interface OrganicFunnelStage {
   count: number;
   // % advancing from the previous stage. Null for the first stage.
   stepRate: number | null;
+  // Optional benchmark to color the step rate against. If undefined, the
+  // step rate is rendered in neutral zinc.
+  band?: BenchmarkBand;
   color: string;
 }
 
@@ -1214,7 +1269,8 @@ function OrganicFunnelChart({
   const width = 1100;
   const padX = 24;
   const segW = (width - 2 * padX) / stages.length;
-  const bottomReserve = 92; // label + count + step rate
+  // label (18) + count (28) + step-rate value (16) + benchmark line (14) + padding
+  const bottomReserve = 110;
   const chartH = height - bottomReserve;
   const yCenter = chartH / 2;
   const visMax = Math.max(1, ...stages.map((s) => s.count));
@@ -1278,16 +1334,39 @@ function OrganicFunnelChart({
             >
               {fmtInt.format(s.count)}
             </text>
-            {s.stepRate !== null ? (
-              <text
-                x={x + segW / 2}
-                y={chartH + 72}
-                textAnchor="middle"
-                className="fill-zinc-500 text-[11px]"
-              >
-                {fmtPct(s.stepRate, 1)} of prev
-              </text>
-            ) : null}
+            {s.stepRate !== null ? (() => {
+              const color = s.band ? bandColor(s.stepRate, s.band) : null;
+              const colorClass =
+                color === "green"
+                  ? "fill-emerald-400"
+                  : color === "yellow"
+                  ? "fill-amber-400"
+                  : color === "red"
+                  ? "fill-rose-400"
+                  : "fill-zinc-400";
+              return (
+                <>
+                  <text
+                    x={x + segW / 2}
+                    y={chartH + 72}
+                    textAnchor="middle"
+                    className={`text-[12px] ${colorClass}`}
+                  >
+                    {fmtPct(s.stepRate, 1)} of prev
+                  </text>
+                  {s.band ? (
+                    <text
+                      x={x + segW / 2}
+                      y={chartH + 88}
+                      textAnchor="middle"
+                      className="fill-zinc-500 text-[10px]"
+                    >
+                      bench {fmtBandRange(s.band)}
+                    </text>
+                  ) : null}
+                </>
+              );
+            })() : null}
           </g>
         );
       })}
@@ -1353,6 +1432,7 @@ function OrganicView({ start, end }: { start: string; end: string }) {
   const checkoutRate = pct(checkoutCount, total.quiz_completed);
   const purchaseRate = pct(total.new_purchases, checkoutCount);
 
+  const benchmarks = data?.benchmarks;
   const funnelStages: OrganicFunnelStage[] = [
     {
       label: "Sessions",
@@ -1364,24 +1444,28 @@ function OrganicView({ start, end }: { start: string; end: string }) {
       label: "LP views",
       count: total.lp_views,
       stepRate: pct(total.lp_views, total.sessions),
+      band: benchmarks?.lp_view_rate,
       color: STAGE_COLORS[1],
     },
     {
       label: "Profile completed",
       count: total.quiz_completed,
       stepRate: pct(total.quiz_completed, total.lp_views),
+      band: benchmarks?.profile_rate,
       color: STAGE_COLORS[2],
     },
     {
       label: "Checkout started",
       count: checkoutCount,
       stepRate: pct(checkoutCount, total.quiz_completed),
+      band: benchmarks?.checkout_rate,
       color: STAGE_COLORS[3],
     },
     {
       label: "Purchase",
       count: total.new_purchases,
       stepRate: pct(total.new_purchases, checkoutCount),
+      band: benchmarks?.purchase_rate,
       color: STAGE_COLORS[4],
     },
   ];
@@ -1411,11 +1495,32 @@ function OrganicView({ start, end }: { start: string; end: string }) {
       {/* KPI strip */}
       <div className="max-w-[1400px] mx-auto grid grid-cols-2 md:grid-cols-6 gap-3 mb-6">
         <Kpi label="Sessions" value={fmtInt.format(total.sessions)} />
-        <Kpi label="LP view rate" value={fmtPct(lpViewRate, 1)} sub="of sessions" />
-        <Kpi label="Profile rate" value={fmtPct(profileRate, 1)} sub="of LP views" />
-        <Kpi label="Checkout rate" value={fmtPct(checkoutRate, 1)} sub="of profiles" />
-        <Kpi label="Purchases" value={fmtInt.format(total.new_purchases)} sub={`${fmtPct(purchaseRate, 1)} of checkouts`} />
+        <Kpi
+          label="LP view rate"
+          value={fmtPct(lpViewRate, 1)}
+          band={benchmarks?.lp_view_rate ? bandColor(lpViewRate, benchmarks.lp_view_rate) : undefined}
+          sub={benchmarks?.lp_view_rate ? `bench ${fmtBandRange(benchmarks.lp_view_rate)}` : "of sessions"}
+        />
+        <Kpi
+          label="Profile rate"
+          value={fmtPct(profileRate, 1)}
+          band={benchmarks?.profile_rate ? bandColor(profileRate, benchmarks.profile_rate) : undefined}
+          sub={benchmarks?.profile_rate ? `bench ${fmtBandRange(benchmarks.profile_rate)}` : "of LP views"}
+        />
+        <Kpi
+          label="Checkout rate"
+          value={fmtPct(checkoutRate, 1)}
+          band={benchmarks?.checkout_rate ? bandColor(checkoutRate, benchmarks.checkout_rate) : undefined}
+          sub={benchmarks?.checkout_rate ? `bench ${fmtBandRange(benchmarks.checkout_rate)}` : "of profiles"}
+        />
+        <Kpi
+          label="Purchases"
+          value={fmtInt.format(total.new_purchases)}
+          band={benchmarks?.purchase_rate ? bandColor(purchaseRate, benchmarks.purchase_rate) : undefined}
+          sub={`${fmtPct(purchaseRate, 1)} of checkouts`}
+        />
         <Kpi label="Revenue" value={fmtMoney.format(total.new_revenue_cents / 100)} />
+        <Kpi label="Sources" value={fmtInt.format(rows.length)} sub="tracked" />
       </div>
 
       {/* Funnel chart */}
@@ -1501,11 +1606,38 @@ function OrganicView({ start, end }: { start: string; end: string }) {
                       </td>
                       <Td align="right">{fmtInt.format(r.sessions)}</Td>
                       <Td align="right">{fmtInt.format(r.lp_views)}</Td>
-                      <Td align="right">{fmtPct(rLpRate, 1)}</Td>
+                      <Td
+                        align="right"
+                        className={
+                          benchmarks?.lp_view_rate
+                            ? BAND_CLASS[bandColor(rLpRate, benchmarks.lp_view_rate)]
+                            : undefined
+                        }
+                      >
+                        {fmtPct(rLpRate, 1)}
+                      </Td>
                       <Td align="right">{fmtInt.format(r.quiz_completed)}</Td>
-                      <Td align="right">{fmtPct(rProfileRate, 1)}</Td>
+                      <Td
+                        align="right"
+                        className={
+                          benchmarks?.profile_rate
+                            ? BAND_CLASS[bandColor(rProfileRate, benchmarks.profile_rate)]
+                            : undefined
+                        }
+                      >
+                        {fmtPct(rProfileRate, 1)}
+                      </Td>
                       <Td align="right">{fmtInt.format(rCheckoutCount)}</Td>
-                      <Td align="right">{fmtPct(rCheckoutRate, 1)}</Td>
+                      <Td
+                        align="right"
+                        className={
+                          benchmarks?.checkout_rate
+                            ? BAND_CLASS[bandColor(rCheckoutRate, benchmarks.checkout_rate)]
+                            : undefined
+                        }
+                      >
+                        {fmtPct(rCheckoutRate, 1)}
+                      </Td>
                       <Td align="right">{fmtInt.format(r.new_purchases)}</Td>
                       <Td align="right">{fmtMoney.format(r.new_revenue_cents / 100)}</Td>
                     </tr>
@@ -1543,7 +1675,10 @@ function OrganicView({ start, end }: { start: string; end: string }) {
           never double-count them here.
         </p>
         <p className="mt-2 text-zinc-600">
-          No industry benchmarks shown. After 30 days of data we&apos;ll set our own baselines.
+          Step-rate benchmarks reuse the paid funnel’s reverse-engineered bands (anchored at
+          CAC $40–$80, 50% checkout→purchase). LP-view rate is widened to 25–50% since organic
+          sessions include non-LP entry points like the homepage and blog.
+          Direct/untagged traffic is excluded — only tracked referrers count here.
         </p>
       </div>
     </>

@@ -9,9 +9,14 @@
  *
  * Auth: Firebase Bearer token + admin email allowlist.
  *
- * Note: no benchmarks here. Organic doesn't have an industry-wide step-by-step
- * benchmark we trust enough to color rates against. Drew agreed to collect
- * 30 days of our own data and treat that as the baseline.
+ * Benchmarks: % step-rates only (no cost-per — organic has no spend).
+ * - LP view rate (session → LP view): 25–50% — sessions are noisy on organic
+ *   (homepage hits, blog reads), only a chunk land on the Reserve LP.
+ * - Profile rate (LP view → profile completed): 20–40% — identical post-LP
+ *   UX to paid, so we reuse the paid click-to-profile band.
+ * - Checkout rate (profile → checkout started): 30–50% — reuses paid band.
+ * - Purchase rate (checkout → purchase): 40–60% — anchored to Drew's 50%
+ *   close-rate assumption.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -94,5 +99,32 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     snapshots: snapsRes.data ?? [],
     sources: ORGANIC_SOURCES,
     source_labels: SOURCE_LABEL_BY_SLUG,
+    // Step-rate benchmarks only. No cost-per on organic.
+    benchmarks: {
+      lp_view_rate: {
+        kind: "rate" as const,
+        low: 0.25,
+        high: 0.5,
+        label: "Session \u2192 LP view",
+      },
+      profile_rate: {
+        kind: "rate" as const,
+        low: 0.2,
+        high: 0.4,
+        label: "LP view \u2192 profile (step)",
+      },
+      checkout_rate: {
+        kind: "rate" as const,
+        low: 0.3,
+        high: 0.5,
+        label: "Profile \u2192 checkout (step)",
+      },
+      purchase_rate: {
+        kind: "rate" as const,
+        low: 0.4,
+        high: 0.6,
+        label: "Checkout \u2192 purchase (step)",
+      },
+    },
   });
 }
