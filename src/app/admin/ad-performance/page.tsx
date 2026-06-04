@@ -430,6 +430,9 @@ export default function AdPerformancePage() {
   // When set, the funnel chart aggregates only this ad group. Clicking the
   // selected row toggles back to "all".
   const [adGroupFocus, setAdGroupFocus] = useState<string | null>(null);
+  // Top-level Paid/Organic tab. Organic is its own self-contained view —
+  // separate data fetch, no benchmarks, no cost metrics.
+  const [tab, setTab] = useState<"paid" | "organic">("paid");
 
   const load = async (live = false) => {
     setLoading(true);
@@ -457,9 +460,11 @@ export default function AdPerformancePage() {
   };
 
   useEffect(() => {
-    void load();
+    // Only load paid data when the Paid tab is visible — Organic owns its own
+    // fetcher inside <OrganicView/>. Reloads when the date range changes.
+    if (tab === "paid") void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [start, end]);
+  }, [start, end, tab]);
 
   // Filter to campaign before aggregating. (unattributed) and (pending)
   // rows are excluded from the on-screen view — they're stored in Supabase
@@ -618,22 +623,54 @@ export default function AdPerformancePage() {
           <DateInput value={start} onChange={(v) => setRange((r) => ({ ...r, start: v }))} />
           <span className="text-zinc-600">→</span>
           <DateInput value={end} onChange={(v) => setRange((r) => ({ ...r, end: v }))} />
-          <button
-            onClick={() => load(true)}
-            disabled={loading}
-            className="px-3 py-1.5 text-xs rounded-md bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 ring-1 ring-zinc-700 transition"
-          >
-            {loading ? "Refreshing…" : "Refresh now"}
-          </button>
+          {tab === "paid" ? (
+            <button
+              onClick={() => load(true)}
+              disabled={loading}
+              className="px-3 py-1.5 text-xs rounded-md bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 ring-1 ring-zinc-700 transition"
+            >
+              {loading ? "Refreshing…" : "Refresh now"}
+            </button>
+          ) : null}
         </div>
       </div>
 
-      {error ? (
+      {/* Paid / Organic tab toggle */}
+      <div className="max-w-[1400px] mx-auto mb-6 flex items-center gap-2">
+        <button
+          onClick={() => setTab("paid")}
+          className={`px-4 py-2 text-xs tracking-[0.16em] uppercase rounded-md transition ${
+            tab === "paid"
+              ? "bg-zinc-100 text-zinc-900"
+              : "bg-zinc-900 text-zinc-400 ring-1 ring-zinc-800 hover:text-zinc-200"
+          }`}
+        >
+          Paid
+        </button>
+        <button
+          onClick={() => setTab("organic")}
+          className={`px-4 py-2 text-xs tracking-[0.16em] uppercase rounded-md transition ${
+            tab === "organic"
+              ? "bg-zinc-100 text-zinc-900"
+              : "bg-zinc-900 text-zinc-400 ring-1 ring-zinc-800 hover:text-zinc-200"
+          }`}
+        >
+          Organic
+        </button>
+      </div>
+
+      {tab === "paid" && error ? (
         <div className="max-w-[1400px] mx-auto mb-6 p-4 rounded-lg bg-rose-500/10 ring-1 ring-rose-500/30 text-rose-300 text-sm">
           {error}
         </div>
       ) : null}
 
+      {tab === "organic" ? (
+        <OrganicView start={start} end={end} />
+      ) : null}
+
+      {tab === "paid" ? (
+        <>
       {/* Campaign filter pills */}
       <div className="max-w-[1400px] mx-auto mb-6 flex items-center gap-2 flex-wrap">
         <FilterPill
@@ -889,6 +926,8 @@ export default function AdPerformancePage() {
           </div>
         </div>
       ) : null}
+        </>
+      ) : null}
     </div>
   );
 }
@@ -1056,5 +1095,457 @@ function KeywordSubrow({ keywords }: { keywords: Keyword[] }) {
         </table>
       </td>
     </tr>
+  );
+}
+
+// ─── Organic tab ────────────────────────────────────────────────────────────
+
+interface OrganicSnapshot {
+  snapshot_date: string;
+  source: string;
+  source_label: string | null;
+  sessions: number;
+  lp_views: number;
+  quiz_started: number;
+  quiz_completed: number;
+  quiz_email_captured: number;
+  checkout_clicked: number;
+  begin_checkout: number;
+  new_purchases: number;
+  new_revenue_cents: number;
+}
+
+interface OrganicSource {
+  slug: string;
+  label: string;
+}
+
+interface OrganicPayload {
+  start: string;
+  end: string;
+  snapshots: OrganicSnapshot[];
+  sources: OrganicSource[];
+  source_labels: Record<string, string>;
+}
+
+interface OrganicRow {
+  source: string;
+  source_label: string;
+  sessions: number;
+  lp_views: number;
+  quiz_started: number;
+  quiz_completed: number;
+  quiz_email_captured: number;
+  checkout_clicked: number;
+  begin_checkout: number;
+  new_purchases: number;
+  new_revenue_cents: number;
+}
+
+function emptyOrganicRow(source: string, label: string): OrganicRow {
+  return {
+    source,
+    source_label: label,
+    sessions: 0,
+    lp_views: 0,
+    quiz_started: 0,
+    quiz_completed: 0,
+    quiz_email_captured: 0,
+    checkout_clicked: 0,
+    begin_checkout: 0,
+    new_purchases: 0,
+    new_revenue_cents: 0,
+  };
+}
+
+function aggregateBySource(snapshots: OrganicSnapshot[]): OrganicRow[] {
+  const map = new Map<string, OrganicRow>();
+  for (const s of snapshots) {
+    const key = s.source;
+    const row =
+      map.get(key) ?? emptyOrganicRow(key, s.source_label ?? key);
+    row.sessions += s.sessions;
+    row.lp_views += s.lp_views;
+    row.quiz_started += s.quiz_started;
+    row.quiz_completed += s.quiz_completed;
+    row.quiz_email_captured += s.quiz_email_captured;
+    row.checkout_clicked += s.checkout_clicked;
+    row.begin_checkout += s.begin_checkout;
+    row.new_purchases += s.new_purchases;
+    row.new_revenue_cents += s.new_revenue_cents;
+    map.set(key, row);
+  }
+  return Array.from(map.values()).sort((a, b) => b.sessions - a.sessions);
+}
+
+function totalsOrganic(rows: OrganicRow[]): OrganicRow {
+  const t = emptyOrganicRow("__total__", "Total");
+  for (const r of rows) {
+    t.sessions += r.sessions;
+    t.lp_views += r.lp_views;
+    t.quiz_started += r.quiz_started;
+    t.quiz_completed += r.quiz_completed;
+    t.quiz_email_captured += r.quiz_email_captured;
+    t.checkout_clicked += r.checkout_clicked;
+    t.begin_checkout += r.begin_checkout;
+    t.new_purchases += r.new_purchases;
+    t.new_revenue_cents += r.new_revenue_cents;
+  }
+  return t;
+}
+
+// Funnel chart for organic — no benchmarks, no color bands, just stage count
+// + step-to-step rate below in neutral zinc. Reuses STAGE_COLORS for the bars.
+interface OrganicFunnelStage {
+  label: string;
+  count: number;
+  // % advancing from the previous stage. Null for the first stage.
+  stepRate: number | null;
+  color: string;
+}
+
+function OrganicFunnelChart({
+  stages,
+  height = 280,
+}: {
+  stages: OrganicFunnelStage[];
+  height?: number;
+}) {
+  const width = 1100;
+  const padX = 24;
+  const segW = (width - 2 * padX) / stages.length;
+  const bottomReserve = 92; // label + count + step rate
+  const chartH = height - bottomReserve;
+  const yCenter = chartH / 2;
+  const visMax = Math.max(1, ...stages.map((s) => s.count));
+
+  return (
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      className="w-full h-auto"
+      preserveAspectRatio="xMidYMid meet"
+    >
+      {stages.map((s, i) => {
+        const ratio = s.count / visMax;
+        const h = Math.max(28, ratio * (chartH - 24));
+        const x = padX + i * segW;
+        const y = yCenter - h / 2;
+        const next = stages[i + 1];
+        return (
+          <g key={s.label}>
+            <rect
+              x={x + 4}
+              y={y}
+              width={segW - 8}
+              height={h}
+              rx={6}
+              fill={s.color}
+              opacity={0.9}
+            />
+            {next ? (() => {
+              const nextRatio = next.count / visMax;
+              const nextH = Math.max(28, nextRatio * (chartH - 24));
+              const nextY = yCenter - nextH / 2;
+              const xRight = x + segW - 4;
+              const xNextLeft = x + segW + 4;
+              return (
+                <polygon
+                  points={`
+                    ${xRight},${y}
+                    ${xNextLeft},${nextY}
+                    ${xNextLeft},${nextY + nextH}
+                    ${xRight},${y + h}
+                  `}
+                  fill={s.color}
+                  opacity={0.18}
+                />
+              );
+            })() : null}
+
+            <text
+              x={x + segW / 2}
+              y={chartH + 18}
+              textAnchor="middle"
+              className="fill-zinc-400 text-[11px] tracking-[0.18em] uppercase"
+            >
+              {s.label}
+            </text>
+            <text
+              x={x + segW / 2}
+              y={chartH + 46}
+              textAnchor="middle"
+              className="fill-zinc-100 text-2xl font-medium"
+            >
+              {fmtInt.format(s.count)}
+            </text>
+            {s.stepRate !== null ? (
+              <text
+                x={x + segW / 2}
+                y={chartH + 72}
+                textAnchor="middle"
+                className="fill-zinc-500 text-[11px]"
+              >
+                {fmtPct(s.stepRate, 1)} of prev
+              </text>
+            ) : null}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function OrganicView({ start, end }: { start: string; end: string }) {
+  const [data, setData] = useState<OrganicPayload | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [sourceFocus, setSourceFocus] = useState<string | null>(null);
+
+  const load = async (live = false) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const user = auth.currentUser;
+      if (!user) throw new Error("Not authenticated");
+      const token = await user.getIdToken();
+      const params = new URLSearchParams({ start, end });
+      if (live) params.set("live", "1");
+      const res = await fetch(`/api/admin/ad-performance/organic?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(j.error || `HTTP ${res.status}`);
+      }
+      const payload = (await res.json()) as OrganicPayload;
+      setData(payload);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [start, end]);
+
+  const rows = useMemo(
+    () => (data ? aggregateBySource(data.snapshots) : []),
+    [data]
+  );
+  const total = useMemo(() => {
+    if (sourceFocus) {
+      const r = rows.find((x) => x.source === sourceFocus);
+      if (r) return totalsOrganic([r]);
+    }
+    return totalsOrganic(rows);
+  }, [rows, sourceFocus]);
+  const focusedRow = useMemo(
+    () => (sourceFocus ? rows.find((r) => r.source === sourceFocus) ?? null : null),
+    [rows, sourceFocus]
+  );
+
+  const lpViewRate = pct(total.lp_views, total.sessions);
+  const profileRate = pct(total.quiz_completed, total.lp_views);
+  const checkoutCount = total.checkout_clicked || total.begin_checkout;
+  const checkoutRate = pct(checkoutCount, total.quiz_completed);
+  const purchaseRate = pct(total.new_purchases, checkoutCount);
+
+  const funnelStages: OrganicFunnelStage[] = [
+    {
+      label: "Sessions",
+      count: total.sessions,
+      stepRate: null,
+      color: STAGE_COLORS[0],
+    },
+    {
+      label: "LP views",
+      count: total.lp_views,
+      stepRate: pct(total.lp_views, total.sessions),
+      color: STAGE_COLORS[1],
+    },
+    {
+      label: "Profile completed",
+      count: total.quiz_completed,
+      stepRate: pct(total.quiz_completed, total.lp_views),
+      color: STAGE_COLORS[2],
+    },
+    {
+      label: "Checkout started",
+      count: checkoutCount,
+      stepRate: pct(checkoutCount, total.quiz_completed),
+      color: STAGE_COLORS[3],
+    },
+    {
+      label: "Purchase",
+      count: total.new_purchases,
+      stepRate: pct(total.new_purchases, checkoutCount),
+      color: STAGE_COLORS[4],
+    },
+  ];
+
+  return (
+    <>
+      {error ? (
+        <div className="max-w-[1400px] mx-auto mb-6 p-4 rounded-lg bg-rose-500/10 ring-1 ring-rose-500/30 text-rose-300 text-sm">
+          {error}
+        </div>
+      ) : null}
+
+      {/* Refresh row */}
+      <div className="max-w-[1400px] mx-auto mb-4 flex items-center justify-between">
+        <p className="text-xs text-zinc-500">
+          Attributed to non-paid referrers. Excludes gclid / utm_medium=cpc / known ad sources.
+        </p>
+        <button
+          onClick={() => load(true)}
+          disabled={loading}
+          className="px-3 py-1.5 text-xs rounded-md bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 ring-1 ring-zinc-700 transition"
+        >
+          {loading ? "Refreshing…" : "Refresh now"}
+        </button>
+      </div>
+
+      {/* KPI strip */}
+      <div className="max-w-[1400px] mx-auto grid grid-cols-2 md:grid-cols-6 gap-3 mb-6">
+        <Kpi label="Sessions" value={fmtInt.format(total.sessions)} />
+        <Kpi label="LP view rate" value={fmtPct(lpViewRate, 1)} sub="of sessions" />
+        <Kpi label="Profile rate" value={fmtPct(profileRate, 1)} sub="of LP views" />
+        <Kpi label="Checkout rate" value={fmtPct(checkoutRate, 1)} sub="of profiles" />
+        <Kpi label="Purchases" value={fmtInt.format(total.new_purchases)} sub={`${fmtPct(purchaseRate, 1)} of checkouts`} />
+        <Kpi label="Revenue" value={fmtMoney.format(total.new_revenue_cents / 100)} />
+      </div>
+
+      {/* Funnel chart */}
+      <div className="max-w-[1400px] mx-auto mb-8 p-6 rounded-xl bg-zinc-900 ring-1 ring-zinc-800">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <h2 className="text-sm tracking-[0.18em] uppercase text-zinc-400">Organic funnel</h2>
+            {focusedRow ? (
+              <button
+                onClick={() => setSourceFocus(null)}
+                className="flex items-center gap-2 text-xs px-2.5 py-1 rounded-md bg-blue-500/15 ring-1 ring-blue-500/40 text-blue-200 hover:bg-blue-500/25 transition"
+                title="Clear source focus"
+              >
+                <span className="font-medium">{focusedRow.source_label}</span>
+                <span className="text-blue-300/80">×</span>
+              </button>
+            ) : (
+              <span className="text-xs text-zinc-600">All sources · click a row to focus</span>
+            )}
+          </div>
+          <div className="text-xs text-zinc-500">
+            {loading ? "Loading…" : data ? `${data.start} → ${data.end}` : ""}
+          </div>
+        </div>
+        {total.sessions > 0 ? (
+          <OrganicFunnelChart stages={funnelStages} />
+        ) : (
+          <div className="h-40 flex items-center justify-center text-zinc-600 text-sm">
+            {loading ? "Loading…" : "No organic data in range."}
+          </div>
+        )}
+      </div>
+
+      {/* Table */}
+      <div className="max-w-[1400px] mx-auto rounded-xl bg-zinc-900 ring-1 ring-zinc-800 overflow-hidden">
+        <div className="px-5 py-3 border-b border-zinc-800 flex items-center justify-between">
+          <h2 className="text-sm tracking-[0.18em] uppercase text-zinc-400">By source</h2>
+          <div className="text-xs text-zinc-500">Click a row to focus the funnel</div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-zinc-900/80 text-[10px] tracking-[0.16em] uppercase text-zinc-500">
+              <tr>
+                <Th>Source</Th>
+                <Th align="right">Sessions</Th>
+                <Th align="right">LP views</Th>
+                <Th align="right">LP %</Th>
+                <Th align="right">Profile done</Th>
+                <Th align="right">Profile %</Th>
+                <Th align="right">Checkout</Th>
+                <Th align="right">Checkout %</Th>
+                <Th align="right">Purchases</Th>
+                <Th align="right">Revenue</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
+                <tr>
+                  <td colSpan={10} className="text-center py-8 text-zinc-600">
+                    {loading ? "Loading…" : "No data."}
+                  </td>
+                </tr>
+              ) : (
+                rows.map((r) => {
+                  const rLpRate = pct(r.lp_views, r.sessions);
+                  const rProfileRate = pct(r.quiz_completed, r.lp_views);
+                  const rCheckoutCount = r.checkout_clicked || r.begin_checkout;
+                  const rCheckoutRate = pct(rCheckoutCount, r.quiz_completed);
+                  const isFocused = sourceFocus === r.source;
+                  return (
+                    <tr
+                      key={r.source}
+                      onClick={() =>
+                        setSourceFocus((cur) => (cur === r.source ? null : r.source))
+                      }
+                      className={
+                        "border-t border-zinc-800/60 hover:bg-zinc-800/40 cursor-pointer transition-colors" +
+                        (isFocused ? " bg-blue-500/10 hover:bg-blue-500/15 ring-1 ring-blue-500/30" : "")
+                      }
+                    >
+                      <td className="px-4 py-2.5">
+                        <div className="text-zinc-100">{r.source_label}</div>
+                      </td>
+                      <Td align="right">{fmtInt.format(r.sessions)}</Td>
+                      <Td align="right">{fmtInt.format(r.lp_views)}</Td>
+                      <Td align="right">{fmtPct(rLpRate, 1)}</Td>
+                      <Td align="right">{fmtInt.format(r.quiz_completed)}</Td>
+                      <Td align="right">{fmtPct(rProfileRate, 1)}</Td>
+                      <Td align="right">{fmtInt.format(rCheckoutCount)}</Td>
+                      <Td align="right">{fmtPct(rCheckoutRate, 1)}</Td>
+                      <Td align="right">{fmtInt.format(r.new_purchases)}</Td>
+                      <Td align="right">{fmtMoney.format(r.new_revenue_cents / 100)}</Td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+            {rows.length > 0 ? (
+              <tfoot>
+                <tr className="border-t-2 border-zinc-700 bg-zinc-900/80 font-medium">
+                  <td className="px-4 py-3 text-zinc-300">Total</td>
+                  <Td align="right">{fmtInt.format(total.sessions)}</Td>
+                  <Td align="right">{fmtInt.format(total.lp_views)}</Td>
+                  <Td align="right">{fmtPct(lpViewRate, 1)}</Td>
+                  <Td align="right">{fmtInt.format(total.quiz_completed)}</Td>
+                  <Td align="right">{fmtPct(profileRate, 1)}</Td>
+                  <Td align="right">{fmtInt.format(checkoutCount)}</Td>
+                  <Td align="right">{fmtPct(checkoutRate, 1)}</Td>
+                  <Td align="right">{fmtInt.format(total.new_purchases)}</Td>
+                  <Td align="right">{fmtMoney.format(total.new_revenue_cents / 100)}</Td>
+                </tr>
+              </tfoot>
+            ) : null}
+          </table>
+        </div>
+      </div>
+
+      <div className="max-w-[1400px] mx-auto mt-6 p-4 rounded-xl bg-zinc-900/50 ring-1 ring-zinc-800/50 text-xs text-zinc-500">
+        <div className="tracking-[0.18em] uppercase text-zinc-400 mb-2">How organic is attributed</div>
+        <p>
+          Sessions are counted distinct by PostHog $session_id where the referring domain is
+          not a known paid source and the URL has no gclid/utm_medium=cpc. Returning visitors
+          credit their first organic touch within the prior 60 days. Purchases require an
+          organic referrer in PostHog history — paid-attributed buyers are excluded so we
+          never double-count them here.
+        </p>
+        <p className="mt-2 text-zinc-600">
+          No industry benchmarks shown. After 30 days of data we&apos;ll set our own baselines.
+        </p>
+      </div>
+    </>
   );
 }

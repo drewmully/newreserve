@@ -15,6 +15,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { refreshAdPerformance } from "@/app/api/_lib/adPerformance";
+import { refreshOrganicPerformance } from "@/app/api/_lib/organicPerformance";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -35,19 +36,30 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   const days = Math.min(Math.max(Number(daysParam ?? "2"), 1), 30);
 
   const started = Date.now();
-  try {
-    const summary = await refreshAdPerformance(days);
-    return NextResponse.json({
-      ok: true,
+  // Run paid + organic refresh in parallel; one failing must not kill the other.
+  const [paidResult, organicResult] = await Promise.allSettled([
+    refreshAdPerformance(days),
+    refreshOrganicPerformance(days),
+  ]);
+
+  const paid = paidResult.status === "fulfilled"
+    ? { ok: true, ...paidResult.value }
+    : { ok: false, error: paidResult.reason instanceof Error ? paidResult.reason.message : String(paidResult.reason) };
+  const organic = organicResult.status === "fulfilled"
+    ? { ok: true, ...organicResult.value }
+    : { ok: false, error: organicResult.reason instanceof Error ? organicResult.reason.message : String(organicResult.reason) };
+
+  if (!paid.ok) console.error("[ad-performance-refresh] paid failed", paidResult.status === "rejected" ? paidResult.reason : null);
+  if (!organic.ok) console.error("[ad-performance-refresh] organic failed", organicResult.status === "rejected" ? organicResult.reason : null);
+
+  const allOk = paid.ok && organic.ok;
+  return NextResponse.json(
+    {
+      ok: allOk,
       duration_ms: Date.now() - started,
-      ...summary,
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error("[ad-performance-refresh] failed", err);
-    return NextResponse.json(
-      { ok: false, error: message, duration_ms: Date.now() - started },
-      { status: 500 }
-    );
-  }
+      paid,
+      organic,
+    },
+    { status: allOk ? 200 : 500 }
+  );
 }
