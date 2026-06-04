@@ -697,6 +697,17 @@ export async function refreshAdPerformance(days = 2): Promise<{
 
   const rows = Array.from(snapshotsByKey.values()).map((s) => ({
     ...s,
+    impressions: Math.round(s.impressions || 0),
+    clicks: Math.round(s.clicks || 0),
+    cost_micros: Math.round(s.cost_micros || 0),
+    lp_views: Math.round(s.lp_views || 0),
+    quiz_started: Math.round(s.quiz_started || 0),
+    quiz_completed: Math.round(s.quiz_completed || 0),
+    quiz_email_captured: Math.round(s.quiz_email_captured || 0),
+    checkout_clicked: Math.round(s.checkout_clicked || 0),
+    begin_checkout: Math.round(s.begin_checkout || 0),
+    new_purchases: Math.round(s.new_purchases || 0),
+    new_revenue_cents: Math.round(s.new_revenue_cents || 0),
     refreshed_at: new Date().toISOString(),
   }));
 
@@ -716,12 +727,12 @@ export async function refreshAdPerformance(days = 2): Promise<{
     criterion_id: k.criterion_id,
     keyword_text: k.keyword_text,
     match_type: k.match_type,
-    impressions: k.impressions,
-    clicks: k.clicks,
-    cost_micros: k.cost_micros,
-    conversions: k.conversions,
+    impressions: Math.round(k.impressions || 0),
+    clicks: Math.round(k.clicks || 0),
+    cost_micros: Math.round(k.cost_micros || 0),
+    conversions: k.conversions || 0,
     ctr: k.ctr,
-    avg_cpc_micros: k.avg_cpc_micros,
+    avg_cpc_micros: Math.round(k.avg_cpc_micros || 0),
     refreshed_at: new Date().toISOString(),
   }));
   if (kwRows.length > 0) {
