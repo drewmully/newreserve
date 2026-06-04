@@ -14,6 +14,7 @@ import type { EmailFlow } from "@/lib/email/sequences";
 import { ACCESS_TEMPLATES } from "@/lib/email/templates/access";
 import { MEMBER_TEMPLATES } from "@/lib/email/templates/member";
 import { RESERVE_TEMPLATES } from "@/lib/email/templates/reserve";
+import { ABANDON_TEMPLATES } from "@/lib/email/templates/abandon";
 
 export const runtime = "nodejs";
 
@@ -23,6 +24,7 @@ const TEMPLATES: Record<EmailFlow, EmailTemplate[]> = {
   access: ACCESS_TEMPLATES,
   member: MEMBER_TEMPLATES,
   reserve: RESERVE_TEMPLATES,
+  abandon: ABANDON_TEMPLATES,
 };
 
 async function verifyAdmin(request: NextRequest): Promise<void> {

@@ -8,13 +8,16 @@ import { adminDb } from "@/lib/firebase-admin";
 import { ACCESS_TEMPLATES } from "./templates/access";
 import { MEMBER_TEMPLATES } from "./templates/member";
 import { RESERVE_TEMPLATES } from "./templates/reserve";
+import { ABANDON_TEMPLATES } from "./templates/abandon";
 import { sendPlainText } from "./resend";
 
 // Active flows: access (paid Reserve Access subs), member (paid Member subs),
-// reserve (pre-checkout quiz acquisition nurture).
+// reserve (pre-checkout quiz acquisition nurture),
+// abandon (post-checkout-started recovery — quiz-completed profile reached
+// Shopify checkout but didn't pay).
 // `free` and `back9` were retired 2026-06-04 — any historical Firestore docs
 // with those flow values are left in place but no longer get processed.
-export type EmailFlow = "access" | "member" | "reserve";
+export type EmailFlow = "access" | "member" | "reserve" | "abandon";
 export type SequenceStatus = "active" | "paused" | "completed";
 
 export type SkipCondition =
@@ -52,11 +55,23 @@ export const FLOW_STEPS: Record<EmailFlow, EmailStepConfig[]> = {
   // when a visitor finishes the style quiz with email consent and is NOT an
   // active subscriber. Halted by the Shopify orders/paid webhook when the same
   // email converts (see markProfilesConvertedByEmail + the webhook handler).
+  // Also halted (replaced by `abandon`) when the same email hits the Shopify
+  // checkouts/create webhook — see markProfilesCheckoutStartedByEmail.
   reserve: [
     { step: 0, triggerType: "schedule", delayDays: 0 },   // immediate reveal
     { step: 1, triggerType: "schedule", delayDays: 2 },   // care + service
     { step: 2, triggerType: "schedule", delayDays: 5 },   // value math
     { step: 3, triggerType: "schedule", delayDays: 9 },   // "have a guy" + gift reminder
+  ],
+  // Post-checkout-abandon recovery. Started by the Shopify checkouts/create
+  // webhook when a quiz-completed profile reaches checkout. Replaces the
+  // `reserve` sequence on the same uid. Halted by orders/paid via the
+  // existing markProfilesConvertedByEmail path (now matches `checkout_started`
+  // profiles too) + completeSequence(profileId).
+  abandon: [
+    { step: 0, triggerType: "schedule", delayDays: 0 },   // ~immediately, soft hold
+    { step: 1, triggerType: "schedule", delayDays: 1 },   // ~24h, friction-busting
+    { step: 2, triggerType: "schedule", delayDays: 3 },   // ~72h, last-call
   ],
 };
 
@@ -64,6 +79,7 @@ const TEMPLATES = {
   access: ACCESS_TEMPLATES,
   member: MEMBER_TEMPLATES,
   reserve: RESERVE_TEMPLATES,
+  abandon: ABANDON_TEMPLATES,
 };
 
 export interface EmailSequenceDoc {

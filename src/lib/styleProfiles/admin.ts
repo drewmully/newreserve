@@ -74,6 +74,8 @@ export async function createStyleProfile(args: {
     shopifyOrderId: null,
     convertedAt: null,
     abandonNudgeSentAt: null,
+    checkoutStartedAt: null,
+    checkoutToken: null,
   };
 
   await ref(profileId).set(doc);
@@ -152,7 +154,12 @@ export async function markProfilesConvertedByEmail(args: {
   const snap = await adminDb
     .collection(COLLECTION)
     .where("email", "==", email)
-    .where("status", "in", ["completed", "started", "abandoned"])
+    .where("status", "in", [
+      "completed",
+      "started",
+      "abandoned",
+      "checkout_started",
+    ])
     .get();
 
   if (snap.empty) return [];
@@ -171,6 +178,63 @@ export async function markProfilesConvertedByEmail(args: {
   }
   await batch.commit();
   return ids;
+}
+
+/**
+ * Called by the Shopify checkouts/create webhook. Matches by lowercase email,
+ * flips matching `completed` (or `abandoned`/`started` with email captured)
+ * profiles to `checkout_started`, stamps the checkout token + timestamp.
+ *
+ * Returns the list of affected profile ids — callers use this to halt the
+ * upstream `reserve` sequence and enroll the same uid in the new `abandon`
+ * recovery flow. Idempotent: profiles already in `checkout_started` are
+ * re-touched (so we update the checkoutToken) but not re-counted as new.
+ */
+export async function markProfilesCheckoutStartedByEmail(args: {
+  email: string;
+  checkoutToken: string;
+}): Promise<{ newlyMarked: string[]; alreadyMarked: string[] }> {
+  const email = normalizeEmail(args.email);
+  if (!email) return { newlyMarked: [], alreadyMarked: [] };
+
+  const snap = await adminDb
+    .collection(COLLECTION)
+    .where("email", "==", email)
+    .where("status", "in", [
+      "completed",
+      "started",
+      "abandoned",
+      "checkout_started",
+    ])
+    .get();
+
+  if (snap.empty) return { newlyMarked: [], alreadyMarked: [] };
+
+  const now = FieldValue.serverTimestamp();
+  const batch = adminDb.batch();
+  const newlyMarked: string[] = [];
+  const alreadyMarked: string[] = [];
+  for (const d of snap.docs) {
+    const data = d.data() as StyleProfileDoc;
+    if (data.status === "checkout_started") {
+      alreadyMarked.push(d.id);
+      // Refresh the token in case they restarted checkout with a new cart.
+      batch.update(d.ref, {
+        checkoutToken: args.checkoutToken,
+        updatedAt: now,
+      });
+    } else {
+      newlyMarked.push(d.id);
+      batch.update(d.ref, {
+        status: "checkout_started" as ProfileStatus,
+        checkoutStartedAt: now,
+        checkoutToken: args.checkoutToken,
+        updatedAt: now,
+      });
+    }
+  }
+  await batch.commit();
+  return { newlyMarked, alreadyMarked };
 }
 
 export async function getStyleProfile(

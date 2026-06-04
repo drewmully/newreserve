@@ -16,7 +16,7 @@
 import { useEffect, useMemo, useState, useCallback, useId } from "react";
 import { useMembership } from "@/app/context/MembershipContext";
 
-type Tier = "access" | "member" | "reserve";
+type Tier = "access" | "member" | "reserve" | "abandon";
 type Period = "today" | "week" | "month" | "custom";
 type PathView = "buckets" | "all" | "other";
 type PctMode = "step" | "start";
@@ -174,11 +174,12 @@ interface ApiResponse {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const FLOW_ORDER: Tier[] = ["access", "member", "reserve"];
+const FLOW_ORDER: Tier[] = ["access", "member", "reserve", "abandon"];
 const FLOW_LABELS: Record<Tier, string> = {
   access: "Reserve Access",
   member: "Reserve Member",
   reserve: "Reserve (Quiz Nurture)",
+  abandon: "Reserve (Checkout Abandon)",
 };
 
 function num(n: number | null | undefined): string {

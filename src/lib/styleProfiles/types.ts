@@ -20,10 +20,11 @@ import type { Timestamp } from "firebase-admin/firestore";
 export type StyleBucket = "classic" | "modern" | "bold" | "quiet";
 
 export type ProfileStatus =
-  | "started"      // quiz_started fired; first answer saved
-  | "completed"    // all required questions answered + email captured + consent
-  | "abandoned"    // email captured but quiz not completed within 24h
-  | "converted";   // matched to a Shopify order (orders-paid webhook)
+  | "started"          // quiz_started fired; first answer saved
+  | "completed"        // all required questions answered + email captured + consent
+  | "abandoned"        // email captured but quiz not completed within 24h
+  | "checkout_started" // quiz-completed profile reached Shopify checkout but didn't pay
+  | "converted";       // matched to a Shopify order (orders-paid webhook)
 
 export type FitPreference = "tailored" | "regular" | "relaxed";
 
@@ -96,6 +97,12 @@ export interface StyleProfileDoc {
 
   /** Set when the abandon-quiz nudge has been queued. Prevents double-nudges. */
   abandonNudgeSentAt: Timestamp | null;
+
+  /** Set by the Shopify checkouts/create webhook when this email hits checkout.
+   *  Triggers the `abandon` recovery flow (replacing the upstream `reserve`
+   *  nurture). Stored as the Shopify checkout token, useful for de-dup. */
+  checkoutStartedAt: Timestamp | null;
+  checkoutToken: string | null;
 }
 
 export type StyleProfileInput = Partial<
