@@ -1,0 +1,889 @@
+"use client";
+
+/**
+ * /admin/ad-performance — Mully Reserve acquisition funnel dashboard.
+ *
+ * Dark Linear/Vercel-style admin UI. Funnel chart up top, dense table below.
+ * Auth is handled by /admin/layout.tsx.
+ *
+ * Data source: /api/admin/ad-performance (reads pre-aggregated snapshots).
+ * Numbers refresh hourly via /api/admin/cron/ad-performance-refresh; the
+ * "Refresh now" button triggers an immediate recompute by passing live=1.
+ */
+
+import { useEffect, useMemo, useState } from "react";
+import { auth } from "@/lib/firebase";
+
+// ─── Types matching the API response ────────────────────────────────────────
+
+interface Snapshot {
+  snapshot_date: string;
+  campaign_id: string;
+  ad_group_id: string;
+  campaign_name: string | null;
+  ad_group_name: string | null;
+  impressions: number;
+  clicks: number;
+  cost_micros: number;
+  conversions: number;
+  lp_views: number;
+  quiz_started: number;
+  quiz_completed: number;
+  quiz_email_captured: number;
+  checkout_clicked: number;
+  begin_checkout: number;
+  new_purchases: number;
+  new_revenue_cents: number;
+}
+
+interface Keyword {
+  snapshot_date: string;
+  campaign_id: string;
+  ad_group_id: string;
+  criterion_id: string;
+  keyword_text: string | null;
+  match_type: string | null;
+  impressions: number;
+  clicks: number;
+  cost_micros: number;
+  conversions: number;
+  ctr: number;
+  avg_cpc_micros: number;
+}
+
+interface BenchmarkBand {
+  low: number;
+  high: number;
+  label: string;
+}
+
+interface ApiPayload {
+  start: string;
+  end: string;
+  snapshots: Snapshot[];
+  keywords: Keyword[];
+  ad_group_map: Record<string, { campaign_slug: string; ad_group_slug: string }>;
+  benchmarks: {
+    ctr: BenchmarkBand;
+    lp_to_quiz: BenchmarkBand;
+    quiz_to_email: BenchmarkBand;
+    email_to_checkout: BenchmarkBand;
+    checkout_to_purchase: BenchmarkBand;
+    click_to_purchase: BenchmarkBand;
+  };
+}
+
+// ─── Aggregation helpers ────────────────────────────────────────────────────
+
+interface AggregatedRow {
+  campaign_id: string;
+  ad_group_id: string;
+  campaign_name: string;
+  ad_group_name: string;
+  impressions: number;
+  clicks: number;
+  cost_cents: number;
+  conversions: number;
+  lp_views: number;
+  quiz_started: number;
+  quiz_completed: number;
+  quiz_email_captured: number;
+  checkout_clicked: number;
+  begin_checkout: number;
+  new_purchases: number;
+  new_revenue_cents: number;
+}
+
+function emptyRow(): Omit<AggregatedRow, "campaign_id" | "ad_group_id" | "campaign_name" | "ad_group_name"> {
+  return {
+    impressions: 0,
+    clicks: 0,
+    cost_cents: 0,
+    conversions: 0,
+    lp_views: 0,
+    quiz_started: 0,
+    quiz_completed: 0,
+    quiz_email_captured: 0,
+    checkout_clicked: 0,
+    begin_checkout: 0,
+    new_purchases: 0,
+    new_revenue_cents: 0,
+  };
+}
+
+function aggregateByAdGroup(snapshots: Snapshot[]): AggregatedRow[] {
+  const map = new Map<string, AggregatedRow>();
+  for (const s of snapshots) {
+    const key = s.ad_group_id;
+    const existing = map.get(key);
+    if (existing) {
+      existing.impressions += s.impressions;
+      existing.clicks += s.clicks;
+      existing.cost_cents += Math.round(s.cost_micros / 10000);
+      existing.conversions += Number(s.conversions);
+      existing.lp_views += s.lp_views;
+      existing.quiz_started += s.quiz_started;
+      existing.quiz_completed += s.quiz_completed;
+      existing.quiz_email_captured += s.quiz_email_captured;
+      existing.checkout_clicked += s.checkout_clicked;
+      existing.begin_checkout += s.begin_checkout;
+      existing.new_purchases += s.new_purchases;
+      existing.new_revenue_cents += s.new_revenue_cents;
+      // Prefer non-null name
+      if (!existing.campaign_name && s.campaign_name) existing.campaign_name = s.campaign_name;
+      if (!existing.ad_group_name && s.ad_group_name) existing.ad_group_name = s.ad_group_name;
+    } else {
+      map.set(key, {
+        campaign_id: s.campaign_id,
+        ad_group_id: s.ad_group_id,
+        campaign_name: s.campaign_name ?? "—",
+        ad_group_name: s.ad_group_name ?? "—",
+        ...emptyRow(),
+        impressions: s.impressions,
+        clicks: s.clicks,
+        cost_cents: Math.round(s.cost_micros / 10000),
+        conversions: Number(s.conversions),
+        lp_views: s.lp_views,
+        quiz_started: s.quiz_started,
+        quiz_completed: s.quiz_completed,
+        quiz_email_captured: s.quiz_email_captured,
+        checkout_clicked: s.checkout_clicked,
+        begin_checkout: s.begin_checkout,
+        new_purchases: s.new_purchases,
+        new_revenue_cents: s.new_revenue_cents,
+      });
+    }
+  }
+  return Array.from(map.values());
+}
+
+function totals(rows: AggregatedRow[]): AggregatedRow {
+  const t = {
+    campaign_id: "TOTAL",
+    ad_group_id: "TOTAL",
+    campaign_name: "Total",
+    ad_group_name: "All ad groups",
+    ...emptyRow(),
+  };
+  for (const r of rows) {
+    t.impressions += r.impressions;
+    t.clicks += r.clicks;
+    t.cost_cents += r.cost_cents;
+    t.conversions += r.conversions;
+    t.lp_views += r.lp_views;
+    t.quiz_started += r.quiz_started;
+    t.quiz_completed += r.quiz_completed;
+    t.quiz_email_captured += r.quiz_email_captured;
+    t.checkout_clicked += r.checkout_clicked;
+    t.begin_checkout += r.begin_checkout;
+    t.new_purchases += r.new_purchases;
+    t.new_revenue_cents += r.new_revenue_cents;
+  }
+  return t;
+}
+
+// ─── Formatting ────────────────────────────────────────────────────────────
+
+const fmtInt = new Intl.NumberFormat("en-US");
+const fmtMoney = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 2,
+});
+const fmtMoneyWhole = new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 0,
+});
+
+function pct(num: number, denom: number): number {
+  if (!denom) return 0;
+  return num / denom;
+}
+function fmtPct(p: number, digits = 1): string {
+  return `${(p * 100).toFixed(digits)}%`;
+}
+
+// Color a metric vs. a benchmark band: red < low, yellow [low, high), green ≥ high
+function bandColor(value: number, band: BenchmarkBand): "green" | "yellow" | "red" {
+  if (!isFinite(value) || value <= 0) return "red";
+  if (value >= band.high) return "green";
+  if (value >= band.low) return "yellow";
+  return "red";
+}
+const BAND_CLASS: Record<"green" | "yellow" | "red", string> = {
+  green: "text-emerald-400",
+  yellow: "text-amber-400",
+  red: "text-rose-400",
+};
+const BAND_BG: Record<"green" | "yellow" | "red", string> = {
+  green: "bg-emerald-500/15 ring-1 ring-emerald-500/30",
+  yellow: "bg-amber-500/15 ring-1 ring-amber-500/30",
+  red: "bg-rose-500/15 ring-1 ring-rose-500/30",
+};
+
+// ─── Funnel chart (SVG) ─────────────────────────────────────────────────────
+// Five trapezoid stages with widths proportional to volume. Each stage shows
+// the count, the % advancing from the prior stage, and a benchmark badge.
+
+interface FunnelStage {
+  label: string;
+  count: number;
+  // % advancing from previous stage (display only)
+  advancePct?: number;
+  // Benchmark band to color the advancePct against
+  band?: BenchmarkBand;
+  color: string;
+}
+
+function FunnelChart({
+  stages,
+  height = 240,
+}: {
+  stages: FunnelStage[];
+  height?: number;
+}) {
+  const width = 1100;
+  const padX = 24;
+  const segW = (width - 2 * padX) / stages.length;
+  const maxCount = Math.max(1, ...stages.map((s) => s.count));
+
+  return (
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      className="w-full h-auto"
+      preserveAspectRatio="xMidYMid meet"
+    >
+      {stages.map((s, i) => {
+        const next = stages[i + 1];
+        const ratio = s.count / maxCount;
+        const h = Math.max(28, ratio * (height - 100));
+        const x = padX + i * segW;
+        const yCenter = height / 2;
+        const y = yCenter - h / 2;
+
+        // Stage block
+        return (
+          <g key={s.label}>
+            <rect
+              x={x + 4}
+              y={y}
+              width={segW - 8}
+              height={h}
+              rx={6}
+              fill={s.color}
+              opacity={0.9}
+            />
+            {/* Connecting flow polygon */}
+            {next ? (() => {
+              const nextRatio = next.count / maxCount;
+              const nextH = Math.max(28, nextRatio * (height - 100));
+              const nextY = yCenter - nextH / 2;
+              const xRight = x + segW - 4;
+              const xNextLeft = x + segW + 4;
+              return (
+                <polygon
+                  points={`
+                    ${xRight},${y}
+                    ${xNextLeft},${nextY}
+                    ${xNextLeft},${nextY + nextH}
+                    ${xRight},${y + h}
+                  `}
+                  fill={s.color}
+                  opacity={0.18}
+                />
+              );
+            })() : null}
+
+            {/* Stage label */}
+            <text
+              x={x + segW / 2}
+              y={height - 56}
+              textAnchor="middle"
+              className="fill-zinc-400 text-[11px] tracking-[0.18em] uppercase"
+            >
+              {s.label}
+            </text>
+
+            {/* Count */}
+            <text
+              x={x + segW / 2}
+              y={height - 30}
+              textAnchor="middle"
+              className="fill-zinc-100 text-2xl font-medium"
+            >
+              {fmtInt.format(s.count)}
+            </text>
+
+            {/* Advance % vs prior — only if defined */}
+            {s.advancePct !== undefined && s.band ? (
+              <text
+                x={x + segW / 2}
+                y={height - 10}
+                textAnchor="middle"
+                className={`text-[11px] ${
+                  bandColor(s.advancePct, s.band) === "green"
+                    ? "fill-emerald-400"
+                    : bandColor(s.advancePct, s.band) === "yellow"
+                    ? "fill-amber-400"
+                    : "fill-rose-400"
+                }`}
+              >
+                {fmtPct(s.advancePct)} of prev · benchmark {fmtPct(s.band.low, 0)}–{fmtPct(s.band.high, 0)}
+              </text>
+            ) : null}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+// ─── Page ──────────────────────────────────────────────────────────────────
+
+const STAGE_COLORS = ["#60a5fa", "#a78bfa", "#f472b6", "#fb923c", "#34d399"];
+
+function defaultWindow(): { start: string; end: string } {
+  const end = new Date();
+  const start = new Date(end.getTime() - 6 * 24 * 60 * 60 * 1000);
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  return { start: fmt(start), end: fmt(end) };
+}
+
+export default function AdPerformancePage() {
+  const [data, setData] = useState<ApiPayload | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [{ start, end }, setRange] = useState(defaultWindow());
+  const [campaignFilter, setCampaignFilter] = useState<string>("all");
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const load = async (live = false) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const user = auth.currentUser;
+      if (!user) throw new Error("Not authenticated");
+      const token = await user.getIdToken();
+      const params = new URLSearchParams({ start, end });
+      if (live) params.set("live", "1");
+      const res = await fetch(`/api/admin/ad-performance?${params}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(j.error || `HTTP ${res.status}`);
+      }
+      const payload = (await res.json()) as ApiPayload;
+      setData(payload);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [start, end]);
+
+  // Filter to campaign before aggregating
+  const filteredSnapshots = useMemo(() => {
+    if (!data) return [];
+    if (campaignFilter === "all") return data.snapshots;
+    return data.snapshots.filter((s) => s.campaign_id === campaignFilter);
+  }, [data, campaignFilter]);
+
+  const rows = useMemo(() => aggregateByAdGroup(filteredSnapshots), [filteredSnapshots]);
+  const total = useMemo(() => totals(rows), [rows]);
+
+  // Get list of campaigns for the dropdown
+  const campaigns = useMemo(() => {
+    if (!data) return [];
+    const seen = new Map<string, string>();
+    for (const s of data.snapshots) {
+      if (s.campaign_id === "(pending)") continue;
+      if (!seen.has(s.campaign_id)) {
+        seen.set(s.campaign_id, s.campaign_name ?? s.campaign_id);
+      }
+    }
+    return Array.from(seen.entries()).map(([id, name]) => ({ id, name }));
+  }, [data]);
+
+  const benchmarks = data?.benchmarks;
+
+  const funnelStages: FunnelStage[] = useMemo(() => {
+    if (!benchmarks) return [];
+    return [
+      { label: "Ad clicks", count: total.clicks, color: STAGE_COLORS[0] },
+      {
+        label: "LP views",
+        count: total.lp_views,
+        advancePct: pct(total.lp_views, total.clicks),
+        band: { low: 0.7, high: 0.95, label: "Click \u2192 LP view" },
+        color: STAGE_COLORS[1],
+      },
+      {
+        label: "Quiz completed",
+        count: total.quiz_completed,
+        advancePct: pct(total.quiz_completed, total.clicks),
+        band: benchmarks.lp_to_quiz,
+        color: STAGE_COLORS[2],
+      },
+      {
+        label: "Checkout started",
+        count: total.checkout_clicked || total.begin_checkout,
+        advancePct: pct(total.checkout_clicked || total.begin_checkout, total.quiz_completed),
+        band: benchmarks.email_to_checkout,
+        color: STAGE_COLORS[3],
+      },
+      {
+        label: "New purchases",
+        count: total.new_purchases,
+        advancePct: pct(
+          total.new_purchases,
+          total.checkout_clicked || total.begin_checkout || 1
+        ),
+        band: benchmarks.checkout_to_purchase,
+        color: STAGE_COLORS[4],
+      },
+    ];
+  }, [total, benchmarks]);
+
+  const ctr = pct(total.clicks, total.impressions);
+  const cpc = total.clicks ? total.cost_cents / total.clicks / 100 : 0;
+  const cac = total.new_purchases ? total.cost_cents / total.new_purchases / 100 : null;
+  const clickToPurchase = pct(total.new_purchases, total.clicks);
+
+  return (
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 px-6 py-8">
+      {/* Header */}
+      <div className="flex items-end justify-between mb-6 max-w-[1400px] mx-auto">
+        <div>
+          <h1 className="text-2xl font-medium tracking-tight">Ad Performance</h1>
+          <p className="text-sm text-zinc-500 mt-1">
+            Mully Reserve acquisition funnel · Google Ads &times; PostHog &times; Shopify (headless only)
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <DateInput value={start} onChange={(v) => setRange((r) => ({ ...r, start: v }))} />
+          <span className="text-zinc-600">\u2192</span>
+          <DateInput value={end} onChange={(v) => setRange((r) => ({ ...r, end: v }))} />
+          <button
+            onClick={() => load(true)}
+            disabled={loading}
+            className="px-3 py-1.5 text-xs rounded-md bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 ring-1 ring-zinc-700 transition"
+          >
+            {loading ? "Refreshing\u2026" : "Refresh now"}
+          </button>
+        </div>
+      </div>
+
+      {error ? (
+        <div className="max-w-[1400px] mx-auto mb-6 p-4 rounded-lg bg-rose-500/10 ring-1 ring-rose-500/30 text-rose-300 text-sm">
+          {error}
+        </div>
+      ) : null}
+
+      {/* Campaign filter pills */}
+      <div className="max-w-[1400px] mx-auto mb-6 flex items-center gap-2 flex-wrap">
+        <FilterPill
+          active={campaignFilter === "all"}
+          onClick={() => setCampaignFilter("all")}
+          label="All campaigns"
+        />
+        {campaigns.map((c) => (
+          <FilterPill
+            key={c.id}
+            active={campaignFilter === c.id}
+            onClick={() => setCampaignFilter(c.id)}
+            label={c.name}
+          />
+        ))}
+      </div>
+
+      {/* KPI strip */}
+      <div className="max-w-[1400px] mx-auto grid grid-cols-2 md:grid-cols-6 gap-3 mb-6">
+        <Kpi label="Spend" value={fmtMoney.format(total.cost_cents / 100)} />
+        <Kpi
+          label="CTR"
+          value={fmtPct(ctr, 2)}
+          band={benchmarks?.ctr ? bandColor(ctr, benchmarks.ctr) : undefined}
+          sub={
+            benchmarks?.ctr
+              ? `bench ${fmtPct(benchmarks.ctr.low, 1)}\u2013${fmtPct(benchmarks.ctr.high, 1)}`
+              : undefined
+          }
+        />
+        <Kpi label="Avg CPC" value={fmtMoney.format(cpc)} />
+        <Kpi
+          label="Click \u2192 purchase"
+          value={fmtPct(clickToPurchase, 2)}
+          band={
+            benchmarks?.click_to_purchase
+              ? bandColor(clickToPurchase, benchmarks.click_to_purchase)
+              : undefined
+          }
+          sub={
+            benchmarks?.click_to_purchase
+              ? `bench ${fmtPct(benchmarks.click_to_purchase.low, 1)}\u2013${fmtPct(benchmarks.click_to_purchase.high, 1)}`
+              : undefined
+          }
+        />
+        <Kpi label="New purchases" value={fmtInt.format(total.new_purchases)} />
+        <Kpi
+          label="CAC"
+          value={cac !== null ? fmtMoneyWhole.format(cac) : "\u2014"}
+          sub="cost \u00f7 new purchases"
+        />
+      </div>
+
+      {/* Funnel chart */}
+      <div className="max-w-[1400px] mx-auto mb-8 p-6 rounded-xl bg-zinc-900 ring-1 ring-zinc-800">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm tracking-[0.18em] uppercase text-zinc-400">Funnel flow</h2>
+          <div className="text-xs text-zinc-500">
+            {loading ? "Loading\u2026" : data ? `${data.start} \u2192 ${data.end}` : ""}
+          </div>
+        </div>
+        {funnelStages.length > 0 ? (
+          <FunnelChart stages={funnelStages} />
+        ) : (
+          <div className="h-40 flex items-center justify-center text-zinc-600 text-sm">
+            No data in range.
+          </div>
+        )}
+      </div>
+
+      {/* Table */}
+      <div className="max-w-[1400px] mx-auto rounded-xl bg-zinc-900 ring-1 ring-zinc-800 overflow-hidden">
+        <div className="px-5 py-3 border-b border-zinc-800 flex items-center justify-between">
+          <h2 className="text-sm tracking-[0.18em] uppercase text-zinc-400">By ad group</h2>
+          <div className="text-xs text-zinc-500">Click a row to see keywords</div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-zinc-900/80 text-[10px] tracking-[0.16em] uppercase text-zinc-500">
+              <tr>
+                <Th>Campaign / Ad group</Th>
+                <Th align="right">Impr</Th>
+                <Th align="right">Clicks</Th>
+                <Th align="right">Spend</Th>
+                <Th align="right">CTR</Th>
+                <Th align="right">CPC</Th>
+                <Th align="right">Quiz done</Th>
+                <Th align="right">Click \u2192 Quiz</Th>
+                <Th align="right">Checkout</Th>
+                <Th align="right">Quiz \u2192 CO</Th>
+                <Th align="right">Purchases</Th>
+                <Th align="right">CAC</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.length === 0 ? (
+                <tr>
+                  <td colSpan={12} className="text-center py-8 text-zinc-600">
+                    {loading ? "Loading\u2026" : "No data."}
+                  </td>
+                </tr>
+              ) : (
+                rows.map((r) => {
+                  const rCtr = pct(r.clicks, r.impressions);
+                  const rCpc = r.clicks ? r.cost_cents / r.clicks / 100 : 0;
+                  const rClickToQuiz = pct(r.quiz_completed, r.clicks);
+                  const rQuizToCheckout = pct(
+                    r.checkout_clicked || r.begin_checkout,
+                    r.quiz_completed
+                  );
+                  const rCac = r.new_purchases ? r.cost_cents / r.new_purchases / 100 : null;
+                  const isOpen = expanded.has(r.ad_group_id);
+                  return (
+                    <>
+                      <tr
+                        key={r.ad_group_id}
+                        onClick={() => {
+                          setExpanded((s) => {
+                            const n = new Set(s);
+                            if (n.has(r.ad_group_id)) n.delete(r.ad_group_id);
+                            else n.add(r.ad_group_id);
+                            return n;
+                          });
+                        }}
+                        className="border-t border-zinc-800/60 hover:bg-zinc-800/40 cursor-pointer"
+                      >
+                        <td className="px-4 py-2.5">
+                          <div className="flex items-center gap-2">
+                            <span className="text-zinc-500 text-xs w-3 inline-block">
+                              {isOpen ? "\u25be" : "\u25b8"}
+                            </span>
+                            <div>
+                              <div className="text-zinc-100">{r.ad_group_name}</div>
+                              <div className="text-xs text-zinc-500">{r.campaign_name}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <Td align="right">{fmtInt.format(r.impressions)}</Td>
+                        <Td align="right">{fmtInt.format(r.clicks)}</Td>
+                        <Td align="right">{fmtMoney.format(r.cost_cents / 100)}</Td>
+                        <Td
+                          align="right"
+                          className={benchmarks ? BAND_CLASS[bandColor(rCtr, benchmarks.ctr)] : undefined}
+                        >
+                          {fmtPct(rCtr, 2)}
+                        </Td>
+                        <Td align="right">{fmtMoney.format(rCpc)}</Td>
+                        <Td align="right">{fmtInt.format(r.quiz_completed)}</Td>
+                        <Td
+                          align="right"
+                          className={
+                            benchmarks ? BAND_CLASS[bandColor(rClickToQuiz, benchmarks.lp_to_quiz)] : undefined
+                          }
+                        >
+                          {fmtPct(rClickToQuiz, 1)}
+                        </Td>
+                        <Td align="right">
+                          {fmtInt.format(r.checkout_clicked || r.begin_checkout)}
+                        </Td>
+                        <Td
+                          align="right"
+                          className={
+                            benchmarks
+                              ? BAND_CLASS[bandColor(rQuizToCheckout, benchmarks.email_to_checkout)]
+                              : undefined
+                          }
+                        >
+                          {fmtPct(rQuizToCheckout, 1)}
+                        </Td>
+                        <Td align="right">{fmtInt.format(r.new_purchases)}</Td>
+                        <Td align="right">{rCac !== null ? fmtMoneyWhole.format(rCac) : "\u2014"}</Td>
+                      </tr>
+                      {isOpen ? (
+                        <KeywordSubrow
+                          key={`${r.ad_group_id}-kw`}
+                          keywords={(data?.keywords ?? []).filter(
+                            (k) => k.ad_group_id === r.ad_group_id
+                          )}
+                        />
+                      ) : null}
+                    </>
+                  );
+                })
+              )}
+            </tbody>
+            {rows.length > 0 ? (
+              <tfoot>
+                <tr className="border-t-2 border-zinc-700 bg-zinc-900/80 font-medium">
+                  <td className="px-4 py-3 text-zinc-300">Total</td>
+                  <Td align="right">{fmtInt.format(total.impressions)}</Td>
+                  <Td align="right">{fmtInt.format(total.clicks)}</Td>
+                  <Td align="right">{fmtMoney.format(total.cost_cents / 100)}</Td>
+                  <Td align="right">{fmtPct(ctr, 2)}</Td>
+                  <Td align="right">{fmtMoney.format(cpc)}</Td>
+                  <Td align="right">{fmtInt.format(total.quiz_completed)}</Td>
+                  <Td align="right">{fmtPct(pct(total.quiz_completed, total.clicks), 1)}</Td>
+                  <Td align="right">
+                    {fmtInt.format(total.checkout_clicked || total.begin_checkout)}
+                  </Td>
+                  <Td align="right">
+                    {fmtPct(pct(total.checkout_clicked || total.begin_checkout, total.quiz_completed), 1)}
+                  </Td>
+                  <Td align="right">{fmtInt.format(total.new_purchases)}</Td>
+                  <Td align="right">{cac !== null ? fmtMoneyWhole.format(cac) : "\u2014"}</Td>
+                </tr>
+              </tfoot>
+            ) : null}
+          </table>
+        </div>
+      </div>
+
+      {/* Benchmarks reference */}
+      {benchmarks ? (
+        <div className="max-w-[1400px] mx-auto mt-6 p-4 rounded-xl bg-zinc-900/50 ring-1 ring-zinc-800/50 text-xs text-zinc-500">
+          <div className="tracking-[0.18em] uppercase text-zinc-400 mb-2">
+            Industry benchmarks (e-commerce search, 2026)
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-1">
+            {Object.entries(benchmarks).map(([k, v]) => (
+              <div key={k} className="flex items-center justify-between">
+                <span>{v.label}</span>
+                <span className="text-zinc-400">
+                  {fmtPct(v.low, 1)} \u2013 {fmtPct(v.high, 1)}
+                </span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 text-zinc-600">
+            Green: at/above high benchmark \u00b7 Amber: in band \u00b7 Red: below low
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// ─── Small components ──────────────────────────────────────────────────────
+
+function Kpi({
+  label,
+  value,
+  band,
+  sub,
+}: {
+  label: string;
+  value: string;
+  band?: "green" | "yellow" | "red";
+  sub?: string;
+}) {
+  return (
+    <div
+      className={`p-3 rounded-xl bg-zinc-900 ring-1 ring-zinc-800 ${
+        band ? BAND_BG[band] : ""
+      }`}
+    >
+      <div className="text-[10px] tracking-[0.16em] uppercase text-zinc-500">{label}</div>
+      <div className={`text-xl font-medium mt-1 ${band ? BAND_CLASS[band] : "text-zinc-100"}`}>
+        {value}
+      </div>
+      {sub ? <div className="text-[10px] text-zinc-500 mt-0.5">{sub}</div> : null}
+    </div>
+  );
+}
+
+function FilterPill({
+  active,
+  onClick,
+  label,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-3 py-1.5 text-xs rounded-full transition ${
+        active
+          ? "bg-zinc-100 text-zinc-900"
+          : "bg-zinc-900 text-zinc-300 ring-1 ring-zinc-800 hover:bg-zinc-800"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function DateInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <input
+      type="date"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="bg-zinc-900 ring-1 ring-zinc-800 rounded-md px-3 py-1.5 text-xs text-zinc-200 [color-scheme:dark]"
+    />
+  );
+}
+
+function Th({
+  children,
+  align = "left",
+}: {
+  children: React.ReactNode;
+  align?: "left" | "right";
+}) {
+  return (
+    <th
+      className={`px-4 py-2.5 ${align === "right" ? "text-right" : "text-left"} font-medium`}
+    >
+      {children}
+    </th>
+  );
+}
+
+function Td({
+  children,
+  align = "left",
+  className,
+}: {
+  children: React.ReactNode;
+  align?: "left" | "right";
+  className?: string;
+}) {
+  return (
+    <td
+      className={`px-4 py-2.5 tabular-nums ${
+        align === "right" ? "text-right" : "text-left"
+      } text-zinc-200 ${className ?? ""}`}
+    >
+      {children}
+    </td>
+  );
+}
+
+function KeywordSubrow({ keywords }: { keywords: Keyword[] }) {
+  // Aggregate same criterion_id across days
+  const map = new Map<string, Keyword>();
+  for (const k of keywords) {
+    const existing = map.get(k.criterion_id);
+    if (existing) {
+      existing.impressions += k.impressions;
+      existing.clicks += k.clicks;
+      existing.cost_micros += k.cost_micros;
+      existing.conversions += Number(k.conversions);
+    } else {
+      map.set(k.criterion_id, { ...k });
+    }
+  }
+  const rows = Array.from(map.values()).sort((a, b) => b.clicks - a.clicks);
+  if (rows.length === 0) {
+    return (
+      <tr className="border-t border-zinc-800/40 bg-zinc-950/60">
+        <td colSpan={12} className="px-12 py-4 text-zinc-600 text-xs">
+          No keyword data in this range.
+        </td>
+      </tr>
+    );
+  }
+  return (
+    <tr className="border-t border-zinc-800/40 bg-zinc-950/60">
+      <td colSpan={12} className="px-12 py-3">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-[10px] tracking-[0.16em] uppercase text-zinc-500">
+              <th className="text-left py-1.5 font-medium">Keyword</th>
+              <th className="text-left font-medium">Match</th>
+              <th className="text-right font-medium">Impr</th>
+              <th className="text-right font-medium">Clicks</th>
+              <th className="text-right font-medium">Spend</th>
+              <th className="text-right font-medium">CTR</th>
+              <th className="text-right font-medium">Avg CPC</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((k) => {
+              const kCtr = pct(k.clicks, k.impressions);
+              const kCpc = k.clicks ? k.cost_micros / k.clicks / 1_000_000 : 0;
+              return (
+                <tr key={k.criterion_id} className="border-t border-zinc-800/30">
+                  <td className="py-1.5 text-zinc-300">{k.keyword_text ?? "\u2014"}</td>
+                  <td className="text-zinc-500">{(k.match_type || "").toLowerCase()}</td>
+                  <td className="text-right tabular-nums text-zinc-300">
+                    {fmtInt.format(k.impressions)}
+                  </td>
+                  <td className="text-right tabular-nums text-zinc-300">
+                    {fmtInt.format(k.clicks)}
+                  </td>
+                  <td className="text-right tabular-nums text-zinc-300">
+                    {fmtMoney.format(k.cost_micros / 1_000_000)}
+                  </td>
+                  <td className="text-right tabular-nums text-zinc-400">{fmtPct(kCtr, 2)}</td>
+                  <td className="text-right tabular-nums text-zinc-400">{fmtMoney.format(kCpc)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </td>
+    </tr>
+  );
+}

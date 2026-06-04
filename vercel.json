@@ -51,6 +51,10 @@
     {
       "path": "/api/admin/cron/marketing-funnel-snapshot",
       "schedule": "5 * * * *"
+    },
+    {
+      "path": "/api/admin/cron/ad-performance-refresh",
+      "schedule": "10 * * * *"
     }
   ]
 }
