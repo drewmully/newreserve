@@ -101,7 +101,7 @@ export async function POST(
     tier: typeof userData.tier === "string" ? userData.tier : "free",
     isLegacy: userData.isLegacy === true,
     legacyPlan: typeof userData.legacyPlan === "string" ? userData.legacyPlan : null,
-    flow: (seq.flow as EmailFlow) ?? "free",
+    flow: (seq.flow as EmailFlow) ?? "access",
     lastSentStep: (seq.lastSentStep as number) ?? 0,
     tags: (seq.tags as string[]) ?? [],
     memberNotes: memberNotes.length > 0 ? memberNotes : undefined,

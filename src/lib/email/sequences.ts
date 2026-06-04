@@ -5,18 +5,19 @@
 
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase-admin";
-import { FREE_TEMPLATES } from "./templates/free";
 import { ACCESS_TEMPLATES } from "./templates/access";
 import { MEMBER_TEMPLATES } from "./templates/member";
-import { BACK9_TEMPLATES } from "./templates/back9";
 import { RESERVE_TEMPLATES } from "./templates/reserve";
 import { sendPlainText } from "./resend";
 
-export type EmailFlow = "free" | "access" | "member" | "back9" | "reserve";
+// Active flows: access (paid Reserve Access subs), member (paid Member subs),
+// reserve (pre-checkout quiz acquisition nurture).
+// `free` and `back9` were retired 2026-06-04 — any historical Firestore docs
+// with those flow values are left in place but no longer get processed.
+export type EmailFlow = "access" | "member" | "reserve";
 export type SequenceStatus = "active" | "paused" | "completed";
 
 export type SkipCondition =
-  | "has_community_post"
   | "has_club_application"
   | "has_concierge_request"
   | "has_v1_activated";
@@ -31,13 +32,6 @@ export interface EmailStepConfig {
 }
 
 export const FLOW_STEPS: Record<EmailFlow, EmailStepConfig[]> = {
-  free: [
-    { step: 0, triggerType: "schedule", delayDays: 0 },
-    { step: 1, triggerType: "schedule", delayDays: 3, skipCondition: "has_community_post" },
-    { step: 2, triggerType: "schedule", delayDays: 7 },
-    { step: 3, triggerType: "schedule", delayDays: 14 },
-    { step: 4, triggerType: "schedule", delayDays: 21 },
-  ],
   access: [
     { step: 0, triggerType: "schedule", delayDays: 0 },
     { step: 1, triggerType: "schedule", delayDays: 3, skipCondition: "has_club_application" },
@@ -54,14 +48,6 @@ export const FLOW_STEPS: Record<EmailFlow, EmailStepConfig[]> = {
     { step: 4, triggerType: "event", delayDays: 0 },
     { step: 5, triggerType: "schedule", delayDays: 45 },
   ],
-  back9: [
-    { step: 0, triggerType: "schedule", delayDays: 0 },
-    { step: 1, triggerType: "schedule", delayDays: 2 },
-    { step: 2, triggerType: "schedule", delayDays: 5 },
-    { step: 3, triggerType: "schedule", delayDays: 10 },
-    { step: 4, triggerType: "schedule", delayDays: 16 },
-    { step: 5, triggerType: "schedule", delayDays: 22 },
-  ],
   // Mully Reserve pre-checkout acquisition nurture. Started by /api/quiz/complete
   // when a visitor finishes the style quiz with email consent and is NOT an
   // active subscriber. Halted by the Shopify orders/paid webhook when the same
@@ -75,10 +61,8 @@ export const FLOW_STEPS: Record<EmailFlow, EmailStepConfig[]> = {
 };
 
 const TEMPLATES = {
-  free: FREE_TEMPLATES,
   access: ACCESS_TEMPLATES,
   member: MEMBER_TEMPLATES,
-  back9: BACK9_TEMPLATES,
   reserve: RESERVE_TEMPLATES,
 };
 
@@ -147,14 +131,6 @@ export async function checkSkip(
   condition: SkipCondition
 ): Promise<boolean> {
   switch (condition) {
-    case "has_community_post": {
-      const snap = await adminDb
-        .collection("communityPosts")
-        .where("authorId", "==", uid)
-        .limit(1)
-        .get();
-      return !snap.empty;
-    }
     case "has_club_application": {
       const snap = await adminDb.collection("registry_applications").doc(uid).get();
       return snap.exists && snap.data()?.status !== "none";

@@ -2,9 +2,8 @@
  * POST /api/admin/fix-email-sequences
  *
  * Backfill: finds users whose email sequence flow doesn't match their actual
- * tier and corrects them. Handles two cases:
- *   1. Legacy members (isLegacy=true) stuck in any active flow → mark completed
- *   2. Paid members (tier=member/black/access) stuck in free flow → switch to correct flow
+ * tier and corrects them. Paid members (tier=member/black/access) stuck on
+ * the wrong drip get switched to the correct flow.
  *
  * Body: { dry_run: boolean }
  * Auth: Firebase Bearer token (admin email allowlist).
@@ -26,13 +25,12 @@ async function verifyAdmin(request: NextRequest): Promise<void> {
 }
 
 type ActionType =
-  | "legacy_switched_to_back9"
-  | "legacy_already_on_back9"
   | "switched_to_member"
   | "switched_to_access"
   | "already_correct"
   | "skipped_no_user_doc"
-  | "skipped_no_email";
+  | "skipped_no_email"
+  | "skipped_tier_no_drip";
 
 interface ResultRow {
   uid: string;
@@ -60,36 +58,19 @@ export async function POST(request: NextRequest) {
     // default to dry_run=true
   }
 
-  // Two queries: active/paused sequences + completed legacy_skip sequences
-  // where flow may have been left as "free" by a previous backfill run.
-  // Single-field array-contains doesn't require a composite index.
-  // The status filter is skipped here and handled client-side in the loop.
-  const [activeSnap, legacyTaggedSnap] = await Promise.all([
-    adminDb.collection("email_sequences").where("status", "in", ["active", "paused"]).get(),
-    adminDb.collection("email_sequences").where("tags", "array-contains", "legacy_skip").get(),
-  ]);
-
-  // Merge, deduplicate by doc id
-  const seenIds = new Set<string>();
-  const allDocs: FirebaseFirestore.QueryDocumentSnapshot[] = [];
-  for (const snap of [activeSnap, legacyTaggedSnap]) {
-    for (const doc of snap.docs) {
-      if (!seenIds.has(doc.id)) {
-        seenIds.add(doc.id);
-        allDocs.push(doc);
-      }
-    }
-  }
+  const activeSnap = await adminDb
+    .collection("email_sequences")
+    .where("status", "in", ["active", "paused"])
+    .get();
 
   const results: ResultRow[] = [];
 
-  for (const seqDoc of allDocs) {
+  for (const seqDoc of activeSnap.docs) {
     const uid = seqDoc.id;
     const seqData = seqDoc.data() as Record<string, unknown>;
-    const currentFlow = (seqData.flow as string) ?? "free";
+    const currentFlow = (seqData.flow as string) ?? "";
     const currentStatus = (seqData.status as string) ?? "active";
 
-    // Fetch user doc for tier info
     const userSnap = await adminDb.collection("users").doc(uid).get();
     if (!userSnap.exists) {
       results.push({
@@ -110,65 +91,34 @@ export async function POST(request: NextRequest) {
     const isLegacy = (userData.isLegacy as boolean | undefined) ?? false;
     const firstName = (userData.username as string | undefined) ?? null;
 
-    // Case 1: legacy member — correct flow is "back9"
-    if (isLegacy) {
-      if (currentFlow === "back9") {
-        results.push({
-          uid,
-          email,
-          tier,
-          is_legacy: true,
-          current_flow: currentFlow,
-          current_status: currentStatus,
-          action: "legacy_already_on_back9",
-        });
-        continue;
-      }
-
-      // On wrong flow (e.g. legacy_skip or free) → switch to back9
-      if (!email) {
-        results.push({
-          uid,
-          email: null,
-          tier,
-          is_legacy: true,
-          current_flow: currentFlow,
-          current_status: currentStatus,
-          action: "skipped_no_email",
-        });
-        continue;
-      }
-
-      results.push({
-        uid,
-        email,
-        tier,
-        is_legacy: true,
-        current_flow: currentFlow,
-        current_status: currentStatus,
-        action: "legacy_switched_to_back9",
-      });
-
-      if (!dryRun) {
-        await startFlow(uid, email, firstName, "back9");
-      }
-      continue;
-    }
-
-    // Case 2: paid member stuck in free flow
-    const correctFlow: EmailFlow =
+    // Determine correct flow from tier. Anything without a drip (free, legacy,
+    // unknown) is skipped — no drip campaign to enroll them in.
+    const correctFlow: EmailFlow | null =
       tier === "member" || tier === "black"
         ? "member"
         : tier === "access"
         ? "access"
-        : "free";
+        : null;
+
+    if (!correctFlow) {
+      results.push({
+        uid,
+        email,
+        tier,
+        is_legacy: isLegacy,
+        current_flow: currentFlow,
+        current_status: currentStatus,
+        action: "skipped_tier_no_drip",
+      });
+      continue;
+    }
 
     if (correctFlow === currentFlow) {
       results.push({
         uid,
         email,
         tier,
-        is_legacy: false,
+        is_legacy: isLegacy,
         current_flow: currentFlow,
         current_status: currentStatus,
         action: "already_correct",
@@ -176,51 +126,36 @@ export async function POST(request: NextRequest) {
       continue;
     }
 
-    if (correctFlow !== "free") {
-      if (!email) {
-        results.push({
-          uid,
-          email: null,
-          tier,
-          is_legacy: false,
-          current_flow: currentFlow,
-          current_status: currentStatus,
-          action: "skipped_no_email",
-        });
-        continue;
-      }
-
+    if (!email) {
       results.push({
         uid,
-        email,
+        email: null,
         tier,
-        is_legacy: false,
+        is_legacy: isLegacy,
         current_flow: currentFlow,
         current_status: currentStatus,
-        action: correctFlow === "member" ? "switched_to_member" : "switched_to_access",
+        action: "skipped_no_email",
       });
+      continue;
+    }
 
-      if (!dryRun) {
-        await startFlow(uid, email, firstName, correctFlow);
-      }
-    } else {
-      // tier=free stuck in member/access — shouldn't happen, flag as already_correct
-      results.push({
-        uid,
-        email,
-        tier,
-        is_legacy: false,
-        current_flow: currentFlow,
-        current_status: currentStatus,
-        action: "already_correct",
-      });
+    results.push({
+      uid,
+      email,
+      tier,
+      is_legacy: isLegacy,
+      current_flow: currentFlow,
+      current_status: currentStatus,
+      action: correctFlow === "member" ? "switched_to_member" : "switched_to_access",
+    });
+
+    if (!dryRun) {
+      await startFlow(uid, email, firstName, correctFlow);
     }
   }
 
   const summary = {
-    total_checked: allDocs.length,
-    legacy_switched_to_back9: results.filter((r) => r.action === "legacy_switched_to_back9").length,
-    legacy_already_on_back9: results.filter((r) => r.action === "legacy_already_on_back9").length,
+    total_checked: activeSnap.docs.length,
     switched_to_member: results.filter((r) => r.action === "switched_to_member").length,
     switched_to_access: results.filter((r) => r.action === "switched_to_access").length,
     already_correct: results.filter((r) => r.action === "already_correct").length,

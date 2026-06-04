@@ -1,5 +1,5 @@
 /**
- * GET /api/admin/marketing-funnel/email-preview?flow=free&step=0
+ * GET /api/admin/marketing-funnel/email-preview?flow=access&step=0
  *
  * Returns the rendered subject + body for a given drip flow + step,
  * so the dashboard can show admins what an email actually looks like.
@@ -11,10 +11,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminAuth } from "@/lib/firebase-admin";
 import { isAllowedAdminEmail } from "@/lib/adminEmailAllowlist";
 import type { EmailFlow } from "@/lib/email/sequences";
-import { FREE_TEMPLATES } from "@/lib/email/templates/free";
 import { ACCESS_TEMPLATES } from "@/lib/email/templates/access";
 import { MEMBER_TEMPLATES } from "@/lib/email/templates/member";
-import { BACK9_TEMPLATES } from "@/lib/email/templates/back9";
 import { RESERVE_TEMPLATES } from "@/lib/email/templates/reserve";
 
 export const runtime = "nodejs";
@@ -22,10 +20,8 @@ export const runtime = "nodejs";
 type EmailTemplate = (firstName: string | null) => { subject: string; text: string };
 
 const TEMPLATES: Record<EmailFlow, EmailTemplate[]> = {
-  free: FREE_TEMPLATES,
   access: ACCESS_TEMPLATES,
   member: MEMBER_TEMPLATES,
-  back9: BACK9_TEMPLATES,
   reserve: RESERVE_TEMPLATES,
 };
 

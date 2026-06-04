@@ -16,7 +16,7 @@
  * utm_content=step_N).
  */
 
-import type { EmailTemplate } from "./free";
+import type { EmailTemplate } from "./types";
 
 function hi(firstName: string | null, alt?: string): string {
   if (firstName) return `Hey ${firstName},`;

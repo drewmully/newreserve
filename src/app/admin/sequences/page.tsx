@@ -54,13 +54,12 @@ interface TemplatesData {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const FLOW_LABELS: Record<string, string> = {
-  free: "Free",
   access: "Reserve Access",
   member: "Reserve Member",
-  back9: "Back 9 (Legacy)",
+  reserve: "Reserve (Quiz Nurture)",
 };
 
-const FLOW_ORDER = ["free", "access", "member", "back9"];
+const FLOW_ORDER = ["access", "member", "reserve"];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -533,7 +532,7 @@ function TemplatesTab({ getHeaders }: { getHeaders: () => Promise<HeadersInit> }
   const [data, setData] = useState<TemplatesData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeFlow, setActiveFlow] = useState<string>("free");
+  const [activeFlow, setActiveFlow] = useState<string>("access");
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   useEffect(() => {

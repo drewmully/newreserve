@@ -51,7 +51,7 @@ import {
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const FLOW_ORDER: EmailFlow[] = ["free", "access", "member", "back9"];
+const FLOW_ORDER: EmailFlow[] = ["access", "member", "reserve"];
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 

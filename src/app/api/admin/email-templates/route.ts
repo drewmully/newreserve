@@ -9,10 +9,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminAuth } from "@/lib/firebase-admin";
 import { isAllowedAdminEmail } from "@/lib/adminEmailAllowlist";
 import { FLOW_STEPS } from "@/lib/email/sequences";
-import { FREE_TEMPLATES } from "@/lib/email/templates/free";
 import { ACCESS_TEMPLATES } from "@/lib/email/templates/access";
 import { MEMBER_TEMPLATES } from "@/lib/email/templates/member";
-import { BACK9_TEMPLATES } from "@/lib/email/templates/back9";
+import { RESERVE_TEMPLATES } from "@/lib/email/templates/reserve";
 
 async function verifyAdmin(request: NextRequest): Promise<void> {
   const header = request.headers.get("Authorization") ?? "";
@@ -25,10 +24,9 @@ async function verifyAdmin(request: NextRequest): Promise<void> {
 }
 
 const ALL_TEMPLATES = {
-  free: FREE_TEMPLATES,
   access: ACCESS_TEMPLATES,
   member: MEMBER_TEMPLATES,
-  back9: BACK9_TEMPLATES,
+  reserve: RESERVE_TEMPLATES,
 } as const;
 
 export interface TemplateStep {

@@ -1,4 +1,4 @@
-import type { EmailTemplate } from "./free";
+import type { EmailTemplate } from "./types";
 
 function hi(firstName: string | null): string {
   return firstName ? `${firstName},` : "Hey there,";

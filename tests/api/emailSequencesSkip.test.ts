@@ -18,28 +18,6 @@ describe("email sequence skip conditions", () => {
     adminDbCollectionMock.mockReset();
   });
 
-  it("checks community posts by authorId", async () => {
-    const whereMock = vi.fn(() => ({
-      limit: vi.fn(() => ({
-        get: vi.fn().mockResolvedValue({ empty: false }),
-      })),
-    }));
-
-    adminDbCollectionMock.mockImplementation((name: string) => {
-      if (name !== "communityPosts") {
-        throw new Error(`Unexpected collection ${name}`);
-      }
-
-      return {
-        where: whereMock,
-      };
-    });
-
-    const { checkSkip } = await loadModule();
-    await expect(checkSkip("uid_1", "has_community_post")).resolves.toBe(true);
-    expect(whereMock).toHaveBeenCalledWith("authorId", "==", "uid_1");
-  });
-
   it("checks concierge requests by user_id", async () => {
     const whereMock = vi.fn(() => ({
       limit: vi.fn(() => ({

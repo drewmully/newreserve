@@ -3,7 +3,11 @@
  *
  * Called client-side from MembershipContext after first sign-in.
  * Idempotent — skips if a non-legacy-skip sequence already exists.
- * Legacy users previously marked legacy_skip are upgraded to Flow 4 (back9).
+ *
+ * Behavior change 2026-06-04: `free` and `back9` flows were retired. Free-tier
+ * signups and legacy Back 9 members no longer get a drip from this endpoint.
+ * Only paid Reserve Access / Member tiers start a sequence here. Pre-checkout
+ * acquisition (the `reserve` flow) is still triggered from /api/quiz/complete.
  * Accepts Firebase ID token for auth.
  */
 
@@ -46,20 +50,20 @@ export async function POST(req: NextRequest) {
   const email = userData.email as string;
   const firstName = (userData.username as string | undefined) ?? null;
   const tier = (userData.tier as string | undefined) ?? "free";
-  const isLegacy = (userData.isLegacy as boolean | undefined) ?? false;
 
-  // Legacy Back 9 members get Flow 4 — replaces any prior legacy_skip doc
-  if (isLegacy) {
-    await startFlow(uid, email, firstName, "back9");
-    console.log(
-      `[email/welcome] back9 flow started for uid=${uid}${isLegacySkip ? " (was legacy_skip)" : ""}`
-    );
-    return NextResponse.json({ ok: true });
-  }
-
-  let flow: EmailFlow = "free";
+  // Free tier + legacy back9 retirements: no drip starts here. Only paid
+  // Reserve tiers (member/black/access) enroll. Everyone else gets a no-op.
+  let flow: EmailFlow | null = null;
   if (tier === "member" || tier === "black") flow = "member";
   else if (tier === "access") flow = "access";
+
+  if (!flow) {
+    console.log(
+      `[email/welcome] no drip enrolled for uid=${uid} (tier=${tier})` +
+        (isLegacySkip ? " (was legacy_skip)" : "")
+    );
+    return NextResponse.json({ ok: true, skipped: true, reason: "tier_no_drip" });
+  }
 
   await startFlow(uid, email, firstName, flow);
 

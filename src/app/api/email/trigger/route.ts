@@ -15,7 +15,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { startFlow, type EmailFlow } from "@/lib/email/sequences";
 import { adminDb } from "@/lib/firebase-admin";
 
-const VALID_FLOWS: EmailFlow[] = ["free", "access", "member"];
+// `free` retired 2026-06-04. Manual trigger now only accepts paid tier flows
+// + the pre-checkout `reserve` flow (which is also started automatically by
+// /api/quiz/complete, but this endpoint lets admins force-enroll a profile).
+const VALID_FLOWS: EmailFlow[] = ["access", "member", "reserve"];
 
 function isAuthorized(req: NextRequest): boolean {
   const secret = process.env.INTERNAL_API_SECRET;
