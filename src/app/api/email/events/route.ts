@@ -95,6 +95,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, skipped: "no_recipient" });
   }
 
+  // Broadcast events belong to mully-hub (Supabase outbound_campaign_recipient),
+  // not the per-user drip system stored in Firestore. We share the Resend
+  // webhook subscription with mully-hub, so we just ACK without writing — the
+  // hub's /api/resend/webhook is the source of truth for broadcast engagement.
+  const incomingTags = event.data.tags;
+  if (incomingTags && typeof incomingTags === "object" && "mully_campaign_id" in incomingTags) {
+    return NextResponse.json({ ok: true, skipped: "broadcast_event" });
+  }
+
   // Map event type to short label
   const eventType = event.type.replace("email.", "") as
     | "sent"
