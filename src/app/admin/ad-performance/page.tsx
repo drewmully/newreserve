@@ -388,22 +388,29 @@ export default function AdPerformancePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [start, end]);
 
-  // Filter to campaign before aggregating
+  // Filter to campaign before aggregating. (unattributed) and (pending)
+  // rows are excluded from the on-screen view — they're stored in Supabase
+  // for auditing but don't surface in the admin UI.
   const filteredSnapshots = useMemo(() => {
     if (!data) return [];
-    if (campaignFilter === "all") return data.snapshots;
-    return data.snapshots.filter((s) => s.campaign_id === campaignFilter);
+    const visible = data.snapshots.filter(
+      (s) =>
+        s.campaign_id !== "(unattributed)" && s.campaign_id !== "(pending)"
+    );
+    if (campaignFilter === "all") return visible;
+    return visible.filter((s) => s.campaign_id === campaignFilter);
   }, [data, campaignFilter]);
 
   const rows = useMemo(() => aggregateByAdGroup(filteredSnapshots), [filteredSnapshots]);
   const total = useMemo(() => totals(rows), [rows]);
 
-  // Get list of campaigns for the dropdown
+  // Get list of campaigns for the dropdown (exclude sentinel buckets)
   const campaigns = useMemo(() => {
     if (!data) return [];
     const seen = new Map<string, string>();
     for (const s of data.snapshots) {
-      if (s.campaign_id === "(pending)") continue;
+      if (s.campaign_id === "(pending)" || s.campaign_id === "(unattributed)")
+        continue;
       if (!seen.has(s.campaign_id)) {
         seen.set(s.campaign_id, s.campaign_name ?? s.campaign_id);
       }
