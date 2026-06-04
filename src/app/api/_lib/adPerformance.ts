@@ -33,6 +33,8 @@ import { getSupabaseService } from "@/app/api/_lib/supabaseService";
 // slug used by PostHog. We seed this from the live account; extend as new
 // groups ship.
 
+export const MR_CAMPAIGN_ID = "23901702384";
+
 export const AD_GROUP_UTM_BY_ID: Record<
   string,
   { campaign_slug: string; ad_group_slug: string }
@@ -44,6 +46,18 @@ export const AD_GROUP_UTM_BY_ID: Record<
   "202771149968": { campaign_slug: "mr_prospect_search", ad_group_slug: "ag_premium" },     // AG4 Premium-Apparel
   "194914637217": { campaign_slug: "mr_prospect_search", ad_group_slug: "ag_style" },       // AG5 Style-Occasion
 };
+
+// Slug pair → ad_group_id (reverse lookup, computed once).
+export const AD_GROUP_ID_BY_SLUG: Record<string, string> = Object.fromEntries(
+  Object.entries(AD_GROUP_UTM_BY_ID).map(([id, s]) => [
+    `${s.campaign_slug}|${s.ad_group_slug}`,
+    id,
+  ])
+);
+
+// Sentinel used when ad activity exists but UTMs were lost (pre-stitch, direct).
+export const UNATTRIBUTED_CAMPAIGN_ID = "(unattributed)";
+export const UNATTRIBUTED_AD_GROUP_ID = "(unattributed)";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -171,6 +185,7 @@ export async function fetchAdsByDate(start: string, end: string): Promise<
     WHERE segments.date BETWEEN '${start}' AND '${end}'
       AND ad_group.status != 'REMOVED'
       AND campaign.status != 'REMOVED'
+      AND campaign.id = ${MR_CAMPAIGN_ID}
   `;
   const rows = await adsQuery(query);
   const out: Record<string, AdRow & { date: string }> = {};
@@ -224,6 +239,7 @@ export async function fetchKeywordsByDate(
     FROM keyword_view
     WHERE segments.date BETWEEN '${start}' AND '${end}'
       AND ad_group_criterion.status != 'REMOVED'
+      AND campaign.id = ${MR_CAMPAIGN_ID}
   `;
   const rows = await adsQuery(query);
   const out: Array<KeywordRow & { date: string }> = [];
@@ -314,28 +330,54 @@ export async function fetchFunnelByUtm(
     "begin_checkout",
   ];
   const eventList = events.map((e) => `'${e}'`).join(",");
+  const mrSlugs = Object.values(AD_GROUP_UTM_BY_ID);
+  const campaignSlugList = Array.from(new Set(mrSlugs.map((s) => `'${s.campaign_slug}'`))).join(",");
+
+  // Step 1: bucket each MR event by its OWN utm if present, else by the
+  // person's earliest MR-tagged UTM in a 60-day lookback.
+  //
+  // Why: people who click an ad once and come back days later usually
+  // arrive UTM-less. Person-level lookback recovers them. Events that still
+  // have no MR slug (organic, direct, or pre-stitch) fall into the
+  // `(unattributed)` bucket so they remain visible.
+  //
+  // Why count() rather than count(distinct person_id): Drew compares this
+  // to Google Ads `clicks`, which is event-count (not unique-people).
+  // PostHog `lp_subscription_view` fires once per page load, so this
+  // matches the click-equivalent metric.
+
+  const lookbackStart = new Date(start);
+  lookbackStart.setUTCDate(lookbackStart.getUTCDate() - 60);
+  const lookbackStartStr = lookbackStart.toISOString().slice(0, 10);
 
   const sql = `
-    with person_attrib as (
+    with person_mr_attrib as (
       select
         person_id,
         argMin(properties.utm_campaign, timestamp) as campaign,
         argMin(properties.utm_content, timestamp) as ad_group
       from events
-      where timestamp >= '${start} 00:00:00'
+      where timestamp >= '${lookbackStartStr} 00:00:00'
         and timestamp <  '${end} 23:59:59'
-        and properties.utm_campaign != ''
-        and properties.utm_campaign is not null
+        and properties.utm_campaign in (${campaignSlugList})
       group by person_id
     )
     select
       toDate(e.timestamp) as date,
-      coalesce(nullif(pa.campaign, ''), '(none)') as campaign,
-      coalesce(nullif(pa.ad_group, ''), '(none)') as ad_group,
+      coalesce(
+        nullif(if(e.properties.utm_campaign in (${campaignSlugList}), e.properties.utm_campaign, ''), ''),
+        nullif(pa.campaign, ''),
+        '(unattributed)'
+      ) as campaign,
+      coalesce(
+        nullif(if(e.properties.utm_campaign in (${campaignSlugList}), e.properties.utm_content, ''), ''),
+        nullif(pa.ad_group, ''),
+        '(unattributed)'
+      ) as ad_group,
       e.event,
-      count(distinct e.person_id) as uniques
+      count() as evts
     from events e
-    left join person_attrib pa on pa.person_id = e.person_id
+    left join person_mr_attrib pa on pa.person_id = e.person_id
     where e.timestamp >= '${start} 00:00:00'
       and e.timestamp <  '${end} 23:59:59'
       and e.event in (${eventList})
@@ -482,7 +524,11 @@ export async function fetchPurchasesByUtm(
     .filter((e): e is string => Boolean(e));
   if (emails.length === 0) return [];
 
-  // Look up each purchaser's first UTM in PostHog.
+  // Look up each purchaser's first MR-tagged UTM in PostHog.
+  const mrSlugs = Object.values(AD_GROUP_UTM_BY_ID);
+  const campaignSlugList = Array.from(
+    new Set(mrSlugs.map((s) => `'${s.campaign_slug}'`))
+  ).join(",");
   const escaped = emails.map((e) => `'${e.replace(/'/g, "''")}'`).join(",");
   const sql = `
     select
@@ -491,8 +537,7 @@ export async function fetchPurchasesByUtm(
       argMin(properties.utm_content, timestamp) as ad_group
     from events
     where lower(person.properties.email) in (${escaped})
-      and properties.utm_campaign != ''
-      and properties.utm_campaign is not null
+      and properties.utm_campaign in (${campaignSlugList})
     group by email
   `;
   const phRes = await runHogQL(sql).catch(() => ({} as HogQLResponse));
@@ -501,18 +546,19 @@ export async function fetchPurchasesByUtm(
     const [email, campaign, adGroup] = r as [string, string, string];
     if (email) {
       attribByEmail.set(email, {
-        campaign: campaign || "(none)",
-        ad_group: adGroup || "(none)",
+        campaign: campaign || "(unattributed)",
+        ad_group: adGroup || "(unattributed)",
       });
     }
   }
 
-  // Aggregate by (date, campaign, ad_group)
+  // Aggregate by (date, campaign, ad_group). Purchases without a known MR
+  // UTM go into the (unattributed) bucket so revenue still appears.
   const byKey = new Map<string, PurchaseRow & { date: string }>();
   for (const o of orders) {
     const attrib = (o.email && attribByEmail.get(o.email)) || {
-      campaign: "(none)",
-      ad_group: "(none)",
+      campaign: "(unattributed)",
+      ad_group: "(unattributed)",
     };
     const key = `${o.createdAtDate}|${attrib.campaign}|${attrib.ad_group}`;
     let row = byKey.get(key);
@@ -622,21 +668,24 @@ export async function refreshAdPerformance(days = 2): Promise<{
 
   // Build a reverse map slug → ad_group_id so we can merge funnel + purchase
   // rows back onto the right Ads row.
-  const slugToAdGroupId = new Map<string, string>();
-  for (const [adGroupId, slugs] of Object.entries(AD_GROUP_UTM_BY_ID)) {
-    slugToAdGroupId.set(
-      `${slugs.campaign_slug}|${slugs.ad_group_slug}`,
-      adGroupId
-    );
-  }
+  const slugToAdGroupId = new Map<string, string>(
+    Object.entries(AD_GROUP_ID_BY_SLUG)
+  );
 
   function applyToSnapshot<T extends { date: string; campaign_slug: string; ad_group_slug: string }>(
     row: T,
     apply: (target: NonNullable<ReturnType<typeof snapshotsByKey.get>>) => void
   ) {
+    // `(unattributed)` rows go into a single per-date bucket so they remain
+    // visible in the UI rather than silently dropped.
+    const isUnattrib =
+      row.campaign_slug === "(unattributed)" ||
+      row.ad_group_slug === "(unattributed)";
     const slugKey = `${row.campaign_slug}|${row.ad_group_slug}`;
-    const adGroupId = slugToAdGroupId.get(slugKey);
-    if (!adGroupId) return; // unattributable to a known Ads ad group
+    const adGroupId = isUnattrib
+      ? UNATTRIBUTED_AD_GROUP_ID
+      : slugToAdGroupId.get(slugKey);
+    if (!adGroupId) return; // a non-MR slug we don't track
     // Find the snapshot for this date+ad group. The Ads row tells us
     // campaign_id; we look it up across all snapshots for this ad group.
     let target: NonNullable<ReturnType<typeof snapshotsByKey.get>> | undefined;
@@ -648,14 +697,16 @@ export async function refreshAdPerformance(days = 2): Promise<{
     }
     if (!target) {
       // No Ads row for this date+ad group (e.g. funnel activity on a day
-      // with no spend reported yet — Ads has a few-hour lag). Seed a row
-      // with zero spend so the funnel numbers aren't lost.
+      // with no spend reported yet — Ads has a few-hour lag, or the row is
+      // an `(unattributed)` bucket). Seed a row with zero spend so the
+      // funnel numbers aren't lost.
+      const campaignId = isUnattrib ? UNATTRIBUTED_CAMPAIGN_ID : "(pending)";
       const seed = {
         snapshot_date: row.date,
-        campaign_id: "(pending)",
+        campaign_id: campaignId,
         ad_group_id: adGroupId,
-        campaign_name: null,
-        ad_group_name: null,
+        campaign_name: isUnattrib ? "Unattributed" : null,
+        ad_group_name: isUnattrib ? "Unattributed" : null,
         impressions: 0,
         clicks: 0,
         cost_micros: 0,
@@ -670,7 +721,7 @@ export async function refreshAdPerformance(days = 2): Promise<{
         new_revenue_cents: 0,
       };
       snapshotsByKey.set(
-        `${row.date}|(pending)|${adGroupId}`,
+        `${row.date}|${campaignId}|${adGroupId}`,
         seed
       );
       target = seed;
