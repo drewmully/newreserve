@@ -262,8 +262,15 @@ export async function GET(request: NextRequest) {
     new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const end = url.searchParams.get("end") || today;
 
-  const startTs = Timestamp.fromDate(new Date(start + "T00:00:00Z"));
-  const endTs = Timestamp.fromDate(new Date(end + "T23:59:59Z"));
+  // We filter on `resend_timestamp` (the actual time Resend recorded the
+  // event), NOT `created_at` (when the Firestore doc was written). Backfilled
+  // docs all share the same `created_at` ~= backfill run time, which would
+  // dump thousands of old events into whichever window the operator opens.
+  //
+  // `resend_timestamp` is stored as an ISO-8601 string — string range filters
+  // work lexicographically for that format.
+  const startIso = new Date(start + "T00:00:00Z").toISOString();
+  const endIso = new Date(end + "T23:59:59.999Z").toISOString();
 
   // ── 1. Read all email_events in window ────────────────────────────────────
   let events: Array<{
@@ -275,8 +282,8 @@ export async function GET(request: NextRequest) {
   try {
     const snap = await adminDb
       .collection("email_events")
-      .where("created_at", ">=", startTs)
-      .where("created_at", "<=", endTs)
+      .where("resend_timestamp", ">=", startIso)
+      .where("resend_timestamp", "<=", endIso)
       .get();
     for (const doc of snap.docs) {
       const d = doc.data() as Record<string, unknown>;

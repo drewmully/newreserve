@@ -102,14 +102,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "missing flow/step" }, { status: 400 });
   }
 
-  const startTs = Timestamp.fromDate(new Date(start + "T00:00:00Z"));
-  const endTs = Timestamp.fromDate(new Date(end + "T23:59:59Z"));
+  // Filter on resend_timestamp (real send time) not created_at (Firestore doc
+  // write time) so backfilled docs don't show up as "recent" events.
+  const startIso = new Date(start + "T00:00:00Z").toISOString();
+  const endIso = new Date(end + "T23:59:59.999Z").toISOString();
 
   // Pull events in window with matching flow+step tags
   const evSnap = await adminDb
     .collection("email_events")
-    .where("created_at", ">=", startTs)
-    .where("created_at", "<=", endTs)
+    .where("resend_timestamp", ">=", startIso)
+    .where("resend_timestamp", "<=", endIso)
     .get();
 
   type State = {
