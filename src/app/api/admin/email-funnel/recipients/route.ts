@@ -10,6 +10,37 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { isAllowedAdminEmail } from "@/lib/adminEmailAllowlist";
 import { Timestamp } from "firebase-admin/firestore";
+import type { EmailFlow } from "@/lib/email/sequences";
+import { FLOW_STEPS } from "@/lib/email/sequences";
+import { ACCESS_TEMPLATES } from "@/lib/email/templates/access";
+import { MEMBER_TEMPLATES } from "@/lib/email/templates/member";
+import { RESERVE_TEMPLATES } from "@/lib/email/templates/reserve";
+import { ABANDON_TEMPLATES } from "@/lib/email/templates/abandon";
+
+type EmailTemplate = (firstName: string | null) => { subject: string; text: string };
+const TEMPLATES: Record<EmailFlow, EmailTemplate[]> = {
+  access: ACCESS_TEMPLATES,
+  member: MEMBER_TEMPLATES,
+  reserve: RESERVE_TEMPLATES,
+  abandon: ABANDON_TEMPLATES,
+};
+
+// Pull out https?:// URLs from a plain-text email body so the UI can show
+// the clickable links Resend would rewrite for tracking.
+function extractLinks(text: string): string[] {
+  const re = /https?:\/\/[^\s<>)\]"']+/g;
+  const seen = new Set<string>();
+  const out: string[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text))) {
+    const url = m[0].replace(/[.,;:!?]+$/, "");
+    if (!seen.has(url)) {
+      seen.add(url);
+      out.push(url);
+    }
+  }
+  return out;
+}
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -191,11 +222,26 @@ export async function GET(request: NextRequest) {
     };
   });
 
+  // Render the template for this step so the UI can show what was sent.
+  let template: { subject: string; text: string; links: string[]; delayDays: number | null } | null = null;
+  const tplsForFlow = TEMPLATES[flow as EmailFlow];
+  const stepCfgs = FLOW_STEPS[flow as EmailFlow];
+  if (tplsForFlow && tplsForFlow[step]) {
+    const rendered = tplsForFlow[step](null); // null name — shows the {{firstName}} fallback path
+    template = {
+      subject: rendered.subject,
+      text: rendered.text,
+      links: extractLinks(rendered.text),
+      delayDays: stepCfgs?.[step]?.delayDays ?? null,
+    };
+  }
+
   return NextResponse.json({
     flow,
     step,
     total: all.length,
     recipients: top,
+    template,
     truncated,
   });
 }

@@ -129,6 +129,12 @@ interface DrillResponse {
   step: number;
   total: number;
   recipients: DrillRecipient[];
+  template: {
+    subject: string;
+    text: string;
+    links: string[];
+    delayDays: number | null;
+  } | null;
   truncated: boolean;
 }
 
@@ -213,6 +219,64 @@ function DrillModal({
             <div className="p-8 text-rose-300 text-sm">{error}</div>
           ) : data ? (
             <div>
+              {/* Email content block — what was actually sent */}
+              {data.template ? (
+                <div className="px-6 py-4 border-b border-zinc-900 bg-zinc-900/30">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="text-[10px] uppercase tracking-[0.16em] text-zinc-500">
+                      Email content
+                    </div>
+                    {data.template.delayDays !== null ? (
+                      <div className="text-[10px] text-zinc-600">
+                        sends day {data.template.delayDays}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="mb-3">
+                    <div className="text-[10px] uppercase tracking-[0.14em] text-zinc-600">
+                      Subject
+                    </div>
+                    <div className="text-zinc-100 text-sm mt-1">
+                      {data.template.subject}
+                    </div>
+                  </div>
+                  <div className="mb-3">
+                    <div className="text-[10px] uppercase tracking-[0.14em] text-zinc-600">
+                      Body
+                    </div>
+                    <pre className="text-zinc-300 text-xs mt-1 whitespace-pre-wrap font-sans bg-zinc-950/50 rounded p-3 ring-1 ring-zinc-800 max-h-64 overflow-auto">
+                      {data.template.text}
+                    </pre>
+                  </div>
+                  {data.template.links.length > 0 ? (
+                    <div>
+                      <div className="text-[10px] uppercase tracking-[0.14em] text-zinc-600">
+                        Links ({data.template.links.length})
+                      </div>
+                      <ul className="text-xs mt-1 space-y-1">
+                        {data.template.links.map((link) => (
+                          <li key={link} className="truncate">
+                            <a
+                              href={link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sky-400 hover:text-sky-300 underline decoration-zinc-700"
+                            >
+                              {link}
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : (
+                    <div className="text-[10px] text-amber-300/70">
+                      No https?:// links found in this template — Resend won't
+                      have anything to track for clicks.
+                    </div>
+                  )}
+                </div>
+              ) : null}
+
               <div className="px-6 py-3 text-xs text-zinc-500 border-b border-zinc-900">
                 {data.total.toLocaleString()} recipient{data.total === 1 ? "" : "s"}
                 {data.truncated ? " (showing first 500)" : ""}
@@ -297,22 +361,22 @@ export default function EmailView({ start, end }: { start: string; end: string }
     };
   }, [start, end]);
 
-  // Total roll-up across drip + broadcast.
+  // Top KPIs are scoped to the reserve (quiz nurture) flow only — that's the
+  // acquisition funnel Drew tracks. Member/access are post-purchase nurtures
+  // and abandon is recovery; both are surfaced in their own per-flow cards
+  // below but lumping them into the top tiles dilutes the acquisition
+  // metric people are trying to read at a glance.
   const totals = useMemo(() => {
     const t = { sent: 0, delivered: 0, opened: 0, clicked: 0, purchased: 0 };
     if (!data) return t;
-    for (const f of data.flows) {
-      t.sent += f.totals.sent;
-      t.delivered += f.totals.delivered;
-      t.opened += f.totals.opened;
-      t.clicked += f.totals.clicked;
-      t.purchased += f.totals.purchased;
+    const reserve = data.flows.find((f) => f.flow === "reserve");
+    if (reserve) {
+      t.sent = reserve.totals.sent;
+      t.delivered = reserve.totals.delivered;
+      t.opened = reserve.totals.opened;
+      t.clicked = reserve.totals.clicked;
+      t.purchased = reserve.totals.purchased;
     }
-    t.sent += data.broadcast.sent;
-    t.delivered += data.broadcast.delivered;
-    t.opened += data.broadcast.opened;
-    t.clicked += data.broadcast.clicked;
-    t.purchased += data.broadcast.purchased;
     return t;
   }, [data]);
 
@@ -334,7 +398,10 @@ export default function EmailView({ start, end }: { start: string; end: string }
 
   return (
     <div className="max-w-[1400px] mx-auto">
-      {/* KPI strip */}
+      {/* KPI strip — scoped to reserve (quiz nurture) flow only */}
+      <div className="text-[10px] uppercase tracking-[0.16em] text-zinc-500 mb-2">
+        Reserve (Quiz Nurture) — acquisition funnel
+      </div>
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
         <Kpi label="Sent" value={num(totals.sent)} color={STAGE_COLORS[0]} />
         <Kpi
