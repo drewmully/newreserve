@@ -142,7 +142,9 @@ export default function ReserveCardPage() {
             brand_interest: brands,
           },
           selected_plan: plan,
-          source: "reserve_card_qr",
+          source:
+            new URLSearchParams(window.location.search).get("ref") ||
+            "reserve_card_qr",
         }),
       });
 
