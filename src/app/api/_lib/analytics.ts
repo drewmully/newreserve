@@ -72,7 +72,10 @@ const META_EVENT_MAP: Record<string, string> = {
   // Member surface
   login: "Contact",
   wallet_viewed: "ViewContent",
-  subscription_state: "Subscribe",
+  // subscription_state intentionally NOT mapped: it fires on every status
+  // refresh (not just new purchases) and lacks value/currency. Meta flags it
+  // as low-quality Subscribe. Real subscription purchases flow through
+  // "purchase" event which carries value+currency.
   registry_applied: "Lead",
 };
 

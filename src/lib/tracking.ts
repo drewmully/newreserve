@@ -163,7 +163,9 @@ const META_STANDARD_EVENTS: Record<string, string> = {
   purchase: "Purchase",
   login: "Contact",
   wallet_viewed: "ViewContent",
-  subscription_state: "Subscribe",
+  // subscription_state intentionally NOT mapped: fires on every status refresh,
+  // lacks value/currency. Real purchases go through "purchase" → Purchase.
+  // subscription_state: "Subscribe",
   registry_applied: "Lead",
 };
 
