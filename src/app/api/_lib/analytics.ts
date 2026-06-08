@@ -39,12 +39,37 @@ export interface AnalyticsEvent {
 
 // ─── Meta Conversions API ────────────────────────────────────────────────────
 
+/**
+ * Maps internal event names to Meta standard events. Standard events are the
+ * only ones Meta's algorithm can optimize ad delivery against — anything
+ * else lands in CAPI as a CustomEvent which Meta can read but cannot target.
+ *
+ * Reserve funnel mapping rationale:
+ *   - lp_subscription_view / reveal_viewed → ViewContent (top of funnel)
+ *   - quiz_started / reveal_cta_clicked   → InitiateCheckout (intent)
+ *   - quiz_step_completed                 → AddToCart (mid-funnel progress)
+ *   - quiz_email_captured                 → Lead (the optimization target for
+ *                                              cold acquisition campaigns)
+ *   - quiz_completed                      → CompleteRegistration (warm lead)
+ *   - purchase                            → Purchase (graduate to this once we
+ *                                              have 50+ purchases/week)
+ */
 const META_EVENT_MAP: Record<string, string> = {
   page_view: "PageView",
+  // Reserve acquisition funnel
+  lp_subscription_view: "ViewContent",
+  quiz_started: "InitiateCheckout",
+  quiz_step_completed: "AddToCart",
+  quiz_email_captured: "Lead",
+  quiz_completed: "CompleteRegistration",
+  reveal_viewed: "ViewContent",
+  reveal_cta_clicked: "InitiateCheckout",
+  // Generic ecom
   add_to_cart: "AddToCart",
   initiate_checkout: "InitiateCheckout",
   checkout_clicked: "InitiateCheckout",
   purchase: "Purchase",
+  // Member surface
   login: "Contact",
   wallet_viewed: "ViewContent",
   subscription_state: "Subscribe",
@@ -59,6 +84,12 @@ async function fireMetaCAPI(event: AnalyticsEvent): Promise<void> {
   const pixelId = process.env.META_PIXEL_ID;
   const accessToken = process.env.META_ACCESS_TOKEN;
   if (!pixelId || !accessToken) return;
+
+  // Only fire to Meta if the event has a mapped standard event name. Skip
+  // internal-only events (e.g. quiz_abandoned diagnostics) so we don't pollute
+  // the pixel's signal with noise Meta can't optimize against.
+  const metaEventName = META_EVENT_MAP[event.event_name];
+  if (!metaEventName) return;
 
   const userData: Record<string, unknown> = {};
   if (event.user_id) {
@@ -79,6 +110,26 @@ async function fireMetaCAPI(event: AnalyticsEvent): Promise<void> {
   if (event.ip) userData.client_ip_address = event.ip;
   if (event.user_agent) userData.client_user_agent = event.user_agent;
 
+  // Deduplication: client-side Pixel and server-side CAPI fire the SAME event
+  // with the same event_id. Meta dedupes them, picks the higher-quality match,
+  // and counts the event ONCE. Without this, we'd double-count.
+  const eventId =
+    typeof event.properties?.event_id === "string"
+      ? (event.properties.event_id as string)
+      : undefined;
+
+  // Purchase events need value + currency at the top level for Meta's optimizer.
+  const props = event.properties ?? {};
+  const customData: Record<string, unknown> = {
+    ...props,
+    user_id: event.user_id,
+    segments: event.segments ?? [],
+  };
+  if (event.event_name === "purchase") {
+    customData.value = props.value ?? 0;
+    customData.currency = props.currency ?? "USD";
+  }
+
   await fetch(
     `https://graph.facebook.com/v19.0/${pixelId}/events?access_token=${accessToken}`,
     {
@@ -87,15 +138,11 @@ async function fireMetaCAPI(event: AnalyticsEvent): Promise<void> {
       body: JSON.stringify({
         data: [
           {
-            event_name: META_EVENT_MAP[event.event_name] ?? "CustomEvent",
-            event_time:
-              event.timestamp ?? Math.floor(Date.now() / 1000),
+            event_name: metaEventName,
+            event_time: event.timestamp ?? Math.floor(Date.now() / 1000),
+            event_id: eventId,
             user_data: userData,
-            custom_data: {
-              ...(event.properties ?? {}),
-              user_id: event.user_id,
-              segments: event.segments ?? [],
-            },
+            custom_data: customData,
             action_source: "website",
             event_source_url: event.page_url,
           },

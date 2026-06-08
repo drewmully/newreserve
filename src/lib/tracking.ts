@@ -136,6 +136,99 @@ function getAttributionProperties(): Record<string, string | null> {
 }
 
 /**
+ * Mirror the event to the Meta Pixel (fbq) when it's loaded. Server-side
+ * Meta CAPI events always fire from /api/analytics/track. This client mirror
+ * is what powers Meta retargeting audiences ("users who hit quiz_started but
+ * didn't quiz_complete") and gives Meta a high-match-quality browser signal.
+ *
+ * Uses the SAME `event_id` Meta CAPI uses on the server side, so Meta dedupes
+ * the two and counts the event once. Without this, every funnel event would
+ * be double-counted in Ads Manager.
+ *
+ * No-op when fbq is undefined — i.e. when NEXT_PUBLIC_META_PIXEL_ID is not
+ * configured or the pixel script hasn't finished loading yet.
+ */
+const META_STANDARD_EVENTS: Record<string, string> = {
+  page_view: "PageView",
+  lp_subscription_view: "ViewContent",
+  quiz_started: "InitiateCheckout",
+  quiz_step_completed: "AddToCart",
+  quiz_email_captured: "Lead",
+  quiz_completed: "CompleteRegistration",
+  reveal_viewed: "ViewContent",
+  reveal_cta_clicked: "InitiateCheckout",
+  add_to_cart: "AddToCart",
+  initiate_checkout: "InitiateCheckout",
+  checkout_clicked: "InitiateCheckout",
+  purchase: "Purchase",
+  login: "Contact",
+  wallet_viewed: "ViewContent",
+  subscription_state: "Subscribe",
+  registry_applied: "Lead",
+};
+
+function mirrorToMetaPixel(
+  eventName: string,
+  eventId: string,
+  properties: Record<string, unknown>
+): void {
+  if (typeof window === "undefined") return;
+  const fbq = (
+    window as unknown as { fbq?: (...args: unknown[]) => void }
+  ).fbq;
+  if (typeof fbq !== "function") return;
+
+  const metaEvent = META_STANDARD_EVENTS[eventName];
+  if (!metaEvent) return;
+
+  try {
+    const eventData: Record<string, unknown> = {};
+    // Purchase needs value + currency for Meta's optimizer.
+    if (eventName === "purchase") {
+      eventData.value = properties.value ?? 0;
+      eventData.currency = properties.currency ?? "USD";
+    }
+    // {eventID} is Meta's dedup key against server-side CAPI; it MUST match
+    // the event_id we pass through to fireMetaCAPI on the server.
+    fbq("track", metaEvent, eventData, { eventID: eventId });
+  } catch {
+    // Never let analytics break the page.
+  }
+}
+
+/**
+ * Persists fbclid as the _fbc first-party cookie. Meta sets _fbc automatically
+ * when the Pixel loads and a fbclid is in the URL — but only on the very first
+ * landing, only when CSP/extensions don't block it, and only when the user
+ * hasn't opted out of FB tracking. Doing it ourselves as a fallback raises
+ * Meta event match quality from ~50% to 80%+ on the bottom of the funnel.
+ *
+ * Cookie format Meta expects: fb.1.<click_timestamp_ms>.<fbclid>
+ */
+function captureFbclidCookie(): void {
+  if (typeof window === "undefined") return;
+  try {
+    const fbclid = getUrlParam("fbclid");
+    if (!fbclid) return;
+    // If Meta's pixel already wrote _fbc, leave it alone — theirs is canonical.
+    const existing = getCookie("_fbc");
+    if (existing && existing.includes(fbclid)) return;
+
+    const value = `fb.1.${Date.now()}.${fbclid}`;
+    // 90-day cookie scoped to mymully.com so subdomains (mail., reserve.,
+    // checkout.) share the same _fbc and we don't lose attribution after
+    // the user bounces through reserve.mymully.com.
+    const maxAge = 90 * 24 * 60 * 60;
+    const domain = window.location.hostname.endsWith("mymully.com")
+      ? "; domain=.mymully.com"
+      : "";
+    document.cookie = `_fbc=${value}; path=/; max-age=${maxAge}; SameSite=Lax${domain}`;
+  } catch {
+    // Never let analytics break the page.
+  }
+}
+
+/**
  * Mirror the event to client-side gtag.js when it's loaded. Server-side
  * GA4/Google Ads pings always fire from /api/analytics/track. This client
  * mirror is what populates Google Ads remarketing audiences ("users who hit
@@ -281,9 +374,18 @@ export async function trackEvent(
       ...getAttributionProperties(),
     };
 
+    // Capture fbclid → _fbc cookie as a fallback before mirroring to Meta,
+    // so the very first event after an ad click already carries _fbc.
+    captureFbclidCookie();
+
     // Mirror to client-side gtag.js (GA4 + Google Ads). No-op when the
     // Google tag is not configured.
     mirrorToGtag(eventName, eventId, mergedProperties);
+
+    // Mirror to client-side Meta Pixel (fbq). No-op when NEXT_PUBLIC_META_PIXEL_ID
+    // is not configured. Uses the SAME eventId we pass to server-side CAPI
+    // so Meta dedupes the two and counts the event once.
+    mirrorToMetaPixel(eventName, eventId, mergedProperties);
 
     await fetch("/api/analytics/track", {
       method: "POST",
