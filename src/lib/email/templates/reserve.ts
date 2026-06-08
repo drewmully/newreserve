@@ -16,18 +16,35 @@
  * utm_content=step_N).
  */
 
-import type { EmailTemplate } from "./types";
+import type { EmailTemplate, EmailTemplateContext } from "./types";
 
 function hi(firstName: string | null, alt?: string): string {
   if (firstName) return `Hey ${firstName},`;
   return alt ?? "Hey there,";
 }
 
-const RESERVE_URL = "https://mymully.com/lp/subscription";
+// Generic LP — fallback only when a recipient somehow has no profileId.
+// Real recipients land on their personalized reveal page (see revealUrl).
+const RESERVE_URL_FALLBACK = "https://mymully.com/lp/subscription";
+const REVEAL_BASE = "https://mymully.com/lp/reserve/reveal";
 const REVIEWS_LINE = "Renewal rate: 96%. The members who get one almost never leave.";
 
+/**
+ * Builds the per-recipient "see your edit" link.
+ *
+ * Resend's link-rewriter will already stamp utm_campaign=flow_reserve and
+ * utm_content=step_N from the engine's tags (see sequences.ts). We add
+ * `attributed=email` as a stable, click-side marker so the reveal page's
+ * client-side analytics can show "this view came from your nurture email"
+ * independent of any UTM stripping by inbox proxies.
+ */
+function revealUrl(ctx: EmailTemplateContext | undefined): string {
+  if (!ctx?.profileId) return RESERVE_URL_FALLBACK;
+  return `${REVEAL_BASE}/${ctx.profileId}?attributed=email`;
+}
+
 // Email 1 — Immediate: reveal + gift offer (sent within ~1 hour of quiz complete)
-export const reserve_1: EmailTemplate = (firstName) => ({
+export const reserve_1: EmailTemplate = (firstName, ctx) => ({
   subject: firstName
     ? `${firstName}, your Reserve edit is ready`
     : "Your Reserve edit is ready",
@@ -35,7 +52,7 @@ export const reserve_1: EmailTemplate = (firstName) => ({
 
 Based on your answers, I pulled a quarter's worth of pieces together for you. Two apparel picks, two accessories, and a rangefinder I'm including as a welcome gift.
 
-You can see the edit here: ${RESERVE_URL}
+You can see the edit here: ${revealUrl(ctx)}
 
 A few things worth knowing:
 
@@ -53,7 +70,7 @@ P.S. ${REVIEWS_LINE}`,
 });
 
 // Email 2 — ~36h: care + service proof
-export const reserve_2: EmailTemplate = (firstName) => ({
+export const reserve_2: EmailTemplate = (firstName, ctx) => ({
   subject: "How Reserve actually works",
   text: `${hi(firstName)}
 
@@ -67,13 +84,13 @@ You can. Pause, skip, change frequency — all of it lives in your account. We d
 
 The first quarter is the proof. The rangefinder welcome gift is yours either way.
 
-Your edit's still here: ${RESERVE_URL}
+Your edit's still here: ${revealUrl(ctx)}
 
 Drew`,
 });
 
 // Email 3 — ~5 days: value math, $300 for $250
-export const reserve_3: EmailTemplate = (firstName) => ({
+export const reserve_3: EmailTemplate = (firstName, ctx) => ({
   subject: "$300 worth, $250 in",
   text: `${hi(firstName)}
 
@@ -85,7 +102,7 @@ It's not a discount play. It's a curation play. You're paying for someone who ac
 
 Most of our members tell me the same thing: they stopped browsing for golf clothes. The good stuff just shows up.
 
-Your edit: ${RESERVE_URL}
+Your edit: ${revealUrl(ctx)}
 
 Drew
 
@@ -93,7 +110,7 @@ P.S. If you'd rather just see the four pieces I picked for you, that page above 
 });
 
 // Email 4 — ~9 days: positioning + final gift reminder
-export const reserve_4: EmailTemplate = (firstName) => ({
+export const reserve_4: EmailTemplate = (firstName, ctx) => ({
   subject: "The guy who handles your golf wardrobe",
   text: `${hi(firstName)}
 
@@ -107,7 +124,7 @@ You walk into the season looking sharp without having scrolled through twelve br
 
 I built Reserve for the guy who's tired of doing this himself.
 
-If that's you, the edit I pulled is still here: ${RESERVE_URL}
+If that's you, the edit I pulled is still here: ${revealUrl(ctx)}
 
 The rangefinder welcome gift goes with the first quarter. After that, this email goes quiet — you'll only hear from me if something changes.
 
@@ -123,6 +140,9 @@ export const RESERVE_TEMPLATES: EmailTemplate[] = [
 
 // One-off abandon-quiz nudge — NOT part of the FLOW_STEPS array. Sent ad-hoc
 // by the abandon-nudge cron when a visitor captured email but didn't finish.
+//
+// This one intentionally points at the generic LP — by definition the visitor
+// didn't finish the quiz so there's no profileId / no edit to show yet.
 export const reserve_abandon: EmailTemplate = (firstName) => ({
   subject: firstName ? `${firstName}, want me to finish your edit?` : "Want me to finish your edit?",
   text: `${hi(firstName)}
@@ -130,7 +150,7 @@ export const reserve_abandon: EmailTemplate = (firstName) => ({
 You got partway through the style quiz earlier but didn't finish. No pressure — I just need a couple more answers to actually put your Reserve edit together.
 
 Picks up where you left off, takes about 30 seconds:
-${RESERVE_URL}
+${RESERVE_URL_FALLBACK}
 
 The rangefinder welcome gift is still on the table if you decide Reserve is for you.
 

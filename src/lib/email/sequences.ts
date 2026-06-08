@@ -265,7 +265,11 @@ export async function processSequence(uid: string): Promise<void> {
     return;
   }
 
-  const { subject, text } = template(seq.firstName);
+  // For the `reserve` flow, the sequence doc id IS the styleProfile id, so we
+  // pass it as ctx.profileId so reserve templates can link to the recipient's
+  // personalized reveal page (/lp/reserve/reveal/{profileId}) instead of the
+  // generic LP. Other flows ignore ctx.
+  const { subject, text } = template(seq.firstName, { profileId: uid });
   const emailId = await sendPlainText({
     to: seq.email,
     subject,
@@ -372,7 +376,8 @@ export async function triggerEventStep(
   const template = templates[stepIndex];
   if (!template) return;
 
-  const { subject, text } = template(seq.firstName);
+  // Same profileId plumbing as processSequence — see comment above.
+  const { subject, text } = template(seq.firstName, { profileId: uid });
   await sendPlainText({
     to: seq.email,
     subject,
