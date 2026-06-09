@@ -4,7 +4,7 @@
 # right under the line items. Content is product-aware: Reserve Member shows
 # quarterly-specific copy, Reserve Access shows annual-specific copy.
 
-api_version = "2025-01"
+api_version = "2026-04"
 
 [[extensions]]
 name = "mully-reassurance"
