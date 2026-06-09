@@ -9,8 +9,8 @@
     "info": "shopify app info"
   },
   "dependencies": {
-    "@shopify/app": "^3.66.0",
-    "@shopify/cli": "^3.66.0"
+    "@shopify/app": "3.58.2",
+    "@shopify/cli": "3.58.2"
   },
   "type": "module",
   "workspaces": [
