@@ -562,7 +562,11 @@ export default function AdPerformancePage() {
   // dropped — they're implied by ad clicks, and a separate `lp_views` row
   // confuses the dashboard when redirects or org/direct traffic skew it.
   const dollarSpend = total.cost_cents / 100;
-  const checkoutCount = total.checkout_clicked || total.begin_checkout;
+  // checkout_clicked already includes reveal_cta_clicked +
+  // lp_subscription_checkout_clicked merged at the API layer (see
+  // adPerformance.ts switch). begin_checkout is a separate GA-style
+  // event for cohorts that bypass our CTA buttons — fold it in too.
+  const checkoutCount = (total.checkout_clicked || 0) + (total.begin_checkout || 0);
   const profileCount = total.quiz_completed;
 
   const funnelStages: FunnelStage[] = useMemo(() => {
@@ -852,7 +856,7 @@ export default function AdPerformancePage() {
                   const rCpc = r.clicks ? r.cost_cents / r.clicks / 100 : 0;
                   const rClickToQuiz = pct(r.quiz_completed, r.clicks);
                   const rQuizToCheckout = pct(
-                    r.checkout_clicked || r.begin_checkout,
+                    (r.checkout_clicked || 0) + (r.begin_checkout || 0),
                     r.quiz_completed
                   );
                   const rCac = r.new_purchases ? r.cost_cents / r.new_purchases / 100 : null;
@@ -912,7 +916,7 @@ export default function AdPerformancePage() {
                           {fmtPct(rClickToQuiz, 1)}
                         </Td>
                         <Td align="right">
-                          {fmtInt.format(r.checkout_clicked || r.begin_checkout)}
+                          {fmtInt.format((r.checkout_clicked || 0) + (r.begin_checkout || 0))}
                         </Td>
                         <Td
                           align="right"
@@ -952,10 +956,10 @@ export default function AdPerformancePage() {
                   <Td align="right">{fmtInt.format(total.quiz_completed)}</Td>
                   <Td align="right">{fmtPct(pct(total.quiz_completed, total.clicks), 1)}</Td>
                   <Td align="right">
-                    {fmtInt.format(total.checkout_clicked || total.begin_checkout)}
+                    {fmtInt.format((total.checkout_clicked || 0) + (total.begin_checkout || 0))}
                   </Td>
                   <Td align="right">
-                    {fmtPct(pct(total.checkout_clicked || total.begin_checkout, total.quiz_completed), 1)}
+                    {fmtPct(pct((total.checkout_clicked || 0) + (total.begin_checkout || 0), total.quiz_completed), 1)}
                   </Td>
                   <Td align="right">{fmtInt.format(total.new_purchases)}</Td>
                   <Td align="right">{cac !== null ? fmtMoneyWhole.format(cac) : "—"}</Td>
@@ -1445,7 +1449,9 @@ function OrganicView({ start, end }: { start: string; end: string }) {
   // Funnel is collapsed — session → profile → checkout → purchase. LP views
   // are still stored in Supabase but no longer surface in the UI.
   const profileRate = pct(total.quiz_completed, total.sessions);
-  const checkoutCount = total.checkout_clicked || total.begin_checkout;
+  // checkout_clicked already includes reveal_cta_clicked +
+  // lp_subscription_checkout_clicked merged at the API layer.
+  const checkoutCount = (total.checkout_clicked || 0) + (total.begin_checkout || 0);
   const checkoutRate = pct(checkoutCount, total.quiz_completed);
   const purchaseRate = pct(total.new_purchases, checkoutCount);
 
@@ -1591,7 +1597,7 @@ function OrganicView({ start, end }: { start: string; end: string }) {
               ) : (
                 rows.map((r) => {
                   const rProfileRate = pct(r.quiz_completed, r.sessions);
-                  const rCheckoutCount = r.checkout_clicked || r.begin_checkout;
+                  const rCheckoutCount = (r.checkout_clicked || 0) + (r.begin_checkout || 0);
                   const rCheckoutRate = pct(rCheckoutCount, r.quiz_completed);
                   const isFocused = sourceFocus === r.source;
                   return (
