@@ -191,7 +191,10 @@ export async function GET(request: NextRequest) {
       queue.push({ uid: doc.id, email, firstName });
     });
 
-    const CONCURRENCY = 5;
+    // Resend free-tier ceiling is 5 req/sec. Stay under by capping concurrency
+    // at 3 and pacing each worker by ~300ms between sends.
+    const CONCURRENCY = 3;
+    const SEND_PACE_MS = 300;
     let cursor = 0;
     await Promise.all(
       Array.from({ length: CONCURRENCY }, async () => {
@@ -216,6 +219,7 @@ export async function GET(request: NextRequest) {
               ],
             });
             results.push({ uid: u.uid, email: u.email, status: "sent" });
+            await new Promise((r) => setTimeout(r, SEND_PACE_MS));
           } catch (err) {
             results.push({
               uid: u.uid,

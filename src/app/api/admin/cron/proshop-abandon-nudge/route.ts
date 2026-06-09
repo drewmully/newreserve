@@ -224,6 +224,8 @@ export async function GET(request: NextRequest) {
           source: "cron",
         });
         results.push({ uid: c.uid, slug: c.productSlug, status: "sent" });
+        // Pace below Resend's 5/sec ceiling. Sequential loop with 250ms.
+        await new Promise((r) => setTimeout(r, 250));
       } catch (err) {
         results.push({
           uid: c.uid,

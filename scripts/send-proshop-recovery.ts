@@ -156,6 +156,8 @@ async function main() {
       console.error(`  ERROR ${s.email}:`, err);
       errors += 1;
     }
+    // Pace under Resend's 5/sec free-tier ceiling. 250ms = 4/sec ceiling.
+    if (!DRY_RUN) await new Promise((r) => setTimeout(r, 250));
   }
 
   console.log("\n=== Recovery summary ===");
