@@ -44,6 +44,19 @@ const VALID_EVENTS = new Set([
   "quiz_abandoned",
   "reveal_viewed",
   "reveal_cta_clicked",
+  // Pro Shop funnel — for the dashboard shop tab + /shop/* public pages
+  "proshop_view",
+  "proshop_product_viewed",
+  "proshop_brand_filter_changed",
+  "proshop_quick_add_clicked",
+  // Post-Loop-checkout hand-off CTA — measures whether new members
+  // actually take the bridge from /home (or the first-box drawer) into
+  // the Pro Shop. Critical for activation.
+  "post_checkout_proshop_cta_clicked",
+  "proshop_welcome_banner_dismissed",
+  "proshop_recovery_email_clicked",
+  "proshop_weekly_digest_clicked",
+  "proshop_abandon_nudge_clicked",
 ]);
 
 function getBearerToken(request: NextRequest): string | null {

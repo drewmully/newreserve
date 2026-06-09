@@ -515,6 +515,50 @@ function GatedTab({ type, onUpgrade }: { type: "shop" | "drops" | "club" | "bene
    SHOP TAB
    ═══════════════════════════════════════════ */
 
+function ProShopWelcomeBanner() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const [dismissed, setDismissed] = useState(false);
+  const showWelcome = searchParams.get("welcome") === "1";
+  if (!showWelcome || dismissed) return null;
+  const handleDismiss = () => {
+    setDismissed(true);
+    try {
+      trackEvent("proshop_welcome_banner_dismissed", {
+        properties: { surface: "dashboard-shop" },
+      });
+    } catch {}
+    // Drop ?welcome=1 so a refresh doesn’t re-show.
+    router.replace("/dashboard?tab=shop", { scroll: false });
+  };
+  return (
+    <div className="mb-6 rounded-2xl bg-gradient-to-br from-forest/95 to-forest p-5 md:p-6 text-bone shadow-sm">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1">
+          <p className="text-[10px] tracking-[0.32em] uppercase text-bone/70 font-medium mb-2">
+            Welcome in
+          </p>
+          <h3 className="font-serif text-xl md:text-2xl leading-tight mb-2">
+            Your Pro Shop is open.
+          </h3>
+          <p className="text-sm text-bone/85 leading-relaxed max-w-xl">
+            Member pricing on every brand. Curated to the season. Ships separately
+            from your quarterly curation.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={handleDismiss}
+          aria-label="Dismiss"
+          className="text-bone/60 hover:text-bone text-xl leading-none px-2 -mt-1"
+        >
+          ×
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ShopTab() {
   const [shopProducts, setShopProducts] = useState<ShopifyProduct[]>([]);
   const [loading, setLoading] = useState(true);
@@ -623,6 +667,7 @@ function ShopTab() {
   return (
     <div className="px-6 md:px-12">
       <div className="max-w-7xl mx-auto">
+        <ProShopWelcomeBanner />
         {partialWarning && (
           <p className="mb-4 text-xs text-charcoal/45">{partialWarning}</p>
         )}

@@ -49,6 +49,11 @@ if (!SHOPIFY_STORE_DOMAIN || !SHOPIFY_ADMIN_TOKEN) {
 
 const DRY_RUN = !process.argv.includes("--execute");
 const MAX_AGE_DAYS = 90;
+// Where to dump the survivor manifest for the recovery-email step. The path
+// is also overridable via --survivors-out=<path>.
+const survivorsOutArg = process.argv.find((a) => a.startsWith("--survivors-out="));
+const SURVIVORS_OUT =
+  survivorsOutArg?.split("=")[1]?.trim() || "/tmp/proshop-recovery-survivors.json";
 
 async function fetchAllOpenDrafts(): Promise<DraftOrder[]> {
   const drafts: DraftOrder[] = [];
@@ -113,6 +118,22 @@ async function main() {
   let totalDuplicates = 0;
   let totalSurvivors = 0;
   let recoveredValue = 0;
+  // Survivor manifest emitted at the end — one record per customer with the
+  // single open draft we kept (or the only draft they had). The recovery-email
+  // script reads this file. We intentionally write this even on --dry-run so
+  // we can preview the audience before sending.
+  type SurvivorRecord = {
+    email: string;
+    draft_id: number;
+    total_price: string;
+    invoice_url: string | null;
+    line_items: Array<{ title: string; quantity: number; price: string }>;
+    created_at: string;
+    updated_at: string;
+    had_duplicates: boolean;
+    duplicates_removed: number;
+  };
+  const survivors: SurvivorRecord[] = [];
 
   console.log("\n=== Per-customer breakdown ===");
   for (const [email, drafts] of Array.from(byEmail.entries()).sort(
@@ -121,6 +142,18 @@ async function main() {
     if (drafts.length === 1) {
       totalSurvivors += 1;
       recoveredValue += parseFloat(drafts[0].total_price);
+      const only = drafts[0];
+      survivors.push({
+        email,
+        draft_id: only.id,
+        total_price: only.total_price,
+        invoice_url: only.invoice_url,
+        line_items: only.line_items,
+        created_at: only.created_at,
+        updated_at: only.updated_at,
+        had_duplicates: false,
+        duplicates_removed: 0,
+      });
       continue;
     }
 
@@ -138,6 +171,17 @@ async function main() {
     console.log(
       `${email}: keeping #${keep.id} ($${keep.total_price}), deleting ${dupes.length} dupes`
     );
+    survivors.push({
+      email,
+      draft_id: keep.id,
+      total_price: keep.total_price,
+      invoice_url: keep.invoice_url,
+      line_items: keep.line_items,
+      created_at: keep.created_at,
+      updated_at: keep.updated_at,
+      had_duplicates: true,
+      duplicates_removed: dupes.length,
+    });
 
     if (!DRY_RUN) {
       for (const d of dupes) {
@@ -156,6 +200,27 @@ async function main() {
   console.log(`Survivors (one draft per customer): ${totalSurvivors}`);
   console.log(`Duplicates ${DRY_RUN ? "would delete" : "deleted"}: ${totalDuplicates}`);
   console.log(`Recoverable intent value: $${recoveredValue.toFixed(2)}`);
+  // Persist survivor manifest for the downstream recovery email step.
+  try {
+    const fs = await import("node:fs");
+    fs.writeFileSync(
+      SURVIVORS_OUT,
+      JSON.stringify(
+        {
+          generated_at: new Date().toISOString(),
+          mode: DRY_RUN ? "dry-run" : "execute",
+          survivor_count: survivors.length,
+          survivors,
+        },
+        null,
+        2
+      )
+    );
+    console.log(`\nWrote survivor manifest to ${SURVIVORS_OUT}`);
+  } catch (err) {
+    console.error("Failed to write survivor manifest:", err);
+  }
+
   console.log(
     DRY_RUN
       ? "\nRe-run with --execute to actually delete."
