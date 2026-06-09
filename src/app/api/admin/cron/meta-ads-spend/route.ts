@@ -100,53 +100,55 @@ async function fetchAllPages(initialUrl: string): Promise<MetaInsightsRow[]> {
 }
 
 /**
- * Extract the IC count from a Meta `actions[]` array. Meta surfaces
- * Initiate Checkout as either `initiate_checkout` (custom event) or
- * `offsite_conversion.fb_pixel_initiate_checkout` (Pixel + CAPI standard).
- * Sum both so we don't miss either path.
+ * Meta exposes the SAME conversion under multiple action_type names in the
+ * same `actions[]` array:
+ *   - `initiate_checkout`                                   ← omni count (pixel+CAPI dedup'd)
+ *   - `offsite_conversion.fb_pixel_initiate_checkout`       ← pixel only (subset)
+ *   - `offsite_initiate_checkout_add_20_s_calls`            ← custom-event alias
+ *
+ * They all report the SAME 22 IC for the same day. Naively summing them
+ * triples the count. Prefer `initiate_checkout` (the omni count) when
+ * present, fall back to the pixel-only count, then to zero.
  */
-function extractInitiateCheckouts(actions: MetaInsightsRow["actions"]): number {
+function pickAction(
+  actions: MetaInsightsRow["actions"],
+  preferred: string[]
+): number {
   if (!actions) return 0;
-  let total = 0;
+  const byType = new Map<string, number>();
   for (const a of actions) {
-    if (
-      a.action_type === "initiate_checkout" ||
-      a.action_type === "offsite_conversion.fb_pixel_initiate_checkout"
-    ) {
-      total += Number(a.value || 0);
-    }
+    byType.set(a.action_type, Number(a.value || 0));
   }
-  return total;
+  for (const t of preferred) {
+    const v = byType.get(t);
+    if (typeof v === "number" && v > 0) return v;
+  }
+  return 0;
+}
+
+function extractInitiateCheckouts(actions: MetaInsightsRow["actions"]): number {
+  return pickAction(actions, [
+    "initiate_checkout",
+    "offsite_conversion.fb_pixel_initiate_checkout",
+  ]);
 }
 
 function extractPurchases(actions: MetaInsightsRow["actions"]): number {
-  if (!actions) return 0;
-  let total = 0;
-  for (const a of actions) {
-    if (
-      a.action_type === "purchase" ||
-      a.action_type === "offsite_conversion.fb_pixel_purchase"
-    ) {
-      total += Number(a.value || 0);
-    }
-  }
-  return total;
+  return pickAction(actions, [
+    "purchase",
+    "offsite_conversion.fb_pixel_purchase",
+    "omni_purchase",
+  ]);
 }
 
 function extractPurchaseRevenue(
   values: MetaInsightsRow["action_values"]
 ): number {
-  if (!values) return 0;
-  let total = 0;
-  for (const a of values) {
-    if (
-      a.action_type === "purchase" ||
-      a.action_type === "offsite_conversion.fb_pixel_purchase"
-    ) {
-      total += Number(a.value || 0);
-    }
-  }
-  return total;
+  return pickAction(values, [
+    "purchase",
+    "offsite_conversion.fb_pixel_purchase",
+    "omni_purchase",
+  ]);
 }
 
 export async function GET(req: NextRequest) {
