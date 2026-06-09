@@ -3,9 +3,14 @@
  *
  * Builds a Shopify checkout URL for the current user.
  * - Free tier: returns the Storefront cart's checkoutUrl as-is.
- * - Paid tier: creates a Shopify Draft Order with a 15% order-level discount.
- *   The Shopify REST API requires `amount` (the calculated dollar value of the
- *   discount) — without it the field is silently ignored.
+ * - Paid tier: creates (or updates) a Shopify Draft Order with a 15% order-level
+ *   discount. The Shopify REST API requires `amount` (the calculated dollar value
+ *   of the discount) — without it the field is silently ignored.
+ *
+ * IDEMPOTENCY: every paid member has at most one OPEN draft order at a time.
+ * The draft_id is cached in users/{uid}.shopify_open_draft. On subsequent calls
+ * we look up the cached draft; if it still exists and is OPEN, we PUT the new
+ * line items onto it. Otherwise we create a new draft and cache the new id.
  *
  * Body: {
  *   checkoutUrl: string,
@@ -38,10 +43,7 @@ interface CartItemInput {
   retailPrice: number;
 }
 
-async function createMemberDraftOrder(
-  cartItems: CartItemInput[],
-  email?: string
-): Promise<string> {
+function getShopifyConfig() {
   const token =
     process.env.SHOPIFY_ADMIN_TOKEN ?? process.env.SHOPIFY_CLIENT_SECRET;
   if (!token) throw new Error("Missing Shopify Admin credentials");
@@ -50,14 +52,20 @@ async function createMemberDraftOrder(
   if (!domain) throw new Error("Missing SHOPIFY_STORE_DOMAIN");
 
   const apiVersion = process.env.SHOPIFY_ADMIN_API_VERSION ?? "2024-10";
+  return { token, domain, apiVersion };
+}
 
+function buildDraftOrderBody(
+  cartItems: CartItemInput[],
+  uid: string,
+  email?: string
+): Record<string, unknown> {
   const lineItems = cartItems
     .filter((item) => item.quantity >= 1)
     .map((item) => {
       const numericId = item.variantId.startsWith("gid://")
         ? parseInt(item.variantId.split("/").pop() ?? "0", 10)
         : parseInt(item.variantId, 10);
-
       return { variant_id: numericId, quantity: item.quantity };
     });
 
@@ -81,9 +89,66 @@ async function createMemberDraftOrder(
       value: (MEMBER_DISCOUNT_RATE * 100).toFixed(1),
       amount: totalDiscount.toFixed(2),
     },
+    tags: `reserve_member,uid:${uid}`,
+    note: `Reserve member draft for uid:${uid}`,
   };
   if (email) body.email = email;
+  return body;
+}
 
+interface DraftOrderResponse {
+  draft_order: {
+    id: number;
+    invoice_url: string;
+    status: string;
+  };
+}
+
+async function fetchDraft(
+  draftId: number
+): Promise<DraftOrderResponse["draft_order"] | null> {
+  const { token, domain, apiVersion } = getShopifyConfig();
+  const res = await fetch(
+    `https://${domain}/admin/api/${apiVersion}/draft_orders/${draftId}.json`,
+    { headers: { "X-Shopify-Access-Token": token } }
+  );
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    console.error("[checkout] fetchDraft failed", res.status, await res.text());
+    return null;
+  }
+  const json = (await res.json()) as DraftOrderResponse;
+  return json.draft_order;
+}
+
+async function updateDraft(
+  draftId: number,
+  body: Record<string, unknown>
+): Promise<string | null> {
+  const { token, domain, apiVersion } = getShopifyConfig();
+  const res = await fetch(
+    `https://${domain}/admin/api/${apiVersion}/draft_orders/${draftId}.json`,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Access-Token": token,
+      },
+      body: JSON.stringify({ draft_order: body }),
+    }
+  );
+  if (!res.ok) {
+    console.error("[checkout] updateDraft failed", res.status, await res.text());
+    return null;
+  }
+  const json = (await res.json()) as DraftOrderResponse;
+  return json.draft_order.invoice_url;
+}
+
+async function createDraft(
+  body: Record<string, unknown>
+): Promise<{ id: number; invoiceUrl: string } | null> {
+  const { token, domain, apiVersion } = getShopifyConfig();
   const res = await fetch(
     `https://${domain}/admin/api/${apiVersion}/draft_orders.json`,
     {
@@ -95,15 +160,60 @@ async function createMemberDraftOrder(
       body: JSON.stringify({ draft_order: body }),
     }
   );
-
   if (!res.ok) {
     throw new Error(
       `Draft order creation failed ${res.status}: ${await res.text()}`
     );
   }
+  const json = (await res.json()) as DraftOrderResponse;
+  return { id: json.draft_order.id, invoiceUrl: json.draft_order.invoice_url };
+}
 
-  const json = (await res.json()) as { draft_order: { invoice_url: string } };
-  return json.draft_order.invoice_url;
+async function getOrCreateMemberDraftOrder(
+  uid: string,
+  cartItems: CartItemInput[],
+  email: string | undefined
+): Promise<string> {
+  const body = buildDraftOrderBody(cartItems, uid, email);
+  const userRef = adminDb.collection("users").doc(uid);
+  const userDoc = await userRef.get();
+  const data = userDoc.data() ?? {};
+
+  const cachedDraftId =
+    typeof data.shopify_open_draft_id === "number"
+      ? data.shopify_open_draft_id
+      : null;
+
+  // Try to reuse the cached draft if it's still OPEN
+  if (cachedDraftId) {
+    const existing = await fetchDraft(cachedDraftId);
+    if (existing && existing.status === "open") {
+      const invoiceUrl = await updateDraft(cachedDraftId, body);
+      if (invoiceUrl) {
+        console.log(
+          "[checkout] reused draft",
+          cachedDraftId,
+          "for uid",
+          uid
+        );
+        return invoiceUrl;
+      }
+    }
+    // Cached draft is gone or no longer open — clear the cache
+    if (!existing || existing.status !== "open") {
+      await userRef.set({ shopify_open_draft_id: null }, { merge: true });
+    }
+  }
+
+  // No reusable draft — create a new one
+  const created = await createDraft(body);
+  if (!created) throw new Error("Draft order creation returned null");
+  await userRef.set(
+    { shopify_open_draft_id: created.id },
+    { merge: true }
+  );
+  console.log("[checkout] created new draft", created.id, "for uid", uid);
+  return created.invoiceUrl;
 }
 
 export async function POST(request: NextRequest) {
@@ -117,7 +227,7 @@ export async function POST(request: NextRequest) {
   let checkoutUrl: string;
   let cartItems: CartItemInput[] = [];
   try {
-    const body = await request.json() as {
+    const body = (await request.json()) as {
       checkoutUrl?: string;
       cartItems?: CartItemInput[];
     };
@@ -144,7 +254,6 @@ export async function POST(request: NextRequest) {
         String(subs.status ?? "").toLowerCase() === "active";
       if (subActive) {
         tier = "access";
-        // Cache it so future requests skip this fallback
         await userRef.set({ tier: "access" }, { merge: true });
         console.log("[checkout] tier inferred from subscription and cached");
       }
@@ -153,7 +262,7 @@ export async function POST(request: NextRequest) {
     console.log("[checkout] uid:", uid, "tier:", tier, "cartItems:", cartItems.length);
 
     if (tier && tier !== "free" && cartItems.length > 0) {
-      const invoiceUrl = await createMemberDraftOrder(cartItems, email);
+      const invoiceUrl = await getOrCreateMemberDraftOrder(uid, cartItems, email);
       console.log("[checkout] draft order invoice_url:", invoiceUrl);
       return NextResponse.json({ checkoutUrl: invoiceUrl });
     }

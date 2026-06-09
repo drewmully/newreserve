@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ShopifyProduct } from "@/lib/shopify";
+import { trackEvent } from "@/lib/tracking";
 import {
   getInitialVariantSelection,
   resolveVariantBySelection,
@@ -47,6 +48,52 @@ export function ProductDetailClient({
         : product.images,
     [product, selection]
   );
+
+  // Fire proshop_product_viewed once on mount. Captures source (dashboard vs public)
+  // via referrer/path so we can attribute PDP traffic back to where members entered.
+  const viewedRef = useRef(false);
+  useEffect(() => {
+    if (viewedRef.current) return;
+    viewedRef.current = true;
+    let source: string = "direct";
+    try {
+      const ref = typeof document !== "undefined" ? document.referrer : "";
+      if (ref) {
+        const refUrl = new URL(ref);
+        if (refUrl.pathname.startsWith("/dashboard")) source = "dashboard-shop";
+        else if (refUrl.pathname.startsWith("/shop")) source = "public-shop";
+        else if (refUrl.pathname.startsWith("/account")) source = "account";
+        else if (refUrl.hostname && refUrl.hostname !== window.location.hostname) {
+          source = `external:${refUrl.hostname}`;
+        } else {
+          source = `internal:${refUrl.pathname}`;
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    trackEvent("proshop_product_viewed", {
+      properties: {
+        product_slug: product.slug,
+        variant_id: product.variantId,
+        name: product.name,
+        brand: product.brand,
+        collection: product.collection,
+        collection_handle: "reserve-pro-shop",
+        price: product.price,
+        reserve_price: product.reservePrice,
+        source,
+      },
+    });
+  }, [
+    product.slug,
+    product.variantId,
+    product.name,
+    product.brand,
+    product.collection,
+    product.price,
+    product.reservePrice,
+  ]);
 
   // Reset gallery to the first image whenever the color changes. We key the
   // gallery by the current color value so its internal activeIndex resets.

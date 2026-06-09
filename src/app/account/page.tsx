@@ -1124,10 +1124,10 @@ function OrdersSection({ orders }: { orders: OrdersState }) {
             Your history will appear here after your first purchase.
           </p>
           <Link
-            href="/home"
+            href="/dashboard?tab=shop"
             className="inline-flex items-center justify-center h-9 px-5 rounded-lg border border-taupe/20 text-xs font-medium tracking-wider uppercase text-charcoal/45 hover:border-forest/30 hover:text-forest transition-all duration-300"
           >
-            Browse Shop
+            Browse Pro Shop
           </Link>
         </div>
       </section>

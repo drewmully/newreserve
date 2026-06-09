@@ -33,7 +33,7 @@ import { trackEvent } from "@/lib/tracking";
 export function FirstBoxWelcomeDrawer() {
   const { email, username, fitProfile, completeOnboarding, onboardingProfile } =
     useMembership();
-  const [step, setStep] = useState<"intro" | "sizing">("intro");
+  const [step, setStep] = useState<"intro" | "sizing" | "done">("intro");
   const [shirt, setShirt] = useState(fitProfile.shirtSize || "M");
   const [gloveHand, setGloveHand] = useState(
     fitProfile.gloveHand || "Right"
@@ -68,6 +68,10 @@ export function FirstBoxWelcomeDrawer() {
       try {
         trackEvent("first_box_sized", { tier: "member" });
       } catch {}
+      // Advance to the hand-off step instead of closing the drawer.
+      // This is where we route new members straight into the Pro Shop —
+      // the single biggest lever for member engagement post-checkout.
+      setStep("done");
     } catch (err) {
       console.error("[FirstBoxWelcomeDrawer] submit failed", err);
       setError(
@@ -207,6 +211,54 @@ export function FirstBoxWelcomeDrawer() {
             </div>
           </>
         )}
+
+        {step === "done" && (
+          <>
+            <h2 className="font-serif text-2xl md:text-[2rem] text-obsidian leading-tight mb-3">
+              You&rsquo;re set, {username || "friend"}.
+            </h2>
+            <p className="text-sm text-obsidian/70 leading-relaxed mb-5">
+              Your next curation ships on its quarterly cadence. In the meantime,
+              your Pro Shop is open — Rhone, Greyson, Penfold, Quiet Golf and
+              more, at member pricing.
+            </p>
+            <ul className="space-y-2 mb-6 text-sm text-obsidian/70">
+              <li className="flex gap-2">
+                <span className="text-forest font-medium">•</span>
+                15% off every item, every day.
+              </li>
+              <li className="flex gap-2">
+                <span className="text-forest font-medium">•</span>
+                Ships separately from your curation.
+              </li>
+              <li className="flex gap-2">
+                <span className="text-forest font-medium">•</span>
+                Free returns within 30 days.
+              </li>
+            </ul>
+            <div className="flex flex-col gap-2">
+              <a
+                href="/dashboard?tab=shop&welcome=1"
+                onClick={() => {
+                  try {
+                    trackEvent("post_checkout_proshop_cta_clicked", {
+                      properties: { tier: "member", source: "first_box_drawer" },
+                    });
+                  } catch {}
+                }}
+                className="w-full text-center px-5 py-3.5 rounded-lg bg-forest text-bone text-sm font-medium hover:bg-forest/90 transition"
+              >
+                Browse the Pro Shop
+              </a>
+              <a
+                href="/home"
+                className="w-full text-center px-5 py-3 text-sm text-obsidian/60 hover:text-obsidian"
+              >
+                Maybe later
+              </a>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -287,10 +339,17 @@ export function AccessWelcomeBanner() {
             </p>
             <div className="flex flex-wrap gap-2">
               <a
-                href="/shop"
+                href="/dashboard?tab=shop&welcome=1"
+                onClick={() => {
+                  try {
+                    trackEvent("post_checkout_proshop_cta_clicked", {
+                      properties: { tier: "access", source: "access_banner" },
+                    });
+                  } catch {}
+                }}
                 className="inline-flex items-center px-4 py-2 rounded-lg bg-forest text-bone text-sm font-medium hover:bg-forest/90 transition"
               >
-                Browse the pro shop
+                Browse the Pro Shop
               </a>
               <button
                 type="button"

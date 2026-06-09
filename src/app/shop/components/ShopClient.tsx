@@ -19,6 +19,7 @@ import {
   resolveTieredPriceDisplay,
 } from "@/lib/productPricing";
 import { buildShopDisplayProducts } from "@/lib/shopDisplay";
+import { trackEvent } from "@/lib/tracking";
 
 /* Safe membership hook — returns null when used outside the provider (e.g. public /shop) */
 function useMembershipSafe() {
@@ -54,6 +55,26 @@ export function ShopGrid({
     description: string;
     image: string;
   } | null>(null);
+
+  // Fire proshop_view once on mount with the source context so we can
+  // measure dashboard-shop vs. public-shop entry rates.
+  useEffect(() => {
+    void trackEvent("proshop_view", {
+      properties: {
+        source_context: sourceContext,
+        product_count: products.length,
+      },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Fire proshop_brand_filter_changed when the user toggles brand <-> collection.
+  const handleViewChange = (next: "brand" | "collection") => {
+    setView(next);
+    void trackEvent("proshop_brand_filter_changed", {
+      properties: { view: next, source_context: sourceContext },
+    });
+  };
 
   const filteredProducts = buildShopDisplayProducts(products);
 
@@ -92,7 +113,7 @@ export function ShopGrid({
         {(["brand", "collection"] as const).map((mode) => (
           <button
             key={mode}
-            onClick={() => setView(mode)}
+            onClick={() => handleViewChange(mode)}
             className={`px-4 py-2 rounded-full text-xs tracking-wider uppercase transition-colors duration-200 cursor-pointer ${
               view === mode
                 ? "bg-forest text-bone"
@@ -386,6 +407,16 @@ function ProductTile({
           isPaid={isPaid}
           onAddToCart={async (item) => {
             if (!ctx) return;
+            void trackEvent("proshop_quick_add_clicked", {
+              properties: {
+                source_context: sourceContext,
+                product_slug: product.slug,
+                product_name: product.name,
+                brand: product.brand,
+                collection: product.collection,
+                price: product.price,
+              },
+            });
             await ctx.addToCart(item);
           }}
           idleClassName="absolute bottom-3 right-3 w-9 h-9 rounded-full flex items-center justify-center transition-all duration-300 cursor-pointer shadow-sm btn-press bg-forest text-bone opacity-0 group-hover:opacity-100 translate-y-1 group-hover:translate-y-0 hover:bg-forest-dark"
