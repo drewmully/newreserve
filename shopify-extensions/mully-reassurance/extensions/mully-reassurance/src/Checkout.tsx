@@ -17,9 +17,8 @@
 import {
   reactExtension,
   useApi,
+  useSubscription,
   BlockStack,
-  InlineStack,
-  Icon,
   Text,
   View,
   Divider,
@@ -30,66 +29,29 @@ import React from "react";
 const RESERVE_MEMBER_VARIANT = "47601025122496";
 const RESERVE_ACCESS_VARIANT = "47601025482944";
 
-type BulletKey =
-  | "rangefinder_gift"
-  | "ships_7_days"
-  | "free_exchanges"
-  | "cancel_after_q1"
-  | "renew_rate"
-  | "annual_drops"
-  | "partner_discounts"
-  | "cancel_anytime"
-  | "secure_checkout"
-  | "us_support";
-
 interface Bullet {
-  key: BulletKey;
-  icon:
-    | "success"
-    | "delivered"
-    | "discount"
-    | "calendar"
-    | "star"
-    | "gift"
-    | "lock"
-    | "chat";
+  key: string;
   text: string;
 }
 
 const MEMBER_BULLETS: Bullet[] = [
-  {
-    key: "rangefinder_gift",
-    icon: "gift",
-    text: "Rangefinder welcome gift — yours to keep",
-  },
-  { key: "ships_7_days", icon: "delivered", text: "Ships in 7 days" },
-  { key: "free_exchanges", icon: "success", text: "Free size exchanges" },
-  {
-    key: "cancel_after_q1",
-    icon: "calendar",
-    text: "Cancel anytime after your first quarter",
-  },
-  { key: "renew_rate", icon: "star", text: "96% of members renew" },
+  { key: "rangefinder_gift", text: "✓  Rangefinder welcome gift — yours to keep" },
+  { key: "ships_7_days", text: "✓  Ships in 7 days" },
+  { key: "free_exchanges", text: "✓  Free size exchanges" },
+  { key: "cancel_after_q1", text: "✓  Cancel anytime after your first quarter" },
+  { key: "renew_rate", text: "✓  96% of members renew" },
 ];
 
 const ACCESS_BULLETS: Bullet[] = [
-  {
-    key: "annual_drops",
-    icon: "star",
-    text: "Annual access to member-only drops",
-  },
-  {
-    key: "partner_discounts",
-    icon: "discount",
-    text: "Partner discounts on top golf brands",
-  },
-  { key: "cancel_anytime", icon: "calendar", text: "Cancel anytime" },
+  { key: "annual_drops", text: "✓  Annual access to member-only drops" },
+  { key: "partner_discounts", text: "✓  Partner discounts on top golf brands" },
+  { key: "cancel_anytime", text: "✓  Cancel anytime" },
 ];
 
 const GENERIC_BULLETS: Bullet[] = [
-  { key: "secure_checkout", icon: "lock", text: "Secure checkout" },
-  { key: "free_exchanges", icon: "success", text: "Free size exchanges" },
-  { key: "us_support", icon: "chat", text: "US-based support" },
+  { key: "secure_checkout", text: "✓  Secure checkout" },
+  { key: "free_exchanges", text: "✓  Free size exchanges" },
+  { key: "us_support", text: "✓  US-based support" },
 ];
 
 /**
@@ -117,7 +79,9 @@ function pickBullets(variantIds: string[]): {
 
 function Extension() {
   const { lines } = useApi<"purchase.checkout.cart-line-list.render-after">();
-  const cartLines = lines.current ?? [];
+  // In API 2026-04, `lines` is a SubscribableSignalLike. Read it via
+  // useSubscription so the component re-renders when the cart changes.
+  const cartLines = useSubscription(lines) ?? [];
 
   const variantIds = cartLines
     .map((line) => variantIdFromGid(line.merchandise?.id))
@@ -133,10 +97,7 @@ function Extension() {
         </Text>
         <Divider />
         {bullets.map((bullet) => (
-          <InlineStack key={bullet.key} spacing="tight" blockAlignment="center">
-            <Icon source={bullet.icon} size="small" />
-            <Text size="small">{bullet.text}</Text>
-          </InlineStack>
+          <Text key={bullet.key} size="small">{bullet.text}</Text>
         ))}
       </BlockStack>
     </View>
