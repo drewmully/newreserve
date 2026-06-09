@@ -13,7 +13,7 @@ Welcome to Reserve Access. You just made a great call.
 
 Here's what's unlocked for you starting now:
 
-* 15% off everything in the Pro Shop (auto-applied when you're signed in)
+* 15% off everything in the Pro Shop (auto-applied when you're signed in) — browse it here: https://mymully.com/dashboard?tab=shop
 
 * Free 2-day shipping on every order, no minimums
 
@@ -89,7 +89,9 @@ export const access_5: EmailTemplate = (firstName) => ({
 
 You've been on Access for about a month now. How's it going?
 
-Have you had a chance to explore the shop? Used the V1+ coaching? Connected with anyone in the Club network?
+Have you had a chance to explore the Pro Shop? Used the V1+ coaching? Connected with anyone in the Club network?
+
+If the shop slipped past you, this is where your 15% lives: https://mymully.com/dashboard?tab=shop
 
 I ask because I want to make sure you're getting real value. If there's anything that feels confusing or anything you wish worked differently, I want to know.
 

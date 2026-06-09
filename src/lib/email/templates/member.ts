@@ -66,6 +66,8 @@ You get paired with a PGA-certified instructor who can do swing analysis, create
 
 You can activate it in your Benefits tab. Takes about two minutes to set up.
 
+While your first curation is being built, the Pro Shop is open too — Rhone, Greyson, Penfold and more, 15% off at the member rate: https://mymully.com/dashboard?tab=shop
+
 What part of your game are you working on right now? Driver? Short game? Putting? Just curious.
 
 Drew`,
@@ -103,6 +105,8 @@ I'm always a little nervous sending these out because I want every box to feel l
 If you loved it, I'd be grateful if you shared a quick review or photo in the Community. It helps other members know what to expect and it helps us keep improving.
 
 And if anything missed the mark, please tell me. We adjust your profile each quarter based on your feedback so it only gets better.
+
+If you want to round it out before next quarter, the Pro Shop carries the same brands at your member rate: https://mymully.com/dashboard?tab=shop
 
 What was the standout item?
 

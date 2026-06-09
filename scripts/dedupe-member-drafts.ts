@@ -62,7 +62,7 @@ async function fetchAllOpenDrafts(): Promise<DraftOrder[]> {
     | null = `https://${SHOPIFY_STORE_DOMAIN}/admin/api/${API_VERSION}/draft_orders.json?status=open&limit=250`;
 
   while (url) {
-    const res = await fetch(url, {
+    const res: Response = await fetch(url, {
       headers: { "X-Shopify-Access-Token": SHOPIFY_ADMIN_TOKEN! },
     });
     if (!res.ok) {
