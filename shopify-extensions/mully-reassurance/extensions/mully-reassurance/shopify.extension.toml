@@ -1,0 +1,22 @@
+# Mully reassurance bullets extension.
+#
+# Renders trust bullets in the Shopify Plus checkout cart summary panel,
+# right under the line items. Content is product-aware: Reserve Member shows
+# quarterly-specific copy, Reserve Access shows annual-specific copy.
+
+api_version = "2025-01"
+
+[[extensions]]
+name = "mully-reassurance"
+handle = "mully-reassurance"
+type = "ui_extension"
+
+  [[extensions.targeting]]
+  module = "./src/Checkout.tsx"
+  target = "purchase.checkout.cart-line-list.render-after"
+
+  [extensions.capabilities]
+  # No network access needed — copy is fully local.
+  network_access = false
+  block_progress = false
+  api_access = true

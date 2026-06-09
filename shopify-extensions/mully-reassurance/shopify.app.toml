@@ -1,0 +1,25 @@
+# Shopify app config for Mully Internal Extensions.
+# After `shopify app dev` first run, the CLI will fill in `client_id` for you.
+# Keep this file checked in so re-deploys from any machine pick up the same app.
+
+name = "Mully Internal Extensions"
+handle = "mully-internal-extensions"
+application_url = "https://www.mymully.com"
+embedded = false
+
+[access_scopes]
+# UI extensions don't need OAuth scopes — they run in checkout. We declare an
+# empty scopes string so the CLI doesn't prompt during init.
+scopes = ""
+
+[auth]
+redirect_urls = ["https://www.mymully.com/api/shopify/callback"]
+
+[webhooks]
+api_version = "2025-01"
+
+[pos]
+embedded = false
+
+[build]
+include_config_on_deploy = true
