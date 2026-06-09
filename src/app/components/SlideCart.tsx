@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useMembership } from "../context/MembershipContext";
 import { trackEvent } from "@/lib/tracking";
 import { MEMBER_DISCOUNT_RATE } from "@/lib/shopify";
@@ -20,88 +20,78 @@ export function SlideCart() {
   } = useMembership();
   const isPaid = tier !== "free";
 
-  const checkoutSourceKey = useMemo(
-    () =>
-      [
-        cartCheckoutUrl ?? "",
-        user?.uid ?? "guest",
-        ...cart.map((item) =>
-          [
-            item.variantId ?? item.slug,
-            item.quantity,
-            item.price,
-            item.retailPrice ?? "",
-          ].join(":")
-        ),
-      ].join("|"),
-    [cart, cartCheckoutUrl, user?.uid]
-  );
-  const [checkoutHref, setCheckoutHref] = useState<{
-    href: string;
-    sourceKey: string;
-  } | null>(null);
+  // Loading state for the checkout button. The draft-order round-trip now
+  // happens on click (not on every cart change) so we show a spinner during
+  // the round-trip and then navigate.
+  const [checkoutPending, setCheckoutPending] = useState(false);
 
-  useEffect(() => {
-    if (!cartCheckoutUrl) {
+  function buildReturnUrl(baseUrl: string): string {
+    try {
+      const url = new URL(baseUrl);
+      url.searchParams.set("return_url", `${window.location.origin}/account`);
+      return url.toString();
+    } catch {
+      const sep = baseUrl.includes("?") ? "&" : "?";
+      return `${baseUrl}${sep}return_url=${encodeURIComponent(`${window.location.origin}/account`)}`;
+    }
+  }
+
+  async function handleCheckoutClick(
+    event: React.MouseEvent<HTMLButtonElement>
+  ) {
+    event.preventDefault();
+    if (!cartCheckoutUrl || checkoutPending) return;
+
+    void trackEvent("checkout_clicked", {
+      properties: {
+        cart_total: cartTotal,
+        cart_items: cart.length,
+        currency: "USD",
+      },
+    });
+
+    const fallbackUrl = buildReturnUrl(cartCheckoutUrl);
+
+    // Free tier or signed-out user: skip the API and use the plain Storefront URL.
+    if (!user || !isPaid) {
+      window.location.assign(fallbackUrl);
       return;
     }
 
-    let cancelled = false;
+    setCheckoutPending(true);
+    try {
+      const token = await user.getIdToken();
+      const cartItems = cart
+        .filter((item) => item.variantId && item.quantity >= 1)
+        .map((item) => ({
+          variantId: item.variantId!,
+          quantity: item.quantity,
+          retailPrice: item.retailPrice ?? item.price,
+        }));
 
-    const buildCheckoutUrl = async () => {
-      let baseUrl = cartCheckoutUrl;
-      try {
-        const url = new URL(baseUrl);
-        url.searchParams.set("return_url", `${window.location.origin}/account`);
-        baseUrl = url.toString();
-      } catch {
-        const sep = baseUrl.includes("?") ? "&" : "?";
-        baseUrl = `${baseUrl}${sep}return_url=${encodeURIComponent(`${window.location.origin}/account`)}`;
-      }
-
-      if (!user) {
-        if (!cancelled) setCheckoutHref({ href: baseUrl, sourceKey: checkoutSourceKey });
+      const res = await fetch("/api/shopify/checkout", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ checkoutUrl: fallbackUrl, cartItems }),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { checkoutUrl: string; error?: string };
+        window.location.assign(data.checkoutUrl ?? fallbackUrl);
         return;
       }
-
-      try {
-        const token = await user.getIdToken();
-        const cartItems = cart
-          .filter((item) => item.variantId && item.quantity >= 1)
-          .map((item) => ({
-            variantId: item.variantId!,
-            quantity: item.quantity,
-            retailPrice: item.retailPrice ?? item.price,
-          }));
-
-
-        const res = await fetch("/api/shopify/checkout", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ checkoutUrl: baseUrl, cartItems }),
-        });
-        if (res.ok) {
-          const data = await res.json() as { checkoutUrl: string; error?: string };
-          if (!cancelled) setCheckoutHref({ href: data.checkoutUrl, sourceKey: checkoutSourceKey });
-          return;
-        }
-        console.error("[SlideCart] checkout API error:", res.status, await res.text());
-      } catch {
-        // Fall through to plain URL
-      }
-
-      if (!cancelled) setCheckoutHref({ href: baseUrl, sourceKey: checkoutSourceKey });
-    };
-
-    void buildCheckoutUrl();
-    return () => { cancelled = true; };
-  }, [cart, cartCheckoutUrl, checkoutSourceKey, user]);
-
-  const resolvedCheckoutHref =
-    checkoutHref?.sourceKey === checkoutSourceKey ? checkoutHref.href : null;
+      console.error("[SlideCart] checkout API error:", res.status, await res.text());
+    } catch (err) {
+      console.error("[SlideCart] checkout click failed:", err);
+    } finally {
+      // If we successfully redirected the navigation already happened; this
+      // only runs if something failed and we fall through to the fallback.
+      setCheckoutPending(false);
+    }
+    window.location.assign(fallbackUrl);
+  }
 
   useEffect(() => {
     if (!cartOpen) return;
@@ -366,30 +356,25 @@ export function SlideCart() {
               )}
             </div>
 
-            {resolvedCheckoutHref ? (
-              <a
-                href={resolvedCheckoutHref}
-                onClick={() => {
-                  void trackEvent("checkout_clicked", {
-                    properties: {
-                      cart_total: cartTotal,
-                      cart_items: cart.length,
-                      currency: "USD",
-                    },
-                  });
-                }}
-                className="w-full h-12 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer btn-press flex items-center justify-center"
-              >
-                Go to Checkout
-              </a>
-            ) : (
-              <button
-                disabled
-                className="w-full h-12 rounded-xl bg-forest/50 text-bone text-sm font-medium tracking-wider uppercase cursor-not-allowed flex items-center justify-center"
-              >
-                Go to Checkout
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={handleCheckoutClick}
+              disabled={!cartCheckoutUrl || checkoutPending}
+              className={
+                cartCheckoutUrl && !checkoutPending
+                  ? "w-full h-12 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300 cursor-pointer btn-press flex items-center justify-center"
+                  : "w-full h-12 rounded-xl bg-forest/50 text-bone text-sm font-medium tracking-wider uppercase cursor-not-allowed flex items-center justify-center"
+              }
+            >
+              {checkoutPending ? (
+                <span className="flex items-center gap-2">
+                  <span className="w-4 h-4 border-2 border-bone/40 border-t-bone rounded-full animate-spin" />
+                  Preparing checkout…
+                </span>
+              ) : (
+                "Go to Checkout"
+              )}
+            </button>
 
             <button
               onClick={() => setCartOpen(false)}
