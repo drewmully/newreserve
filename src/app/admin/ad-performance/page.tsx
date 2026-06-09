@@ -71,11 +71,28 @@ interface Benchmarks {
   cost_per_purchase: BenchmarkBand;
 }
 
+interface MetaSnapshot {
+  snapshot_date: string;
+  ad_account_id: string;
+  campaign_id: string;
+  campaign_name: string | null;
+  adset_id: string;
+  adset_name: string | null;
+  impressions: number;
+  clicks: number;
+  reach: number;
+  spend_cents: number;
+  initiate_checkouts: number;
+  purchases: number;
+  purchase_revenue_cents: number;
+}
+
 interface ApiPayload {
   start: string;
   end: string;
   snapshots: Snapshot[];
   keywords: Keyword[];
+  meta_snapshots?: MetaSnapshot[];
   ad_group_map: Record<string, { campaign_slug: string; ad_group_slug: string }>;
   benchmarks: Benchmarks;
 }
@@ -734,6 +751,12 @@ export default function AdPerformancePage() {
 
       {tab === "paid" ? (
         <>
+      {/* Meta Ads strip — sits above Google so spend totals line up with the
+          ad platform the user is most-likely actively monitoring. Hidden
+          entirely when no Meta snapshots exist (table empty or API not yet
+          authorized). */}
+      <MetaAdsSection metaSnapshots={data?.meta_snapshots ?? []} />
+
       {/* Campaign filter pills */}
       <div className="max-w-[1400px] mx-auto mb-6 flex items-center gap-2 flex-wrap">
         <FilterPill
@@ -1019,6 +1042,173 @@ function Kpi({
         {value}
       </div>
       {sub ? <div className="text-[10px] text-zinc-500 mt-0.5">{sub}</div> : null}
+    </div>
+  );
+}
+
+/**
+ * Compact Meta Ads strip — sits above the Google funnel. Read-only summary
+ * of spend, delivery, IC, and purchases pulled from Meta Marketing API.
+ *
+ * Hidden when the snapshot table is empty (Drew hasn't authorized ads_read
+ * yet, or the cron hasn't run yet, or we're outside any window with spend).
+ * Showing an empty Meta panel would just confuse the eye when Google data
+ * is already crowded.
+ */
+function MetaAdsSection({ metaSnapshots }: { metaSnapshots: MetaSnapshot[] }) {
+  if (!metaSnapshots || metaSnapshots.length === 0) return null;
+
+  // Aggregate across the window. Per-ad-set drill-down can come later — today
+  // Drew just needs a top-line sanity check against the Meta UI.
+  const totals = metaSnapshots.reduce(
+    (acc, r) => ({
+      impressions: acc.impressions + (r.impressions || 0),
+      clicks: acc.clicks + (r.clicks || 0),
+      spend_cents: acc.spend_cents + (r.spend_cents || 0),
+      initiate_checkouts: acc.initiate_checkouts + (r.initiate_checkouts || 0),
+      purchases: acc.purchases + (r.purchases || 0),
+      purchase_revenue_cents:
+        acc.purchase_revenue_cents + (r.purchase_revenue_cents || 0),
+    }),
+    {
+      impressions: 0,
+      clicks: 0,
+      spend_cents: 0,
+      initiate_checkouts: 0,
+      purchases: 0,
+      purchase_revenue_cents: 0,
+    }
+  );
+
+  const spend = totals.spend_cents / 100;
+  const ctr = pct(totals.clicks, totals.impressions);
+  const cpc = totals.clicks ? spend / totals.clicks : 0;
+  const costPerIc =
+    totals.initiate_checkouts > 0 ? spend / totals.initiate_checkouts : 0;
+  const costPerPurchase =
+    totals.purchases > 0 ? spend / totals.purchases : 0;
+  const ctlToIc = pct(totals.initiate_checkouts, totals.clicks);
+
+  // Per-ad-set rollup for the small table below the KPIs.
+  const adsetMap = new Map<
+    string,
+    {
+      adset_id: string;
+      adset_name: string;
+      campaign_name: string;
+      impressions: number;
+      clicks: number;
+      spend_cents: number;
+      initiate_checkouts: number;
+      purchases: number;
+    }
+  >();
+  for (const r of metaSnapshots) {
+    const key = r.adset_id;
+    const existing = adsetMap.get(key);
+    if (existing) {
+      existing.impressions += r.impressions || 0;
+      existing.clicks += r.clicks || 0;
+      existing.spend_cents += r.spend_cents || 0;
+      existing.initiate_checkouts += r.initiate_checkouts || 0;
+      existing.purchases += r.purchases || 0;
+    } else {
+      adsetMap.set(key, {
+        adset_id: r.adset_id,
+        adset_name: r.adset_name || "(unnamed)",
+        campaign_name: r.campaign_name || "(unknown)",
+        impressions: r.impressions || 0,
+        clicks: r.clicks || 0,
+        spend_cents: r.spend_cents || 0,
+        initiate_checkouts: r.initiate_checkouts || 0,
+        purchases: r.purchases || 0,
+      });
+    }
+  }
+  const adsetRows = Array.from(adsetMap.values()).sort(
+    (a, b) => b.spend_cents - a.spend_cents
+  );
+
+  return (
+    <div className="max-w-[1400px] mx-auto mb-8">
+      <div className="flex items-baseline gap-3 mb-3">
+        <h2 className="text-sm tracking-[0.16em] uppercase text-zinc-400">
+          Meta Ads
+        </h2>
+        <span className="text-[10px] text-zinc-600">
+          Pulled from Marketing API · IC counts are platform-reported
+          (browser+CAPI), not PostHog
+        </span>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3 mb-4">
+        <Kpi label="Spend" value={fmtMoney.format(spend)} />
+        <Kpi label="CTR" value={fmtPct(ctr, 2)} />
+        <Kpi label="Avg CPC" value={fmtMoney.format(cpc)} />
+        <Kpi
+          label="Initiate Checkout"
+          value={fmtInt.format(totals.initiate_checkouts)}
+          sub={costPerIc > 0 ? `${fmtMoneyWhole.format(costPerIc)} / IC` : undefined}
+        />
+        <Kpi label="Click → IC" value={fmtPct(ctlToIc, 1)} />
+        <Kpi
+          label="Purchases"
+          value={fmtInt.format(totals.purchases)}
+          sub={
+            costPerPurchase > 0
+              ? `${fmtMoneyWhole.format(costPerPurchase)} CAC`
+              : undefined
+          }
+        />
+      </div>
+      {adsetRows.length > 0 ? (
+        <div className="rounded-xl bg-zinc-900 ring-1 ring-zinc-800 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead className="text-[10px] tracking-[0.16em] uppercase text-zinc-500 bg-zinc-900/60">
+              <tr>
+                <Th align="left">Ad set</Th>
+                <Th align="left">Campaign</Th>
+                <Th align="right">Spend</Th>
+                <Th align="right">Impr.</Th>
+                <Th align="right">Clicks</Th>
+                <Th align="right">CTR</Th>
+                <Th align="right">IC</Th>
+                <Th align="right">$/IC</Th>
+                <Th align="right">Purch.</Th>
+                <Th align="right">CAC</Th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-800">
+              {adsetRows.map((a) => {
+                const aSpend = a.spend_cents / 100;
+                const aCtr = pct(a.clicks, a.impressions);
+                const aCpi =
+                  a.initiate_checkouts > 0 ? aSpend / a.initiate_checkouts : 0;
+                const aCac = a.purchases > 0 ? aSpend / a.purchases : 0;
+                return (
+                  <tr key={a.adset_id} className="hover:bg-zinc-800/40">
+                    <Td align="left">{a.adset_name}</Td>
+                    <Td align="left" className="text-zinc-500">
+                      {a.campaign_name}
+                    </Td>
+                    <Td align="right">{fmtMoney.format(aSpend)}</Td>
+                    <Td align="right">{fmtInt.format(a.impressions)}</Td>
+                    <Td align="right">{fmtInt.format(a.clicks)}</Td>
+                    <Td align="right">{fmtPct(aCtr, 2)}</Td>
+                    <Td align="right">{fmtInt.format(a.initiate_checkouts)}</Td>
+                    <Td align="right">
+                      {aCpi > 0 ? fmtMoneyWhole.format(aCpi) : "\u2014"}
+                    </Td>
+                    <Td align="right">{fmtInt.format(a.purchases)}</Td>
+                    <Td align="right">
+                      {aCac > 0 ? fmtMoneyWhole.format(aCac) : "\u2014"}
+                    </Td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -29,6 +29,10 @@
       "schedule": "45 11 * * *"
     },
     {
+      "path": "/api/admin/cron/meta-ads-spend",
+      "schedule": "50 11 * * *"
+    },
+    {
       "path": "/api/admin/cron/cash-sheet-pull",
       "schedule": "15 12 * * *"
     },

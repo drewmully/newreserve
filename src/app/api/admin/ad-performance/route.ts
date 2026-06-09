@@ -71,7 +71,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   }
 
   const sb = getSupabaseService();
-  const [snapsRes, kwRes] = await Promise.all([
+  const [snapsRes, kwRes, metaRes] = await Promise.all([
     sb
       .from("ad_performance_snapshots")
       .select("*")
@@ -83,6 +83,12 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       .select("*")
       .gte("snapshot_date", start)
       .lte("snapshot_date", end),
+    sb
+      .from("meta_ad_performance_snapshots")
+      .select("*")
+      .gte("snapshot_date", start)
+      .lte("snapshot_date", end)
+      .order("snapshot_date", { ascending: true }),
   ]);
 
   if (snapsRes.error) {
@@ -92,11 +98,16 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     );
   }
 
+  // Meta snapshots are best-effort — the table may be empty until Drew
+  // grants the Marketing API token `ads_read`. Surface what's there.
+  const metaSnapshots = metaRes.error ? [] : metaRes.data ?? [];
+
   return NextResponse.json({
     start,
     end,
     snapshots: snapsRes.data ?? [],
     keywords: kwRes.data ?? [],
+    meta_snapshots: metaSnapshots,
     ad_group_map: AD_GROUP_UTM_BY_ID,
     // Benchmarks are STEP-TO-STEP (each rate is % advancing from the PREVIOUS
     // stage, not from clicks). Cost-per bands are reverse-engineered from CAC:
