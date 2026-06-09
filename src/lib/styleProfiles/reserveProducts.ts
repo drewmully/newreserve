@@ -198,13 +198,16 @@ function toCard(raw: RawShopifyProduct, bucket: ProductBucket): ReserveProductCa
   const price = variant?.price ?? "0";
   const compareAt = variant?.compareAtPrice ?? null;
 
-  // Display logic: compareAt if it's higher (true retail), else variant price.
-  let displayCents = priceToCents(price);
+  // Display logic: show the actual selling price (variant.price) as the
+  // primary. If compareAt is meaningfully higher, surface it as the
+  // struck-through MSRP. We require a real delta (≥2%) so rounding noise
+  // or vendor-side data quirks (where compareAt was set equal to price)
+  // don't render "$98 $98" with a strike on an identical number.
+  const displayCents = priceToCents(price);
   let compareDisplay: string | null = null;
   const compareCents = priceToCents(compareAt);
-  if (compareCents > displayCents) {
+  if (compareCents > 0 && compareCents > displayCents * 1.02) {
     compareDisplay = formatCents(compareCents);
-    displayCents = compareCents;
   }
 
   const storeDomain = process.env.SHOPIFY_STORE_DOMAIN ?? "mullybox-store.myshopify.com";
