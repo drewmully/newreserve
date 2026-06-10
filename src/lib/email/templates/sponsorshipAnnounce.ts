@@ -48,21 +48,21 @@ Every member has a personal sponsorship code. Yours is:
 
 When a friend joins Reserve or Access through your code, you both get rewarded. The rewards stack as you bring in more people:
 
-  1 paid sponsorship   The First Dozen. A dozen Pro V1s to you, a dozen to them.
-  3 in 30 days         The Foursome. Private tee time at a Mully partner course, custom embroidered patches for the group, and a coordinated gear drop.
-  10 paid sponsorships  Path to Black. Guaranteed invitation to Reserve Black.
-  18 in a year         The 18. Comped trip of your choice, Pebble, Pinehurst, or wherever. Airfare and golf capped at $2,000.
+  • 1 paid sponsorship: The First Dozen. A dozen Pro V1s to you, a dozen to them.
+  • 3 in 30 days: The Foursome. Private tee time at a Mully partner course, custom embroidered patches for the group, and a coordinated gear drop.
+  • 10 paid sponsorships: Path to Black. Guaranteed invitation to Reserve Black.
+  • 18 in a year: The 18. Comped trip of your choice, Pebble, Pinehurst, or wherever. Airfare and golf capped at $2,000.
 
 Two ways to use it.
 
 Forward this link to a friend. It sets the attribution cookie automatically, you don't have to remember to tell them anything:
-${shareUrl}
+[Send my sponsorship link](${shareUrl})
 
 Or send them your code directly and they enter it at checkout:
 ${ctx.sponsorshipCode}
 
 Your full sponsorship board with progress, attributed orders, and badge status lives here:
-${boardUrl}
+[Open my sponsorship board](${boardUrl})
 
 If even one person in your foursome would actually use Reserve, this is the easiest dozen Pro V1s you'll ever earn. Reply if anything is broken or you have questions.
 
