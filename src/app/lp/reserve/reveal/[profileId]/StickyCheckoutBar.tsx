@@ -64,10 +64,10 @@ export function StickyCheckoutBar({
       <div className="mx-auto flex max-w-4xl items-center gap-4 px-4 py-3 sm:px-6 sm:py-4">
         <div className="hidden flex-1 sm:block">
           <div className="font-serif text-base text-forest">
-            Reserve — $250 / quarter
+            Reserve, $250 / quarter
           </div>
           <div className="text-xs text-charcoal/65">
-            {typicalRetail} typical retail · Rangefinder gift · Cancel anytime after Q1.
+            {typicalRetail} typical retail · Rangefinder gift · Cancel anytime after Q1 · Q3 locks June 30.
           </div>
         </div>
         <div className="flex-1 sm:max-w-xs">
