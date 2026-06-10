@@ -18,6 +18,7 @@ const NAV_LINKS: NavLink[] = [
   { href: "/ops", label: "Ops" },
   { href: "/admin/users", label: "Users" },
   { href: "/admin/gifts", label: "Gifts" },
+  { href: "/admin/intercom", label: "Intercom" },
   { href: "/admin/email-replies", label: "Reply queue" },
   { href: "/admin/registry", label: "Club Registry" },
 ];
