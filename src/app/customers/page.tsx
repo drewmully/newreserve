@@ -59,12 +59,47 @@ type OrderRow = {
   notes: string | null;
   line_items: LineItem[];
 };
+type FirestoreDocLike = { id: string; data: Record<string, unknown> };
+type CurationCommunication = {
+  thread_id: string | number | null;
+  channel: string | null;
+  subject: string | null;
+  topic_label: string | null;
+  outcome: string | null;
+  customer_intent_summary: string | null;
+  agent_action_summary: string | null;
+  thread_status: string | null;
+  thread_category: string | null;
+  thread_created_at: string | null;
+  last_message_at: string | null;
+  messages: Array<{
+    id: string | number;
+    direction: string | null;
+    channel: string | null;
+    body_text: string | null;
+    sent_at: string | null;
+  }>;
+  match_reason: "analysis" | "thread_category" | "message_body";
+};
+type Enrichment = {
+  firestore: {
+    customer: Record<string, unknown> | null;
+    user: Record<string, unknown> | null;
+    member_knowledge: Record<string, unknown> | null;
+    mulligan_submission: Record<string, unknown> | null;
+    email_replies: FirestoreDocLike[];
+    email_feedback: FirestoreDocLike[];
+    concierge_requests: FirestoreDocLike[];
+  };
+  communications: CurationCommunication[];
+};
 type Dossier = {
   customer_360: Record<string, unknown> & { id: number; email: string | null };
   customer_facts: Record<string, unknown> | null;
   subscriber: Record<string, unknown> | null;
   orders: OrderRow[];
   firestore: Record<string, unknown> | null;
+  enrichment?: Enrichment | null;
 };
 
 function fmtMoney(v: unknown) {
@@ -397,14 +432,17 @@ function Dossier({ dossier }: { dossier: Dossier }) {
         />
       </Section>
 
-      {/* Firestore */}
-      {dossier.firestore && (
-        <Section title="Firestore (raw)">
-          <pre className="text-xs bg-white border border-taupe/30 rounded p-3 overflow-x-auto">
-            {JSON.stringify(dossier.firestore, null, 2)}
-          </pre>
-        </Section>
-      )}
+      {/* Curation-relevant communications */}
+      <CurationCommsSection comms={dossier.enrichment?.communications ?? []} />
+
+      {/* Concierge / Mulligan / Member knowledge */}
+      <CurationRequestsSection enrichment={dossier.enrichment ?? null} />
+
+      {/* Inbound email replies — customer's own words */}
+      <EmailRepliesSection replies={dossier.enrichment?.firestore.email_replies ?? []} />
+
+      {/* Firestore raw — collapsed by default to avoid overwhelming the dossier */}
+      <FirestoreRawSection enrichment={dossier.enrichment ?? null} fallback={dossier.firestore} />
 
       {/* AI summary */}
       {c.ai_summary ? (
@@ -435,5 +473,268 @@ function KV({ label, value, multiline }: { label: string; value: string; multili
         {value || "—"}
       </div>
     </div>
+  );
+}
+
+// ── New enrichment renderers ──────────────────────────────────────────────────────────
+function fmtDateTime(v: unknown) {
+  if (!v) return "—";
+  const d = new Date(String(v));
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function asString(v: unknown): string {
+  if (v == null) return "";
+  if (typeof v === "string") return v;
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  try {
+    return JSON.stringify(v);
+  } catch {
+    return String(v);
+  }
+}
+
+function CurationCommsSection({ comms }: { comms: CurationCommunication[] }) {
+  if (comms.length === 0) {
+    return (
+      <Section title="Customer Communications (curation-relevant)">
+        <div className="text-sm text-charcoal/40">
+          No fit, sizing, color, brand, swap, or preference signals in recent threads.
+        </div>
+      </Section>
+    );
+  }
+  return (
+    <Section title={`Customer Communications (curation-relevant · ${comms.length})`}>
+      <ul className="divide-y divide-taupe/20">
+        {comms.map((c) => (
+          <li key={String(c.thread_id)} className="py-3 first:pt-0 last:pb-0">
+            <div className="flex items-baseline justify-between gap-3">
+              <div className="text-sm font-medium text-obsidian truncate">
+                {c.subject || c.topic_label || c.thread_category || "(no subject)"}
+              </div>
+              <div className="text-xs text-charcoal/50 shrink-0">
+                {fmtDateTime(c.last_message_at || c.thread_created_at)}
+              </div>
+            </div>
+            <div className="text-xs text-charcoal/60 mt-0.5 flex flex-wrap gap-x-2">
+              {c.channel && <span>{c.channel}</span>}
+              {c.thread_status && <span>· {c.thread_status}</span>}
+              {c.topic_label && <span>· topic: {c.topic_label}</span>}
+              {c.outcome && <span>· outcome: {c.outcome}</span>}
+              <span className="text-charcoal/40">· matched on {c.match_reason}</span>
+            </div>
+            {c.customer_intent_summary && (
+              <div className="text-xs mt-1 text-charcoal/80">
+                <span className="text-charcoal/40">intent:</span>{" "}
+                {c.customer_intent_summary}
+              </div>
+            )}
+            {c.agent_action_summary && (
+              <div className="text-xs text-charcoal/70">
+                <span className="text-charcoal/40">action:</span>{" "}
+                {c.agent_action_summary}
+              </div>
+            )}
+            {c.messages.length > 0 && (
+              <ul className="mt-2 pl-3 border-l-2 border-taupe/30 space-y-1.5">
+                {c.messages.map((m) => (
+                  <li key={String(m.id)} className="text-xs">
+                    <div className="flex items-center gap-2 text-charcoal/40">
+                      <span
+                        className={
+                          m.direction === "in"
+                            ? "text-forest font-medium"
+                            : "text-charcoal/60"
+                        }
+                      >
+                        {m.direction === "in" ? "customer" : "team"}
+                      </span>
+                      <span>· {fmtDateTime(m.sent_at)}</span>
+                    </div>
+                    <div className="text-charcoal/80 whitespace-pre-wrap mt-0.5">
+                      {m.body_text}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </li>
+        ))}
+      </ul>
+    </Section>
+  );
+}
+
+function CurationRequestsSection({ enrichment }: { enrichment: Enrichment | null }) {
+  const fs = enrichment?.firestore;
+  const concierge = fs?.concierge_requests ?? [];
+  const mulligan = fs?.mulligan_submission ?? null;
+  const knowledge = fs?.member_knowledge ?? null;
+  const feedback = fs?.email_feedback ?? [];
+
+  if (!concierge.length && !mulligan && !knowledge && !feedback.length) return null;
+
+  return (
+    <Section title="Concierge / Mulligan / Member Knowledge">
+      {knowledge && (
+        <div className="mb-3">
+          <div className="text-xs uppercase tracking-wide text-charcoal/40 mb-1">
+            Member knowledge
+          </div>
+          <pre className="text-xs bg-cream/50 border border-taupe/20 rounded p-2 overflow-x-auto whitespace-pre-wrap">
+            {JSON.stringify(knowledge, null, 2)}
+          </pre>
+        </div>
+      )}
+      {mulligan && (
+        <div className="mb-3">
+          <div className="text-xs uppercase tracking-wide text-charcoal/40 mb-1">
+            Mulligan submission
+          </div>
+          <pre className="text-xs bg-cream/50 border border-taupe/20 rounded p-2 overflow-x-auto whitespace-pre-wrap">
+            {JSON.stringify(mulligan, null, 2)}
+          </pre>
+        </div>
+      )}
+      {concierge.length > 0 && (
+        <div className="mb-3">
+          <div className="text-xs uppercase tracking-wide text-charcoal/40 mb-1">
+            Concierge requests ({concierge.length})
+          </div>
+          <ul className="space-y-2">
+            {concierge.map((doc) => {
+              const d = doc.data;
+              return (
+                <li key={doc.id} className="text-xs border border-taupe/20 rounded p-2 bg-white">
+                  <div className="flex justify-between text-charcoal/50">
+                    <span>{asString(d.subject) || "(no subject)"}</span>
+                    <span>{fmtDateTime(d.created_at)}</span>
+                  </div>
+                  <div className="text-charcoal/40 mt-0.5">
+                    {asString(d.status) || "pending"} · tier:{" "}
+                    {asString(d.tier) || "—"}
+                  </div>
+                  {asString(d.message) && (
+                    <div className="text-charcoal/80 mt-1 whitespace-pre-wrap">
+                      {asString(d.message)}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+      {feedback.length > 0 && (
+        <div>
+          <div className="text-xs uppercase tracking-wide text-charcoal/40 mb-1">
+            Email feedback ({feedback.length})
+          </div>
+          <ul className="space-y-1">
+            {feedback.slice(0, 10).map((doc) => {
+              const d = doc.data;
+              return (
+                <li key={doc.id} className="text-xs text-charcoal/70 flex gap-2">
+                  <span className="text-charcoal/40 shrink-0">
+                    {fmtDateTime(d.created_at)}
+                  </span>
+                  <span>{asString(d.label) || asString(d.rating) || asString(d.value) || "—"}</span>
+                  {asString(d.note) ? (
+                    <span className="text-charcoal/60">— {asString(d.note)}</span>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+    </Section>
+  );
+}
+
+function EmailRepliesSection({ replies }: { replies: FirestoreDocLike[] }) {
+  if (replies.length === 0) return null;
+  return (
+    <Section title={`Inbound Email Replies (${replies.length})`}>
+      <ul className="divide-y divide-taupe/20">
+        {replies.map((doc) => {
+          const d = doc.data;
+          const body = asString(d.replyText) || asString(d.rawText);
+          return (
+            <li key={doc.id} className="py-2 first:pt-0 last:pb-0">
+              <div className="flex justify-between items-baseline">
+                <div className="text-sm font-medium text-obsidian truncate">
+                  {asString(d.subject) || "(no subject)"}
+                </div>
+                <div className="text-xs text-charcoal/50 shrink-0">
+                  {fmtDateTime(d.createdAt)}
+                </div>
+              </div>
+              <div className="text-xs text-charcoal/60">
+                flow: {asString(d.flow) || "—"} · status:{" "}
+                {asString(d.status) || "—"}
+              </div>
+              {body && (
+                <div className="text-xs text-charcoal/80 mt-1 whitespace-pre-wrap">
+                  {body.length > 1000 ? body.slice(0, 1000) + "…" : body}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </Section>
+  );
+}
+
+function FirestoreRawSection({
+  enrichment,
+  fallback,
+}: {
+  enrichment: Enrichment | null;
+  fallback: Record<string, unknown> | null;
+}) {
+  const fs = enrichment?.firestore;
+  const customer = fs?.customer ?? fallback ?? null;
+  const user = fs?.user ?? null;
+  if (!customer && !user) return null;
+  return (
+    <Section title="Firestore (raw)">
+      <details>
+        <summary className="text-xs text-charcoal/50 cursor-pointer hover:text-charcoal">
+          Show raw customer / user docs
+        </summary>
+        <div className="mt-2 space-y-3">
+          {customer && (
+            <div>
+              <div className="text-xs uppercase tracking-wide text-charcoal/40 mb-1">
+                customers/{"{uid}"}
+              </div>
+              <pre className="text-xs bg-white border border-taupe/30 rounded p-3 overflow-x-auto">
+                {JSON.stringify(customer, null, 2)}
+              </pre>
+            </div>
+          )}
+          {user && (
+            <div>
+              <div className="text-xs uppercase tracking-wide text-charcoal/40 mb-1">
+                users/{"{uid}"}
+              </div>
+              <pre className="text-xs bg-white border border-taupe/30 rounded p-3 overflow-x-auto">
+                {JSON.stringify(user, null, 2)}
+              </pre>
+            </div>
+          )}
+        </div>
+      </details>
+    </Section>
   );
 }
