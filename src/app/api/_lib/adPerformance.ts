@@ -327,11 +327,14 @@ export async function fetchFunnelByUtm(
     "quiz_started",
     "quiz_completed",
     "quiz_email_captured",
-    "lp_subscription_checkout_clicked",
     "begin_checkout",
     "reveal_cta_clicked",
     "checkout_clicked",
   ];
+  // Note: lp_subscription_checkout_clicked was retired 2026-06-03 when the
+  // LP shifted from direct-to-checkout to quiz-first flow. Removed here to
+  // stop polluting the bucket with stale fires (last 7d: 2 fires).
+
   const eventList = events.map((e) => `'${e}'`).join(",");
   const mrSlugs = Object.values(AD_GROUP_UTM_BY_ID);
   const campaignSlugList = Array.from(new Set(mrSlugs.map((s) => `'${s.campaign_slug}'`))).join(",");
@@ -426,13 +429,10 @@ export async function fetchFunnelByUtm(
       case "quiz_started": row.quiz_started = n; break;
       case "quiz_completed": row.quiz_completed = n; break;
       case "quiz_email_captured": row.quiz_email_captured = n; break;
-      // Roll three checkout-intent events into one bucket: the original
-      // landing-page CTA (lp_subscription_checkout_clicked, retired 2026-06-03),
-      // the generic GA-style begin_checkout, and the modern reveal-page CTA
+      // Roll two checkout-intent events into one bucket: the generic
+      // GA-style begin_checkout and the modern reveal-page CTA
       // (reveal_cta_clicked, fires from the personalized reveal page that
-      // Meta and Resend cohorts hit). Without this, Meta/Resend traffic
-      // shows 0 checkouts because they never trip the old LP-CTA event.
-      case "lp_subscription_checkout_clicked": row.checkout_clicked += n; break;
+      // Meta and Resend cohorts hit).
       case "checkout_clicked": row.checkout_clicked += n; break;
       case "reveal_cta_clicked": row.reveal_cta_clicked += n; row.checkout_clicked += n; break;
       case "begin_checkout": row.begin_checkout = n; break;

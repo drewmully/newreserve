@@ -581,7 +581,7 @@ async function fetchPostHogFunnel(
         AND (
           event IN (
             'checkout_clicked',
-            'lp_subscription_checkout_clicked',
+            'reveal_cta_clicked',
             'checkout_started',
             '$checkout_started',
             'begin_checkout',
