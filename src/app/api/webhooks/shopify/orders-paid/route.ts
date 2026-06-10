@@ -273,9 +273,19 @@ export async function POST(request: NextRequest) {
       })
     );
 
+  // GA4 client_id, captured on the LP from the `_ga` cookie and round-
+  // tripped through Shopify checkout via cart note_attributes. When
+  // present, fireGA4 uses this as Measurement Protocol `client_id` so
+  // the server-side purchase event stitches onto the same GA4 user as
+  // the original LP pageview — preserving session_source / utm_source
+  // attribution. Without this, MP falls back to `anon-<uuid>` and the
+  // purchase lands in `(not set)` / `(direct)`.
+  const gaClientId = orderAttr("ga_client_id");
+
   const event = {
     event_name: "purchase" as const,
     user_id: purchaseDistinctId,
+    anonymous_id: gaClientId,
     email,
     ip: shopperIp,
     user_agent: order.client_details?.user_agent ?? undefined,
@@ -317,6 +327,7 @@ export async function POST(request: NextRequest) {
       utm_campaign: utmString("utm_campaign"),
       utm_content: utmString("utm_content"),
       utm_term: utmString("utm_term"),
+      ga_client_id: gaClientId,
     },
     timestamp: Math.floor(Date.now() / 1000),
   };

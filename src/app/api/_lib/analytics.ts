@@ -166,22 +166,51 @@ async function fireGA4(event: AnalyticsEvent): Promise<void> {
       ? event.segments.join(",")
       : undefined;
 
+  const props = event.properties ?? {};
+  const str = (k: string): string | undefined => {
+    const v = props[k];
+    return typeof v === "string" && v.length > 0 ? v : undefined;
+  };
+
+  // Resolve client_id with this priority:
+  //   1. event.anonymous_id (Shopify webhook sets this from note_attributes
+  //      ga_client_id — the GA4 client_id captured on the LP at first
+  //      pageview, so server-side purchase stitches to the LP session).
+  //   2. event.user_id (logged-in users)
+  //   3. anon-<uuid> (last resort — produces unattributed traffic)
+  const clientId =
+    event.anonymous_id ?? event.user_id ?? `anon-${crypto.randomUUID()}`;
+
+  // Surface campaign attribution at the GA4 event-param level. GA4
+  // recognizes `source`, `medium`, `campaign`, `term`, `content` as
+  // reserved param names and uses them to populate session_source /
+  // session_medium / session_campaign dimensions, even on server-side
+  // events delivered via Measurement Protocol. This is what flips
+  // (direct)/(none) to the real ad source on the purchase event.
+  const campaign = {
+    source: str("utm_source"),
+    medium: str("utm_medium"),
+    campaign: str("utm_campaign"),
+    term: str("utm_term"),
+    content: str("utm_content"),
+  };
+
   await fetch(
     `https://www.google-analytics.com/mp/collect?measurement_id=${measurementId}&api_secret=${apiSecret}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        client_id:
-          event.anonymous_id ??
-          event.user_id ??
-          `anon-${crypto.randomUUID()}`,
+        client_id: clientId,
         user_id: event.user_id,
         events: [
           {
             name: event.event_name,
             params: {
-              ...(event.properties ?? {}),
+              ...props,
+              ...Object.fromEntries(
+                Object.entries(campaign).filter(([, v]) => v !== undefined)
+              ),
               page_location: event.page_url,
               reserve_user_id: event.user_id,
               segment_tags: segmentTags,

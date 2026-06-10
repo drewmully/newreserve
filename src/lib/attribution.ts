@@ -30,6 +30,15 @@ export interface AttributionPayload {
   fbp?: string;
   /** Meta Pixel click identifier cookie (_fbc). Derived from fbclid. */
   fbc?: string;
+  /**
+   * GA4 client_id, derived from the `_ga` cookie set by gtag.js. Format on
+   * the wire is `GA1.1.<client>.<ts>`; we extract `<client>.<ts>` and use it
+   * as the Measurement Protocol `client_id` so server-side purchase events
+   * stitch onto the same GA4 user as the client-side LP pageview. Without
+   * this, MP falls back to `anon-<uuid>` and 132 of 139 purchases land in
+   * `(not set)` / `(direct)`.
+   */
+  ga_client_id?: string;
   utm_source?: string;
   utm_medium?: string;
   utm_campaign?: string;
@@ -62,6 +71,7 @@ const CART_FORWARDED_KEYS: (keyof AttributionPayload)[] = [
   ...URL_TRACKED_KEYS,
   "fbp",
   "fbc",
+  "ga_client_id",
 ];
 
 function readCookie(name: string): string | undefined {
@@ -90,6 +100,26 @@ function readMetaCookies(): { fbp?: string; fbc?: string } {
     fbp: readCookie("_fbp"),
     fbc: readCookie("_fbc"),
   };
+}
+
+/**
+ * Read the GA4 client_id from the `_ga` cookie set by gtag.js.
+ *
+ * `_ga` is formatted as `GA1.1.<client>.<ts>` (the leading `GA1.1.` is
+ * the version + domain depth prefix Google injects). The GA4 Measurement
+ * Protocol expects `client_id` to be the trailing `<client>.<ts>` portion,
+ * which is also exactly what client-side gtag uses internally — so MP
+ * stitches server-side events onto the same GA4 user.
+ */
+function readGaClientId(): string | undefined {
+  const raw = readCookie("_ga");
+  if (!raw) return undefined;
+  // Match GA1.<digit>.<client>.<ts> — strip the prefix, keep the rest.
+  const m = raw.match(/^GA\d\.\d\.(.+)$/);
+  if (m && m[1]) return m[1];
+  // Fall back to raw value if the format is unexpected — better to send
+  // SOMETHING than fall back to anon-<uuid>.
+  return raw;
 }
 
 function readParamsFromUrl(): AttributionPayload {
@@ -211,10 +241,12 @@ export function attributionToCartAttributes(
   // load, so the value at checkout time is more accurate than the one
   // captured at first landing.
   const meta = readMetaCookies();
+  const gaClientId = readGaClientId();
   const merged: AttributionPayload = {
     ...attr,
     fbp: meta.fbp ?? attr.fbp,
     fbc: meta.fbc ?? attr.fbc,
+    ga_client_id: gaClientId ?? attr.ga_client_id,
   };
 
   const out: Array<{ key: string; value: string }> = [];
