@@ -33,8 +33,13 @@ export function lapsedWinbackTemplate(
   ctx: LapsedWinbackContext,
 ): { subject: string; text: string } {
   const greeting = ctx.firstName ? `Hey ${ctx.firstName},` : "Hey,";
-  const reserveUrl = `${ctx.siteOrigin}/lp/reserve?utm_source=resend&utm_medium=email&utm_campaign=winback_jun26&discount=${DISCOUNT_CODE}`;
-  const accessUrl  = `${ctx.siteOrigin}/lp/reserve?plan=access&utm_source=resend&utm_medium=email&utm_campaign=winback_jun26&discount=${DISCOUNT_CODE}`;
+
+  // Single CTA URL. The link gets rendered with a short anchor label via the
+  // [label](url) markdown convention that toTrackableHtml understands. UTM
+  // params are appended automatically by sendPlainText's link rewriter, so we
+  // don't need to hand-stamp them here. We still surface `discount=` so the
+  // LP can pre-fill the code at checkout.
+  const reserveUrl = `${ctx.siteOrigin}/lp/reserve?discount=${DISCOUNT_CODE}`;
 
   const sponsorshipLine = ctx.sponsorshipCode
     ? `If you'd rather pass this to a friend, your sponsorship code is ${ctx.sponsorshipCode} and it earns you both a dozen Pro V1s when they join.`
@@ -52,13 +57,9 @@ Here's what's different now:
   • Members get first dibs on Pro Shop drops and member-only pricing
   • Sponsorship rewards: a dozen Pro V1s when you bring a friend, a private tee time when you bring three
 
-I'm giving you $${DISCOUNT_AMOUNT_USD} off your first quarter or your first year of Access with code ${DISCOUNT_CODE}.
+I'm giving you $${DISCOUNT_AMOUNT_USD} off your first quarter with code ${DISCOUNT_CODE}. That's $${249 - DISCOUNT_AMOUNT_USD} your first quarter, then $249/quarter after.
 
-Reserve Member (quarterly), $${249 - DISCOUNT_AMOUNT_USD} your first quarter, then $249/quarter:
-${reserveUrl}
-
-Mully Access (annual, no shipments), $${99 - DISCOUNT_AMOUNT_USD} your first year:
-${accessUrl}
+[Reactivate my Reserve membership](${reserveUrl})
 
 One thing to know: Q3 curation locks June 30. If you sign back up by then, you ship with the next quarter. After July 1 you'd land in Q4 instead, which is a longer wait than I'd want for someone coming back.
 
