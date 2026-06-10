@@ -40,7 +40,7 @@ export function lapsedWinbackTemplate(
     ? `If you'd rather pass this to a friend, your sponsorship code is ${ctx.sponsorshipCode} and it earns you both a dozen Pro V1s when they join.`
     : "";
 
-  const subject = "Reserve's changed since you left — come back for $50 + a rangefinder";
+  const subject = "Come back to Reserve. $50 off, plus the rangefinder still ships.";
 
   const text = `${greeting}
 
@@ -54,19 +54,19 @@ Here's what's different now:
 
 I'm giving you $${DISCOUNT_AMOUNT_USD} off your first quarter or your first year of Access with code ${DISCOUNT_CODE}.
 
-Reserve Member (quarterly) — $${249 - DISCOUNT_AMOUNT_USD} your first quarter, then $249/quarter:
+Reserve Member (quarterly), $${249 - DISCOUNT_AMOUNT_USD} your first quarter, then $249/quarter:
 ${reserveUrl}
 
-Mully Access (annual, no shipments) — $${99 - DISCOUNT_AMOUNT_USD} your first year:
+Mully Access (annual, no shipments), $${99 - DISCOUNT_AMOUNT_USD} your first year:
 ${accessUrl}
 
 One thing to know: Q3 curation locks June 30. If you sign back up by then, you ship with the next quarter. After July 1 you'd land in Q4 instead, which is a longer wait than I'd want for someone coming back.
 
 ${sponsorshipLine}
 
-If anything's off — wrong size on file, a previous bad experience, a billing question — just reply. I read every one.
+If anything's off, wrong size on file, a previous bad experience, a billing question, just reply. I read every one.
 
-— Drew
+Drew
 Founder, Mullybox
 
 P.S. Code ${DISCOUNT_CODE} expires June 30. One per customer.
