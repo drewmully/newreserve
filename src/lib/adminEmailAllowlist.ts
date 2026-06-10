@@ -2,6 +2,7 @@ const DEFAULT_ADMIN_EMAILS = [
   "drew@mullybox.com",
   "leo@mullybox.com",
   "jack@mullybox.com",
+  "joe@mullybox.com",
 ] as const;
 
 export function getAdminEmailAllowlist(serialized?: string | null): string[] {
