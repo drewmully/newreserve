@@ -221,7 +221,7 @@ export async function fetchOrganicFunnel(
     where e.timestamp >= '${start} 00:00:00'
       and e.timestamp <  '${end} 23:59:59'
       and e.event in ('lp_subscription_view','quiz_started','quiz_completed',
-                      'quiz_email_captured','lp_subscription_checkout_clicked',
+                      'quiz_email_captured','reveal_cta_clicked','checkout_clicked',
                       'begin_checkout')
       and ${ORGANIC_FILTER.replace(/properties\./g, "e.properties.")}
     group by date, rd, e.event
@@ -354,7 +354,10 @@ export async function fetchOrganicFunnel(
       case "quiz_email_captured":
         row.quiz_email_captured += count;
         break;
-      case "lp_subscription_checkout_clicked":
+      case "reveal_cta_clicked":
+        row.checkout_clicked += count;
+        break;
+      case "checkout_clicked":
         row.checkout_clicked += count;
         break;
       case "begin_checkout":

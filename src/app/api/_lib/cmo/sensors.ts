@@ -792,7 +792,7 @@ export async function collectIntent(
         WITH s AS (
           SELECT properties.$session_id AS sid,
                  argMin(properties.$device_type, timestamp) AS device,
-                 max(if(event IN ('checkout_clicked','lp_subscription_checkout_clicked','InitiateCheckout'), 1, 0)) AS checked_out,
+                 max(if(event IN ('checkout_clicked','reveal_cta_clicked','InitiateCheckout'), 1, 0)) AS checked_out,
                  countIf(event != 'page_view' AND event NOT LIKE '$%') AS engagement_events
           FROM events
           WHERE timestamp >= ${startDt}
@@ -861,7 +861,7 @@ export async function collectIntent(
         WITH s AS (
           SELECT properties.$session_id AS sid,
                  argMin(properties.utm_source, timestamp) AS utm_source,
-                 max(if(event IN ('checkout_clicked','lp_subscription_checkout_clicked','InitiateCheckout'), 1, 0)) AS checked_out
+                 max(if(event IN ('checkout_clicked','reveal_cta_clicked','InitiateCheckout'), 1, 0)) AS checked_out
           FROM events
           WHERE timestamp >= ${startDt}
             AND timestamp <  ${endDt}
