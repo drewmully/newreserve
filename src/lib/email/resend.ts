@@ -158,7 +158,23 @@ function toTrackableHtml(
   utmCampaign: string,
   utmContent: string | undefined
 ): string {
-  const escaped = text
+  // Step 1: extract markdown links `[label](url)` BEFORE escaping so the
+  // brackets/parens don't get HTML-escaped away. Replace with sentinels.
+  // After escaping we'll swap the sentinels for the final <a> tags. This
+  // lets template authors write short anchor text without giving up the
+  // single-source-of-truth body shared with the plain-text MIME part.
+  const mdLinks: Array<{ label: string; href: string; trailing: string }> = [];
+  const SENTINEL = "\u0000MDLINK\u0000";
+  const withSentinels = text.replace(
+    /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g,
+    (_full, label: string, rawUrl: string) => {
+      const { url, trailing } = rewriteFirstPartyUrl(rawUrl, utmCampaign, utmContent);
+      const idx = mdLinks.push({ label, href: url, trailing }) - 1;
+      return `${SENTINEL}${idx}${SENTINEL}`;
+    }
+  );
+
+  const escaped = withSentinels
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
@@ -173,7 +189,22 @@ function toTrackableHtml(
     }
   );
 
-  const paragraphs = linked
+  // Step 2: swap sentinels back for the markdown-link anchors.
+  const withMdLinks = linked.replace(
+    new RegExp(`${SENTINEL}(\\d+)${SENTINEL}`, "g"),
+    (_m, idxStr: string) => {
+      const link = mdLinks[Number(idxStr)];
+      if (!link) return "";
+      // Label is plain text from the template author. Escape HTML in it.
+      const safeLabel = link.label
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+      return `<a href="${link.href}" style="color:#2d5016">${safeLabel}</a>${link.trailing}`;
+    }
+  );
+
+  const paragraphs = withMdLinks
     .split(/\n\n+/)
     .map((p) => `<p style="margin:0 0 1em 0;line-height:1.6">${p.replace(/\n/g, "<br>")}</p>`)
     .join("");
@@ -193,7 +224,18 @@ function rewriteFirstPartyUrlsInPlainText(
   utmCampaign: string,
   utmContent: string | undefined
 ): string {
-  return text.replace(/https?:\/\/[^\s<>"]+/g, (matchedUrl) => {
+  // First, expand markdown links `[label](url)` to `label: url` so the
+  // plain-text MIME part stays readable for clients that don't render HTML.
+  // Label first, then the raw URL on the same line so a reader still sees
+  // the destination.
+  const expanded = text.replace(
+    /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g,
+    (_full, label: string, rawUrl: string) => {
+      const { url, trailing } = rewriteFirstPartyUrl(rawUrl, utmCampaign, utmContent);
+      return `${label}: ${url}${trailing}`;
+    }
+  );
+  return expanded.replace(/https?:\/\/[^\s<>"]+/g, (matchedUrl) => {
     const { url, trailing } = rewriteFirstPartyUrl(matchedUrl, utmCampaign, utmContent);
     return url + trailing;
   });
