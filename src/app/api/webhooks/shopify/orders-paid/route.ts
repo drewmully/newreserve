@@ -40,6 +40,7 @@ import {
   getFoundingHundredVariantGid,
 } from "@/lib/foundingHundred";
 import { processSponsorship } from "@/app/api/_lib/sponsorship";
+import { getSupabaseService } from "@/app/api/_lib/supabaseService";
 
 /**
  * Extracts the numeric variant id from the rangefinder variant GID env var,
@@ -183,15 +184,37 @@ interface ShopifyLineItem {
   price: string;
   sku: string | null;
   variant_id: number | null;
+  product_id: number | null;
+  vendor: string | null;
+  fulfillment_status: string | null;
+  requires_shipping: boolean;
+  taxable: boolean;
+  total_discount: string;
+  /** Survey/custom attributes from the purchase flow */
+  properties: Array<{ name: string; value: string }> | null;
 }
 
 interface ShopifyOrder {
   id: number;
   order_number: number;
+  name: string;
   email: string | null;
   phone: string | null;
   total_price: string;
+  subtotal_price: string;
+  total_tax: string;
+  total_shipping_price_set?: { shop_money?: { amount?: string } } | null;
+  total_discounts: string;
   currency: string;
+  financial_status: string | null;
+  fulfillment_status: string | null;
+  created_at: string;
+  processed_at: string | null;
+  cancelled_at: string | null;
+  source_name: string | null;
+  note: string | null;
+  discount_codes: Array<{ code: string }> | null;
+  tags: string;
   browser_ip?: string | null;
   client_details?: {
     browser_ip?: string | null;
@@ -202,9 +225,134 @@ interface ShopifyOrder {
     email: string | null;
     first_name?: string | null;
   };
+  shipping_address?: {
+    city?: string | null;
+    province?: string | null;
+    country?: string | null;
+  } | null;
+  billing_address?: {
+    city?: string | null;
+    province?: string | null;
+    country?: string | null;
+  } | null;
+  shipping_lines?: Array<{ title?: string | null }> | null;
   line_items: ShopifyLineItem[];
   /** Shopify carries cart attributes here on the order. */
   note_attributes?: Array<{ name: string; value: string }>;
+}
+
+// ─── Supabase persistence ─────────────────────────────────────────────────────
+
+/**
+ * Upserts the order and all its line items into Supabase.
+ * Runs after the webhook response is queued — non-fatal, never blocks 200.
+ *
+ * Line item `properties` array is flattened into a { key: value } JSONB
+ * object, matching the shape the backfill cron uses for customAttributes.
+ * This is what stg_shopify__customer_sizes reads for sizing data.
+ */
+async function persistOrderToSupabase(order: ShopifyOrder): Promise<void> {
+  try {
+    const sb = getSupabaseService();
+    const isSub = /subscription/i.test(order.tags ?? "");
+    const discountCode =
+      order.discount_codes?.[0]?.code ??
+      (order.note_attributes?.find((a) => a.name === "discount_code")?.value ?? null);
+
+    // ── Upsert order row ──────────────────────────────────────────────────
+    const { error: orderErr } = await sb.from("orders").upsert(
+      {
+        id: order.id,
+        name: order.name,
+        email: order.email ?? null,
+        financial_status: order.financial_status ?? null,
+        fulfillment_status: order.fulfillment_status ?? null,
+        total: order.total_price,
+        subtotal: order.subtotal_price ?? null,
+        shipping_amount:
+          order.total_shipping_price_set?.shop_money?.amount ?? null,
+        taxes: order.total_tax ?? null,
+        discount_code: discountCode,
+        discount_amount: order.total_discounts ?? null,
+        refunded_amount: 0,
+        currency: order.currency,
+        shipping_method: order.shipping_lines?.[0]?.title ?? null,
+        tags: order.tags || null,
+        source: order.source_name ?? null,
+        risk_level: null,
+        notes: order.note ?? null,
+        cancelled_at: order.cancelled_at ?? null,
+        paid_at: order.processed_at ?? null,
+        fulfilled_at: null,
+        created_at: order.created_at,
+        is_subscription: isSub,
+        shipping_city: order.shipping_address?.city ?? null,
+        shipping_province: order.shipping_address?.province ?? null,
+        shipping_country: order.shipping_address?.country ?? null,
+        billing_city: order.billing_address?.city ?? null,
+        billing_province: order.billing_address?.province ?? null,
+        billing_country: order.billing_address?.country ?? null,
+      },
+      { onConflict: "id" }
+    );
+
+    if (orderErr) {
+      console.error("[orders-paid] supabase order upsert failed:", orderErr.message);
+      return;
+    }
+
+    // ── Upsert line items ─────────────────────────────────────────────────
+    if (!order.line_items?.length) return;
+
+    const lineRows = order.line_items.map((li) => {
+      // Flatten properties array → { key: value } JSONB
+      const props: Record<string, string | null> = {};
+      for (const p of li.properties ?? []) {
+        if (p && typeof p.name === "string") props[p.name] = p.value ?? null;
+      }
+
+      return {
+        order_id: order.id,
+        // Shopify REST webhook uses numeric line item id; use gid-style for
+        // consistency with the backfill which uses the GraphQL Admin API.
+        // Both are unique per line item so either works as the conflict key.
+        shopify_line_id: `gid://shopify/LineItem/${li.id}`,
+        product_id: li.product_id ? String(li.product_id) : null,
+        variant_id: li.variant_id ? String(li.variant_id) : null,
+        variant_title: null,
+        product_type: null,
+        sku: li.sku ?? null,
+        title: li.title ?? null,
+        vendor: li.vendor ?? null,
+        quantity: li.quantity ?? 0,
+        price: li.price ?? null,
+        total_discount: li.total_discount ?? null,
+        fulfillment_status: li.fulfillment_status ?? null,
+        requires_shipping: li.requires_shipping ?? null,
+        selling_plan_id: null,
+        selling_plan_name: null,
+        taxable: li.taxable ?? null,
+        properties: Object.keys(props).length > 0 ? props : null,
+        raw: li,
+      };
+    });
+
+    const { error: liErr } = await sb
+      .from("order_line_items")
+      .upsert(lineRows, { onConflict: "shopify_line_id" });
+
+    if (liErr) {
+      console.error("[orders-paid] supabase line_items upsert failed:", liErr.message);
+      return;
+    }
+
+    console.log(
+      `[orders-paid] supabase persisted order=${order.id} line_items=${lineRows.length}`
+    );
+  } catch (err) {
+    // Never let a Supabase write failure affect the webhook 200 response.
+    console.error("[orders-paid] supabase persist threw:", err);
+  }
 }
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
@@ -273,13 +421,6 @@ export async function POST(request: NextRequest) {
       })
     );
 
-  // GA4 client_id, captured on the LP from the `_ga` cookie and round-
-  // tripped through Shopify checkout via cart note_attributes. When
-  // present, fireGA4 uses this as Measurement Protocol `client_id` so
-  // the server-side purchase event stitches onto the same GA4 user as
-  // the original LP pageview — preserving session_source / utm_source
-  // attribution. Without this, MP falls back to `anon-<uuid>` and the
-  // purchase lands in `(not set)` / `(direct)`.
   const gaClientId = orderAttr("ga_client_id");
 
   const event = {
@@ -292,9 +433,6 @@ export async function POST(request: NextRequest) {
     properties: {
       order_id: String(order.order_number),
       shopify_order_id: String(order.id),
-      // mully_txn_id is set on the LP at cart-creation time and round-trips
-      // through Shopify in note_attributes. Using it as transaction_id lets
-      // the client-side gtag fire on /auth/callback dedupe against this one.
       transaction_id: orderAttr("mully_txn_id") ?? String(order.order_number),
       shopify_customer_id: shopifyCustomerId,
       reserve_user_id: firebaseUid,
@@ -307,18 +445,9 @@ export async function POST(request: NextRequest) {
         price: parseFloat(item.price),
         variant_id: item.variant_id,
       })),
-      // Attribution carry-through — lets Google Ads / Meta CAPI credit the
-      // original ad click for this purchase even though it landed via a
-      // server-to-server Shopify webhook.
       gclid: utmString("gclid"),
       gbraid: utmString("gbraid"),
       wbraid: utmString("wbraid"),
-      // Meta Pixel browser identifiers — captured client-side from the
-      // _fbp/_fbc cookies on the LP and round-tripped through Shopify
-      // checkout via cart note_attributes. dispatchAnalyticsEvent reads
-      // these from event.properties and passes them into Meta CAPI's
-      // user_data block, bumping match quality from ~30% (hashed email/IP
-      // only) to ~80% (with browser identity).
       fbp: utmString("fbp"),
       fbc: utmString("fbc"),
       fbclid: utmString("fbclid"),
@@ -335,8 +464,6 @@ export async function POST(request: NextRequest) {
   const eventId = randomUUID();
 
   // ── Update Firestore user tier + trigger email flow ──────────────────────
-  // For gift orders we skip this entirely — the purchaser is not the
-  // member; the recipient becomes the member once they confirm sizing.
   const tierUpdate = email && !isGiftOrder(order.note_attributes)
     ? (async () => {
         const tier = resolveTierFromLineItems(order.line_items);
@@ -345,13 +472,11 @@ export async function POST(request: NextRequest) {
           const emailFlow = tier === "member" || tier === "black" ? "member" : "access";
 
           if (!purchaseUserDoc) {
-            // New user from pre-auth paid onboarding flow — create Firebase account + send magic link
             let uid: string;
             try {
               const newUser = await adminAuth.createUser({ email });
               uid = newUser.uid;
             } catch {
-              // User might already exist in Firebase Auth (edge case) — look them up
               try {
                 const existing = await adminAuth.getUserByEmail(email);
                 uid = existing.uid;
@@ -381,15 +506,11 @@ export async function POST(request: NextRequest) {
               to: email,
               subject: "Unlock your Mully account",
               text: `Hey${firstName ? ` ${firstName}` : ""},\n\nYour membership is confirmed. Click the link below to unlock your dashboard:\n\n${magicLink}\n\nSee you inside,\nDrew`,
-              // Single-use Firebase sign-in link: send text-only with no click/
-              // open tracking so mailbox link-scanners can't pre-consume the
-              // one-time oobCode ("This link has expired" bug).
               disableTracking: true,
             });
 
             await triggerEmailFlow(uid, email, firstName, emailFlow);
           } else {
-            // Existing user — update tier only
             const userDoc = purchaseUserDoc;
             const uid = userDoc.id;
             const userData = userDoc.data();
@@ -412,25 +533,6 @@ export async function POST(request: NextRequest) {
       })()
     : Promise.resolve();
 
-  // NOTE: This webhook intentionally does NOT swap the customer's Loop
-  // subscription product. The orders-paid webhook fires on every paid order,
-  // including recurring renewals, so resolving a tier here and swapping would
-  // silently migrate subscribers onto a different plan on every billing cycle
-  // — including grandfathered legacy (Back 9) subscribers, whose renewal line
-  // items resolve to the "member" tier for benefit purposes. The ONLY place a
-  // plan upgrade swap may occur is the reservecard-to-member cron, which acts
-  // exclusively on customers who explicitly chose selected_plan="member" in the
-  // reservecard form. See bug: legacy renewals auto-flipping subscribers to the
-  // Reserve Member plan at ~2am ET.
-
-  // ── Founding 100 claim: defense-in-depth.
-  // Only claim a slot if BOTH:
-  //   (a) the cart was tagged with the gift attribute (set at checkout creation), AND
-  //   (b) the rangefinder variant is actually present in the paid order's line_items.
-  // (b) defends against a customer removing the gift line from checkout — in
-  //     that case we do NOT burn a founding slot.
-  // Idempotent on order id via the ring-buffer in claimFoundingHundred,
-  // so webhook retries are safe.
   const foundingClaim = (async () => {
     try {
       const tagged = orderAttr(FOUNDING_100_CART_ATTR_KEY) === "true";
@@ -462,10 +564,6 @@ export async function POST(request: NextRequest) {
     }
   })();
 
-  // ── Sponsorship attribution ────────────────────────────────────────────
-  // If the cart carried a mully_sponsor attribute AND the order is a paid
-  // membership, attribute the sponsorship, evaluate badges, and fire emails.
-  // Idempotent on shopify_order_id. Never blocks the webhook response.
   const sponsorshipAttribution = (async () => {
     try {
       const result = await processSponsorship(order);
@@ -483,11 +581,6 @@ export async function POST(request: NextRequest) {
     }
   })();
 
-  // ── Mully Reserve: halt the abandoned-quiz nurture for this buyer ────────
-  // If this purchaser was running through the Reserve acquisition funnel
-  // (style quiz → reveal → checkout), flip their styleProfile(s) to
-  // `converted` and call completeSequence() on each so the email engine
-  // stops scheduling reserve-flow nudges. Idempotent + non-fatal.
   const reserveConversion = (async () => {
     if (!email) return;
     try {
@@ -507,7 +600,6 @@ export async function POST(request: NextRequest) {
     }
   })();
 
-  // ── Gift Phase 2: persist a gift_orders doc if this purchase was a gift ──
   const giftPersist = (async () => {
     try {
       if (!isGiftOrder(order.note_attributes)) return;
@@ -524,8 +616,6 @@ export async function POST(request: NextRequest) {
         return;
       }
 
-      // Don't double-create on webhook retries — Shopify retries trigger
-      // the dedupe path above, but belt-and-suspenders here.
       const giftDocId = String(order.id);
       await createGiftOrderDoc({
         shopify_order_id: giftDocId,
@@ -562,6 +652,10 @@ export async function POST(request: NextRequest) {
     foundingClaim,
     sponsorshipAttribution,
     reserveConversion,
+    // ── NEW: persist order + line items to Supabase ────────────────────────
+    // Runs in parallel with analytics so it never delays the 200 response.
+    // Non-fatal: all errors are caught inside persistOrderToSupabase.
+    persistOrderToSupabase(order),
   ]);
 
   // Shopify expects a 200 response quickly or it will retry
