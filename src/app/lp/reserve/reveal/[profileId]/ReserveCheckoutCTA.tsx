@@ -96,6 +96,24 @@ export function ReserveCheckoutCTA({
       });
     }
 
+    // Fired immediately before the redirect handoff. The gap between
+    // reveal_cta_clicked and checkout_redirect_started measures any
+    // checkout-build failures; the gap between this event and purchase
+    // measures the Shopify-side drop. Without these intermediate events
+    // we cannot tell which leg of the funnel is leaking.
+    trackEvent(
+      "checkout_redirect_started",
+      {
+        properties: {
+          profileId,
+          styleBucket,
+          tier: "member",
+          source: "lp_reveal",
+        },
+      },
+      { includeAuth: false }
+    ).catch(() => {});
+
     try {
       await createMembershipCheckout("member", {
         returnPath: "/auth/callback",
@@ -124,7 +142,7 @@ export function ReserveCheckoutCTA({
         disabled={loading}
         className="w-full rounded-md bg-ember py-4 text-base font-medium tracking-wide text-bone transition hover:bg-ember/90 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {loading ? "Opening checkout…" : "Start your Reserve — $250 / quarter"}
+        {loading ? "Opening checkout…" : "Claim my Q3 Reserve edit"}
       </button>
       {error && (
         <p className="mt-3 text-center text-sm text-red-700" role="alert">

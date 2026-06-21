@@ -73,7 +73,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export const metadata: Metadata = {
-  title: "Your Reserve edit — Mully",
+  title: "Your Reserve edit. Mully",
   description:
     "A quarterly golf apparel curation tailored to your style. Welcome-gift rangefinder included.",
   robots: { index: false, follow: false }, // personalized — keep out of indexes
@@ -184,6 +184,12 @@ export default async function ReserveRevealPage({ params }: PageProps) {
             <p className="mt-3 text-xs leading-relaxed text-charcoal/65">
               {typicalRetail} typical retail · Rangefinder welcome gift · Cancel anytime after Q1.
             </p>
+            <p className="mt-2 text-xs font-medium leading-relaxed text-ember">
+              Q3 curation locks June 30. Sign up after July 1 and your first edit ships in Q4.
+            </p>
+            <p className="mt-3 text-[11px] uppercase tracking-[0.18em] text-forest/70">
+              96% renewal rate · $300+ typical edit value
+            </p>
           </div>
         )}
       </section>
@@ -241,14 +247,14 @@ function EditGrid({ edit, bucketLabel }: { edit: RevealEdit; bucketLabel: string
       {accessories.length > 0 && (
         <SubBlock
           title="Recent accessories"
-          subtitle="The kind of piece that lives in your bag — your quarter will include one."
+          subtitle="The kind of piece that lives in your bag. Your quarter will include one."
         >
           <ProductRow products={accessories} />
         </SubBlock>
       )}
 
       <SubBlock
-        title="Welcome gift — rangefinder"
+        title="Welcome gift, rangefinder"
         subtitle="Included with your first quarter. Yours to keep, even if you cancel."
       >
         {rangefinder ? (
@@ -501,6 +507,9 @@ function CheckoutBlock({
       {/* One compact reassurance line. No secondary CTAs. */}
       <p className="mt-4 text-center text-xs leading-relaxed text-charcoal/65">
         Sizing confirmed after checkout · free shipping · cancel anytime after your first quarter · gift yours to keep.
+      </p>
+      <p className="mt-2 text-center text-xs font-medium leading-relaxed text-ember">
+        Q3 curation locks June 30. Sign up after July 1 and your first edit ships in Q4.
       </p>
     </section>
   );
