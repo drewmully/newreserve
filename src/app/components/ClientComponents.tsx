@@ -375,10 +375,31 @@ export function FloatingCTA() {
       if (res.ok && data?.exists === true) {
         sessionStorage.setItem(PENDING_SIGN_IN_EMAIL_KEY, email.trim());
         router.push("/login");
-      } else {
-        sessionStorage.setItem(PENDING_ONBOARDING_EMAIL_KEY, email.trim());
-        router.push("/onboarding");
+        return;
       }
+
+      // Not in Firebase Auth — might still be a legacy Loop subscriber.
+      // Ask Loop before routing to /onboarding.
+      try {
+        const loopRes = await fetch("/api/auth/check-loop-status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: email.trim() }),
+        });
+        if (loopRes.ok) {
+          const loopData = (await loopRes.json()) as { paid?: boolean };
+          if (loopData.paid === true) {
+            sessionStorage.setItem(PENDING_SIGN_IN_EMAIL_KEY, email.trim());
+            router.push("/login?paid_member=1");
+            return;
+          }
+        }
+      } catch {
+        // Fall through to onboarding on any error.
+      }
+
+      sessionStorage.setItem(PENDING_ONBOARDING_EMAIL_KEY, email.trim());
+      router.push("/onboarding");
     } catch {
       sessionStorage.setItem(PENDING_ONBOARDING_EMAIL_KEY, email.trim());
       router.push("/onboarding");

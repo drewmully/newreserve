@@ -54,12 +54,25 @@ export default function LoginPage() {
   const { sendOTPEmail, isSignedIn, authLoading, onboardingCompleted, completeOnboarding, setTier, email: contextEmail } = useMembership();
   const pendingOnboardingHandled = useRef(false);
 
-  // Detect email link synchronously on first render so we never flash the form
+  // Detect email link synchronously on first render so we never flash the form.
+  // Also honor ?paid_member=1 — that means the EmailCTA already triggered a
+  // magic-link email via /api/auth/check-loop-status, so we should land on
+  // the "check your inbox" screen instead of the email input.
+  const initialPaidMember =
+    typeof window !== "undefined" &&
+    (() => {
+      try {
+        return new URLSearchParams(window.location.search).get("paid_member") === "1";
+      } catch {
+        return false;
+      }
+    })();
+  const [isPaidMemberFlow] = useState<boolean>(initialPaidMember);
   const [step, setStep] = useState<Step>(() => {
     if (typeof window === "undefined") return "email";
-    return isSignInWithEmailLink(auth, window.location.href)
-      ? "confirming"
-      : "email";
+    if (isSignInWithEmailLink(auth, window.location.href)) return "confirming";
+    if (initialPaidMember) return "sent";
+    return "email";
   });
 
   const [emailValue, setEmailValue] = useState(() => {
@@ -376,9 +389,11 @@ export default function LoginPage() {
             <>
               <div className="text-center mb-8">
                 {logoBox}
-                <h1 className="font-serif text-2xl text-obsidian mb-1">Check your email</h1>
+                <h1 className="font-serif text-2xl text-obsidian mb-1">
+                  {isPaidMemberFlow ? "Welcome back" : "Check your email"}
+                </h1>
                 <p className="text-sm text-charcoal/45">
-                  We sent a sign‑in link to{" "}
+                  {isPaidMemberFlow ? "Your membership is active. " : ""}We sent a sign‑in link to{" "}
                   <strong className="text-obsidian font-medium">{emailValue}</strong>.
                 </p>
               </div>
