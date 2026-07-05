@@ -50,6 +50,8 @@ interface RawProduct {
   aboutBrandMeta: { value: string } | null;
   whyWeLikeItMeta: { value: string } | null;
   sizingMeta: { value: string } | null;
+  editorialHeadlineMeta: { value: string } | null;
+  editorialBodyMeta: { value: string } | null;
 }
 
 const PRODUCT_FIELDS = `
@@ -77,6 +79,8 @@ const PRODUCT_FIELDS = `
   aboutBrandMeta: metafield(namespace: "custom", key: "about_brand") { value }
   whyWeLikeItMeta: metafield(namespace: "custom", key: "why_we_like_it") { value }
   sizingMeta: metafield(namespace: "custom", key: "sizing") { value }
+  editorialHeadlineMeta: metafield(namespace: "custom", key: "editorial_headline") { value }
+  editorialBodyMeta: metafield(namespace: "custom", key: "editorial_body") { value }
 `;
 
 export interface EditorialProduct extends ShopifyProduct {
@@ -84,6 +88,16 @@ export interface EditorialProduct extends ShopifyProduct {
   publishedAt: string | null;
   /** Which collection this appeared in (first match wins on merge). */
   sourceHandle: string;
+  /**
+   * Short editorial hook shown on the card (Uncrate-style: 1 sentence).
+   * Sourced from Shopify metafield `custom.editorial_headline`.
+   */
+  editorialHeadline: string;
+  /**
+   * Longer editorial body for the PDP or future longform view. Multi-line.
+   * Sourced from Shopify metafield `custom.editorial_body`.
+   */
+  editorialBody: string;
 }
 
 function mapVariant(raw: RawVariant): ShopifyProductVariant {
@@ -130,6 +144,8 @@ function mapProduct(raw: RawProduct, sourceHandle: string): EditorialProduct {
     aboutBrand: raw.aboutBrandMeta?.value ?? "",
     whyWeLikeIt: raw.whyWeLikeItMeta?.value ?? "",
     sizing: raw.sizingMeta?.value ?? "",
+    editorialHeadline: raw.editorialHeadlineMeta?.value ?? "",
+    editorialBody: raw.editorialBodyMeta?.value ?? "",
     options,
     variants,
     variantId: defaultVariant?.id,

@@ -11,15 +11,17 @@
  *   - 1-2 sentence editorial excerpt
  *   - Quiet "Add to Cart" underline link
  *
- * Copy source order:
- *   1. `whyWeLikeIt` metafield
- *   2. First sentence of `description`
- *   3. Blank
+ * Copy source order (editorial voice only — never leak raw Shopify
+ * product description into the card):
+ *   1. `editorialHeadline` metafield (custom.editorial_headline)
+ *   2. `whyWeLikeIt` metafield  (custom.why_we_like_it)  — legacy fallback
+ *   3. Blank  — forces editorial discipline. If a product has no
+ *      editorial copy set, the card renders name + price only.
  */
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { EditorialProduct } from "@/lib/shopifyEditorial";
 import { resolveTieredPriceDisplay } from "@/lib/productPricing";
 import { useMembership } from "../../context/MembershipContext";
@@ -37,17 +39,22 @@ interface EditorialCardProps {
 }
 
 function excerpt(product: EditorialProduct): string {
+  // Editorial-only sources. Raw `product.description` is intentionally NOT
+  // a fallback — vendor copy is usually spec-sheet or marketing fluff and
+  // breaks the Uncrate-style voice we want on this page.
   const source =
-    product.whyWeLikeIt?.trim() || product.description?.trim() || "";
+    product.editorialHeadline?.trim() ||
+    product.whyWeLikeIt?.trim() ||
+    "";
   if (!source) return "";
-  if (source.length <= 140) return source;
-  const cut = source.slice(0, 140);
+  if (source.length <= 160) return source;
+  const cut = source.slice(0, 160);
   const lastStop = Math.max(
     cut.lastIndexOf(". "),
     cut.lastIndexOf("? "),
     cut.lastIndexOf("! ")
   );
-  return lastStop > 70 ? cut.slice(0, lastStop + 1) : cut.trimEnd() + "…";
+  return lastStop > 80 ? cut.slice(0, lastStop + 1) : cut.trimEnd() + "…";
 }
 
 function pad(n: number): string {
@@ -70,8 +77,26 @@ export function EditorialCard({
 
   const isPrivate = product.sourceCollections?.includes("private-releases");
   const primary = product.images[0];
-  const secondary = product.images[1] ?? product.images[0];
+  const secondaryRaw = product.images[1];
+  const hasSecondary = Boolean(secondaryRaw && secondaryRaw !== primary);
   const [hover, setHover] = useState(false);
+  // Only actually mount the secondary <Image> once the user hovers. Prevents
+  // paying for a second Shopify request per card on initial load.
+  const [everHovered, setEverHovered] = useState(false);
+
+  // Shopify CDN can synthesize a tiny blurred placeholder by appending a
+  // `width` param. 24px is ~1KB and gives us instant paint under a blur-up.
+  const blurUrl = useMemo(() => {
+    if (!primary) return undefined;
+    try {
+      const u = new URL(primary);
+      if (u.hostname === "cdn.shopify.com") {
+        u.searchParams.set("width", "24");
+        return u.toString();
+      }
+    } catch {}
+    return undefined;
+  }, [primary]);
 
   return (
     <article
@@ -83,7 +108,10 @@ export function EditorialCard({
       <Link
         href={`/shop/${product.slug}`}
         className="block relative aspect-square bg-[#f7f6f2] border border-charcoal/[0.08] overflow-hidden"
-        onMouseEnter={() => setHover(true)}
+        onMouseEnter={() => {
+          setHover(true);
+          if (hasSecondary) setEverHovered(true);
+        }}
         onMouseLeave={() => setHover(false)}
         onClick={() =>
           void trackEvent("editorial_card_click", {
@@ -101,25 +129,31 @@ export function EditorialCard({
             src={primary}
             alt={product.name}
             fill
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-            className={`object-contain p-6 md:p-8 transition-opacity duration-500 ${
-              hover && secondary && secondary !== primary
-                ? "opacity-0"
-                : "opacity-100"
+            // Tight sizes so the browser fetches the smallest usable width.
+            // Mobile is single column (100vw), tablet 2-col (50vw), desktop 3-col (~360px).
+            sizes="(max-width: 767px) 100vw, (max-width: 1023px) 50vw, 360px"
+            className={`object-contain p-5 md:p-6 transition-opacity duration-500 ${
+              hover && hasSecondary ? "opacity-0" : "opacity-100"
             }`}
+            // Only the first row above the fold is priority; everything else
+            // lazy-loads as it enters the viewport.
             priority={index < 3}
+            loading={index < 3 ? undefined : "lazy"}
+            placeholder={blurUrl ? "blur" : "empty"}
+            blurDataURL={blurUrl}
           />
         )}
-        {secondary && secondary !== primary && (
+        {hasSecondary && everHovered && (
           <Image
-            src={secondary}
+            src={secondaryRaw!}
             alt=""
             fill
-            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-            className={`object-contain p-6 md:p-8 transition-opacity duration-500 ${
+            sizes="(max-width: 767px) 100vw, (max-width: 1023px) 50vw, 360px"
+            className={`object-contain p-5 md:p-6 transition-opacity duration-500 ${
               hover ? "opacity-100" : "opacity-0"
             }`}
             aria-hidden
+            loading="lazy"
           />
         )}
 
