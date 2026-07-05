@@ -76,6 +76,7 @@ export function EditorialCard({
   );
 
   const isPrivate = product.sourceCollections?.includes("private-releases");
+  const isDestination = product.editorialCategory === "destinations";
   const primary = product.images[0];
   const secondaryRaw = product.images[1];
   const hasSecondary = Boolean(secondaryRaw && secondaryRaw !== primary);
@@ -105,6 +106,62 @@ export function EditorialCard({
       data-collection={product.collection}
     >
       {/* IMAGE TILE ─── */}
+      {isDestination ? (
+        <a
+          href={product.destinationUrl || "#"}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block relative aspect-square bg-[#f7f6f2] border border-charcoal/[0.08] overflow-hidden"
+          onMouseEnter={() => {
+            setHover(true);
+            if (hasSecondary) setEverHovered(true);
+          }}
+          onMouseLeave={() => setHover(false)}
+          onClick={() =>
+            void trackEvent("editorial_card_click", {
+              properties: {
+                product_slug: product.slug,
+                brand: product.brand,
+                ordinal,
+                index,
+                category: "destinations",
+              },
+            })
+          }
+        >
+          {primary && (
+            <Image
+              src={primary}
+              alt={product.name}
+              fill
+              sizes="(max-width: 767px) 100vw, (max-width: 1023px) 50vw, 360px"
+              className={`object-cover transition-opacity duration-500 ${
+                hover && hasSecondary ? "opacity-0" : "opacity-100"
+              }`}
+              priority={index < 3}
+              loading={index < 3 ? undefined : "lazy"}
+              placeholder={blurUrl ? "blur" : "empty"}
+              blurDataURL={blurUrl}
+            />
+          )}
+          {hasSecondary && everHovered && (
+            <Image
+              src={secondaryRaw!}
+              alt=""
+              fill
+              sizes="(max-width: 767px) 100vw, (max-width: 1023px) 50vw, 360px"
+              className={`object-cover transition-opacity duration-500 ${
+                hover ? "opacity-100" : "opacity-0"
+              }`}
+              aria-hidden
+              loading="lazy"
+            />
+          )}
+          <div className="absolute top-3 right-3 px-2 py-1 bg-forest text-bone text-[9px] tracking-[0.22em] uppercase">
+            Destination
+          </div>
+        </a>
+      ) : (
       <Link
         href={`/shop/${product.slug}`}
         className="block relative aspect-square bg-[#f7f6f2] border border-charcoal/[0.08] overflow-hidden"
@@ -163,6 +220,7 @@ export function EditorialCard({
           </div>
         )}
       </Link>
+      )}
 
       {/* COPY BLOCK — centered under image ─── */}
       <div className="pt-6 md:pt-7 text-center px-2">
@@ -171,15 +229,31 @@ export function EditorialCard({
         </div>
 
         <h2 className="font-sans text-[13px] md:text-[14px] font-semibold tracking-[0.08em] uppercase leading-[1.35] text-charcoal mb-2">
-          <Link
-            href={`/shop/${product.slug}`}
-            className="hover:text-forest transition-colors"
-          >
-            {product.name}
-          </Link>
+          {isDestination ? (
+            <a
+              href={product.destinationUrl || "#"}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-forest transition-colors"
+            >
+              {product.name}
+            </a>
+          ) : (
+            <Link
+              href={`/shop/${product.slug}`}
+              className="hover:text-forest transition-colors"
+            >
+              {product.name}
+            </Link>
+          )}
         </h2>
 
-        {/* Price line — retail slash reserve, Uncrate-style */}
+        {/* Price line — retail slash reserve, Uncrate-style. Hidden for destinations. */}
+        {isDestination ? (
+          <div className="text-[11px] tracking-[0.24em] uppercase text-charcoal/50 mb-4">
+            {product.collection || "Golf Resort"}
+          </div>
+        ) : (
         <div className="text-[13px] text-charcoal mb-4 flex items-baseline justify-center gap-1.5">
           {priceDisplay.compareAtPrice != null ? (
             <>
@@ -203,6 +277,7 @@ export function EditorialCard({
             <span>${priceDisplay.activePrice.toFixed(0)}</span>
           )}
         </div>
+        )}
 
         {excerpt(product) && (
           <p className="text-[13.5px] leading-[1.6] text-charcoal/70 max-w-[34ch] mx-auto mb-5">
@@ -210,6 +285,27 @@ export function EditorialCard({
           </p>
         )}
 
+        {isDestination ? (
+          <a
+            href={product.destinationUrl || "#"}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() =>
+              void trackEvent("editorial_destination_click", {
+                properties: {
+                  product_slug: product.slug,
+                  brand: product.brand,
+                  ordinal,
+                  index,
+                },
+              })
+            }
+            className="inline-flex items-center gap-2 text-[10px] tracking-[0.28em] uppercase text-charcoal/70 border-b border-charcoal/30 hover:border-charcoal hover:text-charcoal pb-1 transition-all"
+          >
+            <span>Visit Course</span>
+            <span aria-hidden>&rarr;</span>
+          </a>
+        ) : (
         <QuickAddToCartButton
           product={product}
           isPaid={isPaid}
@@ -240,6 +336,7 @@ export function EditorialCard({
           buttonAriaLabel={`Add ${product.name} to cart`}
           modalTitle={product.name}
         />
+        )}
       </div>
     </article>
   );

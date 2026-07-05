@@ -19,6 +19,7 @@
 import {
   PRO_SHOP_COLLECTION_HANDLE,
   PRIVATE_RELEASES_COLLECTION_HANDLE,
+  DESTINATIONS_COLLECTION_HANDLE,
   type ShopifyProduct,
   type ShopifyProductImage,
   type ShopifyProductOption,
@@ -52,6 +53,8 @@ interface RawProduct {
   sizingMeta: { value: string } | null;
   editorialHeadlineMeta: { value: string } | null;
   editorialBodyMeta: { value: string } | null;
+  editorialCategoryMeta: { value: string } | null;
+  destinationUrlMeta: { value: string } | null;
 }
 
 const PRODUCT_FIELDS = `
@@ -81,6 +84,8 @@ const PRODUCT_FIELDS = `
   sizingMeta: metafield(namespace: "custom", key: "sizing") { value }
   editorialHeadlineMeta: metafield(namespace: "custom", key: "editorial_headline") { value }
   editorialBodyMeta: metafield(namespace: "custom", key: "editorial_body") { value }
+  editorialCategoryMeta: metafield(namespace: "custom", key: "editorial_category") { value }
+  destinationUrlMeta: metafield(namespace: "custom", key: "destination_url") { value }
 `;
 
 export interface EditorialProduct extends ShopifyProduct {
@@ -98,6 +103,39 @@ export interface EditorialProduct extends ShopifyProduct {
    * Sourced from Shopify metafield `custom.editorial_body`.
    */
   editorialBody: string;
+  /**
+   * One of: 'tech' | 'style' | 'destinations' | 'course'.
+   * Drives the category filter on /lp/editorial.
+   */
+  editorialCategory: EditorialCategory | "";
+  /**
+   * For editorial_category='destinations' only. Outbound resort URL.
+   * The card renders "Visit Course" instead of Add to Cart when set.
+   */
+  destinationUrl: string;
+}
+
+export const EDITORIAL_CATEGORIES = [
+  "tech",
+  "style",
+  "destinations",
+  "course",
+] as const;
+export type EditorialCategory = (typeof EDITORIAL_CATEGORIES)[number];
+
+export const EDITORIAL_CATEGORY_LABELS: Record<EditorialCategory, string> = {
+  tech: "Tech",
+  style: "Style",
+  destinations: "Destinations",
+  course: "Course",
+};
+
+function normalizeCategory(raw: string | null | undefined): EditorialCategory | "" {
+  if (!raw) return "";
+  const v = raw.trim().toLowerCase();
+  return (EDITORIAL_CATEGORIES as readonly string[]).includes(v)
+    ? (v as EditorialCategory)
+    : "";
 }
 
 function mapVariant(raw: RawVariant): ShopifyProductVariant {
@@ -146,6 +184,8 @@ function mapProduct(raw: RawProduct, sourceHandle: string): EditorialProduct {
     sizing: raw.sizingMeta?.value ?? "",
     editorialHeadline: raw.editorialHeadlineMeta?.value ?? "",
     editorialBody: raw.editorialBodyMeta?.value ?? "",
+    editorialCategory: normalizeCategory(raw.editorialCategoryMeta?.value),
+    destinationUrl: raw.destinationUrlMeta?.value ?? "",
     options,
     variants,
     variantId: defaultVariant?.id,
@@ -216,20 +256,19 @@ async function fetchCollection(handle: string): Promise<EditorialProduct[]> {
  * both handles are recorded in `sourceCollections`.
  */
 export async function getEditorialFeed(): Promise<EditorialProduct[]> {
-  const settled = await Promise.allSettled([
-    fetchCollection(PRO_SHOP_COLLECTION_HANDLE),
-    fetchCollection(PRIVATE_RELEASES_COLLECTION_HANDLE),
-  ]);
+  const handles = [
+    PRO_SHOP_COLLECTION_HANDLE,
+    PRIVATE_RELEASES_COLLECTION_HANDLE,
+    DESTINATIONS_COLLECTION_HANDLE,
+  ];
+  const settled = await Promise.allSettled(handles.map(fetchCollection));
 
   const groups: EditorialProduct[][] = [];
   settled.forEach((result, i) => {
     if (result.status === "fulfilled") {
       groups.push(result.value);
     } else {
-      const handle = i === 0
-        ? PRO_SHOP_COLLECTION_HANDLE
-        : PRIVATE_RELEASES_COLLECTION_HANDLE;
-      console.error(`[EditorialFeed] "${handle}" failed:`, result.reason);
+      console.error(`[EditorialFeed] "${handles[i]}" failed:`, result.reason);
     }
   });
 

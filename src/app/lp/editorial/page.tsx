@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getEditorialFeed } from "@/lib/shopifyEditorial";
 import { EditorialHeader } from "./EditorialHeader";
-import { EditorialFeed } from "./EditorialFeed";
+import { EditorialShell } from "./EditorialShell";
+import { Mully8Hero } from "./Mully8Hero";
 
 /**
  * /lp/editorial
@@ -52,36 +53,32 @@ export default async function EditorialLandingPage() {
 
       {/* Push content below the fixed header (14/16 h). */}
       <main className="pt-14 md:pt-16">
-        {/* ─── HERO ─────────────────────────────────────────────────────── */}
-        <section className="px-6 md:px-8 pt-14 md:pt-20 pb-10 md:pb-16 max-w-3xl mx-auto text-center border-b border-charcoal/[0.08]">
-          <div className="text-[10px] tracking-[0.3em] uppercase text-charcoal/45 mb-4">
-            The Shelf &nbsp;·&nbsp; Curated by Mully
-          </div>
-          <h1 className="font-serif text-3xl md:text-5xl leading-[1.08] text-charcoal mb-5">
-            Golf goods{" "}
-            <span className="italic text-forest">most golfers</span>{" "}
-            haven't found yet.
-          </h1>
-          <p className="text-[14.5px] md:text-[15px] leading-[1.7] text-charcoal/65 max-w-md mx-auto">
-            Objects of desire &amp; tools of the trade, curated by Mully.
+        {/* ─── MULLY 8 HERO (rotating marquee, newest 8) ─────────────── */}
+        <Mully8Hero products={products} />
+
+        {/* ─── CATEGORY NAV + FEED (client shell owns filter state) ──── */}
+        <EditorialShell products={products} />
+
+        {/* ─── MULLY 100 CTA ─────────────────────────────────────────── */}
+        <section className="px-6 md:px-8 pb-24 max-w-3xl mx-auto text-center">
+          <div className="mx-auto h-px w-8 bg-charcoal/25 mb-6" />
+          <p className="font-serif italic text-forest text-lg mb-3">
+            Beyond the shelf.
           </p>
-
-          <div className="mt-7 flex items-center justify-center text-[10px] tracking-[0.28em] uppercase">
-            <Link
-              href="/lp/subscription"
-              className="inline-flex items-center gap-2 text-charcoal/55 hover:text-forest border-b border-charcoal/25 hover:border-forest pb-1 transition-all"
-            >
-              <span>Or: Curated Shipments</span>
-              <span aria-hidden>&rarr;</span>
-            </Link>
-          </div>
-        </section>
-
-        {/* ─── FEED ─────────────────────────────────────────────────────── */}
-        <section className="px-5 md:px-10 pt-12 md:pt-16 pb-20 md:pb-28">
-          <div className="max-w-6xl mx-auto">
-            <EditorialFeed products={products} />
-          </div>
+          <h2 className="font-serif text-2xl md:text-3xl text-charcoal mb-4">
+            The Mully 100
+          </h2>
+          <p className="text-[14px] leading-[1.7] text-charcoal/65 max-w-md mx-auto mb-6">
+            One hundred golf-adjacent picks we'd buy on Amazon this week. No
+            fluff, no filler, no sponsored placements.
+          </p>
+          <Link
+            href="/lp/mully100"
+            className="inline-flex items-center gap-2 text-[11px] tracking-[0.28em] uppercase text-charcoal border-b border-charcoal hover:text-forest hover:border-forest pb-1 transition-all"
+          >
+            <span>Browse the Mully 100</span>
+            <span aria-hidden>&rarr;</span>
+          </Link>
         </section>
       </main>
 

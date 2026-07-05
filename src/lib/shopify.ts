@@ -16,6 +16,9 @@ export const PRO_SHOP_COLLECTION_HANDLE =
 export const PRIVATE_RELEASES_COLLECTION_HANDLE =
   process.env.NEXT_PUBLIC_SHOPIFY_PRIVATE_RELEASES_COLLECTION_HANDLE ??
   "private-releases";
+export const DESTINATIONS_COLLECTION_HANDLE =
+  process.env.NEXT_PUBLIC_SHOPIFY_DESTINATIONS_COLLECTION_HANDLE ??
+  "destinations";
 
 function requireEnv(name: string, value: string | undefined): string {
   if (!value) {

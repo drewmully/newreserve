@@ -26,32 +26,50 @@
 
 import { useMemo, useState } from "react";
 import { useMembership } from "../../context/MembershipContext";
-import type { EditorialProduct } from "@/lib/shopifyEditorial";
+import type {
+  EditorialProduct,
+  EditorialCategory,
+} from "@/lib/shopifyEditorial";
 import { EditorialCard } from "./EditorialCard";
 import { AccessUpsell } from "./AccessUpsell";
 import { slugifyForId } from "./EditorialHeader";
 
 interface EditorialFeedProps {
   products: EditorialProduct[];
+  /** Filter to a single category. Omit or pass "all" to show everything. */
+  categoryFilter?: EditorialCategory | "all";
 }
 
-export function EditorialFeed({ products }: EditorialFeedProps) {
+export function EditorialFeed({
+  products,
+  categoryFilter = "all",
+}: EditorialFeedProps) {
   const { tier, isSignedIn, authLoading } = useMembership();
   const [upsellOpen, setUpsellOpen] = useState(false);
 
-  // Total product count — used to invert the ordinal so newer = higher.
-  // Product at index 0 in the newest-first feed is the "latest issue"
-  // and thus carries the maximum ordinal.
-  const total = products.length;
+  // Ordinal in the feed is computed from the FULL feed (not filtered), so a
+  // given product's № stays stable regardless of which filter is active.
+  const totalAll = products.length;
+  const ordinalBySlug = useMemo(() => {
+    const m = new Map<string, number>();
+    products.forEach((p, i) => m.set(p.slug, totalAll - i));
+    return m;
+  }, [products, totalAll]);
 
-  // First card index per brand / collection for menu jump anchors.
+  const filtered = useMemo(() => {
+    if (categoryFilter === "all") return products;
+    return products.filter((p) => p.editorialCategory === categoryFilter);
+  }, [products, categoryFilter]);
+
+  // First card index per brand / collection for menu jump anchors
+  // (over the filtered view, since that's what's rendered).
   const brandAnchors = useMemo(
-    () => firstIndexBy(products, (p) => p.brand),
-    [products]
+    () => firstIndexBy(filtered, (p) => p.brand),
+    [filtered]
   );
   const collectionAnchors = useMemo(
-    () => firstIndexBy(products, (p) => p.collection),
-    [products]
+    () => firstIndexBy(filtered, (p) => p.collection),
+    [filtered]
   );
 
   const handleGuestAdded = () => {
@@ -60,7 +78,7 @@ export function EditorialFeed({ products }: EditorialFeedProps) {
     setUpsellOpen(true);
   };
 
-  if (products.length === 0) {
+  if (filtered.length === 0) {
     return (
       <div className="max-w-md mx-auto text-center py-24">
         <p className="font-serif text-2xl text-forest mb-3">
@@ -83,9 +101,8 @@ export function EditorialFeed({ products }: EditorialFeedProps) {
           md:divide-x md:divide-charcoal/[0.06]
         "
       >
-        {products.map((product, i) => {
-          // Ordinal: newest (i=0) gets `total`, oldest (i=total-1) gets 1.
-          const ordinal = total - i;
+        {filtered.map((product, i) => {
+          const ordinal = ordinalBySlug.get(product.slug) ?? totalAll - i;
 
           const brandAnchor =
             brandAnchors[product.brand] === i

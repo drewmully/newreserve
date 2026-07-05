@@ -39,6 +39,18 @@ const nextConfig: NextConfig = {
         hostname: "*.myshopify.com",
         pathname: "/**",
       },
+      {
+        // Amazon product-image CDN — used by the Mully 100 (affiliate feed).
+        protocol: "https",
+        hostname: "m.media-amazon.com",
+        pathname: "/images/**",
+      },
+      {
+        // Amazon legacy image host, occasionally returned by product APIs.
+        protocol: "https",
+        hostname: "images-na.ssl-images-amazon.com",
+        pathname: "/images/**",
+      },
     ],
   },
 };
