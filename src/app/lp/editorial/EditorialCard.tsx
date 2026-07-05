@@ -1,16 +1,20 @@
 "use client";
 
 /**
- * One product = one editorial post.
+ * One editorial card — Uncrate-Supply pattern.
  *
- * The card is the whole story. Big image, single sentence of copy, a quiet
- * "Add" affordance. Mobile-first: image is full-bleed and square-ish, text
- * sits underneath. On desktop the image dominates 60% and text lives right.
+ * Structure (top to bottom, all centered):
+ *   - Bordered image tile, subtle backdrop, hover cross-fade to secondary
+ *   - Ordinal (small, uppercase, tracked)
+ *   - Product name (BOLD UPPERCASE, condensed line-height)
+ *   - Price line: retail  /  reserve (like "$198 / $138" on Uncrate sale)
+ *   - 1-2 sentence editorial excerpt
+ *   - Quiet "Add to Cart" underline link
  *
- * Copy sourcing (in order of preference):
- *   1. `whyWeLikeIt` metafield — the editorial voice from the Shopify admin.
- *   2. First 140 chars of `description` — fallback, still curated.
- *   3. Blank — we'd rather show nothing than filler.
+ * Copy source order:
+ *   1. `whyWeLikeIt` metafield
+ *   2. First sentence of `description`
+ *   3. Blank
  */
 
 import Image from "next/image";
@@ -24,7 +28,9 @@ import { trackEvent } from "@/lib/tracking";
 
 interface EditorialCardProps {
   product: EditorialProduct;
-  /** Ordinal position in the feed, for editorial numbering (01, 02…). */
+  /** Editorial issue number shown on the card. */
+  ordinal: number;
+  /** Ordinal position in the feed, used for analytics. */
   index: number;
   /** Fires when a guest adds — parent uses this to surface the Access upsell. */
   onGuestAddedToCart?: () => void;
@@ -34,18 +40,26 @@ function excerpt(product: EditorialProduct): string {
   const source =
     product.whyWeLikeIt?.trim() || product.description?.trim() || "";
   if (!source) return "";
-  if (source.length <= 160) return source;
-  // Cut on the last sentence-ending punctuation within 160.
-  const cut = source.slice(0, 160);
-  const lastStop = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("? "), cut.lastIndexOf("! "));
-  return lastStop > 80 ? cut.slice(0, lastStop + 1) : cut.trimEnd() + "…";
+  if (source.length <= 140) return source;
+  const cut = source.slice(0, 140);
+  const lastStop = Math.max(
+    cut.lastIndexOf(". "),
+    cut.lastIndexOf("? "),
+    cut.lastIndexOf("! ")
+  );
+  return lastStop > 70 ? cut.slice(0, lastStop + 1) : cut.trimEnd() + "…";
 }
 
-function ordinal(n: number): string {
-  return String(n + 1).padStart(2, "0");
+function pad(n: number): string {
+  return String(n).padStart(2, "0");
 }
 
-export function EditorialCard({ product, index, onGuestAddedToCart }: EditorialCardProps) {
+export function EditorialCard({
+  product,
+  ordinal,
+  index,
+  onGuestAddedToCart,
+}: EditorialCardProps) {
   const { tier, addToCart, isSignedIn } = useMembership();
   const isPaid = tier !== "free";
 
@@ -61,146 +75,137 @@ export function EditorialCard({ product, index, onGuestAddedToCart }: EditorialC
 
   return (
     <article
-      className="group relative"
-      // Data attributes let the feed section-jump find & scroll to us.
+      className="group flex flex-col"
       data-brand={product.brand}
       data-collection={product.collection}
     >
-      <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-10 items-start">
-        {/* IMAGE — full bleed on mobile, 7 cols on desktop */}
-        <Link
-          href={`/shop/${product.slug}`}
-          className="col-span-1 md:col-span-7 block relative overflow-hidden bg-bone-dark aspect-[4/5] md:aspect-[5/6]"
-          onMouseEnter={() => setHover(true)}
-          onMouseLeave={() => setHover(false)}
-          onClick={() =>
-            void trackEvent("editorial_card_click", {
+      {/* IMAGE TILE ─── */}
+      <Link
+        href={`/shop/${product.slug}`}
+        className="block relative aspect-square bg-[#f7f6f2] border border-charcoal/[0.08] overflow-hidden"
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+        onClick={() =>
+          void trackEvent("editorial_card_click", {
+            properties: {
+              product_slug: product.slug,
+              brand: product.brand,
+              ordinal,
+              index,
+            },
+          })
+        }
+      >
+        {primary && (
+          <Image
+            src={primary}
+            alt={product.name}
+            fill
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            className={`object-contain p-6 md:p-8 transition-opacity duration-500 ${
+              hover && secondary && secondary !== primary
+                ? "opacity-0"
+                : "opacity-100"
+            }`}
+            priority={index < 3}
+          />
+        )}
+        {secondary && secondary !== primary && (
+          <Image
+            src={secondary}
+            alt=""
+            fill
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            className={`object-contain p-6 md:p-8 transition-opacity duration-500 ${
+              hover ? "opacity-100" : "opacity-0"
+            }`}
+            aria-hidden
+          />
+        )}
+
+        {isPrivate && (
+          <div className="absolute top-3 right-3 px-2 py-1 bg-forest text-bone text-[9px] tracking-[0.22em] uppercase">
+            Private
+          </div>
+        )}
+      </Link>
+
+      {/* COPY BLOCK — centered under image ─── */}
+      <div className="pt-6 md:pt-7 text-center px-2">
+        <div className="text-[10px] tracking-[0.28em] uppercase text-charcoal/40 mb-3">
+          № {pad(ordinal)} &nbsp;·&nbsp; {product.brand}
+        </div>
+
+        <h2 className="font-sans text-[13px] md:text-[14px] font-semibold tracking-[0.08em] uppercase leading-[1.35] text-charcoal mb-2">
+          <Link
+            href={`/shop/${product.slug}`}
+            className="hover:text-forest transition-colors"
+          >
+            {product.name}
+          </Link>
+        </h2>
+
+        {/* Price line — retail slash reserve, Uncrate-style */}
+        <div className="text-[13px] text-charcoal mb-4 flex items-baseline justify-center gap-1.5">
+          {priceDisplay.compareAtPrice != null ? (
+            <>
+              <span className="text-charcoal/45 line-through">
+                ${priceDisplay.compareAtPrice.toFixed(0)}
+              </span>
+              <span className="text-charcoal/30">/</span>
+              <span className="text-ember font-medium">
+                ${priceDisplay.activePrice.toFixed(0)}
+              </span>
+            </>
+          ) : priceDisplay.memberPrice != null ? (
+            <>
+              <span>${priceDisplay.activePrice.toFixed(0)}</span>
+              <span className="text-charcoal/30">/</span>
+              <span className="text-forest/80 text-[11px] tracking-widest uppercase">
+                ${priceDisplay.memberPrice.toFixed(0)} member
+              </span>
+            </>
+          ) : (
+            <span>${priceDisplay.activePrice.toFixed(0)}</span>
+          )}
+        </div>
+
+        {excerpt(product) && (
+          <p className="text-[13.5px] leading-[1.6] text-charcoal/70 max-w-[34ch] mx-auto mb-5">
+            {excerpt(product)}
+          </p>
+        )}
+
+        <QuickAddToCartButton
+          product={product}
+          isPaid={isPaid}
+          onAddToCart={async (item) => {
+            await addToCart(item);
+            void trackEvent("editorial_add_to_cart", {
               properties: {
                 product_slug: product.slug,
                 brand: product.brand,
+                ordinal,
                 index,
+                is_signed_in: isSignedIn,
               },
-            })
-          }
-        >
-          {primary && (
-            <Image
-              src={primary}
-              alt={product.name}
-              fill
-              sizes="(max-width: 768px) 100vw, 60vw"
-              className={`object-cover transition-opacity duration-700 ${
-                hover && secondary && secondary !== primary
-                  ? "opacity-0"
-                  : "opacity-100"
-              }`}
-              priority={index < 2}
-            />
-          )}
-          {secondary && secondary !== primary && (
-            <Image
-              src={secondary}
-              alt=""
-              fill
-              sizes="(max-width: 768px) 100vw, 60vw"
-              className={`object-cover transition-opacity duration-700 ${
-                hover ? "opacity-100" : "opacity-0"
-              }`}
-              aria-hidden
-            />
-          )}
-
-          {/* Corner ordinal, upper left — small, quiet */}
-          <div className="absolute top-4 left-4 text-[10px] tracking-[0.25em] uppercase text-bone/85 mix-blend-difference">
-            №&nbsp;{ordinal(index)}
-          </div>
-
-          {/* Private-release badge, upper right */}
-          {isPrivate && (
-            <div className="absolute top-4 right-4 px-2 py-1 bg-forest text-bone text-[9px] tracking-[0.22em] uppercase">
-              Private Release
-            </div>
-          )}
-        </Link>
-
-        {/* COPY — sits below on mobile, 5 cols on desktop */}
-        <div className="col-span-1 md:col-span-5 md:pt-6">
-          <div className="text-[10px] tracking-[0.25em] uppercase text-charcoal/50 mb-3">
-            {product.brand} <span className="mx-1.5 text-charcoal/25">/</span>{" "}
-            {product.collection}
-          </div>
-
-          <h2 className="font-serif text-2xl md:text-3xl leading-tight text-forest mb-3">
-            <Link
-              href={`/shop/${product.slug}`}
-              className="hover:text-forest-dark transition-colors"
-            >
-              {product.name}
-            </Link>
-          </h2>
-
-          {excerpt(product) && (
-            <p className="text-[15px] leading-[1.65] text-charcoal/80 mb-6 max-w-[52ch]">
-              {excerpt(product)}
-            </p>
-          )}
-
-          {/* Price + add row */}
-          <div className="flex items-center gap-4 mb-2">
-            <div className="flex items-baseline gap-2">
-              <span className="font-serif text-xl text-forest">
-                ${priceDisplay.activePrice.toFixed(0)}
-              </span>
-              {priceDisplay.compareAtPrice != null && (
-                <span className="text-sm text-charcoal/45 line-through">
-                  ${priceDisplay.compareAtPrice.toFixed(0)}
-                </span>
-              )}
-              {priceDisplay.memberPrice != null && (
-                <span className="text-[11px] tracking-widest uppercase text-forest/70 ml-1">
-                  · ${priceDisplay.memberPrice.toFixed(0)} for members
-                </span>
-              )}
-            </div>
-          </div>
-
-          <QuickAddToCartButton
-            product={product}
-            isPaid={isPaid}
-            onAddToCart={async (item) => {
-              await addToCart(item);
-              void trackEvent("editorial_add_to_cart", {
-                properties: {
-                  product_slug: product.slug,
-                  brand: product.brand,
-                  index,
-                  is_signed_in: isSignedIn,
-                },
-              });
-              if (!isSignedIn && onGuestAddedToCart) {
-                onGuestAddedToCart();
-              }
-            }}
-            idleClassName="mt-3 inline-flex items-center gap-2 text-xs tracking-[0.22em] uppercase text-forest border-b border-forest/40 hover:border-forest pb-1 transition-all cursor-pointer"
-            addedClassName="mt-3 inline-flex items-center gap-2 text-xs tracking-[0.22em] uppercase text-sage border-b border-sage pb-1"
-            idleContent={
-              <>
-                <span>Add to Cart</span>
-                <span aria-hidden>&rarr;</span>
-              </>
+            });
+            if (!isSignedIn && onGuestAddedToCart) {
+              onGuestAddedToCart();
             }
-            addedContent={<span>Added ✓</span>}
-            buttonAriaLabel={`Add ${product.name} to cart`}
-            modalTitle={product.name}
-          />
-
-          <Link
-            href={`/shop/${product.slug}`}
-            className="mt-3 md:mt-4 block text-xs tracking-[0.22em] uppercase text-charcoal/45 hover:text-forest transition-colors"
-          >
-            Read the story &nbsp;·&nbsp; Full details
-          </Link>
-        </div>
+          }}
+          idleClassName="inline-flex items-center gap-2 text-[10px] tracking-[0.28em] uppercase text-charcoal/70 border-b border-charcoal/30 hover:border-charcoal hover:text-charcoal pb-1 transition-all cursor-pointer"
+          addedClassName="inline-flex items-center gap-2 text-[10px] tracking-[0.28em] uppercase text-sage border-b border-sage pb-1"
+          idleContent={
+            <>
+              <span>Add to Cart</span>
+              <span aria-hidden>+</span>
+            </>
+          }
+          addedContent={<span>Added ✓</span>}
+          buttonAriaLabel={`Add ${product.name} to cart`}
+          modalTitle={product.name}
+        />
       </div>
     </article>
   );

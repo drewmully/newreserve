@@ -47,48 +47,39 @@ export default async function EditorialLandingPage() {
   ).sort();
 
   return (
-    <div className="min-h-screen bg-bone">
+    <div className="min-h-screen bg-white text-charcoal">
       <EditorialHeader brands={brands} collections={collections} />
 
       {/* Push content below the fixed header (14/16 h). */}
       <main className="pt-14 md:pt-16">
         {/* ─── HERO ─────────────────────────────────────────────────────── */}
-        <section className="px-6 md:px-8 pt-16 md:pt-28 pb-14 md:pb-24 max-w-3xl mx-auto text-center">
-          <div className="text-[10px] tracking-[0.3em] uppercase text-charcoal/45 mb-5">
+        <section className="px-6 md:px-8 pt-14 md:pt-20 pb-10 md:pb-16 max-w-3xl mx-auto text-center border-b border-charcoal/[0.08]">
+          <div className="text-[10px] tracking-[0.3em] uppercase text-charcoal/45 mb-4">
             The Shelf &nbsp;·&nbsp; Curated by Mully
           </div>
-          <h1 className="font-serif text-4xl md:text-6xl leading-[1.05] text-forest mb-6">
+          <h1 className="font-serif text-3xl md:text-5xl leading-[1.08] text-charcoal mb-5">
             Golf goods{" "}
-            <span className="italic text-forest/85">most golfers</span>{" "}
+            <span className="italic text-forest">most golfers</span>{" "}
             haven't found yet.
           </h1>
-          <p className="text-[15px] md:text-base leading-[1.7] text-charcoal/70 max-w-lg mx-auto">
-            One piece at a time. Handpicked by the same editors who curate our
-            quarterly shipments. Nothing to sign up for. Read, add, done.
+          <p className="text-[14.5px] md:text-[15px] leading-[1.7] text-charcoal/65 max-w-md mx-auto">
+            Objects of desire &amp; tools of the trade, curated by Mully.
           </p>
 
-          {/* Two whisper-quiet CTAs: browse (self) + flagship (subscription) */}
-          <div className="mt-9 flex flex-col md:flex-row items-center justify-center gap-4 md:gap-8 text-xs tracking-[0.22em] uppercase">
-            <a
-              href="#editorial-top"
-              className="inline-flex items-center gap-2 text-forest border-b border-forest/40 hover:border-forest pb-1 transition-all"
-            >
-              <span>Enter the Shelf</span>
-              <span aria-hidden>&darr;</span>
-            </a>
+          <div className="mt-7 flex items-center justify-center text-[10px] tracking-[0.28em] uppercase">
             <Link
               href="/lp/subscription"
-              className="inline-flex items-center gap-2 text-charcoal/60 hover:text-forest border-b border-charcoal/25 hover:border-forest pb-1 transition-all"
+              className="inline-flex items-center gap-2 text-charcoal/55 hover:text-forest border-b border-charcoal/25 hover:border-forest pb-1 transition-all"
             >
-              <span>Curated Shipments</span>
+              <span>Or: Curated Shipments</span>
               <span aria-hidden>&rarr;</span>
             </Link>
           </div>
         </section>
 
         {/* ─── FEED ─────────────────────────────────────────────────────── */}
-        <section className="px-5 md:px-8 pb-20 md:pb-32">
-          <div className="max-w-5xl mx-auto">
+        <section className="px-5 md:px-10 pt-12 md:pt-16 pb-20 md:pb-28">
+          <div className="max-w-6xl mx-auto">
             <EditorialFeed products={products} />
           </div>
         </section>

@@ -62,7 +62,7 @@ export function EditorialHeader({ brands, collections }: EditorialHeaderProps) {
       <SlideCart />
 
       {/* Sticky, thin, backdrop-blurred bar. Bone with a hairline underline. */}
-      <header className="fixed top-0 inset-x-0 z-40 bg-bone/85 backdrop-blur-md border-b border-charcoal/[0.06]">
+      <header className="fixed top-0 inset-x-0 z-40 bg-white/90 backdrop-blur-md border-b border-charcoal/[0.08]">
         <div className="mx-auto max-w-6xl h-14 md:h-16 px-5 md:px-8 flex items-center justify-between">
           {/* Hamburger */}
           <button
@@ -148,7 +148,7 @@ export function EditorialHeader({ brands, collections }: EditorialHeaderProps) {
 
         {/* Panel */}
         <aside
-          className={`absolute left-0 top-0 h-full w-full md:w-[420px] bg-bone shadow-2xl transform transition-transform duration-300 ${
+          className={`absolute left-0 top-0 h-full w-full md:w-[420px] bg-white shadow-2xl transform transition-transform duration-300 ${
             menuOpen ? "translate-x-0" : "-translate-x-full"
           } flex flex-col`}
           role="dialog"
@@ -182,7 +182,7 @@ export function EditorialHeader({ brands, collections }: EditorialHeaderProps) {
             <Link
               href="/lp/subscription"
               onClick={() => setMenuOpen(false)}
-              className="block mx-6 mt-6 mb-8 p-5 border border-forest/25 rounded-sm bg-cream hover:bg-bone-dark transition-colors group"
+              className="block mx-6 mt-6 mb-8 p-5 border border-forest/20 rounded-sm bg-[#faf9f6] hover:bg-[#f5f1e8] transition-colors group"
             >
               <div className="text-[10px] tracking-[0.2em] uppercase text-forest/60 mb-2">
                 Flagship
