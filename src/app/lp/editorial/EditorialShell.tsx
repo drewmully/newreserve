@@ -6,7 +6,7 @@
  * server page can hand off cleanly.
  */
 
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import type {
   EditorialProduct,
   EditorialCategory,
@@ -43,7 +43,11 @@ export function EditorialShell({ products }: EditorialShellProps) {
 
   return (
     <>
-      <CategoryNav active={category} onChange={setCategory} counts={counts} />
+      {/* CategoryNav uses useSearchParams(), which requires a Suspense
+          boundary during static prerender. */}
+      <Suspense fallback={<div className="h-14" aria-hidden />}>
+        <CategoryNav active={category} onChange={setCategory} counts={counts} />
+      </Suspense>
       <section className="px-5 md:px-10 pt-12 md:pt-16 pb-20 md:pb-28">
         <div className="max-w-6xl mx-auto">
           <EditorialFeed products={products} categoryFilter={category} />
