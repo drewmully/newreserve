@@ -32,6 +32,7 @@ import type {
 } from "@/lib/shopifyEditorial";
 import { EditorialCard } from "./EditorialCard";
 import { AccessUpsell } from "./AccessUpsell";
+import { CuratedShipmentsCard } from "./CuratedShipmentsCard";
 import { slugifyForId } from "./EditorialHeader";
 
 interface EditorialFeedProps {
@@ -130,7 +131,7 @@ export function EditorialFeed({
           md:divide-x md:divide-charcoal/[0.06]
         "
       >
-        {gridItems.map((product, i) => {
+        {gridItems.flatMap((product, i) => {
           const ordinal = ordinalBySlug.get(product.slug);
 
           const brandAnchor =
@@ -142,7 +143,7 @@ export function EditorialFeed({
               ? `editorial-collection-${slugifyForId(product.collection)}`
               : null;
 
-          return (
+          const cell = (
             <li
               key={product.slug}
               className="relative md:px-6 lg:px-8"
@@ -169,6 +170,24 @@ export function EditorialFeed({
               />
             </li>
           );
+
+          // After the first row of 3 cells (i.e. before index 3),
+          // slot in the spanning Curated Shipments card. Only inject
+          // on the unfiltered feed and only when there are enough
+          // items to warrant it — no point wedging a huge card into
+          // a 4-item filtered view.
+          if (
+            i === 3 &&
+            categoryFilter === "all" &&
+            gridItems.length > 5
+          ) {
+            return [
+              <CuratedShipmentsCard key="curated-shipments-spanning" />,
+              cell,
+            ];
+          }
+
+          return [cell];
         })}
       </ul>
 

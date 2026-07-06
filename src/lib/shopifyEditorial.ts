@@ -332,77 +332,110 @@ export async function getEditorialFeed(): Promise<EditorialProduct[]> {
     return tb - ta;
   });
 
-  // ─── Interleave affiliates + destinations at fixed cadence ───────────
+  // ─── Pin the hero ──────────────────────────────────────────
   //
-  // Cadence over Shopify products only:
-  //   - Every 3rd Shopify product is followed by an affiliate card
-  //   - Every 4th Shopify product is followed by a destination card
-  //     (kept from the earlier rhythm — destinations are rarer editorial
-  //     breaks; affiliates are the more frequent "cool product" injection)
+  // We hoist a specific affiliate to the top of the feed so it lands in
+  // the hero slot (feed[0] is picked up by EditorialFeed.tsx). The rest
+  // of the affiliates and all destinations flow into the interleave
+  // queue below.
   //
-  // Concrete rhythm the reader sees, with P=product, A=affiliate,
-  // D=destination:
-  //     P P P A P D P P A P P P A D P P A ...
-  //
-  // Both stride counters reset on 0 and increment per Shopify product,
-  // never per affiliate/destination, so the injection cadence stays
-  // stable regardless of how many are already queued.
+  // Editorial choice, not chronology. McLaren's Series 3 iron is our
+  // current hero pick. To change, edit HERO_AFFILIATE_SLUG below.
+  const affiliatesAll = getAffiliateEditorialProducts();
   const destinations = getDestinationEditorialProducts();
-  const affiliates = getAffiliateEditorialProducts();
-  return interleaveEditorial(products, affiliates, 3, destinations, 4);
+  const heroIdx = affiliatesAll.findIndex(
+    (a) => a.slug === HERO_AFFILIATE_SLUG
+  );
+  const heroCard = heroIdx >= 0 ? affiliatesAll[heroIdx] : undefined;
+  const affiliates =
+    heroIdx >= 0
+      ? [...affiliatesAll.slice(0, heroIdx), ...affiliatesAll.slice(heroIdx + 1)]
+      : affiliatesAll;
+
+  // ─── Interleave editorial cards at 1-in-3 cadence ──────────────────
+  //
+  // Every 3rd cell of the grid is an editorial card (affiliate OR
+  // destination). Concretely, after every 2 Shopify products we insert
+  // one editorial card, so the reader sees:
+  //     P P E P P E P P E P P E ...
+  // where E alternates between the affiliate queue and the destination
+  // queue (affiliates come more often since we have more of them).
+  //
+  // Alternation ratio is roughly 3 affiliates : 1 destination, which
+  // keeps destinations rare enough to feel like real editorial breaks.
+  const interleaved = interleaveEditorial(products, affiliates, destinations, 2);
+
+  // Prepend hero (if present) so EditorialFeed picks it up at index 0.
+  return heroCard ? [heroCard, ...interleaved] : interleaved;
 }
 
 /**
- * Interleave affiliate and destination cards into a Shopify product feed
- * at independent, product-indexed strides. Returns a new array; inputs
- * unchanged.
+ * Which affiliate to pin as the hero card. Set to `undefined` (or a slug
+ * that doesn't exist) to fall back to the natural newest-first Shopify
+ * hero. Kept here rather than in `affiliates.ts` because it's a
+ * feed-level composition decision, not an entry-level attribute.
+ */
+const HERO_AFFILIATE_SLUG = "mclaren-golf-series-3-iron";
+
+/**
+ * Interleave editorial cards (affiliates + destinations, merged) into a
+ * Shopify product feed. Returns a new array; inputs unchanged.
  *
- * Both strides are counted against the SHOPIFY product index, not the
- * output index. That's the key to a stable rhythm: injecting an affiliate
- * doesn't shift the destination stride.
+ * Cadence: after every `productStride` Shopify products, insert one
+ * editorial card. With productStride=2 in a 3-column grid, every 3rd
+ * cell of the grid is an editorial card.
  *
- * When an affiliate slot and a destination slot both fall on the same
- * product boundary, the affiliate goes first, then the destination.
- * Once either queue is empty, remaining products flow through untouched.
+ * Editorial cards alternate between the affiliate and destination queues.
+ * We deal affiliates roughly 3-to-1 vs destinations so the more curated,
+ * larger destination features stay rare and feel like intentional breaks.
+ * Once one queue empties, the other keeps feeding until both are drained.
  *
- * Example (affiliateStride=3, destStride=4):
- *   products:     [P1..P12]
- *   affiliates:   [A1, A2, A3, A4]
- *   destinations: [D1, D2, D3]
- *   result:       [P1, P2, P3, A1, P4, D1, P5, P6, A2, P7, P8, D2, P9, A3, P10, P11, P12, A4, D3]
- *                                                          (with wrap-through of remaining queues)
+ * Example (productStride=2, 6 affiliates, 2 destinations):
+ *   products:  [P1..P12]
+ *   result:    [P1, P2, A1, P3, P4, A2, P5, P6, A3, P7, P8, D1, P9, P10, A4, P11, P12, A5, A6, D2]
  */
 function interleaveEditorial(
   products: EditorialProduct[],
   affiliates: EditorialProduct[],
-  affiliateStride: number,
   destinations: EditorialProduct[],
-  destStride: number
+  productStride: number
 ): EditorialProduct[] {
   const out: EditorialProduct[] = [];
   let affIdx = 0;
   let destIdx = 0;
+  let editorialSlot = 0; // counts editorial insertions to alternate queues
+
+  const nextEditorial = (): EditorialProduct | undefined => {
+    // 3:1 affiliate:destination ratio. Position 0-2 draw from affiliates,
+    // position 3 draws from destinations, then cycle. If the picked queue
+    // is empty, fall back to the other queue.
+    const preferDestination = editorialSlot % 4 === 3;
+    const affLeft = affIdx < affiliates.length;
+    const destLeft = destIdx < destinations.length;
+    if (!affLeft && !destLeft) return undefined;
+    if (preferDestination && destLeft) return destinations[destIdx++];
+    if (!preferDestination && affLeft) return affiliates[affIdx++];
+    // Fallback: whichever queue still has items.
+    return affLeft ? affiliates[affIdx++] : destinations[destIdx++];
+  };
+
   for (let i = 0; i < products.length; i++) {
     out.push(products[i]);
-    const nth = i + 1; // 1-based product index for stride math
-    if (
-      affiliateStride >= 1 &&
-      nth % affiliateStride === 0 &&
-      affIdx < affiliates.length
-    ) {
-      out.push(affiliates[affIdx++]);
-    }
-    if (
-      destStride >= 1 &&
-      nth % destStride === 0 &&
-      destIdx < destinations.length
-    ) {
-      out.push(destinations[destIdx++]);
+    const nth = i + 1;
+    if (productStride >= 1 && nth % productStride === 0) {
+      const ed = nextEditorial();
+      if (ed) {
+        out.push(ed);
+        editorialSlot++;
+      }
     }
   }
-  // Any leftover affiliates or destinations get appended at the bottom
-  // so the reader still sees them. Affiliates first, then destinations.
-  while (affIdx < affiliates.length) out.push(affiliates[affIdx++]);
-  while (destIdx < destinations.length) out.push(destinations[destIdx++]);
+  // Drain any remaining editorial cards to the bottom of the feed.
+  while (affIdx < affiliates.length || destIdx < destinations.length) {
+    const ed = nextEditorial();
+    if (!ed) break;
+    out.push(ed);
+    editorialSlot++;
+  }
   return out;
 }

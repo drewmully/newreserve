@@ -173,14 +173,16 @@ export function EditorialCard({
   }, [primary]);
 
   // Image tile height: hero is nearly full-viewport-width tall, grid is a
-  // clean 4:3ish square-ish tile. object-cover for destinations and the
-  // Moke (both are photographic scenes rather than isolated product
-  // shots), object-contain for products (they need whitespace).
+  // clean 4:3ish square-ish tile. object-cover for destinations and
+  // affiliates (photographic scenes and vendor product shots with their
+  // own backdrops — avoids the "double background" look of a black-on-tan
+  // tile). object-contain with padding for Shopify SKUs so isolated
+  // product shots get proper whitespace.
   const imageWrapperClass = isHero
     ? "block relative w-full aspect-[16/10] md:aspect-[16/9] bg-[#f7f6f2] overflow-hidden"
     : "block relative aspect-square bg-[#f7f6f2] overflow-hidden";
 
-  const imageFitClass = isDestination
+  const imageFitClass = isDestination || isAffiliate
     ? "object-cover"
     : isHero
     ? "object-contain p-8 md:p-14"
