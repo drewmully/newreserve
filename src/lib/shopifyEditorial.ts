@@ -25,6 +25,7 @@ import {
   type ShopifyProductVariant,
 } from "@/lib/shopify";
 import { getDestinationEditorialProducts } from "@/lib/destinations";
+import { getAffiliateEditorialProducts } from "@/lib/affiliates";
 
 const MEMBER_DISCOUNT_RATE = 0.15;
 
@@ -111,8 +112,22 @@ export interface EditorialProduct extends ShopifyProduct {
   /**
    * For editorial_category='destinations' only. Outbound resort URL.
    * The card renders "Visit [Resort]" instead of Add to Cart when set.
+   * Also used by affiliates as the outbound vendor URL.
    */
   destinationUrl: string;
+  /**
+   * Present on off-Shopify affiliate products only. When set, the card
+   * renders 'Buy at <affiliateVendor>' as an outbound link instead of
+   * add-to-cart. Undefined for real Shopify products and destinations.
+   */
+  affiliateVendor?: string;
+  /**
+   * Display-only price string for affiliates (e.g. '$375 per club',
+   * 'from $6'). Affiliates have no Shopify variant, so `price` /
+   * `reservePrice` stay 0; the card uses this string in place of the
+   * numeric price line. Undefined for Shopify products and destinations.
+   */
+  affiliateDisplayPrice?: string;
 }
 
 export const EDITORIAL_CATEGORIES = [
@@ -317,41 +332,77 @@ export async function getEditorialFeed(): Promise<EditorialProduct[]> {
     return tb - ta;
   });
 
-  // ─── Interleave destinations at every 4th slot ────────────────────────
-  // Rhythm: P P P P D P P P P D P P P P D ...
-  // The 5th, 10th, 15th, ... items are destination cards. Once we run out
-  // of destinations we just continue with products. This is a layout
-  // decision, not a chronology decision — destinations should appear as
-  // periodic editorial breaks in the shopping feed, not sort by date.
+  // ─── Interleave affiliates + destinations at fixed cadence ───────────
+  //
+  // Cadence over Shopify products only:
+  //   - Every 3rd Shopify product is followed by an affiliate card
+  //   - Every 4th Shopify product is followed by a destination card
+  //     (kept from the earlier rhythm — destinations are rarer editorial
+  //     breaks; affiliates are the more frequent "cool product" injection)
+  //
+  // Concrete rhythm the reader sees, with P=product, A=affiliate,
+  // D=destination:
+  //     P P P A P D P P A P P P A D P P A ...
+  //
+  // Both stride counters reset on 0 and increment per Shopify product,
+  // never per affiliate/destination, so the injection cadence stays
+  // stable regardless of how many are already queued.
   const destinations = getDestinationEditorialProducts();
-  return interleaveDestinations(products, destinations, 4);
+  const affiliates = getAffiliateEditorialProducts();
+  return interleaveEditorial(products, affiliates, 3, destinations, 4);
 }
 
 /**
- * Interleave `destinations` into `products` so a destination card appears
- * after every `stride` product cards. Returns a new array; inputs unchanged.
+ * Interleave affiliate and destination cards into a Shopify product feed
+ * at independent, product-indexed strides. Returns a new array; inputs
+ * unchanged.
  *
- * Example (stride=4):
- *   products:     [P1, P2, P3, P4, P5, P6, P7, P8, P9]
- *   destinations: [D1, D2]
- *   result:       [P1, P2, P3, P4, D1, P5, P6, P7, P8, D2, P9]
+ * Both strides are counted against the SHOPIFY product index, not the
+ * output index. That's the key to a stable rhythm: injecting an affiliate
+ * doesn't shift the destination stride.
  *
- * If destinations run out, remaining products are appended straight.
+ * When an affiliate slot and a destination slot both fall on the same
+ * product boundary, the affiliate goes first, then the destination.
+ * Once either queue is empty, remaining products flow through untouched.
+ *
+ * Example (affiliateStride=3, destStride=4):
+ *   products:     [P1..P12]
+ *   affiliates:   [A1, A2, A3, A4]
+ *   destinations: [D1, D2, D3]
+ *   result:       [P1, P2, P3, A1, P4, D1, P5, P6, A2, P7, P8, D2, P9, A3, P10, P11, P12, A4, D3]
+ *                                                          (with wrap-through of remaining queues)
  */
-function interleaveDestinations(
+function interleaveEditorial(
   products: EditorialProduct[],
+  affiliates: EditorialProduct[],
+  affiliateStride: number,
   destinations: EditorialProduct[],
-  stride: number
+  destStride: number
 ): EditorialProduct[] {
-  if (destinations.length === 0 || stride < 1) return products;
   const out: EditorialProduct[] = [];
+  let affIdx = 0;
   let destIdx = 0;
   for (let i = 0; i < products.length; i++) {
     out.push(products[i]);
-    // After every `stride` products, drop in the next destination (if any).
-    if ((i + 1) % stride === 0 && destIdx < destinations.length) {
+    const nth = i + 1; // 1-based product index for stride math
+    if (
+      affiliateStride >= 1 &&
+      nth % affiliateStride === 0 &&
+      affIdx < affiliates.length
+    ) {
+      out.push(affiliates[affIdx++]);
+    }
+    if (
+      destStride >= 1 &&
+      nth % destStride === 0 &&
+      destIdx < destinations.length
+    ) {
       out.push(destinations[destIdx++]);
     }
   }
+  // Any leftover affiliates or destinations get appended at the bottom
+  // so the reader still sees them. Affiliates first, then destinations.
+  while (affIdx < affiliates.length) out.push(affiliates[affIdx++]);
+  while (destIdx < destinations.length) out.push(destinations[destIdx++]);
   return out;
 }

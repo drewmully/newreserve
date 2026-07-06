@@ -50,13 +50,14 @@ export function EditorialFeed({
   // Ordinal in the feed is computed from the FULL feed (not filtered), so a
   // given product's № stays stable regardless of which filter is active.
   //
-  // Destinations are editorial breaks, not shoppable items, so they don't
-  // get an ordinal. We number only real products: newest product = highest
-  // №, oldest product = № 01. Destination cards render without a number.
+  // Destinations and off-Shopify affiliates are editorial breaks, not our
+  // own shoppable inventory, so they don't get an ordinal. We number only
+  // real Mully products: newest = highest №, oldest = № 01. Non-Mully
+  // cards render without a number.
   const ordinalBySlug = useMemo(() => {
     const m = new Map<string, number>();
     const productsOnly = products.filter(
-      (p) => p.editorialCategory !== "destinations"
+      (p) => p.editorialCategory !== "destinations" && !p.affiliateVendor
     );
     const totalProducts = productsOnly.length;
     productsOnly.forEach((p, i) => m.set(p.slug, totalProducts - i));

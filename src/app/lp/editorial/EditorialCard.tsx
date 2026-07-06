@@ -86,8 +86,13 @@ function tagChipLabel(product: EditorialProduct): string {
   const cat = product.editorialCategory;
   const parent = cat ? EDITORIAL_CATEGORY_LABELS[cat] : "Featured";
   const isDestination = cat === "destinations";
+  const isAffiliate = Boolean(product.affiliateVendor);
+  // Affiliates use vendor as the child (already the same value as brand,
+  // but stated explicitly here so the intent is obvious to future editors).
   const child = isDestination
     ? product.collection || product.brand
+    : isAffiliate
+    ? product.affiliateVendor
     : product.brand;
   if (child && child.trim() && child.toLowerCase() !== parent.toLowerCase()) {
     return `${parent} / ${child}`;
@@ -96,8 +101,10 @@ function tagChipLabel(product: EditorialProduct): string {
 }
 
 /**
- * Human-readable vendor name for the "Buy from ____" secondary link.
- * Merch cards just say "Buy Now" (Add to Cart happens locally).
+ * Human-readable vendor name for the outbound secondary link.
+ * - Destinations render "Visit [Hostname]"
+ * - Affiliates render "Buy at [Vendor]"
+ * - Everything else (Shopify SKUs) uses the local Add-to-Cart flow.
  */
 function vendorLinkLabel(product: EditorialProduct): string {
   if (product.editorialCategory === "destinations") {
@@ -109,6 +116,9 @@ function vendorLinkLabel(product: EditorialProduct): string {
     } catch {
       return "Visit Site";
     }
+  }
+  if (product.affiliateVendor) {
+    return `Buy at ${product.affiliateVendor}`;
   }
   return "Buy Now";
 }
@@ -130,6 +140,11 @@ export function EditorialCard({
 
   const isPrivate = product.sourceCollections?.includes("private-releases");
   const isDestination = product.editorialCategory === "destinations";
+  const isAffiliate = Boolean(product.affiliateVendor);
+  // "Outbound" = the card's main link goes off-site in a new tab, not to
+  // a local /shop/<slug> PDP. Both destinations and affiliates behave this
+  // way. Everything else is a normal Shopify product with a local PDP.
+  const isOutbound = isDestination || isAffiliate;
   const isHero = variant === "hero";
   const primary = product.images[0];
   const secondaryRaw = product.images[1];
@@ -158,8 +173,9 @@ export function EditorialCard({
   }, [primary]);
 
   // Image tile height: hero is nearly full-viewport-width tall, grid is a
-  // clean 4:3ish square-ish tile. object-cover for destinations (they're
-  // photographic), object-contain for products (they need whitespace).
+  // clean 4:3ish square-ish tile. object-cover for destinations and the
+  // Moke (both are photographic scenes rather than isolated product
+  // shots), object-contain for products (they need whitespace).
   const imageWrapperClass = isHero
     ? "block relative w-full aspect-[16/10] md:aspect-[16/9] bg-[#f7f6f2] overflow-hidden"
     : "block relative aspect-square bg-[#f7f6f2] overflow-hidden";
@@ -200,11 +216,15 @@ export function EditorialCard({
       data-variant={variant}
     >
       {/* IMAGE TILE ─── */}
-      {isDestination ? (
+      {isOutbound ? (
         <a
           href={product.destinationUrl || "#"}
           target="_blank"
-          rel="noopener noreferrer"
+          rel={
+            isAffiliate
+              ? "noopener noreferrer sponsored"
+              : "noopener noreferrer"
+          }
           className={imageWrapperClass}
           onMouseEnter={onImageEnter}
           onMouseLeave={onImageLeave}
@@ -305,11 +325,15 @@ export function EditorialCard({
               : "text-[17px] md:text-[19px] tracking-[0.03em]"
           }`}
         >
-          {isDestination ? (
+          {isOutbound ? (
             <a
               href={product.destinationUrl || "#"}
               target="_blank"
-              rel="noopener noreferrer"
+              rel={
+                isAffiliate
+                  ? "noopener noreferrer sponsored"
+                  : "noopener noreferrer"
+              }
               className="hover:text-forest transition-colors"
             >
               {product.name}
@@ -324,7 +348,9 @@ export function EditorialCard({
           )}
         </h2>
 
-        {/* Deck: excerpt sentence ending with price for merch */}
+        {/* Deck: excerpt sentence ending with price for merch, or a
+            display-only price string for affiliates. Destinations get
+            no price line at all. */}
         {(shortDeck || !isDestination) && (
           <p
             className={`font-serif text-charcoal/85 mx-auto ${
@@ -335,7 +361,12 @@ export function EditorialCard({
           >
             {shortDeck}
             {shortDeck && !isDestination && " "}
-            {!isDestination && (
+            {!isDestination && isAffiliate && product.affiliateDisplayPrice && (
+              <span className="whitespace-nowrap font-medium">
+                {product.affiliateDisplayPrice}.
+              </span>
+            )}
+            {!isDestination && !isAffiliate && (
               <span className="whitespace-nowrap">
                 {priceDisplay.compareAtPrice != null ? (
                   <>
@@ -396,20 +427,30 @@ export function EditorialCard({
             </>
           )}
 
-          {isDestination ? (
+          {isOutbound ? (
             <a
               href={product.destinationUrl || "#"}
               target="_blank"
-              rel="noopener noreferrer"
+              rel={
+                isAffiliate
+                  ? "noopener noreferrer sponsored"
+                  : "noopener noreferrer"
+              }
               onClick={() =>
-                void trackEvent("editorial_destination_click", {
-                  properties: {
-                    product_slug: product.slug,
-                    brand: product.brand,
-                    ordinal,
-                    index,
-                  },
-                })
+                void trackEvent(
+                  isAffiliate
+                    ? "editorial_affiliate_click"
+                    : "editorial_destination_click",
+                  {
+                    properties: {
+                      product_slug: product.slug,
+                      brand: product.brand,
+                      vendor: product.affiliateVendor ?? undefined,
+                      ordinal,
+                      index,
+                    },
+                  }
+                )
               }
               className="text-taupe hover:text-forest underline underline-offset-4 decoration-taupe/50 hover:decoration-forest/70 transition-colors"
             >
