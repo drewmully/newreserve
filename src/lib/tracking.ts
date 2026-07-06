@@ -199,6 +199,108 @@ function mirrorToMetaPixel(
 }
 
 /**
+ * Mirror the event to the OpenAI Ads pixel (oaiq) when it's loaded. Server-side
+ * OpenAI Conversions API events fire from /api/analytics/track. This client
+ * mirror is what powers OpenAI/ChatGPT Ads retargeting audiences and gives
+ * the optimizer a high-quality browser-side signal.
+ *
+ * Uses the SAME `event_id` OpenAI CAPI uses on the server (passed via the
+ * SDK's eventOptions.event_id), so OpenAI dedupes the two and counts the
+ * event once. Without this, every funnel event would be double-counted.
+ *
+ * OpenAI event taxonomy (extracted from oaiq.min.js validator):
+ *   page_viewed          → {type:"contents"}
+ *   contents_viewed      → {type, amount, currency, contents}
+ *   items_added          → {type, amount, currency, contents}
+ *   checkout_started     → {type:"contents"}
+ *   order_created        → {type, amount, currency, contents}
+ *   registration_completed → {type:"customer_action", amount, currency}
+ *   lead_created         → {type:"customer_action"}
+ *   subscription_created → {type, plan_id, amount, currency, contents}
+ *
+ * No-op when oaiq is undefined — i.e. when NEXT_PUBLIC_OPENAI_PIXEL_ID is
+ * not configured or the pixel script hasn't finished loading yet.
+ */
+const OPENAI_STANDARD_EVENTS: Record<
+  string,
+  { name: string; category: "contents" | "customer_action" | "plan_enrollment" }
+> = {
+  // page_view intentionally NOT mapped here — the layout.tsx OpenAI pixel
+  // fires the initial page_viewed on script init. Firing it again from
+  // trackEvent would double-count until we route it through a shared event_id.
+  lp_subscription_view: { name: "contents_viewed", category: "contents" },
+  reveal_viewed: { name: "contents_viewed", category: "contents" },
+  wallet_viewed: { name: "contents_viewed", category: "contents" },
+  add_to_cart: { name: "items_added", category: "contents" },
+  quiz_step_completed: { name: "items_added", category: "contents" },
+  // Intent → checkout_started
+  quiz_started: { name: "checkout_started", category: "contents" },
+  reveal_cta_clicked: { name: "checkout_started", category: "contents" },
+  initiate_checkout: { name: "checkout_started", category: "contents" },
+  checkout_clicked: { name: "checkout_started", category: "contents" },
+  // Lead / registration — customer_action category
+  quiz_email_captured: { name: "lead_created", category: "customer_action" },
+  registry_applied: { name: "lead_created", category: "customer_action" },
+  quiz_completed: {
+    name: "registration_completed",
+    category: "customer_action",
+  },
+  login: { name: "registration_completed", category: "customer_action" },
+  // Money event
+  purchase: { name: "order_created", category: "contents" },
+};
+
+function mirrorToOpenAI(
+  eventName: string,
+  eventId: string,
+  properties: Record<string, unknown>
+): void {
+  if (typeof window === "undefined") return;
+  const oaiq = (
+    window as unknown as { oaiq?: (...args: unknown[]) => void }
+  ).oaiq;
+  if (typeof oaiq !== "function") return;
+
+  const mapping = OPENAI_STANDARD_EVENTS[eventName];
+  if (!mapping) return;
+
+  try {
+    // Base payload always carries `type` (category) — required by validator.
+    const data: Record<string, unknown> = { type: mapping.category };
+
+    // Purchase / add_to_cart / view carry value+currency; registration too.
+    if (mapping.category === "contents" || mapping.category === "customer_action") {
+      if (properties.value !== undefined) data.amount = properties.value;
+      if (properties.currency !== undefined) data.currency = properties.currency;
+    }
+
+    // Contents array (product-level detail) — only when we have line items
+    // and only for content-carrying events. Shape enforced by validator:
+    // [{id, name, content_type, quantity, amount, currency}].
+    if (
+      mapping.category === "contents" &&
+      Array.isArray(properties.contents)
+    ) {
+      data.contents = properties.contents;
+    }
+
+    // Subscription/plan enrollment carries plan_id.
+    if (
+      mapping.category === "plan_enrollment" &&
+      typeof properties.plan_id === "string"
+    ) {
+      data.plan_id = properties.plan_id;
+    }
+
+    // {event_id} is OpenAI's dedup key against server-side CAPI; it MUST match
+    // the id we pass through to fireOpenAICAPI on the server.
+    oaiq("measure", mapping.name, data, { event_id: eventId });
+  } catch {
+    // Never let analytics break the page.
+  }
+}
+
+/**
  * Persists fbclid as the _fbc first-party cookie. Meta sets _fbc automatically
  * when the Pixel loads and a fbclid is in the URL — but only on the very first
  * landing, only when CSP/extensions don't block it, and only when the user
@@ -388,6 +490,11 @@ export async function trackEvent(
     // is not configured. Uses the SAME eventId we pass to server-side CAPI
     // so Meta dedupes the two and counts the event once.
     mirrorToMetaPixel(eventName, eventId, mergedProperties);
+
+    // Mirror to client-side OpenAI Ads pixel (oaiq). No-op when
+    // NEXT_PUBLIC_OPENAI_PIXEL_ID is not configured. Uses the SAME eventId
+    // we pass to server-side OpenAI CAPI so OpenAI dedupes the two.
+    mirrorToOpenAI(eventName, eventId, mergedProperties);
 
     await fetch("/api/analytics/track", {
       method: "POST",

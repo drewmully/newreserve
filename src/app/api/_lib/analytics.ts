@@ -8,6 +8,7 @@
  *
  * Required env vars per provider:
  *   Meta CAPI:    META_PIXEL_ID, META_ACCESS_TOKEN
+ *   OpenAI CAPI:  OPENAI_PIXEL_ID, OPENAI_CAPI_KEY
  *   GA4:          GA4_MEASUREMENT_ID, GA4_API_SECRET
  *   Google Ads:   GOOGLE_ADS_CONVERSION_ID
  *                 GOOGLE_ADS_LABEL_PAGE_VIEW         (page_view events)
@@ -151,6 +152,142 @@ async function fireMetaCAPI(event: AnalyticsEvent): Promise<void> {
           },
         ],
       }),
+    }
+  );
+}
+
+// ─── OpenAI Ads Conversions API ──────────────────────────────────
+
+/**
+ * Maps internal event names to OpenAI standard events + payload categories.
+ * Category drives which fields the OpenAI validator accepts:
+ *   contents        → type, amount, currency, contents
+ *   customer_action → type, amount, currency
+ *   plan_enrollment → type, plan_id, amount, currency, contents
+ *
+ * Same rationale as META_EVENT_MAP: only standard events are optimizable
+ * by OpenAI's ad-delivery model. Internal-only diagnostics stay out.
+ */
+const OPENAI_EVENT_MAP: Record<
+  string,
+  { name: string; category: "contents" | "customer_action" | "plan_enrollment" }
+> = {
+  page_view: { name: "page_viewed", category: "contents" },
+  // Reserve acquisition funnel
+  lp_subscription_view: { name: "contents_viewed", category: "contents" },
+  reveal_viewed: { name: "contents_viewed", category: "contents" },
+  wallet_viewed: { name: "contents_viewed", category: "contents" },
+  add_to_cart: { name: "items_added", category: "contents" },
+  quiz_step_completed: { name: "items_added", category: "contents" },
+  quiz_started: { name: "checkout_started", category: "contents" },
+  reveal_cta_clicked: { name: "checkout_started", category: "contents" },
+  initiate_checkout: { name: "checkout_started", category: "contents" },
+  checkout_clicked: { name: "checkout_started", category: "contents" },
+  quiz_email_captured: {
+    name: "lead_created",
+    category: "customer_action",
+  },
+  registry_applied: { name: "lead_created", category: "customer_action" },
+  quiz_completed: {
+    name: "registration_completed",
+    category: "customer_action",
+  },
+  login: { name: "registration_completed", category: "customer_action" },
+  purchase: { name: "order_created", category: "contents" },
+};
+
+/**
+ * Fire an event to OpenAI Ads Conversions API.
+ *
+ * Endpoint: POST https://bzr.openai.com/v1/events?pid=<PIXEL_ID>
+ * Auth:     Bearer <OPENAI_CAPI_KEY>
+ * Dedup:    event.id must match the client-side eventOptions.event_id
+ *           (passed through as properties.event_id from trackEvent).
+ *
+ * User-data matching (all SHA-256 hashed — same recipe as Meta CAPI):
+ *   email_sha256, external_id_sha256, ip_address, user_agent, country,
+ *   city, zip_code. The more high-entropy fields we supply, the higher
+ *   the match rate for cookieless conversions.
+ */
+async function fireOpenAICAPI(event: AnalyticsEvent): Promise<void> {
+  const pixelId = process.env.OPENAI_PIXEL_ID;
+  const apiKey = process.env.OPENAI_CAPI_KEY;
+  if (!pixelId || !apiKey) return;
+
+  const mapping = OPENAI_EVENT_MAP[event.event_name];
+  if (!mapping) return;
+
+  const props = event.properties ?? {};
+
+  const userData: Record<string, unknown> = {};
+  if (event.email) {
+    userData.email_sha256 = sha256hex(event.email.trim().toLowerCase());
+  }
+  if (event.user_id) {
+    userData.external_id_sha256 = sha256hex(event.user_id.trim());
+  }
+  if (event.ip) userData.ip_address = event.ip;
+  if (event.user_agent) userData.user_agent = event.user_agent;
+
+  // Build payload data per OpenAI validator schema.
+  const data: Record<string, unknown> = { type: mapping.category };
+  if (
+    mapping.category === "contents" ||
+    mapping.category === "customer_action"
+  ) {
+    if (props.value !== undefined) data.amount = props.value;
+    if (props.currency !== undefined) data.currency = props.currency;
+  }
+  if (
+    mapping.category === "contents" &&
+    Array.isArray(props.contents)
+  ) {
+    data.contents = props.contents;
+  }
+  if (
+    mapping.category === "plan_enrollment" &&
+    typeof props.plan_id === "string"
+  ) {
+    data.plan_id = props.plan_id;
+  }
+
+  // Purchase must carry amount + currency — default to safe values if the
+  // caller didn't pass them (rare but non-fatal for OpenAI's model).
+  if (event.event_name === "purchase") {
+    data.amount = props.value ?? 0;
+    data.currency = props.currency ?? "USD";
+  }
+
+  const eventId =
+    typeof props.event_id === "string" ? props.event_id : undefined;
+
+  const timestampMs =
+    (event.timestamp ? event.timestamp * 1000 : undefined) ?? Date.now();
+
+  const body = {
+    validate_only: false,
+    events: [
+      {
+        id: eventId,
+        type: mapping.name,
+        timestamp_ms: timestampMs,
+        source_url: event.page_url,
+        action_source: "web",
+        user_data: Object.keys(userData).length > 0 ? userData : undefined,
+        data,
+      },
+    ],
+  };
+
+  await fetch(
+    `https://bzr.openai.com/v1/events?pid=${pixelId}`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
     }
   );
 }
@@ -488,6 +625,7 @@ export async function dispatchAnalyticsEvent(
 ): Promise<void> {
   await Promise.allSettled([
     fireMetaCAPI(event),
+    fireOpenAICAPI(event),
     fireGA4(event),
     fireGoogleAds(event),
     firePostHog(event),
