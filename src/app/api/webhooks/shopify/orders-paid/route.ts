@@ -41,6 +41,7 @@ import {
 } from "@/lib/foundingHundred";
 import { processSponsorship } from "@/app/api/_lib/sponsorship";
 import { getSupabaseService } from "@/app/api/_lib/supabaseService";
+import { provisionPaidMemberFromLoop } from "@/app/api/_lib/provisionPaidMember";
 
 /**
  * Extracts the numeric variant id from the rangefinder variant GID env var,
@@ -464,10 +465,36 @@ export async function POST(request: NextRequest) {
   const eventId = randomUUID();
 
   // ── Update Firestore user tier + trigger email flow ──────────────────────
+  // Two paths:
+  //   1. Line items resolve to a known membership variant → use the existing
+  //      inline provisioning below. This is the fast path for new-flow
+  //      Shopify checkouts and matches behavior that's already in production.
+  //   2. Line items don't resolve but the customer has an ACTIVE Loop
+  //      subscription (typical for legacy Back 9 subscribers renewing via
+  //      Loop, or any SKU not in NEXT_PUBLIC_SHOPIFY_*_VARIANT_IDS) → fall
+  //      back to provisionPaidMemberFromLoop so we still create the Firebase
+  //      user + magic link email instead of silently doing nothing.
   const tierUpdate = email && !isGiftOrder(order.note_attributes)
     ? (async () => {
         const tier = resolveTierFromLineItems(order.line_items);
-        if (!tier || tier === "free") return;
+        if (!tier || tier === "free") {
+          // Fallback: even without a matching line item, Loop may already
+          // consider this customer active. Provision only if so.
+          try {
+            const result = await provisionPaidMemberFromLoop(email, {
+              source: "orders_paid_webhook",
+              firstName: order.customer?.first_name ?? null,
+            });
+            if (result.status === "provisioned") {
+              console.log(
+                `[orders-paid] Loop fallback provisioned uid=${result.uid} tier=${result.tier}`
+              );
+            }
+          } catch (err) {
+            console.error("[orders-paid] Loop fallback failed:", err);
+          }
+          return;
+        }
         try {
           const emailFlow = tier === "member" || tier === "black" ? "member" : "access";
 

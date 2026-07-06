@@ -77,6 +77,41 @@ export function EmailCTA({ variant = "hero", ctaText }: { variant?: "hero" | "bo
         return;
       }
 
+      // Not in Firebase Auth yet — but this could still be a legacy Loop
+      // subscriber whose Firebase account was never created. Ask Loop
+      // before assuming they're a new signup. If Loop says they're an
+      // active paying member, /api/auth/check-loop-status provisions the
+      // Firebase user + Firestore doc and emails them a magic link.
+      try {
+        const loopRes = await fetch("/api/auth/check-loop-status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+        });
+        if (loopRes.ok) {
+          const loopData = (await loopRes.json()) as {
+            paid?: boolean;
+            tier?: string;
+            isLegacy?: boolean;
+          };
+          if (loopData.paid === true) {
+            void trackEvent("legacy_loop_login_provisioned", {
+              email,
+              properties: {
+                tier: loopData.tier ?? "unknown",
+                is_legacy: loopData.isLegacy ?? false,
+                source: variant === "hero" ? "hero_cta" : "bottom_cta",
+              },
+            });
+            try { sessionStorage.setItem(PENDING_SIGN_IN_EMAIL_KEY, email); } catch {}
+            router.push("/login?paid_member=1");
+            return;
+          }
+        }
+      } catch {
+        // Loop lookup failed — fall through to the standard new-user path.
+      }
+
       // New user: create a Firebase account with no password and sign in
       // with the returned custom token, then route to /choose-plan.
       const startRes = await fetch("/api/auth/start-account", {
