@@ -116,7 +116,7 @@ async function runHogQL(
  * Pull yesterday's counts split by the `homepage-lp` event property.
  * Detroit is UTC-4 (EDT) or UTC-5 (EST); to keep the query stable, we ask
  * PostHog for the raw property on events whose Detroit-local date matches
- * `dateISO`. Uses `toString(toDate(timestamp, 'America/Detroit'))` so DST
+ * `dateISO`. Uses `toDate(toTimeZone(timestamp, 'America/Detroit'))` so DST
  * flips are handled by ClickHouse, not by us.
  */
 async function pullPosthogSplit(dateISO: string): Promise<{
@@ -142,7 +142,7 @@ async function pullPosthogSplit(dateISO: string): Promise<{
       countIf(event = 'purchase') AS purchases,
       sumIf(toFloatOrZero(toString(properties['value'])), event = 'purchase') AS revenue
     FROM events
-    WHERE toString(toDate(timestamp, 'America/Detroit')) = '${dateISO}'
+    WHERE toString(toDate(toTimeZone(timestamp, 'America/Detroit'))) = '${dateISO}'
       AND properties['homepage-lp'] IN ('control', 'variant-a')
     GROUP BY variant
   `;
