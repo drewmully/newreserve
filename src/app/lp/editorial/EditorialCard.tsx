@@ -180,20 +180,15 @@ export function EditorialCard({
 
   // Image tile height: hero is nearly full-viewport-width tall but ~30%
   // shorter than the original 16:9 pass so the copy below reads without
-  // scrolling. Grid tiles stay square. object-cover for destinations and
-  // affiliates (photographic scenes and vendor product shots with their
-  // own backdrops — avoids the "double background" look of a black-on-tan
-  // tile). object-contain with padding for Shopify SKUs so isolated
-  // product shots get proper whitespace.
+  // scrolling. Grid tiles stay square. All cards use object-cover so the
+  // image fills the tile edge-to-edge — no double-background look
+  // regardless of whether the source is a destination photo, an affiliate
+  // vendor shot, or a Shopify product image on its own backdrop.
   const imageWrapperClass = isHero
     ? "block relative w-full aspect-[16/7] md:aspect-[21/8] bg-[#f7f6f2] overflow-hidden"
     : "block relative aspect-square bg-[#f7f6f2] overflow-hidden";
 
-  const imageFitClass = isDestination || isAffiliate
-    ? "object-cover"
-    : isHero
-    ? "object-contain p-8 md:p-14"
-    : "object-contain p-5 md:p-6";
+  const imageFitClass = "object-cover";
 
   const imageSizes = isHero
     ? "(max-width: 1023px) 100vw, 1000px"
