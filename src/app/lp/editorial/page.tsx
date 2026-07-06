@@ -38,6 +38,27 @@ export const metadata: Metadata = {
 // the next hour without a redeploy.
 export const revalidate = 3600;
 
+/**
+ * Format "Updated on July 6, 2026 at 15:00" using US Eastern time. Uses
+ * Intl.DateTimeFormat so DST is handled correctly. 24-hour clock to match
+ * the Uncrate reference.
+ */
+function formatUpdatedAt(now: Date): string {
+  const date = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Detroit",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(now);
+  const time = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Detroit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(now);
+  return `Updated on ${date} at ${time}`;
+}
+
 export default async function EditorialLandingPage() {
   const products = await getEditorialFeed();
 
@@ -46,6 +67,11 @@ export default async function EditorialLandingPage() {
   const collections = Array.from(
     new Set(products.map((p) => p.collection))
   ).sort();
+
+  // "Updated on ..." label pinned next to the hero (Uncrate pattern).
+  // Rendered at ISR revalidation time, so it reflects the last cache
+  // rebuild. Formatted in US Eastern time (Mully HQ, Detroit).
+  const updatedAtLabel = formatUpdatedAt(new Date());
 
   return (
     <div className="min-h-screen bg-white text-charcoal">
@@ -57,7 +83,10 @@ export default async function EditorialLandingPage() {
         <Mully8Hero />
 
         {/* ─── CATEGORY NAV + FEED (client shell owns filter state) ──── */}
-        <EditorialShell products={products} />
+        <EditorialShell
+          products={products}
+          updatedAtLabel={updatedAtLabel}
+        />
 
         {/* ─── MULLY 100 CTA ─────────────────────────────────────────── */}
         <section className="px-6 md:px-8 pb-24 max-w-3xl mx-auto text-center">

@@ -49,6 +49,11 @@ interface EditorialCardProps {
    * - `hero`  — full-width first card. Bigger image, longer deck.
    */
   variant?: "grid" | "hero";
+  /**
+   * Optional "Updated on ..." label rendered vertically along the left
+   * edge of the hero image (Uncrate pattern). Only shown on `variant=hero`.
+   */
+  updatedAtLabel?: string;
   /** Fires when a guest adds — parent uses this to surface the Access upsell. */
   onGuestAddedToCart?: () => void;
 }
@@ -128,6 +133,7 @@ export function EditorialCard({
   ordinal,
   index,
   variant = "grid",
+  updatedAtLabel,
   onGuestAddedToCart,
 }: EditorialCardProps) {
   const { tier, addToCart, isSignedIn } = useMembership();
@@ -172,14 +178,15 @@ export function EditorialCard({
     return undefined;
   }, [primary]);
 
-  // Image tile height: hero is nearly full-viewport-width tall, grid is a
-  // clean 4:3ish square-ish tile. object-cover for destinations and
+  // Image tile height: hero is nearly full-viewport-width tall but ~30%
+  // shorter than the original 16:9 pass so the copy below reads without
+  // scrolling. Grid tiles stay square. object-cover for destinations and
   // affiliates (photographic scenes and vendor product shots with their
   // own backdrops — avoids the "double background" look of a black-on-tan
   // tile). object-contain with padding for Shopify SKUs so isolated
   // product shots get proper whitespace.
   const imageWrapperClass = isHero
-    ? "block relative w-full aspect-[16/10] md:aspect-[16/9] bg-[#f7f6f2] overflow-hidden"
+    ? "block relative w-full aspect-[16/7] md:aspect-[21/8] bg-[#f7f6f2] overflow-hidden"
     : "block relative aspect-square bg-[#f7f6f2] overflow-hidden";
 
   const imageFitClass = isDestination || isAffiliate
@@ -210,6 +217,8 @@ export function EditorialCard({
       },
     });
 
+  const showUpdatedLabel = isHero && Boolean(updatedAtLabel);
+
   return (
     <article
       className={`group flex flex-col ${isHero ? "col-span-full" : ""}`}
@@ -217,7 +226,18 @@ export function EditorialCard({
       data-collection={product.collection}
       data-variant={variant}
     >
-      {/* IMAGE TILE ─── */}
+      {/* IMAGE TILE ─── wrapped in a positioning shell on hero so the
+          vertical "Updated on ..." label can sit outside the image bounds. */}
+      <div className={isHero ? "relative" : "contents"}>
+        {showUpdatedLabel && (
+          <span
+            aria-label={updatedAtLabel}
+            className="hidden md:flex absolute top-1/2 -translate-y-1/2 left-0 md:-left-2 lg:-left-4 -translate-x-full items-center gap-2 text-[10px] tracking-[0.32em] uppercase text-charcoal/50 select-none whitespace-nowrap origin-center rotate-180 [writing-mode:vertical-rl]"
+          >
+            <span aria-hidden className="inline-block h-[1px] w-6 bg-charcoal/25" />
+            <span>{updatedAtLabel}</span>
+          </span>
+        )}
       {isOutbound ? (
         <a
           href={product.destinationUrl || "#"}
@@ -305,6 +325,7 @@ export function EditorialCard({
           )}
         </Link>
       )}
+      </div>
 
       {/* COPY BLOCK ─── centered under image */}
       <div

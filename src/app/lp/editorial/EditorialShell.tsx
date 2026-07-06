@@ -18,9 +18,14 @@ import { EditorialFeed } from "./EditorialFeed";
 
 interface EditorialShellProps {
   products: EditorialProduct[];
+  /** Optional label rendered vertically next to the hero card. */
+  updatedAtLabel?: string;
 }
 
-export function EditorialShell({ products }: EditorialShellProps) {
+export function EditorialShell({
+  products,
+  updatedAtLabel,
+}: EditorialShellProps) {
   const [category, setCategory] = useState<EditorialCategory | "all">("all");
 
   const counts = useMemo(() => {
@@ -49,7 +54,11 @@ export function EditorialShell({ products }: EditorialShellProps) {
       <PromotedBar />
       <section className="px-5 md:px-10 pt-12 md:pt-16 pb-20 md:pb-28">
         <div className="max-w-6xl mx-auto">
-          <EditorialFeed products={products} categoryFilter={category} />
+          <EditorialFeed
+            products={products}
+            categoryFilter={category}
+            updatedAtLabel={updatedAtLabel}
+          />
         </div>
       </section>
     </>

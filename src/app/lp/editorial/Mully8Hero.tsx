@@ -29,7 +29,9 @@ export function EditorialMasthead({ years = 8 }: EditorialMastheadProps) {
       aria-label={`Mully — celebrating ${years} years`}
       className="relative bg-forest text-bone border-b border-forest overflow-hidden"
     >
-      <div className="max-w-6xl mx-auto px-6 md:px-10 pt-14 md:pt-20 pb-10 md:pb-14">
+      {/* Height reduced ~40% from original masthead. Vertical padding,
+          watermark size, wordmark size, and subhead gap all trimmed. */}
+      <div className="max-w-6xl mx-auto px-6 md:px-10 pt-8 md:pt-12 pb-6 md:pb-8">
         {/* Wordmark + watermark stack.
             The wrapper is inline-block so its width tracks the wordmark
             width, keeping the watermark visually anchored to the mark. */}
@@ -42,7 +44,7 @@ export function EditorialMasthead({ years = 8 }: EditorialMastheadProps) {
               aria-hidden
               className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-[52%] font-serif font-black leading-none text-[#B08D57]/70 select-none"
               style={{
-                fontSize: "clamp(180px, 34vw, 460px)",
+                fontSize: "clamp(108px, 20vw, 276px)",
                 letterSpacing: "-0.04em",
               }}
             >
@@ -52,7 +54,7 @@ export function EditorialMasthead({ years = 8 }: EditorialMastheadProps) {
             {/* Wordmark on top. Playfair Display, low case, tight tracking. */}
             <h1
               className="relative font-serif font-bold leading-none tracking-[-0.03em] text-bone"
-              style={{ fontSize: "clamp(72px, 15vw, 200px)" }}
+              style={{ fontSize: "clamp(44px, 9vw, 120px)" }}
             >
               mully
               <span className="text-[#B08D57]">.</span>
@@ -73,11 +75,11 @@ export function EditorialMasthead({ years = 8 }: EditorialMastheadProps) {
         </div>
 
         {/* Subhead + eyebrow */}
-        <div className="mt-10 md:mt-14 text-center max-w-2xl mx-auto">
-          <p className="text-[10px] tracking-[0.3em] uppercase text-bone/50 mb-4">
+        <div className="mt-6 md:mt-8 text-center max-w-2xl mx-auto">
+          <p className="text-[10px] tracking-[0.3em] uppercase text-bone/50 mb-3">
             The Shelf &nbsp;·&nbsp; Curated by Mully
           </p>
-          <p className="font-serif italic text-2xl md:text-3xl text-bone leading-[1.25]">
+          <p className="font-serif italic text-xl md:text-2xl text-bone leading-[1.25]">
             Eight years of finding the golf goods{" "}
             <span className="text-[#D9B786]">most golfers</span> haven't
             found yet.

@@ -256,15 +256,16 @@ async function storefrontFetch<T>(query: string, variables: Record<string, unkno
 }
 
 /**
- * Fetch a single collection sorted by publish date, newest first.
- * Shopify natively supports `sortKey: CREATED, reverse: true` on the
- * collection.products connection.
+ * Fetch a single collection sorted by best-selling volume, highest first.
+ * Shopify Storefront tracks per-product sales counts and exposes them via
+ * `sortKey: BEST_SELLING` on the collection.products connection. Products
+ * with zero sales fall to the bottom in Shopify's natural order.
  */
 async function fetchCollection(handle: string): Promise<EditorialProduct[]> {
   const query = `
     query EditorialCollection($handle: String!) {
       collection(handle: $handle) {
-        products(first: 50, sortKey: CREATED, reverse: true) {
+        products(first: 50, sortKey: BEST_SELLING) {
           nodes { ${PRODUCT_FIELDS} }
         }
       }
@@ -323,14 +324,11 @@ export async function getEditorialFeed(): Promise<EditorialProduct[]> {
     }
   }
 
+  // Preserve Shopify's BEST_SELLING order from the first collection that
+  // returned each product. If the same slug appears in multiple
+  // collections, keep its earliest position (already handled by the
+  // insertion-order semantics of Map above).
   const products = Array.from(bySlug.values());
-
-  // Newest first. Products with no publishedAt sink to the bottom.
-  products.sort((a, b) => {
-    const ta = a.publishedAt ? Date.parse(a.publishedAt) : 0;
-    const tb = b.publishedAt ? Date.parse(b.publishedAt) : 0;
-    return tb - ta;
-  });
 
   // ─── Pin the hero ──────────────────────────────────────────
   //
@@ -352,18 +350,17 @@ export async function getEditorialFeed(): Promise<EditorialProduct[]> {
       ? [...affiliatesAll.slice(0, heroIdx), ...affiliatesAll.slice(heroIdx + 1)]
       : affiliatesAll;
 
-  // ─── Interleave editorial cards at 1-in-3 cadence ──────────────────
+  // ─── Interleave using the DPPE block pattern ────────────────
   //
-  // Every 3rd cell of the grid is an editorial card (affiliate OR
-  // destination). Concretely, after every 2 Shopify products we insert
-  // one editorial card, so the reader sees:
-  //     P P E P P E P P E P P E ...
-  // where E alternates between the affiliate queue and the destination
-  // queue (affiliates come more often since we have more of them).
+  // The grid repeats a 4-cell block:  D  P  P  E
+  // where D = destination, P = Shopify product (best-selling first),
+  //       E = affiliate.
   //
-  // Alternation ratio is roughly 3 affiliates : 1 destination, which
-  // keeps destinations rare enough to feel like real editorial breaks.
-  const interleaved = interleaveEditorial(products, affiliates, destinations, 2);
+  // Destinations get their own cadence so they spread evenly through
+  // the feed instead of clumping. Affiliates keep the PPE rhythm the
+  // eye is trained on. If either queue empties, remaining products keep
+  // flowing without gaps.
+  const interleaved = interleaveEditorial(products, affiliates, destinations);
 
   // Prepend hero (if present) so EditorialFeed picks it up at index 0.
   return heroCard ? [heroCard, ...interleaved] : interleaved;
@@ -378,64 +375,61 @@ export async function getEditorialFeed(): Promise<EditorialProduct[]> {
 const HERO_AFFILIATE_SLUG = "mclaren-golf-series-3-iron";
 
 /**
- * Interleave editorial cards (affiliates + destinations, merged) into a
- * Shopify product feed. Returns a new array; inputs unchanged.
+ * Interleave editorial cards into the Shopify product feed using the
+ * DPPE block pattern. Returns a new array; inputs unchanged.
  *
- * Cadence: after every `productStride` Shopify products, insert one
- * editorial card. With productStride=2 in a 3-column grid, every 3rd
- * cell of the grid is an editorial card.
+ * Each 4-cell block is:  D (destination)  P  P  E (affiliate).
+ * Destinations and affiliates are on independent cadences — destinations
+ * are NOT "editorial breaks that count against product spacing." A
+ * destination card slots in at the top of each block regardless of what
+ * else is present.
  *
- * Editorial cards alternate between the affiliate and destination queues.
- * We deal affiliates roughly 3-to-1 vs destinations so the more curated,
- * larger destination features stay rare and feel like intentional breaks.
- * Once one queue empties, the other keeps feeding until both are drained.
+ * Behavior when queues empty:
+ *   - No destinations left → block starts with a product instead.
+ *   - No affiliates left    → block ends with an extra product.
+ *   - No products left      → remaining editorial cards drain to the
+ *                             bottom (destinations first, then affiliates,
+ *                             alternating so they don't clump).
  *
- * Example (productStride=2, 6 affiliates, 2 destinations):
- *   products:  [P1..P12]
- *   result:    [P1, P2, A1, P3, P4, A2, P5, P6, A3, P7, P8, D1, P9, P10, A4, P11, P12, A5, A6, D2]
+ * Example (6 products, 2 destinations, 3 affiliates):
+ *   D1 P1 P2 A1  D2 P3 P4 A2  P5 P6 A3
  */
 function interleaveEditorial(
   products: EditorialProduct[],
   affiliates: EditorialProduct[],
-  destinations: EditorialProduct[],
-  productStride: number
+  destinations: EditorialProduct[]
 ): EditorialProduct[] {
   const out: EditorialProduct[] = [];
-  let affIdx = 0;
-  let destIdx = 0;
-  let editorialSlot = 0; // counts editorial insertions to alternate queues
+  let pIdx = 0;
+  let aIdx = 0;
+  let dIdx = 0;
 
-  const nextEditorial = (): EditorialProduct | undefined => {
-    // 3:1 affiliate:destination ratio. Position 0-2 draw from affiliates,
-    // position 3 draws from destinations, then cycle. If the picked queue
-    // is empty, fall back to the other queue.
-    const preferDestination = editorialSlot % 4 === 3;
-    const affLeft = affIdx < affiliates.length;
-    const destLeft = destIdx < destinations.length;
-    if (!affLeft && !destLeft) return undefined;
-    if (preferDestination && destLeft) return destinations[destIdx++];
-    if (!preferDestination && affLeft) return affiliates[affIdx++];
-    // Fallback: whichever queue still has items.
-    return affLeft ? affiliates[affIdx++] : destinations[destIdx++];
-  };
+  const nextProduct = () => (pIdx < products.length ? products[pIdx++] : undefined);
+  const nextAffiliate = () => (aIdx < affiliates.length ? affiliates[aIdx++] : undefined);
+  const nextDestination = () => (dIdx < destinations.length ? destinations[dIdx++] : undefined);
 
-  for (let i = 0; i < products.length; i++) {
-    out.push(products[i]);
-    const nth = i + 1;
-    if (productStride >= 1 && nth % productStride === 0) {
-      const ed = nextEditorial();
-      if (ed) {
-        out.push(ed);
-        editorialSlot++;
-      }
-    }
+  // Emit DPPE blocks while any product remains.
+  while (pIdx < products.length) {
+    const d = nextDestination();
+    if (d) out.push(d);
+
+    const p1 = nextProduct();
+    if (p1) out.push(p1);
+
+    const p2 = nextProduct();
+    if (p2) out.push(p2);
+
+    const a = nextAffiliate();
+    if (a) out.push(a);
   }
-  // Drain any remaining editorial cards to the bottom of the feed.
-  while (affIdx < affiliates.length || destIdx < destinations.length) {
-    const ed = nextEditorial();
-    if (!ed) break;
-    out.push(ed);
-    editorialSlot++;
+
+  // Drain any leftover editorial cards, alternating so they don't clump.
+  while (dIdx < destinations.length || aIdx < affiliates.length) {
+    const d = nextDestination();
+    if (d) out.push(d);
+    const a = nextAffiliate();
+    if (a) out.push(a);
   }
+
   return out;
 }

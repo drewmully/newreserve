@@ -39,11 +39,14 @@ interface EditorialFeedProps {
   products: EditorialProduct[];
   /** Filter to a single category. Omit or pass "all" to show everything. */
   categoryFilter?: EditorialCategory | "all";
+  /** Optional label rendered vertically next to the hero card. */
+  updatedAtLabel?: string;
 }
 
 export function EditorialFeed({
   products,
   categoryFilter = "all",
+  updatedAtLabel,
 }: EditorialFeedProps) {
   const { tier, isSignedIn, authLoading } = useMembership();
   const [upsellOpen, setUpsellOpen] = useState(false);
@@ -118,6 +121,7 @@ export function EditorialFeed({
             ordinal={ordinalBySlug.get(hero.slug)}
             index={0}
             variant="hero"
+            updatedAtLabel={updatedAtLabel}
             onGuestAddedToCart={handleGuestAdded}
           />
         </div>
