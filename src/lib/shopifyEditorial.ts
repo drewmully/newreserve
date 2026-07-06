@@ -271,11 +271,8 @@ export async function getEditorialFeed(): Promise<EditorialProduct[]> {
     }
   });
 
-  // Destinations are code-level (see src/lib/destinations.ts), not Shopify
-  // products. Merge them in as first-class feed entries so they interleave
-  // by publishedAt like everything else.
-  groups.push(getDestinationEditorialProducts());
-
+  // Merge Shopify products only (destinations are handled separately below
+  // so we can interleave them at fixed cadence rather than by date).
   const bySlug = new Map<string, EditorialProduct>();
   for (const group of groups) {
     for (const product of group) {
@@ -298,14 +295,50 @@ export async function getEditorialFeed(): Promise<EditorialProduct[]> {
     }
   }
 
-  const all = Array.from(bySlug.values());
+  const products = Array.from(bySlug.values());
 
   // Newest first. Products with no publishedAt sink to the bottom.
-  all.sort((a, b) => {
+  products.sort((a, b) => {
     const ta = a.publishedAt ? Date.parse(a.publishedAt) : 0;
     const tb = b.publishedAt ? Date.parse(b.publishedAt) : 0;
     return tb - ta;
   });
 
-  return all;
+  // ─── Interleave destinations at every 4th slot ────────────────────────
+  // Rhythm: P P P P D P P P P D P P P P D ...
+  // The 5th, 10th, 15th, ... items are destination cards. Once we run out
+  // of destinations we just continue with products. This is a layout
+  // decision, not a chronology decision — destinations should appear as
+  // periodic editorial breaks in the shopping feed, not sort by date.
+  const destinations = getDestinationEditorialProducts();
+  return interleaveDestinations(products, destinations, 4);
+}
+
+/**
+ * Interleave `destinations` into `products` so a destination card appears
+ * after every `stride` product cards. Returns a new array; inputs unchanged.
+ *
+ * Example (stride=4):
+ *   products:     [P1, P2, P3, P4, P5, P6, P7, P8, P9]
+ *   destinations: [D1, D2]
+ *   result:       [P1, P2, P3, P4, D1, P5, P6, P7, P8, D2, P9]
+ *
+ * If destinations run out, remaining products are appended straight.
+ */
+function interleaveDestinations(
+  products: EditorialProduct[],
+  destinations: EditorialProduct[],
+  stride: number
+): EditorialProduct[] {
+  if (destinations.length === 0 || stride < 1) return products;
+  const out: EditorialProduct[] = [];
+  let destIdx = 0;
+  for (let i = 0; i < products.length; i++) {
+    out.push(products[i]);
+    // After every `stride` products, drop in the next destination (if any).
+    if ((i + 1) % stride === 0 && destIdx < destinations.length) {
+      out.push(destinations[destIdx++]);
+    }
+  }
+  return out;
 }

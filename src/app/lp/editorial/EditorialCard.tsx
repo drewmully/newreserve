@@ -30,8 +30,11 @@ import { trackEvent } from "@/lib/tracking";
 
 interface EditorialCardProps {
   product: EditorialProduct;
-  /** Editorial issue number shown on the card. */
-  ordinal: number;
+  /**
+   * Editorial issue number shown on the card. Undefined for destination
+   * cards — they're editorial breaks, not numbered inventory.
+   */
+  ordinal?: number;
   /** Ordinal position in the feed, used for analytics. */
   index: number;
   /** Fires when a guest adds — parent uses this to surface the Access upsell. */
@@ -225,7 +228,13 @@ export function EditorialCard({
       {/* COPY BLOCK — centered under image ─── */}
       <div className="pt-6 md:pt-7 text-center px-2">
         <div className="text-[10px] tracking-[0.28em] uppercase text-charcoal/40 mb-3">
-          № {pad(ordinal)} &nbsp;·&nbsp; {product.brand}
+          {isDestination ? (
+            <span>Destination &nbsp;·&nbsp; {product.collection}</span>
+          ) : (
+            <span>
+              № {pad(ordinal ?? 0)} &nbsp;·&nbsp; {product.brand}
+            </span>
+          )}
         </div>
 
         <h2 className="font-sans text-[13px] md:text-[14px] font-semibold tracking-[0.08em] uppercase leading-[1.35] text-charcoal mb-2">
