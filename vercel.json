@@ -67,6 +67,10 @@
     {
       "path": "/api/admin/cron/proshop-abandon-nudge",
       "schedule": "5 * * * *"
+    },
+    {
+      "path": "/api/admin/cron/ab-homepage-daily",
+      "schedule": "0 7 * * *"
     }
   ]
 }
