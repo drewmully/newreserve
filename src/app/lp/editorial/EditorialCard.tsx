@@ -188,7 +188,11 @@ export function EditorialCard({
     ? "block relative w-full aspect-[16/7] md:aspect-[21/8] bg-[#f7f6f2] overflow-hidden"
     : "block relative aspect-square bg-[#f7f6f2] overflow-hidden";
 
-  const imageFitClass = "object-cover";
+  // Every image in the editorial feed also gets `editorial-image-grade`,
+  // a subtle global filter (see globals.css) that unifies raw ecommerce
+  // product shots, affiliate vendor photos, and destination stock into
+  // one magazine-style look.
+  const imageFitClass = "object-cover editorial-image-grade";
 
   const imageSizes = isHero
     ? "(max-width: 1023px) 100vw, 1000px"

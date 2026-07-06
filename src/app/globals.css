@@ -1625,3 +1625,57 @@ input:focus-visible {
   display: block;
   width: 100%;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   EDITORIAL IMAGE GRADE
+   Subtle magazine-style photo treatment applied to every image in the
+   /lp/editorial feed. Pulls raw ecommerce product shots, affiliate vendor
+   photos, and destination stock closer to a unified Uncrate/Cereal look:
+   slightly desaturated, a touch more contrast, a warmer midtone. Kept
+   deliberately mild so brand colors survive but the feed reads as one.
+   ───────────────────────────────────────────────────────────────────────── */
+.editorial-image-grade {
+  filter: saturate(0.9) contrast(1.04) brightness(0.985);
+  transition: filter 400ms ease;
+}
+.editorial-image-grade:hover,
+.group:hover .editorial-image-grade {
+  filter: saturate(0.96) contrast(1.05) brightness(1);
+}
+
+/* Stronger, warmer grade for the spanning Curated Shipments card so the
+   flatlay reads editorial rather than product-catalog. Slightly darker,
+   less saturated, and a warm sepia-adjacent midtone that pairs with the
+   forest-green copy panel to its right. */
+.editorial-image-hero {
+  filter: saturate(0.78) contrast(1.06) brightness(0.94) sepia(0.08);
+  transition: filter 500ms ease, transform 900ms ease;
+}
+.group:hover .editorial-image-hero {
+  filter: saturate(0.85) contrast(1.08) brightness(0.96) sepia(0.08);
+}
+
+/* Inner vignette + right-edge shadow that anchors the flatlay against the
+   forest panel and pulls the eye toward the headline. Applied as a
+   ::after overlay so the underlying <Image> stays untouched. */
+.editorial-hero-frame {
+  position: relative;
+}
+.editorial-hero-frame::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(to right, rgba(31, 61, 43, 0) 60%, rgba(31, 61, 43, 0.35) 100%),
+    radial-gradient(120% 90% at 30% 40%, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.22) 100%);
+}
+@media (max-width: 767px) {
+  /* On mobile the copy stacks below the image, so anchor the vignette to
+     the bottom edge instead of the right. */
+  .editorial-hero-frame::after {
+    background:
+      linear-gradient(to bottom, rgba(31, 61, 43, 0) 55%, rgba(31, 61, 43, 0.4) 100%),
+      radial-gradient(120% 90% at 50% 40%, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.22) 100%);
+  }
+}

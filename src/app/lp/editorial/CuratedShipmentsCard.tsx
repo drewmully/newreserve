@@ -31,13 +31,13 @@ export function CuratedShipmentsCard() {
       >
         <div className="grid grid-cols-1 md:grid-cols-2">
           {/* Image side */}
-          <div className="relative aspect-[4/3] md:aspect-auto md:min-h-[420px] bg-forest overflow-hidden">
+          <div className="editorial-hero-frame relative aspect-[4/3] md:aspect-auto md:min-h-[420px] bg-forest overflow-hidden">
             <Image
               src="/reserve-flatlay-hero.webp"
               alt="A curated shipment of Mully goods, arranged flat"
               fill
               sizes="(max-width: 767px) 100vw, 50vw"
-              className="object-cover transition-transform duration-[900ms] group-hover:scale-[1.03]"
+              className="object-cover editorial-image-hero transition-transform duration-[900ms] group-hover:scale-[1.03]"
             />
           </div>
 
