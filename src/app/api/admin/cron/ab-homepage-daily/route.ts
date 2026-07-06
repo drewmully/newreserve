@@ -140,7 +140,7 @@ async function pullPosthogSplit(dateISO: string): Promise<{
       countIf(event = 'add_to_cart') AS atc,
       countIf(event = 'checkout_clicked') AS checkout,
       countIf(event = 'purchase') AS purchases,
-      sumIf(toFloat64OrZero(toString(properties['value'])), event = 'purchase') AS revenue
+      sumIf(toFloatOrZero(toString(properties['value'])), event = 'purchase') AS revenue
     FROM events
     WHERE toString(toDate(timestamp, 'America/Detroit')) = '${dateISO}'
       AND properties['homepage-lp'] IN ('control', 'variant-a')
