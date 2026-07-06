@@ -105,12 +105,23 @@ export function EditorialHeader({ brands, collections }: EditorialHeaderProps) {
             </span>
           </Link>
 
-          {/* Cart */}
-          <button
-            onClick={() => setCartOpen(true)}
-            className="relative w-10 h-10 -mr-2 flex items-center justify-center text-forest hover:text-forest-dark transition-colors cursor-pointer"
-            aria-label="Cart"
-          >
+          {/* Right cluster — Sign In + Cart. Kept as a single flex row so the
+              wordmark's absolute center remains visually balanced. Sign In
+              stays understated (10–11px, tracked, uppercase) so it reads as
+              editorial navigation, not a marketing CTA. */}
+          <div className="flex items-center gap-3 md:gap-4">
+            <Link
+              href="/login"
+              className="text-[10px] md:text-[11px] tracking-[0.22em] uppercase text-forest/80 hover:text-forest transition-colors font-medium"
+            >
+              Sign In
+            </Link>
+            {/* Cart */}
+            <button
+              onClick={() => setCartOpen(true)}
+              className="relative w-10 h-10 -mr-2 flex items-center justify-center text-forest hover:text-forest-dark transition-colors cursor-pointer"
+              aria-label="Cart"
+            >
             <svg
               className="w-[18px] h-[18px]"
               fill="none"
@@ -124,12 +135,13 @@ export function EditorialHeader({ brands, collections }: EditorialHeaderProps) {
                 d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"
               />
             </svg>
-            {cartCount > 0 && (
-              <span className="absolute top-1 right-1 min-w-[16px] h-[16px] px-1 rounded-full bg-ember text-white text-[10px] font-medium flex items-center justify-center">
-                {cartCount}
-              </span>
-            )}
-          </button>
+              {cartCount > 0 && (
+                <span className="absolute top-1 right-1 min-w-[16px] h-[16px] px-1 rounded-full bg-ember text-white text-[10px] font-medium flex items-center justify-center">
+                  {cartCount}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
       </header>
 

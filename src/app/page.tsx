@@ -1,33 +1,19 @@
 /**
- * Homepage — redirects to the Reserve LP, preserving query params.
+ * Homepage — 50/50 A/B split between the two funnel entry points.
  *
- * Why a redirect instead of duplicating the LP markup here?
- *   - The Reserve LP at /lp/subscription is the single source of truth for
- *     the funnel. Iterations happen there. Duplicating its JSX into / would
- *     mean every change has to be applied in two places, with subtle drift
- *     between hero copy, CTAs, analytics source tags, and section spacing.
- *   - The existing analytics events fire with source: "lp_subscription_*".
- *     Keeping the URL stable preserves all of that.
- *   - GlassHeader's "/" logo link gracefully redirects back to the LP — no
- *     dead links from the rest of the site.
+ * The actual split (and query-param forwarding) happens in `src/middleware.ts`
+ * so that:
+ *   1. The visitor's sticky bucket cookie (`mr_ab`, 0..99) is set on the very
+ *      first request, before any React runs.
+ *   2. Repeat visitors always land on the same variant.
+ *   3. All downstream analytics events fire with the same `homepage-lp`
+ *      property (via `getAbVariantProperties` in `src/lib/tracking.ts`), so
+ *      the daily rollup can attribute conversions back to the assigned LP.
  *
- * Why we forward query params:
- *   Any ad, email link, or shared URL that points at `/` (rather than
- *   `/lp/subscription`) used to land on the LP with NO UTMs because the
- *   redirect dropped the search string. That silently broke attribution
- *   for AG5 and any future ad someone forgets to point at the canonical
- *   LP path. Now we preserve `?utm_*`, `?gclid`, `?fbclid`, and any other
- *   query the marketer attached.
- *
- * Redirect type:
- *   Using next/navigation `redirect()` from a server component yields a
- *   307 (temporary) by default. That's the right semantic for now —
- *   if/when we want search engines to fully transfer authority to the LP
- *   URL, switch to `permanentRedirect()` from next/navigation.
- *
- * The previous bespoke homepage layout lives in git history at commit
- * 2595803 (and earlier) — `git show HEAD~1:src/app/page.tsx` if we ever
- * need to bring it back.
+ * This server component is a defensive fallback for the case where middleware
+ * is bypassed (e.g. maintenance rewrites, config regressions). It performs
+ * the same subscription-side redirect the pre-A/B homepage used to do, with
+ * query params preserved. In practice it should never render.
  */
 
 import { redirect } from "next/navigation";

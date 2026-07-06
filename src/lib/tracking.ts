@@ -96,6 +96,13 @@ function getAbVariantProperties(): Record<string, string> {
     "hero-cta": bucket < 50 ? "control" : "variant-a",
     "ob-plan-headline": bucket < 50 ? "control" : "variant-a",
     "ob-plan-subtext": bucket < 50 ? "control" : "variant-a",
+    // Homepage A/B split (middleware-driven redirect on /):
+    //   bucket 0..49  → /lp/subscription   (control)
+    //   bucket 50..99 → /lp/editorial      (variant-a)
+    // Attaching the assignment to every event lets us slice downstream funnel
+    // events (email_submitted, add_to_cart, checkout_clicked, purchase) by
+    // homepage variant in PostHog.
+    "homepage-lp": bucket < 50 ? "control" : "variant-a",
   };
 }
 
