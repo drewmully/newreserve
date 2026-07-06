@@ -116,7 +116,7 @@ export const MULLY_100: Mully100Item[] = [
     name: "Pro X3+ Rangefinder",
     headline:
       "1,300 yards of range, 7x magnification, and wind speed piped in from the phone in your pocket.",
-    image: placeholder("Bushnell Pro X3+"),
+    image: "https://m.media-amazon.com/images/I/81atEbM9Q-L._AC_SL1500_.jpg",
     asin: "B0CZ7MGYXB",
   },
   {
@@ -127,7 +127,8 @@ export const MULLY_100: Mully100Item[] = [
     name: "Approach R10 Launch Monitor",
     headline:
       "A $600 launch monitor you can throw in a backpack, run in the garage, and get PGA-comparable ball-speed numbers from.",
-    image: placeholder("Garmin R10"),
+    image: "https://m.media-amazon.com/images/I/61POLvv99xS._AC_SL1500_.jpg",
+    asin: "B095QX1FSR",
   },
   {
     id: "garmin-s70",
@@ -137,7 +138,8 @@ export const MULLY_100: Mully100Item[] = [
     name: "Approach S70 GPS Watch",
     headline:
       "An always-on AMOLED touchscreen with 43,000 preloaded courses, doubling as the nicest sport watch on the tee sheet.",
-    image: placeholder("Garmin S70"),
+    image: "https://m.media-amazon.com/images/I/81cLltnu90L._AC_SL1500_.jpg",
+    asin: "B0C5YSFSLR",
   },
   {
     id: "voice-caddie-sc4",
@@ -147,7 +149,8 @@ export const MULLY_100: Mully100Item[] = [
     name: "SC4 Portable Launch Monitor",
     headline:
       "A pocket launch monitor with radar accuracy that pairs to the phone for swing video overlays.",
-    image: placeholder("Voice Caddie SC4"),
+    image: "https://m.media-amazon.com/images/I/71vEwIlpwNL._AC_SL1500_.jpg",
+    asin: "B0DK24YKBD",
   },
 
   // ─── COURSE (balls, gloves, accessories) ───────────────────────────────
@@ -159,7 +162,8 @@ export const MULLY_100: Mully100Item[] = [
     name: "Pro V1 (2025)",
     headline:
       "The ball 70 percent of tour pros carry, now with a softer urethane cover and a rounder flight on wedges.",
-    image: placeholder("Titleist Pro V1"),
+    image: "https://m.media-amazon.com/images/I/61H+HnVHvdL._AC_SL1500_.jpg",
+    asin: "B0DPN7QZ9R",
   },
   {
     id: "titleist-pro-v1x",
@@ -169,7 +173,8 @@ export const MULLY_100: Mully100Item[] = [
     name: "Pro V1x (2025)",
     headline:
       "A higher flight and firmer feel than the V1 for players who want more spin on iron shots.",
-    image: placeholder("Titleist Pro V1x"),
+    image: "https://m.media-amazon.com/images/I/71pQr8zNGqL._AC_SL1500_.jpg",
+    asin: "B0DPN73WKB",
   },
   {
     id: "callaway-chrome-tour",
@@ -179,7 +184,8 @@ export const MULLY_100: Mully100Item[] = [
     name: "Chrome Tour Golf Balls",
     headline:
       "Callaway's answer to the Pro V1: a 4-piece urethane ball with a hyper-elastic core aimed at more distance without losing greenside bite.",
-    image: placeholder("Chrome Tour"),
+    image: "https://m.media-amazon.com/images/I/812qDrU9TrL._AC_SL1500_.jpg",
+    asin: "B0CJK2P78G",
   },
   {
     id: "srixon-zstar-xv",
@@ -189,7 +195,8 @@ export const MULLY_100: Mully100Item[] = [
     name: "Z-Star XV",
     headline:
       "A firmer 3-piece urethane ball that ranks with the V1x on tour spin numbers for about $10 less per dozen.",
-    image: placeholder("Srixon Z-Star XV"),
+    image: "https://m.media-amazon.com/images/I/81Fnr6P63CL._AC_SL1500_.jpg",
+    asin: "B0BSR9ZQ4Q",
   },
   {
     id: "titleist-players-glove",
@@ -199,7 +206,8 @@ export const MULLY_100: Mully100Item[] = [
     name: "Players Cabretta Glove",
     headline:
       "Premium cabretta leather from a Uruguayan tannery, thin enough to feel the grip and durable enough for a full round.",
-    image: placeholder("Titleist Players"),
+    image: "https://m.media-amazon.com/images/I/61mJun5Lc4L._AC_SL1500_.jpg",
+    asin: "B07WQBND6R",
   },
   {
     id: "footjoy-stasof",
@@ -209,7 +217,8 @@ export const MULLY_100: Mully100Item[] = [
     name: "StaSof Glove",
     headline:
       "The industry's benchmark leather glove for grip in humidity, on tour since 1993.",
-    image: placeholder("FootJoy StaSof"),
+    image: "https://m.media-amazon.com/images/I/81SuGbQpd8L._AC_SL1500_.jpg",
+    asin: "B0B9Q331TF",
   },
   {
     id: "pride-professional-tees",
@@ -219,7 +228,8 @@ export const MULLY_100: Mully100Item[] = [
     name: "PTS 3 1/4\" Tees, 75-pack",
     headline:
       "The tee used by more tour pros than any other, in the 3 1/4-inch length that fits a modern 460cc driver.",
-    image: placeholder("Pride PTS Tees"),
+    image: "https://m.media-amazon.com/images/I/71mzqtkZqzL._AC_SL1500_.jpg",
+    asin: "B0009SXX98",
   },
   {
     id: "pin-high-alignment-sticks",
@@ -229,7 +239,8 @@ export const MULLY_100: Mully100Item[] = [
     name: "Alignment Sticks, Pair",
     headline:
       "Two 48-inch fiberglass sticks that fit inside your bag and turn any range session into a real practice.",
-    image: placeholder("Alignment Sticks"),
+    image: "https://m.media-amazon.com/images/I/81kIV77L7CL._AC_SL1500_.jpg",
+    asin: "B0CMR54LDK",
   },
 
   // ─── STYLE (apparel, headwear, bags) ───────────────────────────────────
@@ -241,7 +252,8 @@ export const MULLY_100: Mully100Item[] = [
     name: "Pro/SL Carbon Golf Shoe",
     headline:
       "A carbon-plated spikeless outsole under FootJoy's benchmark tour last, worn by 3 major champions since 2023.",
-    image: placeholder("FJ Pro/SL Carbon"),
+    image: "https://m.media-amazon.com/images/I/719ULimphqL._AC_SL1500_.jpg",
+    asin: "B07T93Y8GW",
   },
   {
     id: "footjoy-pro-sl",
@@ -251,7 +263,8 @@ export const MULLY_100: Mully100Item[] = [
     name: "Pro/SL Golf Shoe",
     headline:
       "The tour spikeless standard: leather uppers, 3-layer chassis, and enough traction to hit 3-wood off a wet lie.",
-    image: placeholder("FootJoy Pro/SL"),
+    image: "https://m.media-amazon.com/images/I/71FcxhDotzL._AC_SL1500_.jpg",
+    asin: "B0GFCZPDGR",
   },
   {
     id: "puma-ignite-pwradapt",
@@ -261,7 +274,8 @@ export const MULLY_100: Mully100Item[] = [
     name: "Ignite PWRADAPT Caged",
     headline:
       "Six aggressive spikes and a molded midsole that behaves like a running shoe for guys who walk 36.",
-    image: placeholder("PUMA PWRADAPT"),
+    image: "https://m.media-amazon.com/images/I/71IoPgYZOHL._AC_SL1500_.jpg",
+    asin: "B07VKPL8S8",
   },
   {
     id: "sun-mountain-c130",
@@ -271,7 +285,8 @@ export const MULLY_100: Mully100Item[] = [
     name: "C-130 Cart Bag",
     headline:
       "The most-copied cart bag on the market: a 14-way top with full-length dividers, built in Missoula.",
-    image: placeholder("Sun Mountain C-130"),
+    image: "https://m.media-amazon.com/images/I/71HQok1zxCL._AC_SL1500_.jpg",
+    asin: "B0DHGHS2C1",
   },
   {
     id: "sun-mountain-15",
@@ -281,7 +296,8 @@ export const MULLY_100: Mully100Item[] = [
     name: "1.5+ LS Stand Bag",
     headline:
       "3.5 pounds, dual-strap system, and a 4-way top that fits under a push cart without unloading.",
-    image: placeholder("Sun Mountain 1.5+"),
+    image: "https://m.media-amazon.com/images/I/71dIRHoOYnL._AC_SL1500_.jpg",
+    asin: "B0FPY5WX96",
   },
   {
     id: "titleist-players-4-plus",
@@ -291,27 +307,8 @@ export const MULLY_100: Mully100Item[] = [
     name: "Players 4 Plus Stand Bag",
     headline:
       "A 5-pound stand bag with 6 pockets, 4-way top, and the Titleist ball-marker holster tour caddies use.",
-    image: placeholder("Titleist Players 4+"),
-  },
-  {
-    id: "vessel-player-4",
-    rank: 26,
-    category: "style",
-    brand: "Vessel",
-    name: "Player IV Pro Stand Bag",
-    headline:
-      "Full-grain synthetic leather, magnetic pockets, and a 6-way top that looks better after 100 rounds.",
-    image: placeholder("Vessel Player IV"),
-  },
-  {
-    id: "malbon-buckets-hat",
-    rank: 27,
-    category: "style",
-    brand: "Malbon",
-    name: "Buckets Rope Cap",
-    headline:
-      "The hat that turned Malbon into a $50 million brand, in a low-crown five-panel silhouette.",
-    image: placeholder("Malbon Buckets"),
+    image: "https://m.media-amazon.com/images/I/51cJ-x54+9L._AC_SL1500_.jpg",
+    asin: "B0F9J72J7Q",
   },
   {
     id: "yeti-rambler-26",
@@ -321,7 +318,8 @@ export const MULLY_100: Mully100Item[] = [
     name: "Rambler 26 oz Bottle",
     headline:
       "Double-wall stainless with a chug cap, keeping range water actually cold for 18 holes in July.",
-    image: placeholder("YETI Rambler 26"),
+    image: "https://m.media-amazon.com/images/I/51IBMjU4kdL._AC_SL1500_.jpg",
+    asin: "B0G65LGZ2H",
   },
   {
     id: "ohana-golf-towel",
@@ -331,7 +329,8 @@ export const MULLY_100: Mully100Item[] = [
     name: "Woven Cotton Golf Towel",
     headline:
       "600 gsm cotton with a carabiner clip, dyed in a Portuguese mill and cut to a 16x24 tour size.",
-    image: placeholder("Ohana Towel"),
+    image: "https://m.media-amazon.com/images/I/517qSCWpQJL._AC_SL1500_.jpg",
+    asin: "B0FHG41QJV",
   },
 
   // ─── COURSE (training, on-course consumables) ──────────────────────────
@@ -343,7 +342,8 @@ export const MULLY_100: Mully100Item[] = [
     name: "Full-Size Swing Trainer",
     headline:
       "A weighted rubber head on a flex shaft that fixes tempo in 5 swings, endorsed by more than 250 tour pros.",
-    image: placeholder("Orange Whip"),
+    image: "https://m.media-amazon.com/images/I/51tyGeYgCmL._AC_SL1500_.jpg",
+    asin: "B07HXTFD8D",
   },
   {
     id: "puttout-pressure-trainer",
@@ -353,7 +353,8 @@ export const MULLY_100: Mully100Item[] = [
     name: "Pressure Putt Trainer",
     headline:
       "A parabolic ramp that punishes anything but tour-speed putting, small enough for the living room.",
-    image: placeholder("PuttOut"),
+    image: "https://m.media-amazon.com/images/I/61FEPWGok8L._AC_SL1500_.jpg",
+    asin: "B08VWH6Y58",
   },
   {
     id: "callaway-hitting-net",
@@ -363,17 +364,8 @@ export const MULLY_100: Mully100Item[] = [
     name: "Home Range Net",
     headline:
       "A 7x7 pop-up net with a self-healing back, up in 90 seconds for backyard sessions.",
-    image: placeholder("Callaway Net"),
-  },
-  {
-    id: "spider-tour-mat",
-    rank: 43,
-    category: "course",
-    brand: "Fiberbuilt",
-    name: "Grass Series 5x4 Hitting Mat",
-    headline:
-      "The mat you actually feel a divot on, used in more than 400 top-100 practice facilities.",
-    image: placeholder("Fiberbuilt Mat"),
+    image: "https://m.media-amazon.com/images/I/71hOGXUsfkL._AC_SL1000_.jpg",
+    asin: "B088GNTN6G",
   },
 
   // ─── STYLE (accessories) ───────────────────────────────────────────────
@@ -385,7 +377,8 @@ export const MULLY_100: Mully100Item[] = [
     name: "Wayfarer Classic",
     headline:
       "The 1952 shape that outlasted every design trend since, in G-15 lenses that read greens in bright sun.",
-    image: placeholder("Ray-Ban Wayfarer"),
+    image: "https://m.media-amazon.com/images/I/71cP6H4ls8L._AC_SL1500_.jpg",
+    asin: "B0CNQ3ZPZF",
   },
   {
     id: "oakley-holbrook",
@@ -395,7 +388,8 @@ export const MULLY_100: Mully100Item[] = [
     name: "Holbrook Prizm Golf",
     headline:
       "Prizm lenses that turn grass into three shades of green for better read on breaks.",
-    image: placeholder("Oakley Holbrook"),
+    image: "https://m.media-amazon.com/images/I/51bOLY1jQ+L._AC_SL1500_.jpg",
+    asin: "B07Y2X9DH2",
   },
   {
     id: "peter-millar-shorts",
@@ -405,16 +399,7 @@ export const MULLY_100: Mully100Item[] = [
     name: "Salem 9\" Performance Short",
     headline:
       "A 9-inch inseam in 4-way stretch nylon that reads dressier than joggers and cooler than khakis.",
-    image: placeholder("Peter Millar"),
-  },
-  {
-    id: "howler-brothers-hat",
-    rank: 53,
-    category: "style",
-    brand: "Howler Brothers",
-    name: "Structured Snapback",
-    headline:
-      "Waxed cotton, a curved bill, and the fishing-brand aesthetic that reads more Bandon than PGA West.",
-    image: placeholder("Howler Bros"),
+    image: "https://m.media-amazon.com/images/I/41tZek0K21L._AC_SL1500_.jpg",
+    asin: "B07QH794HJ",
   },
 ];

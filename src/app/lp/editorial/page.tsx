@@ -54,7 +54,7 @@ export default async function EditorialLandingPage() {
       {/* Push content below the fixed header (14/16 h). */}
       <main className="pt-14 md:pt-16">
         {/* ─── MULLY 8 HERO (rotating marquee, newest 8) ─────────────── */}
-        <Mully8Hero products={products} />
+        <Mully8Hero />
 
         {/* ─── CATEGORY NAV + FEED (client shell owns filter state) ──── */}
         <EditorialShell products={products} />

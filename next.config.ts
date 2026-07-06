@@ -51,6 +51,27 @@ const nextConfig: NextConfig = {
         hostname: "images-na.ssl-images-amazon.com",
         pathname: "/images/**",
       },
+      // ─── Destination hero photography hosts ────────────────────
+      {
+        protocol: "https",
+        hostname: "evanschillerphotography.com",
+        pathname: "/cdn/shop/**",
+      },
+      {
+        protocol: "https",
+        hostname: "kiawahresort.com",
+        pathname: "/wp-content/**",
+      },
+      {
+        protocol: "https",
+        hostname: "cdn-ilbbpdb.nitrocdn.com",
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
+        hostname: "www.haversham.com",
+        pathname: "/wp-content/**",
+      },
     ],
   },
 };

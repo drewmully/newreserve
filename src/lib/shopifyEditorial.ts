@@ -19,12 +19,12 @@
 import {
   PRO_SHOP_COLLECTION_HANDLE,
   PRIVATE_RELEASES_COLLECTION_HANDLE,
-  DESTINATIONS_COLLECTION_HANDLE,
   type ShopifyProduct,
   type ShopifyProductImage,
   type ShopifyProductOption,
   type ShopifyProductVariant,
 } from "@/lib/shopify";
+import { getDestinationEditorialProducts } from "@/lib/destinations";
 
 const MEMBER_DISCOUNT_RATE = 0.15;
 
@@ -259,7 +259,6 @@ export async function getEditorialFeed(): Promise<EditorialProduct[]> {
   const handles = [
     PRO_SHOP_COLLECTION_HANDLE,
     PRIVATE_RELEASES_COLLECTION_HANDLE,
-    DESTINATIONS_COLLECTION_HANDLE,
   ];
   const settled = await Promise.allSettled(handles.map(fetchCollection));
 
@@ -271,6 +270,11 @@ export async function getEditorialFeed(): Promise<EditorialProduct[]> {
       console.error(`[EditorialFeed] "${handles[i]}" failed:`, result.reason);
     }
   });
+
+  // Destinations are code-level (see src/lib/destinations.ts), not Shopify
+  // products. Merge them in as first-class feed entries so they interleave
+  // by publishedAt like everything else.
+  groups.push(getDestinationEditorialProducts());
 
   const bySlug = new Map<string, EditorialProduct>();
   for (const group of groups) {

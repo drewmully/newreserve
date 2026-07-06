@@ -1,222 +1,96 @@
-"use client";
-
 /**
- * Mully 8 — the rotating editorial hero.
+ * Editorial masthead — celebrates Mully's 8th year.
  *
- * Modeled on Uncrate 20 (uncrate.com/20). Shows the 8 most-recently added
- * products from the editorial feed, one at a time, with a big image and
- * editorial copy. Auto-advances every ~6s, pauses on hover. Dots below.
+ * Modeled on the Uncrate 20 masthead (uncrate.com): the wordmark set
+ * over a giant numeral watermark, with a small "YEARS" caption. Pure
+ * typography, server-rendered, no JavaScript. This is a magazine cover,
+ * not a product carousel.
  *
- * Numbering is FIXED 1..8. Newest = № 08, next = № 07, ... down to № 01.
- * This is different from the feed ordinal (which uses total-i and grows
- * unbounded over time). Mully 8 is a "top of shelf" magazine cover.
+ * The "8" is a background element — the `mully` wordmark sits on top,
+ * with the tail of the `y` running through the counter of the 8 so the
+ * two shapes lock together rather than sit next to each other.
  *
- * Destinations render as an outbound "Visit Course" CTA. All other
- * products render as an "Add to Shelf" underline link that jumps to the
- * PDP, since the shelf card below has the actual cart flow.
+ * Sizes:
+ *  - The wordmark scales fluidly (clamp) so it reads confidently on
+ *    phone, tablet, and desktop.
+ *  - The "8" is roughly 1.7x the wordmark height and centered behind.
+ *  - "YEARS" is small caps, tracked wide, sitting under the right edge
+ *    of the 8 (matching Uncrate).
  */
 
-import Image from "next/image";
-import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { EditorialProduct } from "@/lib/shopifyEditorial";
-import { trackEvent } from "@/lib/tracking";
-
-interface Mully8HeroProps {
-  products: EditorialProduct[];
+interface EditorialMastheadProps {
+  /** Number of years to display in the watermark. Default 8. */
+  years?: number;
 }
 
-const AUTO_ADVANCE_MS = 6000;
-
-function pad(n: number): string {
-  return String(n).padStart(2, "0");
-}
-
-export function Mully8Hero({ products }: Mully8HeroProps) {
-  // Take the top 8 (feed is already newest-first).
-  const top8 = useMemo(() => products.slice(0, 8), [products]);
-  const [active, setActive] = useState(0);
-  const [paused, setPaused] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const goTo = useCallback(
-    (i: number) => {
-      if (top8.length === 0) return;
-      setActive(((i % top8.length) + top8.length) % top8.length);
-    },
-    [top8.length]
-  );
-
-  useEffect(() => {
-    if (paused || top8.length <= 1) return;
-    timerRef.current = setInterval(() => {
-      setActive((a) => (a + 1) % top8.length);
-    }, AUTO_ADVANCE_MS);
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [paused, top8.length]);
-
-  if (top8.length === 0) return null;
-
-  const product = top8[active];
-  // Mully 8 number: newest (index 0) = 8, next = 7, ... oldest of 8 = 1.
-  const mullyNum = top8.length - active;
-  const isDestination = product.editorialCategory === "destinations";
-  const image = product.images[0];
-
+export function EditorialMasthead({ years = 8 }: EditorialMastheadProps) {
   return (
     <section
-      className="relative bg-cream border-b border-charcoal/[0.08]"
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
-      aria-roledescription="carousel"
-      aria-label="The Mully 8"
+      aria-label={`Mully — celebrating ${years} years`}
+      className="relative bg-forest text-bone border-b border-forest overflow-hidden"
     >
-      <div className="max-w-6xl mx-auto px-5 md:px-10 pt-12 md:pt-16 pb-10 md:pb-16">
-        {/* Eyebrow */}
-        <div className="flex items-center justify-between mb-8 md:mb-10">
-          <div className="flex items-center gap-3 text-[10px] tracking-[0.3em] uppercase text-charcoal/50">
-            <span className="font-serif italic text-forest text-base normal-case tracking-normal">
-              The
-            </span>
-            <span>Mully 8</span>
-          </div>
-          <Link
-            href="/lp/mully100"
-            className="text-[10px] tracking-[0.28em] uppercase text-charcoal/60 hover:text-forest border-b border-charcoal/25 hover:border-forest pb-1 transition-all"
-            onClick={() =>
-              void trackEvent("mully8_to_mully100_click", { properties: {} })
-            }
-          >
-            The Mully 100 &rarr;
-          </Link>
-        </div>
-
-        {/* Slide */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-14 items-center">
-          {/* Image */}
-          <div className="relative aspect-square bg-[#f7f6f2] border border-charcoal/[0.08] overflow-hidden">
-            {image && (
-              <Image
-                key={product.slug}
-                src={image}
-                alt={product.name}
-                fill
-                sizes="(max-width: 767px) 100vw, 50vw"
-                className={
-                  isDestination
-                    ? "object-cover transition-opacity duration-700"
-                    : "object-contain p-6 md:p-10 transition-opacity duration-700"
-                }
-                priority
-              />
-            )}
-            <div className="absolute top-4 left-4 text-[10px] tracking-[0.3em] uppercase text-charcoal/50 bg-bone/70 backdrop-blur px-2 py-1">
-              № {pad(mullyNum)} / 08
-            </div>
-          </div>
-
-          {/* Copy */}
-          <div className="text-left">
-            <div className="text-[10px] tracking-[0.3em] uppercase text-charcoal/45 mb-4">
-              {product.brand}
-              {product.editorialCategory ? (
-                <>
-                  <span className="mx-2 text-charcoal/25">·</span>
-                  <span>{product.editorialCategory}</span>
-                </>
-              ) : null}
-            </div>
-            <h2 className="font-serif text-3xl md:text-4xl lg:text-5xl leading-[1.05] text-charcoal mb-5">
-              {isDestination ? (
-                <a
-                  href={product.destinationUrl || "#"}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:text-forest transition-colors"
-                >
-                  {product.name}
-                </a>
-              ) : (
-                <Link
-                  href={`/shop/${product.slug}`}
-                  className="hover:text-forest transition-colors"
-                >
-                  {product.name}
-                </Link>
-              )}
-            </h2>
-            {product.editorialHeadline && (
-              <p className="text-[15px] md:text-[16px] leading-[1.65] text-charcoal/70 mb-8 max-w-[46ch]">
-                {product.editorialHeadline}
-              </p>
-            )}
-
-            <div className="flex items-center gap-6">
-              {isDestination ? (
-                <a
-                  href={product.destinationUrl || "#"}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={() =>
-                    void trackEvent("mully8_cta_click", {
-                      properties: {
-                        product_slug: product.slug,
-                        position: active,
-                        category: "destinations",
-                      },
-                    })
-                  }
-                  className="inline-flex items-center gap-2 text-[11px] tracking-[0.28em] uppercase text-charcoal border-b border-charcoal hover:text-forest hover:border-forest pb-1 transition-all"
-                >
-                  <span>Visit Course</span>
-                  <span aria-hidden>&rarr;</span>
-                </a>
-              ) : (
-                <Link
-                  href={`/shop/${product.slug}`}
-                  onClick={() =>
-                    void trackEvent("mully8_cta_click", {
-                      properties: {
-                        product_slug: product.slug,
-                        position: active,
-                      },
-                    })
-                  }
-                  className="inline-flex items-center gap-2 text-[11px] tracking-[0.28em] uppercase text-charcoal border-b border-charcoal hover:text-forest hover:border-forest pb-1 transition-all"
-                >
-                  <span>View the Piece</span>
-                  <span aria-hidden>&rarr;</span>
-                </Link>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Dots */}
-        <div className="mt-10 md:mt-12 flex items-center justify-center gap-2">
-          {top8.map((p, i) => (
-            <button
-              key={p.slug}
-              type="button"
-              onClick={() => {
-                goTo(i);
-                void trackEvent("mully8_dot_click", {
-                  properties: { position: i },
-                });
+      <div className="max-w-6xl mx-auto px-6 md:px-10 pt-14 md:pt-20 pb-10 md:pb-14">
+        {/* Wordmark + watermark stack.
+            The wrapper is inline-block so its width tracks the wordmark
+            width, keeping the watermark visually anchored to the mark. */}
+        <div className="relative flex justify-center">
+          <div className="relative inline-block leading-none">
+            {/* Watermark "8" — sits behind the wordmark. Uses currentColor
+                so it inherits the section text color, then knocks its
+                opacity down for the parchment/gold impression. */}
+            <span
+              aria-hidden
+              className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-[52%] font-serif font-black leading-none text-[#B08D57]/70 select-none"
+              style={{
+                fontSize: "clamp(180px, 34vw, 460px)",
+                letterSpacing: "-0.04em",
               }}
-              aria-label={`Show item ${top8.length - i} of ${top8.length}`}
-              aria-current={i === active}
-              className={`h-1.5 rounded-full transition-all ${
-                i === active
-                  ? "w-8 bg-forest"
-                  : "w-1.5 bg-charcoal/20 hover:bg-charcoal/40"
-              }`}
-            />
-          ))}
+            >
+              {years}
+            </span>
+
+            {/* Wordmark on top. Playfair Display, low case, tight tracking. */}
+            <h1
+              className="relative font-serif font-bold leading-none tracking-[-0.03em] text-bone"
+              style={{ fontSize: "clamp(72px, 15vw, 200px)" }}
+            >
+              mully
+              <span className="text-[#B08D57]">.</span>
+            </h1>
+          </div>
+        </div>
+
+        {/* YEARS caption — small caps, wide track, offset right like Uncrate. */}
+        <div className="mt-2 md:mt-3 flex justify-center">
+          <div className="relative w-full max-w-[520px]">
+            <span
+              className="absolute right-2 md:right-6 -top-3 md:-top-6 text-[10px] md:text-[12px] tracking-[0.42em] uppercase text-bone/60"
+              aria-hidden
+            >
+              Years
+            </span>
+          </div>
+        </div>
+
+        {/* Subhead + eyebrow */}
+        <div className="mt-10 md:mt-14 text-center max-w-2xl mx-auto">
+          <p className="text-[10px] tracking-[0.3em] uppercase text-bone/50 mb-4">
+            The Shelf &nbsp;·&nbsp; Curated by Mully
+          </p>
+          <p className="font-serif italic text-2xl md:text-3xl text-bone leading-[1.25]">
+            Eight years of finding the golf goods{" "}
+            <span className="text-[#D9B786]">most golfers</span> haven't
+            found yet.
+          </p>
         </div>
       </div>
     </section>
   );
 }
+
+/**
+ * Backwards-compat alias. The page.tsx still imports `Mully8Hero`; keep
+ * it exported so we don't have to touch the page. If you clean this up
+ * later, swap the import name over there instead.
+ */
+export { EditorialMasthead as Mully8Hero };
