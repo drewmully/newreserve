@@ -1,22 +1,25 @@
 "use client";
 
 /**
- * One editorial card — Uncrate-Supply pattern.
+ * One editorial card — Uncrate-Supply pattern (rebuild, July 2026).
  *
- * Structure (top to bottom, all centered):
- *   - Bordered image tile, subtle backdrop, hover cross-fade to secondary
- *   - Ordinal (small, uppercase, tracked)
- *   - Product name (BOLD UPPERCASE, condensed line-height)
- *   - Price line: retail  /  reserve (like "$198 / $138" on Uncrate sale)
- *   - 1-2 sentence editorial excerpt
- *   - Quiet "Add to Cart" underline link
+ * Layout (top to bottom, all centered):
+ *   ─────────────────────────────────
+ *   [ product image, generous whitespace, no border ]
+ *   ─────────────────────────────────
+ *   TAG CHIP:  PARENT / CHILD   (tan, tracked, uppercase, 10px)
+ *   TITLE (serif Playfair, uppercase, bold, ~20px)
+ *   Deck (serif Playfair regular, ~15px, price ends the deck sentence)
+ *   [ Read More ]  or  [ Buy from Vendor ]      (tan links, italic serif "or")
+ *   ─────────────────────────────────
+ *
+ * The "Read More" link toggles an inline expansion of `editorialBody`.
  *
  * Copy source order (editorial voice only — never leak raw Shopify
  * product description into the card):
  *   1. `editorialHeadline` metafield (custom.editorial_headline)
- *   2. `whyWeLikeIt` metafield  (custom.why_we_like_it)  — legacy fallback
- *   3. Blank  — forces editorial discipline. If a product has no
- *      editorial copy set, the card renders name + price only.
+ *   2. `whyWeLikeIt` metafield  (custom.why_we_like_it) — legacy fallback
+ *   3. Blank — card renders name + price only.
  */
 
 import Image from "next/image";
@@ -27,47 +30,94 @@ import { resolveTieredPriceDisplay } from "@/lib/productPricing";
 import { useMembership } from "../../context/MembershipContext";
 import { QuickAddToCartButton } from "../../components/QuickAddToCartButton";
 import { trackEvent } from "@/lib/tracking";
+import { EDITORIAL_CATEGORY_LABELS } from "@/lib/shopifyEditorial";
 
 interface EditorialCardProps {
   product: EditorialProduct;
   /**
    * Editorial issue number shown on the card. Undefined for destination
-   * cards — they're editorial breaks, not numbered inventory.
+   * cards — they're editorial breaks, not numbered inventory. Currently
+   * only used for analytics; not rendered on the card itself in the
+   * Uncrate rebuild.
    */
   ordinal?: number;
   /** Ordinal position in the feed, used for analytics. */
   index: number;
+  /**
+   * Layout variant.
+   * - `grid`  (default) — standard column card in the interleaved feed.
+   * - `hero`  — full-width first card. Bigger image, longer deck.
+   */
+  variant?: "grid" | "hero";
   /** Fires when a guest adds — parent uses this to surface the Access upsell. */
   onGuestAddedToCart?: () => void;
 }
 
+/**
+ * Short deck shown directly under the title, before the Read More expansion.
+ * ~240 chars keeps two lines of serif copy at desktop. Editorial voice only,
+ * never Shopify product body.
+ */
 function excerpt(product: EditorialProduct): string {
-  // Editorial-only sources. Raw `product.description` is intentionally NOT
-  // a fallback — vendor copy is usually spec-sheet or marketing fluff and
-  // breaks the Uncrate-style voice we want on this page.
   const source =
     product.editorialHeadline?.trim() ||
     product.whyWeLikeIt?.trim() ||
     "";
   if (!source) return "";
-  if (source.length <= 160) return source;
-  const cut = source.slice(0, 160);
+  if (source.length <= 240) return source;
+  const cut = source.slice(0, 240);
   const lastStop = Math.max(
     cut.lastIndexOf(". "),
     cut.lastIndexOf("? "),
     cut.lastIndexOf("! ")
   );
-  return lastStop > 80 ? cut.slice(0, lastStop + 1) : cut.trimEnd() + "…";
+  return lastStop > 120 ? cut.slice(0, lastStop + 1) : cut.trimEnd() + "…";
 }
 
-function pad(n: number): string {
-  return String(n).padStart(2, "0");
+/**
+ * The `PARENT / CHILD` chip that sits above the title.
+ *
+ * PARENT = the editorial category (Style, Gear, Tech, Destinations,
+ * Golf-Adjacent). CHILD = brand for merch, region for destinations,
+ * or a subcategory hint for golf-adjacent items. If we don't have a
+ * good child, we render the parent alone.
+ */
+function tagChipLabel(product: EditorialProduct): string {
+  const cat = product.editorialCategory;
+  const parent = cat ? EDITORIAL_CATEGORY_LABELS[cat] : "Featured";
+  const isDestination = cat === "destinations";
+  const child = isDestination
+    ? product.collection || product.brand
+    : product.brand;
+  if (child && child.trim() && child.toLowerCase() !== parent.toLowerCase()) {
+    return `${parent} / ${child}`;
+  }
+  return parent;
+}
+
+/**
+ * Human-readable vendor name for the "Buy from ____" secondary link.
+ * Merch cards just say "Buy Now" (Add to Cart happens locally).
+ */
+function vendorLinkLabel(product: EditorialProduct): string {
+  if (product.editorialCategory === "destinations") {
+    try {
+      const host = new URL(product.destinationUrl).hostname
+        .replace(/^www\./, "")
+        .split(".")[0];
+      return host ? `Visit ${host[0].toUpperCase()}${host.slice(1)}` : "Visit Site";
+    } catch {
+      return "Visit Site";
+    }
+  }
+  return "Buy Now";
 }
 
 export function EditorialCard({
   product,
   ordinal,
   index,
+  variant = "grid",
   onGuestAddedToCart,
 }: EditorialCardProps) {
   const { tier, addToCart, isSignedIn } = useMembership();
@@ -80,13 +130,18 @@ export function EditorialCard({
 
   const isPrivate = product.sourceCollections?.includes("private-releases");
   const isDestination = product.editorialCategory === "destinations";
+  const isHero = variant === "hero";
   const primary = product.images[0];
   const secondaryRaw = product.images[1];
   const hasSecondary = Boolean(secondaryRaw && secondaryRaw !== primary);
   const [hover, setHover] = useState(false);
-  // Only actually mount the secondary <Image> once the user hovers. Prevents
-  // paying for a second Shopify request per card on initial load.
   const [everHovered, setEverHovered] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  const chip = tagChipLabel(product);
+  const shortDeck = excerpt(product);
+  const longBody = (product.editorialBody || "").trim();
+  const hasLongBody = longBody.length > shortDeck.length + 20;
 
   // Shopify CDN can synthesize a tiny blurred placeholder by appending a
   // `width` param. 24px is ~1KB and gives us instant paint under a blur-up.
@@ -102,11 +157,47 @@ export function EditorialCard({
     return undefined;
   }, [primary]);
 
+  // Image tile height: hero is nearly full-viewport-width tall, grid is a
+  // clean 4:3ish square-ish tile. object-cover for destinations (they're
+  // photographic), object-contain for products (they need whitespace).
+  const imageWrapperClass = isHero
+    ? "block relative w-full aspect-[16/10] md:aspect-[16/9] bg-[#f7f6f2] overflow-hidden"
+    : "block relative aspect-square bg-[#f7f6f2] overflow-hidden";
+
+  const imageFitClass = isDestination
+    ? "object-cover"
+    : isHero
+    ? "object-contain p-8 md:p-14"
+    : "object-contain p-5 md:p-6";
+
+  const imageSizes = isHero
+    ? "(max-width: 1023px) 100vw, 1000px"
+    : "(max-width: 767px) 100vw, (max-width: 1023px) 50vw, 360px";
+
+  // ─── Event handlers wrapping the two image branches ────────────────────
+  const onImageEnter = () => {
+    setHover(true);
+    if (hasSecondary) setEverHovered(true);
+  };
+  const onImageLeave = () => setHover(false);
+  const onImageClick = () =>
+    void trackEvent("editorial_card_click", {
+      properties: {
+        product_slug: product.slug,
+        brand: product.brand,
+        ordinal,
+        index,
+        variant,
+        category: product.editorialCategory || "",
+      },
+    });
+
   return (
     <article
-      className="group flex flex-col"
+      className={`group flex flex-col ${isHero ? "col-span-full" : ""}`}
       data-brand={product.brand}
       data-collection={product.collection}
+      data-variant={variant}
     >
       {/* IMAGE TILE ─── */}
       {isDestination ? (
@@ -114,31 +205,18 @@ export function EditorialCard({
           href={product.destinationUrl || "#"}
           target="_blank"
           rel="noopener noreferrer"
-          className="block relative aspect-square bg-[#f7f6f2] border border-charcoal/[0.08] overflow-hidden"
-          onMouseEnter={() => {
-            setHover(true);
-            if (hasSecondary) setEverHovered(true);
-          }}
-          onMouseLeave={() => setHover(false)}
-          onClick={() =>
-            void trackEvent("editorial_card_click", {
-              properties: {
-                product_slug: product.slug,
-                brand: product.brand,
-                ordinal,
-                index,
-                category: "destinations",
-              },
-            })
-          }
+          className={imageWrapperClass}
+          onMouseEnter={onImageEnter}
+          onMouseLeave={onImageLeave}
+          onClick={onImageClick}
         >
           {primary && (
             <Image
               src={primary}
               alt={product.name}
               fill
-              sizes="(max-width: 767px) 100vw, (max-width: 1023px) 50vw, 360px"
-              className={`object-cover transition-opacity duration-500 ${
+              sizes={imageSizes}
+              className={`${imageFitClass} transition-opacity duration-500 ${
                 hover && hasSecondary ? "opacity-0" : "opacity-100"
               }`}
               priority={index < 3}
@@ -152,92 +230,81 @@ export function EditorialCard({
               src={secondaryRaw!}
               alt=""
               fill
-              sizes="(max-width: 767px) 100vw, (max-width: 1023px) 50vw, 360px"
-              className={`object-cover transition-opacity duration-500 ${
+              sizes={imageSizes}
+              className={`${imageFitClass} transition-opacity duration-500 ${
                 hover ? "opacity-100" : "opacity-0"
               }`}
               aria-hidden
               loading="lazy"
             />
           )}
-          <div className="absolute top-3 right-3 px-2 py-1 bg-forest text-bone text-[9px] tracking-[0.22em] uppercase">
-            Destination
-          </div>
         </a>
       ) : (
-      <Link
-        href={`/shop/${product.slug}`}
-        className="block relative aspect-square bg-[#f7f6f2] border border-charcoal/[0.08] overflow-hidden"
-        onMouseEnter={() => {
-          setHover(true);
-          if (hasSecondary) setEverHovered(true);
-        }}
-        onMouseLeave={() => setHover(false)}
-        onClick={() =>
-          void trackEvent("editorial_card_click", {
-            properties: {
-              product_slug: product.slug,
-              brand: product.brand,
-              ordinal,
-              index,
-            },
-          })
-        }
-      >
-        {primary && (
-          <Image
-            src={primary}
-            alt={product.name}
-            fill
-            // Tight sizes so the browser fetches the smallest usable width.
-            // Mobile is single column (100vw), tablet 2-col (50vw), desktop 3-col (~360px).
-            sizes="(max-width: 767px) 100vw, (max-width: 1023px) 50vw, 360px"
-            className={`object-contain p-5 md:p-6 transition-opacity duration-500 ${
-              hover && hasSecondary ? "opacity-0" : "opacity-100"
-            }`}
-            // Only the first row above the fold is priority; everything else
-            // lazy-loads as it enters the viewport.
-            priority={index < 3}
-            loading={index < 3 ? undefined : "lazy"}
-            placeholder={blurUrl ? "blur" : "empty"}
-            blurDataURL={blurUrl}
-          />
-        )}
-        {hasSecondary && everHovered && (
-          <Image
-            src={secondaryRaw!}
-            alt=""
-            fill
-            sizes="(max-width: 767px) 100vw, (max-width: 1023px) 50vw, 360px"
-            className={`object-contain p-5 md:p-6 transition-opacity duration-500 ${
-              hover ? "opacity-100" : "opacity-0"
-            }`}
-            aria-hidden
-            loading="lazy"
-          />
-        )}
+        <Link
+          href={`/shop/${product.slug}`}
+          className={imageWrapperClass}
+          onMouseEnter={onImageEnter}
+          onMouseLeave={onImageLeave}
+          onClick={onImageClick}
+        >
+          {primary && (
+            <Image
+              src={primary}
+              alt={product.name}
+              fill
+              sizes={imageSizes}
+              className={`${imageFitClass} transition-opacity duration-500 ${
+                hover && hasSecondary ? "opacity-0" : "opacity-100"
+              }`}
+              priority={index < 3}
+              loading={index < 3 ? undefined : "lazy"}
+              placeholder={blurUrl ? "blur" : "empty"}
+              blurDataURL={blurUrl}
+            />
+          )}
+          {hasSecondary && everHovered && (
+            <Image
+              src={secondaryRaw!}
+              alt=""
+              fill
+              sizes={imageSizes}
+              className={`${imageFitClass} transition-opacity duration-500 ${
+                hover ? "opacity-100" : "opacity-0"
+              }`}
+              aria-hidden
+              loading="lazy"
+            />
+          )}
 
-        {isPrivate && (
-          <div className="absolute top-3 right-3 px-2 py-1 bg-forest text-bone text-[9px] tracking-[0.22em] uppercase">
-            Private
-          </div>
-        )}
-      </Link>
+          {isPrivate && (
+            <div className="absolute top-3 right-3 px-2 py-1 bg-forest text-bone text-[9px] tracking-[0.22em] uppercase">
+              Private
+            </div>
+          )}
+        </Link>
       )}
 
-      {/* COPY BLOCK — centered under image ─── */}
-      <div className="pt-6 md:pt-7 text-center px-2">
-        <div className="text-[10px] tracking-[0.28em] uppercase text-charcoal/40 mb-3">
-          {isDestination ? (
-            <span>Destination &nbsp;·&nbsp; {product.collection}</span>
-          ) : (
-            <span>
-              № {pad(ordinal ?? 0)} &nbsp;·&nbsp; {product.brand}
-            </span>
-          )}
+      {/* COPY BLOCK ─── centered under image */}
+      <div
+        className={`text-center ${
+          isHero
+            ? "pt-8 md:pt-10 px-6 md:px-16 max-w-4xl mx-auto"
+            : "pt-6 md:pt-7 px-2"
+        }`}
+      >
+        {/* Tag chip: PARENT / CHILD */}
+        <div className="text-[10px] md:text-[11px] tracking-[0.28em] uppercase text-taupe mb-3 md:mb-4">
+          {chip}
         </div>
 
-        <h2 className="font-sans text-[13px] md:text-[14px] font-semibold tracking-[0.08em] uppercase leading-[1.35] text-charcoal mb-2">
+        {/* Title */}
+        <h2
+          className={`font-serif font-bold uppercase text-charcoal leading-[1.15] mb-3 ${
+            isHero
+              ? "text-[26px] md:text-[38px] tracking-[0.02em]"
+              : "text-[17px] md:text-[19px] tracking-[0.03em]"
+          }`}
+        >
           {isDestination ? (
             <a
               href={product.destinationUrl || "#"}
@@ -257,95 +324,126 @@ export function EditorialCard({
           )}
         </h2>
 
-        {/* Price line — retail slash reserve, Uncrate-style. Hidden for destinations. */}
-        {isDestination ? (
-          <div className="text-[11px] tracking-[0.24em] uppercase text-charcoal/50 mb-4">
-            {product.collection || "Golf Resort"}
-          </div>
-        ) : (
-        <div className="text-[13px] text-charcoal mb-4 flex items-baseline justify-center gap-1.5">
-          {priceDisplay.compareAtPrice != null ? (
-            <>
-              <span className="text-charcoal/45 line-through">
-                ${priceDisplay.compareAtPrice.toFixed(0)}
+        {/* Deck: excerpt sentence ending with price for merch */}
+        {(shortDeck || !isDestination) && (
+          <p
+            className={`font-serif text-charcoal/85 mx-auto ${
+              isHero
+                ? "text-[16px] md:text-[18px] leading-[1.55] max-w-[52ch] mb-6"
+                : "text-[14.5px] md:text-[15px] leading-[1.6] max-w-[38ch] mb-5"
+            }`}
+          >
+            {shortDeck}
+            {shortDeck && !isDestination && " "}
+            {!isDestination && (
+              <span className="whitespace-nowrap">
+                {priceDisplay.compareAtPrice != null ? (
+                  <>
+                    <span className="text-charcoal/45 line-through">
+                      ${priceDisplay.compareAtPrice.toFixed(0)}
+                    </span>{" "}
+                    <span className="text-ember font-medium">
+                      ${priceDisplay.activePrice.toFixed(0)}.
+                    </span>
+                  </>
+                ) : (
+                  <span className="font-medium">
+                    ${priceDisplay.activePrice.toFixed(0)}.
+                  </span>
+                )}
               </span>
-              <span className="text-charcoal/30">/</span>
-              <span className="text-ember font-medium">
-                ${priceDisplay.activePrice.toFixed(0)}
-              </span>
-            </>
-          ) : priceDisplay.memberPrice != null ? (
-            <>
-              <span>${priceDisplay.activePrice.toFixed(0)}</span>
-              <span className="text-charcoal/30">/</span>
-              <span className="text-forest/80 text-[11px] tracking-widest uppercase">
-                ${priceDisplay.memberPrice.toFixed(0)} member
-              </span>
-            </>
-          ) : (
-            <span>${priceDisplay.activePrice.toFixed(0)}</span>
-          )}
-        </div>
-        )}
-
-        {excerpt(product) && (
-          <p className="text-[13.5px] leading-[1.6] text-charcoal/70 max-w-[34ch] mx-auto mb-5">
-            {excerpt(product)}
+            )}
           </p>
         )}
 
-        {isDestination ? (
-          <a
-            href={product.destinationUrl || "#"}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() =>
-              void trackEvent("editorial_destination_click", {
-                properties: {
-                  product_slug: product.slug,
-                  brand: product.brand,
-                  ordinal,
-                  index,
-                },
-              })
-            }
-            className="inline-flex items-center gap-2 text-[10px] tracking-[0.28em] uppercase text-charcoal/70 border-b border-charcoal/30 hover:border-charcoal hover:text-charcoal pb-1 transition-all"
+        {/* Expanded editorial body */}
+        {expanded && hasLongBody && (
+          <div
+            className={`font-serif text-charcoal/80 mx-auto text-left mb-6 space-y-4 ${
+              isHero
+                ? "text-[15.5px] leading-[1.7] max-w-[62ch]"
+                : "text-[14px] leading-[1.7] max-w-[46ch]"
+            }`}
           >
-            <span>Visit Course</span>
-            <span aria-hidden>&rarr;</span>
-          </a>
-        ) : (
-        <QuickAddToCartButton
-          product={product}
-          isPaid={isPaid}
-          onAddToCart={async (item) => {
-            await addToCart(item);
-            void trackEvent("editorial_add_to_cart", {
-              properties: {
-                product_slug: product.slug,
-                brand: product.brand,
-                ordinal,
-                index,
-                is_signed_in: isSignedIn,
-              },
-            });
-            if (!isSignedIn && onGuestAddedToCart) {
-              onGuestAddedToCart();
-            }
-          }}
-          idleClassName="inline-flex items-center gap-2 text-[10px] tracking-[0.28em] uppercase text-charcoal/70 border-b border-charcoal/30 hover:border-charcoal hover:text-charcoal pb-1 transition-all cursor-pointer"
-          addedClassName="inline-flex items-center gap-2 text-[10px] tracking-[0.28em] uppercase text-sage border-b border-sage pb-1"
-          idleContent={
-            <>
-              <span>Add to Cart</span>
-              <span aria-hidden>+</span>
-            </>
-          }
-          addedContent={<span>Added ✓</span>}
-          buttonAriaLabel={`Add ${product.name} to cart`}
-          modalTitle={product.name}
-        />
+            {longBody.split(/\n{2,}/).map((para, i) => (
+              <p key={i}>{para.trim()}</p>
+            ))}
+          </div>
         )}
+
+        {/* Actions: Read More  or  Buy Now / Visit ─── */}
+        <div className="flex items-baseline justify-center gap-3 text-[13px] md:text-[14px] font-serif">
+          {hasLongBody && (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setExpanded((v) => !v);
+                  void trackEvent("editorial_read_more_toggle", {
+                    properties: {
+                      product_slug: product.slug,
+                      expanded: !expanded,
+                      variant,
+                    },
+                  });
+                }}
+                className="text-taupe hover:text-forest underline underline-offset-4 decoration-taupe/50 hover:decoration-forest/70 transition-colors cursor-pointer"
+                aria-expanded={expanded}
+              >
+                {expanded ? "Less" : "Read More"}
+              </button>
+              <span className="italic text-charcoal/50">or</span>
+            </>
+          )}
+
+          {isDestination ? (
+            <a
+              href={product.destinationUrl || "#"}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() =>
+                void trackEvent("editorial_destination_click", {
+                  properties: {
+                    product_slug: product.slug,
+                    brand: product.brand,
+                    ordinal,
+                    index,
+                  },
+                })
+              }
+              className="text-taupe hover:text-forest underline underline-offset-4 decoration-taupe/50 hover:decoration-forest/70 transition-colors"
+            >
+              {vendorLinkLabel(product)}
+            </a>
+          ) : (
+            <QuickAddToCartButton
+              product={product}
+              isPaid={isPaid}
+              onAddToCart={async (item) => {
+                await addToCart(item);
+                void trackEvent("editorial_add_to_cart", {
+                  properties: {
+                    product_slug: product.slug,
+                    brand: product.brand,
+                    ordinal,
+                    index,
+                    is_signed_in: isSignedIn,
+                    variant,
+                  },
+                });
+                if (!isSignedIn && onGuestAddedToCart) {
+                  onGuestAddedToCart();
+                }
+              }}
+              idleClassName="text-taupe hover:text-forest underline underline-offset-4 decoration-taupe/50 hover:decoration-forest/70 transition-colors cursor-pointer"
+              addedClassName="text-sage underline underline-offset-4 decoration-sage/60"
+              idleContent={<span>Add to Cart</span>}
+              addedContent={<span>Added ✓</span>}
+              buttonAriaLabel={`Add ${product.name} to cart`}
+              modalTitle={product.name}
+            />
+          )}
+        </div>
       </div>
     </article>
   );

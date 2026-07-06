@@ -24,14 +24,11 @@ export function Mully100Grid({ items }: Mully100GridProps) {
   const [active, setActive] = useState<EditorialCategory | "all">("all");
 
   const counts = useMemo(() => {
-    const base: Record<EditorialCategory | "all", number> = {
-      all: items.length,
-      tech: 0,
-      style: 0,
-      destinations: 0,
-      course: 0,
-    };
-    for (const it of items) base[it.category] += 1;
+    const base = { all: items.length } as Record<EditorialCategory | "all", number>;
+    for (const c of EDITORIAL_CATEGORIES) base[c] = 0;
+    for (const it of items) {
+      if (base[it.category] !== undefined) base[it.category] += 1;
+    }
     return base;
   }, [items]);
 

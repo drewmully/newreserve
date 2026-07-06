@@ -1,8 +1,9 @@
 "use client";
 
 /**
- * Category nav bar for /lp/editorial. Four pills below the Mully 8 hero:
- * All / Tech / Style / Destinations / Course.
+ * Category nav bar for /lp/editorial. Pills below the Mully 8 hero,
+ * dynamically generated from EDITORIAL_CATEGORIES so new categories
+ * (e.g. golf-adjacent) automatically appear without touching this file.
  *
  * Client-side filter — sets a `category` query param and communicates the
  * choice back up via `onChange`. The parent `EditorialFeed` reads its

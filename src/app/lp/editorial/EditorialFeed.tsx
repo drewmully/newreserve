@@ -68,15 +68,23 @@ export function EditorialFeed({
     return products.filter((p) => p.editorialCategory === categoryFilter);
   }, [products, categoryFilter]);
 
+  // Hero card: only when unfiltered. First item in the feed (newest, per
+  // the sort in getEditorialFeed) becomes the hero variant. The rest of
+  // the feed keeps its interleave rhythm below. When a category filter is
+  // active we skip the hero — hero should only crown the full editorial
+  // shelf, not a filtered view.
+  const hero = categoryFilter === "all" ? filtered[0] : undefined;
+  const gridItems = hero ? filtered.slice(1) : filtered;
+
   // First card index per brand / collection for menu jump anchors
-  // (over the filtered view, since that's what's rendered).
+  // (over the grid view, since that's where the anchors render).
   const brandAnchors = useMemo(
-    () => firstIndexBy(filtered, (p) => p.brand),
-    [filtered]
+    () => firstIndexBy(gridItems, (p) => p.brand),
+    [gridItems]
   );
   const collectionAnchors = useMemo(
-    () => firstIndexBy(filtered, (p) => p.collection),
-    [filtered]
+    () => firstIndexBy(gridItems, (p) => p.collection),
+    [gridItems]
   );
 
   const handleGuestAdded = () => {
@@ -100,6 +108,19 @@ export function EditorialFeed({
     <>
       <div id="editorial-top" aria-hidden />
 
+      {/* Hero card: full-width, only on the unfiltered feed. */}
+      {hero && (
+        <div className="mb-16 md:mb-20 pb-16 md:pb-20 border-b border-charcoal/[0.08]">
+          <EditorialCard
+            product={hero}
+            ordinal={ordinalBySlug.get(hero.slug)}
+            index={0}
+            variant="hero"
+            onGuestAddedToCart={handleGuestAdded}
+          />
+        </div>
+      )}
+
       {/* Grid: 1 / 2 / 3 columns, with dividers between cells */}
       <ul
         className="
@@ -108,7 +129,7 @@ export function EditorialFeed({
           md:divide-x md:divide-charcoal/[0.06]
         "
       >
-        {filtered.map((product, i) => {
+        {gridItems.map((product, i) => {
           const ordinal = ordinalBySlug.get(product.slug);
 
           const brandAnchor =

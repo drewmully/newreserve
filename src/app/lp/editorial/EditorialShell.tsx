@@ -23,13 +23,10 @@ export function EditorialShell({ products }: EditorialShellProps) {
   const [category, setCategory] = useState<EditorialCategory | "all">("all");
 
   const counts = useMemo(() => {
-    const base: Record<EditorialCategory | "all", number> = {
-      all: products.length,
-      tech: 0,
-      style: 0,
-      destinations: 0,
-      course: 0,
-    };
+    // Build the count map dynamically from EDITORIAL_CATEGORIES so new
+    // categories don't require touching this file.
+    const base = { all: products.length } as Record<EditorialCategory | "all", number>;
+    for (const c of EDITORIAL_CATEGORIES) base[c] = 0;
     for (const p of products) {
       if (
         p.editorialCategory &&

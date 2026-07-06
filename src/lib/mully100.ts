@@ -157,7 +157,7 @@ export const MULLY_100: Mully100Item[] = [
   {
     id: "titleist-pro-v1",
     rank: 10,
-    category: "course",
+    category: "gear",
     brand: "Titleist",
     name: "Pro V1 (2025)",
     headline:
@@ -168,7 +168,7 @@ export const MULLY_100: Mully100Item[] = [
   {
     id: "titleist-pro-v1x",
     rank: 11,
-    category: "course",
+    category: "gear",
     brand: "Titleist",
     name: "Pro V1x (2025)",
     headline:
@@ -179,7 +179,7 @@ export const MULLY_100: Mully100Item[] = [
   {
     id: "callaway-chrome-tour",
     rank: 12,
-    category: "course",
+    category: "gear",
     brand: "Callaway",
     name: "Chrome Tour Golf Balls",
     headline:
@@ -190,7 +190,7 @@ export const MULLY_100: Mully100Item[] = [
   {
     id: "srixon-zstar-xv",
     rank: 13,
-    category: "course",
+    category: "gear",
     brand: "Srixon",
     name: "Z-Star XV",
     headline:
@@ -201,7 +201,7 @@ export const MULLY_100: Mully100Item[] = [
   {
     id: "titleist-players-glove",
     rank: 14,
-    category: "course",
+    category: "gear",
     brand: "Titleist",
     name: "Players Cabretta Glove",
     headline:
@@ -212,7 +212,7 @@ export const MULLY_100: Mully100Item[] = [
   {
     id: "footjoy-stasof",
     rank: 15,
-    category: "course",
+    category: "gear",
     brand: "FootJoy",
     name: "StaSof Glove",
     headline:
@@ -223,7 +223,7 @@ export const MULLY_100: Mully100Item[] = [
   {
     id: "pride-professional-tees",
     rank: 16,
-    category: "course",
+    category: "gear",
     brand: "Pride Professional",
     name: "PTS 3 1/4\" Tees, 75-pack",
     headline:
@@ -234,7 +234,7 @@ export const MULLY_100: Mully100Item[] = [
   {
     id: "pin-high-alignment-sticks",
     rank: 17,
-    category: "course",
+    category: "gear",
     brand: "Pin High",
     name: "Alignment Sticks, Pair",
     headline:
@@ -337,7 +337,7 @@ export const MULLY_100: Mully100Item[] = [
   {
     id: "orange-whip-trainer",
     rank: 40,
-    category: "course",
+    category: "gear",
     brand: "Orange Whip",
     name: "Full-Size Swing Trainer",
     headline:
@@ -348,7 +348,7 @@ export const MULLY_100: Mully100Item[] = [
   {
     id: "puttout-pressure-trainer",
     rank: 41,
-    category: "course",
+    category: "gear",
     brand: "PuttOut",
     name: "Pressure Putt Trainer",
     headline:
@@ -359,7 +359,7 @@ export const MULLY_100: Mully100Item[] = [
   {
     id: "callaway-hitting-net",
     rank: 42,
-    category: "course",
+    category: "gear",
     brand: "Callaway",
     name: "Home Range Net",
     headline:

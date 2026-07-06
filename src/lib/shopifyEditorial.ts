@@ -104,38 +104,51 @@ export interface EditorialProduct extends ShopifyProduct {
    */
   editorialBody: string;
   /**
-   * One of: 'tech' | 'style' | 'destinations' | 'course'.
-   * Drives the category filter on /lp/editorial.
+   * One of: 'style' | 'gear' | 'tech' | 'destinations' | 'golf-adjacent'.
+   * Drives the category filter and the PARENT / CHILD tag chip.
    */
   editorialCategory: EditorialCategory | "";
   /**
    * For editorial_category='destinations' only. Outbound resort URL.
-   * The card renders "Visit Course" instead of Add to Cart when set.
+   * The card renders "Visit [Resort]" instead of Add to Cart when set.
    */
   destinationUrl: string;
 }
 
 export const EDITORIAL_CATEGORIES = [
-  "tech",
   "style",
+  "gear",
+  "tech",
   "destinations",
-  "course",
+  "golf-adjacent",
 ] as const;
 export type EditorialCategory = (typeof EDITORIAL_CATEGORIES)[number];
 
 export const EDITORIAL_CATEGORY_LABELS: Record<EditorialCategory, string> = {
-  tech: "Tech",
   style: "Style",
+  gear: "Gear",
+  tech: "Tech",
   destinations: "Destinations",
-  course: "Course",
+  "golf-adjacent": "Golf-Adjacent",
+};
+
+/**
+ * Legacy Shopify metafield values we still want to accept and remap.
+ * Old data uses 'course' where we now use 'gear'. Older imports may have
+ * already been re-typed — keep this map minimal so it only handles known
+ * historical values.
+ */
+const CATEGORY_ALIASES: Record<string, EditorialCategory> = {
+  course: "gear",
 };
 
 function normalizeCategory(raw: string | null | undefined): EditorialCategory | "" {
   if (!raw) return "";
   const v = raw.trim().toLowerCase();
-  return (EDITORIAL_CATEGORIES as readonly string[]).includes(v)
-    ? (v as EditorialCategory)
-    : "";
+  if ((EDITORIAL_CATEGORIES as readonly string[]).includes(v)) {
+    return v as EditorialCategory;
+  }
+  return CATEGORY_ALIASES[v] ?? "";
 }
 
 function mapVariant(raw: RawVariant): ShopifyProductVariant {
