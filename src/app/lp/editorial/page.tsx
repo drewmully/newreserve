@@ -4,6 +4,7 @@ import { getEditorialFeed } from "@/lib/shopifyEditorial";
 import { EditorialHeader } from "./EditorialHeader";
 import { EditorialShell } from "./EditorialShell";
 import { Mully8Hero } from "./Mully8Hero";
+import DropWatchBar from "./DropWatchBar";
 
 /**
  * /lp/editorial
@@ -111,7 +112,10 @@ export default async function EditorialLandingPage() {
         </section>
       </main>
 
-      {/* ─── FOOTER ─────────────────────────────────────────────────────── */}
+      {/* Floating footer — subtle email capture ("Never miss a drop") */}
+      <DropWatchBar />
+
+      {/* ─── FOOTER ────────────────────────────────────────────────────── */}
       <footer className="py-10 px-6 md:px-12 bg-forest">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <span className="flex items-center gap-2 text-bone">
