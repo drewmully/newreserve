@@ -249,7 +249,14 @@ export async function provisionPaidMemberFromLoop(
 
     if (isFirstTimeDoc) {
       updates.created_at = now;
-      updates.onboarding_completed = false;
+      // Anyone being provisioned via this helper already has an active Loop
+      // membership — they've paid, sometimes for years. They should NOT be
+      // dumped into the new-signup /onboarding flow on first login. Mark
+      // onboarding complete so login/page.tsx routes them to /home. If they
+      // haven't filled out fit profile / sizing yet, the WelcomeDrawer on
+      // /home is the right place to capture it — non-blocking on first miss.
+      updates.onboarding_completed = true;
+      updates.onboarding_source = "loop_provision_auto";
     }
 
     await userRef.set(updates, { merge: true });
