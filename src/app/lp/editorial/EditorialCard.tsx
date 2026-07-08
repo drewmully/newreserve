@@ -370,10 +370,73 @@ export function EditorialCard({
           )}
         </h2>
 
-        {/* Deck: excerpt sentence ending with price for merch, or a
-            display-only price string for affiliates. Destinations get
-            no price line at all. */}
-        {(shortDeck || !isDestination) && (
+        {/* Price line ─── prominent, sits directly under the title so the
+            eye lands on it before the deck. Only rendered for Shopify
+            merch (destinations have no price; affiliates keep their price
+            inline with the deck since they route off-site). */}
+        {!isDestination && !isAffiliate && (
+          <div
+            className={`flex items-baseline justify-center gap-2.5 font-serif ${
+              isHero
+                ? "mb-5 text-[22px] md:text-[26px]"
+                : "mb-4 text-[18px] md:text-[20px]"
+            }`}
+            aria-label="Price"
+          >
+            {priceDisplay.compareAtPrice != null ? (
+              // Paid member sees the retail price crossed out and their
+              // reserved price in ember, tagged "Member Price" in sage.
+              <>
+                <span
+                  className={`text-charcoal/40 line-through font-normal ${
+                    isHero
+                      ? "text-[16px] md:text-[18px]"
+                      : "text-[13px] md:text-[14px]"
+                  }`}
+                >
+                  ${priceDisplay.compareAtPrice.toFixed(0)}
+                </span>
+                <span className="text-ember font-semibold tracking-[0.01em]">
+                  ${priceDisplay.activePrice.toFixed(0)}
+                </span>
+                {priceDisplay.badgeLabel && (
+                  <span
+                    className={`ml-1 text-sage tracking-[0.22em] uppercase font-sans font-medium ${
+                      isHero ? "text-[10px]" : "text-[9px] md:text-[10px]"
+                    }`}
+                  >
+                    {priceDisplay.badgeLabel}
+                  </span>
+                )}
+              </>
+            ) : (
+              // Guest (or a product with no member-vs-retail delta).
+              // Show the retail price in charcoal, and, if a member price
+              // is available, whisper it in sage below so the CTA to sign
+              // up is present without shouting.
+              <>
+                <span className="text-charcoal font-semibold tracking-[0.01em]">
+                  ${priceDisplay.activePrice.toFixed(0)}
+                </span>
+                {priceDisplay.memberPrice != null && (
+                  <span
+                    className={`text-sage tracking-[0.22em] uppercase font-sans font-medium ${
+                      isHero ? "text-[10px]" : "text-[9px] md:text-[10px]"
+                    }`}
+                  >
+                    · ${priceDisplay.memberPrice.toFixed(0)} for members
+                  </span>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Deck: editorial excerpt. Price used to end this sentence for
+            merch; that role has moved to the prominent price line above.
+            Affiliates still print their display price inline (they route
+            off-site so the deck is the last touchpoint we control). */}
+        {(shortDeck || isAffiliate) && (
           <p
             className={`font-serif text-charcoal/85 mx-auto ${
               isHero
@@ -382,28 +445,10 @@ export function EditorialCard({
             }`}
           >
             {shortDeck}
-            {shortDeck && !isDestination && " "}
-            {!isDestination && isAffiliate && product.affiliateDisplayPrice && (
+            {shortDeck && isAffiliate && product.affiliateDisplayPrice && " "}
+            {isAffiliate && product.affiliateDisplayPrice && (
               <span className="whitespace-nowrap font-medium">
                 {product.affiliateDisplayPrice}.
-              </span>
-            )}
-            {!isDestination && !isAffiliate && (
-              <span className="whitespace-nowrap">
-                {priceDisplay.compareAtPrice != null ? (
-                  <>
-                    <span className="text-charcoal/45 line-through">
-                      ${priceDisplay.compareAtPrice.toFixed(0)}
-                    </span>{" "}
-                    <span className="text-ember font-medium">
-                      ${priceDisplay.activePrice.toFixed(0)}.
-                    </span>
-                  </>
-                ) : (
-                  <span className="font-medium">
-                    ${priceDisplay.activePrice.toFixed(0)}.
-                  </span>
-                )}
               </span>
             )}
           </p>
