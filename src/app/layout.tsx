@@ -34,6 +34,33 @@ function MetaPixel() {
 }
 
 /**
+ * Renders the OpenAI Ads pixel (oaiq.min.js) only when NEXT_PUBLIC_OPENAI_PIXEL_ID
+ * is configured. Fires a client-side page_viewed on every load, which — paired
+ * with the server-side Conversions API dispatch in /api/_lib/analytics.ts —
+ * gives OpenAI's ChatGPT-Ads optimizer a full-funnel signal (dedup'd via
+ * eventOptions.event_id, same pattern as Meta CAPI).
+ *
+ * Debug mode is enabled in non-production so [oaiq] validation warnings
+ * surface in the browser console during a smoke test.
+ */
+function OpenAIPixel() {
+  const pixelId = process.env.NEXT_PUBLIC_OPENAI_PIXEL_ID;
+  if (!pixelId) return null;
+
+  const debug = process.env.NODE_ENV !== "production";
+
+  return (
+    <Script
+      id="openai-pixel"
+      strategy="afterInteractive"
+      dangerouslySetInnerHTML={{
+        __html: `!function(w,d,s,u){if(w.oaiq)return;var q=function(){q.q.push(arguments)};q.q=[];w.oaiq=q;var j=d.createElement(s);j.async=1;j.src=u;var f=d.getElementsByTagName(s)[0];f.parentNode.insertBefore(j,f)}(window,document,"script","https://bzrcdn.openai.com/sdk/oaiq.min.js");oaiq("init",{pixelId:"${pixelId}",debug:${debug}});oaiq("measure","page_viewed",{type:"contents"});`,
+      }}
+    />
+  );
+}
+
+/**
  * Renders the Google tag (gtag.js) only when at least one Google property
  * is configured. The same tag handles GA4 hits and Google Ads remarketing.
  */
@@ -136,6 +163,18 @@ export default async function RootLayout({
           a no-op until you flip the env var on in Vercel.
         */}
         <MetaPixel />
+        {/*
+          OpenAI Ads pixel (oaiq) — sets the OpenAI first-party click-id
+          cookie and fires a client-side page_viewed on every load. Server-side
+          Conversions API pings still fire from /api/_lib/analytics.ts; this
+          client pixel is what powers OpenAI/ChatGPT Ads retargeting audiences
+          and gives the optimizer a browser-side signal deduped against CAPI
+          via a shared event_id.
+
+          Renders ONLY when NEXT_PUBLIC_OPENAI_PIXEL_ID is set, so this stays
+          a no-op until you flip the env var on in Vercel.
+        */}
+        <OpenAIPixel />
         {/*
           Junip Reviews — loads on every page. The script is named
           `junip_shopify.js` for legacy reasons but supports custom
