@@ -118,6 +118,23 @@ function seqRef(uid: string) {
   return adminDb.collection("email_sequences").doc(uid);
 }
 
+/**
+ * Best-effort lookup of the first name captured during quiz completion, keyed
+ * by the styleProfile id. Returns null if no sequence doc exists yet or the
+ * shopper never provided a first name. Safe to call from SSR pages — all
+ * errors are swallowed and return null.
+ */
+export async function getFirstNameForProfile(uid: string): Promise<string | null> {
+  try {
+    const snap = await seqRef(uid).get();
+    if (!snap.exists) return null;
+    const seq = snap.data() as EmailSequenceDoc | undefined;
+    return seq?.firstName ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function sendAtFromStart(startedAt: Timestamp, delayDays: number): Timestamp {
   return Timestamp.fromMillis(
     startedAt.toMillis() + delayDays * 24 * 60 * 60 * 1000

@@ -3,7 +3,7 @@
 /**
  * Style quiz — top-of-funnel pre-checkout component for Mully Reserve.
  *
- * 7 steps (0-6), ONE question per screen, mobile-first.
+ * 6 steps (0-5), ONE question per screen, mobile-first.
  * Brand palette throughout: bone bg, forest primary, ember accent, charcoal body.
  * Step 1 (categories) uses brand-matched SVG icons, NOT emoji.
  * Style cards are contained — no oversized images.
@@ -12,7 +12,10 @@
  *   - Step 0 answer creates the profile via /api/quiz/start; the response
  *     profileId is stored in localStorage so reloads can resume.
  *   - Each subsequent answer is saved via /api/quiz/step (fire-and-forget).
- *   - Step 6 (email gate) calls /api/quiz/complete and routes to /reveal.
+ *   - Step 5 (brands + play frequency) finishes the quiz and routes
+ *     directly to /lp/reserve/reveal/{profileId}. No email is collected at
+ *     the quiz stage — the reveal page (RevealBrick) is the next surface.
+ *     Email is captured later during Shopify checkout.
  *   - If the user navigates away mid-quiz, a sendBeacon to /api/quiz/abandon
  *     fires for the drop-off funnel in PostHog.
  *
@@ -187,7 +190,7 @@ const PLAY_CARDS: Array<{ value: PlayFrequency; label: string }> = [
 
 const QUIZ_STORAGE_KEY = "mully_quiz_profileId";
 const QUIZ_ANSWERS_KEY = "mully_quiz_answers";
-const TOTAL_STEPS = 7;
+const TOTAL_STEPS = 6;
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -400,78 +403,32 @@ export function QuizModal({ source = "lp_subscription", onClose }: QuizModalProp
     [answers, profileId, saveStep, source, step]
   );
 
-  // Track email-captured exactly once per profile (when user types a valid
-  // email and blurs the field). Fires BEFORE the consent-gated submit so we
-  // measure the email capture rate independently of conversion.
-  const emailCapturedRef = useRef(false);
-  const handleEmailBlur = useCallback(() => {
-    if (emailCapturedRef.current) return;
-    if (!profileId) return;
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(answers.email)) return;
-    emailCapturedRef.current = true;
-    trackEvent(
-      "quiz_email_captured",
-      {
-        email: answers.email,
-        properties: { source, profileId, styleBucket: answers.golfStyle },
-      },
-      { includeAuth: false }
-    ).catch(() => {});
-  }, [answers.email, answers.golfStyle, profileId, source]);
-
-  const submitEmail = useCallback(async () => {
+  /**
+   * Finishes the quiz WITHOUT an email gate. As of 2026-07-09 the reveal
+   * brick is the winning post-quiz surface and we route straight there.
+   * Email is captured downstream at Shopify checkout.
+   *
+   * We still fire `quiz_completed` on the client so PostHog / GA4 / Meta all
+   * see the funnel finish, and we clear the localStorage answers to prevent
+   * stale replay.
+   */
+  const finishQuiz = useCallback(async () => {
     setError(null);
     if (!profileId) {
       setError("Looks like the quiz reset. Refresh and try again.");
       return;
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(answers.email)) {
-      setError("Please enter a valid email.");
-      return;
-    }
-    if (!answers.consent) {
-      setError("Tick the consent box to see your edit.");
-      return;
-    }
-    // Safety net: if the user typed-then-submitted without blur (mobile keyboard
-    // "go" button), still fire quiz_email_captured once.
-    if (!emailCapturedRef.current) {
-      emailCapturedRef.current = true;
-      trackEvent(
-        "quiz_email_captured",
-        {
-          email: answers.email,
-          properties: { source, profileId, styleBucket: answers.golfStyle },
-        },
-        { includeAuth: false }
-      ).catch(() => {});
-    }
     setSubmitting(true);
     try {
-      const res = await fetch("/api/quiz/complete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          profileId,
-          email: answers.email,
-          consent: answers.consent,
-          firstName: answers.firstName || undefined,
-          // Forward the localStorage anon so server-side PostHog dispatch uses
-          // the same distinct_id as client-side trackEvent. Without this, the
-          // route falls back to the quiz cookie anonId and PostHog ends up
-          // with two anons → broken alias to email → lost UTM attribution.
-          client_anonymous_id: getClientAnonymousId(),
-        }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new Error((body as { error?: string }).error ?? "complete_failed");
-      }
       trackEvent(
         "quiz_completed",
         {
-          email: answers.email,
-          properties: { source, profileId, styleBucket: answers.golfStyle },
+          properties: {
+            source,
+            profileId,
+            styleBucket: answers.golfStyle,
+            variant: "no_email_gate",
+          },
         },
         { includeAuth: false }
       ).catch(() => {});
@@ -487,7 +444,7 @@ export function QuizModal({ source = "lp_subscription", onClose }: QuizModalProp
       );
       setSubmitting(false);
     }
-  }, [answers, profileId, router, source]);
+  }, [answers.golfStyle, profileId, router, source]);
 
   // ─── Progress bar ───────────────────────────────────────────────────────────
 
@@ -570,26 +527,36 @@ export function QuizModal({ source = "lp_subscription", onClose }: QuizModalProp
           play={answers.playFrequency}
           onChange={(v) => setAnswers((a) => ({ ...a, favoriteBrands: v }))}
           onChangePlay={(v) => setAnswers((a) => ({ ...a, playFrequency: v }))}
-          onNext={() =>
-            goNext({
+          onNext={async () => {
+            // Persist the final step's answers, then jump straight to the
+            // reveal brick. No email gate as of 2026-07-09.
+            const patch = {
               favoriteBrands: answers.favoriteBrands,
               playFrequency: answers.playFrequency,
-            })
-          }
-        />
-      )}
-
-      {step === 6 && (
-        <StepEmailGate
-          submitting={submitting}
-          email={answers.email}
-          firstName={answers.firstName}
-          consent={answers.consent}
-          onChangeEmail={(email) => setAnswers((a) => ({ ...a, email }))}
-          onChangeName={(firstName) => setAnswers((a) => ({ ...a, firstName }))}
-          onChangeConsent={(consent) => setAnswers((a) => ({ ...a, consent }))}
-          onEmailBlur={handleEmailBlur}
-          onSubmit={submitEmail}
+            };
+            setAnswers((a) => ({ ...a, ...patch }));
+            if (profileId) {
+              setSubmitting(true);
+              try {
+                await saveStep(profileId, 5, patch);
+                trackEvent(
+                  "quiz_step_completed",
+                  {
+                    properties: {
+                      step: 5,
+                      source,
+                      profileId,
+                      fields: Object.keys(patch),
+                    },
+                  },
+                  { includeAuth: false }
+                ).catch(() => {});
+              } finally {
+                setSubmitting(false);
+              }
+            }
+            await finishQuiz();
+          }}
         />
       )}
 
@@ -909,107 +876,6 @@ function StepBrands({
       <PrimaryButton onClick={onNext} disabled={submitting}>
         Continue
       </PrimaryButton>
-    </section>
-  );
-}
-
-function StepEmailGate({
-  submitting,
-  email,
-  firstName,
-  consent,
-  onChangeEmail,
-  onChangeName,
-  onChangeConsent,
-  onEmailBlur,
-  onSubmit,
-}: {
-  submitting: boolean;
-  email: string;
-  firstName: string;
-  consent: boolean;
-  onChangeEmail: (v: string) => void;
-  onChangeName: (v: string) => void;
-  onChangeConsent: (v: boolean) => void;
-  onEmailBlur: () => void;
-  onSubmit: () => void;
-}) {
-  const trimmedName = firstName.trim();
-  const smsBody = trimmedName
-    ? `Hi Martine!  My name is ${trimmedName}, and I'm looking at joining Mully.  How does the curation work?`
-    : `Hi Martine! I'm looking at joining Mully. How does the curation work?`;
-  // sms:+<number>?&body=<encoded> works on modern iOS (16+) and Android.
-  const smsHref = `sms:+19493299066?&body=${encodeURIComponent(smsBody)}`;
-
-  return (
-    <section>
-      <div className="mb-5 flex items-center gap-4">
-        <div className="relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-full border border-forest/15 shadow-sm">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/lp/quiz/martine-jordan.jpg"
-            alt="Martine Jordan, your Reserve stylist"
-            className="h-full w-full object-cover"
-            loading="lazy"
-          />
-        </div>
-        <p className="text-sm leading-snug text-charcoal/70">
-          <span className="font-serif text-base text-forest">Martine Jordan</span>{" "}
-          curates your first edit personally.
-        </p>
-      </div>
-      <h2 className="mb-1 font-serif text-3xl text-forest sm:text-4xl leading-tight">
-        Where do we send your edit?
-      </h2>
-      <p className="mb-6 text-sm text-charcoal/65">
-        We'll show you the four pieces and the welcome-gift rangefinder on the
-        next screen.
-      </p>
-      <div className="grid gap-3">
-        <input
-          type="text"
-          autoComplete="given-name"
-          value={firstName}
-          onChange={(e) => onChangeName(e.target.value)}
-          placeholder="First name (optional)"
-          className="rounded-md border border-forest/15 bg-bone px-5 py-4 text-base text-charcoal placeholder:text-charcoal/40 focus:border-forest focus:outline-none focus:ring-2 focus:ring-forest/30"
-        />
-        <input
-          type="email"
-          inputMode="email"
-          autoComplete="email"
-          value={email}
-          onChange={(e) => onChangeEmail(e.target.value)}
-          onBlur={onEmailBlur}
-          placeholder="you@email.com"
-          required
-          className="rounded-md border border-forest/15 bg-bone px-5 py-4 text-base text-charcoal placeholder:text-charcoal/40 focus:border-forest focus:outline-none focus:ring-2 focus:ring-forest/30"
-        />
-        <label className="mt-1 flex items-start gap-3 text-sm text-charcoal/70">
-          <input
-            type="checkbox"
-            checked={consent}
-            onChange={(e) => onChangeConsent(e.target.checked)}
-            className="mt-1 h-4 w-4 accent-forest"
-          />
-          <span>
-            Send me my Reserve edit and occasional emails from Drew. Unsubscribe
-            anytime.
-          </span>
-        </label>
-      </div>
-      <PrimaryButton onClick={onSubmit} disabled={submitting}>
-        {submitting ? "Building your edit…" : "See my edit"}
-      </PrimaryButton>
-      <a
-        href={smsHref}
-        className="mt-4 block text-center text-sm text-forest/70 underline decoration-forest/25 underline-offset-4 transition hover:text-forest"
-      >
-        Text me for style advice
-      </a>
-      <p className="mt-4 text-center text-xs text-charcoal/50">
-        No charge to see. Love it or exchange anything. Free welcome gift if you join.
-      </p>
     </section>
   );
 }

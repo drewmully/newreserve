@@ -16,6 +16,8 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { getStyleProfile } from "@/lib/styleProfiles/admin";
+import { getFirstNameForProfile } from "@/lib/email/sequences";
+import { RevealBrick } from "./RevealBrick";
 import {
   buildRevealEdit,
   formatCentsUSD,
@@ -151,6 +153,20 @@ export default async function ReserveRevealPage({ params }: PageProps) {
   const structure = BUCKET_EDIT_STRUCTURE[bucket];
   const typicalRetail = BUCKET_TYPICAL_RETAIL_DISPLAY[bucket];
 
+  // RevealBrick (v2) short-circuit. Ships to 100% of traffic as of 2026-07-09.
+  // The v1 layout below is retained for QA rollback but is no longer served.
+  const firstName = await getFirstNameForProfile(profileId);
+  return (
+    <RevealBrick
+      profileId={profileId}
+      bucket={bucket}
+      quizLineItemProps={quizLineItemProps}
+      alreadyConverted={alreadyConverted}
+      firstName={firstName ?? undefined}
+    />
+  );
+
+  // eslint-disable-next-line no-unreachable
   return (
     <main className="min-h-screen bg-bone pb-28 text-charcoal sm:pb-32">
       <RevealPageView profileId={profileId} bucket={bucket} />
