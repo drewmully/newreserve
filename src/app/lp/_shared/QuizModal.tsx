@@ -934,8 +934,30 @@ function StepEmailGate({
   onEmailBlur: () => void;
   onSubmit: () => void;
 }) {
+  const trimmedName = firstName.trim();
+  const smsBody = trimmedName
+    ? `Hi Martine!  My name is ${trimmedName}, and I'm looking at joining Mully.  How does the curation work?`
+    : `Hi Martine! I'm looking at joining Mully. How does the curation work?`;
+  // sms:+<number>?&body=<encoded> works on modern iOS (16+) and Android.
+  const smsHref = `sms:+19493299066?&body=${encodeURIComponent(smsBody)}`;
+
   return (
     <section>
+      <div className="mb-5 flex items-center gap-4">
+        <div className="relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-full border border-forest/15 shadow-sm">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/lp/quiz/martine-jordan.jpg"
+            alt="Martine Jordan, your Reserve stylist"
+            className="h-full w-full object-cover"
+            loading="lazy"
+          />
+        </div>
+        <p className="text-sm leading-snug text-charcoal/70">
+          <span className="font-serif text-base text-forest">Martine Jordan</span>{" "}
+          curates your first edit personally.
+        </p>
+      </div>
       <h2 className="mb-1 font-serif text-3xl text-forest sm:text-4xl leading-tight">
         Where do we send your edit?
       </h2>
@@ -979,6 +1001,12 @@ function StepEmailGate({
       <PrimaryButton onClick={onSubmit} disabled={submitting}>
         {submitting ? "Building your edit…" : "See my edit"}
       </PrimaryButton>
+      <a
+        href={smsHref}
+        className="mt-4 block text-center text-sm text-forest/70 underline decoration-forest/25 underline-offset-4 transition hover:text-forest"
+      >
+        Text me for style advice
+      </a>
       <p className="mt-4 text-center text-xs text-charcoal/50">
         No charge to see. Love it or exchange anything. Free welcome gift if you join.
       </p>
