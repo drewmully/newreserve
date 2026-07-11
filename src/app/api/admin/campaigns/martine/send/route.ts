@@ -34,7 +34,12 @@ export const maxDuration = 300;
 export const dynamic = "force-dynamic";
 
 const CAMPAIGN_KEY = "martine_reactivation_2026_07";
-const FROM = "Martine <Martine@mail.mymully.com>";
+// Sender identity note: we send from info@mymully.com (root domain, warm
+// reputation) rather than Martine@mail.mymully.com. The initial batch 1
+// (2026-07-10) went out from the subdomain persona and got 0/403 opens on a
+// Gmail-heavy list — classic cold-persona spam-foldering. The Martine persona
+// stays in the body/signature and CTA; only the envelope From changes.
+const FROM = "Mully <info@mymully.com>";
 const REPLY_TO = "info@mymully.com";
 const SUBJECT_VARIANTS = [
   "A note from your new curator",
@@ -291,7 +296,10 @@ export async function POST(req: NextRequest) {
             { name: "batch", value: `d${batch}` },
           ],
         },
-        { idempotencyKey: `${CAMPAIGN_KEY}:${r.id}` }
+        // idempotency key includes send attempt derived from FROM identity
+        // so a From-address change (e.g. Martine@mail.mymully.com -> info@mymully.com)
+        // does not get deduped by Resend as a repeat send.
+        { idempotencyKey: `${CAMPAIGN_KEY}:v2:${r.id}` }
       );
       if (sendErr || !data) {
         throw new Error(sendErr?.message ?? "unknown");
