@@ -67,7 +67,7 @@ export function StickyCheckoutBar({
             Reserve — $250 / quarter
           </div>
           <div className="text-xs text-charcoal/65">
-            {typicalRetail} typical retail · Rangefinder gift · Cancel anytime after Q1.
+            {typicalRetail} typical retail · Free size exchanges · Cancel anytime after Q1.
           </div>
         </div>
         <div className="flex-1 sm:max-w-xs">

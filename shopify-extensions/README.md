@@ -6,7 +6,7 @@ Shopify Checkout UI Extension that renders reassurance bullets in the cart summa
 
 `mully-reassurance` — a UI extension targeting `purchase.checkout.cart-line-list.render-after` that displays trust bullets *under the line item summary*. Bullet content is product-aware:
 
-- **Reserve Member (variant 47601025122496)** → shows quarterly-specific reassurance (rangefinder gift, cancel after Q1, free exchanges, ships in 7 days).
+- **Reserve Member (variant 47601025122496)** → shows quarterly-specific reassurance ($300+ retail value, cancel after Q1, free exchanges, ships in 7 days).
 - **Reserve Access (variant 47601025482944)** → annual-specific reassurance.
 - Other carts → generic reassurance.
 
