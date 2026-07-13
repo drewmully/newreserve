@@ -45,22 +45,15 @@ async function shouldAttachFoundingHundredGift(): Promise<{
   attach: boolean;
   variantGid: string | null;
 }> {
-  try {
-    const res = await fetch("/api/founding_100/status", { cache: "no-store" });
-    if (!res.ok) return { attach: false, variantGid: null };
-    const data = (await res.json()) as {
-      available?: boolean;
-      variantGid?: string | null;
-    };
-    if (!data?.available) return { attach: false, variantGid: null };
-    const variantGid = data.variantGid ?? null;
-    if (!variantGid || !variantGid.startsWith("gid://shopify/ProductVariant/")) {
-      return { attach: false, variantGid: null };
-    }
-    return { attach: true, variantGid };
-  } catch {
-    return { attach: false, variantGid: null };
-  }
+  // Founding 100 rangefinder offer was retired 2026-07-13. The rangefinder
+  // product was moved to DRAFT in Shopify and FOUNDING100GIFT was expired.
+  // We MUST return { attach: false } here — otherwise the front-end would
+  // still push the DRAFT variant into cartCreate and Shopify would 422 the
+  // entire subscription checkout (not just the gift line). Leaving the
+  // rest of the plumbing (status endpoint, variant GID env, orders-paid
+  // webhook branch) intact so a future limited-drop offer can flip this
+  // back on by reverting this early-return.
+  return { attach: false, variantGid: null };
 }
 
 export interface CreateMembershipCheckoutOptions {
