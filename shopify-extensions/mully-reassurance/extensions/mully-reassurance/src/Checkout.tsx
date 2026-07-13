@@ -5,8 +5,8 @@
  * summary panel, directly beneath the line items. Variant detection drives
  * the copy:
  *
- *   - 47601025122496 → Reserve Member (quarterly curation): rangefinder
- *     welcome gift, 7-day ship, free exchanges, cancel after Q1, 96% renew
+ *   - 47601025122496 → Reserve Member (quarterly curation): 7-day ship, free
+ *     exchanges, cancel after Q1, 96% renew ($300+ retail for $250)
  *   - 47601025482944 → Reserve Access (annual membership): member-only
  *     drops, partner discounts, cancel anytime
  *   - anything else  → generic reassurance bullets
@@ -35,7 +35,7 @@ interface Bullet {
 }
 
 const MEMBER_BULLETS: Bullet[] = [
-  { key: "rangefinder_gift", text: "✓  Rangefinder welcome gift — yours to keep" },
+  { key: "retail_value", text: "✓  $300+ in retail, sourced from the brands" },
   { key: "ships_7_days", text: "✓  Ships in 7 days" },
   { key: "free_exchanges", text: "✓  Free size exchanges" },
   { key: "cancel_after_q1", text: "✓  Cancel anytime after your first quarter" },

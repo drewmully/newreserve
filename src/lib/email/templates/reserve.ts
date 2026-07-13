@@ -5,10 +5,12 @@
  * consent AND is not already an active subscriber. Goal: convert quiz finishers
  * into a $250/qtr Reserve members within ~10 days.
  *
- * Tone (Drew's instructions, verbatim):
- *   - Premium gift-led, NEVER discounted.
+ * Tone (Drew's instructions):
+ *   - Premium curation, NEVER discounted.
  *   - "Have a guy who handles your golf wardrobe."
- *   - 96% renewal, $300+ value for $250, rangefinder welcome gift yours-to-keep.
+ *   - 96% renewal, $300+ retail value for $250, first-quarter reassurance
+ *     (free size exchanges, cancel after Q1). No welcome-gift promise —
+ *     Founding 100 rangefinder was retired 2026-07-13.
  *   - Audience: man 35+, doesn't read fluff. Short. Visual. Load-bearing words only.
  *
  * Plain text — Resend's link rewriter handles attribution UTMs automatically
@@ -50,14 +52,14 @@ export const reserve_1: EmailTemplate = (firstName, ctx) => ({
     : "Your Reserve edit is ready",
   text: `${hi(firstName)}
 
-Based on your answers, I pulled a quarter's worth of pieces together for you. Two apparel picks, two accessories, and a rangefinder I'm including as a welcome gift.
+Based on your answers, I pulled a quarter's worth of pieces together for you. Two apparel picks and a few accessories, tuned to your style and size.
 
 You can see the edit here: ${revealUrl(ctx)}
 
 A few things worth knowing:
 
 - $300+ in retail. You pay $250.
-- The rangefinder is yours to keep. Even if you cancel after the first quarter.
+- Free size exchanges if a piece misses. Cancel anytime after the first quarter.
 - Sizing is confirmed after checkout with a 60-second form. Nothing ships until I've got your fit right.
 
 Reserve is quarterly. One ship, one charge, no surprises. We sell out every quarter, which is why I'm walking people through one at a time.
@@ -82,7 +84,7 @@ Yes. After you join, we confirm sizing and walk through your preferences. The ed
 2. "What if I want to skip a quarter?"
 You can. Pause, skip, change frequency — all of it lives in your account. We don't trap anyone. The reason 96% of members renew is because the gear is good, not because the unsubscribe button is hidden.
 
-The first quarter is the proof. The rangefinder welcome gift is yours either way.
+The first quarter is the proof. If Reserve isn't for you, cancel before the next quarter bills. No calls, no forms.
 
 Your edit's still here: ${revealUrl(ctx)}
 
@@ -96,7 +98,7 @@ export const reserve_3: EmailTemplate = (firstName, ctx) => ({
 
 The math on Reserve isn't complicated.
 
-You pay $250 a quarter. The pieces inside are typically $300+ at retail, sourced directly from the brands. The first quarter also ships with a rangefinder welcome gift on top — yours to keep even if you cancel.
+You pay $250 a quarter. The pieces inside are typically $300+ at retail, sourced directly from the brands. If a fit misses, we swap it. If Reserve isn't for you, cancel after the first quarter — no calls, no forms.
 
 It's not a discount play. It's a curation play. You're paying for someone who actually knows the brands, the fabrics, and what works on a course versus what just looks good on Instagram, to do the work for you.
 
@@ -126,7 +128,7 @@ I built Reserve for the guy who's tired of doing this himself.
 
 If that's you, the edit I pulled is still here: ${revealUrl(ctx)}
 
-The rangefinder welcome gift goes with the first quarter. After that, this email goes quiet — you'll only hear from me if something changes.
+After this one, this email goes quiet — you'll only hear from me if something changes.
 
 Drew`,
 });
@@ -152,7 +154,7 @@ You got partway through the style quiz earlier but didn't finish. No pressure �
 Picks up where you left off, takes about 30 seconds:
 ${RESERVE_URL_FALLBACK}
 
-The rangefinder welcome gift is still on the table if you decide Reserve is for you.
+$300+ in retail for $250 is still on the table if you decide Reserve is for you.
 
 Drew`,
 });

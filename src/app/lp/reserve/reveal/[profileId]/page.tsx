@@ -2,10 +2,14 @@
  * SSR Reveal page: /lp/reserve/reveal/{profileId}
  *
  * The middle-of-funnel destination after the visitor completes the style quiz.
- * Renders the personalized edit (2 apparel + 2 accessories + rangefinder gift)
- * pulled live from Shopify, with the $300+ value math and a single primary
- * CTA → Shopify membership checkout (with quiz answers attached as line
- * item properties).
+ * Renders the personalized edit (2 apparel + 3 accessories) pulled live from
+ * Shopify, with the $300+ value math and a single primary CTA → Shopify
+ * membership checkout (with quiz answers attached as line item properties).
+ *
+ * Note: the previous edit included a rangefinder welcome-gift slot tied to
+ * the Founding 100 offer. That offer was retired on 2026-07-13; the picker
+ * still classifies rangefinders (so they never leak into accessories) but
+ * no longer surfaces one as a gift line.
  *
  * Gating:
  *   - 404 if the profileId doesn't exist in Firestore.
@@ -77,7 +81,7 @@ export const runtime = "nodejs";
 export const metadata: Metadata = {
   title: "Your Reserve edit — Mully",
   description:
-    "A quarterly golf apparel curation tailored to your style. Welcome-gift rangefinder included.",
+    "A quarterly golf apparel curation tailored to your style. $300+ retail, sourced from the brands, for $250 per quarter.",
   robots: { index: false, follow: false }, // personalized — keep out of indexes
 };
 
@@ -198,7 +202,7 @@ export default async function ReserveRevealPage({ params }: PageProps) {
               quizLineItemProps={quizLineItemProps}
             />
             <p className="mt-3 text-xs leading-relaxed text-charcoal/65">
-              {typicalRetail} typical retail · Rangefinder welcome gift · Cancel anytime after Q1.
+              {typicalRetail} typical retail · Free size exchanges · Cancel anytime after Q1.
             </p>
           </div>
         )}
@@ -235,7 +239,6 @@ export default async function ReserveRevealPage({ params }: PageProps) {
 function EditGrid({ edit, bucketLabel }: { edit: RevealEdit; bucketLabel: string }) {
   const apparel = edit.apparel;
   const accessories = edit.accessories;
-  const rangefinder = edit.rangefinder;
 
   return (
     <section className="mx-auto max-w-6xl px-4 pb-8 sm:px-6">
@@ -257,100 +260,12 @@ function EditGrid({ edit, bucketLabel }: { edit: RevealEdit; bucketLabel: string
       {accessories.length > 0 && (
         <SubBlock
           title="Recent accessories"
-          subtitle="The kind of piece that lives in your bag — your quarter will include one."
+          subtitle="The kind of pieces that live in your bag — your quarter will include a few."
         >
           <ProductRow products={accessories} />
         </SubBlock>
       )}
-
-      <SubBlock
-        title="Welcome gift — rangefinder"
-        subtitle="Included with your first quarter. Yours to keep, even if you cancel."
-      >
-        {rangefinder ? (
-          <CompactGiftCard product={rangefinder} />
-        ) : (
-          <CompactGiftFallback />
-        )}
-      </SubBlock>
     </section>
-  );
-}
-
-/**
- * Compact gift card — image + copy side-by-side, capped width.
- * Replaces the previous full-width square card which was visually enormous
- * on desktop and pushed the CTA below the fold.
- */
-function CompactGiftCard({ product }: { product: ReserveProductCard }) {
-  return (
-    <article className="mx-auto flex max-w-2xl items-stretch overflow-hidden rounded-lg border border-ember/40 bg-bone shadow-[0_4px_24px_-12px_rgba(212,119,44,0.35)]">
-      <div className="relative aspect-square w-32 flex-shrink-0 bg-bone-dark/40 sm:w-44">
-        {product.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={product.imageUrl}
-            alt={product.imageAlt ?? product.title}
-            className="h-full w-full object-cover"
-            loading="lazy"
-          />
-        ) : null}
-      </div>
-      <div className="flex flex-1 flex-col justify-center px-4 py-3 sm:px-6 sm:py-4">
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] uppercase tracking-[0.2em] text-ember/85">
-            {product.vendor ?? "Mully"}
-          </span>
-          <span className="rounded-full bg-ember/15 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-ember">
-            Gift
-          </span>
-        </div>
-        <div className="mt-1 line-clamp-2 text-sm font-medium text-forest sm:text-base">
-          {product.title}
-        </div>
-        <div className="mt-1 text-xs text-charcoal/65">
-          Yours to keep, even if you cancel.
-        </div>
-      </div>
-    </article>
-  );
-}
-
-/**
- * Static fallback gift block. Used when no rangefinder is currently in
- * the active Shopify catalog — we still want to make the welcome-gift
- * promise visible. Image is local (/founding-100-rangefinder.webp) so the
- * block never "goes missing" if Shopify hiccups.
- */
-function CompactGiftFallback() {
-  return (
-    <article className="mx-auto flex max-w-2xl items-stretch overflow-hidden rounded-lg border border-ember/40 bg-bone shadow-[0_4px_24px_-12px_rgba(212,119,44,0.35)]">
-      <div className="relative aspect-square w-32 flex-shrink-0 bg-bone-dark/40 sm:w-44">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/founding-100-rangefinder.webp"
-          alt="Rangefinder welcome gift"
-          className="h-full w-full object-cover"
-          loading="lazy"
-        />
-      </div>
-      <div className="flex flex-1 flex-col justify-center px-4 py-3 sm:px-6 sm:py-4">
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] uppercase tracking-[0.2em] text-ember/85">
-            Mully
-          </span>
-          <span className="rounded-full bg-ember/15 px-2 py-0.5 text-[10px] uppercase tracking-[0.18em] text-ember">
-            Gift
-          </span>
-        </div>
-        <div className="mt-1 text-sm font-medium text-forest sm:text-base">
-          Laser rangefinder
-        </div>
-        <div className="mt-1 text-xs text-charcoal/65">
-          Ships with your first quarter. Yours to keep, even if you cancel.
-        </div>
-      </div>
-    </article>
   );
 }
 
@@ -485,12 +400,12 @@ function ValueBlock({
           </div>
           <div>
             <div className="text-[10px] uppercase tracking-[0.22em] text-charcoal/60">
-              Plus
+              Peace of mind
             </div>
             <div className="mt-1 text-base font-medium text-forest">
-              Rangefinder welcome gift
+              Free size exchanges
             </div>
-            <div className="text-xs text-charcoal/60">Yours to keep.</div>
+            <div className="text-xs text-charcoal/60">Cancel anytime after Q1.</div>
           </div>
         </div>
       </div>

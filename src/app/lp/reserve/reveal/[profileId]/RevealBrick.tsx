@@ -193,7 +193,7 @@ export function RevealBrick({
           <Chip icon={<IconPrice />} text="$250 / quarter" />
           <Chip icon={<IconBox />} text="4 to 6 pieces" />
           <Chip icon={<IconTruck />} text={giftMode ? "Ships to his door" : "Ships in 2 days"} />
-          <Chip icon={<IconGift />} text={giftMode ? "Rangefinder included" : "Founding gift inside"} />
+          <Chip icon={<IconGift />} text="$300+ in retail" />
         </ul>
 
         {/* CTA */}

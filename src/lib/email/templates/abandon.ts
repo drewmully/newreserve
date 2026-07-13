@@ -13,7 +13,9 @@
  *
  * Tone (Drew's instructions, persistent):
  *   - Premium, never discount. Curation that rotates, no SKU guarantees.
- *   - Rangefinder is the welcome gift.
+ *   - Value anchor is $300+ retail for $250. Reassurance: free size exchanges,
+ *     cancel after Q1. No welcome-gift promise (Founding 100 rangefinder
+ *     retired 2026-07-13).
  *   - NEVER use "box" — use curation / edit / quarter / shipment / Reserve.
  */
 
@@ -39,7 +41,7 @@ A quick recap of what's on it:
 
 - A quarter of curated apparel and accessories, picked to your style.
 - $300+ in retail. You pay $250.
-- A rangefinder welcome gift, yours to keep — even if you cancel after the first quarter.
+- Free size exchanges if a piece misses. Cancel anytime after the first quarter — no calls, no forms.
 - Sizing locked in after checkout with a 60-second form. Nothing ships until I've got your fit right.
 
 Finish here: ${RESERVE_URL}
@@ -62,7 +64,7 @@ After checkout you fill a 60-second sizing form. Nothing ships until I've got yo
 2. "What if I want to skip a quarter?"
 You can. Pause, skip, change frequency — all of it lives in your account. We don't trap anyone. 96% of members renew because the gear is good, not because the unsubscribe is hidden.
 
-The rangefinder welcome gift goes with the first quarter, yours to keep either way.
+The first quarter is the proof. If Reserve isn't for you after it lands, cancel before Q2 — nothing sticky.
 
 Pick up where you left off: ${RESERVE_URL}
 
@@ -78,7 +80,7 @@ I'm going to release your spot tomorrow so someone else can claim the quarter.
 
 If you want to keep it, the edit's still here: ${RESERVE_URL}
 
-If now's not the right time, that's fine — no follow-up after this. The quiz answers stay on file, and the rangefinder welcome gift offer holds for the next opening if you come back.
+If now's not the right time, that's fine — no follow-up after this. The quiz answers stay on file, and the $300+ retail-for-$250 quarter holds for the next opening if you come back.
 
 Drew`,
 });

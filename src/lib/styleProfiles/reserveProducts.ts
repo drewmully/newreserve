@@ -1,22 +1,29 @@
 /**
  * Live Shopify product fetch for the personalized Reserve reveal page.
  *
- * Drew's instructions verbatim:
+ * Drew's original instructions:
  *   "Poll live from shopify but collection tag won't work great — see what
- *    data you get and pick something that would work generally. Should be
- *    2 apparel items, 2 accessories, rangefinder gift."
+ *    data you get and pick something that would work generally."
+ *
+ * Current edit shape (updated 2026-07-13): 2 apparel + 3 accessories. The
+ * rangefinder welcome-gift slot was retired with the Founding 100 offer.
+ * The rangefinder bucket + classifier are retained so we can revive a
+ * gift-line offer later without reworking this file — the picker just
+ * never surfaces a rangefinder in the reveal edit today.
  *
  * Strategy:
  *   1. Pull a healthy window of recently-updated products (status=active,
  *      published_status=published) so the catalog stays fresh without us
  *      having to maintain collection tags by hand.
  *   2. Classify each product as APPAREL, ACCESSORY, or RANGEFINDER using a
- *      cascade: productType > tags > title keywords. This works on Drew's
- *      catalog regardless of how he chooses to tag a new brand drop.
+ *      cascade: productType > tags > title keywords. Rangefinder-classified
+ *      products are filtered OUT of the reveal edit so they never appear as
+ *      an accessory pick either.
  *   3. Deterministically rank within each bucket by hashing
  *      `${profileId}:${styleBucket}:${product.id}` so the same visitor sees
  *      the same edit on refresh, but different visitors get variety.
- *   4. Return the first 2 apparel + 2 accessories + 1 rangefinder.
+ *   4. Return the first 2 apparel + 3 accessories. `rangefinder` is always
+ *      null on the returned edit.
  *
  * Pure server-side — never import from a client component.
  */
@@ -48,8 +55,13 @@ export interface ReserveProductCard {
 export interface RevealEdit {
   apparel: ReserveProductCard[];
   accessories: ReserveProductCard[];
+  /**
+   * Reserved slot for a future welcome-gift line. Always null today —
+   * kept in the type so downstream code doesn't have to change if we
+   * light a gift line back up later.
+   */
   rangefinder: ReserveProductCard | null;
-  /** Sum of retail/compareAt prices for the four edit pieces (rangefinder excluded — it's a gift). */
+  /** Sum of retail/compareAt prices for the reveal edit pieces. */
   totalRetailCents: number;
   /** $250 — the Reserve quarterly price. */
   reservePriceCents: number;
@@ -275,8 +287,11 @@ export async function buildRevealEdit(args: {
   rangefinder.sort((a, b) => rankFn(a) - rankFn(b));
 
   const apparelPick = apparel.slice(0, 2);
-  const accessoryPick = accessory.slice(0, 2);
-  const rangefinderPick = rangefinder[0] ?? null;
+  const accessoryPick = accessory.slice(0, 3);
+  // Rangefinder slot retired 2026-07-13 with the Founding 100 offer. We
+  // still classify rangefinders so they never accidentally land in the
+  // accessory bucket, but we don't surface one as a gift line.
+  void rangefinder;
 
   const retailParts: number[] = [];
   for (const p of [...apparelPick, ...accessoryPick]) {
@@ -291,7 +306,7 @@ export async function buildRevealEdit(args: {
   return {
     apparel: apparelPick,
     accessories: accessoryPick,
-    rangefinder: rangefinderPick,
+    rangefinder: null,
     totalRetailCents,
     reservePriceCents,
     savingsCents,

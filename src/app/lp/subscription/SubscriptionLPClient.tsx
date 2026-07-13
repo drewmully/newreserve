@@ -24,7 +24,7 @@
  * Strategic constraints (do NOT change without product sign-off):
  *   - NEVER use the word "box" — it's "edit", "quarter", "curation", "Reserve".
  *   - Hero imagery must read "wardrobe," not "package." No closed/stacked boxes.
- *   - Gift is welcome gift, never a discount.
+ *   - Value anchor is the $300+ retail-for-$250 delta, never a discount.
  *   - Quiz CTA wins every CTA collision; attention ratio stays near 1:1.
  */
 
@@ -232,35 +232,56 @@ export default function SubscriptionLPClient() {
         </div>
       </section>
 
-      {/* ============================ GIFT ================================ */}
+      {/* ======================= VALUE + REASSURANCE ====================== */}
+      {/* Replaces the previous rangefinder welcome-gift section (retired
+          2026-07-13). Anchors on the $300+ retail-for-$250 delta and the
+          first-quarter reassurance rail: free exchanges, cancel after Q1,
+          ships in 7 days. */}
       <section className="py-16 sm:py-20 bg-forest text-bone">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 items-center">
-          <div className="relative aspect-[4/3] rounded-sm overflow-hidden bg-forest-dark">
-            <Image
-              src="/founding-100-rangefinder.webp"
-              alt="Rangefinder welcome gift"
-              fill
-              sizes="(min-width: 1024px) 40vw, 100vw"
-              className="object-contain p-6 sm:p-10"
-              unoptimized
-            />
-          </div>
-          <div>
+        <div className="max-w-5xl mx-auto px-4 sm:px-6">
+          <div className="text-center max-w-3xl mx-auto">
             <div className="text-[11px] tracking-[0.28em] uppercase text-ember mb-4">
-              Welcome gift
+              The first quarter
             </div>
             <h2 className="font-serif text-3xl sm:text-4xl leading-tight">
-              A rangefinder, on us.
+              $300+ in retail, sourced from the brands.
+              <br className="hidden sm:block" />
+              You pay $250.
             </h2>
             <p className="text-base sm:text-lg text-bone/80 mt-5 leading-relaxed">
-              Every new Reserve member gets a precision rangefinder with their
-              first quarter. Yours to keep — even if you cancel.
+              Four pieces tuned to your style and size — apparel and
+              accessories that live in your bag and rotation. Nothing ships
+              until sizing is confirmed. If a piece misses, we exchange it.
             </p>
-            <div className="mt-7 inline-flex items-center gap-2 text-[11px] tracking-[0.22em] uppercase text-bone/65 border border-bone/25 rounded-sm px-3 py-2">
-              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M20 6L9 17l-5-5" />
-              </svg>
-              Yours to keep
+          </div>
+
+          <div className="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-6">
+            <div className="rounded-sm border border-bone/20 bg-forest-dark/40 p-6">
+              <div className="text-[10px] tracking-[0.22em] uppercase text-ember mb-2">
+                Ships in 7 days
+              </div>
+              <div className="text-sm text-bone/80 leading-relaxed">
+                Sizing confirmed after checkout with a 60-second form. Your
+                quarter ships within a week.
+              </div>
+            </div>
+            <div className="rounded-sm border border-bone/20 bg-forest-dark/40 p-6">
+              <div className="text-[10px] tracking-[0.22em] uppercase text-ember mb-2">
+                Free size exchanges
+              </div>
+              <div className="text-sm text-bone/80 leading-relaxed">
+                If a fit misses, we swap it. No restocking fees, no return
+                shipping on your end.
+              </div>
+            </div>
+            <div className="rounded-sm border border-bone/20 bg-forest-dark/40 p-6">
+              <div className="text-[10px] tracking-[0.22em] uppercase text-ember mb-2">
+                Cancel after Q1
+              </div>
+              <div className="text-sm text-bone/80 leading-relaxed">
+                Try one full quarter. If Reserve isn't for you, cancel before
+                the next quarter bills. No calls, no forms.
+              </div>
             </div>
           </div>
         </div>
@@ -334,8 +355,8 @@ export default function SubscriptionLPClient() {
             you commit.
           </h2>
           <p className="text-base sm:text-lg text-bone/75 mt-6 max-w-xl mx-auto leading-relaxed">
-            We'll show you the four pieces we'd send this quarter, plus the
-            welcome-gift rangefinder. Then it's your call.
+            We'll show you the four pieces we'd send this quarter — $300+ in
+            retail, sourced from the brands. Then it's your call.
           </p>
           <div className="mt-9 inline-block w-full max-w-sm">
             <QuizLauncher
