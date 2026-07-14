@@ -31,6 +31,7 @@
 
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
+import { after } from "next/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -82,29 +83,14 @@ export async function POST(request: Request): Promise<Response> {
   const consentText = body.consent_text ?? CONSENT_TEXT_FALLBACK;
   const consentAt = new Date().toISOString();
 
-  // ---- Step 2 + 3: Shopify customer create + tag (best-effort) ----
-  let shopifyCustomerId: string | null = null;
-  try {
-    shopifyCustomerId = await upsertShopifyCustomer({
-      phone,
-      consentText,
-      consentAt,
-      clientIp,
-      landingUrl: body.landing_url ?? null,
-    });
-  } catch (err) {
-    // Log but do not fail — we still want to text them.
-    // eslint-disable-next-line no-console
-    console.error("[consult] shopify_upsert_failed", {
-      message: err instanceof Error ? err.message : String(err),
-      phone_last4: phone.slice(-4),
-    });
-  }
-
-  // ---- Step 4: enroll into mully-sms-agent (blocking) ----
+  // ---- Step 2: enroll into mully-sms-agent (blocking, ~1s) ----
+  // We do this FIRST and synchronously because it's the one thing the user
+  // is waiting on: Martine's opener has to fire within ~30s. Shopify's
+  // customerCreate/Update calls can occasionally run 30–60s on this store,
+  // which would stall the response and leave the visitor on a spinner.
   const enrollResult = await enrollWithSmsAgent({
     phone,
-    shopifyCustomerId,
+    shopifyCustomerId: null,
     consentText,
     consentAt,
     clientIp,
@@ -121,18 +107,42 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
-  // ---- Step 5: PostHog attribution (best-effort) ----
-  try {
-    await firePostHog({
-      phoneLast4: phone.slice(-4),
-      landingUrl: body.landing_url ?? null,
-      userAgent,
-      shopifyCustomerId,
-      contactId: enrollResult.contact_id ?? null,
-    });
-  } catch {
-    // Silent — analytics never blocks the user.
-  }
+  // ---- Step 3: Shopify customer upsert (deferred via next/after) ----
+  // Runs after the response is sent so the visitor never waits on Shopify.
+  // `after` keeps the Vercel function alive until this resolves, so we
+  // still get the consent record + `consult-lead` tag persisted.
+  after(async () => {
+    try {
+      await upsertShopifyCustomer({
+        phone,
+        consentText,
+        consentAt,
+        clientIp,
+        landingUrl: body.landing_url ?? null,
+      });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("[consult] shopify_upsert_failed", {
+        message: err instanceof Error ? err.message : String(err),
+        phone_last4: phone.slice(-4),
+      });
+    }
+  });
+
+  // ---- Step 4: PostHog attribution (deferred) ----
+  after(async () => {
+    try {
+      await firePostHog({
+        phoneLast4: phone.slice(-4),
+        landingUrl: body.landing_url ?? null,
+        userAgent,
+        shopifyCustomerId: null,
+        contactId: enrollResult.contact_id ?? null,
+      });
+    } catch {
+      // Analytics never blocks the user.
+    }
+  });
 
   return NextResponse.json(
     {

@@ -56,10 +56,16 @@ export default function ConsultLPClient() {
     }
 
     setStatus("submitting");
+    // 15s client-side cap so a slow API can never leave the user staring
+    // at a spinner forever. The server does the real work via next/after,
+    // so any response we get after this cap doesn't change the outcome.
+    const controller = new AbortController();
+    const abortTimer = setTimeout(() => controller.abort(), 15_000);
     try {
       const res = await fetch("/api/consult", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           phone: `+1${digits}`,
           source: "lp_consult",
@@ -84,12 +90,28 @@ export default function ConsultLPClient() {
       trackEvent("lp_consult_submit", { phone_last4: digits.slice(-4) });
       setStatus("success");
     } catch (err) {
+      clearTimeout(abortTimer);
+      // If we hit the 15s cap, the server has almost certainly already
+      // enrolled the visitor via next/after. Show the success card so
+      // they check their phone (Martine's opener is on its way) instead
+      // of an error that makes them try again and duplicate the enroll.
+      const wasAborted =
+        err instanceof DOMException && err.name === "AbortError";
+      if (wasAborted) {
+        trackEvent("lp_consult_submit_timeout", {
+          phone_last4: digits.slice(-4),
+        });
+        setStatus("success");
+        return;
+      }
       const msg =
         err instanceof Error ? err.message : "Something went wrong.";
       setError(msg);
       setStatus("error");
       trackEvent("lp_consult_submit_error", { message: msg });
+      return;
     }
+    clearTimeout(abortTimer);
   }
 
   return (
