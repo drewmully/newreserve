@@ -78,6 +78,9 @@ const META_EVENT_MAP: Record<string, string> = {
   // as low-quality Subscribe. Real subscription purchases flow through
   // "purchase" event which carries value+currency.
   registry_applied: "Lead",
+  // Consult LP phone capture (Martine funnel)
+  lp_consult_view: "ViewContent",
+  lp_consult_submit: "Lead",
 };
 
 function sha256hex(value: string): string {

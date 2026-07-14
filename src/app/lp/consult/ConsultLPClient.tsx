@@ -87,7 +87,13 @@ export default function ConsultLPClient() {
           "Couldn't send that just now. Try again in a moment.",
         );
       }
-      trackEvent("lp_consult_submit", { phone_last4: digits.slice(-4) });
+      // Fire the Lead event with the full E.164 phone so server-side Meta
+      // CAPI can hash it (ph) and get a strong match. phone is stripped by
+      // trackEvent before it hits the client-side pixel (fbq call has no PII).
+      trackEvent("lp_consult_submit", {
+        phone: `+1${digits}`,
+        properties: { phone_last4: digits.slice(-4) },
+      });
       setStatus("success");
     } catch (err) {
       clearTimeout(abortTimer);
@@ -100,6 +106,14 @@ export default function ConsultLPClient() {
       if (wasAborted) {
         trackEvent("lp_consult_submit_timeout", {
           phone_last4: digits.slice(-4),
+        });
+        // Server almost certainly enrolled; fire Lead so Meta still counts it.
+        trackEvent("lp_consult_submit", {
+          phone: `+1${digits}`,
+          properties: {
+            phone_last4: digits.slice(-4),
+            timed_out: true,
+          },
         });
         setStatus("success");
         return;

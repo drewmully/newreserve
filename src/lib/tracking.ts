@@ -174,6 +174,9 @@ const META_STANDARD_EVENTS: Record<string, string> = {
   // lacks value/currency. Real purchases go through "purchase" → Purchase.
   // subscription_state: "Subscribe",
   registry_applied: "Lead",
+  // Consult LP phone capture (Martine funnel)
+  lp_consult_view: "ViewContent",
+  lp_consult_submit: "Lead",
 };
 
 function mirrorToMetaPixel(
