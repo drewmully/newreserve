@@ -70,8 +70,16 @@ export default function ConsultLPClient() {
         }),
       });
       if (!res.ok) {
+        // Log the real reason for debugging but show the user a soft, human message.
         const data = await res.json().catch(() => ({}));
-        throw new Error(data?.error || `Server returned ${res.status}`);
+        // eslint-disable-next-line no-console
+        console.error("[consult] submit failed", {
+          status: res.status,
+          body: data,
+        });
+        throw new Error(
+          "Couldn't send that just now. Try again in a moment.",
+        );
       }
       trackEvent("lp_consult_submit", { phone_last4: digits.slice(-4) });
       setStatus("success");
