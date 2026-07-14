@@ -172,16 +172,12 @@ export default function ConsultLPClient() {
               )}
             </div>
 
-            {/* Photo column
-                Note: `/founders/martine.webp` needs to be added to /public/founders/.
-                Until then, the CSS bg color renders and Next/Image logs a 404 warning
-                in dev, but the page still ships. See CuratorStrip for the founder-avatar
-                pattern this mirrors. */}
+            {/* Photo column — hero uses the working-at-the-rack shot (4:5) */}
             <div className="relative order-first md:order-none">
               <div className="relative aspect-[4/5] w-full overflow-hidden rounded-lg bg-forest/10">
                 <Image
-                  src="/founders/martine.webp"
-                  alt="Martine Jordan, head stylist at Mully"
+                  src="/founders/martine-hero.webp"
+                  alt="Martine Jordan, head stylist at Mully, picking pieces from the styling rack"
                   fill
                   priority
                   sizes="(max-width: 768px) 100vw, 50vw"

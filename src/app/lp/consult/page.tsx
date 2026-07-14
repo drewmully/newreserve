@@ -40,7 +40,7 @@ export const metadata: Metadata = {
     title: "Free style consult with Martine — Mully",
     description:
       "A personal text conversation with Martine, head stylist at Mully. Build your profile, get hand-picked recommendations, $50 Pro Shop credit as a member.",
-    images: ["/martine-consult-og.webp"],
+    images: ["/founders/martine-hero.webp"],
   },
 };
 
