@@ -21,6 +21,39 @@ import { captureAttributionFromUrl } from "@/lib/attribution";
 import { GlassHeader } from "@/app/components/ClientComponents";
 import { ReviewsBlock } from "../_shared/LPSections";
 
+// Post-submit redirect: after we show the SuccessCard for a beat (so the
+// visitor registers that Martine is about to text them), forward them to the
+// subscription landing page so they can convert in the same session while
+// they're still warm. utm params on the current URL are carried through so
+// the subscription page's attribution capture picks up the same source.
+const POST_SUBMIT_REDIRECT_PATH = "/lp/subscription";
+const POST_SUBMIT_REDIRECT_DELAY_MS = 2500;
+
+function buildRedirectUrl(): string {
+  if (typeof window === "undefined") return POST_SUBMIT_REDIRECT_PATH;
+  const current = new URL(window.location.href);
+  const next = new URL(POST_SUBMIT_REDIRECT_PATH, window.location.origin);
+  // Carry through marketing attribution + fbclid/gclid so downstream tracking
+  // stays glued to the same visitor.
+  const carry = [
+    "utm_source",
+    "utm_medium",
+    "utm_campaign",
+    "utm_content",
+    "utm_term",
+    "fbclid",
+    "gclid",
+  ];
+  for (const key of carry) {
+    const v = current.searchParams.get(key);
+    if (v) next.searchParams.set(key, v);
+  }
+  // Tag the entry so we can filter subscription-page visits that came from
+  // the consult flow in analytics.
+  next.searchParams.set("from", "consult");
+  return next.pathname + next.search;
+}
+
 // Format a raw digit string into a US-style display like "(313) 555-1234"
 // while keeping the underlying value simple to submit. We ship the raw
 // digits + a country prefix to the API, which does E.164 normalization.
@@ -44,6 +77,22 @@ export default function ConsultLPClient() {
     trackEvent("lp_consult_view");
     captureAttributionFromUrl();
   }, []);
+
+  // Redirect to /lp/subscription after a short delay so the user reads the
+  // success card first. Kept as a local function so both the happy path and
+  // the 15s-abort path share the exact same behavior.
+  function scheduleRedirect() {
+    if (typeof window === "undefined") return;
+    const dest = buildRedirectUrl();
+    trackEvent("lp_consult_redirect_scheduled", {
+      properties: { dest, delay_ms: POST_SUBMIT_REDIRECT_DELAY_MS },
+    });
+    window.setTimeout(() => {
+      // Use replace so back-button doesn't bounce the visitor to the LP
+      // (they've already submitted; there's nothing useful to go back to).
+      window.location.replace(dest);
+    }, POST_SUBMIT_REDIRECT_DELAY_MS);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -95,6 +144,7 @@ export default function ConsultLPClient() {
         properties: { phone_last4: digits.slice(-4) },
       });
       setStatus("success");
+      scheduleRedirect();
     } catch (err) {
       clearTimeout(abortTimer);
       // If we hit the 15s cap, the server has almost certainly already
@@ -116,6 +166,7 @@ export default function ConsultLPClient() {
           },
         });
         setStatus("success");
+        scheduleRedirect();
         return;
       }
       const msg =
@@ -410,8 +461,7 @@ function SuccessCard() {
         it lands so her name shows on every message.
       </p>
       <p className="mt-3 text-sm leading-relaxed text-charcoal/70">
-        Nothing after 10 minutes? Text <span className="font-medium">START</span>{" "}
-        to the number that reaches out and we&rsquo;ll pick it up.
+        Taking you to your membership options now&hellip;
       </p>
     </div>
   );
