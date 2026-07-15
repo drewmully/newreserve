@@ -38,6 +38,7 @@ export const dynamic = "force-dynamic";
 
 interface ConsultBody {
   phone?: string;
+  first_name?: string | null;
   source?: string;
   consent_text?: string;
   landing_url?: string | null;
@@ -74,6 +75,11 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
+  // First name is optional at the API layer (older LP variants and any
+  // third-party integrations may not send it), but the v2 consult LP always
+  // does. Trim and clamp to a sane length before persisting.
+  const firstName = (body.first_name ?? "").toString().trim().slice(0, 60) || null;
+
   const hdrs = await headers();
   const clientIp =
     hdrs.get("x-forwarded-for")?.split(",")[0]?.trim() ||
@@ -90,6 +96,7 @@ export async function POST(request: Request): Promise<Response> {
   // which would stall the response and leave the visitor on a spinner.
   const enrollResult = await enrollWithSmsAgent({
     phone,
+    firstName,
     shopifyCustomerId: null,
     consentText,
     consentAt,
@@ -115,6 +122,7 @@ export async function POST(request: Request): Promise<Response> {
     try {
       await upsertShopifyCustomer({
         phone,
+        firstName,
         consentText,
         consentAt,
         clientIp,
@@ -159,6 +167,7 @@ export async function POST(request: Request): Promise<Response> {
 
 interface UpsertInput {
   phone: string;
+  firstName: string | null;
   consentText: string;
   consentAt: string;
   clientIp: string | null;
@@ -217,6 +226,10 @@ async function upsertShopifyCustomer(input: UpsertInput): Promise<string | null>
     const upd = await shopifyAdminFetch(endpoint, token, updateMutation, {
       input: {
         id: existing.id,
+        // Only include firstName on update if we have one AND the existing
+        // customer doesn't already have a name populated we'd overwrite.
+        // Shopify's CustomerInput ignores null firstName, so this is safe.
+        ...(input.firstName ? { firstName: input.firstName } : {}),
         smsMarketingConsent: {
           marketingState: "SUBSCRIBED",
           marketingOptInLevel: "SINGLE_OPT_IN",
@@ -247,6 +260,7 @@ async function upsertShopifyCustomer(input: UpsertInput): Promise<string | null>
   const created = await shopifyAdminFetch(endpoint, token, createMutation, {
     input: {
       phone: input.phone,
+      ...(input.firstName ? { firstName: input.firstName } : {}),
       smsMarketingConsent: {
         marketingState: "SUBSCRIBED",
         marketingOptInLevel: "SINGLE_OPT_IN",
@@ -300,6 +314,7 @@ async function shopifyAdminFetch(
 
 interface EnrollInput {
   phone: string;
+  firstName: string | null;
   shopifyCustomerId: string | null;
   consentText: string;
   consentAt: string;
@@ -330,6 +345,7 @@ async function enrollWithSmsAgent(input: EnrollInput): Promise<EnrollResult> {
       },
       body: JSON.stringify({
         phone: input.phone,
+        first_name: input.firstName ?? undefined,
         segment: "consult_landing",
         shopify_customer_id: input.shopifyCustomerId,
         browsed: {

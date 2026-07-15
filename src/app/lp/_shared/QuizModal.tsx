@@ -197,9 +197,22 @@ const TOTAL_STEPS = 6;
 export interface QuizModalProps {
   source?: string;
   onClose?: () => void;
+  /**
+   * When present, seeds the visitor's first name into the quiz's answer
+   * state without changing any step order. Used by the /lp/consult flow
+   * where we collect name+phone in a Step 0 before opening the quiz, so
+   * the quiz doesn't need to ask for name again. Purely additive — the
+   * /lp/subscription flow leaves this undefined and behaves exactly as
+   * before.
+   */
+  seedFirstName?: string;
 }
 
-export function QuizModal({ source = "lp_subscription", onClose }: QuizModalProps) {
+export function QuizModal({
+  source = "lp_subscription",
+  onClose,
+  seedFirstName,
+}: QuizModalProps) {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [profileId, setProfileId] = useState<string | null>(null);
@@ -215,7 +228,7 @@ export function QuizModal({ source = "lp_subscription", onClose }: QuizModalProp
     playFrequency: null,
     email: "",
     consent: false,
-    firstName: "",
+    firstName: seedFirstName ?? "",
   });
 
   // Restore on mount.
@@ -225,7 +238,16 @@ export function QuizModal({ source = "lp_subscription", onClose }: QuizModalProp
       const cachedAnswers = localStorage.getItem(QUIZ_ANSWERS_KEY);
       if (cachedAnswers) {
         const parsed = JSON.parse(cachedAnswers) as Partial<QuizAnswers>;
-        setAnswers((a) => ({ ...a, ...parsed }));
+        setAnswers((a) => ({
+          ...a,
+          ...parsed,
+          // A fresh consult onboarding session (seedFirstName provided) must
+          // win over any stale localStorage firstName from a previous quiz
+          // run — otherwise a visitor who quizzed anonymously last week
+          // and now enters a different name in Step 0 would silently get
+          // the old one.
+          firstName: seedFirstName ?? parsed.firstName ?? a.firstName,
+        }));
       }
       const cachedId = localStorage.getItem(QUIZ_STORAGE_KEY);
       if (cachedId) setProfileId(cachedId);
@@ -237,7 +259,10 @@ export function QuizModal({ source = "lp_subscription", onClose }: QuizModalProp
       { properties: { source } },
       { includeAuth: false }
     ).catch(() => {});
-  }, [source]);
+    // seedFirstName is only read on initial mount — the parent Consult
+    // launcher never changes it after the phone step. Listing it here to
+    // satisfy exhaustive-deps without introducing re-runs in practice.
+  }, [source, seedFirstName]);
 
   useEffect(() => {
     try {
