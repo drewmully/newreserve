@@ -129,6 +129,7 @@ function ConsultOnboardingOverlay({
 }: ConsultOnboardingOverlayProps) {
   const [phase, setPhase] = useState<"phone" | "quiz">("phone");
   const [firstName, setFirstName] = useState("");
+  const [phoneE164, setPhoneE164] = useState<string | null>(null);
 
   useEffect(() => {
     // Standard PostHog LP view event (we already fire lp_consult_view via the
@@ -166,20 +167,25 @@ function ConsultOnboardingOverlay({
         <div className="flex-1">
           {phase === "phone" ? (
             <ConsultStep0
-              onSuccess={(name) => {
+              onSuccess={(name, phone) => {
                 setFirstName(name);
+                setPhoneE164(phone);
                 setPhase("quiz");
               }}
             />
           ) : (
             // Once phone is captured we hand off to the existing shared
-            // QuizModal, seeded with the first name we just collected.
+            // QuizModal, seeded with the first name and E.164 phone we just
+            // collected. QuizModal uses the phone to POST quiz answers to
+            // the sms-agent enrich endpoint so Martine's SendBlue profile
+            // reflects the visitor's style profile before she replies.
             // QuizModal manages its own state, persistence, and terminal
             // navigation (reveal + checkout).
             <QuizModal
               source={source}
               onClose={onClose}
               seedFirstName={firstName}
+              seedPhone={phoneE164}
             />
           )}
         </div>
@@ -191,7 +197,10 @@ function ConsultOnboardingOverlay({
 // ---- Step 0: name + phone + consent + Martine intro -----------------------
 
 interface ConsultStep0Props {
-  onSuccess: (firstName: string) => void;
+  // We pass BOTH the first name (used to seed the quiz greeting) and the
+  // E.164 phone (used to reconcile the visitor's quiz answers back to the
+  // SendBlue contact record when the quiz completes).
+  onSuccess: (firstName: string, phoneE164: string) => void;
 }
 
 // US-only for now — matches the Meta targeting on the ad set. We
@@ -274,7 +283,7 @@ function ConsultStep0({ onSuccess }: ConsultStep0Props) {
         },
       });
 
-      onSuccess(firstName.trim());
+      onSuccess(firstName.trim(), `+1${digits}`);
     } catch (err) {
       window.clearTimeout(abortTimer);
       if (err instanceof Error && err.name === "AbortError") {
@@ -288,7 +297,7 @@ function ConsultStep0({ onSuccess }: ConsultStep0Props) {
             source: "lp_consult_v2",
           },
         });
-        onSuccess(firstName.trim());
+        onSuccess(firstName.trim(), `+1${digits}`);
         return;
       }
       submittedRef.current = false;

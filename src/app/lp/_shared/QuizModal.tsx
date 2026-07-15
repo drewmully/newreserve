@@ -206,12 +206,24 @@ export interface QuizModalProps {
    * before.
    */
   seedFirstName?: string;
+  /**
+   * E.164 phone captured in Step 0 of the /lp/consult onboarding.
+   * Threaded through so the quiz can POST the visitor's answers to the
+   * sms-agent enrich endpoint (via /api/consult/enrich) once they finish
+   * the quiz. This is what makes Martine's SendBlue dashboard show the
+   * visitor's style profile alongside her name.
+   *
+   * The standard /lp/subscription flow leaves this undefined and skips
+   * the enrich call entirely, matching prior behavior.
+   */
+  seedPhone?: string | null;
 }
 
 export function QuizModal({
   source = "lp_subscription",
   onClose,
   seedFirstName,
+  seedPhone,
 }: QuizModalProps) {
   const router = useRouter();
   const [step, setStep] = useState(0);
@@ -457,6 +469,39 @@ export function QuizModal({
         },
         { includeAuth: false }
       ).catch(() => {});
+
+      // Enrich Martine's SendBlue profile with the completed quiz answers
+      // if we know who this visitor is (came from the /lp/consult flow
+      // and provided phone in Step 0). Fire-and-forget with a short abort
+      // timeout so we never block the reveal navigation on a laggy
+      // sms-agent — the enrich endpoint is idempotent and can be safely
+      // retried later if needed.
+      if (seedPhone) {
+        const ctrl = new AbortController();
+        const t = window.setTimeout(() => ctrl.abort(), 4000);
+        void fetch("/api/consult/enrich", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            phone: seedPhone,
+            answers: {
+              style: answers.golfStyle,
+              categories: answers.categoryPrefs,
+              fit: answers.fit,
+              top_size: answers.topSize,
+              bottom_size: answers.bottomSize,
+              favorite_brands: answers.favoriteBrands,
+              play_frequency: answers.playFrequency,
+              style_profile_id: profileId,
+            },
+          }),
+          signal: ctrl.signal,
+          keepalive: true, // survive the router.push() navigation
+        })
+          .catch(() => {})
+          .finally(() => window.clearTimeout(t));
+      }
+
       try {
         localStorage.removeItem(QUIZ_ANSWERS_KEY);
       } catch {}
@@ -469,7 +514,19 @@ export function QuizModal({
       );
       setSubmitting(false);
     }
-  }, [answers.golfStyle, profileId, router, source]);
+  }, [
+    answers.bottomSize,
+    answers.categoryPrefs,
+    answers.favoriteBrands,
+    answers.fit,
+    answers.golfStyle,
+    answers.playFrequency,
+    answers.topSize,
+    profileId,
+    router,
+    seedPhone,
+    source,
+  ]);
 
   // ─── Progress bar ───────────────────────────────────────────────────────────
 
