@@ -288,6 +288,51 @@ export async function swapLoopSubscriptionProduct(params: {
   }
 }
 
+/**
+ * Update the custom attributes on a subscription line item, WITHOUT
+ * swapping the product. Used by the B9 backfill: submitted members
+ * have fit data in Supabase `b9_migrations.fit_attributes` that never
+ * made it onto their Loop line, so packing wouldn't see it at renewal.
+ *
+ * NOTE: This does NOT change variant, quantity, or selling plan. Product
+ * swap remains manual per Drew's instruction. Do not add a swap call here.
+ */
+export async function updateLoopSubscriptionLineAttributes(params: {
+  shopifyCustomerId: string;
+  subscriptionId: string;
+  lineId: string;
+  attributes: Record<string, string>;
+}): Promise<{ status: number; response: unknown }> {
+  const { shopifyCustomerId, subscriptionId, lineId, attributes } = params;
+
+  const sessionToken = await generateLoopSessionToken(shopifyCustomerId);
+  const accessToken = await exchangeLoopSessionTokenForAccessToken(sessionToken);
+
+  const attrArray = Object.entries(attributes)
+    .filter(([k, v]) => k && v != null && String(v).trim().length > 0)
+    .map(([key, value]) => ({ key, value: String(value) }));
+
+  const url = `${STOREFRONT_BASE_URL}/subscription/${encodeURIComponent(subscriptionId)}/line/${encodeURIComponent(lineId)}/attribute`;
+
+  const res = await fetchWithRetry(url, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ attributes: attrArray }),
+  });
+
+  const text = await res.text();
+  let parsed: unknown = text;
+  try { parsed = JSON.parse(text); } catch { /* keep raw */ }
+
+  if (!res.ok) {
+    throw new Error(`Loop line-attribute error ${res.status}: ${text}`);
+  }
+  return { status: res.status, response: parsed };
+}
+
 export const pauseLoopSubscription = (id: string) =>
   loopSubscriptionMutation(id, "pause");
 
