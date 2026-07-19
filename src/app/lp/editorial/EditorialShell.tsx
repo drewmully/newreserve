@@ -6,12 +6,13 @@
  * server page can hand off cleanly.
  */
 
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import type {
   EditorialProduct,
   EditorialCategory,
 } from "@/lib/shopifyEditorial";
 import { EDITORIAL_CATEGORIES } from "@/lib/shopifyEditorial";
+import { trackEvent } from "@/lib/tracking";
 import { CategoryNav } from "./CategoryNav";
 import { PromotedBar } from "./PromotedBar";
 import { EditorialFeed } from "./EditorialFeed";
@@ -27,6 +28,17 @@ export function EditorialShell({
   updatedAtLabel,
 }: EditorialShellProps) {
   const [category, setCategory] = useState<EditorialCategory | "all">("all");
+
+  // Fire lp_editorial_view once per mount. Matches the pattern used by
+  // SubscriptionLPClient / GiftLPClient. The empty dep array plus a mount
+  // guard means route changes back to /lp/editorial re-fire, but React
+  // StrictMode double-mount won't (trackEvent itself dedupes bots).
+  useEffect(() => {
+    void trackEvent("lp_editorial_view", {
+      product_count: products.length,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const counts = useMemo(() => {
     // Build the count map dynamically from EDITORIAL_CATEGORIES so new

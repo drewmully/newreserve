@@ -423,11 +423,54 @@ export async function POST(request: NextRequest) {
     );
 
   const gaClientId = orderAttr("ga_client_id");
+  // mully_anon_id is the PostHog anon distinct_id. Preferred over ga_client_id
+  // because it's the same id the client-side SDK uses — so PostHog's alias
+  // machinery merges the pre-signup anonymous person into the identified
+  // purchase person. Fallback to gaClientId preserves the legacy behavior
+  // for any orders still in flight from before this deploy.
+  const mullyAnonId = orderAttr("mully_anon_id");
+  const anonDistinctId = mullyAnonId ?? gaClientId;
+
+  // ── Purchase enrichment (added 2026-07-18) ──────────────────────────────
+  // 1) is_first_purchase: true iff this is the user's FIRST paid order.
+  //    Derived from the Firestore user doc: absence of tier_paid_at means
+  //    the tierUpdate below will be the one that stamps it. We check BEFORE
+  //    the tierUpdate mutation runs so we're not racing our own write.
+  // 2) purchase_type: "subscription" | "proshop" | "mixed" | "gift". Lets
+  //    downstream insights partition new-sub events from renewals and
+  //    pro-shop-only purchases without HogQL heuristics.
+  // 3) sponsorship_ref: the raw mully_sponsor cart attribute, present iff
+  //    the purchase used a sponsorship code. Attributing this here rather
+  //    than in a downstream event means every purchase is queryable for
+  //    referral share in a single-tile insight.
+  const purchaseUserData = purchaseUserDoc?.data() as
+    | { tier_paid_at?: number | null }
+    | undefined;
+  const isFirstPurchase = !purchaseUserData?.tier_paid_at;
+
+  const orderIsGift = isGiftOrder(order.note_attributes);
+  const purchaseType: "subscription" | "proshop" | "mixed" | "gift" = (() => {
+    if (orderIsGift) return "gift";
+    let hasSub = false;
+    let hasProshop = false;
+    for (const item of order.line_items) {
+      const tier = resolveMemberTierFromVariantId(item.variant_id);
+      // resolveMemberTierFromVariantId returns "access" | "member" | null.
+      // Null means the variant isn't a subscription tier → pro-shop item.
+      if (tier) hasSub = true;
+      else hasProshop = true;
+    }
+    if (hasSub && hasProshop) return "mixed";
+    if (hasSub) return "subscription";
+    return "proshop";
+  })();
+
+  const sponsorshipRef = orderAttr("mully_sponsor") ?? null;
 
   const event = {
     event_name: "purchase" as const,
     user_id: purchaseDistinctId,
-    anonymous_id: gaClientId,
+    anonymous_id: anonDistinctId,
     email,
     ip: shopperIp,
     user_agent: order.client_details?.user_agent ?? undefined,
@@ -458,6 +501,10 @@ export async function POST(request: NextRequest) {
       utm_content: utmString("utm_content"),
       utm_term: utmString("utm_term"),
       ga_client_id: gaClientId,
+      mully_anon_id: mullyAnonId,
+      is_first_purchase: isFirstPurchase,
+      purchase_type: purchaseType,
+      sponsorship_ref: sponsorshipRef,
     },
     timestamp: Math.floor(Date.now() / 1000),
   };

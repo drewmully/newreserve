@@ -57,7 +57,35 @@ const VALID_EVENTS = new Set([
   "proshop_recovery_email_clicked",
   "proshop_weekly_digest_clicked",
   "proshop_abandon_nudge_clicked",
+  // Editorial LP variant (mymully.com/lp/editorial) A/B against subscription LP.
+  "lp_editorial_view",
+  "lp_editorial_checkout_clicked",
 ]);
+
+/**
+ * Bot user-agent regex. Any request whose User-Agent matches this pattern
+ * short-circuits at the analytics endpoint — the event is dropped before it
+ * reaches PostHog / GA4 / Meta.
+ *
+ * Sources (all observed in prod PostHog data 2026-07-11..07-18):
+ *   - meta-externalads/1.1  (Meta ad-network link crawler, 396 uids in 7d)
+ *   - Bytespider              (ByteDance / TikTok)
+ *   - Storebot-Google, AdsBot-Google, Googlebot, DuckDuckBot, bingbot,
+ *     Baiduspider              (search engine + ad indexers)
+ *   - HeadlessChrome, PhantomJS, Puppeteer, Playwright  (automation)
+ *   - Generic "bot", "crawl", "spider", "http"-agents (curl, wget, node-fetch,
+ *     Python-urllib, PostmanRuntime, Go-http-client)
+ *
+ * Kept in one place so both the API route AND the client-side AnalyticsTracker
+ * can import a single source of truth if needed. Case-insensitive.
+ */
+const BOT_UA_PATTERN =
+  /bot|crawl|spider|meta-externalads|Bytespider|Storebot|AdsBot|Googlebot|DuckDuckBot|bingbot|Baiduspider|HeadlessChrome|PhantomJS|Puppeteer|Playwright|python-urllib|node-fetch|Go-http-client|PostmanRuntime|curl\/|wget\//i;
+
+function isBotUserAgent(ua: string | null | undefined): boolean {
+  if (!ua) return false;
+  return BOT_UA_PATTERN.test(ua);
+}
 
 function getBearerToken(request: NextRequest): string | null {
   const header = request.headers.get("authorization");
@@ -191,6 +219,18 @@ export async function POST(request: NextRequest) {
       },
       { status: 400 }
     );
+  }
+
+  // Bot filter: drop before any downstream side-effect. We return 200 (not
+  // 4xx) so bots don't retry / probe the failure mode, and we don't hit our
+  // real error metrics from crawler noise. Also skip if the client itself
+  // flagged the request as bot traffic in properties.is_bot.
+  const userAgent = request.headers.get("user-agent");
+  const clientFlaggedBot =
+    typeof (body.properties as { is_bot?: unknown } | undefined)?.is_bot ===
+      "boolean" && (body.properties as { is_bot?: boolean }).is_bot === true;
+  if (isBotUserAgent(userAgent) || clientFlaggedBot) {
+    return NextResponse.json({ ok: true, dropped: "bot" });
   }
 
   const claimedUid = sanitizeString(body.user_id, 128);
