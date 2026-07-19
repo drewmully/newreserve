@@ -32,6 +32,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseService, withJobRun } from "@/app/api/_lib/supabaseService";
+import { postAdSpendToPostHog } from "@/app/api/admin/cron/_lib/postAdSpendToPostHog";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -274,6 +275,22 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // ── Pull 3: mirror daily totals into PostHog as ad_spend_daily events
+    //   so blended CAC can be computed on the PostHog side without joining
+    //   Supabase. Non-fatal.
+    const posthogRows = accountRows
+      .filter((r) => r.date_start)
+      .map((r) => ({
+        spend_date: r.date_start,
+        amount: Number(Number(r.spend || 0).toFixed(2)),
+        impressions: Number(r.impressions || 0),
+        clicks: Number(r.clicks || 0),
+      }));
+    const posthogResult = await postAdSpendToPostHog({
+      channel: "meta_ads",
+      rows: posthogRows,
+    });
+
     bumpRows(
       accountRows.length + adsetRows.length,
       spendRows.length + snapshotRows.length
@@ -281,11 +298,14 @@ export async function GET(req: NextRequest) {
     setMeta({
       spend_rows: spendRows.length,
       snapshot_rows: snapshotRows.length,
+      posthog_captured: posthogResult.captured,
+      posthog_error: posthogResult.error ?? null,
       range: [fmt(start), fmt(end)],
     });
     return {
       spend_rows: spendRows.length,
       snapshot_rows: snapshotRows.length,
+      posthog_captured: posthogResult.captured,
     };
   });
 

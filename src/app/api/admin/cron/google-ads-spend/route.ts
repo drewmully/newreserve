@@ -20,6 +20,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { postAdSpendToPostHog } from "@/app/api/admin/cron/_lib/postAdSpendToPostHog";
 import { getSupabaseService, withJobRun } from "@/app/api/_lib/supabaseService";
 
 export const runtime = "nodejs";
@@ -141,9 +142,28 @@ export async function GET(req: NextRequest) {
       .upsert(rows, { onConflict: "brand,spend_date,channel,source" });
     if (error) throw new Error(`marketing_spend upsert: ${error.message}`);
 
+    // Mirror the daily totals into PostHog as ad_spend_daily events so the
+    // growth dashboard can compute blended CAC without joining Supabase.
+    // Non-fatal — Supabase remains the source of truth.
+    const posthogResult = await postAdSpendToPostHog({
+      channel: "google_ads",
+      rows: rows.map((r) => ({
+        spend_date: r.spend_date,
+        amount: r.amount,
+      })),
+    });
+
     bumpRows(j.results?.length || 0, rows.length);
-    setMeta({ rows: rows.length, range: [fmt(start), fmt(end)] });
-    return { rows: rows.length };
+    setMeta({
+      rows: rows.length,
+      range: [fmt(start), fmt(end)],
+      posthog_captured: posthogResult.captured,
+      posthog_error: posthogResult.error ?? null,
+    });
+    return {
+      rows: rows.length,
+      posthog_captured: posthogResult.captured,
+    };
   });
 
   return NextResponse.json(result);
