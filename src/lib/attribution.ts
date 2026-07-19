@@ -74,6 +74,27 @@ const CART_FORWARDED_KEYS: (keyof AttributionPayload)[] = [
   "ga_client_id",
 ];
 
+/**
+ * Read the persistent client anonymous_id from localStorage (mully_anon_id).
+ * This is the SAME id that /src/lib/tracking.ts assigns and that PostHog uses
+ * as $anon_distinct_id for pre-signup events. Reading it directly here (rather
+ * than importing from tracking.ts) keeps attribution.ts free of circular
+ * imports — tracking.ts already imports from attribution.ts.
+ *
+ * If the id doesn't exist yet (e.g. very first page load with no prior events),
+ * returns undefined. In that case the server-side purchase webhook falls back
+ * to ga_client_id, which is the pre-2026-07-18 behavior.
+ */
+function readMullyAnonId(): string | undefined {
+  if (typeof window === "undefined") return undefined;
+  try {
+    const raw = window.localStorage.getItem("mully_anon_id");
+    return raw && raw.length > 0 ? raw : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function readCookie(name: string): string | undefined {
   if (typeof document === "undefined") return undefined;
   try {
@@ -256,5 +277,17 @@ export function attributionToCartAttributes(
       out.push({ key, value });
     }
   }
+
+  // Forward mully_anon_id so the orders/paid webhook can use it as the
+  // PostHog $anon_distinct_id when firing the server-side purchase event.
+  // Prior to 2026-07-18 the webhook used ga_client_id, but that's a Google
+  // Analytics identifier — not the PostHog anon id — so the alias merge
+  // silently no-ops. We keep ga_client_id in the cart for GA4 stitching
+  // and add mully_anon_id as a separate attribute so BOTH stitch correctly.
+  const mullyAnonId = readMullyAnonId();
+  if (mullyAnonId) {
+    out.push({ key: "mully_anon_id", value: mullyAnonId });
+  }
+
   return out;
 }

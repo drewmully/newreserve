@@ -437,11 +437,48 @@ export async function identifyAnalyticsUser({
   }
 }
 
+/**
+ * Client-side bot detection. Same intent as the server bot filter in
+ * /api/analytics/track — avoid noise from headless crawlers, ad-network
+ * link scanners, and headless automation harnesses. This runs FIRST so
+ * we save the round-trip and don't fire client-side Meta / gtag pixels
+ * on bot page loads either.
+ *
+ * Signals (any triggers a drop):
+ *   - navigator.webdriver flag (Selenium, Playwright with automation on)
+ *   - User-Agent matches the same bot regex used server-side
+ *   - Missing window/document (SSR shouldn't call this, but defensive)
+ */
+const CLIENT_BOT_UA =
+  /bot|crawl|spider|meta-externalads|Bytespider|Storebot|AdsBot|Googlebot|DuckDuckBot|bingbot|Baiduspider|HeadlessChrome|PhantomJS|Puppeteer|Playwright/i;
+
+function isClientBot(): boolean {
+  if (typeof window === "undefined" || typeof navigator === "undefined") {
+    return true;
+  }
+  try {
+    if ((navigator as Navigator & { webdriver?: boolean }).webdriver === true) {
+      return true;
+    }
+    if (navigator.userAgent && CLIENT_BOT_UA.test(navigator.userAgent)) {
+      return true;
+    }
+  } catch {
+    /* if navigator access throws, fall through */
+  }
+  return false;
+}
+
 export async function trackEvent(
   eventName: string,
   payload: TrackEventPayload = {},
   options: TrackEventOptions = {}
 ): Promise<void> {
+  // Bot short-circuit — skip network, skip pixels, skip attribution capture.
+  // The server has an identical filter as belt-and-braces, but bailing here
+  // is cheaper and keeps Meta Pixel / gtag from firing.
+  if (isClientBot()) return;
+
   const {
     user_id: explicitUserId,
     email: explicitEmail,
