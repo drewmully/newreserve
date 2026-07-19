@@ -225,6 +225,15 @@ interface ShopifyOrder {
     id: number;
     email: string | null;
     first_name?: string | null;
+    /**
+     * Total number of orders the customer has placed on the store.
+     * Shopify webhooks populate this on the customer sub-object.
+     * We use === 1 as the source of truth for "first purchase" — it is
+     * more reliable than deriving from our own Firestore tier_paid_at
+     * because tier_paid_at can be reset on churn, incorrectly marking
+     * a resubscribe as a new signup.
+     */
+    orders_count?: number | null;
   };
   shipping_address?: {
     city?: string | null;
@@ -446,7 +455,22 @@ export async function POST(request: NextRequest) {
   const purchaseUserData = purchaseUserDoc?.data() as
     | { tier_paid_at?: number | null }
     | undefined;
-  const isFirstPurchase = !purchaseUserData?.tier_paid_at;
+  // Prefer Shopify's own customer.orders_count when present — it is
+  // authoritative and immune to our own tier_paid_at getting reset on
+  // churn. Fall back to the Firestore tier_paid_at signal for orders
+  // that arrive without an attached customer (rare).
+  const shopifyOrdersCount = order.customer?.orders_count;
+  const isFirstPurchase =
+    typeof shopifyOrdersCount === "number"
+      ? shopifyOrdersCount === 1
+      : !purchaseUserData?.tier_paid_at;
+  // Shopify source_name identifies which sales channel the order came
+  // from: "web" (online store), "headless" (Storefront API — this is
+  // the mymully.com landing-page checkout), "shopify_draft_order",
+  // etc. Exposing it lets downstream insights split newreserve-driven
+  // signups from the main storefront without any HogQL heuristics.
+  const channel = order.source_name ?? null;
+  const isHeadless = channel === "headless";
 
   const orderIsGift = isGiftOrder(order.note_attributes);
   const purchaseType: "subscription" | "proshop" | "mixed" | "gift" = (() => {
@@ -505,6 +529,9 @@ export async function POST(request: NextRequest) {
       is_first_purchase: isFirstPurchase,
       purchase_type: purchaseType,
       sponsorship_ref: sponsorshipRef,
+      channel,
+      is_headless: isHeadless,
+      shopify_orders_count: shopifyOrdersCount ?? null,
     },
     timestamp: Math.floor(Date.now() / 1000),
   };
