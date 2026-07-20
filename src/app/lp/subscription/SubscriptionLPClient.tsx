@@ -132,13 +132,14 @@ export default function SubscriptionLPClient() {
 
             {/* Hero image — new editorial shoot (local asset). */}
             <div className="lg:col-span-7 order-1 lg:order-none">
-              <div className="relative aspect-[4/5] sm:aspect-[5/4] lg:aspect-square md:max-w-[85%] md:ml-auto">
+              <div className="md:max-w-[85%] md:ml-auto">
                 <Image
                   src="/subscription-hero.jpg"
                   alt="A Mully Reserve quarterly edit of premium golf apparel, styled flat on an editorial surface."
-                  fill
-                  sizes="(min-width: 1024px) 58vw, 100vw"
-                  className="object-cover"
+                  width={1200}
+                  height={1200}
+                  sizes="(min-width: 768px) 42vw, 100vw"
+                  className="w-full h-auto"
                   priority
                 />
               </div>

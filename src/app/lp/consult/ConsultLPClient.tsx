@@ -110,7 +110,7 @@ export default function ConsultLPClient() {
               {/* Price — prominent. The $250 quarterly figure is the anchor,
                   framed as the price of a considered edit. */}
               <div className="mt-8 flex items-baseline gap-3">
-                <span className="font-serif text-5xl sm:text-6xl text-forest leading-none">
+                <span className="font-serif text-4xl sm:text-5xl text-forest leading-none">
                   $250
                 </span>
                 <span className="text-sm tracking-[0.18em] uppercase text-charcoal/55">
@@ -136,13 +136,14 @@ export default function ConsultLPClient() {
 
             {/* Hero image — shared editorial shoot (local asset). */}
             <div className="lg:col-span-7 order-1 lg:order-none">
-              <div className="relative aspect-[4/5] sm:aspect-[5/4] lg:aspect-square overflow-hidden rounded-sm border border-charcoal/[0.08] bg-bone-dark/20">
+              <div className="md:max-w-[85%] md:ml-auto">
                 <Image
                   src="/subscription-hero.jpg"
                   alt="A Mully Reserve quarterly edit of premium golf apparel, styled flat on an editorial surface."
-                  fill
-                  sizes="(min-width: 1024px) 58vw, 100vw"
-                  className="object-cover"
+                  width={1200}
+                  height={1200}
+                  sizes="(min-width: 768px) 42vw, 100vw"
+                  className="w-full h-auto"
                   priority
                 />
               </div>
