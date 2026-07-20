@@ -602,6 +602,22 @@ async function firePostHog(event: AnalyticsEvent): Promise<void> {
         distinctId: personId,
         properties: getPostHogPersonProperties(event),
       });
+
+      // Stitch the visitor's anonymous session onto the identified person.
+      // `posthog.alias` fires a $create_alias event that PostHog uses to
+      // merge two `distinct_id`s under a single person. Without this,
+      // events fired BEFORE the user logged in (page_view, quiz_started,
+      // etc. carrying `anonymous_id`) stay on an orphan anon person and
+      // UTM/source attribution never rolls up to the identified user.
+      //
+      // We only alias when the two IDs differ — aliasing an id to itself
+      // is a no-op that still costs a request.
+      if (event.anonymous_id && event.anonymous_id !== personId) {
+        posthog.alias({
+          distinctId: personId,
+          alias: event.anonymous_id,
+        });
+      }
     }
 
     posthog.capture({
