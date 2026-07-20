@@ -1,39 +1,29 @@
 "use client";
 
 /**
- * Mully Reserve — landing page.
+ * Mully Reserve — /lp/subscription landing page.
  *
- * Magazine-style, visual-first, minimal copy. Brand palette:
- *   bone (page bg) / forest (primary) / ember (accents) / charcoal (body)
+ * Editorial restyle (2026-07-20): white background, Playfair headlines,
+ * Inter body, generous whitespace, thin serif headings, 10px tracked
+ * uppercase labels. Positioning is luxury/considered, not value/discount.
  *
- * Positioning: a CURATOR who handles your golf wardrobe. We are EXITING
- * the subscription-box category — the product is the CARE and the TASTE,
- * not the packaging. Buyer is 35+, affluent.
- *
- * Hero headline (current): "Premium golf gear. Zero guesswork."
- * The "have a guy who handles your golf wardrobe" line lives ONLY in the
- * pitch section as warmth — never as the H1.
- *
- * (Previous headline "Your golf style, handled." was rotated out 2026-06-03
- * to lean into premium/luxury search intent; the "style, handled" framing
- * is preserved in the AG2 paid-search RSA copy.)
- *
- * Primary CTA everywhere is the style quiz. No skip-to-checkout links —
- * those leak intent past email capture and into the hard $250 ask.
+ * Data wiring is untouched: the quiz -> reveal -> checkout flow is owned by
+ * QuizLauncher/QuizModal. Analytics event names and launcher `source`
+ * identifiers are preserved exactly.
  *
  * Strategic constraints (do NOT change without product sign-off):
- *   - NEVER use the word "box" — it's "edit", "quarter", "curation", "Reserve".
- *   - Hero imagery must read "wardrobe," not "package." No closed/stacked boxes.
- *   - Value anchor is the $300+ retail-for-$250 delta, never a discount.
- *   - Quiz CTA wins every CTA collision; attention ratio stays near 1:1.
+ *   - Primary CTA everywhere is the style quiz (QuizLauncher).
+ *   - Value anchor is the quarterly $250 price, presented as the cost of a
+ *     considered edit, never a coupon or a percentage saved.
+ *   - The mobile sticky CTA is a single full-width tap target so the whole
+ *     visible bar routes into the same quiz/checkout flow as desktop.
  */
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { trackEvent } from "@/lib/tracking";
 import { captureAttributionFromUrl } from "@/lib/attribution";
 import { GlassHeader } from "@/app/components/ClientComponents";
-import { ReserveHeroImage } from "@/app/components/ReserveHeroImage";
 import { RECENT_BOX_PRODUCTS } from "../_shared/products";
 import { ReviewsBlock } from "../_shared/LPSections";
 import { CuratorStrip } from "../_shared/CuratorStrip";
@@ -55,37 +45,30 @@ const HOW_IT_WORKS = [
   {
     n: "01",
     title: "Take the quiz",
-    body: "60 seconds. Style, fit, sizes.",
+    body: "60 seconds on style, fit, and sizes.",
   },
   {
     n: "02",
     title: "See your edit",
-    body: "We show you what we'd send before you commit.",
+    body: "We show you the pieces we would send before you commit to anything.",
   },
   {
     n: "03",
     title: "Get your quarter",
-    body: "$300+ retail, hand-curated, every 3 months.",
+    body: "Hand-picked apparel, delivered every three months.",
   },
 ];
 
 const PROOF_STATS = [
   { stat: "96%", label: "Renewal rate" },
-  { stat: "$300+", label: "Retail per quarter" },
-  { stat: "4–6", label: "Pieces per shipment" },
-  { stat: "Free", label: "Returns & exchanges" },
+  { stat: "4 to 6", label: "Pieces per quarter" },
+  { stat: "20+", label: "Brands in rotation" },
+  { stat: "1", label: "Stylist on your fit" },
 ];
 
 export default function SubscriptionLPClient() {
-  const [error, setError] = useState<string | null>(null);
-
-  // Hero: new editorial product-set shoot on a forest-green backdrop.
-  // Art-directed per breakpoint inside the JSX via ReserveHeroImage's
-  // <picture>-based mobileSrc/tabletSrc/src trio (see the hero block below).
-
-  // Editorial grid — apparel detail only. We pull
-  // individual product photography from RECENT_BOX_PRODUCTS so the grid reads
-  // "wardrobe pieces," not "package contents."
+  // Editorial grid — individual apparel photography so the grid reads as
+  // wardrobe pieces, not package contents.
   const gridShots = [
     RECENT_BOX_PRODUCTS[0], // Rhone Quarter Zip — Layer
     RECENT_BOX_PRODUCTS[2], // Quiet Golf Vintage Polo — Polo
@@ -98,72 +81,64 @@ export default function SubscriptionLPClient() {
     trackEvent("lp_subscription_view");
   }, []);
 
-  // NOTE: the previous "Skip the quiz — start membership" links were removed
-  // intentionally. They leaked visitors past email capture into the $250 ask
-  // and tanked segmentation. The quiz IS the funnel. If a future bypass is
-  // ever needed, it should be ONE low-contrast "already sold? start here"
-  // link — not repeated buttons that compete with the quiz CTA.
-
   return (
-    <div className="min-h-screen bg-bone text-charcoal">
+    <div className="min-h-screen bg-white text-charcoal">
       <GlassHeader />
 
       {/* ============================== HERO ============================== */}
-      <section className="pt-20 sm:pt-24">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+      <section className="pt-24 sm:pt-28 lg:pt-32">
+        <div className="max-w-6xl mx-auto px-5 sm:px-8">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-16 items-center">
             {/* Copy column */}
             <div className="lg:col-span-5 order-2 lg:order-none">
-              <div className="text-[11px] tracking-[0.28em] uppercase text-ember/90 mb-4">
+              <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-6">
                 Mully Reserve
               </div>
-              <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl text-forest leading-[1.02]">
-                Premium golf gear.
-                <br />
-                Zero guesswork.
+              <h1 className="font-serif text-4xl sm:text-5xl lg:text-[3.4rem] text-forest leading-[1.05]">
+                Not a discount subscription box.
               </h1>
-              <p className="text-base sm:text-lg text-charcoal/75 mt-5 leading-relaxed max-w-md">
-                Quarterly editorial curation for golfers with taste. Four to six
-                pieces, $300+ retail, every three months.
+              <p className="text-base sm:text-lg text-charcoal/70 mt-6 leading-relaxed max-w-md">
+                A quarterly edit of premium apparel, handpicked for your game.
+                No two boxes are the same. Get started if you want to be the
+                most dialed in player in your clubhouse.
               </p>
 
-              {/* Primary CTA — quiz */}
-              <div className="mt-7 max-w-sm">
-                <QuizLauncher
-                  variant="primary-large"
-                  label="See what we'd send you · 60s"
-                  source="lp_subscription_hero"
-                />
-                <div className="mt-3 text-[11px] tracking-[0.18em] uppercase text-charcoal/55 text-center">
-                  No charge to see. Love it or exchange anything.
-                </div>
+              {/* Price — prominent per Drew. The $250 quarterly figure is the
+                  anchor, framed as the price of a considered edit. */}
+              <div className="mt-8 flex items-baseline gap-3">
+                <span className="font-serif text-5xl sm:text-6xl text-forest leading-none">
+                  $250
+                </span>
+                <span className="text-sm tracking-[0.18em] uppercase text-charcoal/55">
+                  per quarter
+                </span>
+              </div>
+              <div className="mt-1 text-[13px] text-charcoal/50">
+                Billed every three months. Cancel after your first quarter.
               </div>
 
-              {error ? (
-                <div className="mt-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2 max-w-sm">
-                  {error}
+              {/* Primary CTA — quiz */}
+              <div className="mt-8 max-w-sm">
+                <QuizLauncher
+                  variant="primary-large"
+                  label="Get Started · 60s"
+                  source="lp_subscription_hero"
+                />
+                <div className="mt-3 text-[10px] tracking-[0.2em] uppercase text-charcoal/45 text-center">
+                  See your edit before you commit.
                 </div>
-              ) : null}
+              </div>
             </div>
 
-            {/* Hero image — new editorial shoot on forest backdrop.
-                Art-directed per breakpoint via <picture>:
-                  mobile (4:5 container)  → hero-portrait-4x5.webp
-                  tablet (5:4 container)  → hero-landscape-4x3.webp
-                  desktop (4:5 container) → hero-portrait-4x5.webp (base)
-                The dark green background on these shots IS the editorial
-                backdrop — no flatlay vignette/caption overlay needed.
-                Per Drew (2026-06-03): the prior 'no closed boxes in hero'
-                rule has been retired in favor of this new product-set
-                imagery. */}
+            {/* Hero image — new editorial shoot (local asset). */}
             <div className="lg:col-span-7 order-1 lg:order-none">
-              <div className="relative aspect-[4/5] sm:aspect-[5/4] lg:aspect-[4/5] rounded-sm overflow-hidden bg-[#1d3526]">
-                <ReserveHeroImage
-                  src="/lp/hero/hero-portrait-4x5.webp"
-                  mobileSrc="/lp/hero/hero-portrait-4x5.webp"
-                  tabletSrc="/lp/hero/hero-landscape-4x3.webp"
-                  alt="A Mully Reserve quarter laid out on a forest-green editorial surface — Rhone navy quarter-zip, Field Day blue knit, Greyson tee, Will Leather plaid wallet, Penfold canvas bag, and a Will Leather golf shoe carrier."
-                  treatment="default"
+              <div className="relative aspect-[4/5] sm:aspect-[5/4] lg:aspect-square overflow-hidden rounded-sm border border-charcoal/[0.08] bg-bone-dark/20">
+                <Image
+                  src="/subscription-hero.jpg"
+                  alt="A Mully Reserve quarterly edit of premium golf apparel, styled flat on an editorial surface."
+                  fill
+                  sizes="(min-width: 1024px) 58vw, 100vw"
+                  className="object-cover"
                   priority
                 />
               </div>
@@ -172,15 +147,15 @@ export default function SubscriptionLPClient() {
         </div>
       </section>
 
-      {/* ====================== WEDGE / VALUE STRIP ====================== */}
-      <section className="mt-16 sm:mt-24 border-y border-forest/10 bg-bone-dark/30 py-10">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 grid grid-cols-2 sm:grid-cols-4 gap-6">
+      {/* ====================== PROOF / STAT STRIP ======================= */}
+      <section className="mt-20 sm:mt-28 border-y border-charcoal/[0.08] py-12">
+        <div className="max-w-6xl mx-auto px-5 sm:px-8 grid grid-cols-2 sm:grid-cols-4 gap-8">
           {PROOF_STATS.map((p) => (
             <div key={p.label} className="text-center">
               <div className="font-serif text-3xl sm:text-4xl text-forest">
                 {p.stat}
               </div>
-              <div className="text-[11px] sm:text-xs tracking-[0.18em] uppercase text-charcoal/60 mt-1.5">
+              <div className="text-[10px] tracking-[0.22em] uppercase text-charcoal/50 mt-2">
                 {p.label}
               </div>
             </div>
@@ -189,31 +164,27 @@ export default function SubscriptionLPClient() {
       </section>
 
       {/* ========================= "HAVE A GUY" =========================== */}
-      <section className="py-16 sm:py-24">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 text-center">
-          <div className="text-[11px] tracking-[0.28em] uppercase text-ember/90 mb-4">
-            The pitch
+      <section className="py-20 sm:py-28">
+        <div className="max-w-3xl mx-auto px-5 sm:px-8 text-center">
+          <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-5">
+            The idea
           </div>
           <h2 className="font-serif text-3xl sm:text-4xl text-forest leading-tight">
-            You should have a guy who handles your golf wardrobe.
+            You should have someone who handles your golf wardrobe.
           </h2>
-          <p className="text-base sm:text-lg text-charcoal/75 mt-6 leading-relaxed">
-            Four times a year we send the pieces we'd put on ourselves. Brands
-            worth knowing — Greyson, Rhone, Quiet Golf, Field Day, Penfold.
-            Fit confirmed before anything ships.
+          <p className="text-base sm:text-lg text-charcoal/70 mt-6 leading-relaxed">
+            Four times a year we send the pieces we reach for ourselves. Brands
+            worth knowing (Greyson, Rhone, Quiet Golf, Field Day, Penfold), fit
+            confirmed before anything ships.
           </p>
         </div>
 
-        {/* Editorial grid — individual apparel product photography, no
-            staged packages. Each tile is a piece you might receive. */}
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 mt-12">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        {/* Editorial grid — individual apparel photography. */}
+        <div className="max-w-6xl mx-auto px-5 sm:px-8 mt-14">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
             {gridShots.map((p) => (
-              <figure
-                key={p.image}
-                className="relative"
-              >
-                <div className="relative aspect-[3/4] rounded-sm overflow-hidden bg-bone-dark/40">
+              <figure key={p.image} className="relative">
+                <div className="relative aspect-[3/4] overflow-hidden rounded-sm border border-charcoal/[0.06] bg-bone-dark/20">
                   <Image
                     src={p.image}
                     alt={`${p.vendor} ${p.title}`}
@@ -223,7 +194,7 @@ export default function SubscriptionLPClient() {
                     unoptimized
                   />
                 </div>
-                <figcaption className="mt-3 text-[10px] tracking-[0.2em] uppercase text-charcoal/55">
+                <figcaption className="mt-3 text-[10px] tracking-[0.2em] uppercase text-charcoal/50">
                   {p.vendor} · {p.category}
                 </figcaption>
               </figure>
@@ -232,54 +203,48 @@ export default function SubscriptionLPClient() {
         </div>
       </section>
 
-      {/* ======================= VALUE + REASSURANCE ====================== */}
-      {/* Replaces the previous rangefinder welcome-gift section (retired
-          2026-07-13). Anchors on the $300+ retail-for-$250 delta and the
-          first-quarter reassurance rail: free exchanges, cancel after Q1,
-          ships in 7 days. */}
-      <section className="py-16 sm:py-20 bg-forest text-bone">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6">
+      {/* ======================= THE QUARTER (forest panel) ============== */}
+      <section className="py-20 sm:py-24 bg-forest text-bone">
+        <div className="max-w-5xl mx-auto px-5 sm:px-8">
           <div className="text-center max-w-3xl mx-auto">
-            <div className="text-[11px] tracking-[0.28em] uppercase text-ember mb-4">
-              The first quarter
+            <div className="text-[10px] tracking-[0.28em] uppercase text-bone/50 mb-5">
+              The quarter
             </div>
             <h2 className="font-serif text-3xl sm:text-4xl leading-tight">
-              $300+ in retail, sourced from the brands.
-              <br className="hidden sm:block" />
-              You pay $250.
+              A considered edit, built around how you play.
             </h2>
-            <p className="text-base sm:text-lg text-bone/80 mt-5 leading-relaxed">
-              Four pieces tuned to your style and size — apparel and
-              accessories that live in your bag and rotation. Nothing ships
-              until sizing is confirmed. If a piece misses, we exchange it.
+            <p className="text-base sm:text-lg text-bone/75 mt-6 leading-relaxed">
+              Four pieces tuned to your style and size, apparel and accessories
+              that earn a place in your rotation. Nothing ships until your
+              sizing is confirmed. If a piece misses, we exchange it.
             </p>
           </div>
 
-          <div className="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-6">
-            <div className="rounded-sm border border-bone/20 bg-forest-dark/40 p-6">
-              <div className="text-[10px] tracking-[0.22em] uppercase text-ember mb-2">
+          <div className="mt-14 grid grid-cols-1 sm:grid-cols-3 gap-6">
+            <div className="rounded-sm border border-bone/15 p-6">
+              <div className="text-[10px] tracking-[0.22em] uppercase text-bone/50 mb-3">
                 Ships in 7 days
               </div>
-              <div className="text-sm text-bone/80 leading-relaxed">
-                Sizing confirmed after checkout with a 60-second form. Your
+              <div className="text-sm text-bone/75 leading-relaxed">
+                Sizing is confirmed after checkout with a 60-second form. Your
                 quarter ships within a week.
               </div>
             </div>
-            <div className="rounded-sm border border-bone/20 bg-forest-dark/40 p-6">
-              <div className="text-[10px] tracking-[0.22em] uppercase text-ember mb-2">
+            <div className="rounded-sm border border-bone/15 p-6">
+              <div className="text-[10px] tracking-[0.22em] uppercase text-bone/50 mb-3">
                 Free size exchanges
               </div>
-              <div className="text-sm text-bone/80 leading-relaxed">
+              <div className="text-sm text-bone/75 leading-relaxed">
                 If a fit misses, we swap it. No restocking fees, no return
                 shipping on your end.
               </div>
             </div>
-            <div className="rounded-sm border border-bone/20 bg-forest-dark/40 p-6">
-              <div className="text-[10px] tracking-[0.22em] uppercase text-ember mb-2">
+            <div className="rounded-sm border border-bone/15 p-6">
+              <div className="text-[10px] tracking-[0.22em] uppercase text-bone/50 mb-3">
                 Cancel after Q1
               </div>
-              <div className="text-sm text-bone/80 leading-relaxed">
-                Try one full quarter. If Reserve isn't for you, cancel before
+              <div className="text-sm text-bone/75 leading-relaxed">
+                Take one full quarter. If Reserve is not for you, cancel before
                 the next quarter bills. No calls, no forms.
               </div>
             </div>
@@ -288,24 +253,24 @@ export default function SubscriptionLPClient() {
       </section>
 
       {/* ========================= HOW IT WORKS =========================== */}
-      <section className="py-16 sm:py-24 bg-bone">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6">
-          <div className="text-center mb-12">
-            <div className="text-[11px] tracking-[0.28em] uppercase text-ember/90 mb-3">
+      <section className="py-20 sm:py-28">
+        <div className="max-w-5xl mx-auto px-5 sm:px-8">
+          <div className="text-center mb-14">
+            <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-4">
               How it works
             </div>
             <h2 className="font-serif text-3xl sm:text-4xl text-forest">
               Three steps. Sixty seconds.
             </h2>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 sm:gap-10">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-10 sm:gap-12">
             {HOW_IT_WORKS.map((s) => (
               <div key={s.n} className="text-center sm:text-left">
-                <div className="font-serif text-5xl text-ember/80 mb-3 leading-none">
+                <div className="font-serif text-4xl text-forest/25 mb-4 leading-none">
                   {s.n}
                 </div>
                 <div className="font-serif text-xl text-forest">{s.title}</div>
-                <div className="text-sm text-charcoal/70 mt-2 leading-relaxed">
+                <div className="text-sm text-charcoal/65 mt-2 leading-relaxed">
                   {s.body}
                 </div>
               </div>
@@ -315,12 +280,12 @@ export default function SubscriptionLPClient() {
       </section>
 
       {/* ========================== BRAND LOGOS =========================== */}
-      <section className="py-12 sm:py-16 border-y border-forest/10 bg-bone-dark/30">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6">
-          <div className="text-center text-[11px] tracking-[0.28em] uppercase text-charcoal/55 mb-7">
-            Brands you'll find inside
+      <section className="py-14 sm:py-16 border-y border-charcoal/[0.08]">
+        <div className="max-w-5xl mx-auto px-5 sm:px-8">
+          <div className="text-center text-[10px] tracking-[0.28em] uppercase text-charcoal/45 mb-8">
+            Brands in the rotation
           </div>
-          <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-x-5 gap-y-6 items-center">
+          <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-x-6 gap-y-7 items-center">
             {BRAND_LOGOS.map((b) => (
               <div key={b.alt} className="relative h-8 sm:h-9">
                 <Image
@@ -328,7 +293,7 @@ export default function SubscriptionLPClient() {
                   alt={b.alt}
                   fill
                   sizes="80px"
-                  className="object-contain opacity-70"
+                  className="object-contain opacity-60"
                 />
               </div>
             ))}
@@ -340,62 +305,54 @@ export default function SubscriptionLPClient() {
       <ReviewsBlock />
 
       {/* ========================== CURATOR STRIP ========================= */}
-      {/* Trust accent below the testimonials: who's actually behind Reserve. */}
       <CuratorStrip />
 
       {/* =========================== FINAL CTA ============================ */}
-      <section className="bg-forest text-bone py-20 sm:py-24">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 text-center">
-          <div className="text-[11px] tracking-[0.28em] uppercase text-ember mb-4">
+      <section className="bg-forest text-bone py-24 sm:py-28">
+        <div className="max-w-3xl mx-auto px-5 sm:px-8 text-center">
+          <div className="text-[10px] tracking-[0.28em] uppercase text-bone/50 mb-5">
             $250 / quarter · billed every 3 months
           </div>
-          <h2 className="font-serif text-3xl sm:text-5xl leading-[1.05]">
-            See your edit before
-            <br />
-            you commit.
+          <h2 className="font-serif text-3xl sm:text-5xl leading-[1.08]">
+            See your edit before you commit.
           </h2>
-          <p className="text-base sm:text-lg text-bone/75 mt-6 max-w-xl mx-auto leading-relaxed">
-            We'll show you the four pieces we'd send this quarter — $300+ in
-            retail, sourced from the brands. Then it's your call.
+          <p className="text-base sm:text-lg text-bone/70 mt-6 max-w-xl mx-auto leading-relaxed">
+            We will show you the pieces we would send this quarter. Then it is
+            your call.
           </p>
-          <div className="mt-9 inline-block w-full max-w-sm">
+          <div className="mt-10 inline-block w-full max-w-sm">
             <QuizLauncher
               variant="primary-large"
-              label="Build my Reserve edit"
+              label="Get Started"
               source="lp_subscription_final"
             />
           </div>
-          <div className="mt-4 text-[11px] tracking-[0.18em] uppercase text-bone/55">
+          <div className="mt-4 text-[10px] tracking-[0.2em] uppercase text-bone/45">
             96% renewal · Free shipping · Cancel anytime after your first quarter
           </div>
         </div>
       </section>
 
       <footer className="bg-forest-dark text-bone/55 text-xs pt-8 pb-24 lg:pb-8 text-center">
-        © {new Date().getFullYear()} Mullybox. All rights reserved.
+        © {new Date().getFullYear()} Mully Group, Inc. All rights reserved.
       </footer>
 
-      {/* ====================== MOBILE STICKY CTA ========================= */}
+      {/* ====================== MOBILE STICKY CTA =========================
+          Single full-width tap target. The previous bar rendered its label in
+          a non-interactive <div> alongside a narrow button, so taps on the
+          label region (most of the bar) did nothing. The whole visible bar is
+          now the QuizLauncher button and routes into the same quiz/checkout
+          flow as the desktop CTA. z-50 keeps it above page content. */}
       <div
-        className="lg:hidden fixed bottom-0 inset-x-0 z-40 border-t border-forest/15 bg-bone/95 backdrop-blur-md shadow-[0_-4px_16px_-8px_rgba(0,0,0,0.15)]"
+        className="lg:hidden fixed bottom-0 inset-x-0 z-50 border-t border-charcoal/10 bg-white/95 backdrop-blur-md shadow-[0_-4px_16px_-8px_rgba(0,0,0,0.15)]"
         style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       >
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-[10px] tracking-[0.2em] uppercase text-charcoal/55">
-              Reserve · 60-second quiz
-            </div>
-            <div className="font-serif text-base text-forest leading-tight">
-              See your edit
-            </div>
-          </div>
-          <div className="flex-1 max-w-[60%]">
-            <QuizLauncher
-              variant="primary-large"
-              label="Build my edit"
-              source="lp_subscription_sticky"
-            />
-          </div>
+        <div className="max-w-6xl mx-auto px-4 py-3">
+          <QuizLauncher
+            variant="primary-large"
+            label="Get Started · $250/quarter"
+            source="lp_subscription_sticky"
+          />
         </div>
       </div>
     </div>
