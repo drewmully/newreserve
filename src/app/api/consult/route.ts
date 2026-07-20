@@ -42,6 +42,14 @@ interface ConsultBody {
   source?: string;
   consent_text?: string;
   landing_url?: string | null;
+  /**
+   * PostHog anonymous_id captured client-side. Forwarded so the server
+   * `consult_submit` event and the alias() call both land on the SAME
+   * PostHog person as the visitor's other client-side events (page_view,
+   * lp_consult_modal_view, quiz_started, quiz_completed). Without this the
+   * event lands on `phone_<last4>` which never stitches to a real person.
+   */
+  anonymous_id?: string | null;
 }
 
 interface EnrollResult {
@@ -138,6 +146,10 @@ export async function POST(request: Request): Promise<Response> {
   });
 
   // ---- Step 4: PostHog attribution (deferred) ----
+  const anonymousId =
+    typeof body.anonymous_id === "string" && body.anonymous_id.length > 0
+      ? body.anonymous_id.slice(0, 128)
+      : null;
   after(async () => {
     try {
       await firePostHog({
@@ -146,6 +158,7 @@ export async function POST(request: Request): Promise<Response> {
         userAgent,
         shopifyCustomerId: null,
         contactId: enrollResult.contact_id ?? null,
+        anonymousId,
       });
     } catch {
       // Analytics never blocks the user.
@@ -395,6 +408,14 @@ interface PostHogInput {
   userAgent: string | null;
   shopifyCustomerId: string | null;
   contactId: string | null;
+  /**
+   * Client-provided PostHog anon_id. When present, the server event uses it
+   * as its distinct_id so the funnel step lines up with the visitor's other
+   * client-side events on the SAME PostHog person. We also emit an
+   * `$create_alias` event so downstream sessions from this phone number (or
+   * the same Shopify customer) stitch to the same person.
+   */
+  anonymousId: string | null;
 }
 
 async function firePostHog(input: PostHogInput): Promise<void> {
@@ -405,13 +426,22 @@ async function firePostHog(input: PostHogInput): Promise<void> {
     "https://us.i.posthog.com";
   if (!apiKey) return;
 
+  // Prefer the client-provided anon_id so the funnel stitches. Fall back to
+  // Shopify customer id, then phone-only. All three are stable-per-visitor.
+  const distinctId =
+    input.anonymousId ??
+    input.shopifyCustomerId ??
+    `phone_${input.phoneLast4}`;
+
+  const commonHeaders = { "Content-Type": "application/json" };
+
   await fetch(`${host}/i/v0/e/`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: commonHeaders,
     body: JSON.stringify({
       api_key: apiKey,
       event: "consult_submit",
-      distinct_id: input.shopifyCustomerId ?? `phone_${input.phoneLast4}`,
+      distinct_id: distinctId,
       properties: {
         $lib: "server",
         source: "lp_consult",
@@ -420,7 +450,27 @@ async function firePostHog(input: PostHogInput): Promise<void> {
         phone_last4: input.phoneLast4,
         shopify_customer_id: input.shopifyCustomerId,
         sms_contact_id: input.contactId,
+        anonymous_id: input.anonymousId,
       },
     }),
   });
+
+  // Emit an $create_alias event tying the phone-derived id to the client
+  // anon_id. This gives us retroactive stitching for the historical
+  // `phone_<last4>` events too — PostHog's person-merge picks them up.
+  if (input.anonymousId && input.anonymousId !== `phone_${input.phoneLast4}`) {
+    await fetch(`${host}/i/v0/e/`, {
+      method: "POST",
+      headers: commonHeaders,
+      body: JSON.stringify({
+        api_key: apiKey,
+        event: "$create_alias",
+        distinct_id: input.anonymousId,
+        properties: {
+          $lib: "server",
+          alias: `phone_${input.phoneLast4}`,
+        },
+      }),
+    });
+  }
 }

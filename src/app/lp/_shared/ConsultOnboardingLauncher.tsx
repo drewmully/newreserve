@@ -22,7 +22,7 @@
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { QuizModal } from "./QuizModal";
-import { trackEvent } from "@/lib/tracking";
+import { trackEvent, getClientAnonymousId } from "@/lib/tracking";
 import { captureAttributionFromUrl } from "@/lib/attribution";
 
 // ---- Constants ------------------------------------------------------------
@@ -248,6 +248,13 @@ function ConsultStep0({ onSuccess }: ConsultStep0Props) {
     const controller = new AbortController();
     const abortTimer = window.setTimeout(() => controller.abort(), 15000);
     try {
+      // Forward the visitor's PostHog anon_id so the server-side
+      // `consult_submit` event lands on the SAME PostHog person as the
+      // client's page_view / quiz_started events. Without this the server
+      // event uses `phone_<last4>` as its distinct_id and the LP funnel
+      // can't stitch phase-1 completion into the sequence.
+      const anonymousId =
+        typeof window !== "undefined" ? getClientAnonymousId() : null;
       const res = await fetch("/api/consult", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -258,6 +265,7 @@ function ConsultStep0({ onSuccess }: ConsultStep0Props) {
           consent_text: CONSENT_TEXT,
           landing_url:
             typeof window !== "undefined" ? window.location.href : null,
+          anonymous_id: anonymousId,
         }),
         signal: controller.signal,
       });
