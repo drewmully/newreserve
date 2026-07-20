@@ -532,6 +532,12 @@ export async function POST(request: NextRequest) {
       channel,
       is_headless: isHeadless,
       shopify_orders_count: shopifyOrdersCount ?? null,
+      // Deterministic Meta CAPI dedup id. Format: purchase_<shopify_order_id>.
+      // The client-side confirmation page at /auth/callback fires a matching
+      // fbq('track','Purchase',{},{eventID: event_id}) using the same value,
+      // and Meta then dedupes the server + browser Purchase into a single
+      // conversion. Without this, Meta double-counts every ad-driven order.
+      event_id: `purchase_${order.id}`,
     },
     timestamp: Math.floor(Date.now() / 1000),
   };
@@ -595,6 +601,21 @@ export async function POST(request: NextRequest) {
               created_at: Date.now(),
               updated_at: Date.now(),
               tier_paid_at: Date.now(),
+              // Snapshot the just-paid order so the /auth/callback client
+              // can fetch its value + Meta CAPI event_id for browser-side
+              // dedup without re-hitting Shopify. `event_id_captured` is
+              // set to false until the browser fires its Purchase pixel
+              // and pings /api/purchase-context, then flipped to true so
+              // refreshes don't re-fire.
+              latest_purchase: {
+                shopify_order_id: String(order.id),
+                order_number: String(order.order_number),
+                value: Number(value),
+                currency: order.currency,
+                event_id: `purchase_${order.id}`,
+                paid_at: Date.now(),
+                event_id_captured: false,
+              },
             });
 
             const magicLink = await adminAuth.generateSignInWithEmailLink(email, {
@@ -619,6 +640,18 @@ export async function POST(request: NextRequest) {
               tier,
               updated_at: Date.now(),
               tier_paid_at: Date.now(),
+              // Refresh the latest_purchase snapshot so /auth/callback can
+              // dedup the CAPI Purchase for this order too, not just the
+              // very first one. See the parallel comment above.
+              latest_purchase: {
+                shopify_order_id: String(order.id),
+                order_number: String(order.order_number),
+                value: Number(value),
+                currency: order.currency,
+                event_id: `purchase_${order.id}`,
+                paid_at: Date.now(),
+                event_id_captured: false,
+              },
             };
             if (shopifyCustomerId && !userData.shopify_customer_id) {
               updates.shopify_customer_id = shopifyCustomerId;

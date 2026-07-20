@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useMembership } from "@/app/context/MembershipContext";
 
-// Globally-typed gtag shim so we can call window.gtag(...) without TS errors.
+// Globally-typed gtag + fbq shims so we can call them without TS errors.
 declare global {
   interface Window {
     gtag?: (
@@ -14,6 +14,7 @@ declare global {
       params?: Record<string, unknown>
     ) => void;
     dataLayer?: unknown[];
+    fbq?: (...args: unknown[]) => void;
   }
 }
 
@@ -144,6 +145,98 @@ export default function AuthCallbackPage() {
       return () => clearTimeout(timer);
     }
   }, [authLoading, isSignedIn, conversionFired, router]);
+
+  // ── Meta CAPI dedup: fire browser-side Purchase pixel ──────────────────
+  //
+  // The orders-paid webhook already sent a server-side Purchase to Meta
+  // via CAPI (see src/app/api/_lib/analytics.ts). Meta's Ads Manager was
+  // double-counting those Purchases because CAPI had no browser-side
+  // partner to dedup against — Meta was crediting the CAPI event AND a
+  // "modeled" browser conversion for the same order.
+  //
+  // Now: we fetch the just-paid order's event_id from Firestore via
+  // /api/purchase-context (uses the same deterministic
+  // `purchase_<shopify_order_id>` id the webhook stamped on the CAPI
+  // event) and fire fbq with eventID set. Meta then merges the two into
+  // a single conversion. The server flips a Firestore flag on first
+  // response, and we also gate on sessionStorage, so refreshes /
+  // back-navigation never re-fire.
+  //
+  // Non-fatal by design: if fbq is missing (adblocker, script failure)
+  // or the API call fails, we log and move on. CAPI still gives Meta
+  // the conversion; only the dedup benefit is lost.
+  const [metaFired, setMetaFired] = useState(false);
+  useEffect(() => {
+    if (authLoading || !isSignedIn) return;
+    let cancelled = false;
+    const SESSION_KEY = "mully_meta_purchase_fired";
+
+    (async () => {
+      try {
+        if (sessionStorage.getItem(SESSION_KEY)) {
+          if (!cancelled) setMetaFired(true);
+          return;
+        }
+
+        // Get Firebase ID token — we need it to call our server API.
+        const { getAuth } = await import("firebase/auth");
+        const user = getAuth().currentUser;
+        if (!user) {
+          if (!cancelled) setMetaFired(true);
+          return;
+        }
+        const idToken = await user.getIdToken();
+
+        const resp = await fetch("/api/purchase-context", {
+          headers: { Authorization: `Bearer ${idToken}` },
+          cache: "no-store",
+        });
+        if (!resp.ok) throw new Error(`purchase-context ${resp.status}`);
+        const ctx = (await resp.json()) as {
+          has_purchase?: boolean;
+          already_captured?: boolean;
+          event_id?: string;
+          value?: number;
+          currency?: string;
+        };
+
+        if (!ctx.has_purchase || ctx.already_captured || !ctx.event_id) {
+          try { sessionStorage.setItem(SESSION_KEY, "1"); } catch {}
+          if (!cancelled) setMetaFired(true);
+          return;
+        }
+
+        if (typeof window.fbq !== "function") {
+          // Meta Pixel base code didn't load — nothing to dedup with,
+          // but mark done so we don't retry on every render.
+          try { sessionStorage.setItem(SESSION_KEY, "1"); } catch {}
+          if (!cancelled) setMetaFired(true);
+          return;
+        }
+
+        window.fbq(
+          "track",
+          "Purchase",
+          { value: ctx.value ?? 0, currency: ctx.currency ?? "USD" },
+          { eventID: ctx.event_id }
+        );
+
+        try { sessionStorage.setItem(SESSION_KEY, "1"); } catch {}
+        if (!cancelled) setMetaFired(true);
+      } catch (err) {
+        console.warn("[meta] Purchase dedup fire skipped:", err);
+        if (!cancelled) setMetaFired(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, isSignedIn]);
+  // metaFired is intentionally not blocking the redirect — the ping
+  // to Meta's edge is fire-and-forget and completes in <100ms in
+  // practice. Reference it so the linter doesn't drop the state var.
+  void metaFired;
 
   if (authLoading || !isSignedIn) {
     return (
