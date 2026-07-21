@@ -5,16 +5,18 @@
  *
  * `GiftCard` is the always-visible entry point under the hero CTA. Opening it
  * (or the "Gift for a Golfer" persona CTA) mounts `GiftModal`, which collects a
- * recipient shirt size and an optional note, then hands off to the Reserve
- * Member gift permalink on checkout.mymully.com with the collected values as
- * Shopify line-item properties.
+ * recipient shirt size and an optional note, then starts checkout through the
+ * shared `createMembershipCheckout` Storefront flow (same builder the standard
+ * "Get Started" and /lp/gift funnels use). That flow returns a Shopify
+ * `checkoutUrl` from a cartCreate mutation, so it never triggers the customer
+ * login prompt the raw checkout.mymully.com/products permalink did. The order
+ * is tagged `gift=true` so the orders-paid webhook routes it through the gift
+ * pipeline; the shirt size rides on the subscription line item.
  */
 
 import { useEffect, useState } from "react";
 import { trackEvent } from "@/lib/tracking";
-
-const GIFT_CHECKOUT_BASE =
-  "https://checkout.mymully.com/products/reserve-member-gift?utm_source=copyToPasteBoard&utm_medium=product-links&utm_content=web";
+import { createMembershipCheckout } from "@/lib/shopifyCheckout";
 
 const SHIRT_SIZES = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"] as const;
 const MESSAGE_MAX = 200;
@@ -58,6 +60,8 @@ export function GiftModal({
 }) {
   const [size, setSize] = useState<(typeof SHIRT_SIZES)[number]>("L");
   const [message, setMessage] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -75,20 +79,33 @@ export function GiftModal({
 
   if (!open) return null;
 
-  function handleCheckout() {
+  async function handleCheckout() {
+    if (submitting) return;
+    setError(null);
+    setSubmitting(true);
     trackEvent(
       "gift_checkout_initiated",
       { properties: { source, shirt_size: size, has_message: message.length > 0 } },
       { includeAuth: false }
     ).catch(() => {});
 
-    const url =
-      `${GIFT_CHECKOUT_BASE}` +
-      `&properties[Shirt Size]=${encodeURIComponent(size)}` +
-      (message.trim()
-        ? `&properties[Gift Message]=${encodeURIComponent(message.trim())}`
-        : "");
-    window.location.href = url;
+    const trimmedMessage = message.trim();
+    try {
+      await createMembershipCheckout("member", {
+        returnPath: "/auth/callback",
+        attributes: [
+          { key: "lp_source", value: source },
+          { key: "gift", value: "true" },
+          ...(trimmedMessage
+            ? [{ key: "gift_message", value: trimmedMessage }]
+            : []),
+        ],
+        subscriptionLineAttributes: [{ key: "Top size", value: size }],
+      });
+    } catch {
+      setSubmitting(false);
+      setError("Could not start checkout. Please try again.");
+    }
   }
 
   return (
@@ -171,12 +188,19 @@ export function GiftModal({
           </div>
         </div>
 
+        {error ? (
+          <div className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+            {error}
+          </div>
+        ) : null}
+
         <button
           type="button"
           onClick={handleCheckout}
-          className="mt-6 w-full bg-ember hover:bg-ember/90 text-bone py-3.5 rounded-md text-sm font-medium tracking-wide transition cursor-pointer"
+          disabled={submitting}
+          className="mt-6 w-full bg-ember hover:bg-ember/90 text-bone py-3.5 rounded-md text-sm font-medium tracking-wide transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Checkout as a gift →
+          {submitting ? "One moment…" : "Checkout as a gift →"}
         </button>
       </div>
     </div>

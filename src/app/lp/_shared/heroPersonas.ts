@@ -23,7 +23,7 @@ export interface Persona {
 export const HERO_PERSONAS: readonly Persona[] = [
   {
     key: "casual",
-    tab: "Casual Golfer",
+    tab: "Myself · casual",
     subheader:
       "A quarterly edit of premium apparel, handpicked for your game. No two edits are the same. Get started if you want to be the most dialed in player in your clubhouse.",
     stat: "96% of members renew after their first quarter.",
@@ -31,7 +31,7 @@ export const HERO_PERSONAS: readonly Persona[] = [
   },
   {
     key: "serious",
-    tab: "Serious Player",
+    tab: "Myself · serious",
     subheader:
       "For the guy who plays 36 on Saturdays. Every quarter our team pulls 4 to 6 pieces from Greyson, Rhone, and 20+ brands to keep your rotation fresh.",
     stat: "Members average 18 to 24 new pieces a year.",
@@ -39,7 +39,7 @@ export const HERO_PERSONAS: readonly Persona[] = [
   },
   {
     key: "gift",
-    tab: "Gift for a Golfer",
+    tab: "A gift",
     subheader:
       "The move for the golfer who has everything. Pick a shirt size, add a note, and we ship the first edit within 1 business day.",
     stat: "Ships in 1 business day. Cancel anytime.",

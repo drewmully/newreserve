@@ -56,16 +56,18 @@ export function HeroCopyColumn({
         Not a discount subscription box.
       </h1>
 
-      <div className="mt-6">
-        <PersonaTabs value={persona} onChange={setPersona} />
-      </div>
-
-      <p className="text-base sm:text-lg text-charcoal/70 mt-5 leading-relaxed max-w-md">
+      <p className="text-base sm:text-lg text-charcoal/70 mt-6 leading-relaxed max-w-md">
         {active.subheader}
       </p>
       <div className="mt-3 text-[13px] tracking-wide text-forest/70">
         {active.stat}
       </div>
+
+      <PersonaTabs
+        value={persona}
+        onChange={setPersona}
+        className="mt-5"
+      />
 
       {/* Price card — the $250 quarterly anchor, per-piece framing, the
           compact 3-stat trust strip, the CTA (gift persona routes to the gift
@@ -87,13 +89,13 @@ export function HeroCopyColumn({
           retail.
         </div>
 
-        <div className="grid grid-cols-3 gap-4 py-4 mt-4 border-y border-charcoal/[0.08]">
+        <div className="grid grid-cols-3 gap-2 py-3 mt-4 border-y border-charcoal/[0.08]">
           {TRUST_STATS.map((s) => (
             <div key={s.label}>
-              <div className="font-serif text-2xl text-forest leading-none">
+              <div className="font-serif text-lg sm:text-xl text-forest leading-none">
                 {s.stat}
               </div>
-              <div className="mt-1.5 text-[10px] tracking-[0.28em] uppercase text-charcoal/50">
+              <div className="mt-1 text-[9px] tracking-[0.24em] uppercase text-charcoal/50">
                 {s.label}
               </div>
             </div>

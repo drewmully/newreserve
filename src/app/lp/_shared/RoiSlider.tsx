@@ -4,17 +4,17 @@
  * Compact ROI slider shared by /lp/subscription and /lp/consult.
  *
  * The visitor sets how many times a year they currently shop for golf gear
- * (5 to 24). Four outcome tiles recompute live, framing Mully Reserve against
- * self-directed retail shopping: time saved, pieces per year, annual spend,
- * and pieces others don't own.
+ * (5 to 24). Four tiles recompute live and show only the delta (the Mully
+ * improvement) as positive numbers: hours saved, extra pieces, dollars saved,
+ * and extra unique pieces per edit.
  */
 
 import { useMemo, useState } from "react";
 
-function formatK(dollars: number): string {
-  const k = dollars / 1000;
-  const rounded = Math.round(k * 10) / 10;
-  return Number.isInteger(rounded) ? `$${rounded}k` : `$${rounded.toFixed(1)}k`;
+function formatSaved(dollars: number): string {
+  if (dollars < 1000) return `$${dollars}`;
+  const k = Math.round((dollars / 1000) * 10) / 10;
+  return Number.isInteger(k) ? `$${k}k` : `$${k.toFixed(1)}k`;
 }
 
 function uniquePieces(visits: number): number {
@@ -33,15 +33,16 @@ export function RoiSlider({ className }: { className?: string }) {
 
   const tiles = useMemo<Tile[]>(() => {
     const hoursSaved = Math.round((visits * (60 - 15)) / 60);
-    const retailPieces = Math.floor(visits * 1.5);
-    const retailSpend = visits * 200;
+    const extraPieces = Math.max(0, 20 - Math.floor(visits * 1.5));
+    const dollarsSaved = Math.max(0, visits * 200 - 1000);
+    const theirUnique = uniquePieces(visits);
     return [
-      { line1: `${hoursSaved} hours`, line2: "Saved every year" },
-      { line1: `${retailPieces} vs 20`, line2: "Pieces per year" },
-      { line1: `${formatK(retailSpend)} vs $1k`, line2: "Annual spend" },
+      { line1: `${hoursSaved} hours`, line2: "Hours saved / year" },
+      { line1: `+${extraPieces}`, line2: "Extra pieces / year" },
+      { line1: formatSaved(dollarsSaved), line2: "Saved / year" },
       {
-        line1: `${uniquePieces(visits)} vs 3 to 6`,
-        line2: "Pieces others don't own",
+        line1: `+${3 - theirUnique} to +${6 - theirUnique}`,
+        line2: "Unique pieces / edit",
       },
     ];
   }, [visits]);
