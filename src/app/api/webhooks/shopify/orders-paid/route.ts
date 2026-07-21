@@ -465,12 +465,45 @@ export async function POST(request: NextRequest) {
       ? shopifyOrdersCount === 1
       : !purchaseUserData?.tier_paid_at;
   // Shopify source_name identifies which sales channel the order came
-  // from: "web" (online store), "headless" (Storefront API — this is
-  // the mymully.com landing-page checkout), "shopify_draft_order",
-  // etc. Exposing it lets downstream insights split newreserve-driven
-  // signups from the main storefront without any HogQL heuristics.
-  const channel = order.source_name ?? null;
-  const isHeadless = channel === "headless";
+  // from. Verified against production data (queried 2026-07-21):
+  //   - "channel:7831744"                  = newreserve Storefront API
+  //                                          (the mymully.com landing-page
+  //                                          checkout — what we mean by
+  //                                          "headless"). Confirmed by
+  //                                          publication.name = "Mullybox
+  //                                          Headless" on the same orders.
+  //   - "subscription_contract_checkout_one" = Loop renewal (Subscription
+  //                                          Recurring Order tag).
+  //   - "shopify_draft_order"               = admin-created draft order.
+  //   - "web"                               = main storefront checkout.
+  //
+  // We normalize the source_name into a stable `source_channel` string so
+  // downstream insights can filter without knowing raw Shopify channel
+  // IDs. `is_headless` becomes the boolean flag most tiles care about.
+  const rawSourceName = order.source_name ?? null;
+  const tagList = (order.tags ?? "")
+    .split(",")
+    .map((t) => t.trim().toLowerCase());
+  const isSubscriptionFirst = tagList.includes("subscription first order");
+  const isSubscriptionRecurring = tagList.includes(
+    "subscription recurring order",
+  );
+
+  let sourceChannel: string;
+  if (rawSourceName === "channel:7831744") sourceChannel = "headless";
+  else if (rawSourceName === "subscription_contract_checkout_one")
+    sourceChannel = "loop_renewal";
+  else if (rawSourceName === "web") sourceChannel = "web";
+  else if (rawSourceName === "shopify_draft_order")
+    sourceChannel = "draft_order";
+  else if (rawSourceName) sourceChannel = rawSourceName;
+  else sourceChannel = "unknown";
+
+  // Kept for backward compatibility with existing tiles that still filter
+  // by `properties.channel`. New tiles should filter on `source_channel`
+  // or `is_headless`.
+  const channel = sourceChannel;
+  const isHeadless = sourceChannel === "headless";
 
   const orderIsGift = isGiftOrder(order.note_attributes);
   const purchaseType: "subscription" | "proshop" | "mixed" | "gift" = (() => {
@@ -530,7 +563,11 @@ export async function POST(request: NextRequest) {
       purchase_type: purchaseType,
       sponsorship_ref: sponsorshipRef,
       channel,
+      source_channel: sourceChannel,
+      source_name_raw: rawSourceName,
       is_headless: isHeadless,
+      is_subscription_first_order: isSubscriptionFirst,
+      is_subscription_recurring_order: isSubscriptionRecurring,
       shopify_orders_count: shopifyOrdersCount ?? null,
       // Deterministic Meta CAPI dedup id. Format: purchase_<shopify_order_id>.
       // The client-side confirmation page at /auth/callback fires a matching
