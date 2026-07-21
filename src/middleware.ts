@@ -4,22 +4,19 @@ import type { NextRequest } from "next/server";
 const MAINTENANCE_MODE = process.env.MAINTENANCE_MODE === "true";
 
 /**
- * A/B test on `/`:
- *   Bucket 0..49  → control  (/lp/subscription)
- *   Bucket 50..99 → variant  (/lp/editorial)
+ * Homepage routing on `/`:
+ *   100% of traffic is redirected to /lp/consult.
  *
- * The `mr_ab` cookie (0..99) is the source of truth. If a visitor lands
- * without one, we set it here BEFORE the redirect so their bucket sticks
- * for 90 days (identical variant on repeat visits, and every downstream
- * analytics event they fire carries the same `homepage-lp` property via
- * tracking.ts::getAbVariantProperties).
+ * The prior 50/50 A/B split (subscription vs editorial) is retired. We still
+ * set the sticky `mr_ab` cookie (0..99) on first visit so downstream analytics
+ * events keep carrying the `homepage-lp` property via
+ * tracking.ts::getAbVariantProperties; the bucket no longer changes the
+ * destination.
  *
  * Query params (utm_*, gclid, fbclid, …) are forwarded so paid attribution
- * survives the split.
+ * survives the redirect.
  */
-function pickHomepageVariant(bucket: number): "subscription" | "editorial" {
-  return bucket < 50 ? "subscription" : "editorial";
-}
+const HOMEPAGE_DESTINATION = "/lp/consult";
 
 export function middleware(request: NextRequest) {
   // ─── A/B bucket cookie (sticky visitor assignment) ───
@@ -52,11 +49,8 @@ export function middleware(request: NextRequest) {
   // /account, API routes) is untouched, aside from ensuring the cookie is set.
   const { pathname, search } = request.nextUrl;
   if (pathname === "/") {
-    const variant = pickHomepageVariant(bucket);
-    const destination =
-      variant === "subscription" ? "/lp/subscription" : "/lp/editorial";
     const url = request.nextUrl.clone();
-    url.pathname = destination;
+    url.pathname = HOMEPAGE_DESTINATION;
     // `search` already includes the leading "?" if there are params, and is ""
     // otherwise. Preserving it keeps utm_*, gclid, fbclid, etc. attached to
     // the destination LP.
