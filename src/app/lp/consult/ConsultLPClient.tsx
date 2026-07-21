@@ -152,6 +152,31 @@ export default function ConsultLPClient() {
         </div>
       </section>
 
+      {/* ========================= MEMBER REVIEWS ========================
+          Junip Homepage Reviews Carousel (store_reviews). The Junip widget
+          script is loaded globally in app/layout.tsx and hydrates any matching
+          .junip-review-carousel node after mount. data-title is intentionally
+          blank so the widget does not render a second header above our own
+          editorial h2. */}
+      <section className="bg-white py-16 md:py-24">
+        <div className="max-w-6xl mx-auto px-5 sm:px-8">
+          <div className="text-center mb-10 sm:mb-12">
+            <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-4">
+              Member reviews
+            </div>
+            <h2 className="font-serif text-3xl sm:text-4xl text-forest">
+              What members are saying
+            </h2>
+          </div>
+          <div
+            className="junip-review-carousel"
+            data-title=""
+            data-reviews-type="store_reviews"
+            data-show-summary="true"
+          />
+        </div>
+      </section>
+
       {/* ====================== PROOF / STAT STRIP ======================= */}
       <section className="mt-20 sm:mt-28 border-y border-charcoal/[0.08] py-12">
         <div className="max-w-6xl mx-auto px-5 sm:px-8 grid grid-cols-2 sm:grid-cols-4 gap-8">
