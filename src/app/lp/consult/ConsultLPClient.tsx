@@ -228,11 +228,11 @@ export default function ConsultLPClient() {
           <div className="mt-14 grid grid-cols-1 sm:grid-cols-3 gap-6">
             <div className="rounded-sm border border-bone/15 p-6">
               <div className="text-[10px] tracking-[0.22em] uppercase text-bone/50 mb-3">
-                Ships in 7 days
+                Ships in 1 business day
               </div>
               <div className="text-sm text-bone/75 leading-relaxed">
-                Sizing is confirmed after checkout with a 60-second form. Your
-                quarter ships within a week.
+                Your first edit typically ships within 1 business day. Sizing is
+                confirmed after checkout with a 60-second form.
               </div>
             </div>
             <div className="rounded-sm border border-bone/15 p-6">
