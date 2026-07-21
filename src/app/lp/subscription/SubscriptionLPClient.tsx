@@ -168,7 +168,8 @@ export default function SubscriptionLPClient() {
           <div
             className="junip-review-carousel"
             data-title=""
-            data-reviews-type="store_reviews"
+            data-reviews-type="product_reviews"
+            data-product-id="47601025122496"
             data-show-summary="true"
           />
         </div>
