@@ -3,10 +3,10 @@
 /**
  * Gift flow shared by /lp/subscription and /lp/consult.
  *
- * `GiftCard` is the always-visible entry point under the hero CTA. Opening it
- * (or the "Gift for a Golfer" persona CTA) mounts `GiftModal`, which collects a
- * recipient shirt size and an optional note, then starts checkout through the
- * shared `createMembershipCheckout` Storefront flow (same builder the standard
+ * The subtle "Send it as a gift" link under the hero CTA (or the "A gift"
+ * persona CTA) mounts `GiftModal`, which collects a recipient shirt size and an
+ * optional note, then starts checkout through the shared
+ * `createMembershipCheckout` Storefront flow (same builder the standard
  * "Get Started" and /lp/gift funnels use). That flow returns a Shopify
  * `checkoutUrl` from a cartCreate mutation, so it never triggers the customer
  * login prompt the raw checkout.mymully.com/products permalink did. The order
@@ -20,34 +20,6 @@ import { createMembershipCheckout } from "@/lib/shopifyCheckout";
 
 const SHIRT_SIZES = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"] as const;
 const MESSAGE_MAX = 200;
-
-export function GiftCard({
-  onOpen,
-  className,
-}: {
-  onOpen: () => void;
-  className?: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className={[
-        "block w-full text-left rounded-sm border border-charcoal/15 p-4 transition hover:border-forest cursor-pointer",
-        className,
-      ]
-        .filter(Boolean)
-        .join(" ")}
-    >
-      <div className="text-[10px] tracking-[0.28em] uppercase text-charcoal/50">
-        Prefer to gift?
-      </div>
-      <div className="mt-1.5 text-sm text-charcoal/70 leading-relaxed">
-        Gift a quarter to a golfer in your life. Ships in 1 business day. →
-      </div>
-    </button>
-  );
-}
 
 export function GiftModal({
   open,

@@ -32,6 +32,7 @@ import { CuratorStrip } from "../_shared/CuratorStrip";
 import { ConsultOnboardingLauncher } from "../_shared/ConsultOnboardingLauncher";
 import { HeroCopyColumn } from "../_shared/HeroCopyColumn";
 import { HeroMiniQuiz } from "../_shared/HeroMiniQuiz";
+import { RoiSlider } from "../_shared/RoiSlider";
 
 const BRAND_LOGOS = [
   { src: "/brands/greyson.png", alt: "Greyson" },
@@ -76,12 +77,12 @@ export default function ConsultLPClient() {
       {/* ============================== HERO ============================== */}
       <section className="pt-24 sm:pt-28 lg:pt-32">
         <div className="max-w-6xl mx-auto px-5 sm:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-16 items-center">
-            {/* Copy column — persona tabs, price card, gift, ROI slider. */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-10 lg:gap-16 items-center md:items-center">
+            {/* Copy column — persona tabs, price block, CTA, subtle gift link. */}
             <HeroCopyColumn funnel="consult" />
 
             {/* Hero image — shared editorial shoot (local asset). */}
-            <div className="lg:col-span-7 order-1 lg:order-none">
+            <div className="order-1 md:order-none">
               <div className="md:max-w-[85%] md:ml-auto">
                 <Image
                   src="/subscription-hero.jpg"
@@ -95,6 +96,23 @@ export default function ConsultLPClient() {
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* =========================== SEE THE VALUE =======================
+          ROI slider lifted out of the hero into its own calm section so the
+          hero reads clean. Faint off-white background sets it apart. */}
+      <section className="bg-[#FAF9F6] py-16 md:py-24">
+        <div className="max-w-2xl mx-auto px-5 sm:px-8">
+          <div className="text-center mb-10">
+            <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-4">
+              See the value
+            </div>
+            <h2 className="font-serif text-3xl sm:text-4xl text-forest">
+              How often do you shop for gear?
+            </h2>
+          </div>
+          <RoiSlider className="max-w-2xl mx-auto" />
         </div>
       </section>
 

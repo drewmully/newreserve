@@ -13,27 +13,20 @@
  * Selecting the "Gift for a Golfer" persona swaps the primary CTA to open the
  * gift modal instead of the funnel launcher.
  *
- * Vertical order is deliberate (mobile budget): label, headline, persona tabs,
- * subheader, social-proof stat, price card, ROI slider. The hero IMAGE column
- * is owned by the page, not this component.
+ * Vertical order is deliberate: kicker, headline, persona tabs, one consolidated
+ * subcopy paragraph, price block, primary CTA, subtle gift link. The ROI slider
+ * and the hero IMAGE column are owned by the page, not this component.
  */
 
 import { useState } from "react";
 import { QuizLauncher } from "./QuizLauncher";
 import { ConsultOnboardingLauncher } from "./ConsultOnboardingLauncher";
 import { PersonaTabs } from "./PersonaTabs";
-import { RoiSlider } from "./RoiSlider";
-import { GiftCard, GiftModal } from "./GiftModal";
+import { GiftModal } from "./GiftModal";
 import { HERO_PERSONAS, type PersonaKey } from "./heroPersonas";
 
 const PRIMARY_LARGE =
   "w-full bg-ember hover:bg-ember/90 text-bone py-3.5 rounded-md text-sm font-medium tracking-wide transition cursor-pointer";
-
-const TRUST_STATS = [
-  { stat: "96%", label: "Renewal rate" },
-  { stat: "4 to 6", label: "Pieces per quarter" },
-  { stat: "20+", label: "Brands in rotation" },
-] as const;
 
 export function HeroCopyColumn({
   funnel,
@@ -48,7 +41,7 @@ export function HeroCopyColumn({
   const source = `lp_${funnel}_hero`;
 
   return (
-    <div className="lg:col-span-5 order-2 lg:order-none">
+    <div className="order-2 md:order-none">
       <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-6">
         Mully Reserve
       </div>
@@ -56,22 +49,15 @@ export function HeroCopyColumn({
         Not a discount subscription box.
       </h1>
 
-      <p className="text-base sm:text-lg text-charcoal/70 mt-6 leading-relaxed max-w-md">
+      <PersonaTabs value={persona} onChange={setPersona} className="mt-6 mb-6" />
+
+      <p className="text-base text-charcoal/80 leading-relaxed max-w-md">
         {active.subheader}
       </p>
-      <div className="mt-3 text-[13px] tracking-wide text-forest/70">
-        {active.stat}
-      </div>
 
-      <PersonaTabs
-        value={persona}
-        onChange={setPersona}
-        className="mt-5"
-      />
-
-      {/* Price card — the $250 quarterly anchor, per-piece framing, the
-          compact 3-stat trust strip, the CTA (gift persona routes to the gift
-          modal), and the gift card entry point. */}
+      {/* Price block — the $250 quarterly anchor and one consolidated billing
+          line, the CTA immediately below (gift persona routes to the gift
+          modal), and a subtle gift link. */}
       <div className="mt-8 max-w-sm">
         <div className="flex items-baseline gap-3">
           <span className="font-serif text-4xl sm:text-5xl text-forest leading-none">
@@ -81,25 +67,8 @@ export function HeroCopyColumn({
             per quarter
           </span>
         </div>
-        <div className="mt-1 text-[13px] text-charcoal/50">
-          Billed every three months. Cancel after your first quarter.
-        </div>
         <div className="mt-2 text-sm text-charcoal/70">
-          That&rsquo;s $42 to $62 per piece from Rhone, Greyson, and more. Ditch
-          retail.
-        </div>
-
-        <div className="grid grid-cols-3 gap-2 py-3 mt-4 border-y border-charcoal/[0.08]">
-          {TRUST_STATS.map((s) => (
-            <div key={s.label}>
-              <div className="font-serif text-lg sm:text-xl text-forest leading-none">
-                {s.stat}
-              </div>
-              <div className="mt-1 text-[9px] tracking-[0.24em] uppercase text-charcoal/50">
-                {s.label}
-              </div>
-            </div>
-          ))}
+          Billed every three months. $42 to $62 per piece from premium brands.
         </div>
 
         <div className="mt-5">
@@ -126,10 +95,16 @@ export function HeroCopyColumn({
           )}
         </div>
 
-        <GiftCard className="mt-3" onOpen={() => setGiftOpen(true)} />
+        {!isGift ? (
+          <button
+            type="button"
+            onClick={() => setGiftOpen(true)}
+            className="text-xs text-charcoal/60 hover:text-forest tracking-wide underline underline-offset-4 decoration-charcoal/20 mt-3"
+          >
+            Gifting? Send it as a gift &rarr;
+          </button>
+        ) : null}
       </div>
-
-      <RoiSlider className="mt-8 max-w-sm" />
 
       <GiftModal
         open={giftOpen}
