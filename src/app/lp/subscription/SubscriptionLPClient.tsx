@@ -150,11 +150,10 @@ export default function SubscriptionLPClient() {
       </section>
 
       {/* ========================= MEMBER REVIEWS ========================
-          Junip Homepage Reviews Carousel (store_reviews). The Junip widget
-          script is loaded globally in app/layout.tsx and hydrates any matching
-          .junip-review-carousel node after mount. data-title is intentionally
-          blank so the widget does not render a second header above our own
-          editorial h2. */}
+          Junip product-review widget (review wall) for the Reserve Member
+          product. The Junip script is loaded globally in app/layout.tsx and
+          hydrates the matching .junip-product-review node after mount. Framed
+          by our own editorial label + h2. */}
       <section className="bg-white py-16 md:py-24">
         <div className="max-w-6xl mx-auto px-5 sm:px-8">
           <div className="text-center mb-10 sm:mb-12">
@@ -165,13 +164,7 @@ export default function SubscriptionLPClient() {
               What members are saying
             </h2>
           </div>
-          <div
-            className="junip-review-carousel"
-            data-title=""
-            data-reviews-type="product_reviews"
-            data-product-id="47601025122496"
-            data-show-summary="true"
-          />
+          <span className="junip-product-review" data-product-id="8501257044160" />
         </div>
       </section>
 
