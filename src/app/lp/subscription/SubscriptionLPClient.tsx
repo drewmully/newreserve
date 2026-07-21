@@ -20,6 +20,7 @@
  */
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect } from "react";
 import { trackEvent } from "@/lib/tracking";
 import { captureAttributionFromUrl } from "@/lib/attribution";
@@ -332,6 +333,30 @@ export default function SubscriptionLPClient() {
 
       {/* ========================== CURATOR STRIP ========================= */}
       <CuratorStrip />
+
+      {/* ====================== EDITORIAL CROSS-SELL ===================== */}
+      <section className="bg-bone py-20 sm:py-24">
+        <div className="max-w-3xl mx-auto px-5 sm:px-8 text-center">
+          <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-5">
+            Prefer to pick your own?
+          </div>
+          <h2 className="font-serif text-3xl sm:text-4xl text-forest leading-tight">
+            See our edits.
+          </h2>
+          <p className="text-base sm:text-lg text-charcoal/70 mt-6 leading-relaxed">
+            The full Mully edit, browsable anytime. Curated pieces, resort
+            profiles, and the Mully 100.
+          </p>
+          <div className="mt-8">
+            <Link
+              href="/lp/editorial"
+              className="inline-block bg-ember hover:bg-ember/90 text-bone py-3.5 px-10 rounded-md text-sm font-medium tracking-wide transition cursor-pointer"
+            >
+              See the Editorial
+            </Link>
+          </div>
+        </div>
+      </section>
 
       {/* =========================== FINAL CTA ============================ */}
       <section className="bg-forest text-bone py-24 sm:py-28">
