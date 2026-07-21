@@ -27,7 +27,6 @@ import { trackEvent } from "@/lib/tracking";
 import { captureAttributionFromUrl } from "@/lib/attribution";
 import { GlassHeader } from "@/app/components/ClientComponents";
 import { RECENT_BOX_PRODUCTS } from "../_shared/products";
-import { ReviewsBlock } from "../_shared/LPSections";
 import { CuratorStrip } from "../_shared/CuratorStrip";
 import { ConsultOnboardingLauncher } from "../_shared/ConsultOnboardingLauncher";
 import { HeroCopyColumn } from "../_shared/HeroCopyColumn";
@@ -99,23 +98,6 @@ export default function ConsultLPClient() {
         </div>
       </section>
 
-      {/* =========================== SEE THE VALUE =======================
-          ROI slider lifted out of the hero into its own calm section so the
-          hero reads clean. Faint off-white background sets it apart. */}
-      <section className="bg-[#FAF9F6] py-16 md:py-24">
-        <div className="max-w-2xl mx-auto px-5 sm:px-8">
-          <div className="text-center mb-10">
-            <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-4">
-              See the value
-            </div>
-            <h2 className="font-serif text-3xl sm:text-4xl text-forest">
-              How often do you shop for gear?
-            </h2>
-          </div>
-          <RoiSlider className="max-w-2xl mx-auto" />
-        </div>
-      </section>
-
       {/* ========================= MEMBER REVIEWS ========================
           Junip product-review widget (review wall) for the Reserve Member
           product. The Junip script is loaded globally in app/layout.tsx and
@@ -132,6 +114,23 @@ export default function ConsultLPClient() {
             </h2>
           </div>
           <span className="junip-product-review" data-product-id="8501257044160" />
+        </div>
+      </section>
+
+      {/* =========================== SEE THE VALUE =======================
+          ROI slider in its own calm section. Faint off-white background sets
+          it apart. Sits after reviews, ahead of the inline mini-quiz. */}
+      <section className="bg-[#FAF9F6] py-16 md:py-24">
+        <div className="max-w-2xl mx-auto px-5 sm:px-8">
+          <div className="text-center mb-10">
+            <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-4">
+              See the value
+            </div>
+            <h2 className="font-serif text-3xl sm:text-4xl text-forest">
+              How often do you shop for gear?
+            </h2>
+          </div>
+          <RoiSlider className="max-w-2xl mx-auto" />
         </div>
       </section>
 
@@ -265,9 +264,6 @@ export default function ConsultLPClient() {
         </div>
       </section>
 
-      {/* ============================ REVIEWS ============================= */}
-      <ReviewsBlock />
-
       {/* ========================== CURATOR STRIP ========================= */}
       <CuratorStrip />
 
@@ -291,32 +287,6 @@ export default function ConsultLPClient() {
             >
               See the Editorial
             </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* =========================== FINAL CTA ============================ */}
-      <section className="bg-forest text-bone py-24 sm:py-28">
-        <div className="max-w-3xl mx-auto px-5 sm:px-8 text-center">
-          <div className="text-[10px] tracking-[0.28em] uppercase text-bone/50 mb-5">
-            $250 / quarter · billed every 3 months
-          </div>
-          <h2 className="font-serif text-3xl sm:text-5xl leading-[1.08]">
-            See your edit before you commit.
-          </h2>
-          <p className="text-base sm:text-lg text-bone/70 mt-6 max-w-xl mx-auto leading-relaxed">
-            Martine dials in your fit, then we show you the pieces we would send
-            this quarter. Then it is your call.
-          </p>
-          <div className="mt-10 inline-block w-full max-w-sm">
-            <ConsultOnboardingLauncher
-              variant="primary-large"
-              label="Get Started"
-              source="lp_consult_final"
-            />
-          </div>
-          <div className="mt-4 text-[10px] tracking-[0.2em] uppercase text-bone/45">
-            96% renewal · Free shipping · Cancel anytime after your first quarter
           </div>
         </div>
       </section>
