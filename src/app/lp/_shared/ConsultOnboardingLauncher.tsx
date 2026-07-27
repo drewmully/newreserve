@@ -21,6 +21,7 @@
 
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { QuizModal } from "./QuizModal";
 import { trackEvent, getClientAnonymousId } from "@/lib/tracking";
 import { captureAttributionFromUrl } from "@/lib/attribution";
@@ -90,10 +91,16 @@ export function ConsultOnboardingLauncher({
 
   useEffect(() => {
     if (!open) return;
+    // Lock scroll + expose a signal the mobile sticky CTA (and any other
+    // sibling elements that would visually collide with the fullscreen
+    // modal) can read via CSS. See ConsultLPClient sticky footer, which
+    // hides itself while [data-consult-open="true"] is set on <html>.
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    document.documentElement.setAttribute("data-consult-open", "true");
     return () => {
       document.body.style.overflow = prev;
+      document.documentElement.removeAttribute("data-consult-open");
     };
   }, [open]);
 
@@ -140,9 +147,14 @@ function ConsultOnboardingOverlay({
     captureAttributionFromUrl();
   }, [source]);
 
-  return (
+  // Render the overlay via a portal to <body> so it escapes any ancestor
+  // that establishes a containing block for position:fixed (e.g. the mobile
+  // sticky footer uses backdrop-filter: blur, which traps fixed descendants
+  // inside a ~72px strip below the viewport). Guarded for SSR.
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 bg-bone overflow-y-auto"
+      className="fixed inset-0 z-[100] bg-bone overflow-y-auto"
       role="dialog"
       aria-modal="true"
       aria-label="Get started"
@@ -190,7 +202,8 @@ function ConsultOnboardingOverlay({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

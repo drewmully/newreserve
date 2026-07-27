@@ -399,14 +399,20 @@ export default function ConsultLPClient() {
           now the ConsultOnboardingLauncher button and routes into the same
           onboarding/checkout flow as the desktop CTA. z-50 keeps it above
           page content. */}
+      {/*
+        Hidden while the onboarding modal is open (Step 0 phone screen +
+        quiz). ConsultOnboardingLauncher toggles [data-consult-open="true"]
+        on <html> for the duration of the modal so this bar stops competing
+        with the in-modal "Continue" CTA on mobile.
+      */}
       <div
-        className="lg:hidden fixed bottom-0 inset-x-0 z-50 border-t border-charcoal/10 bg-white/95 backdrop-blur-md shadow-[0_-4px_16px_-8px_rgba(0,0,0,0.15)]"
+        className="lg:hidden fixed bottom-0 inset-x-0 z-50 border-t border-charcoal/10 bg-white/95 backdrop-blur-md shadow-[0_-4px_16px_-8px_rgba(0,0,0,0.15)] [html[data-consult-open='true']_&]:hidden"
         style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       >
         <div className="max-w-6xl mx-auto px-4 py-3">
           <ConsultOnboardingLauncher
             variant="primary-large"
-            label="Get Started · $250/quarter"
+            label="Get Started · 60s"
             source="lp_consult_sticky"
           />
         </div>
