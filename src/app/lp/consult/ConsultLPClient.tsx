@@ -68,13 +68,28 @@ const PROOF_STATS = [
   { stat: "1", label: "Stylist on your fit" },
 ];
 
-export default function ConsultLPClient() {
+// A/B split on /lp/consult: which onboarding modal do we open?
+//   phone_gated  — current behavior: Step-0 name+phone+TCPA → quiz
+//   quiz_first   — skip Step-0, open quiz immediately (phone optional, post-reveal)
+// The bucket is resolved server-side in page.tsx from the sticky `mr_ab`
+// cookie set by middleware, then passed in as a prop. This keeps the initial
+// paint on the correct arm without a client-side flip.
+export type ConsultVariant = "phone_gated" | "quiz_first";
+
+export default function ConsultLPClient({
+  variant,
+}: {
+  variant: ConsultVariant;
+}) {
+  const skipPhone = variant === "quiz_first";
+
   useEffect(() => {
     captureAttributionFromUrl();
     // Fires both client-side fbq (Meta ViewContent) and server-side CAPI
-    // via the analytics.ts META_EVENT_MAP mapping.
-    trackEvent("lp_consult_view");
-  }, []);
+    // via the analytics.ts META_EVENT_MAP mapping. `variant` stamps the A/B
+    // arm on every LP view so top-of-funnel comparisons are clean.
+    trackEvent("lp_consult_view", { properties: { variant } });
+  }, [variant]);
 
   // Editorial grid — individual apparel photography so the grid reads as
   // wardrobe pieces, not package contents.
@@ -128,6 +143,7 @@ export default function ConsultLPClient() {
                   variant="primary-large"
                   label="Get Started · 60s"
                   source="lp_consult_hero"
+                  skipPhone={skipPhone}
                 />
                 <div className="mt-3 text-[10px] tracking-[0.2em] uppercase text-charcoal/45 text-center">
                   See your edit before you commit.
@@ -139,8 +155,8 @@ export default function ConsultLPClient() {
             <div className="lg:col-span-7 order-1 lg:order-none">
               <div className="md:max-w-[85%] md:ml-auto">
                 <Image
-                  src="/subscription-hero.jpg"
-                  alt="A Mully Reserve quarterly edit of premium golf apparel, styled flat on an editorial surface."
+                  src="/consult-hero-box.jpg"
+                  alt="The Mully Reserve quarterly box — a hand-packed edit of premium golf apparel."
                   width={1200}
                   height={1200}
                   sizes="(min-width: 768px) 42vw, 100vw"
@@ -414,6 +430,7 @@ export default function ConsultLPClient() {
             variant="primary-large"
             label="Get Started · 60s"
             source="lp_consult_sticky"
+            skipPhone={skipPhone}
           />
         </div>
       </div>

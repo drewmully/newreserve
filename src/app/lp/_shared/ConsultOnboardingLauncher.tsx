@@ -59,6 +59,15 @@ export interface ConsultOnboardingLauncherProps {
   /** Analytics source identifier. */
   source?: string;
   className?: string;
+  /**
+   * When true, the launcher skips the Step-0 name+phone+TCPA screen and
+   * opens directly into the shared QuizModal. Used by the quiz-first A/B
+   * arm on /lp/consult — phone becomes optional and is collected (if at
+   * all) after the reveal, not before. Analytics still emit
+   * `lp_consult_modal_view` on open so top-of-funnel comparisons stay
+   * apples-to-apples between the two arms.
+   */
+  skipPhone?: boolean;
 }
 
 // ---- Launcher (renders trigger button + overlay) --------------------------
@@ -68,6 +77,7 @@ export function ConsultOnboardingLauncher({
   label,
   source = "lp_consult",
   className,
+  skipPhone = false,
 }: ConsultOnboardingLauncherProps) {
   const [open, setOpen] = useState(false);
 
@@ -116,6 +126,7 @@ export function ConsultOnboardingLauncher({
       {open && (
         <ConsultOnboardingOverlay
           source={source}
+          skipPhone={skipPhone}
           onClose={() => setOpen(false)}
         />
       )}
@@ -127,25 +138,36 @@ export function ConsultOnboardingLauncher({
 
 interface ConsultOnboardingOverlayProps {
   source: string;
+  skipPhone: boolean;
   onClose: () => void;
 }
 
 function ConsultOnboardingOverlay({
   source,
+  skipPhone,
   onClose,
 }: ConsultOnboardingOverlayProps) {
-  const [phase, setPhase] = useState<"phone" | "quiz">("phone");
+  // When skipPhone is set (quiz-first A/B arm), we start in the 'quiz'
+  // phase directly and never collect name/phone before the quiz.
+  const [phase, setPhase] = useState<"phone" | "quiz">(
+    skipPhone ? "quiz" : "phone",
+  );
   const [firstName, setFirstName] = useState("");
   const [phoneE164, setPhoneE164] = useState<string | null>(null);
 
   useEffect(() => {
     // Standard PostHog LP view event (we already fire lp_consult_view via the
-    // page useEffect; this is the modal-open equivalent).
+    // page useEffect; this is the modal-open equivalent). The `variant`
+    // property lets us split the top-of-funnel between the phone-gated and
+    // quiz-first A/B arms without adding a second event name.
     trackEvent("lp_consult_modal_view", {
-      properties: { source },
+      properties: {
+        source,
+        variant: skipPhone ? "quiz_first" : "phone_gated",
+      },
     }).catch(() => {});
     captureAttributionFromUrl();
-  }, [source]);
+  }, [source, skipPhone]);
 
   // Render the overlay via a portal to <body> so it escapes any ancestor
   // that establishes a containing block for position:fixed (e.g. the mobile
