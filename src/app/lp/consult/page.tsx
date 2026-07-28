@@ -52,18 +52,18 @@ export default async function ConsultLPPage() {
   // guaranteed to exist. Reading it server-side keeps the initial paint on
   // the correct arm and avoids a client-side flip.
   //
-  //   0..49  → phone_gated (ConsultLPClient: hero + CTA → Step-0 modal → quiz)
-  //   50..99 → quiz_first  (ConsultQuizFirstClient: quiz inline as the hero,
-  //                          no modal, no phone collection anywhere)
+  //   0..49  → modal_quiz  (ConsultLPClient: hero + CTA → modal-quiz, no phone)
+  //   50..99 → inline_quiz (ConsultQuizFirstClient: quiz inline as the hero)
   //
-  // Both arms complete at the same reveal brick (/lp/reserve/reveal/{id})
-  // and fire lp_consult_view stamped with `variant` so PostHog can split
-  // funnels without a second event name.
+  // Neither arm collects a phone number — the outcome measures modal vs
+  // inline as the quiz container. Both arms complete at the same reveal
+  // brick (/lp/reserve/reveal/{id}) and fire lp_consult_view stamped with
+  // `variant` so PostHog can split funnels without a second event name.
   const store = await cookies();
   const raw = store.get("mr_ab")?.value;
   const bucket = raw && /^\d+$/.test(raw) ? Number(raw) : null;
   if (bucket !== null && bucket >= 50) {
     return <ConsultQuizFirstClient />;
   }
-  return <ConsultLPClient variant="phone_gated" />;
+  return <ConsultLPClient variant="modal_quiz" />;
 }

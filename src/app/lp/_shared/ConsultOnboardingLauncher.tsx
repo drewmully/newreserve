@@ -160,10 +160,14 @@ function ConsultOnboardingOverlay({
     // page useEffect; this is the modal-open equivalent). The `variant`
     // property lets us split the top-of-funnel between the phone-gated and
     // quiz-first A/B arms without adding a second event name.
+    // Variant naming reflects the A/B: modal_quiz (skipPhone, no Step-0) vs
+    // the legacy phone_gated path (Step-0 name+phone then quiz). Both /lp/consult
+    // arms now pass skipPhone; phone_gated remains as a defensive label for
+    // any other surface that still runs the launcher with Step-0.
     trackEvent("lp_consult_modal_view", {
       properties: {
         source,
-        variant: skipPhone ? "quiz_first" : "phone_gated",
+        variant: skipPhone ? "modal_quiz" : "phone_gated",
       },
     }).catch(() => {});
     captureAttributionFromUrl();

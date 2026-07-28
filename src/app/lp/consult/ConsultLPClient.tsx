@@ -68,18 +68,23 @@ const PROOF_STATS = [
   { stat: "1", label: "Stylist on your fit" },
 ];
 
-// This client renders the PHONE-GATED arm of /lp/consult.
+// This client renders the MODAL-QUIZ arm of /lp/consult.
 //   · Hero copy + image, primary CTA opens ConsultOnboardingLauncher
-//   · Launcher shows Step-0 name+phone+TCPA, then hands off to QuizModal
+//   · Launcher opens the QuizModal directly — no Step-0 name+phone gate.
+//     (skipPhone={true} is passed to both launcher instances below.)
 //
-// The quiz-first arm is a separate client (ConsultQuizFirstClient) selected
+// The inline-quiz arm is a separate client (ConsultQuizFirstClient) selected
 // server-side in page.tsx based on the mr_ab bucket. Splitting the two arms
 // into distinct clients keeps each surface's DOM lean and prevents dead
 // A/B branches from leaking into either variant.
-export type ConsultVariant = "phone_gated" | "quiz_first";
+//
+// The A/B is now a pure modal-quiz vs inline-quiz test — neither arm asks for
+// a phone number, so the outcome measures the container (modal vs inline),
+// not the phone gate.
+export type ConsultVariant = "modal_quiz" | "inline_quiz";
 
 export default function ConsultLPClient({
-  variant = "phone_gated",
+  variant = "modal_quiz",
 }: {
   variant?: ConsultVariant;
 }) {
@@ -143,6 +148,7 @@ export default function ConsultLPClient({
                   variant="primary-large"
                   label="Get Started · 60s"
                   source="lp_consult_hero"
+                  skipPhone
                 />
                 <div className="mt-3 text-[10px] tracking-[0.2em] uppercase text-charcoal/45 text-center">
                   See your edit before you commit.
@@ -421,7 +427,8 @@ export default function ConsultLPClient({
         with the in-modal "Continue" CTA on mobile.
       */}
       <div
-        className="lg:hidden fixed bottom-0 inset-x-0 z-50 border-t border-charcoal/10 bg-white/95 backdrop-blur-md shadow-[0_-4px_16px_-8px_rgba(0,0,0,0.15)] [html[data-consult-open='true']_&]:hidden"
+        data-lp-sticky
+        className="lg:hidden fixed bottom-0 inset-x-0 z-50 border-t border-charcoal/10 bg-white/95 backdrop-blur-md shadow-[0_-4px_16px_-8px_rgba(0,0,0,0.15)]"
         style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       >
         <div className="max-w-6xl mx-auto px-4 py-3">
@@ -429,6 +436,7 @@ export default function ConsultLPClient({
             variant="primary-large"
             label="Get Started · 60s"
             source="lp_consult_sticky"
+            skipPhone
           />
         </div>
       </div>

@@ -79,7 +79,7 @@ export default function ConsultQuizFirstClient() {
     // Same event as the phone-gated arm so top-of-funnel aggregates cleanly,
     // just stamped with the variant name so PostHog can split funnels.
     trackEvent("lp_consult_view", {
-      properties: { variant: "quiz_first", surface: "inline_quiz_lp" },
+      properties: { variant: "inline_quiz", surface: "inline_quiz_lp" },
     });
   }, []);
 
@@ -375,6 +375,7 @@ export default function ConsultQuizFirstClient() {
           needed here — there is no modal to conflict with — but we mirror
           the styling so users toggling between arms see a consistent bar. */}
       <div
+        data-lp-sticky
         className="lg:hidden fixed bottom-0 inset-x-0 z-50 border-t border-charcoal/10 bg-white/95 backdrop-blur-md shadow-[0_-4px_16px_-8px_rgba(0,0,0,0.15)]"
         style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       >
