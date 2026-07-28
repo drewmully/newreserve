@@ -4,48 +4,30 @@ import type { NextRequest } from "next/server";
 const MAINTENANCE_MODE = process.env.MAINTENANCE_MODE === "true";
 
 /**
- * Homepage routing on `/` — traffic-aware split (2026-07-27):
+ * Homepage routing on `/` — unified to /lp/consult (2026-07-28):
  *
- *   Meta / Instagram paid traffic  → /lp/consult   (phone-gated OR quiz-first,
- *                                                  see ConsultLPClient A/B)
- *   Everything else                → /lp/subscription (editorial control)
+ *   All traffic  → /lp/consult
  *
- * Rationale: /lp/consult is Meta-optimized (quiz → phone → quiz → reveal) and
- * carries the highest conversion for Meta-warmed visitors. Sending organic,
- * Google, and direct traffic through the same phone-gated flow was costing
- * top-of-funnel conversion (see the /lp/subscription pageview cliff on 07/21
- * when 100% of `/` was routed to /lp/consult). The editorial subscription LP
- * remains the better default for non-Meta visitors.
+ * Prior to today (see git history) we split Meta traffic to /lp/consult
+ * and everything else to /lp/subscription because /lp/consult carried a
+ * phone gate that hurt non-Meta top-of-funnel. That phone gate was
+ * removed on 2026-07-09, and the consult LP has since been unified with
+ * the editorial subscription LP body (shared ConsultLPBody component,
+ * MEMBER REVIEWS, SEE THE VALUE ROI slider, THE QUARTER, INLINE MINI
+ * QUIZ, etc.), plus the /lp/consult A/B now covers both the modal-quiz
+ * and inline-quiz containers server-side via the mr_ab cookie.
  *
- * Detection signals — any of these means "Meta traffic":
- *   - `fbclid` query param       (Meta click identifier, always set on ad clicks)
- *   - `utm_source` in {facebook, meta, instagram, ig, fb}
- *   - `utm_medium` = paid_social AND utm_source matches
+ * With those changes the blocker is gone, and routing 100% of `/` to
+ * /lp/consult unifies attribution + funnel measurement on a single LP.
  *
- * The sticky `mr_ab` bucket cookie (0..99) is still set for downstream
- * analytics attribution, but no longer changes the destination.
+ * The sticky `mr_ab` bucket cookie (0..99) is still set on first visit
+ * so the /lp/consult page can pick between modal_quiz and inline_quiz
+ * arms server-side.
  *
- * Query params (utm_*, gclid, fbclid, …) are forwarded so paid attribution
- * survives the redirect.
+ * Query params (utm_*, gclid, fbclid, …) are forwarded so paid
+ * attribution survives the redirect.
  */
-const META_DESTINATION = "/lp/consult";
-const DEFAULT_DESTINATION = "/lp/subscription";
-const META_SOURCE_TOKENS = new Set([
-  "facebook",
-  "meta",
-  "instagram",
-  "ig",
-  "fb",
-]);
-
-function isMetaTraffic(request: NextRequest): boolean {
-  const params = request.nextUrl.searchParams;
-  const fbclid = params.get("fbclid");
-  if (fbclid && fbclid.trim().length > 0) return true;
-  const utmSource = params.get("utm_source")?.toLowerCase().trim() ?? "";
-  if (utmSource && META_SOURCE_TOKENS.has(utmSource)) return true;
-  return false;
-}
+const HOMEPAGE_DESTINATION = "/lp/consult";
 
 export function middleware(request: NextRequest) {
   // ─── A/B bucket cookie (sticky visitor assignment) ───
@@ -73,16 +55,13 @@ export function middleware(request: NextRequest) {
     return NextResponse.rewrite(new URL("/maintenance", request.url));
   }
 
-  // ─── Homepage traffic-aware redirect ───
+  // ─── Homepage redirect ───
   // Only rewrite the exact "/" path. Every other path (LPs, /login, /shop,
   // /account, API routes) is untouched, aside from ensuring the cookie is set.
   const { pathname, search } = request.nextUrl;
   if (pathname === "/") {
-    const destination = isMetaTraffic(request)
-      ? META_DESTINATION
-      : DEFAULT_DESTINATION;
     const url = request.nextUrl.clone();
-    url.pathname = destination;
+    url.pathname = HOMEPAGE_DESTINATION;
     // `search` already includes the leading "?" if there are params, and is ""
     // otherwise. Preserving it keeps utm_*, gclid, fbclid, etc. attached to
     // the destination LP.
