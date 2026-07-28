@@ -27,9 +27,11 @@ import { trackEvent } from "@/lib/tracking";
 import { captureAttributionFromUrl } from "@/lib/attribution";
 import { GlassHeader } from "@/app/components/ClientComponents";
 import { RECENT_BOX_PRODUCTS } from "../_shared/products";
-import { ReviewsBlock } from "../_shared/LPSections";
 import { CuratorStrip } from "../_shared/CuratorStrip";
 import { ConsultOnboardingLauncher } from "../_shared/ConsultOnboardingLauncher";
+import { HeroCopyColumn } from "../_shared/HeroCopyColumn";
+import { HeroMiniQuiz } from "../_shared/HeroMiniQuiz";
+import { RoiSlider } from "../_shared/RoiSlider";
 
 const BRAND_LOGOS = [
   { src: "/brands/greyson.png", alt: "Greyson" },
@@ -43,24 +45,6 @@ const BRAND_LOGOS = [
   { src: "/brands/hyperice.png", alt: "Hyperice" },
 ];
 
-const HOW_IT_WORKS = [
-  {
-    n: "01",
-    title: "Meet Martine",
-    body: "Share your number so our head stylist can dial in your fit.",
-  },
-  {
-    n: "02",
-    title: "Take the quiz",
-    body: "60 seconds on style, fit, and sizes.",
-  },
-  {
-    n: "03",
-    title: "See your edit",
-    body: "We show you the pieces we would send before you commit.",
-  },
-];
-
 const PROOF_STATS = [
   { stat: "96%", label: "Renewal rate" },
   { stat: "4 to 6", label: "Pieces per quarter" },
@@ -68,26 +52,22 @@ const PROOF_STATS = [
   { stat: "1", label: "Stylist on your fit" },
 ];
 
-// This client renders the MODAL-QUIZ arm of /lp/consult.
-//   · Hero copy + image, primary CTA opens ConsultOnboardingLauncher
-//   · Launcher opens the QuizModal directly — no Step-0 name+phone gate.
-//     (skipPhone={true} is passed to both launcher instances below.)
+// This client renders the MODAL-QUIZ (control) arm of /lp/consult.
+// The inline-quiz variant is ConsultQuizFirstClient, selected server-side
+// in page.tsx based on the mr_ab cookie bucket.
 //
-// The inline-quiz arm is a separate client (ConsultQuizFirstClient) selected
-// server-side in page.tsx based on the mr_ab bucket. Splitting the two arms
-// into distinct clients keeps each surface's DOM lean and prevents dead
-// A/B branches from leaking into either variant.
-//
-// The A/B is now a pure modal-quiz vs inline-quiz test — neither arm asks for
-// a phone number, so the outcome measures the container (modal vs inline),
-// not the phone gate.
+// A/B is a pure modal-quiz vs inline-quiz test on top-of-funnel container:
+// this arm keeps the standard editorial LP (HeroMiniQuiz mid-page, sticky
+// opens the ConsultOnboardingLauncher modal); the other arm makes the
+// full quiz the hero. `variant` is stamped on lp_consult_view so funnel
+// splits are clean.
 export type ConsultVariant = "modal_quiz" | "inline_quiz";
 
 export default function ConsultLPClient({
   variant = "modal_quiz",
 }: {
   variant?: ConsultVariant;
-}) {
+} = {}) {
   useEffect(() => {
     captureAttributionFromUrl();
     // Fires both client-side fbq (Meta ViewContent) and server-side CAPI
@@ -110,58 +90,18 @@ export default function ConsultLPClient({
       <GlassHeader />
 
       {/* ============================== HERO ============================== */}
-      <section className="pt-24 sm:pt-28 lg:pt-32">
+      <section className="pt-24 sm:pt-28 lg:pt-32 pb-16 md:pb-24">
         <div className="max-w-6xl mx-auto px-5 sm:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-16 items-center">
-            {/* Copy column */}
-            <div className="lg:col-span-5 order-2 lg:order-none">
-              <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-6">
-                Mully Reserve
-              </div>
-              <h1 className="font-serif text-4xl sm:text-5xl lg:text-[3.4rem] text-forest leading-[1.05]">
-                Not a discount subscription box.
-              </h1>
-              <p className="text-base sm:text-lg text-charcoal/70 mt-6 leading-relaxed max-w-md">
-                A quarterly edit of premium apparel, handpicked for your game.
-                Our head stylist Martine dials in your fit before anything
-                ships. Get started if you want to be the most dialed in player
-                in your clubhouse.
-              </p>
-
-              {/* Price — prominent. The $250 quarterly figure is the anchor,
-                  framed as the price of a considered edit. */}
-              <div className="mt-8 flex items-baseline gap-3">
-                <span className="font-serif text-4xl sm:text-5xl text-forest leading-none">
-                  $250
-                </span>
-                <span className="text-sm tracking-[0.18em] uppercase text-charcoal/55">
-                  per quarter
-                </span>
-              </div>
-              <div className="mt-1 text-[13px] text-charcoal/50">
-                Billed every three months. Cancel after your first quarter.
-              </div>
-
-              {/* Primary CTA — opens the consult onboarding modal */}
-              <div className="mt-8 max-w-sm">
-                <ConsultOnboardingLauncher
-                  variant="primary-large"
-                  label="Get Started · 60s"
-                  source="lp_consult_hero"
-                  skipPhone
-                />
-                <div className="mt-3 text-[10px] tracking-[0.2em] uppercase text-charcoal/45 text-center">
-                  See your edit before you commit.
-                </div>
-              </div>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-10 lg:gap-16 items-center md:items-center">
+            {/* Copy column — persona tabs, price block, CTA, subtle gift link. */}
+            <HeroCopyColumn funnel="consult" skipPhone />
 
             {/* Hero image — shared editorial shoot (local asset). */}
-            <div className="lg:col-span-7 order-1 lg:order-none">
+            <div className="order-1 md:order-none">
               <div className="md:max-w-[85%] md:ml-auto">
                 <Image
-                  src="/consult-hero-box.jpg"
-                  alt="The Mully Reserve quarterly box — a hand-packed edit of premium golf apparel."
+                  src="/subscription-hero.jpg"
+                  alt="A Mully Reserve quarterly edit of premium golf apparel, styled flat on an editorial surface."
                   width={1200}
                   height={1200}
                   sizes="(min-width: 768px) 42vw, 100vw"
@@ -175,11 +115,10 @@ export default function ConsultLPClient({
       </section>
 
       {/* ========================= MEMBER REVIEWS ========================
-          Junip Homepage Reviews Carousel (store_reviews). The Junip widget
-          script is loaded globally in app/layout.tsx and hydrates any matching
-          .junip-review-carousel node after mount. data-title is intentionally
-          blank so the widget does not render a second header above our own
-          editorial h2. */}
+          Junip product-review widget (review wall) for the Reserve Member
+          product. The Junip script is loaded globally in app/layout.tsx and
+          hydrates the matching .junip-product-review node after mount. Framed
+          by our own editorial label + h2. */}
       <section className="bg-white py-16 md:py-24">
         <div className="max-w-6xl mx-auto px-5 sm:px-8">
           <div className="text-center mb-10 sm:mb-12">
@@ -190,12 +129,24 @@ export default function ConsultLPClient({
               What members are saying
             </h2>
           </div>
-          <div
-            className="junip-review-carousel"
-            data-title=""
-            data-reviews-type="store_reviews"
-            data-show-summary="true"
-          />
+          <span className="junip-product-review" data-product-id="8501257044160" />
+        </div>
+      </section>
+
+      {/* =========================== SEE THE VALUE =======================
+          ROI slider in its own calm section. Faint off-white background sets
+          it apart. Sits after reviews, ahead of the inline mini-quiz. */}
+      <section className="bg-[#FAF9F6] py-16 md:py-24">
+        <div className="max-w-2xl mx-auto px-5 sm:px-8">
+          <div className="text-center mb-10">
+            <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-4">
+              See the value
+            </div>
+            <h2 className="font-serif text-3xl sm:text-4xl text-forest">
+              How often do you shop for gear?
+            </h2>
+          </div>
+          <RoiSlider className="max-w-2xl mx-auto" />
         </div>
       </section>
 
@@ -304,32 +255,8 @@ export default function ConsultLPClient({
         </div>
       </section>
 
-      {/* ========================= HOW IT WORKS =========================== */}
-      <section className="py-20 sm:py-28">
-        <div className="max-w-5xl mx-auto px-5 sm:px-8">
-          <div className="text-center mb-14">
-            <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-4">
-              How it works
-            </div>
-            <h2 className="font-serif text-3xl sm:text-4xl text-forest">
-              Three steps. Sixty seconds.
-            </h2>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-10 sm:gap-12">
-            {HOW_IT_WORKS.map((s) => (
-              <div key={s.n} className="text-center sm:text-left">
-                <div className="font-serif text-4xl text-forest/25 mb-4 leading-none">
-                  {s.n}
-                </div>
-                <div className="font-serif text-xl text-forest">{s.title}</div>
-                <div className="text-sm text-charcoal/65 mt-2 leading-relaxed">
-                  {s.body}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      {/* ===================== INLINE MINI STYLE QUIZ ==================== */}
+      <HeroMiniQuiz source="lp_consult_hero" />
 
       {/* ========================== BRAND LOGOS =========================== */}
       <section className="py-14 sm:py-16 border-y border-charcoal/[0.08]">
@@ -352,9 +279,6 @@ export default function ConsultLPClient({
           </div>
         </div>
       </section>
-
-      {/* ============================ REVIEWS ============================= */}
-      <ReviewsBlock />
 
       {/* ========================== CURATOR STRIP ========================= */}
       <CuratorStrip />
@@ -383,32 +307,6 @@ export default function ConsultLPClient({
         </div>
       </section>
 
-      {/* =========================== FINAL CTA ============================ */}
-      <section className="bg-forest text-bone py-24 sm:py-28">
-        <div className="max-w-3xl mx-auto px-5 sm:px-8 text-center">
-          <div className="text-[10px] tracking-[0.28em] uppercase text-bone/50 mb-5">
-            $250 / quarter · billed every 3 months
-          </div>
-          <h2 className="font-serif text-3xl sm:text-5xl leading-[1.08]">
-            See your edit before you commit.
-          </h2>
-          <p className="text-base sm:text-lg text-bone/70 mt-6 max-w-xl mx-auto leading-relaxed">
-            Martine dials in your fit, then we show you the pieces we would send
-            this quarter. Then it is your call.
-          </p>
-          <div className="mt-10 inline-block w-full max-w-sm">
-            <ConsultOnboardingLauncher
-              variant="primary-large"
-              label="Get Started"
-              source="lp_consult_final"
-            />
-          </div>
-          <div className="mt-4 text-[10px] tracking-[0.2em] uppercase text-bone/45">
-            96% renewal · Free shipping · Cancel anytime after your first quarter
-          </div>
-        </div>
-      </section>
-
       <footer className="bg-forest-dark text-bone/55 text-xs pt-8 pb-24 lg:pb-8 text-center">
         © {new Date().getFullYear()} Mully Group, Inc. All rights reserved.
       </footer>
@@ -421,10 +319,11 @@ export default function ConsultLPClient({
           onboarding/checkout flow as the desktop CTA. z-50 keeps it above
           page content. */}
       {/*
-        Hidden while the onboarding modal is open (Step 0 phone screen +
-        quiz). ConsultOnboardingLauncher toggles [data-consult-open="true"]
-        on <html> for the duration of the modal so this bar stops competing
-        with the in-modal "Continue" CTA on mobile.
+        data-lp-sticky lets the global rule in globals.css hide this bar
+        while the onboarding modal is open (html[data-consult-open="true"]),
+        so it stops competing with the modal's Continue CTA on mobile.
+        skipPhone routes the launcher directly into QuizModal without the
+        Step-0 name+phone gate — phone collection is deferred to checkout.
       */}
       <div
         data-lp-sticky
@@ -434,7 +333,7 @@ export default function ConsultLPClient({
         <div className="max-w-6xl mx-auto px-4 py-3">
           <ConsultOnboardingLauncher
             variant="primary-large"
-            label="Get Started · 60s"
+            label="Get Started · $250/quarter"
             source="lp_consult_sticky"
             skipPhone
           />

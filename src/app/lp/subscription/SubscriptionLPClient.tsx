@@ -26,9 +26,11 @@ import { trackEvent } from "@/lib/tracking";
 import { captureAttributionFromUrl } from "@/lib/attribution";
 import { GlassHeader } from "@/app/components/ClientComponents";
 import { RECENT_BOX_PRODUCTS } from "../_shared/products";
-import { ReviewsBlock } from "../_shared/LPSections";
 import { CuratorStrip } from "../_shared/CuratorStrip";
 import { QuizLauncher } from "../_shared/QuizLauncher";
+import { HeroCopyColumn } from "../_shared/HeroCopyColumn";
+import { HeroMiniQuiz } from "../_shared/HeroMiniQuiz";
+import { RoiSlider } from "../_shared/RoiSlider";
 
 const BRAND_LOGOS = [
   { src: "/brands/greyson.png", alt: "Greyson" },
@@ -40,24 +42,6 @@ const BRAND_LOGOS = [
   { src: "/brands/field-day.png", alt: "Field Day" },
   { src: "/brands/harlestons.png", alt: "Harlestons" },
   { src: "/brands/hyperice.png", alt: "Hyperice" },
-];
-
-const HOW_IT_WORKS = [
-  {
-    n: "01",
-    title: "Take the quiz",
-    body: "60 seconds on style, fit, and sizes.",
-  },
-  {
-    n: "02",
-    title: "See your edit",
-    body: "We show you the pieces we would send before you commit to anything.",
-  },
-  {
-    n: "03",
-    title: "Get your quarter",
-    body: "Hand-picked apparel, delivered every three months.",
-  },
 ];
 
 const PROOF_STATS = [
@@ -87,52 +71,14 @@ export default function SubscriptionLPClient() {
       <GlassHeader />
 
       {/* ============================== HERO ============================== */}
-      <section className="pt-24 sm:pt-28 lg:pt-32">
+      <section className="pt-24 sm:pt-28 lg:pt-32 pb-16 md:pb-24">
         <div className="max-w-6xl mx-auto px-5 sm:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-16 items-center">
-            {/* Copy column */}
-            <div className="lg:col-span-5 order-2 lg:order-none">
-              <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-6">
-                Mully Reserve
-              </div>
-              <h1 className="font-serif text-4xl sm:text-5xl lg:text-[3.4rem] text-forest leading-[1.05]">
-                Not a discount subscription box.
-              </h1>
-              <p className="text-base sm:text-lg text-charcoal/70 mt-6 leading-relaxed max-w-md">
-                A quarterly edit of premium apparel, handpicked for your game.
-                No two boxes are the same. Get started if you want to be the
-                most dialed in player in your clubhouse.
-              </p>
-
-              {/* Price — prominent per Drew. The $250 quarterly figure is the
-                  anchor, framed as the price of a considered edit. */}
-              <div className="mt-8 flex items-baseline gap-3">
-                <span className="font-serif text-4xl sm:text-5xl text-forest leading-none">
-                  $250
-                </span>
-                <span className="text-sm tracking-[0.18em] uppercase text-charcoal/55">
-                  per quarter
-                </span>
-              </div>
-              <div className="mt-1 text-[13px] text-charcoal/50">
-                Billed every three months. Cancel after your first quarter.
-              </div>
-
-              {/* Primary CTA — quiz */}
-              <div className="mt-8 max-w-sm">
-                <QuizLauncher
-                  variant="primary-large"
-                  label="Get Started · 60s"
-                  source="lp_subscription_hero"
-                />
-                <div className="mt-3 text-[10px] tracking-[0.2em] uppercase text-charcoal/45 text-center">
-                  See your edit before you commit.
-                </div>
-              </div>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-10 lg:gap-16 items-center md:items-center">
+            {/* Copy column — persona tabs, price block, CTA, subtle gift link. */}
+            <HeroCopyColumn funnel="subscription" />
 
             {/* Hero image — new editorial shoot (local asset). */}
-            <div className="lg:col-span-7 order-1 lg:order-none">
+            <div className="order-1 md:order-none">
               <div className="md:max-w-[85%] md:ml-auto">
                 <Image
                   src="/subscription-hero.jpg"
@@ -150,11 +96,10 @@ export default function SubscriptionLPClient() {
       </section>
 
       {/* ========================= MEMBER REVIEWS ========================
-          Junip Homepage Reviews Carousel (store_reviews). The Junip widget
-          script is loaded globally in app/layout.tsx and hydrates any matching
-          .junip-review-carousel node after mount. data-title is intentionally
-          blank so the widget does not render a second header above our own
-          editorial h2. */}
+          Junip product-review widget (review wall) for the Reserve Member
+          product. The Junip script is loaded globally in app/layout.tsx and
+          hydrates the matching .junip-product-review node after mount. Framed
+          by our own editorial label + h2. */}
       <section className="bg-white py-16 md:py-24">
         <div className="max-w-6xl mx-auto px-5 sm:px-8">
           <div className="text-center mb-10 sm:mb-12">
@@ -165,12 +110,24 @@ export default function SubscriptionLPClient() {
               What members are saying
             </h2>
           </div>
-          <div
-            className="junip-review-carousel"
-            data-title=""
-            data-reviews-type="store_reviews"
-            data-show-summary="true"
-          />
+          <span className="junip-product-review" data-product-id="8501257044160" />
+        </div>
+      </section>
+
+      {/* =========================== SEE THE VALUE =======================
+          ROI slider in its own calm section. Faint off-white background sets
+          it apart. Sits after reviews, ahead of the inline mini-quiz. */}
+      <section className="bg-[#FAF9F6] py-16 md:py-24">
+        <div className="max-w-2xl mx-auto px-5 sm:px-8">
+          <div className="text-center mb-10">
+            <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-4">
+              See the value
+            </div>
+            <h2 className="font-serif text-3xl sm:text-4xl text-forest">
+              How often do you shop for gear?
+            </h2>
+          </div>
+          <RoiSlider className="max-w-2xl mx-auto" />
         </div>
       </section>
 
@@ -279,32 +236,8 @@ export default function SubscriptionLPClient() {
         </div>
       </section>
 
-      {/* ========================= HOW IT WORKS =========================== */}
-      <section className="py-20 sm:py-28">
-        <div className="max-w-5xl mx-auto px-5 sm:px-8">
-          <div className="text-center mb-14">
-            <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-4">
-              How it works
-            </div>
-            <h2 className="font-serif text-3xl sm:text-4xl text-forest">
-              Three steps. Sixty seconds.
-            </h2>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-10 sm:gap-12">
-            {HOW_IT_WORKS.map((s) => (
-              <div key={s.n} className="text-center sm:text-left">
-                <div className="font-serif text-4xl text-forest/25 mb-4 leading-none">
-                  {s.n}
-                </div>
-                <div className="font-serif text-xl text-forest">{s.title}</div>
-                <div className="text-sm text-charcoal/65 mt-2 leading-relaxed">
-                  {s.body}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      {/* ===================== INLINE MINI STYLE QUIZ ==================== */}
+      <HeroMiniQuiz source="lp_subscription_hero" />
 
       {/* ========================== BRAND LOGOS =========================== */}
       <section className="py-14 sm:py-16 border-y border-charcoal/[0.08]">
@@ -327,9 +260,6 @@ export default function SubscriptionLPClient() {
           </div>
         </div>
       </section>
-
-      {/* ============================ REVIEWS ============================= */}
-      <ReviewsBlock />
 
       {/* ========================== CURATOR STRIP ========================= */}
       <CuratorStrip />
@@ -354,32 +284,6 @@ export default function SubscriptionLPClient() {
             >
               See the Editorial
             </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* =========================== FINAL CTA ============================ */}
-      <section className="bg-forest text-bone py-24 sm:py-28">
-        <div className="max-w-3xl mx-auto px-5 sm:px-8 text-center">
-          <div className="text-[10px] tracking-[0.28em] uppercase text-bone/50 mb-5">
-            $250 / quarter · billed every 3 months
-          </div>
-          <h2 className="font-serif text-3xl sm:text-5xl leading-[1.08]">
-            See your edit before you commit.
-          </h2>
-          <p className="text-base sm:text-lg text-bone/70 mt-6 max-w-xl mx-auto leading-relaxed">
-            We will show you the pieces we would send this quarter. Then it is
-            your call.
-          </p>
-          <div className="mt-10 inline-block w-full max-w-sm">
-            <QuizLauncher
-              variant="primary-large"
-              label="Get Started"
-              source="lp_subscription_final"
-            />
-          </div>
-          <div className="mt-4 text-[10px] tracking-[0.2em] uppercase text-bone/45">
-            96% renewal · Free shipping · Cancel anytime after your first quarter
           </div>
         </div>
       </section>
