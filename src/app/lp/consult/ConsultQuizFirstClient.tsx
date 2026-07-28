@@ -18,15 +18,14 @@
  * (mx-auto max-w-2xl, no fixed positioning) so it drops into the hero shell
  * cleanly.
  *
- * Sections below the quiz — reviews, proof stats, "have a guy", the quarter,
- * how it works, brand logos, curator strip, editorial cross-sell — are copied
- * from ConsultLPClient so the below-fold experience is identical between the
- * two A/B arms. The bottom mobile sticky CTA is replaced with a "scroll to
- * quiz" nudge instead of a modal launcher, since the quiz lives on the page.
+ * Below the hero this component renders the SAME shared body as the modal
+ * arm (<ConsultLPBody />) so the two arms don't drift on reviews, proof,
+ * "Have a guy", "The Quarter", inline mini-quiz, brand logos, curator
+ * strip, editorial cross-sell, or footer. The bottom sticky is a
+ * "Back to the quiz" scroll-anchor instead of a modal launcher, since the
+ * quiz already lives on the page.
  */
 
-import Image from "next/image";
-import Link from "next/link";
 import { useEffect } from "react";
 import { trackEvent } from "@/lib/tracking";
 import { captureAttributionFromUrl } from "@/lib/attribution";
@@ -36,51 +35,12 @@ import {
   StickyRevealOnScroll,
   StickyRevealSentinel,
 } from "@/app/lp/_shared/StickyRevealOnScroll";
-import { RECENT_BOX_PRODUCTS } from "../_shared/products";
-import { ReviewsBlock } from "../_shared/LPSections";
-import { CuratorStrip } from "../_shared/CuratorStrip";
-
-const BRAND_LOGOS = [
-  { src: "/brands/greyson.svg", alt: "Greyson" },
-  { src: "/brands/rhone.svg", alt: "Rhone" },
-  { src: "/brands/quiet-golf.svg", alt: "Quiet Golf" },
-  { src: "/brands/field-day.svg", alt: "Field Day" },
-  { src: "/brands/penfold.svg", alt: "Penfold" },
-  { src: "/brands/tasc.svg", alt: "TASC" },
-  { src: "/brands/anderson-ord.svg", alt: "Anderson Ord" },
-  { src: "/brands/olydoe.svg", alt: "Olydoe" },
-  { src: "/brands/will-leather.svg", alt: "Will Leather" },
-];
-
-const HOW_IT_WORKS = [
-  {
-    n: "01",
-    title: "Answer six questions",
-    body: "Style, sizing, brands you like. Sixty seconds.",
-  },
-  {
-    n: "02",
-    title: "See your edit",
-    body: "Martine hand-picks four pieces. You review before you pay.",
-  },
-  {
-    n: "03",
-    title: "Fit-confirm and ship",
-    body: "We double-check sizing after checkout. Free exchanges.",
-  },
-];
-
-const PROOF_STATS = [
-  { stat: "96%", label: "Renewal rate" },
-  { stat: "4.9", label: "Member rating" },
-  { stat: "20+", label: "Brands in rotation" },
-  { stat: "1", label: "Stylist on your fit" },
-];
+import { ConsultLPBody } from "./ConsultLPBody";
 
 export default function ConsultQuizFirstClient() {
   useEffect(() => {
     captureAttributionFromUrl();
-    // Same event as the phone-gated arm so top-of-funnel aggregates cleanly,
+    // Same event as the modal-quiz arm so top-of-funnel aggregates cleanly,
     // just stamped with the variant name so PostHog can split funnels.
     trackEvent("lp_consult_view", {
       properties: {
@@ -90,14 +50,6 @@ export default function ConsultQuizFirstClient() {
       },
     });
   }, []);
-
-  // Editorial grid — individual apparel photography.
-  const gridShots = [
-    RECENT_BOX_PRODUCTS[0], // Rhone Commuter — Top
-    RECENT_BOX_PRODUCTS[1], // Adidas Ultimate 365 — Bottoms
-    RECENT_BOX_PRODUCTS[2], // Peter Millar Sun Hoodie — Layer
-    RECENT_BOX_PRODUCTS[3], // Will Leather Braided Belt — Accessory
-  ].filter(Boolean);
 
   return (
     <div className="min-h-screen bg-white text-charcoal">
@@ -146,250 +98,18 @@ export default function ConsultQuizFirstClient() {
           if the user has scrolled past the quiz entirely. */}
       <StickyRevealSentinel />
 
-      {/* ========================= MEMBER REVIEWS ======================== */}
-      <section className="bg-white py-16 md:py-20">
-        <div className="max-w-6xl mx-auto px-5 sm:px-8">
-          <div className="text-center mb-10 sm:mb-12">
-            <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-4">
-              Member reviews
-            </div>
-            <h2 className="font-serif text-3xl sm:text-4xl text-forest">
-              What members are saying
-            </h2>
-          </div>
-          <div
-            className="junip-review-carousel"
-            data-title=""
-            data-reviews-type="store_reviews"
-            data-show-summary="true"
-          />
-        </div>
-      </section>
-
-      {/* ====================== PROOF / STAT STRIP ======================= */}
-      <section className="mt-4 sm:mt-8 border-y border-charcoal/[0.08] py-12">
-        <div className="max-w-6xl mx-auto px-5 sm:px-8 grid grid-cols-2 sm:grid-cols-4 gap-8">
-          {PROOF_STATS.map((p) => (
-            <div key={p.label} className="text-center">
-              <div className="font-serif text-3xl sm:text-4xl text-forest">
-                {p.stat}
-              </div>
-              <div className="text-[10px] tracking-[0.22em] uppercase text-charcoal/50 mt-2">
-                {p.label}
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ========================= "HAVE A GUY" =========================== */}
-      <section className="py-20 sm:py-28">
-        <div className="max-w-3xl mx-auto px-5 sm:px-8 text-center">
-          <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-5">
-            The idea
-          </div>
-          <h2 className="font-serif text-3xl sm:text-4xl text-forest leading-tight">
-            You should have someone who handles your golf wardrobe.
-          </h2>
-          <p className="text-base sm:text-lg text-charcoal/70 mt-6 leading-relaxed">
-            Four times a year we send the pieces we reach for ourselves. Brands
-            worth knowing (Greyson, Rhone, Quiet Golf, Field Day, Penfold), fit
-            confirmed before anything ships.
-          </p>
-        </div>
-
-        <div className="max-w-6xl mx-auto px-5 sm:px-8 mt-14">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-            {gridShots.map((p) => (
-              <figure key={p.image} className="relative">
-                <div className="relative aspect-[3/4] overflow-hidden rounded-sm border border-charcoal/[0.06] bg-bone-dark/20">
-                  <Image
-                    src={p.image}
-                    alt={`${p.vendor} ${p.title}`}
-                    fill
-                    sizes="(min-width: 1024px) 24vw, 50vw"
-                    className="object-cover"
-                    unoptimized
-                  />
-                </div>
-                <figcaption className="mt-3 text-[10px] tracking-[0.2em] uppercase text-charcoal/50">
-                  {p.vendor} · {p.category}
-                </figcaption>
-              </figure>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ======================= THE QUARTER (forest panel) ============== */}
-      <section className="py-20 sm:py-24 bg-forest text-bone">
-        <div className="max-w-5xl mx-auto px-5 sm:px-8">
-          <div className="text-center max-w-3xl mx-auto">
-            <div className="text-[10px] tracking-[0.28em] uppercase text-bone/50 mb-5">
-              The quarter
-            </div>
-            <h2 className="font-serif text-3xl sm:text-4xl leading-tight">
-              A considered edit, built around how you play.
-            </h2>
-            <p className="text-base sm:text-lg text-bone/75 mt-6 leading-relaxed">
-              Four pieces tuned to your style and size, apparel and accessories
-              that earn a place in your rotation. Nothing ships until your
-              sizing is confirmed. If a piece misses, we exchange it.
-            </p>
-          </div>
-
-          <div className="mt-14 grid grid-cols-1 sm:grid-cols-3 gap-6">
-            <div className="rounded-sm border border-bone/15 p-6">
-              <div className="text-[10px] tracking-[0.22em] uppercase text-bone/50 mb-3">
-                Ships in 1 business day
-              </div>
-              <div className="text-sm text-bone/75 leading-relaxed">
-                Your first edit typically ships within 1 business day. Sizing is
-                confirmed after checkout with a 60-second form.
-              </div>
-            </div>
-            <div className="rounded-sm border border-bone/15 p-6">
-              <div className="text-[10px] tracking-[0.22em] uppercase text-bone/50 mb-3">
-                Free size exchanges
-              </div>
-              <div className="text-sm text-bone/75 leading-relaxed">
-                If a fit misses, we swap it. No restocking fees, no return
-                shipping on your end.
-              </div>
-            </div>
-            <div className="rounded-sm border border-bone/15 p-6">
-              <div className="text-[10px] tracking-[0.22em] uppercase text-bone/50 mb-3">
-                Cancel after Q1
-              </div>
-              <div className="text-sm text-bone/75 leading-relaxed">
-                Take one full quarter. If Reserve is not for you, cancel before
-                the next quarter bills. No calls, no forms.
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ========================= HOW IT WORKS =========================== */}
-      <section className="py-20 sm:py-28">
-        <div className="max-w-5xl mx-auto px-5 sm:px-8">
-          <div className="text-center mb-14">
-            <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-4">
-              How it works
-            </div>
-            <h2 className="font-serif text-3xl sm:text-4xl text-forest">
-              Three steps. Sixty seconds.
-            </h2>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-10 sm:gap-12">
-            {HOW_IT_WORKS.map((s) => (
-              <div key={s.n} className="text-center sm:text-left">
-                <div className="font-serif text-4xl text-forest/25 mb-4 leading-none">
-                  {s.n}
-                </div>
-                <div className="font-serif text-xl text-forest">{s.title}</div>
-                <div className="text-sm text-charcoal/65 mt-2 leading-relaxed">
-                  {s.body}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ========================== BRAND LOGOS =========================== */}
-      <section className="py-14 sm:py-16 border-y border-charcoal/[0.08]">
-        <div className="max-w-5xl mx-auto px-5 sm:px-8">
-          <div className="text-center text-[10px] tracking-[0.28em] uppercase text-charcoal/45 mb-8">
-            Brands in the rotation
-          </div>
-          <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-x-6 gap-y-7 items-center">
-            {BRAND_LOGOS.map((b) => (
-              <div key={b.alt} className="relative h-8 sm:h-9">
-                <Image
-                  src={b.src}
-                  alt={b.alt}
-                  fill
-                  sizes="80px"
-                  className="object-contain opacity-60"
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ============================ REVIEWS ============================= */}
-      <ReviewsBlock />
-
-      {/* ========================== CURATOR STRIP ========================= */}
-      <CuratorStrip />
-
-      {/* ====================== EDITORIAL CROSS-SELL ===================== */}
-      <section className="bg-bone py-20 sm:py-24">
-        <div className="max-w-3xl mx-auto px-5 sm:px-8 text-center">
-          <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-5">
-            Prefer to pick your own?
-          </div>
-          <h2 className="font-serif text-3xl sm:text-4xl text-forest leading-tight">
-            See our edits.
-          </h2>
-          <p className="text-base sm:text-lg text-charcoal/70 mt-6 leading-relaxed">
-            The full Mully edit, browsable anytime. Curated pieces, resort
-            profiles, and the Mully 100.
-          </p>
-          <div className="mt-8">
-            <Link
-              href="/lp/editorial"
-              className="inline-block bg-ember hover:bg-ember/90 text-bone py-3.5 px-10 rounded-md text-sm font-medium tracking-wide transition cursor-pointer"
-            >
-              See the Editorial
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* =========================== FINAL CTA ============================
-          On this arm the "final CTA" nudges the visitor back up to the quiz
-          instead of opening a modal. If they scrolled all the way down
-          without engaging, this is their prompt. */}
-      <section className="bg-forest text-bone py-24 sm:py-28">
-        <div className="max-w-3xl mx-auto px-5 sm:px-8 text-center">
-          <div className="text-[10px] tracking-[0.28em] uppercase text-bone/50 mb-5">
-            $250 / quarter · billed every 3 months
-          </div>
-          <h2 className="font-serif text-3xl sm:text-5xl leading-[1.08]">
-            See your edit before you commit.
-          </h2>
-          <p className="text-base sm:text-lg text-bone/70 mt-6 max-w-xl mx-auto leading-relaxed">
-            Martine dials in your fit, then we show you the pieces we would send
-            this quarter. Then it is your call.
-          </p>
-          <div className="mt-10 inline-block w-full max-w-sm">
-            <a
-              href="#quiz"
-              className="block w-full rounded-md bg-ember py-4 text-base font-medium text-bone transition hover:bg-ember/90"
-            >
-              Start the quiz
-            </a>
-          </div>
-          <div className="mt-4 text-[10px] tracking-[0.2em] uppercase text-bone/45">
-            96% renewal · Free shipping · Cancel anytime after your first quarter
-          </div>
-        </div>
-      </section>
-
-      <footer className="bg-forest-dark text-bone/55 text-xs pt-8 pb-24 lg:pb-8 text-center">
-        © {new Date().getFullYear()} Mully Group, Inc. All rights reserved.
-      </footer>
+      {/* Shared below-hero body — identical to the modal arm so the two
+          A/B arms don't drift on reviews, proof, "Have a guy",
+          "The Quarter", inline mini-quiz, brand logos, curator strip,
+          editorial cross-sell, or footer. */}
+      <ConsultLPBody />
 
       {/* ====================== MOBILE STICKY CTA =========================
-          On the inline arm the quiz IS the hero, so a persistent sticky
-          would just duplicate a CTA that's already sitting in front of
-          the user. The StickyRevealSentinel below is placed *after* the
-          quiz section, so the sticky only appears once the visitor has
-          scrolled past the entire quiz — at which point they've clearly
-          bounced off the quiz and a scroll-back-up nudge is warranted. */}
+          Sticky reveals only once the visitor has scrolled past the entire
+          quiz section, at which point they've clearly bounced off the quiz
+          and a scroll-back-up nudge is warranted. This is an <a href="#quiz">
+          scroll-anchor, not a modal launcher, because the quiz already
+          lives on the page. */}
       <StickyRevealOnScroll>
         <a
           href="#quiz"
