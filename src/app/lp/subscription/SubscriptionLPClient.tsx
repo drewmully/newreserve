@@ -28,6 +28,10 @@ import { GlassHeader } from "@/app/components/ClientComponents";
 import { RECENT_BOX_PRODUCTS } from "../_shared/products";
 import { CuratorStrip } from "../_shared/CuratorStrip";
 import { QuizLauncher } from "../_shared/QuizLauncher";
+import {
+  StickyRevealOnScroll,
+  StickyRevealSentinel,
+} from "../_shared/StickyRevealOnScroll";
 import { HeroCopyColumn } from "../_shared/HeroCopyColumn";
 import { HeroMiniQuiz } from "../_shared/HeroMiniQuiz";
 import { RoiSlider } from "../_shared/RoiSlider";
@@ -94,6 +98,12 @@ export default function SubscriptionLPClient() {
           </div>
         </div>
       </section>
+
+      {/* Sticky-reveal sentinel: while this 1px element is in the viewport,
+          the mobile sticky CTA below is hidden. Placed right after the hero
+          closes so the sticky only appears once the user has scrolled past
+          the hero. */}
+      <StickyRevealSentinel />
 
       {/* ========================= MEMBER REVIEWS ========================
           Junip product-review widget (review wall) for the Reserve Member
@@ -293,24 +303,18 @@ export default function SubscriptionLPClient() {
       </footer>
 
       {/* ====================== MOBILE STICKY CTA =========================
-          Single full-width tap target. The previous bar rendered its label in
-          a non-interactive <div> alongside a narrow button, so taps on the
-          label region (most of the bar) did nothing. The whole visible bar is
-          now the QuizLauncher button and routes into the same quiz/checkout
-          flow as the desktop CTA. z-50 keeps it above page content. */}
-      <div
-        data-lp-sticky
-        className="lg:hidden fixed bottom-0 inset-x-0 z-50 border-t border-charcoal/10 bg-white/95 backdrop-blur-md shadow-[0_-4px_16px_-8px_rgba(0,0,0,0.15)]"
-        style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
-      >
-        <div className="max-w-6xl mx-auto px-4 py-3">
-          <QuizLauncher
-            variant="primary-large"
-            label="Get Started · $250/quarter"
-            source="lp_subscription_sticky"
-          />
-        </div>
-      </div>
+          Sticky reveals only after user scrolls past the hero (via the
+          StickyRevealSentinel placed at hero close). data-lp-sticky is
+          added by StickyRevealOnScroll so the global rule in globals.css
+          also hides the bar while [data-consult-open] is set (i.e. the
+          QuizLauncher modal is open). */}
+      <StickyRevealOnScroll>
+        <QuizLauncher
+          variant="primary-large"
+          label="Get Started · $250/quarter"
+          source="lp_subscription_sticky"
+        />
+      </StickyRevealOnScroll>
     </div>
   );
 }
