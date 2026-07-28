@@ -76,9 +76,23 @@ export function StickyRevealOnScroll({
     }
     const io = new IntersectionObserver(
       ([entry]) => {
-        // While the sentinel is visible, we're still in the hero — hide.
-        // Once it leaves the viewport (user scrolled past hero), show.
-        setRevealed(!entry.isIntersecting);
+        // "Past the sentinel" is not the same as "sentinel not visible".
+        // A sentinel below the fold (i.e. the hero is taller than the
+        // viewport at initial paint) is ALSO not intersecting — which
+        // would incorrectly reveal the sticky on top of the hero on
+        // mobile. What we actually want is "the sentinel has scrolled
+        // ABOVE the viewport top" — i.e. the user has scrolled past it.
+        //
+        // If it's not intersecting but its bottom is below the viewport
+        // top, the sentinel is still below the fold → keep hidden.
+        // If it's not intersecting and its bottom is above the viewport
+        // top, the user has scrolled past → reveal.
+        const rect = entry.boundingClientRect;
+        if (entry.isIntersecting) {
+          setRevealed(false);
+          return;
+        }
+        setRevealed(rect.bottom <= 0);
       },
       // Fire when the sentinel is fully out of view (default threshold).
       { root: null, threshold: 0 },

@@ -1,32 +1,19 @@
 /**
- * Homepage — traffic-aware redirect fallback.
+ * Homepage — server-side redirect fallback.
  *
  * The primary redirect (and query-param forwarding) happens in
- * `src/middleware.ts`, which routes Meta/Instagram paid traffic to
- * /lp/consult and everything else to /lp/subscription. Middleware also sets
- * the sticky `mr_ab` cookie so downstream analytics events keep firing with
- * the `homepage-lp` property.
+ * `src/middleware.ts`, which routes ALL `/` traffic to /lp/consult and
+ * sets the sticky `mr_ab` cookie for the consult A/B bucket.
  *
- * This server component is a defensive fallback for the case where middleware
- * is bypassed (e.g. maintenance rewrites, config regressions). It mirrors the
- * middleware routing logic. In practice it should rarely render.
+ * This server component is a defensive fallback for the case where
+ * middleware is bypassed (e.g. maintenance rewrites, config regressions).
+ * It mirrors the middleware routing so behaviour is consistent even when
+ * middleware doesn't run.
  */
 
 import { redirect } from "next/navigation";
 
-const META_SOURCE_TOKENS = new Set([
-  "facebook",
-  "meta",
-  "instagram",
-  "ig",
-  "fb",
-]);
-
-function firstString(v: string | string[] | undefined): string | null {
-  if (v == null) return null;
-  if (Array.isArray(v)) return v[0] ?? null;
-  return v;
-}
+const HOMEPAGE_DESTINATION = "/lp/consult";
 
 export default async function Home({
   searchParams,
@@ -44,13 +31,6 @@ export default async function Home({
     }
   }
 
-  const fbclid = firstString(sp.fbclid);
-  const utmSource = firstString(sp.utm_source)?.toLowerCase().trim() ?? "";
-  const isMeta =
-    (fbclid !== null && fbclid.trim().length > 0) ||
-    META_SOURCE_TOKENS.has(utmSource);
-  const destination = isMeta ? "/lp/consult" : "/lp/subscription";
-
   const qs = usp.toString();
-  redirect(qs ? `${destination}?${qs}` : destination);
+  redirect(qs ? `${HOMEPAGE_DESTINATION}?${qs}` : HOMEPAGE_DESTINATION);
 }
