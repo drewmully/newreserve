@@ -1,23 +1,28 @@
 "use client";
 
 /**
- * /lp/consult — Meta-optimized funnel landing page.
+ * /lp/consult — quiz-first A/B arm (mr_ab bucket 50..99).
  *
- * Editorial restyle (2026-07-20): mirrors /lp/subscription's editorial look
- * (white background, Playfair headlines, Inter body, generous whitespace,
- * 10px tracked uppercase labels). Positioning is luxury/considered.
+ * The quiz IS the hero. No CTA click required to start — Question 1 renders
+ * inline above the fold and clicking a style card auto-advances to Q2 in
+ * place. No modal, no Step-0 phone screen, no phone collection anywhere.
  *
- * Funnel is unchanged: ConsultOnboardingLauncher opens a two-phase modal —
- * Phase A captures first name + phone with TCPA consent (fires Meta `Lead`),
- * Phase B is the shared style quiz -> reveal -> checkout. Analytics event
- * names and launcher `source` identifiers are preserved exactly.
+ * Completion flow (identical to QuizModal today):
+ *   - Step 0 answer creates the profile via /api/quiz/start
+ *   - Each subsequent step saves via /api/quiz/step (fire-and-forget)
+ *   - Step 5 (brands + play frequency) routes to /lp/reserve/reveal/{profileId}
+ *     — the RevealBrick surface, unchanged.
  *
- * Strategic constraints (do NOT change without product sign-off):
- *   - Consult CTA (ConsultOnboardingLauncher) wins every CTA collision.
- *   - Value anchor is the quarterly $250 price, presented as the cost of a
- *     considered edit, never a coupon or a percentage saved.
- *   - The mobile sticky CTA is a single full-width tap target so the whole
- *     visible bar routes into the same onboarding/checkout flow as desktop.
+ * We render the existing <QuizModal /> without an onClose prop, which
+ * suppresses its Close button. The QuizModal container is layout-friendly
+ * (mx-auto max-w-2xl, no fixed positioning) so it drops into the hero shell
+ * cleanly.
+ *
+ * Sections below the quiz — reviews, proof stats, "have a guy", the quarter,
+ * how it works, brand logos, curator strip, editorial cross-sell — are copied
+ * from ConsultLPClient so the below-fold experience is identical between the
+ * two A/B arms. The bottom mobile sticky CTA is replaced with a "scroll to
+ * quiz" nudge instead of a modal launcher, since the quiz lives on the page.
  */
 
 import Image from "next/image";
@@ -26,62 +31,63 @@ import { useEffect } from "react";
 import { trackEvent } from "@/lib/tracking";
 import { captureAttributionFromUrl } from "@/lib/attribution";
 import { GlassHeader } from "@/app/components/ClientComponents";
+import { QuizModal } from "@/app/lp/_shared/QuizModal";
 import { RECENT_BOX_PRODUCTS } from "../_shared/products";
+import { ReviewsBlock } from "../_shared/LPSections";
 import { CuratorStrip } from "../_shared/CuratorStrip";
-import { ConsultOnboardingLauncher } from "../_shared/ConsultOnboardingLauncher";
-import { HeroCopyColumn } from "../_shared/HeroCopyColumn";
-import { HeroMiniQuiz } from "../_shared/HeroMiniQuiz";
-import { RoiSlider } from "../_shared/RoiSlider";
 
 const BRAND_LOGOS = [
-  { src: "/brands/greyson.png", alt: "Greyson" },
-  { src: "/brands/rhone.png", alt: "Rhone" },
-  { src: "/brands/quiet-golf.png", alt: "Quiet Golf" },
-  { src: "/brands/topo.png", alt: "Topo" },
-  { src: "/brands/feetures.png", alt: "Feetures" },
-  { src: "/brands/arnies.png", alt: "Arnie's" },
-  { src: "/brands/field-day.png", alt: "Field Day" },
-  { src: "/brands/harlestons.png", alt: "Harlestons" },
-  { src: "/brands/hyperice.png", alt: "Hyperice" },
+  { src: "/brands/greyson.svg", alt: "Greyson" },
+  { src: "/brands/rhone.svg", alt: "Rhone" },
+  { src: "/brands/quiet-golf.svg", alt: "Quiet Golf" },
+  { src: "/brands/field-day.svg", alt: "Field Day" },
+  { src: "/brands/penfold.svg", alt: "Penfold" },
+  { src: "/brands/tasc.svg", alt: "TASC" },
+  { src: "/brands/anderson-ord.svg", alt: "Anderson Ord" },
+  { src: "/brands/olydoe.svg", alt: "Olydoe" },
+  { src: "/brands/will-leather.svg", alt: "Will Leather" },
+];
+
+const HOW_IT_WORKS = [
+  {
+    n: "01",
+    title: "Answer six questions",
+    body: "Style, sizing, brands you like. Sixty seconds.",
+  },
+  {
+    n: "02",
+    title: "See your edit",
+    body: "Martine hand-picks four pieces. You review before you pay.",
+  },
+  {
+    n: "03",
+    title: "Fit-confirm and ship",
+    body: "We double-check sizing after checkout. Free exchanges.",
+  },
 ];
 
 const PROOF_STATS = [
   { stat: "96%", label: "Renewal rate" },
-  { stat: "4 to 6", label: "Pieces per quarter" },
+  { stat: "4.9", label: "Member rating" },
   { stat: "20+", label: "Brands in rotation" },
   { stat: "1", label: "Stylist on your fit" },
 ];
 
-// This client renders the MODAL-QUIZ (control) arm of /lp/consult.
-// The inline-quiz variant is ConsultQuizFirstClient, selected server-side
-// in page.tsx based on the mr_ab cookie bucket.
-//
-// A/B is a pure modal-quiz vs inline-quiz test on top-of-funnel container:
-// this arm keeps the standard editorial LP (HeroMiniQuiz mid-page, sticky
-// opens the ConsultOnboardingLauncher modal); the other arm makes the
-// full quiz the hero. `variant` is stamped on lp_consult_view so funnel
-// splits are clean.
-export type ConsultVariant = "modal_quiz" | "inline_quiz";
-
-export default function ConsultLPClient({
-  variant = "modal_quiz",
-}: {
-  variant?: ConsultVariant;
-} = {}) {
+export default function ConsultQuizFirstClient() {
   useEffect(() => {
     captureAttributionFromUrl();
-    // Fires both client-side fbq (Meta ViewContent) and server-side CAPI
-    // via the analytics.ts META_EVENT_MAP mapping. `variant` stamps the A/B
-    // arm on every LP view so top-of-funnel comparisons are clean.
-    trackEvent("lp_consult_view", { properties: { variant } });
-  }, [variant]);
+    // Same event as the phone-gated arm so top-of-funnel aggregates cleanly,
+    // just stamped with the variant name so PostHog can split funnels.
+    trackEvent("lp_consult_view", {
+      properties: { variant: "inline_quiz", surface: "inline_quiz_lp" },
+    });
+  }, []);
 
-  // Editorial grid — individual apparel photography so the grid reads as
-  // wardrobe pieces, not package contents.
+  // Editorial grid — individual apparel photography.
   const gridShots = [
-    RECENT_BOX_PRODUCTS[0], // Rhone Quarter Zip — Layer
-    RECENT_BOX_PRODUCTS[2], // Quiet Golf Vintage Polo — Polo
-    RECENT_BOX_PRODUCTS[4], // Field Day Repel Hoodie — Outerwear
+    RECENT_BOX_PRODUCTS[0], // Rhone Commuter — Top
+    RECENT_BOX_PRODUCTS[1], // Adidas Ultimate 365 — Bottoms
+    RECENT_BOX_PRODUCTS[2], // Peter Millar Sun Hoodie — Layer
     RECENT_BOX_PRODUCTS[3], // Will Leather Braided Belt — Accessory
   ].filter(Boolean);
 
@@ -89,37 +95,45 @@ export default function ConsultLPClient({
     <div className="min-h-screen bg-white text-charcoal">
       <GlassHeader />
 
-      {/* ============================== HERO ============================== */}
-      <section className="pt-24 sm:pt-28 lg:pt-32 pb-16 md:pb-24">
-        <div className="max-w-6xl mx-auto px-5 sm:px-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-10 lg:gap-16 items-center md:items-center">
-            {/* Copy column — persona tabs, price block, CTA, subtle gift link. */}
-            <HeroCopyColumn funnel="consult" skipPhone />
-
-            {/* Hero image — shared editorial shoot (local asset). */}
-            <div className="order-1 md:order-none">
-              <div className="md:max-w-[85%] md:ml-auto">
-                <Image
-                  src="/subscription-hero.jpg"
-                  alt="A Mully Reserve quarterly edit of premium golf apparel, styled flat on an editorial surface."
-                  width={1200}
-                  height={1200}
-                  sizes="(min-width: 768px) 42vw, 100vw"
-                  className="w-full h-auto"
-                  priority
-                />
-              </div>
+      {/* ============================== HERO ==============================
+          The quiz is the hero. A short kicker + one-line headline sits above
+          the quiz card; the quiz itself (rendered without a Close button)
+          takes the primary visual weight. On mobile the entire hero is the
+          quiz card so Question 1 is unambiguously the first thing seen. */}
+      <section
+        id="quiz"
+        className="pt-24 sm:pt-28 lg:pt-32 pb-8 sm:pb-12 scroll-mt-20"
+      >
+        <div className="max-w-3xl mx-auto px-4 sm:px-6">
+          <div className="text-center mb-8 sm:mb-10">
+            <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-4">
+              Mully Reserve
             </div>
+            <h1 className="font-serif text-3xl sm:text-4xl lg:text-[2.7rem] text-forest leading-[1.1]">
+              Let&apos;s build your edit.
+            </h1>
+            <p className="text-sm sm:text-base text-charcoal/65 mt-3 max-w-md mx-auto leading-relaxed">
+              Six questions, 60 seconds. See your quarterly picks before you
+              commit — no phone number required.
+            </p>
+          </div>
+
+          {/* Quiz card — the existing QuizModal, rendered chromeless (no
+              onClose ⇒ no Close button) and framed as an inline hero card.
+              The QuizModal already handles its own progress bar, step
+              persistence, and reveal-brick handoff. */}
+          <div className="rounded-md border border-forest/10 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.03),0_8px_28px_-16px_rgba(20,40,30,0.18)] px-2 py-8 sm:px-4 sm:py-10">
+            <QuizModal source="lp_consult_quiz_first" />
+          </div>
+
+          <div className="mt-5 text-center text-[11px] tracking-[0.2em] uppercase text-charcoal/45">
+            $250 / quarter · cancel after your first · 96% renewal
           </div>
         </div>
       </section>
 
-      {/* ========================= MEMBER REVIEWS ========================
-          Junip product-review widget (review wall) for the Reserve Member
-          product. The Junip script is loaded globally in app/layout.tsx and
-          hydrates the matching .junip-product-review node after mount. Framed
-          by our own editorial label + h2. */}
-      <section className="bg-white py-16 md:py-24">
+      {/* ========================= MEMBER REVIEWS ======================== */}
+      <section className="bg-white py-16 md:py-20">
         <div className="max-w-6xl mx-auto px-5 sm:px-8">
           <div className="text-center mb-10 sm:mb-12">
             <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-4">
@@ -129,29 +143,17 @@ export default function ConsultLPClient({
               What members are saying
             </h2>
           </div>
-          <span className="junip-product-review" data-product-id="8501257044160" />
-        </div>
-      </section>
-
-      {/* =========================== SEE THE VALUE =======================
-          ROI slider in its own calm section. Faint off-white background sets
-          it apart. Sits after reviews, ahead of the inline mini-quiz. */}
-      <section className="bg-[#FAF9F6] py-16 md:py-24">
-        <div className="max-w-2xl mx-auto px-5 sm:px-8">
-          <div className="text-center mb-10">
-            <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-4">
-              See the value
-            </div>
-            <h2 className="font-serif text-3xl sm:text-4xl text-forest">
-              How often do you shop for gear?
-            </h2>
-          </div>
-          <RoiSlider className="max-w-2xl mx-auto" />
+          <div
+            className="junip-review-carousel"
+            data-title=""
+            data-reviews-type="store_reviews"
+            data-show-summary="true"
+          />
         </div>
       </section>
 
       {/* ====================== PROOF / STAT STRIP ======================= */}
-      <section className="mt-20 sm:mt-28 border-y border-charcoal/[0.08] py-12">
+      <section className="mt-4 sm:mt-8 border-y border-charcoal/[0.08] py-12">
         <div className="max-w-6xl mx-auto px-5 sm:px-8 grid grid-cols-2 sm:grid-cols-4 gap-8">
           {PROOF_STATS.map((p) => (
             <div key={p.label} className="text-center">
@@ -182,7 +184,6 @@ export default function ConsultLPClient({
           </p>
         </div>
 
-        {/* Editorial grid — individual apparel photography. */}
         <div className="max-w-6xl mx-auto px-5 sm:px-8 mt-14">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
             {gridShots.map((p) => (
@@ -255,8 +256,32 @@ export default function ConsultLPClient({
         </div>
       </section>
 
-      {/* ===================== INLINE MINI STYLE QUIZ ==================== */}
-      <HeroMiniQuiz source="lp_consult_hero" />
+      {/* ========================= HOW IT WORKS =========================== */}
+      <section className="py-20 sm:py-28">
+        <div className="max-w-5xl mx-auto px-5 sm:px-8">
+          <div className="text-center mb-14">
+            <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-4">
+              How it works
+            </div>
+            <h2 className="font-serif text-3xl sm:text-4xl text-forest">
+              Three steps. Sixty seconds.
+            </h2>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-10 sm:gap-12">
+            {HOW_IT_WORKS.map((s) => (
+              <div key={s.n} className="text-center sm:text-left">
+                <div className="font-serif text-4xl text-forest/25 mb-4 leading-none">
+                  {s.n}
+                </div>
+                <div className="font-serif text-xl text-forest">{s.title}</div>
+                <div className="text-sm text-charcoal/65 mt-2 leading-relaxed">
+                  {s.body}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
       {/* ========================== BRAND LOGOS =========================== */}
       <section className="py-14 sm:py-16 border-y border-charcoal/[0.08]">
@@ -279,6 +304,9 @@ export default function ConsultLPClient({
           </div>
         </div>
       </section>
+
+      {/* ============================ REVIEWS ============================= */}
+      <ReviewsBlock />
 
       {/* ========================== CURATOR STRIP ========================= */}
       <CuratorStrip />
@@ -307,36 +335,57 @@ export default function ConsultLPClient({
         </div>
       </section>
 
+      {/* =========================== FINAL CTA ============================
+          On this arm the "final CTA" nudges the visitor back up to the quiz
+          instead of opening a modal. If they scrolled all the way down
+          without engaging, this is their prompt. */}
+      <section className="bg-forest text-bone py-24 sm:py-28">
+        <div className="max-w-3xl mx-auto px-5 sm:px-8 text-center">
+          <div className="text-[10px] tracking-[0.28em] uppercase text-bone/50 mb-5">
+            $250 / quarter · billed every 3 months
+          </div>
+          <h2 className="font-serif text-3xl sm:text-5xl leading-[1.08]">
+            See your edit before you commit.
+          </h2>
+          <p className="text-base sm:text-lg text-bone/70 mt-6 max-w-xl mx-auto leading-relaxed">
+            Martine dials in your fit, then we show you the pieces we would send
+            this quarter. Then it is your call.
+          </p>
+          <div className="mt-10 inline-block w-full max-w-sm">
+            <a
+              href="#quiz"
+              className="block w-full rounded-md bg-ember py-4 text-base font-medium text-bone transition hover:bg-ember/90"
+            >
+              Start the quiz
+            </a>
+          </div>
+          <div className="mt-4 text-[10px] tracking-[0.2em] uppercase text-bone/45">
+            96% renewal · Free shipping · Cancel anytime after your first quarter
+          </div>
+        </div>
+      </section>
+
       <footer className="bg-forest-dark text-bone/55 text-xs pt-8 pb-24 lg:pb-8 text-center">
         © {new Date().getFullYear()} Mully Group, Inc. All rights reserved.
       </footer>
 
       {/* ====================== MOBILE STICKY CTA =========================
-          Single full-width tap target. The previous bar rendered its label in
-          a non-interactive <div> alongside a narrow button, so taps on the
-          label region (most of the bar) did nothing. The whole visible bar is
-          now the ConsultOnboardingLauncher button and routes into the same
-          onboarding/checkout flow as the desktop CTA. z-50 keeps it above
-          page content. */}
-      {/*
-        data-lp-sticky lets the global rule in globals.css hide this bar
-        while the onboarding modal is open (html[data-consult-open="true"]),
-        so it stops competing with the modal's Continue CTA on mobile.
-        skipPhone routes the launcher directly into QuizModal without the
-        Step-0 name+phone gate — phone collection is deferred to checkout.
-      */}
+          Anchors down to the quiz section instead of opening a modal. The
+          [data-consult-open] variant hide from the phone-gated arm is not
+          needed here — there is no modal to conflict with — but we mirror
+          the styling so users toggling between arms see a consistent bar. */}
       <div
         data-lp-sticky
         className="lg:hidden fixed bottom-0 inset-x-0 z-50 border-t border-charcoal/10 bg-white/95 backdrop-blur-md shadow-[0_-4px_16px_-8px_rgba(0,0,0,0.15)]"
         style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       >
         <div className="max-w-6xl mx-auto px-4 py-3">
-          <ConsultOnboardingLauncher
-            variant="primary-large"
-            label="Get Started · $250/quarter"
-            source="lp_consult_sticky"
-            skipPhone
-          />
+          <a
+            href="#quiz"
+            className="block w-full rounded-md bg-ember py-4 text-center text-base font-medium text-bone transition hover:bg-ember/90"
+          >
+            Start the quiz · 60s
+          </a>
         </div>
       </div>
     </div>

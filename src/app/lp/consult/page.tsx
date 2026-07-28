@@ -30,7 +30,9 @@
  */
 
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
 import ConsultLPClient from "./ConsultLPClient";
+import ConsultQuizFirstClient from "./ConsultQuizFirstClient";
 
 export const metadata: Metadata = {
   title: "Free style consult with Martine — Mully",
@@ -44,6 +46,24 @@ export const metadata: Metadata = {
   },
 };
 
-export default function ConsultLPPage() {
-  return <ConsultLPClient />;
+export default async function ConsultLPPage() {
+  // A/B bucket for the phone-gated vs quiz-first split. Middleware sets
+  // `mr_ab` (0..99) on first visit, so by the time we render this page it's
+  // guaranteed to exist. Reading it server-side keeps the initial paint on
+  // the correct arm and avoids a client-side flip.
+  //
+  //   0..49  → modal_quiz  (ConsultLPClient: hero + CTA → modal-quiz, no phone)
+  //   50..99 → inline_quiz (ConsultQuizFirstClient: quiz inline as the hero)
+  //
+  // Neither arm collects a phone number — the outcome measures modal vs
+  // inline as the quiz container. Both arms complete at the same reveal
+  // brick (/lp/reserve/reveal/{id}) and fire lp_consult_view stamped with
+  // `variant` so PostHog can split funnels without a second event name.
+  const store = await cookies();
+  const raw = store.get("mr_ab")?.value;
+  const bucket = raw && /^\d+$/.test(raw) ? Number(raw) : null;
+  if (bucket !== null && bucket >= 50) {
+    return <ConsultQuizFirstClient />;
+  }
+  return <ConsultLPClient variant="modal_quiz" />;
 }

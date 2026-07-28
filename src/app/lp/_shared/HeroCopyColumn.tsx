@@ -30,8 +30,17 @@ const PRIMARY_LARGE =
 
 export function HeroCopyColumn({
   funnel,
+  skipPhone = false,
 }: {
   funnel: "subscription" | "consult";
+  /**
+   * Only meaningful when funnel === "consult". When true, the hero CTA
+   * routes through ConsultOnboardingLauncher with skipPhone=true, meaning
+   * the modal opens directly on QuizModal without the Step-0 name+phone
+   * gate. Phone collection happens at checkout instead. See the consult
+   * A/B rationale in ConsultLPClient.tsx.
+   */
+  skipPhone?: boolean;
 }) {
   const [persona, setPersona] = useState<PersonaKey>("casual");
   const [giftOpen, setGiftOpen] = useState(false);
@@ -91,6 +100,7 @@ export function HeroCopyColumn({
               variant="primary-large"
               label={active.ctaLabel}
               source={source}
+              skipPhone={skipPhone}
             />
           )}
         </div>

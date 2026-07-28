@@ -87,6 +87,26 @@ function sha256hex(value: string): string {
   return crypto.createHash("sha256").update(value).digest("hex");
 }
 
+// The line-item SKU that identifies a Mully Reserve Member Quarterly
+// Curation purchase — the ONLY purchase Meta ads are optimized against.
+// Pro-shop, gift, and non-RES-MEM orders are excluded from Meta Purchase
+// events so the pixel signal Meta learns from stays aligned with the ad
+// objective (new Reserve subscribers), not noisy one-off apparel orders.
+const META_RESERVE_SKU_PREFIX = "RES-MEM";
+
+function eventContainsReserveMember(event: AnalyticsEvent): boolean {
+  const items = event.properties?.items;
+  if (!Array.isArray(items)) return false;
+  for (const item of items) {
+    if (!item || typeof item !== "object") continue;
+    const id = (item as { id?: unknown }).id;
+    if (typeof id === "string" && id.toUpperCase().startsWith(META_RESERVE_SKU_PREFIX)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 async function fireMetaCAPI(event: AnalyticsEvent): Promise<void> {
   const pixelId = process.env.META_PIXEL_ID;
   const accessToken = process.env.META_ACCESS_TOKEN;
@@ -97,6 +117,15 @@ async function fireMetaCAPI(event: AnalyticsEvent): Promise<void> {
   // the pixel's signal with noise Meta can't optimize against.
   const metaEventName = META_EVENT_MAP[event.event_name];
   if (!metaEventName) return;
+
+  // Gate: Meta Purchase events only fire for orders that include the RES-MEM
+  // subscription SKU. Pro-shop, gift, and mixed non-Reserve orders would
+  // otherwise train Meta's optimizer on the wrong conversion. Non-purchase
+  // events (lead, initiate_checkout, view_content, etc.) still fire
+  // unconditionally so top-of-funnel signal remains intact.
+  if (event.event_name === "purchase" && !eventContainsReserveMember(event)) {
+    return;
+  }
 
   const userData: Record<string, unknown> = {};
   if (event.user_id) {

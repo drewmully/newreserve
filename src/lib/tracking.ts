@@ -179,6 +179,27 @@ const META_STANDARD_EVENTS: Record<string, string> = {
   lp_consult_submit: "Lead",
 };
 
+// Purchase-side gate: only mirror Meta Purchase when the order contains
+// a RES-MEM (Reserve Member Quarterly Curation) line item. Mirrors the
+// server-side gate in src/app/api/_lib/analytics.ts so pro-shop, gift, and
+// mixed non-Reserve orders never train Meta's optimizer on the wrong
+// conversion. Non-purchase Meta mirrors (Lead, InitiateCheckout, etc.)
+// remain unchanged.
+function purchasePropsIncludeReserveMember(
+  properties: Record<string, unknown>
+): boolean {
+  const items = properties.items;
+  if (!Array.isArray(items)) return false;
+  for (const item of items) {
+    if (!item || typeof item !== "object") continue;
+    const id = (item as { id?: unknown }).id;
+    if (typeof id === "string" && id.toUpperCase().startsWith("RES-MEM")) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function mirrorToMetaPixel(
   eventName: string,
   eventId: string,
@@ -192,6 +213,13 @@ function mirrorToMetaPixel(
 
   const metaEvent = META_STANDARD_EVENTS[eventName];
   if (!metaEvent) return;
+
+  // Suppress Purchase mirror for non-Reserve orders so client + server stay
+  // aligned. Meta's dedup only works when both sides fire (with same event_id)
+  // OR both sides skip; firing only one would count the non-Reserve order.
+  if (eventName === "purchase" && !purchasePropsIncludeReserveMember(properties)) {
+    return;
+  }
 
   try {
     const eventData: Record<string, unknown> = {};

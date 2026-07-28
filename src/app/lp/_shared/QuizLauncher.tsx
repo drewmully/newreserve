@@ -2,14 +2,23 @@
 
 /**
  * Mounts the QuizModal in a full-screen overlay when the LP's primary CTA
- * is tapped. Lives in a portal-style fixed wrapper so we don't fight the
- * existing LP's scroll/layout.
+ * is tapped. Renders via React portal to <document.body> so the fixed
+ * overlay escapes any ancestor that establishes a containing block for
+ * position:fixed — in particular the mobile sticky footer's backdrop-blur
+ * ancestor stack, which was trapping the modal inside a ~72px strip below
+ * the viewport on iOS Safari.
+ *
+ * Also toggles [data-consult-open="true"] on <html> for the duration of the
+ * modal so any [data-lp-sticky] element (currently the LP mobile bottom bar)
+ * hides via the global rule in globals.css. Mirrors the fix already applied
+ * to ConsultOnboardingLauncher.
  *
  * Renders nothing until opened — keeps the LP's initial HTML lean and
  * defers the (relatively large) quiz JS until intent is shown.
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { QuizModal } from "./QuizModal";
 import { trackEvent } from "@/lib/tracking";
 
@@ -51,13 +60,17 @@ export function QuizLauncher({
     setOpen(true);
   }, [source]);
 
-  // Lock body scroll while modal is open.
+  // Lock body scroll AND expose a signal the mobile sticky CTA can read via
+  // CSS while the modal is open. See globals.css:
+  //   html[data-consult-open="true"] [data-lp-sticky] { display: none; }
   useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    document.documentElement.setAttribute("data-consult-open", "true");
     return () => {
       document.body.style.overflow = prev;
+      document.documentElement.removeAttribute("data-consult-open");
     };
   }, [open]);
 
@@ -82,14 +95,21 @@ function QuizOverlay({
   onClose: () => void;
   source: string;
 }) {
+  // SSR guard: createPortal needs a real DOM.
+  if (typeof document === "undefined") return null;
+
   // Use 100svh (small viewport height) so the modal sizing is correct when
   // the mobile keyboard is open or the address bar collapses. Tight top
   // padding so the first step (style cards) fits a single mobile viewport.
-  return (
-    <div className="fixed inset-0 z-[60] overflow-y-auto bg-bone">
+  //
+  // z-[100] matches ConsultOnboardingOverlay so both LPs' modals sit above
+  // any z-50 sticky affordance without a fight.
+  return createPortal(
+    <div className="fixed inset-0 z-[100] overflow-y-auto bg-bone">
       <div className="min-h-[100svh] px-4 pt-5 pb-10 sm:pt-12 sm:pb-16">
         <QuizModal source={source} onClose={onClose} />
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

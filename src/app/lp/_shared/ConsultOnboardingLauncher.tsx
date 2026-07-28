@@ -21,6 +21,7 @@
 
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { QuizModal } from "./QuizModal";
 import { trackEvent, getClientAnonymousId } from "@/lib/tracking";
 import { captureAttributionFromUrl } from "@/lib/attribution";
@@ -58,6 +59,15 @@ export interface ConsultOnboardingLauncherProps {
   /** Analytics source identifier. */
   source?: string;
   className?: string;
+  /**
+   * When true, the launcher skips the Step-0 name+phone+TCPA screen and
+   * opens directly into the shared QuizModal. Used by the quiz-first A/B
+   * arm on /lp/consult — phone becomes optional and is collected (if at
+   * all) after the reveal, not before. Analytics still emit
+   * `lp_consult_modal_view` on open so top-of-funnel comparisons stay
+   * apples-to-apples between the two arms.
+   */
+  skipPhone?: boolean;
 }
 
 // ---- Launcher (renders trigger button + overlay) --------------------------
@@ -67,6 +77,7 @@ export function ConsultOnboardingLauncher({
   label,
   source = "lp_consult",
   className,
+  skipPhone = false,
 }: ConsultOnboardingLauncherProps) {
   const [open, setOpen] = useState(false);
 
@@ -90,10 +101,16 @@ export function ConsultOnboardingLauncher({
 
   useEffect(() => {
     if (!open) return;
+    // Lock scroll + expose a signal the mobile sticky CTA (and any other
+    // sibling elements that would visually collide with the fullscreen
+    // modal) can read via CSS. See ConsultLPClient sticky footer, which
+    // hides itself while [data-consult-open="true"] is set on <html>.
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    document.documentElement.setAttribute("data-consult-open", "true");
     return () => {
       document.body.style.overflow = prev;
+      document.documentElement.removeAttribute("data-consult-open");
     };
   }, [open]);
 
@@ -109,6 +126,7 @@ export function ConsultOnboardingLauncher({
       {open && (
         <ConsultOnboardingOverlay
           source={source}
+          skipPhone={skipPhone}
           onClose={() => setOpen(false)}
         />
       )}
@@ -120,29 +138,49 @@ export function ConsultOnboardingLauncher({
 
 interface ConsultOnboardingOverlayProps {
   source: string;
+  skipPhone: boolean;
   onClose: () => void;
 }
 
 function ConsultOnboardingOverlay({
   source,
+  skipPhone,
   onClose,
 }: ConsultOnboardingOverlayProps) {
-  const [phase, setPhase] = useState<"phone" | "quiz">("phone");
+  // When skipPhone is set (quiz-first A/B arm), we start in the 'quiz'
+  // phase directly and never collect name/phone before the quiz.
+  const [phase, setPhase] = useState<"phone" | "quiz">(
+    skipPhone ? "quiz" : "phone",
+  );
   const [firstName, setFirstName] = useState("");
   const [phoneE164, setPhoneE164] = useState<string | null>(null);
 
   useEffect(() => {
     // Standard PostHog LP view event (we already fire lp_consult_view via the
-    // page useEffect; this is the modal-open equivalent).
+    // page useEffect; this is the modal-open equivalent). The `variant`
+    // property lets us split the top-of-funnel between the phone-gated and
+    // quiz-first A/B arms without adding a second event name.
+    // Variant naming reflects the A/B: modal_quiz (skipPhone, no Step-0) vs
+    // the legacy phone_gated path (Step-0 name+phone then quiz). Both /lp/consult
+    // arms now pass skipPhone; phone_gated remains as a defensive label for
+    // any other surface that still runs the launcher with Step-0.
     trackEvent("lp_consult_modal_view", {
-      properties: { source },
+      properties: {
+        source,
+        variant: skipPhone ? "modal_quiz" : "phone_gated",
+      },
     }).catch(() => {});
     captureAttributionFromUrl();
-  }, [source]);
+  }, [source, skipPhone]);
 
-  return (
+  // Render the overlay via a portal to <body> so it escapes any ancestor
+  // that establishes a containing block for position:fixed (e.g. the mobile
+  // sticky footer uses backdrop-filter: blur, which traps fixed descendants
+  // inside a ~72px strip below the viewport). Guarded for SSR.
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 bg-bone overflow-y-auto"
+      className="fixed inset-0 z-[100] bg-bone overflow-y-auto"
       role="dialog"
       aria-modal="true"
       aria-label="Get started"
@@ -190,7 +228,8 @@ function ConsultOnboardingOverlay({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

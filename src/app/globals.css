@@ -25,6 +25,23 @@ html {
   scroll-behavior: smooth;
 }
 
+/*
+ * LP modal + sticky-footer coordination.
+ *
+ * ConsultOnboardingLauncher sets [data-consult-open="true"] on <html> while
+ * its portal-rendered overlay is open. Any element marked [data-lp-sticky]
+ * (currently the /lp/consult mobile bottom bar) hides itself while the modal
+ * is open so it stops competing with in-modal CTAs on mobile.
+ *
+ * This is a plain CSS rule rather than a Tailwind arbitrary variant because
+ * Tailwind v4 does not reliably compile the `[html[data-consult-open='true']_&]`
+ * selector we tried previously — the sticky was still visible on top of the
+ * modal on iOS Safari.
+ */
+html[data-consult-open="true"] [data-lp-sticky] {
+  display: none !important;
+}
+
 body {
   background: #F5F1E8;
   color: #111111;
