@@ -395,6 +395,7 @@ export default function SubscriptionLPClient() {
           now the QuizLauncher button and routes into the same quiz/checkout
           flow as the desktop CTA. z-50 keeps it above page content. */}
       <div
+        data-lp-sticky
         className="lg:hidden fixed bottom-0 inset-x-0 z-50 border-t border-charcoal/10 bg-white/95 backdrop-blur-md shadow-[0_-4px_16px_-8px_rgba(0,0,0,0.15)]"
         style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       >
