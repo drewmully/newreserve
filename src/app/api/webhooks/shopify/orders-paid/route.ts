@@ -569,6 +569,19 @@ export async function POST(request: NextRequest) {
       is_subscription_first_order: isSubscriptionFirst,
       is_subscription_recurring_order: isSubscriptionRecurring,
       shopify_orders_count: shopifyOrdersCount ?? null,
+      // /lp/consult A/B stamps: passed through from Shopify cart
+      // attributes (set by ReserveCheckoutCTA) so purchase events can be
+      // split by modal_quiz vs inline_quiz downstream in PostHog. Only
+      // present on orders whose visitor originated on /lp/consult; other
+      // channels (subscription LP, org, direct) will report null.
+      ab_variant: orderAttr("ab_variant") ?? null,
+      mr_ab_bucket: (() => {
+        const raw = orderAttr("mr_ab_bucket");
+        if (!raw) return null;
+        const n = Number(raw);
+        return Number.isFinite(n) ? n : null;
+      })(),
+      quiz_profile_id: orderAttr("quiz_profile_id") ?? null,
       // Deterministic Meta CAPI dedup id. Format: purchase_<shopify_order_id>.
       // The client-side confirmation page at /auth/callback fires a matching
       // fbq('track','Purchase',{},{eventID: event_id}) using the same value,

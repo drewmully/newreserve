@@ -46,23 +46,44 @@ export const metadata: Metadata = {
   },
 };
 
-export default async function ConsultLPPage() {
-  // A/B bucket for the phone-gated vs quiz-first split. Middleware sets
+export default async function ConsultLPPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ arm?: string }>;
+}) {
+  // A/B bucket for the modal-quiz vs inline-quiz split. Middleware sets
   // `mr_ab` (0..99) on first visit, so by the time we render this page it's
   // guaranteed to exist. Reading it server-side keeps the initial paint on
   // the correct arm and avoids a client-side flip.
   //
-  //   0..49  → modal_quiz  (ConsultLPClient: hero + CTA → modal-quiz, no phone)
+  //   0..49  → modal_quiz  (ConsultLPClient: full editorial LP + sticky
+  //                        opens the modal quiz)
   //   50..99 → inline_quiz (ConsultQuizFirstClient: quiz inline as the hero)
   //
   // Neither arm collects a phone number — the outcome measures modal vs
   // inline as the quiz container. Both arms complete at the same reveal
   // brick (/lp/reserve/reveal/{id}) and fire lp_consult_view stamped with
   // `variant` so PostHog can split funnels without a second event name.
+  //
+  // QA / manual override: appending ?arm=modal_quiz or ?arm=inline_quiz to
+  // the URL forces that arm for this request (does NOT mutate the mr_ab
+  // cookie). Non-matching values are ignored. Useful for previewing an arm
+  // on a device already bucketed to the other side.
+  const params = (await searchParams) ?? {};
+  const override =
+    params.arm === "modal_quiz" || params.arm === "inline_quiz"
+      ? params.arm
+      : null;
+
   const store = await cookies();
   const raw = store.get("mr_ab")?.value;
   const bucket = raw && /^\d+$/.test(raw) ? Number(raw) : null;
-  if (bucket !== null && bucket >= 50) {
+
+  const arm =
+    override ??
+    (bucket !== null && bucket >= 50 ? "inline_quiz" : "modal_quiz");
+
+  if (arm === "inline_quiz") {
     return <ConsultQuizFirstClient />;
   }
   return <ConsultLPClient variant="modal_quiz" />;

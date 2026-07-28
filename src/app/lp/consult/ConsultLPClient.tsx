@@ -29,6 +29,10 @@ import { GlassHeader } from "@/app/components/ClientComponents";
 import { RECENT_BOX_PRODUCTS } from "../_shared/products";
 import { CuratorStrip } from "../_shared/CuratorStrip";
 import { ConsultOnboardingLauncher } from "../_shared/ConsultOnboardingLauncher";
+import {
+  StickyRevealOnScroll,
+  StickyRevealSentinel,
+} from "../_shared/StickyRevealOnScroll";
 import { HeroCopyColumn } from "../_shared/HeroCopyColumn";
 import { HeroMiniQuiz } from "../_shared/HeroMiniQuiz";
 import { RoiSlider } from "../_shared/RoiSlider";
@@ -73,7 +77,9 @@ export default function ConsultLPClient({
     // Fires both client-side fbq (Meta ViewContent) and server-side CAPI
     // via the analytics.ts META_EVENT_MAP mapping. `variant` stamps the A/B
     // arm on every LP view so top-of-funnel comparisons are clean.
-    trackEvent("lp_consult_view", { properties: { variant } });
+    trackEvent("lp_consult_view", {
+      properties: { variant, ab_variant: variant },
+    });
   }, [variant]);
 
   // Editorial grid — individual apparel photography so the grid reads as
@@ -90,6 +96,11 @@ export default function ConsultLPClient({
       <GlassHeader />
 
       {/* ============================== HERO ============================== */}
+      {/* Sticky-reveal sentinel is placed right after the hero closes; while
+          it's in the viewport, the mobile sticky CTA stays hidden. As soon
+          as the user scrolls past the hero, IntersectionObserver flips the
+          sticky in. Keeps the fold clean and non-competitive with the hero
+          CTA. */}
       <section className="pt-24 sm:pt-28 lg:pt-32 pb-16 md:pb-24">
         <div className="max-w-6xl mx-auto px-5 sm:px-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-10 lg:gap-16 items-center md:items-center">
@@ -113,6 +124,12 @@ export default function ConsultLPClient({
           </div>
         </div>
       </section>
+
+      {/* Sticky-reveal sentinel: while this 1px element is in the viewport,
+          the mobile sticky CTA below is hidden. Placed right after the hero
+          closes so the sticky only appears once the user has scrolled past
+          the hero. */}
+      <StickyRevealSentinel />
 
       {/* ========================= MEMBER REVIEWS ========================
           Junip product-review widget (review wall) for the Reserve Member
@@ -312,33 +329,20 @@ export default function ConsultLPClient({
       </footer>
 
       {/* ====================== MOBILE STICKY CTA =========================
-          Single full-width tap target. The previous bar rendered its label in
-          a non-interactive <div> alongside a narrow button, so taps on the
-          label region (most of the bar) did nothing. The whole visible bar is
-          now the ConsultOnboardingLauncher button and routes into the same
-          onboarding/checkout flow as the desktop CTA. z-50 keeps it above
-          page content. */}
-      {/*
-        data-lp-sticky lets the global rule in globals.css hide this bar
-        while the onboarding modal is open (html[data-consult-open="true"]),
-        so it stops competing with the modal's Continue CTA on mobile.
-        skipPhone routes the launcher directly into QuizModal without the
-        Step-0 name+phone gate — phone collection is deferred to checkout.
-      */}
-      <div
-        data-lp-sticky
-        className="lg:hidden fixed bottom-0 inset-x-0 z-50 border-t border-charcoal/10 bg-white/95 backdrop-blur-md shadow-[0_-4px_16px_-8px_rgba(0,0,0,0.15)]"
-        style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
-      >
-        <div className="max-w-6xl mx-auto px-4 py-3">
-          <ConsultOnboardingLauncher
-            variant="primary-large"
-            label="Get Started · $250/quarter"
-            source="lp_consult_sticky"
-            skipPhone
-          />
-        </div>
-      </div>
+          Sticky reveals only after user scrolls past the hero (via the
+          StickyRevealSentinel placed at hero close). data-lp-sticky is
+          added by StickyRevealOnScroll so the global rule in globals.css
+          also hides the bar while [data-consult-open] is set (i.e. the
+          onboarding modal is open). skipPhone opens the modal directly on
+          the quiz — no Step-0 name+phone gate. */}
+      <StickyRevealOnScroll>
+        <ConsultOnboardingLauncher
+          variant="primary-large"
+          label="Get Started · $250/quarter"
+          source="lp_consult_sticky"
+          skipPhone
+        />
+      </StickyRevealOnScroll>
     </div>
   );
 }

@@ -192,6 +192,20 @@ const QUIZ_STORAGE_KEY = "mully_quiz_profileId";
 const QUIZ_ANSWERS_KEY = "mully_quiz_answers";
 const TOTAL_STEPS = 6;
 
+/**
+ * Map QuizLauncher/ConsultOnboardingLauncher `source` values to the
+ * /lp/consult A/B variant. Anything from a launcher on the inline-quiz LP
+ * carries source=lp_consult_quiz_first; everything else on /lp/consult
+ * (hero / sticky) is the modal-quiz arm. Non-consult sources (subscription)
+ * report variant=null so PostHog can filter them out of the consult A/B
+ * without collision.
+ */
+function resolveConsultVariant(source: string): "modal_quiz" | "inline_quiz" | null {
+  if (!source.startsWith("lp_consult")) return null;
+  if (source === "lp_consult_quiz_first") return "inline_quiz";
+  return "modal_quiz";
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export interface QuizModalProps {
@@ -268,7 +282,7 @@ export function QuizModal({
     }
     trackEvent(
       "quiz_view",
-      { properties: { source } },
+      { properties: { source, ab_variant: resolveConsultVariant(source) } },
       { includeAuth: false }
     ).catch(() => {});
     // seedFirstName is only read on initial mount — the parent Consult
@@ -308,6 +322,39 @@ export function QuizModal({
     }
     window.addEventListener("pagehide", handleUnload);
     return () => window.removeEventListener("pagehide", handleUnload);
+  }, []);
+
+  // Browser back button = previous quiz step (not leave the page).
+  //
+  // Rationale: with the phone gate removed, the quiz is often the visitor's
+  // first substantive interaction on the site. Hitting Back and losing all
+  // progress is a common iOS Safari swipe-back behaviour and burns the
+  // funnel. We intercept it with History API:
+  //
+  //   - Whenever `step` advances above 0, push a marker state onto the
+  //     history so each step is its own history entry.
+  //   - A popstate handler decrements the local step. If we're already at
+  //     step 0, we let the pop proceed (visitor leaves the page).
+  //   - We do NOT push at the final step (redirect to reveal is imminent).
+  //
+  // Works identically for the modal arm (ConsultOnboardingLauncher) and
+  // the inline arm (ConsultQuizFirstClient without onClose).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (step === 0) return;
+    if (step >= TOTAL_STEPS - 1) return; // completion → external redirect
+    try {
+      window.history.pushState({ quizStep: step }, "");
+    } catch {}
+  }, [step]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    function handlePopState() {
+      setStep((s) => (s > 0 ? s - 1 : 0));
+    }
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
   // ─── API helpers ────────────────────────────────────────────────────────────
@@ -391,7 +438,13 @@ export function QuizModal({
         trackEvent(
           "quiz_step_completed",
           {
-            properties: { step: 0, styleBucket: bucket, source, profileId: pid },
+            properties: {
+              step: 0,
+              styleBucket: bucket,
+              source,
+              ab_variant: resolveConsultVariant(source),
+              profileId: pid,
+            },
           },
           { includeAuth: false }
         ).catch(() => {});
@@ -425,6 +478,7 @@ export function QuizModal({
               properties: {
                 step,
                 source,
+                ab_variant: resolveConsultVariant(source),
                 profileId: pid,
                 fields: Object.keys(patch),
               },
@@ -464,7 +518,10 @@ export function QuizModal({
             source,
             profileId,
             styleBucket: answers.golfStyle,
+            // Legacy `variant` field kept for backward compat with any
+            // existing PostHog insights. New A/B lives under ab_variant.
             variant: "no_email_gate",
+            ab_variant: resolveConsultVariant(source),
           },
         },
         { includeAuth: false }
@@ -627,6 +684,7 @@ export function QuizModal({
                     properties: {
                       step: 5,
                       source,
+                      ab_variant: resolveConsultVariant(source),
                       profileId,
                       fields: Object.keys(patch),
                     },

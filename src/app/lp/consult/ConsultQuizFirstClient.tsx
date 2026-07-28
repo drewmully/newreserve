@@ -32,6 +32,10 @@ import { trackEvent } from "@/lib/tracking";
 import { captureAttributionFromUrl } from "@/lib/attribution";
 import { GlassHeader } from "@/app/components/ClientComponents";
 import { QuizModal } from "@/app/lp/_shared/QuizModal";
+import {
+  StickyRevealOnScroll,
+  StickyRevealSentinel,
+} from "@/app/lp/_shared/StickyRevealOnScroll";
 import { RECENT_BOX_PRODUCTS } from "../_shared/products";
 import { ReviewsBlock } from "../_shared/LPSections";
 import { CuratorStrip } from "../_shared/CuratorStrip";
@@ -79,7 +83,11 @@ export default function ConsultQuizFirstClient() {
     // Same event as the phone-gated arm so top-of-funnel aggregates cleanly,
     // just stamped with the variant name so PostHog can split funnels.
     trackEvent("lp_consult_view", {
-      properties: { variant: "inline_quiz", surface: "inline_quiz_lp" },
+      properties: {
+        variant: "inline_quiz",
+        ab_variant: "inline_quiz",
+        surface: "inline_quiz_lp",
+      },
     });
   }, []);
 
@@ -131,6 +139,12 @@ export default function ConsultQuizFirstClient() {
           </div>
         </div>
       </section>
+
+      {/* Sticky-reveal sentinel is placed AFTER the quiz section (unlike the
+          modal arm where it sits after the hero). On this arm the quiz IS
+          the hero, so we only want the "Back to the quiz" nudge to appear
+          if the user has scrolled past the quiz entirely. */}
+      <StickyRevealSentinel />
 
       {/* ========================= MEMBER REVIEWS ======================== */}
       <section className="bg-white py-16 md:py-20">
@@ -370,24 +384,20 @@ export default function ConsultQuizFirstClient() {
       </footer>
 
       {/* ====================== MOBILE STICKY CTA =========================
-          Anchors down to the quiz section instead of opening a modal. The
-          [data-consult-open] variant hide from the phone-gated arm is not
-          needed here — there is no modal to conflict with — but we mirror
-          the styling so users toggling between arms see a consistent bar. */}
-      <div
-        data-lp-sticky
-        className="lg:hidden fixed bottom-0 inset-x-0 z-50 border-t border-charcoal/10 bg-white/95 backdrop-blur-md shadow-[0_-4px_16px_-8px_rgba(0,0,0,0.15)]"
-        style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
-      >
-        <div className="max-w-6xl mx-auto px-4 py-3">
-          <a
-            href="#quiz"
-            className="block w-full rounded-md bg-ember py-4 text-center text-base font-medium text-bone transition hover:bg-ember/90"
-          >
-            Start the quiz · 60s
-          </a>
-        </div>
-      </div>
+          On the inline arm the quiz IS the hero, so a persistent sticky
+          would just duplicate a CTA that's already sitting in front of
+          the user. The StickyRevealSentinel below is placed *after* the
+          quiz section, so the sticky only appears once the visitor has
+          scrolled past the entire quiz — at which point they've clearly
+          bounced off the quiz and a scroll-back-up nudge is warranted. */}
+      <StickyRevealOnScroll>
+        <a
+          href="#quiz"
+          className="block w-full rounded-md bg-ember py-4 text-center text-base font-medium text-bone transition hover:bg-ember/90"
+        >
+          Back to the quiz · 60s
+        </a>
+      </StickyRevealOnScroll>
     </div>
   );
 }

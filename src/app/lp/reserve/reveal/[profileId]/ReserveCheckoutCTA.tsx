@@ -45,6 +45,24 @@ export function ReserveCheckoutCTA({
   const onClick = useCallback(async () => {
     setError(null);
     setLoading(true);
+
+    // Read the mr_ab bucket cookie so we can stamp the /lp/consult A/B
+    // arm the visitor started on onto both the PostHog reveal_cta_clicked
+    // event and the Shopify checkout attributes. This is what lets us tie
+    // final Purchase back to modal_quiz vs inline_quiz for CVR analysis.
+    // Cookie-based (not prop-based) because the reveal page can be reached
+    // from either arm without a variant hint in the URL.
+    const mrAb = (() => {
+      if (typeof document === "undefined") return null;
+      const match = document.cookie.match(/(?:^|;\s*)mr_ab=(\d+)/);
+      if (!match) return null;
+      const n = Number(match[1]);
+      if (!Number.isFinite(n)) return null;
+      return n;
+    })();
+    const abVariant: "modal_quiz" | "inline_quiz" | null =
+      mrAb === null ? null : mrAb >= 50 ? "inline_quiz" : "modal_quiz";
+
     trackEvent(
       "reveal_cta_clicked",
       {
@@ -53,6 +71,8 @@ export function ReserveCheckoutCTA({
           styleBucket,
           tier: "member",
           source: "lp_reveal",
+          ab_variant: abVariant,
+          mr_ab_bucket: mrAb,
         },
       },
       { includeAuth: false }
@@ -103,6 +123,15 @@ export function ReserveCheckoutCTA({
           { key: "lp_source", value: "lp_reveal" },
           { key: "quiz_profile_id", value: profileId },
           { key: "style_bucket", value: styleBucket },
+          // A/B stamps flow into Shopify order attributes so the
+          // orders-paid webhook can pass them through to PostHog
+          // purchase events, closing the funnel loop by arm.
+          ...(abVariant
+            ? [{ key: "ab_variant", value: abVariant }]
+            : []),
+          ...(mrAb !== null
+            ? [{ key: "mr_ab_bucket", value: String(mrAb) }]
+            : []),
         ],
         subscriptionLineAttributes: lineProps,
       });
