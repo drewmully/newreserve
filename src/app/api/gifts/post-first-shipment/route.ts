@@ -107,6 +107,8 @@ export async function GET(request: NextRequest) {
           "",
           `Drew · Founder, Mully`,
         ].join("\n"),
+        sendClass: "transactional",
+        category: "gift_post_first_shipment",
         idempotencyKey: `gift-postship:${id}`,
         tags: [
           { name: "category", value: "gift_post_first_shipment" },

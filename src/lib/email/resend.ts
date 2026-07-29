@@ -1,7 +1,11 @@
 import { Resend } from "resend";
+import { checkSend, recordSend, type SendClass } from "./gate";
 
-export const FROM = "Drew Amato <drew@mymully.com>";
-export const REPLY_TO = "drew@mail.mymully.com";
+// One sender identity for every outbound message. drew@mymully.com and
+// drew@mail.mymully.com are retired as SEND addresses; mail.mymully.com still
+// receives inbound (see /api/email/inbound) and is untouched by this.
+export const FROM = "Mully <info@mymully.com>";
+export const REPLY_TO = "info@mymully.com";
 
 export interface PlainTextEmail {
   to: string;
@@ -9,6 +13,33 @@ export interface PlainTextEmail {
   text: string;
   idempotencyKey?: string;
   tags?: { name: string; value: string }[];
+  /**
+   * Which gate policy applies. Defaults to `"transactional"` so a call site
+   * that has not been classified yet keeps working and never gets silently
+   * blocked — the permissive default is deliberate. Anything that is a drip
+   * step or a blast MUST set this explicitly.
+   */
+  sendClass?: SendClass;
+  /** Lifecycle flow this message belongs to, e.g. `"reserve"`. */
+  flow?: string;
+  /** Free-form grouping for `send_log`, e.g. `"abandon_nudge"`. */
+  category?: string;
+  /** Step index within `flow`. */
+  step?: number;
+  /**
+   * Overrides the reply-to address. Only for internal notifications that route
+   * a human reply somewhere other than our own inbox — e.g. the returns
+   * exchange request, where hitting reply must reach the customer. The `From`
+   * identity is never overridable.
+   */
+  replyTo?: string;
+  /**
+   * Pre-rendered HTML body. When set, it ships as-is instead of the HTML we
+   * synthesize from `text` — for designed templates (campaign layouts, admin
+   * notification tables) that would be destroyed by the text-to-HTML path.
+   * `text` is still required and still ships as the plain-text MIME part.
+   */
+  html?: string;
   /**
    * Value used for `utm_campaign` on any mymully.com link inside the email
    * body. If omitted, we auto-derive from `tags`:
@@ -199,8 +230,40 @@ function rewriteFirstPartyUrlsInPlainText(
   });
 }
 
+/**
+ * Sends one message, subject to the send gate.
+ *
+ * Returns the provider message id, or `null` if the gate denied the send or the
+ * provider returned no id. Denials do NOT throw — every existing call site
+ * already tolerates a null return, and a policy denial is a normal outcome, not
+ * an error.
+ */
 export async function sendPlainText(email: PlainTextEmail): Promise<string | null> {
   const resend = getResendClient();
+
+  // `disableTracking` means the body carries a single-use security link
+  // (Firebase magic sign-in, password reset). Those are transactional by
+  // definition, whatever the caller passed.
+  const sendClass: SendClass = email.disableTracking
+    ? "transactional"
+    : email.sendClass ?? "transactional";
+
+  const gateRequest = {
+    to: email.to,
+    sendClass,
+    flow: email.flow,
+    category: email.category,
+    step: email.step,
+  };
+
+  const decision = await checkSend(gateRequest);
+  if (!decision.allowed) {
+    console.warn(
+      `[email] blocked by send gate: to=${email.to} class=${sendClass} ` +
+        `reason=${decision.reason ?? "gate_error"} detail=${decision.detail ?? "none"}`
+    );
+    return null;
+  }
 
   if (email.disableTracking) {
     // Security-link mode for single-use URLs (Firebase magic sign-in / password
@@ -218,7 +281,7 @@ export async function sendPlainText(email: PlainTextEmail): Promise<string | nul
     const { data, error } = await resend.emails.send(
       {
         from: FROM,
-        replyTo: REPLY_TO,
+        replyTo: email.replyTo ?? REPLY_TO,
         to: email.to,
         subject: email.subject,
         text: email.text,
@@ -232,24 +295,29 @@ export async function sendPlainText(email: PlainTextEmail): Promise<string | nul
     if (error) {
       throw new Error(`Resend error: ${JSON.stringify(error)}`);
     }
+    await recordSend(gateRequest, data?.id ?? null);
     return data?.id ?? null;
   }
 
   const utmCampaign = resolveUtmCampaign(email.utmCampaign, email.tags);
-  const rewrittenText = rewriteFirstPartyUrlsInPlainText(
-    email.text,
-    utmCampaign,
-    email.utmContent
-  );
+
+  // A caller-supplied HTML body owns its own links, so we ship both MIME parts
+  // byte-for-byte rather than stamping UTMs into someone else's template.
+  const bodyText =
+    email.html === undefined
+      ? rewriteFirstPartyUrlsInPlainText(email.text, utmCampaign, email.utmContent)
+      : email.text;
+  const bodyHtml =
+    email.html ?? toTrackableHtml(email.text, utmCampaign, email.utmContent);
 
   const { data, error } = await resend.emails.send(
     {
       from: FROM,
-      replyTo: REPLY_TO,
+      replyTo: email.replyTo ?? REPLY_TO,
       to: email.to,
       subject: email.subject,
-      text: rewrittenText,
-      html: toTrackableHtml(email.text, utmCampaign, email.utmContent),
+      text: bodyText,
+      html: bodyHtml,
       ...(email.tags ? { tags: email.tags } : {}),
     },
     email.idempotencyKey ? { idempotencyKey: email.idempotencyKey } : undefined
@@ -257,5 +325,6 @@ export async function sendPlainText(email: PlainTextEmail): Promise<string | nul
   if (error) {
     throw new Error(`Resend error: ${JSON.stringify(error)}`);
   }
+  await recordSend(gateRequest, data?.id ?? null);
   return data?.id ?? null;
 }

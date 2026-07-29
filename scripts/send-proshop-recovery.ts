@@ -142,6 +142,8 @@ async function main() {
         to: s.email,
         subject,
         text,
+        sendClass: "campaign",
+        category: "proshop_recovery",
         idempotencyKey: `proshop-recovery-${s.draft_id}`,
         utmCampaign: "proshop_recovery",
         utmContent: "draft_revival",

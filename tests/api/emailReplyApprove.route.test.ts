@@ -5,7 +5,7 @@ const verifyAdminRequestMock = vi.fn();
 const runTransactionMock = vi.fn();
 const adminDbCollectionMock = vi.fn();
 const sendPlainTextMock = vi.fn();
-const resumeSequenceMock = vi.fn();
+const completeSequenceMock = vi.fn();
 const executeToolCallsMock = vi.fn();
 
 vi.mock("firebase-admin/firestore", () => ({
@@ -30,7 +30,7 @@ vi.mock("@/lib/email/resend", () => ({
 }));
 
 vi.mock("@/lib/email/sequences", () => ({
-  resumeSequence: resumeSequenceMock,
+  completeSequence: completeSequenceMock,
 }));
 
 vi.mock("@/lib/email/ai-reply", () => ({
@@ -59,7 +59,7 @@ describe("POST /api/email/replies/[id]/approve", () => {
     adminDbCollectionMock.mockReset();
     runTransactionMock.mockReset();
     sendPlainTextMock.mockReset().mockResolvedValue("provider-msg-1");
-    resumeSequenceMock.mockReset().mockResolvedValue(undefined);
+    completeSequenceMock.mockReset().mockResolvedValue(undefined);
     executeToolCallsMock.mockReset().mockResolvedValue(undefined);
   });
 
@@ -117,7 +117,10 @@ describe("POST /api/email/replies/[id]/approve", () => {
       to: "member@example.com",
       subject: "Re: Need help",
       text: "Approved draft",
+      sendClass: "transactional",
+      category: "reply_drew",
       idempotencyKey: transactionPayload.sendAttemptId,
+      utmCampaign: "reply_drew",
     });
     expect(replyRef.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -128,11 +131,14 @@ describe("POST /api/email/replies/[id]/approve", () => {
         providerMessageId: "provider-msg-1",
       })
     );
-    expect(executeToolCallsMock).toHaveBeenCalledWith("uid_123", "reply_123", [
-      { name: "tag_member" },
-    ]);
+    expect(executeToolCallsMock).toHaveBeenCalledWith(
+      "uid_123",
+      "reply_123",
+      [{ name: "tag_member" }],
+      "member@example.com"
+    );
     expect(replyRef.update).toHaveBeenCalledWith({ toolCallsCompleted: true });
-    expect(resumeSequenceMock).toHaveBeenCalledWith("uid_123");
+    expect(completeSequenceMock).toHaveBeenCalledWith("uid_123");
     expect(replyRef.update).toHaveBeenCalledWith({ sequenceResumed: true });
   });
 
@@ -176,7 +182,7 @@ describe("POST /api/email/replies/[id]/approve", () => {
     expect(json).toEqual({ ok: true, alreadySent: true });
     expect(sendPlainTextMock).not.toHaveBeenCalled();
     expect(executeToolCallsMock).not.toHaveBeenCalled();
-    expect(resumeSequenceMock).not.toHaveBeenCalled();
+    expect(completeSequenceMock).not.toHaveBeenCalled();
     expect(replyRef.update).not.toHaveBeenCalled();
   });
 });

@@ -73,6 +73,8 @@ export async function GET(request: NextRequest) {
           giftMessage: data.gift_message,
           sizingUrl,
         }),
+        sendClass: "transactional",
+        category: "gift_recipient_announcement",
         idempotencyKey: `gift-recipient:${id}`,
         tags: [
           { name: "category", value: "gift_recipient_announcement" },

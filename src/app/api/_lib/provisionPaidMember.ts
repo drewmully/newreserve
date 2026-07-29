@@ -295,6 +295,8 @@ export async function provisionPaidMemberFromLoop(
         to: email,
         subject: "Unlock your Mully account",
         text: `Hey${firstName ? ` ${firstName}` : ""},\n\nYour Mully membership is active. Click the link below to unlock your dashboard — no password needed:\n\n${magicLink}\n\nSee you inside,\nDrew`,
+        sendClass: "transactional",
+        category: "magic_link",
         disableTracking: true,
       });
 

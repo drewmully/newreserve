@@ -178,6 +178,9 @@ export async function POST(
       to: email,
       subject,
       text: state.textToSend,
+      // Human-approved 1:1 reply to an inbound message, not a broadcast.
+      sendClass: "transactional",
+      category: "reply_drew",
       idempotencyKey: state.sendAttemptId,
       utmCampaign: "reply_drew",
     });

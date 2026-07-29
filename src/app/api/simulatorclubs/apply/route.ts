@@ -188,6 +188,12 @@ export async function POST(req: Request) {
         to: "drew@mymully.com",
         subject,
         text: lines,
+        // Internal ops notification, not a lifecycle step. `flow` is left unset
+        // deliberately: "simulatorclubs_apply" is not a lifecycle flow and
+        // tagging it as one would make it eligible for eviction.
+        sendClass: "transactional",
+        category: "simulatorclubs_apply",
+        step,
         tags: [
           { name: "flow", value: "simulatorclubs_apply" },
           { name: "step", value: String(step) },
