@@ -210,6 +210,8 @@ export async function GET(request: NextRequest) {
               to: u.email,
               subject,
               text,
+              sendClass: "campaign",
+              category: "proshop_weekly",
               idempotencyKey: `proshop-weekly-${weekKey}-${u.uid}`,
               utmCampaign: "proshop_weekly_digest",
               utmContent: weekKey,

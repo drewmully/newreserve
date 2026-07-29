@@ -1,16 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
-import { Resend } from "resend";
 import { adminDb, adminAuth } from "@/lib/firebase-admin";
+import { sendPlainText } from "@/lib/email/resend";
 import { createReviewToken } from "@/lib/registry-tokens";
 
 const ADMIN_EMAIL = "info@Mullybox.com";
-let resendClient: Resend | null = null;
-
-function getResendClient(): Resend {
-  resendClient ??= new Resend(process.env.RESEND_API_KEY);
-  return resendClient;
-}
 
 async function verifyAuth(req: NextRequest): Promise<string | null> {
   const header = req.headers.get("Authorization");
@@ -21,6 +15,30 @@ async function verifyAuth(req: NextRequest): Promise<string | null> {
   } catch {
     return null;
   }
+}
+
+function buildReviewEmailText(
+  approveUrl: string,
+  rejectUrl: string,
+  metadata: Record<string, unknown>,
+  userEmail: string
+): string {
+  return `New Club Registry Request
+
+A member has requested to join the private Club Registry.
+
+Club: ${String(metadata.club_name ?? "—")}
+City: ${String(metadata.city ?? "—")}
+State: ${String(metadata.state ?? "—")}
+Holes: ${String(metadata.holes ?? "—")}
+Guest Policy: ${String(metadata.guest_policy ?? "—")}
+Submitted by: ${userEmail}
+
+Approve: ${approveUrl}
+Reject: ${rejectUrl}
+
+This link is valid for 7 days. If you have already made a decision, you can
+ignore this email.`;
 }
 
 function buildReviewEmailHtml(
@@ -201,17 +219,19 @@ export async function POST(req: NextRequest) {
 
   const userEmail = String(metadata.submitted_by_email ?? "");
 
-  // Send email to admin
-  const { error: emailError } = await getResendClient().emails.send({
-    from: "Mullybox Club Registry <noreply@mymully.com>",
-    to: ADMIN_EMAIL,
-    subject: `New Club Registry Request — ${String(metadata.club_name ?? "Unknown")}`,
-    html: buildReviewEmailHtml(approveUrl, rejectUrl, metadata, userEmail),
-  });
-
-  if (emailError) {
-    console.error("[registry/apply] Resend error:", emailError);
-    // Application was saved — don't fail the request, just log
+  // Send email to admin. The application is already saved, so a failed
+  // notification must not fail the request.
+  try {
+    await sendPlainText({
+      to: ADMIN_EMAIL,
+      subject: `New Club Registry Request — ${String(metadata.club_name ?? "Unknown")}`,
+      text: buildReviewEmailText(approveUrl, rejectUrl, metadata, userEmail),
+      html: buildReviewEmailHtml(approveUrl, rejectUrl, metadata, userEmail),
+      sendClass: "transactional",
+      category: "registry_application_review",
+    });
+  } catch (err) {
+    console.error("[registry/apply] notification send failed:", err);
   }
 
   return NextResponse.json({ ok: true });

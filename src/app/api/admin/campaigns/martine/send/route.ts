@@ -26,8 +26,8 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { Resend } from "resend";
 import { getSupabaseService } from "@/app/api/_lib/supabaseService";
+import { sendPlainText } from "@/lib/email/resend";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -38,9 +38,8 @@ const CAMPAIGN_KEY = "martine_reactivation_2026_07";
 // reputation) rather than Martine@mail.mymully.com. The initial batch 1
 // (2026-07-10) went out from the subdomain persona and got 0/403 opens on a
 // Gmail-heavy list — classic cold-persona spam-foldering. The Martine persona
-// stays in the body/signature and CTA; only the envelope From changes.
-const FROM = "Mully <info@mymully.com>";
-const REPLY_TO = "info@mymully.com";
+// stays in the body/signature and CTA; only the envelope From changes. That
+// identity is now the global FROM/REPLY_TO in @/lib/email/resend.
 const SUBJECT_VARIANTS = [
   "A note from your new curator",
   "Your new Senior Curator, Martine",
@@ -234,11 +233,9 @@ export async function POST(req: NextRequest) {
   const only = url.searchParams.get("only");
 
   const sb = getSupabaseService();
-  const resendApiKey = process.env.RESEND_API_KEY;
-  if (!resendApiKey && !dry) {
+  if (!process.env.RESEND_API_KEY && !dry) {
     return NextResponse.json({ error: "RESEND_API_KEY missing" }, { status: 500 });
   }
-  const resend = resendApiKey ? new Resend(resendApiKey) : null;
 
   // Fetch queued rows
   let query = sb
@@ -269,7 +266,7 @@ export async function POST(req: NextRequest) {
 
   for (const r of recipients) {
     const { html, text, subject } = renderEmail(r);
-    if (dry || !resend) {
+    if (dry) {
       await sb
         .from("campaign_recipients")
         .update({
@@ -282,33 +279,44 @@ export async function POST(req: NextRequest) {
       continue;
     }
     try {
-      const { data, error: sendErr } = await resend.emails.send(
-        {
-          from: FROM,
-          replyTo: REPLY_TO,
-          to: r.email,
-          subject,
-          html,
-          text,
-          headers: { "X-Entity-Ref-ID": r.id },
-          tags: [
-            { name: "campaign", value: "martine_reactivation" },
-            { name: "batch", value: `d${batch}` },
-          ],
-        },
+      const messageId = await sendPlainText({
+        to: r.email,
+        subject,
+        text,
+        // Designed responsive layout with its own unsubscribe link — pass it
+        // through instead of letting the text-to-HTML path regenerate it.
+        html,
+        sendClass: "campaign",
+        category: "martine_reactivation",
         // idempotency key includes send attempt derived from FROM identity
         // so a From-address change (e.g. Martine@mail.mymully.com -> info@mymully.com)
         // does not get deduped by Resend as a repeat send.
-        { idempotencyKey: `${CAMPAIGN_KEY}:v2:${r.id}` }
-      );
-      if (sendErr || !data) {
-        throw new Error(sendErr?.message ?? "unknown");
+        idempotencyKey: `${CAMPAIGN_KEY}:v2:${r.id}`,
+        tags: [
+          { name: "campaign", value: "martine_reactivation" },
+          { name: "batch", value: `d${batch}` },
+        ],
+      });
+      // null means the send gate denied this recipient (suppressed, no consent,
+      // frequency cap). Not a failure — record it as skipped so a retry of the
+      // batch does not keep re-attempting them.
+      if (!messageId) {
+        await sb
+          .from("campaign_recipients")
+          .update({
+            status: "skipped",
+            status_reason: "send_gate_denied",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", r.id);
+        result.skipped++;
+        continue;
       }
       await sb
         .from("campaign_recipients")
         .update({
           status: "sent",
-          resend_message_id: data.id,
+          resend_message_id: messageId,
           sent_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
           status_reason: `batch:${batch}`,

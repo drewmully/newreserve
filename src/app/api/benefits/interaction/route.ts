@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
-import { Resend } from "resend";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
+import { sendPlainText } from "@/lib/email/resend";
 import { getLoopRawSubscriptions } from "@/app/api/_lib/loopAdmin";
 import { resolveMemberTierFromVariantId } from "@/lib/membershipConfig";
 import { appendV1GoogleSheetSignup } from "@/lib/v1GoogleSheet";
@@ -39,16 +39,6 @@ interface FarSureRequest {
   dates: string;
   destination: string;
   notes: string;
-}
-
-let resendClient: Resend | null | undefined;
-
-function getResendClient(): Resend | null {
-  if (!process.env.RESEND_API_KEY) return null;
-  if (resendClient === undefined) {
-    resendClient = new Resend(process.env.RESEND_API_KEY);
-  }
-  return resendClient;
 }
 
 const ADMIN_EMAIL = "info@Mullybox.com";
@@ -252,7 +242,7 @@ async function inferTierFromSubscriptions(input: {
   return cachedActive ? "access" : null;
 }
 
-function buildEmailHtml(input: {
+interface BenefitNotification {
   eventId: string;
   uid: string;
   email: string;
@@ -263,7 +253,43 @@ function buildEmailHtml(input: {
   conciergeRequest?: ConciergeRequest | null;
   farSureRequest?: FarSureRequest | null;
   source: string;
-}): string {
+}
+
+/**
+ * Plain-text MIME part for the admin notification. The HTML table below is the
+ * part a human reads; this exists because every message now goes through
+ * sendPlainText, which always ships a text alternative.
+ */
+function buildEmailText(input: BenefitNotification): string {
+  const lines = [
+    `Benefit: ${input.benefit}`,
+    `Action:  ${input.action}`,
+    `Tier:    ${input.tier}`,
+    `Email:   ${input.email || "-"}`,
+    `UID:     ${input.uid}`,
+    `Source:  ${input.source}`,
+  ];
+  if (typeof input.enabled === "boolean") {
+    lines.push(`Enabled: ${input.enabled}`);
+  }
+  if (input.conciergeRequest) {
+    lines.push("", `Subject: ${input.conciergeRequest.subject}`, input.conciergeRequest.message);
+  }
+  if (input.farSureRequest) {
+    lines.push(
+      "",
+      `Golfers:     ${input.farSureRequest.golfers}`,
+      `Budget each: ${input.farSureRequest.budgetPerGolfer}`,
+      `Dates:       ${input.farSureRequest.dates}`,
+      `Destination: ${input.farSureRequest.destination}`,
+      input.farSureRequest.notes
+    );
+  }
+  lines.push("", `Event ID: ${input.eventId}`);
+  return lines.join("\n");
+}
+
+function buildEmailHtml(input: BenefitNotification): string {
   const actionDetail = (() => {
     if (input.benefit === "v1_virtual_coaching") {
       return "V1+ Virtual Coaching request submitted for review. Member should receive next steps within 1-3 days.";
@@ -592,11 +618,21 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const resend = getResendClient();
-  if (resend) {
+  if (process.env.RESEND_API_KEY) {
+    const notification: BenefitNotification = {
+      eventId: eventRef.id,
+      uid,
+      email,
+      tier,
+      benefit,
+      action,
+      enabled: typeof body.enabled === "boolean" ? body.enabled : undefined,
+      conciergeRequest,
+      farSureRequest,
+      source,
+    };
     try {
-      await resend.emails.send({
-        from: "Mully Benefits <noreply@mymully.com>",
+      await sendPlainText({
         to: ADMIN_EMAIL,
         subject:
           benefit === "concierge_support" && conciergeRequest
@@ -604,18 +640,10 @@ export async function POST(req: NextRequest) {
             : benefit === "far_sure_golf_tours_credit" && farSureRequest
               ? `[Benefits] Far & Sure golf tours credit - ${farSureRequest.destination}`
               : "[Benefits] V1+ coaching request submitted",
-        html: buildEmailHtml({
-          eventId: eventRef.id,
-          uid,
-          email,
-          tier,
-          benefit,
-          action,
-          enabled: typeof body.enabled === "boolean" ? body.enabled : undefined,
-          conciergeRequest,
-          farSureRequest,
-          source,
-        }),
+        text: buildEmailText(notification),
+        html: buildEmailHtml(notification),
+        sendClass: "transactional",
+        category: "benefits_interaction_notification",
       });
     } catch (err) {
       console.error("[benefits/interaction] Resend send failed:", err);
