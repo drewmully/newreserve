@@ -188,6 +188,8 @@ export async function POST(req: Request) {
         to: "drew@mymully.com",
         subject,
         text: lines,
+        sendClass: "transactional",
+        category: "simulatorclubs_apply",
         tags: [
           { name: "flow", value: "simulatorclubs_apply" },
           { name: "step", value: String(step) },

@@ -208,6 +208,9 @@ export async function GET(request: NextRequest) {
           subject,
           text,
           idempotencyKey: `proshop-abandon-${dedupeId}`,
+          sendClass: "lifecycle",
+          flow: "proshop_abandon",
+          category: "proshop_abandon",
           utmCampaign: "proshop_abandon_nudge",
           utmContent: product.slug,
           tags: [

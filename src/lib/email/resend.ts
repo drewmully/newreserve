@@ -1,7 +1,8 @@
 import { Resend } from "resend";
+import { gatedSend, type SendClass } from "./gate";
 
-export const FROM = "Drew Amato <drew@mymully.com>";
-export const REPLY_TO = "drew@mail.mymully.com";
+export const FROM = "Mully <info@mymully.com>";
+export const REPLY_TO = "info@mymully.com";
 
 export interface PlainTextEmail {
   to: string;
@@ -9,6 +10,38 @@ export interface PlainTextEmail {
   text: string;
   idempotencyKey?: string;
   tags?: { name: string; value: string }[];
+  /**
+   * Which gate rules apply. Defaults to `"transactional"` so existing call
+   * sites keep working and nothing is silently blocked — tag marketing sends
+   * explicitly.
+   */
+  sendClass?: SendClass;
+  /** Lifecycle flow this send belongs to, e.g. `"reserve"`. */
+  flow?: string;
+  /** Free-form template category, e.g. `"abandon_nudge"`. */
+  category?: string;
+  /** Step index within a lifecycle flow. */
+  step?: number;
+  /** Campaign identifier — set this on `"campaign"` sends. */
+  campaignId?: string;
+  /**
+   * Duplicate-send key. Defaults to `idempotencyKey`, which is already a
+   * natural per-send key at most call sites.
+   */
+  dedupeKey?: string;
+  /**
+   * Reply-To override. Only for operational mail that must thread back to a
+   * third party (e.g. an exchange request replying to the customer).
+   */
+  replyTo?: string;
+  /**
+   * Pre-rendered HTML body. When set it is sent verbatim — no UTM rewriting,
+   * no plain-text-to-HTML conversion. `text` is still required as the
+   * multipart fallback.
+   */
+  html?: string;
+  /** `X-Entity-Ref-ID` header value. Defaults to `idempotencyKey`. */
+  entityRefId?: string;
   /**
    * Value used for `utm_campaign` on any mymully.com link inside the email
    * body. If omitted, we auto-derive from `tags`:
@@ -199,8 +232,36 @@ function rewriteFirstPartyUrlsInPlainText(
   });
 }
 
+/**
+ * Every outbound email goes through here, and every one of them goes through
+ * the gate. Returns the provider message id, or null when the gate denied the
+ * send or another worker already claimed it — callers already treat null as
+ * "not sent".
+ */
 export async function sendPlainText(email: PlainTextEmail): Promise<string | null> {
+  // Single-use security links (Firebase magic sign-in, password reset) are
+  // transactional by definition.
+  const sendClass: SendClass = email.disableTracking
+    ? "transactional"
+    : (email.sendClass ?? "transactional");
+
+  return gatedSend(
+    {
+      to: email.to,
+      sendClass,
+      flow: email.flow,
+      category: email.category,
+      step: email.step,
+      campaignId: email.campaignId,
+      dedupeKey: email.dedupeKey ?? email.idempotencyKey,
+    },
+    () => deliver(email)
+  );
+}
+
+async function deliver(email: PlainTextEmail): Promise<string | null> {
   const resend = getResendClient();
+  const entityRefId = email.entityRefId ?? email.idempotencyKey;
 
   if (email.disableTracking) {
     // Security-link mode for single-use URLs (Firebase magic sign-in / password
@@ -218,12 +279,12 @@ export async function sendPlainText(email: PlainTextEmail): Promise<string | nul
     const { data, error } = await resend.emails.send(
       {
         from: FROM,
-        replyTo: REPLY_TO,
+        replyTo: email.replyTo ?? REPLY_TO,
         to: email.to,
         subject: email.subject,
         text: email.text,
         headers: {
-          "X-Entity-Ref-ID": email.idempotencyKey ?? "",
+          "X-Entity-Ref-ID": entityRefId ?? "",
         },
         ...(email.tags ? { tags: email.tags } : {}),
       },
@@ -236,20 +297,24 @@ export async function sendPlainText(email: PlainTextEmail): Promise<string | nul
   }
 
   const utmCampaign = resolveUtmCampaign(email.utmCampaign, email.tags);
-  const rewrittenText = rewriteFirstPartyUrlsInPlainText(
-    email.text,
-    utmCampaign,
-    email.utmContent
-  );
+
+  // A caller-supplied HTML body is already rendered (its own links, its own
+  // unsubscribe footer), so it ships verbatim rather than through the
+  // plain-text-to-HTML and UTM rewriters.
+  const html = email.html ?? toTrackableHtml(email.text, utmCampaign, email.utmContent);
+  const text = email.html
+    ? email.text
+    : rewriteFirstPartyUrlsInPlainText(email.text, utmCampaign, email.utmContent);
 
   const { data, error } = await resend.emails.send(
     {
       from: FROM,
-      replyTo: REPLY_TO,
+      replyTo: email.replyTo ?? REPLY_TO,
       to: email.to,
       subject: email.subject,
-      text: rewrittenText,
-      html: toTrackableHtml(email.text, utmCampaign, email.utmContent),
+      text,
+      html,
+      ...(entityRefId ? { headers: { "X-Entity-Ref-ID": entityRefId } } : {}),
       ...(email.tags ? { tags: email.tags } : {}),
     },
     email.idempotencyKey ? { idempotencyKey: email.idempotencyKey } : undefined

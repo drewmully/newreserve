@@ -296,6 +296,8 @@ export async function provisionPaidMemberFromLoop(
         subject: "Unlock your Mully account",
         text: `Hey${firstName ? ` ${firstName}` : ""},\n\nYour Mully membership is active. Click the link below to unlock your dashboard — no password needed:\n\n${magicLink}\n\nSee you inside,\nDrew`,
         disableTracking: true,
+        sendClass: "transactional",
+        category: "magic_link_unlock",
       });
 
       await userRef.set(
