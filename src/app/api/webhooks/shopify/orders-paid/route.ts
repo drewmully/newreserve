@@ -10,8 +10,9 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { verifyShopifyHmac } from "@/lib/events/verify";
+import { mirrorLegacyShopifyDelivery } from "@/lib/events/ingest";
 import type { QueryDocumentSnapshot } from "firebase-admin/firestore";
-import crypto from "crypto";
 import { randomUUID } from "crypto";
 import { dispatchAnalyticsEvent } from "@/app/api/_lib/analytics";
 import { getClientIp } from "@/app/api/_lib/clientIp";
@@ -72,30 +73,6 @@ async function triggerEmailFlow(
 
 // ─── HMAC verification ────────────────────────────────────────────────────────
 
-async function verifyShopifyHmac(
-  request: NextRequest,
-  rawBody: string
-): Promise<boolean> {
-  const secret = process.env.SHOPIFY_WEBHOOK_SECRET;
-  if (!secret) return false;
-
-  const hmacHeader = request.headers.get("x-shopify-hmac-sha256");
-  if (!hmacHeader) return false;
-
-  const computed = crypto
-    .createHmac("sha256", secret)
-    .update(rawBody, "utf8")
-    .digest("base64");
-
-  try {
-    return crypto.timingSafeEqual(
-      Buffer.from(computed, "base64"),
-      Buffer.from(hmacHeader, "base64")
-    );
-  } catch {
-    return false;
-  }
-}
 
 async function isDuplicateWebhook(request: NextRequest): Promise<boolean> {
   const webhookId = request.headers.get("x-shopify-webhook-id");
@@ -372,10 +349,12 @@ export async function POST(request: NextRequest) {
   const rawBody = await request.text();
 
   // ── Verify webhook signature ──────────────────────────────────────────────
-  const isValid = await verifyShopifyHmac(request, rawBody);
+  const isValid = verifyShopifyHmac(request.headers, rawBody);
   if (!isValid) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  await mirrorLegacyShopifyDelivery(request.headers, rawBody, "orders/paid");
 
   const isDuplicate = await isDuplicateWebhook(request);
   if (isDuplicate) {

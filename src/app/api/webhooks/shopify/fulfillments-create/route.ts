@@ -20,37 +20,13 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import crypto from "crypto";
 import { adminDb } from "@/lib/firebase-admin";
 import {
   getGiftOrderById,
   updateGiftOrderStatus,
 } from "@/lib/gifts/giftOrder";
-
-async function verifyShopifyHmac(
-  request: NextRequest,
-  rawBody: string
-): Promise<boolean> {
-  const secret = process.env.SHOPIFY_WEBHOOK_SECRET;
-  if (!secret) return false;
-
-  const hmacHeader = request.headers.get("x-shopify-hmac-sha256");
-  if (!hmacHeader) return false;
-
-  const computed = crypto
-    .createHmac("sha256", secret)
-    .update(rawBody, "utf8")
-    .digest("base64");
-
-  try {
-    return crypto.timingSafeEqual(
-      Buffer.from(computed, "base64"),
-      Buffer.from(hmacHeader, "base64")
-    );
-  } catch {
-    return false;
-  }
-}
+import { verifyShopifyHmac } from "@/lib/events/verify";
+import { mirrorLegacyShopifyDelivery } from "@/lib/events/ingest";
 
 async function isDuplicateWebhook(request: NextRequest): Promise<boolean> {
   const webhookId = request.headers.get("x-shopify-webhook-id");
@@ -85,9 +61,12 @@ interface FulfillmentBody {
 export async function POST(request: NextRequest) {
   const rawBody = await request.text();
 
-  if (!(await verifyShopifyHmac(request, rawBody))) {
+  if (!verifyShopifyHmac(request.headers, rawBody)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  await mirrorLegacyShopifyDelivery(request.headers, rawBody, "fulfillments/create");
+
   if (await isDuplicateWebhook(request)) {
     return NextResponse.json({ ok: true, duplicate: true });
   }

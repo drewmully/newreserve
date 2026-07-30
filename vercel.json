@@ -71,6 +71,14 @@
     {
       "path": "/api/admin/cron/ab-homepage-daily",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/events/reconcile",
+      "schedule": "20 * * * *"
+    },
+    {
+      "path": "/api/cron/events/retention",
+      "schedule": "40 8 * * *"
     }
   ]
 }
