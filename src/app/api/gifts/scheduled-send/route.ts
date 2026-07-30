@@ -74,6 +74,8 @@ export async function GET(request: NextRequest) {
           sizingUrl,
         }),
         idempotencyKey: `gift-recipient:${id}`,
+        sendClass: "transactional",
+        category: "gift_recipient_announcement",
         tags: [
           { name: "category", value: "gift_recipient_announcement" },
           { name: "gift_order_id", value: id },

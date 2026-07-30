@@ -108,6 +108,8 @@ export async function GET(request: NextRequest) {
           `Drew · Founder, Mully`,
         ].join("\n"),
         idempotencyKey: `gift-postship:${id}`,
+        sendClass: "transactional",
+        category: "gift_post_first_shipment",
         tags: [
           { name: "category", value: "gift_post_first_shipment" },
           { name: "gift_order_id", value: id },

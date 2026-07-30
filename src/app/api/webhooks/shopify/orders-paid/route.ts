@@ -679,6 +679,8 @@ export async function POST(request: NextRequest) {
               subject: "Unlock your Mully account",
               text: `Hey${firstName ? ` ${firstName}` : ""},\n\nYour membership is confirmed. Click the link below to unlock your dashboard:\n\n${magicLink}\n\nSee you inside,\nDrew`,
               disableTracking: true,
+              sendClass: "transactional",
+              category: "magic_link_unlock",
             });
 
             await triggerEmailFlow(uid, email, firstName, emailFlow);

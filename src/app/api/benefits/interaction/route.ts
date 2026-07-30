@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
-import { Resend } from "resend";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
+import { sendPlainText } from "@/lib/email/resend";
 import { getLoopRawSubscriptions } from "@/app/api/_lib/loopAdmin";
 import { resolveMemberTierFromVariantId } from "@/lib/membershipConfig";
 import { appendV1GoogleSheetSignup } from "@/lib/v1GoogleSheet";
@@ -39,16 +39,6 @@ interface FarSureRequest {
   dates: string;
   destination: string;
   notes: string;
-}
-
-let resendClient: Resend | null | undefined;
-
-function getResendClient(): Resend | null {
-  if (!process.env.RESEND_API_KEY) return null;
-  if (resendClient === undefined) {
-    resendClient = new Resend(process.env.RESEND_API_KEY);
-  }
-  return resendClient;
 }
 
 const ADMIN_EMAIL = "info@Mullybox.com";
@@ -250,6 +240,26 @@ async function inferTierFromSubscriptions(input: {
   const cachedActive =
     subscriptions.mullybox_active === true || cachedStatus === "active";
   return cachedActive ? "access" : null;
+}
+
+/** Multipart text fallback for the HTML admin notification. */
+function buildEmailText(input: {
+  eventId: string;
+  uid: string;
+  email: string;
+  tier: MemberTier;
+  benefit: ActionableBenefitKey;
+  action: BenefitAction;
+  source: string;
+}): string {
+  return [
+    `Benefit:  ${input.benefit}`,
+    `Action:   ${input.action}`,
+    `Member:   ${input.email} (${input.tier})`,
+    `UID:      ${input.uid}`,
+    `Event:    ${input.eventId}`,
+    `Source:   ${input.source}`,
+  ].join("\n");
 }
 
 function buildEmailHtml(input: {
@@ -592,18 +602,19 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const resend = getResendClient();
-  if (resend) {
+  if (process.env.RESEND_API_KEY) {
+    const subject =
+      benefit === "concierge_support" && conciergeRequest
+        ? `[Benefits] Concierge request - ${conciergeRequest.subject}`
+        : benefit === "far_sure_golf_tours_credit" && farSureRequest
+          ? `[Benefits] Far & Sure golf tours credit - ${farSureRequest.destination}`
+          : "[Benefits] V1+ coaching request submitted";
+
     try {
-      await resend.emails.send({
-        from: "Mully Benefits <noreply@mymully.com>",
+      await sendPlainText({
         to: ADMIN_EMAIL,
-        subject:
-          benefit === "concierge_support" && conciergeRequest
-            ? `[Benefits] Concierge request - ${conciergeRequest.subject}`
-            : benefit === "far_sure_golf_tours_credit" && farSureRequest
-              ? `[Benefits] Far & Sure golf tours credit - ${farSureRequest.destination}`
-              : "[Benefits] V1+ coaching request submitted",
+        subject,
+        text: buildEmailText({ eventId: eventRef.id, uid, email, tier, benefit, action, source }),
         html: buildEmailHtml({
           eventId: eventRef.id,
           uid,
@@ -616,6 +627,9 @@ export async function POST(req: NextRequest) {
           farSureRequest,
           source,
         }),
+        sendClass: "transactional",
+        category: "benefits_admin_notification",
+        idempotencyKey: `benefits-interaction:${eventRef.id}`,
       });
     } catch (err) {
       console.error("[benefits/interaction] Resend send failed:", err);

@@ -1,16 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
-import { Resend } from "resend";
 import { adminDb, adminAuth } from "@/lib/firebase-admin";
 import { createReviewToken } from "@/lib/registry-tokens";
+import { sendPlainText } from "@/lib/email/resend";
 
 const ADMIN_EMAIL = "info@Mullybox.com";
-let resendClient: Resend | null = null;
-
-function getResendClient(): Resend {
-  resendClient ??= new Resend(process.env.RESEND_API_KEY);
-  return resendClient;
-}
 
 async function verifyAuth(req: NextRequest): Promise<string | null> {
   const header = req.headers.get("Authorization");
@@ -202,15 +196,25 @@ export async function POST(req: NextRequest) {
   const userEmail = String(metadata.submitted_by_email ?? "");
 
   // Send email to admin
-  const { error: emailError } = await getResendClient().emails.send({
-    from: "Mullybox Club Registry <noreply@mymully.com>",
-    to: ADMIN_EMAIL,
-    subject: `New Club Registry Request — ${String(metadata.club_name ?? "Unknown")}`,
-    html: buildReviewEmailHtml(approveUrl, rejectUrl, metadata, userEmail),
-  });
-
-  if (emailError) {
-    console.error("[registry/apply] Resend error:", emailError);
+  try {
+    await sendPlainText({
+      to: ADMIN_EMAIL,
+      subject: `New Club Registry Request — ${String(metadata.club_name ?? "Unknown")}`,
+      text: [
+        `Club:      ${String(metadata.club_name ?? "Unknown")}`,
+        `Submitted: ${userEmail}`,
+        "",
+        `Approve: ${approveUrl}`,
+        `Reject:  ${rejectUrl}`,
+      ].join("\n"),
+      html: buildReviewEmailHtml(approveUrl, rejectUrl, metadata, userEmail),
+      sendClass: "transactional",
+      category: "registry_review_request",
+      // No dedupe key: a member may legitimately resubmit an application and
+      // each submission needs its own review email.
+    });
+  } catch (err) {
+    console.error("[registry/apply] Resend error:", err);
     // Application was saved — don't fail the request, just log
   }
 

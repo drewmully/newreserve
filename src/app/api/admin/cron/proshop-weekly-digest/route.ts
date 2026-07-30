@@ -211,6 +211,9 @@ export async function GET(request: NextRequest) {
               subject,
               text,
               idempotencyKey: `proshop-weekly-${weekKey}-${u.uid}`,
+              sendClass: "campaign",
+              campaignId: `proshop_weekly_${weekKey}`,
+              category: "proshop_weekly",
               utmCampaign: "proshop_weekly_digest",
               utmContent: weekKey,
               tags: [

@@ -73,6 +73,9 @@ async function processAbandonNudges(): Promise<{
           subject: tmpl.subject,
           text: tmpl.text,
           idempotencyKey: `reserve_abandon:${profile.profileId}`,
+          sendClass: "lifecycle",
+          flow: "reserve",
+          category: "abandon_nudge",
           tags: [
             { name: "flow", value: "reserve" },
             { name: "category", value: "abandon_nudge" },

@@ -180,6 +180,9 @@ export async function POST(
       text: state.textToSend,
       idempotencyKey: state.sendAttemptId,
       utmCampaign: "reply_drew",
+      // Human-approved 1:1 reply — exempt from the marketing frequency cap.
+      sendClass: "transactional",
+      category: "reply_drew",
     });
 
     await replyRef.update({

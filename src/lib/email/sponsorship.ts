@@ -67,6 +67,8 @@ Drew`;
     subject,
     text,
     idempotencyKey: `sponsor-attributed-${input.sponsorshipId}`,
+    sendClass: "transactional",
+    category: "sponsor_attributed",
     utmContent: isFirst ? "sponsor_attributed_first" : "sponsor_attributed",
     tags: [...BASE_TAGS, tag("event", "attributed"), tag("is_first", isFirst ? "true" : "false")],
   });
@@ -100,6 +102,8 @@ Drew`;
     subject,
     text,
     idempotencyKey: `sponsor-welcome-${input.sponsorshipId}`,
+    sendClass: "transactional",
+    category: "sponsored_welcome",
     utmContent: "sponsored_welcome",
     tags: [...BASE_TAGS, tag("event", "welcome")],
   });
@@ -136,6 +140,8 @@ ${def.title}. ${def.tagline}`;
     subject,
     text,
     idempotencyKey: `reward-${input.badge}-${input.rewardId}-${input.role}`,
+    sendClass: "transactional",
+    category: "badge_earned",
     utmContent: `badge_${input.badge}_${input.role}`,
     tags: [
       ...BASE_TAGS,
