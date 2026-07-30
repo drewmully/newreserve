@@ -12,10 +12,13 @@
  * (`@/lib/firebase-admin`) rather than re-initializing anything.
  *
  * STRICTLY READ-ONLY. This handler performs only `listCollections()`,
- * `count().get()`, projected `select(...).get()` reads, and `limit(1).get()` on
- * Firestore, plus `select()` on Supabase. There is deliberately no `set`, `add`,
- * `update`, `delete`, `create`, `insert`, `upsert`, batch, or transaction
- * anywhere in this file, against either datastore.
+ * `count().get()`, projected `select(...).get()` reads, `limit(1).get()`, and
+ * batched `getAll(...)` multi-gets on Firestore, plus `select()` on Supabase.
+ * There is deliberately no `set`, `add`, `update`, `delete`, `create`, `insert`,
+ * `upsert`, batch write, or transaction anywhere in this file, against either
+ * datastore. Note that a bare `.set(`/`.add(` grep now yields false positives:
+ * every hit is a JavaScript `Map.set` / `Set.add` on a local variable. The
+ * reliable check is to enumerate the `adminDb.` and Supabase query chains.
  *
  * Not a cron — do NOT add it to vercel.json. Invoke on demand.
  *
@@ -35,6 +38,14 @@
  *   ?emails=1    Include the actual backfill email list. PII — default OFF.
  *   ?chunk=300   Supabase `.in()` batch size (default 300, clamped 50-500).
  *   ?page=500    Firestore page size (default 500, clamped 100-1000).
+ *
+ * ?mode=profile-export
+ *   Reads target profile ids from `public._stg_quiz_backfill` and exports the
+ *   matching `styleProfiles` documents shaped 1:1 onto the columns of
+ *   `public.customer_style_profile`.
+ *
+ *   ?full=1      Include the per-profile record array. PII — default OFF.
+ *   ?chunk=300   Firestore getAll() batch size (default 300, clamped 50-500).
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -656,12 +667,487 @@ async function runQuizAudit(req: NextRequest, startedAt: number) {
   });
 }
 
+// ─── profile-export ───────────────────────────────────────────────────────────
+
+/**
+ * Expected location of every field we export, verified against
+ * `src/lib/styleProfiles/types.ts:49-106` and the writer in
+ * `src/lib/styleProfiles/admin.ts:52-79`.
+ *
+ * `answers.*` holds the seven preference answers; `styleBucket`, `consent`,
+ * `status`, `nurtureStage` and the whole `utm` block are top-level. Rather than
+ * trust that, every read goes through `readAt()`, which records a
+ * `fieldPathAnomalies` entry whenever a field is missing from its expected
+ * container but present in one of the others. Real documents get to contradict
+ * the type definition, and we hear about it.
+ */
+const EXPECTED_PATHS: Record<string, [container: string | null, leaf: string]> = {
+  anonId: [null, "anonId"],
+  styleBucket: [null, "styleBucket"],
+  status: [null, "status"],
+  nurtureStage: [null, "nurtureStage"],
+  golfStyle: ["answers", "golfStyle"],
+  fit: ["answers", "fit"],
+  topSize: ["answers", "topSize"],
+  bottomSize: ["answers", "bottomSize"],
+  playFrequency: ["answers", "playFrequency"],
+  categoryPrefs: ["answers", "categoryPrefs"],
+  favoriteBrands: ["answers", "favoriteBrands"],
+  utmSource: ["utm", "source"],
+  utmMedium: ["utm", "medium"],
+  utmCampaign: ["utm", "campaign"],
+  utmContent: ["utm", "content"],
+  utmTerm: ["utm", "term"],
+  gclid: ["utm", "gclid"],
+  referrer: ["utm", "referrer"],
+  landingPath: ["utm", "landingPath"],
+};
+
+/** Every key the schema accounts for, so drift can be reported by name. */
+const KNOWN_TOP_LEVEL = new Set([
+  "profileId", "email", "anonId", "createdAt", "updatedAt", "styleBucket",
+  "answers", "status", "emailCaptured", "consent", "utm", "nurtureStage",
+  "lastEmailedAt", "shopifyOrderId", "convertedAt", "abandonNudgeSentAt",
+  "checkoutStartedAt", "checkoutToken",
+]);
+
+const CONTAINERS = [null, "answers", "utm"] as const;
+
+function asRecord(v: unknown): Record<string, unknown> | null {
+  return typeof v === "object" && v !== null && !Array.isArray(v)
+    ? (v as Record<string, unknown>)
+    : null;
+}
+
+interface PathAnomaly {
+  profileId: string;
+  field: string;
+  expectedPath: string;
+  foundAtPath: string;
+}
+
+/**
+ * Reads `field` from its expected container. If absent there, probes the other
+ * containers for the same leaf name and reports where it actually turned up.
+ * Returns `{ present: false }` only when the leaf exists nowhere.
+ */
+function readAt(
+  data: Record<string, unknown>,
+  field: string,
+  profileId: string,
+  anomalies: PathAnomaly[]
+): { present: boolean; value: unknown } {
+  const [container, leaf] = EXPECTED_PATHS[field];
+  const expectedPath = container ? `${container}.${leaf}` : leaf;
+
+  const expectedHost = container ? asRecord(data[container]) : data;
+  if (expectedHost && Object.prototype.hasOwnProperty.call(expectedHost, leaf)) {
+    return { present: true, value: expectedHost[leaf] };
+  }
+
+  for (const alt of CONTAINERS) {
+    if (alt === container) continue;
+    const host = alt ? asRecord(data[alt]) : data;
+    if (host && Object.prototype.hasOwnProperty.call(host, leaf)) {
+      anomalies.push({
+        profileId,
+        field,
+        expectedPath,
+        foundAtPath: alt ? `${alt}.${leaf}` : leaf,
+      });
+      return { present: true, value: host[leaf] };
+    }
+  }
+
+  return { present: false, value: undefined };
+}
+
+function asStringOrNull(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const t = v.trim();
+  return t.length > 0 ? t : null;
+}
+
+function toIso(v: unknown): string | null {
+  if (v == null) return null;
+  if (v instanceof Date) return v.toISOString();
+  const rec = asRecord(v);
+  if (rec) {
+    if (typeof (rec as { toDate?: unknown }).toDate === "function") {
+      try {
+        return (rec as unknown as { toDate: () => Date }).toDate().toISOString();
+      } catch {
+        return null;
+      }
+    }
+    const secs = rec._seconds ?? rec.seconds;
+    if (typeof secs === "number") return new Date(secs * 1000).toISOString();
+  }
+  if (typeof v === "string") {
+    const d = new Date(v);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  }
+  if (typeof v === "number") return new Date(v).toISOString();
+  return null;
+}
+
+type ConsentState = "true" | "false" | "missing" | "non_boolean";
+
+interface ShapeAnomaly {
+  profileId: string;
+  field: string;
+  reason: "absent" | "not_an_array";
+  rawType: string;
+  rawValue?: unknown;
+}
+
+interface ProfileRecord {
+  profileId: string;
+  email: string | null;
+  anonId: string | null;
+  styleBucket: string | null;
+  golfStyle: string | null;
+  fit: string | null;
+  topSize: string | null;
+  bottomSize: string | null;
+  playFrequency: string | null;
+  categoryPrefs: string[];
+  favoriteBrands: string[];
+  /** true | false | null. NEVER coerced — null means "no usable boolean". */
+  consent: boolean | null;
+  /** Disambiguates the null above. The backfill must branch on this, not consent. */
+  consentState: ConsentState;
+  consentRaw?: { type: string; value: unknown };
+  status: string | null;
+  nurtureStage: number | null;
+  utmSource: string | null;
+  utmMedium: string | null;
+  utmCampaign: string | null;
+  utmContent: string | null;
+  utmTerm: string | null;
+  gclid: string | null;
+  referrer: string | null;
+  landingPath: string | null;
+  createdAt: string | null;
+}
+
+/**
+ * Pulls the target profile ids out of the staging table.
+ *
+ * SELECT only, `.schema("public")` qualified. Paged with `.range()` because
+ * PostgREST caps a default response at 1000 rows and the staging table holds
+ * more than that — an unpaged read would silently truncate the export, which is
+ * precisely the shortfall this mode exists to prevent.
+ */
+async function loadStagingProfileIds(
+  deadline: number
+): Promise<{ ids: string[]; rows: number; truncated: boolean; error: string | null }> {
+  let sb: ReturnType<typeof getSupabaseService>;
+  try {
+    sb = getSupabaseService();
+  } catch (err) {
+    return {
+      ids: [],
+      rows: 0,
+      truncated: true,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+
+  const PAGE = 1000;
+  const ids: string[] = [];
+  let rows = 0;
+
+  for (let offset = 0; ; offset += PAGE) {
+    if (Date.now() > deadline) {
+      return { ids, rows, truncated: true, error: null };
+    }
+    const { data, error } = await sb
+      .schema("public")
+      .from("_stg_quiz_backfill")
+      .select("profile_id")
+      .not("profile_id", "is", null)
+      .order("profile_id", { ascending: true })
+      .range(offset, offset + PAGE - 1);
+
+    if (error) {
+      return { ids, rows, truncated: true, error: error.message };
+    }
+    if (!data || data.length === 0) break;
+
+    rows += data.length;
+    for (const row of data) {
+      const raw = (row as { profile_id: unknown }).profile_id;
+      if (typeof raw === "string" && raw.trim()) ids.push(raw.trim().toLowerCase());
+    }
+    if (data.length < PAGE) break;
+  }
+
+  return { ids, rows, truncated: false, error: null };
+}
+
+async function runProfileExport(req: NextRequest, startedAt: number) {
+  const sp = req.nextUrl.searchParams;
+  const includeFull = sp.get("full") === "1";
+  const chunkSize = clampInt(sp.get("chunk"), 300, 50, 500);
+  const deadline = startedAt + AUDIT_BUDGET_MS;
+
+  const errors: Record<string, string> = {};
+  const stoppedAt: string[] = [];
+  let truncated = false;
+
+  const staging = await loadStagingProfileIds(deadline);
+  if (staging.error) errors.staging = staging.error;
+  if (staging.truncated) {
+    truncated = true;
+    stoppedAt.push(`staging read stopped after ${staging.rows} rows`);
+  }
+
+  // A staging read that failed or returned nothing must never look like a
+  // successful export of zero people.
+  if (staging.ids.length === 0) {
+    return NextResponse.json(
+      {
+        diagnostic: "firestore-inventory",
+        mode: "profile-export",
+        readOnly: true,
+        generatedAt: new Date().toISOString(),
+        elapsedMs: Date.now() - startedAt,
+        truncated: true,
+        stoppedAt: ["no profile ids read from public._stg_quiz_backfill"],
+        errors: Object.keys(errors).length > 0 ? errors : null,
+        requestedIds: 0,
+        foundDocs: 0,
+        missingDocs: 0,
+        notes: [
+          "ABORTED: the staging table yielded no profile ids. This is NOT an empty result set — treat it as a failure and do not conclude there is nothing to export.",
+        ],
+      },
+      { status: 500 }
+    );
+  }
+
+  const uniqueIds = [...new Set(staging.ids)];
+
+  const records: ProfileRecord[] = [];
+  const missingIds: string[] = [];
+  const pathAnomalies: PathAnomaly[] = [];
+  const shapeAnomalies: ShapeAnomaly[] = [];
+  const unexpectedTopLevelFields: Record<string, number> = {};
+  const statusCounts: Record<string, number> = {};
+  const consentCounts = { true: 0, false: 0, missing: 0 };
+  const consentNonBooleanTypes: Record<string, number> = {};
+  const consentNonBooleanSamples: Array<{ profileId: string; type: string; value: unknown }> = [];
+  let consentNonBoolean = 0;
+  let processed = 0;
+
+  for (let i = 0; i < uniqueIds.length; i += chunkSize) {
+    if (Date.now() > deadline) {
+      truncated = true;
+      stoppedAt.push(
+        `Firestore getAll stopped after ${processed} of ${uniqueIds.length} ids`
+      );
+      break;
+    }
+
+    const slice = uniqueIds.slice(i, i + chunkSize);
+    const refs = slice.map((id) => adminDb.collection("styleProfiles").doc(id));
+
+    let snaps;
+    try {
+      // Batched multi-get: one round trip per chunk instead of one per doc.
+      snaps = await adminDb.getAll(...refs);
+    } catch (err) {
+      errors[`getAll_offset_${i}`] =
+        err instanceof Error ? err.message : String(err);
+      truncated = true;
+      stoppedAt.push(`getAll threw at offset ${i}`);
+      break;
+    }
+
+    for (const snap of snaps) {
+      processed++;
+      if (!snap.exists) {
+        missingIds.push(snap.id);
+        continue;
+      }
+      const data = (snap.data() ?? {}) as Record<string, unknown>;
+      const profileId = snap.id;
+
+      for (const key of Object.keys(data)) {
+        if (!KNOWN_TOP_LEVEL.has(key)) bump(unexpectedTopLevelFields, key);
+      }
+
+      // ── consent: three states, never coerced ────────────────────────────
+      // createStyleProfile (admin.ts:70) always writes `consent: false`, so an
+      // absent field means the document predates the field or was written by
+      // something else. Collapsing that into `false` would silently opt someone
+      // out; collapsing it into `true` would silently opt them in. Both are
+      // wrong, so absent stays absent all the way to the caller.
+      let consent: boolean | null = null;
+      let consentState: ConsentState;
+      let consentRaw: { type: string; value: unknown } | undefined;
+
+      if (!Object.prototype.hasOwnProperty.call(data, "consent")) {
+        consentState = "missing";
+        consentCounts.missing++;
+      } else {
+        const raw = data.consent;
+        if (typeof raw === "boolean") {
+          consent = raw;
+          consentState = raw ? "true" : "false";
+          if (raw) consentCounts.true++;
+          else consentCounts.false++;
+        } else {
+          consentState = "non_boolean";
+          consentNonBoolean++;
+          const t = raw === null ? "null" : typeof raw;
+          bump(consentNonBooleanTypes, t);
+          consentRaw = { type: t, value: raw };
+          if (consentNonBooleanSamples.length < 20) {
+            consentNonBooleanSamples.push({ profileId, type: t, value: raw });
+          }
+        }
+      }
+
+      // ── arrays: [] is a real answer, so it is preserved, never nulled ────
+      const readArray = (field: "categoryPrefs" | "favoriteBrands"): string[] => {
+        const r = readAt(data, field, profileId, pathAnomalies);
+        if (!r.present) {
+          shapeAnomalies.push({
+            profileId,
+            field,
+            reason: "absent",
+            rawType: "undefined",
+          });
+          return [];
+        }
+        if (!Array.isArray(r.value)) {
+          shapeAnomalies.push({
+            profileId,
+            field,
+            reason: "not_an_array",
+            rawType: r.value === null ? "null" : typeof r.value,
+            rawValue: r.value,
+          });
+          return [];
+        }
+        return r.value.map((x) => (typeof x === "string" ? x : String(x)));
+      };
+
+      const nurtureRaw = readAt(data, "nurtureStage", profileId, pathAnomalies).value;
+      const status = asStringOrNull(readAt(data, "status", profileId, pathAnomalies).value);
+      bump(statusCounts, status ?? "<missing>");
+
+      records.push({
+        profileId,
+        email: normEmail(data.email),
+        anonId: asStringOrNull(readAt(data, "anonId", profileId, pathAnomalies).value),
+        styleBucket: asStringOrNull(readAt(data, "styleBucket", profileId, pathAnomalies).value),
+        golfStyle: asStringOrNull(readAt(data, "golfStyle", profileId, pathAnomalies).value),
+        fit: asStringOrNull(readAt(data, "fit", profileId, pathAnomalies).value),
+        topSize: asStringOrNull(readAt(data, "topSize", profileId, pathAnomalies).value),
+        bottomSize: asStringOrNull(readAt(data, "bottomSize", profileId, pathAnomalies).value),
+        playFrequency: asStringOrNull(readAt(data, "playFrequency", profileId, pathAnomalies).value),
+        categoryPrefs: readArray("categoryPrefs"),
+        favoriteBrands: readArray("favoriteBrands"),
+        consent,
+        consentState,
+        ...(consentRaw ? { consentRaw } : {}),
+        status,
+        nurtureStage: typeof nurtureRaw === "number" ? nurtureRaw : null,
+        utmSource: asStringOrNull(readAt(data, "utmSource", profileId, pathAnomalies).value),
+        utmMedium: asStringOrNull(readAt(data, "utmMedium", profileId, pathAnomalies).value),
+        utmCampaign: asStringOrNull(readAt(data, "utmCampaign", profileId, pathAnomalies).value),
+        utmContent: asStringOrNull(readAt(data, "utmContent", profileId, pathAnomalies).value),
+        utmTerm: asStringOrNull(readAt(data, "utmTerm", profileId, pathAnomalies).value),
+        gclid: asStringOrNull(readAt(data, "gclid", profileId, pathAnomalies).value),
+        referrer: asStringOrNull(readAt(data, "referrer", profileId, pathAnomalies).value),
+        landingPath: asStringOrNull(readAt(data, "landingPath", profileId, pathAnomalies).value),
+        createdAt: toIso(data.createdAt),
+      });
+    }
+  }
+
+  const tallied =
+    consentCounts.true + consentCounts.false + consentCounts.missing + consentNonBoolean;
+
+  return NextResponse.json({
+    diagnostic: "firestore-inventory",
+    mode: "profile-export",
+    readOnly: true,
+    generatedAt: new Date().toISOString(),
+    elapsedMs: Date.now() - startedAt,
+    truncated,
+    stoppedAt: stoppedAt.length > 0 ? stoppedAt : null,
+    errors: Object.keys(errors).length > 0 ? errors : null,
+    params: { includeFull, chunkSize },
+
+    stagingRowsWithProfileId: staging.rows,
+    requestedIds: uniqueIds.length,
+    duplicateIdsInStaging: staging.ids.length - uniqueIds.length,
+    foundDocs: records.length,
+    missingDocs: missingIds.length,
+    missingIds,
+
+    consentCounts,
+    consentNonBoolean,
+    consentNonBooleanTypes,
+    consentNonBooleanSamples,
+    consentTallyMatchesFoundDocs: tallied === records.length,
+
+    statusCounts,
+    fieldPathAnomalyCount: pathAnomalies.length,
+    fieldPathAnomalies: pathAnomalies.slice(0, 200),
+    shapeAnomalyCount: shapeAnomalies.length,
+    shapeAnomalies: shapeAnomalies.slice(0, 200),
+    unexpectedTopLevelFields,
+
+    recordCount: records.length,
+    records: includeFull ? records : null,
+
+    notes: [
+      "READ-ONLY. Firestore: getAll() multi-get. Supabase: select() on public._stg_quiz_backfill.",
+      "consent is three-state. `consent` is true/false/null and `consentState` is true|false|missing|non_boolean. A missing field is NEVER coerced to false or true — branch on consentState, not on consent, or you will silently opt someone in or out.",
+      "consentCounts covers only real booleans plus absent. Non-boolean values are counted separately in consentNonBoolean; the four buckets sum to foundDocs when consentTallyMatchesFoundDocs is true.",
+      "categoryPrefs and favoriteBrands are always arrays. [] is a genuine answer and is preserved. A stored value that was absent or not an array is returned as [] AND listed in shapeAnomalies — check that list before trusting an empty array on those profileIds.",
+      "Field paths were verified against src/lib/styleProfiles/types.ts:49-106 at build time and are re-verified per document at run time: anything found outside its expected container is reported in fieldPathAnomalies rather than silently read or silently dropped.",
+      "missingIds are ids present in staging with no styleProfiles document. Those people get no preference row; the list is returned in full, never truncated.",
+      includeFull
+        ? "records CONTAINS RAW EMAIL ADDRESSES because ?full=1 was passed. Handle as PII."
+        : "records is withheld. Pass ?full=1 to include per-profile rows (PII).",
+      truncated
+        ? "TRUNCATED — this run is incomplete and WILL under-populate the backfill. See stoppedAt. Do not use it as a source."
+        : "Complete run: every staging id was looked up.",
+    ],
+  });
+}
+
 export async function GET(req: NextRequest) {
   if (!isAuthorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const startedAtGlobal = Date.now();
+  if (req.nextUrl.searchParams.get("mode") === "profile-export") {
+    try {
+      return await runProfileExport(req, startedAtGlobal);
+    } catch (err) {
+      return NextResponse.json(
+        {
+          diagnostic: "firestore-inventory",
+          mode: "profile-export",
+          readOnly: true,
+          truncated: true,
+          error: "profile-export failed",
+          detail: err instanceof Error ? err.message : String(err),
+          elapsedMs: Date.now() - startedAtGlobal,
+        },
+        { status: 500 }
+      );
+    }
+  }
+
   if (req.nextUrl.searchParams.get("mode") === "quiz-audit") {
     try {
       return await runQuizAudit(req, startedAtGlobal);
