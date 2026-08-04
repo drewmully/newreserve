@@ -402,6 +402,31 @@ async function claimSend(req: GateRequest, ctx: GateContext): Promise<Claim> {
   return { status: "claimed", sendLogId: (data as { id: number }).id };
 }
 
+/**
+ * Root cause (Phase 0 diagnosis): `service_role` in Postgres has INSERT /
+ * SELECT on `public.send_log` but NOT `UPDATE` — only the `postgres` role
+ * does. The claim INSERT in {@link claimSend} therefore always succeeds,
+ * but every settle UPDATE below is rejected by Postgres at the grant level
+ * (PostgREST surfaces this as `{ error: { code: '42501', message:
+ * 'permission denied for table send_log' } }`, not a thrown exception), and
+ * the old code only `console.error`d it — so 0 of 223 rows ever moved past
+ * `queued`, deterministically, on every single attempt. See
+ * `db/2026-08-04-grant-send-log-update.sql` for the grant fix; that SQL has
+ * NOT been applied by this change (no production writes were made).
+ *
+ * This rewrite assumes the grant will be fixed out-of-band and makes settle:
+ *   1. Idempotent — the UPDATE's WHERE clause requires `status = 'queued'`,
+ *      so re-running settle for a row that already settled (e.g. the retry
+ *      below racing a previous invocation, or two workers) is a no-op rather
+ *      than double-writing or clobbering a later state.
+ *   2. Retried once on any error (transient network/grant issues get a
+ *      second chance a beat later).
+ *   3. Loud and observable on final failure: logs with a distinct,
+ *      greppable prefix and — critically — writes the failure into
+ *      `send_log.error` via a second, minimal fallback UPDATE (status
+ *      untouched) so the row is never silently stuck with `error IS NULL`
+ *      the way all 223 original rows are.
+ */
 async function settleSend(
   ctx: GateContext,
   sendLogId: number,
@@ -423,11 +448,68 @@ async function settleSend(
           dedupe_key: null,
         };
 
-  const { error } = await ctx.sb.from(SEND_LOG).update(patch).eq("id", sendLogId);
-  if (error) {
+  const attempt = async (): Promise<{ error: { message: string; code?: string } | null }> => {
+    // `.eq("status", "queued")` is what makes this idempotent: once a row
+    // has moved to 'sent' or 'failed' a later/duplicate settle call matches
+    // zero rows instead of overwriting a terminal state.
+    const { error, data } = await ctx.sb
+      .from(SEND_LOG)
+      .update(patch)
+      .eq("id", sendLogId)
+      .eq("status", "queued")
+      .select("id");
+    if (error) return { error };
+    if (!data || data.length === 0) {
+      // Not an error: either already settled by a previous attempt, or the
+      // row was never in 'queued' (shouldn't happen for a fresh claim).
+      console.warn(
+        `[email/gate] settle no-op for send_log ${sendLogId}: row not in 'queued' state (already settled or missing)`
+      );
+    }
+    return { error: null };
+  };
+
+  let lastError: { message: string; code?: string } | null = null;
+  for (let i = 0; i < 2; i++) {
+    const { error } = await attempt();
+    if (!error) return;
+    lastError = error;
     console.error(
-      `[email/gate] failed to settle send_log ${sendLogId} as ${outcome.status}:`,
-      error.message
+      `[email/gate] SETTLE_FAILED (attempt ${i + 1}/2) send_log ${sendLogId} -> ${outcome.status}:`,
+      error.message,
+      error.code ? `(code ${error.code})` : ""
+    );
+  }
+
+  // Both attempts failed. Log loudly with a distinct, greppable marker and
+  // make one last effort to at least record the failure reason on the row —
+  // a minimal patch (error only; status is NOT changed, since we don't know
+  // the row's true state) so operators/backfill scripts can find it instead
+  // of it looking like a normal, silent 'queued' row.
+  console.error(
+    `[email/gate] SETTLE_FAILED_TERMINAL send_log ${sendLogId}: gave up after 2 attempts trying to settle as '${outcome.status}'. ` +
+      `Underlying error: ${lastError?.message ?? "unknown"}${lastError?.code ? ` (code ${lastError.code})` : ""}. ` +
+      `This send_log row's status/sent_at/provider_message_id were NOT updated — it needs backfill/reconciliation.`
+  );
+
+  try {
+    const errorNote = `SETTLE_FAILED: intended=${outcome.status}; ${
+      lastError?.message ?? "unknown error"
+    }`.slice(0, 500);
+    const { error: fallbackError } = await ctx.sb
+      .from(SEND_LOG)
+      .update({ error: errorNote })
+      .eq("id", sendLogId);
+    if (fallbackError) {
+      console.error(
+        `[email/gate] SETTLE_FAILED_TERMINAL send_log ${sendLogId}: even the fallback error-only write failed:`,
+        fallbackError.message
+      );
+    }
+  } catch (err) {
+    console.error(
+      `[email/gate] SETTLE_FAILED_TERMINAL send_log ${sendLogId}: fallback error-write threw:`,
+      err instanceof Error ? err.message : String(err)
     );
   }
 }

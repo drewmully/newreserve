@@ -585,6 +585,99 @@ describe("gatedSend", () => {
     expect(String(update?.payload?.error)).toContain("rate limited");
   });
 
+  it("retries the settle UPDATE once and writes the error into send_log.error when every attempt is permission-denied (the production root cause)", async () => {
+    // Simulates the real production condition: service_role lacks UPDATE on
+    // send_log, so every settle attempt comes back 42501 permission denied.
+    getSupabaseServiceMock.mockReturnValue(
+      makeSupabase((call) => {
+        if (call.table === "suppression_list") return { data: [], error: null };
+        if (call.table === "customers") return { data: [], error: null };
+        if (call.table === "send_log") {
+          if (call.op === "insert") return { data: { id: 4242 }, error: null };
+          if (call.op === "update") {
+            // First two calls are the real settle patch (both attempts fail);
+            // the third is the fallback error-only write, which we let succeed.
+            if ("error" in (call.payload ?? {}) && Object.keys(call.payload ?? {}).length === 1) {
+              return { data: [{ id: 4242 }], error: null };
+            }
+            return {
+              data: null,
+              error: { message: "permission denied for table send_log", code: "42501" },
+            };
+          }
+          return { error: null };
+        }
+        throw new Error(`unexpected table ${call.table}`);
+      })
+    );
+    firestoreGetMock.mockResolvedValue({ docs: [] });
+
+    const { gatedSend } = await loadGate();
+    const errorSpy = vi.spyOn(console, "error");
+
+    const id = await gatedSend(
+      { to: "member@example.com", sendClass: "transactional" },
+      async () => "provider_xyz"
+    );
+
+    // The provider send itself succeeded; gatedSend still returns its id even
+    // though the send_log settle failed — the failure must not be swallowed
+    // silently, but it also must not make gatedSend throw for a successful send.
+    expect(id).toBe("provider_xyz");
+
+    const updates = calls.filter((c) => c.table === "send_log" && c.op === "update");
+    // 2 retried settle attempts + 1 fallback error-only write.
+    expect(updates.length).toBe(3);
+    expect(updates[0].payload).toMatchObject({ status: "sent", provider_message_id: "provider_xyz" });
+    expect(updates[1].payload).toMatchObject({ status: "sent", provider_message_id: "provider_xyz" });
+    expect(Object.keys(updates[2].payload ?? {})).toEqual(["error"]);
+    expect(String(updates[2].payload?.error)).toContain("SETTLE_FAILED");
+
+    // Loud, greppable logging — not a single swallowed console.error.
+    const loggedTerminal = errorSpy.mock.calls.some((args) =>
+      args.some((a) => typeof a === "string" && a.includes("SETTLE_FAILED_TERMINAL"))
+    );
+    expect(loggedTerminal).toBe(true);
+  });
+
+  it("settle is idempotent: a no-op when the row is no longer 'queued' does not error or double-write", async () => {
+    getSupabaseServiceMock.mockReturnValue(
+      makeSupabase((call) => {
+        if (call.table === "suppression_list") return { data: [], error: null };
+        if (call.table === "customers") return { data: [], error: null };
+        if (call.table === "send_log") {
+          if (call.op === "insert") return { data: { id: 4242 }, error: null };
+          if (call.op === "update") {
+            // The row already settled (status != 'queued'), so the
+            // status='queued' filter matches zero rows -- not an error.
+            return { data: [], error: null };
+          }
+          return { error: null };
+        }
+        throw new Error(`unexpected table ${call.table}`);
+      })
+    );
+    firestoreGetMock.mockResolvedValue({ docs: [] });
+
+    const { gatedSend } = await loadGate();
+    const warnSpy = vi.spyOn(console, "warn");
+
+    const id = await gatedSend(
+      { to: "member@example.com", sendClass: "transactional" },
+      async () => "provider_already_settled"
+    );
+
+    expect(id).toBe("provider_already_settled");
+    const updates = calls.filter((c) => c.table === "send_log" && c.op === "update");
+    // No retry, no fallback error write -- a zero-row match is treated as
+    // already-settled, not a failure.
+    expect(updates.length).toBe(1);
+    const loggedNoOp = warnSpy.mock.calls.some((args) =>
+      args.some((a) => typeof a === "string" && a.includes("settle no-op"))
+    );
+    expect(loggedNoOp).toBe(true);
+  });
+
   it("sends without a log row when the database is down and the send is transactional", async () => {
     getSupabaseServiceMock.mockImplementation(() => {
       throw new Error("supabase down");
