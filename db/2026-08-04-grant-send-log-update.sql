@@ -1,0 +1,40 @@
+-- Phase 0 repairs: fix the send-log settle root cause.
+--
+-- Diagnosis (read-only, verified against production Supabase project
+-- xnfjdbpjuaezxjgargto on 2026-08-04):
+--
+--   select grantee, privilege_type
+--   from information_schema.role_table_grants
+--   where table_schema = 'public' and table_name = 'send_log';
+--
+--   grantee       | privilege_type
+--   --------------+---------------
+--   postgres      | INSERT/SELECT/UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER
+--   anon          | INSERT/SELECT/TRUNCATE/REFERENCES/TRIGGER   (no UPDATE)
+--   authenticated | INSERT/SELECT/TRUNCATE/REFERENCES/TRIGGER   (no UPDATE)
+--   service_role  | INSERT/SELECT/TRUNCATE/REFERENCES/TRIGGER   (no UPDATE)
+--
+-- The app authenticates as `service_role` (src/app/api/_lib/supabaseService.ts).
+-- service_role can INSERT the claim row (src/lib/email/gate.ts claimSend) but
+-- every settle UPDATE (src/lib/email/gate.ts settleSend, ~L405-497 before this
+-- patch) is rejected by Postgres at the grant level. PostgREST surfaces this
+-- as `{ error: { code: '42501', message: 'permission denied for table
+-- send_log' } }` -- not a thrown exception -- and the pre-patch code only
+-- console.error'd it, so the row was left at status='queued' forever with
+-- error IS NULL. This is why the failure is 0-for-223 and deterministic
+-- rather than intermittent: it happens on every single settle call, with no
+-- exceptions, because it's a grants problem, not a timeout or logic bug.
+--
+-- Compare with public.suppression_list and public.customers, both of which
+-- DO grant UPDATE to service_role -- this table is the outlier.
+--
+-- THIS FILE HAS NOT BEEN RUN. Per the Phase 0 task constraints, no
+-- statement that writes to the production database was executed. This is
+-- the exact statement an operator should run (e.g. via `supabase db
+-- execute` or the SQL editor) to restore parity with the other tables:
+
+GRANT UPDATE, DELETE ON TABLE public.send_log TO service_role;
+
+-- After applying, back-settle the stranded rows with:
+--   pnpm tsx scripts/backfill-send-log-settle.ts            (dry run, default)
+--   pnpm tsx scripts/backfill-send-log-settle.ts --commit    (writes)
