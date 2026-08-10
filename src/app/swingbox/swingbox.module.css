@@ -249,34 +249,38 @@
   margin-top: 3px;
   opacity: 0.9;
 }
-.heroImageMeta {
-  background: #fff;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 14px 18px;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+.heroChips {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
-@media (max-width: 520px) {
-  .heroImageMeta { grid-template-columns: 1fr; }
-}
-.metaRow {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
+.heroChip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 14px;
   font-family: var(--font-mono);
-  font-size: 12.5px;
-  padding: 4px 0;
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
 }
-.heroImageMeta .metaRow + .metaRow {
-  border-left: 1px dashed var(--line);
-  padding-left: 14px;
+.heroChipLabel {
+  color: var(--ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 10.5px;
 }
-@media (max-width: 520px) {
-  .heroImageMeta .metaRow + .metaRow { border-left: 0; padding-left: 0; border-top: 1px dashed var(--line); padding-top: 8px; }
+.heroChipValue {
+  color: var(--fairway);
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
-.metaRow b { color: var(--fairway); font-weight: 500; }
 
 /* ---------- STRIP ---------- */
 .strip {
@@ -446,11 +450,32 @@
 @media (max-width: 900px) { .irvingGrid { grid-template-columns: 1fr; } }
 .portrait {
   position: relative;
+  display: block;
   border-radius: 14px;
   aspect-ratio: 4 / 5;
   overflow: hidden;
   background: var(--turf-deep);
   box-shadow: 0 30px 60px -30px rgba(30,61,47,0.5);
+  text-decoration: none;
+  color: inherit;
+  transition: transform 220ms ease, box-shadow 220ms ease;
+}
+.portrait:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 40px 70px -30px rgba(30,61,47,0.55);
+}
+.portrait:hover .portraitImg { transform: scale(1.02); }
+.portrait:focus-visible {
+  outline: 2px solid var(--flag);
+  outline-offset: 3px;
+}
+.portraitArrow {
+  display: inline-block;
+  margin-left: 6px;
+  transition: transform 220ms ease;
+}
+.portrait:hover .portraitArrow {
+  transform: translate(2px, -2px);
 }
 .portraitImg {
   display: block;
@@ -458,6 +483,7 @@
   height: 100%;
   object-fit: cover;
   object-position: center 20%;
+  transition: transform 400ms ease;
 }
 .portraitOverlay {
   position: absolute;

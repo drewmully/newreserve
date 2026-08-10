@@ -69,20 +69,20 @@ export default function SwingBoxLanding() {
                 className={styles.heroImg}
               />
             </div>
-            <div className={styles.heroImageMeta}>
-              <div className={styles.metaRow}>
-                <span>Time per day</span>
-                <b>10 min</b>
-              </div>
-              <div className={styles.metaRow}>
-                <span>Equipment</span>
-                <b>In the box</b>
-              </div>
-              <div className={styles.metaRow}>
-                <span>Gym required</span>
-                <b>Never</b>
-              </div>
-            </div>
+            <ul className={styles.heroChips} aria-label="At a glance">
+              <li className={styles.heroChip}>
+                <span className={styles.heroChipLabel}>Time / day</span>
+                <span className={styles.heroChipValue}>10 min</span>
+              </li>
+              <li className={styles.heroChip}>
+                <span className={styles.heroChipLabel}>Equipment</span>
+                <span className={styles.heroChipValue}>In the box</span>
+              </li>
+              <li className={styles.heroChip}>
+                <span className={styles.heroChipLabel}>Gym</span>
+                <span className={styles.heroChipValue}>Never</span>
+              </li>
+            </ul>
           </div>
         </div>
       </header>
@@ -240,7 +240,13 @@ export default function SwingBoxLanding() {
       {/* IRVING */}
       <section className={styles.block}>
         <div className={`${styles.wrap} ${styles.irvingGrid}`}>
-          <div className={styles.portrait}>
+          <a
+            className={styles.portrait}
+            href="https://www.instagram.com/fryarfitnessgolf/"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Irving Fryar Jr. on Instagram (@fryarfitnessgolf)"
+          >
             <Image
               src="/swingbox/irving.jpg"
               alt="Irving Fryar Jr., at the course."
@@ -252,9 +258,14 @@ export default function SwingBoxLanding() {
             <div className={styles.portraitOverlay}>
               <div className={styles.portraitEyebrow}>Coach</div>
               <div className={styles.portraitName}>Irving Fryar Jr.</div>
-              <div className={styles.portraitTag}>@fryarfitnessgolf</div>
+              <div className={styles.portraitTag}>
+                @fryarfitnessgolf
+                <span className={styles.portraitArrow} aria-hidden>
+                  ↗
+                </span>
+              </div>
             </div>
-          </div>
+          </a>
           <div>
             <span className={styles.eyebrow}>Your coach in the box</span>
             <h2 className={styles.h2}>Built by Irving Fryar Jr.</h2>
