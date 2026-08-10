@@ -213,13 +213,14 @@ export default function SwingBoxLanding() {
       {/* SEASON */}
       <section className={`${styles.block} ${styles.alt}`}>
         <div className={styles.wrap}>
-          <span className={styles.eyebrow}>The season · 12 blocks</span>
+          <span className={styles.eyebrow}>Season One · Where every member begins</span>
           <h2 className={styles.h2}>
             Sequenced like a season. Never repeated.
           </h2>
           <p className={styles.secLede}>
-            The full year is one program. Each block sets up the next, tuned
-            to the golf calendar.
+            The first year is one program. Each block sets up the next,
+            tuned to the golf calendar. Whenever you join, you start at
+            Month 01.
           </p>
           <div className={styles.season}>
             {SEASON.map((s) => (
@@ -229,6 +230,10 @@ export default function SwingBoxLanding() {
               </div>
             ))}
           </div>
+          <p className={styles.seasonCloser}>
+            Then Season Two begins. New progressions, new tools, same ten
+            minutes. The training doesn&rsquo;t run out. It levels up.
+          </p>
         </div>
       </section>
 
@@ -236,11 +241,17 @@ export default function SwingBoxLanding() {
       <section className={styles.block}>
         <div className={`${styles.wrap} ${styles.irvingGrid}`}>
           <div className={styles.portrait}>
-            <div className={styles.portraitInner}>
+            <Image
+              src="/swingbox/irving.jpg"
+              alt="Irving Fryar Jr., at the course."
+              width={800}
+              height={1000}
+              sizes="(max-width: 900px) 100vw, 440px"
+              className={styles.portraitImg}
+            />
+            <div className={styles.portraitOverlay}>
               <div className={styles.portraitEyebrow}>Coach</div>
-              <div className={styles.portraitName}>
-                Irving Fryar Jr.
-              </div>
+              <div className={styles.portraitName}>Irving Fryar Jr.</div>
               <div className={styles.portraitTag}>@fryarfitnessgolf</div>
             </div>
           </div>
@@ -373,6 +384,15 @@ export default function SwingBoxLanding() {
                 founders&rsquo; round closes. You&rsquo;ll get tracking the
                 day it leaves our Michigan warehouse. Every month after,
                 like clockwork.
+              </p>
+            </details>
+            <details>
+              <summary>What happens after the first year?</summary>
+              <p>
+                Season Two begins. Golf runs in seasons and so does your
+                body, so the training keeps building instead of ending.
+                You keep your founding price, everything already in your
+                kit, and your streak. Nobody graduates out of moving well.
               </p>
             </details>
             <details>

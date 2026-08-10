@@ -445,32 +445,36 @@
 }
 @media (max-width: 900px) { .irvingGrid { grid-template-columns: 1fr; } }
 .portrait {
-  background: linear-gradient(160deg, var(--turf) 0%, var(--turf-deep) 100%);
+  position: relative;
   border-radius: 14px;
   aspect-ratio: 4 / 5;
-  display: flex;
-  align-items: flex-end;
-  justify-content: flex-start;
-  color: var(--cream);
-  padding: 24px;
-  box-shadow: 0 30px 60px -30px rgba(30,61,47,0.5);
-  position: relative;
   overflow: hidden;
+  background: var(--turf-deep);
+  box-shadow: 0 30px 60px -30px rgba(30,61,47,0.5);
 }
-.portrait::before {
-  content: "";
+.portraitImg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 20%;
+}
+.portraitOverlay {
   position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(400px 300px at 70% 30%, rgba(63,122,82,0.3), transparent 60%),
-    radial-gradient(300px 240px at 30% 90%, rgba(200,64,46,0.15), transparent 60%);
-}
-.portraitInner {
-  position: relative;
-  z-index: 1;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 32px 24px 22px;
+  color: var(--cream);
+  background: linear-gradient(
+    to top,
+    rgba(20, 36, 24, 0.92) 0%,
+    rgba(20, 36, 24, 0.7) 55%,
+    rgba(20, 36, 24, 0) 100%
+  );
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 .portraitEyebrow {
   font-family: var(--font-mono);
@@ -478,6 +482,14 @@
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--fairway-soft);
+}
+.seasonCloser {
+  margin-top: 28px;
+  max-width: 60ch;
+  font-size: 16px;
+  color: var(--ink);
+  border-left: 3px solid var(--flag);
+  padding-left: 18px;
 }
 .portraitName {
   font-family: var(--font-display);
