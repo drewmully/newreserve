@@ -61,17 +61,13 @@ export default function SwingBoxLanding() {
             <div className={styles.heroImageInner}>
               <Image
                 src="/swingbox/hero.jpg"
-                alt="The Swing Box by Irving Fryar Jr. with drill deck, Fryar Recovery Balm, resistance ring, and a golf ball on a tee."
+                alt="The Swing Box by Irving Fryar Jr. with drill deck, Fryar Recovery Balm, resistance ring, and a golf ball on a tee. A +10 yards badge overlays the balm jar."
                 width={1600}
                 height={1200}
                 priority
                 sizes="(max-width: 820px) 100vw, 560px"
                 className={styles.heroImg}
               />
-              <div className={styles.badge}>
-                <span className={styles.badgeNum}>+10</span>
-                <span className={styles.badgeUnit}>yds</span>
-              </div>
             </div>
             <div className={styles.heroImageMeta}>
               <div className={styles.metaRow}>
