@@ -35,6 +35,22 @@ const MEMBERSHIP_EXEMPT_PREFIXES = [
   "/swingbox",
 ];
 
+/**
+ * A subset of exempt paths that are pure static pitch/preview pages with
+ * no attribution needs. Rendering the PageViewTracker on these would still
+ * pull Firebase Auth in via /lib/tracking, which crashes preview envs where
+ * NEXT_PUBLIC_FIREBASE_* is not set. Keep this list minimal — anything on
+ * the main funnel (/, /lp/*, /choose-plan, etc.) MUST keep the tracker.
+ */
+const TRACKER_EXEMPT_PREFIXES = ["/swingbox"];
+
+function shouldRenderPageViewTracker(pathname: string | null): boolean {
+  if (!pathname) return true;
+  return !TRACKER_EXEMPT_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+  );
+}
+
 export function shouldUseMembershipProvider(pathname: string | null): boolean {
   if (!pathname) return true;
   return !MEMBERSHIP_EXEMPT_PREFIXES.some(
@@ -49,9 +65,11 @@ export function Providers({ children }: { children: ReactNode }) {
   return (
     <>
       {shouldWrapWithMembership && <EmailLinkHandler />}
-      <Suspense fallback={null}>
-        <PageViewTracker />
-      </Suspense>
+      {shouldRenderPageViewTracker(pathname) && (
+        <Suspense fallback={null}>
+          <PageViewTracker />
+        </Suspense>
+      )}
       {shouldWrapWithMembership ? (
         <MembershipProvider>
           <IntercomWidget />
