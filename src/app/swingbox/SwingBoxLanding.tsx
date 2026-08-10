@@ -292,9 +292,10 @@ export default function SwingBoxLanding() {
       <section className={`${styles.block} ${styles.alt}`} id="pricing">
         <div className={styles.wrap}>
           <span className={styles.eyebrow}>Founding member pricing</span>
-          <h2 className={styles.h2}>Pick a plan. Price locked for life.</h2>
-          <div className={styles.plans}>
-            <div className={styles.plan}>
+          <h2 className={styles.h2}>One plan. Price locked for life.</h2>
+          <div className={styles.plansSingle}>
+            <div className={`${styles.plan} ${styles.best}`}>
+              <span className={styles.flagtag}>Founding rate</span>
               <h3>Monthly</h3>
               <div className={styles.price}>
                 $29<small>.99/mo</small>
@@ -305,40 +306,8 @@ export default function SwingBoxLanding() {
                 <li>Founding price locked for life</li>
                 <li>Cancel anytime, two taps</li>
               </ul>
-              <a className={styles.btnGhost} href="#pricing">
-                Start monthly
-              </a>
-            </div>
-            <div className={`${styles.plan} ${styles.best}`}>
-              <span className={styles.flagtag}>Best value · 2 boxes free</span>
-              <h3>Annual</h3>
-              <div className={styles.price}>
-                $299<small>/yr</small>
-              </div>
-              <p className={styles.per}>$24.92/mo effective</p>
-              <ul>
-                <li>Everything in monthly</li>
-                <li>Two boxes free vs. paying monthly</li>
-                <li>Welcome kit ships with priority</li>
-                <li>Founders bonus: Range Ready warm-up kit</li>
-              </ul>
               <a className={styles.btn} href="#pricing">
-                Start annual, save $60
-              </a>
-            </div>
-            <div className={styles.plan}>
-              <h3>Quarterly</h3>
-              <div className={styles.price}>
-                $84<small>/qtr</small>
-              </div>
-              <p className={styles.per}>$28/mo, billed by block</p>
-              <ul>
-                <li>Full monthly box: deck, balm, tool</li>
-                <li>Billing follows the training blocks</li>
-                <li>Cancel anytime, two taps</li>
-              </ul>
-              <a className={styles.btnGhost} href="#pricing">
-                Start quarterly
+                Become a founding member
               </a>
             </div>
           </div>

@@ -547,6 +547,15 @@
   margin-top: 40px;
 }
 @media (max-width: 900px) { .plans { grid-template-columns: 1fr; } }
+.plansSingle {
+  display: flex;
+  justify-content: center;
+  margin-top: 40px;
+}
+.plansSingle .plan {
+  width: 100%;
+  max-width: 440px;
+}
 .plan {
   background: #fff;
   border: 1px solid var(--line);
