@@ -30,6 +30,9 @@ const MEMBERSHIP_EXEMPT_PREFIXES = [
   "/mulligan",
   "/policies",
   "/reservecard",
+  // Standalone pitch / preview pages that don't need Firebase auth,
+  // Intercom, or the Back9 welcome overlay.
+  "/swingbox",
 ];
 
 export function shouldUseMembershipProvider(pathname: string | null): boolean {
