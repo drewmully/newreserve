@@ -35,7 +35,6 @@ import { GlassHeader } from "@/app/components/ClientComponents";
 import { captureAttributionFromUrl } from "@/lib/attribution";
 import { trackEvent } from "@/lib/tracking";
 import { QuizModal } from "../_shared/QuizModal";
-import { RECENT_BOX_PRODUCTS } from "../_shared/products";
 
 /* ---------- Types + tiers --------------------------------------------- */
 
@@ -51,6 +50,15 @@ interface TierConfig {
   bestFor: string;
   ctaLabel: string;
   emphasized?: boolean;
+  /**
+   * Flat-lay hero for the tier card and the What's Inside section. When
+   * `image` is undefined we render a PlaceholderFrame with the shot
+   * direction copy in `imageNote`. Populate `image` once the final
+   * photograph is delivered.
+   */
+  image?: string;
+  imageNote: string;
+  itemLabels: { category: string; brandTier: string; season: string }[];
 }
 
 const TIERS: TierConfig[] = [
@@ -68,6 +76,12 @@ const TIERS: TierConfig[] = [
     ],
     bestFor: "Curious members who want a low-commitment way in.",
     ctaLabel: "Start with Discovery",
+    imageNote:
+      "FLAT LAY, 2 PIECES. Forest green paper background. Overhead 90 degree. One folded polo or 1/4 zip + one accessory (belt or headwear) + Mully hangtag. Minimal negative space, single soft key light from upper-left.",
+    itemLabels: [
+      { category: "Layer", brandTier: "Premium", season: "Fall" },
+      { category: "Accessory", brandTier: "Core", season: "Fall" },
+    ],
   },
   {
     id: "signature",
@@ -84,6 +98,13 @@ const TIERS: TierConfig[] = [
     bestFor: "Members ready for a real outfit out of the gate.",
     ctaLabel: "Start with Signature Preview",
     emphasized: true,
+    imageNote:
+      "FLAT LAY, 3 to 4 PIECES. Same forest background, same 90 degree overhead, same lighting as Discovery. One layer + one polo + one bottom or accessory + Mully box lid corner in frame. Visibly denser than Discovery, still styled.",
+    itemLabels: [
+      { category: "Layer", brandTier: "Premium", season: "Fall" },
+      { category: "Polo", brandTier: "Premium", season: "Fall" },
+      { category: "Accessory", brandTier: "Core", season: "Fall" },
+    ],
   },
   {
     id: "reserve",
@@ -99,8 +120,35 @@ const TIERS: TierConfig[] = [
     ],
     bestFor: "Members who want the full edit on arrival.",
     ctaLabel: "Start with Reserve Collection",
+    imageNote:
+      "FLAT LAY, 5 to 6 PIECES. Same forest background, same 90 degree overhead, same lighting. Two layers + one polo + one bottom + two accessories + open Mully box in frame. Visibly the fullest of the three. This photo must read as the most product per square inch.",
+    itemLabels: [
+      { category: "Layer", brandTier: "Premium", season: "Fall" },
+      { category: "Layer", brandTier: "Premium", season: "Fall" },
+      { category: "Polo", brandTier: "Premium", season: "Fall" },
+      { category: "Bottom", brandTier: "Premium", season: "Fall" },
+      { category: "Accessory", brandTier: "Core", season: "Fall" },
+      { category: "Accessory", brandTier: "Core", season: "Fall" },
+    ],
   },
 ];
+
+/* ---------- Hero + unboxing imagery ---------------------------------- */
+
+/**
+ * The hero uses the existing Reserve Collection styled flat-lay on the
+ * forest background. Landscape crop on desktop, portrait crop on mobile.
+ */
+const HERO_LANDSCAPE = "/lp/hero/hero-landscape-4x3.webp";
+const HERO_PORTRAIT = "/lp/hero/hero-portrait-4x5.webp";
+
+/**
+ * The unboxing photo uses the existing closed branded box on white. Once a
+ * shot with tissue + insert card is delivered, swap this constant.
+ */
+const UNBOXING_IMAGE = "/consult-hero-box.jpg";
+const UNBOXING_NOTE =
+  "Replace with a 4:3 landscape shot of the closed Mully box on bone paper, tissue folded to one side, insert card angled forward, high three-quarter camera, one soft key from upper-right. Same bone-white paper background as the current placeholder so the swap is one-line.";
 
 /* ---------- FAQ ------------------------------------------------------- */
 
@@ -203,48 +251,70 @@ export default function DiscoverLPClient() {
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
-  const gridShots = useMemo(
-    () =>
-      [
-        RECENT_BOX_PRODUCTS[0],
-        RECENT_BOX_PRODUCTS[2],
-        RECENT_BOX_PRODUCTS[4],
-        RECENT_BOX_PRODUCTS[3],
-      ].filter(Boolean),
-    []
-  );
-
   return (
     <div className="min-h-screen bg-white text-charcoal">
       <GlassHeader />
 
       {/* ================================ HERO =============================== */}
-      <section className="pt-24 sm:pt-28 lg:pt-32 pb-14 md:pb-20">
-        <div className="max-w-4xl mx-auto px-5 sm:px-8 text-center">
-          <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-5">
-            Mully Reserve
-          </div>
-          <h1 className="font-serif text-4xl sm:text-5xl md:text-6xl text-forest leading-[1.05]">
-            Discover your first box.
-          </h1>
-          <p className="mt-5 text-base sm:text-lg text-charcoal/75 max-w-2xl mx-auto leading-relaxed">
-            Three ways into one membership. Pick your first shipment. Every
-            box after renews as the full Reserve Collection at{" "}
-            <span className="font-medium text-forest">$250 per quarter</span>.
-          </p>
-          <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
-            <a
-              href="#tiers"
-              className="w-full sm:w-auto bg-forest hover:bg-forest/90 text-bone py-3.5 px-10 rounded-md text-sm font-medium tracking-wide transition cursor-pointer"
-            >
-              See the three boxes
-            </a>
-            <Link
-              href="#how-it-works"
-              className="text-sm underline text-charcoal/70 hover:text-charcoal transition"
-            >
-              How the membership works
-            </Link>
+      {/* Full-bleed styled flat-lay of the Reserve Collection on the forest
+          background. Desktop: photo left, copy right. Mobile: photo top,
+          copy below. This is intentionally the first frame a visitor sees. */}
+      <section className="pt-20 sm:pt-24 lg:pt-28 pb-14 md:pb-20">
+        <div className="max-w-7xl mx-auto px-5 sm:px-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-14 items-center">
+            {/* Photo. Two <Image> tags so we can crop tighter on mobile via
+                CSS. The landscape asset is the default; the portrait asset
+                takes over below 640px for a tighter framing on phones. */}
+            <div className="relative w-full aspect-[4/5] sm:aspect-[4/3] bg-forest rounded-md overflow-hidden order-first">
+              <Image
+                src={HERO_PORTRAIT}
+                alt=""
+                fill
+                priority
+                sizes="100vw"
+                className="object-cover sm:hidden"
+              />
+              <Image
+                src={HERO_LANDSCAPE}
+                alt="An open Mully Reserve Collection box surrounded by folded apparel, a leather accessory, and a Perficio golf-shoe bag, all styled on a forest-green backdrop."
+                fill
+                priority
+                sizes="(min-width: 1024px) 50vw, 100vw"
+                className="object-cover hidden sm:block"
+              />
+            </div>
+
+            {/* Copy */}
+            <div className="text-center lg:text-left">
+              <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-4">
+                Mully Reserve
+              </div>
+              <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl text-forest leading-[1.05]">
+                Discover your first box.
+              </h1>
+              <p className="mt-5 text-base sm:text-lg text-charcoal/75 max-w-xl mx-auto lg:mx-0 leading-relaxed">
+                Three ways into one membership. Pick your first shipment.
+                Every box after renews as the full Reserve Collection at{" "}
+                <span className="font-medium text-forest">
+                  $250 per quarter
+                </span>
+                .
+              </p>
+              <div className="mt-8 flex flex-col sm:flex-row items-center lg:items-start justify-center lg:justify-start gap-3">
+                <a
+                  href="#tiers"
+                  className="w-full sm:w-auto bg-forest hover:bg-forest/90 text-bone py-3.5 px-10 rounded-md text-sm font-medium tracking-wide transition cursor-pointer text-center"
+                >
+                  See the three boxes
+                </a>
+                <Link
+                  href="#how-it-works"
+                  className="text-sm underline text-charcoal/70 hover:text-charcoal transition"
+                >
+                  How the membership works
+                </Link>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -292,38 +362,67 @@ export default function DiscoverLPClient() {
         </div>
       </section>
 
-      {/* ============================== WARDROBE ============================= */}
-      <section className="py-16 md:py-24">
-        <div className="max-w-6xl mx-auto px-5 sm:px-8">
+      {/* ============================ WHAT'S INSIDE ==========================
+          Reinstated. Three large flat lays side by side. The visual density
+          delta is the argument, so the photos are the primary content and
+          the labels are supporting. */}
+      <section id="whats-inside" className="py-16 md:py-24">
+        <div className="max-w-7xl mx-auto px-5 sm:px-8">
           <div className="text-center mb-10 sm:mb-14">
             <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-4">
-              Recent shipments
+              What&rsquo;s inside
             </div>
             <h2 className="font-serif text-3xl sm:text-4xl text-forest">
-              What our members opened this quarter.
+              See the three boxes side by side.
             </h2>
+            <p className="mt-4 text-sm sm:text-base text-charcoal/70 max-w-2xl mx-auto leading-relaxed">
+              Same photographer, same background, same lighting, same angle.
+              The difference you see is the difference you get.
+            </p>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-            {gridShots.map((product) => (
-              <figure key={product.title} className="text-left">
-                <div className="aspect-[3/4] bg-bone relative overflow-hidden">
-                  <Image
-                    src={product.image}
-                    alt={`${product.vendor} ${product.title}`}
-                    fill
-                    sizes="(min-width: 768px) 22vw, 45vw"
-                    className="object-cover"
-                  />
-                </div>
-                <figcaption className="mt-2 text-[11px] text-charcoal/60 leading-snug">
-                  <span className="uppercase tracking-[0.14em] text-forest/70">
-                    {product.vendor}
-                  </span>
-                  <span className="text-charcoal/40"> / </span>
-                  <span>{product.title}</span>
-                </figcaption>
-              </figure>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
+            {TIERS.map((tier) => (
+              <TierFlatlayCard key={tier.id} tier={tier} />
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ============================ UNBOXING MOMENT =========================
+          One frame of the closed branded box + tissue + insert card.
+          Currently uses the existing closed-box photo on white; replace
+          with the styled shot per UNBOXING_NOTE when it lands. */}
+      <section className="bg-bone py-16 md:py-24">
+        <div className="max-w-7xl mx-auto px-5 sm:px-8">
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-14 items-center">
+            <div className="lg:col-span-3 relative aspect-[4/3] w-full bg-white rounded-md overflow-hidden border border-forest/10">
+              <Image
+                src={UNBOXING_IMAGE}
+                alt="The closed forest-green Mully Reserve box, embossed logo forward, shot on a neutral bone-white paper background."
+                fill
+                sizes="(min-width: 1024px) 60vw, 100vw"
+                className="object-contain p-6 sm:p-10"
+              />
+              <div
+                className="absolute bottom-3 right-3 text-[10px] tracking-[0.24em] uppercase text-forest/50 bg-white/85 backdrop-blur px-2 py-1 rounded"
+                title={UNBOXING_NOTE}
+              >
+                Placeholder shot
+              </div>
+            </div>
+            <div className="lg:col-span-2">
+              <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-4">
+                The unboxing
+              </div>
+              <h2 className="font-serif text-3xl sm:text-4xl text-forest leading-[1.1]">
+                Built for the moment you open it.
+              </h2>
+              <p className="mt-5 text-sm sm:text-base text-charcoal/75 leading-relaxed">
+                Rigid magnetic box, tissue-wrapped pieces, an insert card
+                that names every item and why it was picked for you. The
+                packaging is part of the product.
+              </p>
+            </div>
           </div>
         </div>
       </section>
@@ -444,8 +543,93 @@ function QuizPortal({ onClose }: { onClose: () => void }) {
   );
 }
 
+/* ---------- Placeholder frame ----------------------------------------
+ * Renders a real photo if `src` is provided; otherwise renders a
+ * correctly-proportioned frame containing the shot direction so the
+ * layout is production-shaped and can accept a final image with zero
+ * layout rework.
+ */
+
+function PlaceholderFrame({
+  src,
+  alt,
+  note,
+  aspect = "aspect-square",
+  bg = "bg-forest",
+  sizes,
+  variant = "dense",
+}: {
+  src?: string;
+  alt: string;
+  note: string;
+  aspect?: string;
+  bg?: string;
+  sizes: string;
+  /** "dense" for tier cards, "large" for the What's Inside section. */
+  variant?: "dense" | "large";
+}) {
+  if (src) {
+    return (
+      <div className={`relative w-full ${aspect} ${bg} overflow-hidden`}>
+        <Image src={src} alt={alt} fill sizes={sizes} className="object-cover" />
+      </div>
+    );
+  }
+  return (
+    <div
+      className={`relative w-full ${aspect} ${bg} overflow-hidden`}
+      role="img"
+      aria-label={alt}
+    >
+      {/* Corner tag */}
+      <div className="absolute top-3 left-3 text-[9px] tracking-[0.28em] uppercase text-bone/80 border border-bone/40 px-2 py-1 rounded-sm bg-forest/40">
+        Photo placeholder
+      </div>
+      {/* Camera icon */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center px-4 sm:px-6 text-center text-bone">
+        <svg
+          viewBox="0 0 24 24"
+          className={variant === "large" ? "w-10 h-10 mb-4 opacity-60" : "w-7 h-7 mb-3 opacity-60"}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.25}
+          aria-hidden="true"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.174-1.26.207-2.152 1.31-2.152 2.586v10.503a2.25 2.25 0 002.25 2.25h15.75a2.25 2.25 0 002.25-2.25V9.99c0-1.276-.891-2.379-2.152-2.586a44.63 44.63 0 00-1.134-.174 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"
+          />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"
+          />
+        </svg>
+        <p
+          className={
+            variant === "large"
+              ? "text-[11px] sm:text-xs leading-relaxed text-bone/90 max-w-md"
+              : "text-[10px] sm:text-[11px] leading-relaxed text-bone/85 max-w-[22ch] sm:max-w-[26ch]"
+          }
+        >
+          {note}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 /* ---------- Tier card ------------------------------------------------- */
 
+/**
+ * Alignment strategy: the card is a flex column. Every text row that can
+ * vary in height across tiers gets a `min-h` slot sized to the worst-case
+ * content. That guarantees the price row of every card sits on the same
+ * baseline, ditto positioning, ditto renewal line, ditto BEST FOR block,
+ * ditto CTA. The image slot is a fixed aspect ratio so the top edges of
+ * every card align regardless of tier.
+ */
 function TierCard({
   tier,
   selected,
@@ -460,62 +644,122 @@ function TierCard({
     <div
       className={
         (isEmphasized
-          ? "relative flex flex-col bg-white border-2 border-forest rounded-md p-6 sm:p-7 shadow-[0_8px_24px_-12px_rgba(20,45,30,0.25)] "
-          : "relative flex flex-col bg-white border border-forest/20 rounded-md p-6 sm:p-7 ") +
+          ? "relative flex flex-col bg-white border-2 border-forest rounded-md overflow-hidden shadow-[0_8px_24px_-12px_rgba(20,45,30,0.25)] "
+          : "relative flex flex-col bg-white border border-forest/20 rounded-md overflow-hidden ") +
         (selected ? " ring-2 ring-forest/40 ring-offset-2" : "")
       }
     >
       {isEmphasized ? (
-        <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-forest text-bone text-[10px] tracking-[0.28em] uppercase px-3 py-1 rounded-sm">
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 bg-forest text-bone text-[10px] tracking-[0.28em] uppercase px-3 py-1 rounded-sm shadow-sm">
           Most chosen
         </div>
       ) : null}
-      <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-3">
-        {tier.eyebrow}
-      </div>
-      <h3 className="font-serif text-2xl text-forest">{tier.title}</h3>
-      <div className="mt-4 flex items-baseline gap-2">
-        <span className="font-serif text-4xl text-forest">
-          {tier.firstBoxPrice}
-        </span>
-        <span className="text-xs text-charcoal/60">first box</span>
-      </div>
-      <p className="mt-4 text-sm text-charcoal/75 leading-relaxed">
-        {tier.positioning}
-      </p>
-      <ul className="mt-4 space-y-2 text-sm text-charcoal/80 leading-relaxed">
-        {tier.contents.map((line) => (
-          <li key={line} className="flex gap-2.5">
-            <span aria-hidden className="text-forest/60 mt-1">
-              &bull;
-            </span>
-            <span>{line}</span>
-          </li>
-        ))}
-      </ul>
 
-      {/* Renewal transparency, full body size, directly under contents. */}
-      <p className="mt-5 text-sm text-forest leading-relaxed font-medium">
-        Renews at $250 per quarter as the full Reserve Collection. Skip or
-        cancel any time.
-      </p>
+      {/* Image slot: fixed aspect ratio, identical across all three cards */}
+      <PlaceholderFrame
+        src={tier.image}
+        alt={`${tier.title} first-box contents flat lay.`}
+        note={tier.imageNote}
+        aspect="aspect-[4/3]"
+        bg="bg-forest"
+        sizes="(min-width: 768px) 32vw, 92vw"
+        variant="dense"
+      />
 
-      <div className="mt-5 pt-5 border-t border-forest/10">
-        <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-2">
-          Best for
+      {/* Card body */}
+      <div className="flex flex-col flex-1 p-6 sm:p-7">
+        <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-3">
+          {tier.eyebrow}
         </div>
-        <p className="text-sm text-charcoal/70 leading-relaxed">
-          {tier.bestFor}
+        <h3 className="font-serif text-2xl text-forest">{tier.title}</h3>
+        <div className="mt-4 flex items-baseline gap-2">
+          <span className="font-serif text-4xl text-forest">
+            {tier.firstBoxPrice}
+          </span>
+          <span className="text-xs text-charcoal/60">first box</span>
+        </div>
+
+        {/* Positioning: 3-line slot on md+, natural on mobile */}
+        <p className="mt-4 text-sm text-charcoal/75 leading-relaxed md:min-h-[4.5rem]">
+          {tier.positioning}
         </p>
+
+        {/* Bullets: 3-item slot on md+, natural on mobile */}
+        <ul className="mt-4 space-y-2 text-sm text-charcoal/80 leading-relaxed md:min-h-[6.75rem]">
+          {tier.contents.map((line) => (
+            <li key={line} className="flex gap-2.5">
+              <span aria-hidden className="text-forest/60 mt-1">
+                &bull;
+              </span>
+              <span>{line}</span>
+            </li>
+          ))}
+        </ul>
+
+        {/* Renewal transparency, full body size, directly under contents. */}
+        <p className="mt-5 text-sm text-forest leading-relaxed font-medium md:min-h-[2.75rem]">
+          Renews at $250 per quarter as the full Reserve Collection. Skip or
+          cancel any time.
+        </p>
+
+        {/* BEST FOR block: identical slot height across tiers */}
+        <div className="mt-5 pt-5 border-t border-forest/10">
+          <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-2">
+            Best for
+          </div>
+          <p className="text-sm text-charcoal/70 leading-relaxed md:min-h-[2.75rem]">
+            {tier.bestFor}
+          </p>
+        </div>
+
+        {/* Spacer to push CTA to the bottom on md+ */}
+        <div className="flex-1" />
+
+        <button
+          type="button"
+          onClick={onSelect}
+          className="mt-6 w-full bg-forest hover:bg-forest/90 text-bone py-3.5 rounded-md text-sm font-medium tracking-wide transition cursor-pointer"
+        >
+          {tier.ctaLabel}
+        </button>
       </div>
-      <button
-        type="button"
-        onClick={onSelect}
-        className="mt-6 w-full bg-forest hover:bg-forest/90 text-bone py-3.5 rounded-md text-sm font-medium tracking-wide transition cursor-pointer"
-      >
-        {tier.ctaLabel}
-      </button>
     </div>
+  );
+}
+
+/* ---------- Tier flat lay card (What's Inside section) ---------------- */
+
+function TierFlatlayCard({ tier }: { tier: TierConfig }) {
+  return (
+    <figure className="flex flex-col">
+      <PlaceholderFrame
+        src={tier.image}
+        alt={`${tier.title} flat lay showing every included piece.`}
+        note={tier.imageNote}
+        aspect="aspect-square"
+        bg="bg-forest"
+        sizes="(min-width: 768px) 32vw, 92vw"
+        variant="large"
+      />
+      <figcaption className="mt-5 flex flex-col flex-1">
+        <div className="flex items-baseline justify-between gap-3">
+          <h3 className="font-serif text-xl text-forest">{tier.title}</h3>
+          <span className="text-[10px] tracking-[0.28em] uppercase text-forest/60">
+            {tier.itemLabels.length} pieces
+          </span>
+        </div>
+        <ul className="mt-4 space-y-1.5 text-sm text-charcoal/80 md:min-h-[9rem]">
+          {tier.itemLabels.map((item, i) => (
+            <li key={i} className="flex items-baseline justify-between gap-3 border-b border-forest/10 py-1.5">
+              <span className="text-charcoal/85">{item.category}</span>
+              <span className="text-[10px] tracking-[0.22em] uppercase text-forest/60">
+                {item.brandTier} · {item.season}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </figcaption>
+    </figure>
   );
 }
 
