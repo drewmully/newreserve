@@ -34,11 +34,11 @@ import type { Metadata } from "next";
 import DiscoverLPClient from "./DiscoverLPClient";
 
 export const metadata: Metadata = {
-  title: "Mully Reserve — Discover Your First Box",
+  title: "Mully Reserve · Discover Your First Box",
   description:
     "Three ways in. One membership. Pick the first box that fits how you golf; each renews as the full quarterly Reserve edit.",
   openGraph: {
-    title: "Mully Reserve — Discover Your First Box",
+    title: "Mully Reserve · Discover Your First Box",
     description:
       "Choose your entry into Reserve. Quarterly curation of premium golf apparel, hand-picked by our editors.",
     images: ["/reserve-flatlay-hero.webp"],
