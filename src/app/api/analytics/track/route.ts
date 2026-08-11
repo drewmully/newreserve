@@ -67,6 +67,14 @@ const VALID_EVENTS = new Set([
   "lp_consult_view",
   "lp_consult_modal_view",
   "lp_consult_submit",
+  // Discover LP (mymully.com/lp/discover) — three-tier acquisition page.
+  // lp_discover_view fires on mount; lp_discover_tier_selected fires when a
+  // visitor clicks any tier's CTA (property: tier=discovery|signature|reserve);
+  // lp_discover_timeline_interacted fires when a member expands a
+  // "how it works" timeline node (property: node).
+  "lp_discover_view",
+  "lp_discover_tier_selected",
+  "lp_discover_timeline_interacted",
 ]);
 
 /**
