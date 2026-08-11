@@ -596,7 +596,9 @@ export function QuizModal({
 
   return (
     <div className="mx-auto w-full max-w-2xl px-4 sm:px-6">
-      <header className="mb-3 flex items-center justify-between sm:mb-6">
+      {/* Compact header+progress on desktop so the four style cards fit
+          the modal viewport as a 2x2 grid. */}
+      <header className="mb-3 flex items-center justify-between sm:mb-4">
         <div className="text-[11px] uppercase tracking-[0.22em] text-ember/90">
           Build your Reserve edit
         </div>
@@ -611,7 +613,7 @@ export function QuizModal({
         )}
       </header>
 
-      <div className="mb-4 h-[3px] w-full overflow-hidden rounded-full bg-forest/10 sm:mb-8">
+      <div className="mb-4 h-[3px] w-full overflow-hidden rounded-full bg-forest/10 sm:mb-6">
         <div
           className="h-full bg-ember transition-[width] duration-300 ease-out"
           style={{ width: `${progressPct}%` }}
@@ -720,15 +722,16 @@ function StepStyle({
   selected: StyleBucket | null;
   onSelect: (v: StyleBucket) => void;
 }) {
-  // Compact crop ratios so the four cards fit a single mobile viewport.
-  // 4:5 on phones (slightly portrait, all four visible above the fold);
-  // 3:4 on sm+ where there's more vertical room.
+  // Compact crop ratios so all four cards fit a single viewport across
+  // devices. Mobile keeps a 4:5 portrait crop (grid-cols-2 => 2 rows in
+  // one screen). Tablet/laptop widen to a 4:3 landscape crop so the 2x2
+  // grid fits within the quiz modal without needing to scroll.
   return (
     <section>
-      <h2 className="mb-1 font-serif text-2xl text-forest sm:text-4xl leading-tight">
+      <h2 className="mb-1 font-serif text-2xl text-forest sm:text-3xl leading-tight">
         Which one looks like you?
       </h2>
-      <p className="mb-4 text-sm text-charcoal/65 sm:mb-6">Pick the closest.</p>
+      <p className="mb-3 text-sm text-charcoal/65 sm:mb-4">Pick the closest.</p>
       <div className="grid grid-cols-2 gap-3 sm:gap-4">
         {STYLE_CARDS.map((card) => (
           <button
@@ -745,7 +748,7 @@ function StepStyle({
                 : "border-forest/15",
             ].join(" ")}
           >
-            <div className="relative aspect-[4/5] w-full bg-bone-dark/40 sm:aspect-[3/4]">
+            <div className="relative aspect-[4/5] w-full bg-bone-dark/40 sm:aspect-[4/3]">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={card.imageSrc}
@@ -754,7 +757,7 @@ function StepStyle({
                 loading="eager"
               />
             </div>
-            <div className="px-3 py-2 sm:px-4 sm:py-3">
+            <div className="px-3 py-2 sm:px-4 sm:py-2.5">
               <div className="font-serif text-base text-forest sm:text-lg">
                 {card.label}
               </div>
