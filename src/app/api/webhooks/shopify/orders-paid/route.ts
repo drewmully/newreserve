@@ -42,6 +42,14 @@ import {
 import { processSponsorship } from "@/app/api/_lib/sponsorship";
 import { getSupabaseService } from "@/app/api/_lib/supabaseService";
 import { provisionPaidMemberFromLoop } from "@/app/api/_lib/provisionPaidMember";
+import { shopifyGraphQL } from "@/app/api/_lib/shopifyAdmin";
+
+/**
+ * Allowed values of the `discover_tier` cart attribute set by /lp/discover.
+ * Any other value is ignored and no tag is written. Keep this list in sync
+ * with TIERS in src/app/lp/discover/DiscoverLPClient.tsx.
+ */
+const DISCOVER_TIERS = new Set(["discovery", "signature", "reserve"]);
 
 /**
  * Extracts the numeric variant id from the rangefinder variant GID env var,
@@ -786,6 +794,63 @@ export async function POST(request: NextRequest) {
     }
   })();
 
+  /**
+   * Discover-tier tagging (added 2026-08-11).
+   *
+   * When a visitor from /lp/discover checks out, DiscoverLPClient writes
+   * a `discover_tier` cart attribute with value "discovery" | "signature"
+   * | "reserve". Shopify persists cart attributes as order note_attributes
+   * on the FIRST order only — Loop renewals do not inherit them because
+   * renewals are created from the subscription contract, not from a cart.
+   *
+   * We add a safety guard: skip if the order is tagged
+   * `subscription recurring order` (Loop’s auto-tag for renewal orders).
+   * If both checks pass, append `discover-tier-<tier>` to the order tags
+   * via the Admin API. Failures are logged and non-fatal.
+   */
+  const discoverTierTag = (async () => {
+    try {
+      const tier = orderAttr("discover_tier");
+      if (!tier || !DISCOVER_TIERS.has(tier)) return;
+      if (isSubscriptionRecurring) {
+        console.log(
+          `[orders-paid] discover_tier: skipping recurring order ${order.id}`
+        );
+        return;
+      }
+      const tagToAdd = `discover-tier-${tier}`;
+      // Do not add if the tag is already present (idempotent for retries).
+      if (tagList.includes(tagToAdd.toLowerCase())) return;
+      const orderGid = `gid://shopify/Order/${order.id}`;
+      const result = await shopifyGraphQL<{
+        tagsAdd: {
+          node: { id: string } | null;
+          userErrors: Array<{ field: string[]; message: string }>;
+        };
+      }>(
+        `mutation AddDiscoverTag($id: ID!, $tags: [String!]!) {
+          tagsAdd(id: $id, tags: $tags) {
+            node { id }
+            userErrors { field message }
+          }
+        }`,
+        { id: orderGid, tags: [tagToAdd] }
+      );
+      if (result.tagsAdd.userErrors.length > 0) {
+        console.error(
+          `[orders-paid] discover_tier tagsAdd userErrors for order ${order.id}:`,
+          result.tagsAdd.userErrors
+        );
+        return;
+      }
+      console.log(
+        `[orders-paid] discover_tier: tagged order ${order.id} with ${tagToAdd}`
+      );
+    } catch (err) {
+      console.error("[orders-paid] discover_tier tagging failed:", err);
+    }
+  })();
+
   const giftPersist = (async () => {
     try {
       if (!isGiftOrder(order.note_attributes)) return;
@@ -838,6 +903,7 @@ export async function POST(request: NextRequest) {
     foundingClaim,
     sponsorshipAttribution,
     reserveConversion,
+    discoverTierTag,
     // ── NEW: persist order + line items to Supabase ────────────────────────
     // Runs in parallel with analytics so it never delays the 200 response.
     // Non-fatal: all errors are caught inside persistOrderToSupabase.
