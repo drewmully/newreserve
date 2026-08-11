@@ -31,7 +31,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { GlassHeader } from "@/app/components/ClientComponents";
 import { captureAttributionFromUrl } from "@/lib/attribution";
 import { trackEvent } from "@/lib/tracking";
 import { QuizModal } from "../_shared/QuizModal";
@@ -46,10 +45,17 @@ interface TierConfig {
   title: string;
   firstBoxPrice: string;
   positioning: string;
-  contents: string[];
   bestFor: string;
   ctaLabel: string;
   emphasized?: boolean;
+  /**
+   * Curation-framed body copy (Round 3). Replaces the earlier bulleted
+   * contents list. Every tier reads as a single confident paragraph. Do
+   * not reintroduce item counts or category tables anywhere on the page.
+   */
+  bodyCopy: string;
+  /** Curation-framed column copy for the "difference is the edit" section. */
+  editCopy: string;
   /**
    * Flat-lay hero for the tier card and the What's Inside section. When
    * `image` is undefined we render a PlaceholderFrame with the shot
@@ -58,7 +64,6 @@ interface TierConfig {
    */
   image?: string;
   imageNote: string;
-  itemLabels: { category: string; brandTier: string; season: string }[];
 }
 
 const TIERS: TierConfig[] = [
@@ -69,19 +74,14 @@ const TIERS: TierConfig[] = [
     firstBoxPrice: "$50",
     positioning:
       "One hero piece and the accessories that finish it. A shorter first shipment for members trying the format.",
-    contents: [
-      "One layer or polo chosen for your climate and fit",
-      "One accessory pairing (belt, socks, or headwear)",
-      "Curator notes on how to wear it on and off the course",
-    ],
+    bodyCopy:
+      "One hero piece and the accessories that finish it. A first look at how Mully curates.",
+    editCopy:
+      "A taste. One piece we believe in, finished with the right accessories.",
     bestFor: "Curious members who want a low-commitment way in.",
     ctaLabel: "Start with Discovery",
     imageNote:
       "FLAT LAY, 2 PIECES. Forest green paper background. Overhead 90 degree. One folded polo or 1/4 zip + one accessory (belt or headwear) + Mully hangtag. Minimal negative space, single soft key light from upper-left.",
-    itemLabels: [
-      { category: "Layer", brandTier: "Premium", season: "Fall" },
-      { category: "Accessory", brandTier: "Core", season: "Fall" },
-    ],
   },
   {
     id: "signature",
@@ -90,21 +90,15 @@ const TIERS: TierConfig[] = [
     firstBoxPrice: "$125",
     positioning:
       "Two or three pieces styled to layer into a full outfit for your next round.",
-    contents: [
-      "Two apparel pieces styled to layer together",
-      "One accessory pairing to complete the look",
-      "Curator notes and care guidance",
-    ],
+    bodyCopy:
+      "A styled pairing built to leave the house together. Apparel and accessories, chosen as one look.",
+    editCopy:
+      "A look. Pieces selected to work together, not just arrive together.",
     bestFor: "Members ready for a real outfit out of the gate.",
     ctaLabel: "Start with Signature Preview",
     emphasized: true,
     imageNote:
       "FLAT LAY, 3 to 4 PIECES. Same forest background, same 90 degree overhead, same lighting as Discovery. One layer + one polo + one bottom or accessory + Mully box lid corner in frame. Visibly denser than Discovery, still styled.",
-    itemLabels: [
-      { category: "Layer", brandTier: "Premium", season: "Fall" },
-      { category: "Polo", brandTier: "Premium", season: "Fall" },
-      { category: "Accessory", brandTier: "Core", season: "Fall" },
-    ],
   },
   {
     id: "reserve",
@@ -113,23 +107,14 @@ const TIERS: TierConfig[] = [
     firstBoxPrice: "$250",
     positioning:
       "The complete quarterly edit from day one. Four to six hand-picked pieces valued well above the membership rate.",
-    contents: [
-      "Four to six pieces spanning layers, polos, and accessories",
-      "Full editorial styling notes for the season",
-      "Priority selection into next quarter's rotation",
-    ],
+    bodyCopy:
+      "The full quarterly edit. A complete seasonal kit of apparel, headwear, and accessories, picked for how and where you play.",
+    editCopy:
+      "The kit. Everything we would pull for your quarter, styled as one edit. Retail value clears the membership price, but the point is that you did not have to choose any of it.",
     bestFor: "Members who want the full edit on arrival.",
     ctaLabel: "Start with Reserve Collection",
     imageNote:
       "FLAT LAY, 5 to 6 PIECES. Same forest background, same 90 degree overhead, same lighting. Two layers + one polo + one bottom + two accessories + open Mully box in frame. Visibly the fullest of the three. This photo must read as the most product per square inch.",
-    itemLabels: [
-      { category: "Layer", brandTier: "Premium", season: "Fall" },
-      { category: "Layer", brandTier: "Premium", season: "Fall" },
-      { category: "Polo", brandTier: "Premium", season: "Fall" },
-      { category: "Bottom", brandTier: "Premium", season: "Fall" },
-      { category: "Accessory", brandTier: "Core", season: "Fall" },
-      { category: "Accessory", brandTier: "Core", season: "Fall" },
-    ],
   },
 ];
 
@@ -155,7 +140,7 @@ const UNBOXING_NOTE =
 const FAQ: { q: string; a: string }[] = [
   {
     q: "How is Discovery different from Reserve Collection?",
-    a: "Discovery ships a shorter first box built around one hero piece. Reserve Collection ships the full quarterly edit of four to six pieces on day one.",
+    a: "Discovery introduces the format with a single hero piece and supporting accessories. Reserve Collection is the complete quarterly edit. Same curation, different scope.",
   },
   {
     q: "What happens after my first box?",
@@ -171,7 +156,7 @@ const FAQ: { q: string; a: string }[] = [
   },
   {
     q: "Which brands are in the rotation?",
-    a: "Rhone, Greyson, Quiet Golf, Topo, Feetures, Arnie's, Field Day, Harlestons, Hyperice, and a growing set of premium partners.",
+    a: "The rotation stays at the caliber you would expect from a premium golf edit. Familiar names alongside the pieces we go find so the box does not read like a display shelf.",
   },
   {
     q: "How does shipping work?",
@@ -251,21 +236,47 @@ export default function DiscoverLPClient() {
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
 
+  // Closing CTA ("Take the style quiz") launches the quiz WITHOUT stashing a
+  // tier. Any prior tier selection from the top tier grid is cleared, so
+  // the visitor lands on the reveal page unpinned and defaults to the full
+  // Reserve checkout unless they go back and pick a tier explicitly. This
+  // replaces the earlier behavior which silently preselected Signature
+  // Preview and applied MULLY_SIGNATURE at checkout. Recommendation logic
+  // based on quiz answers is planned separately.
+  const openQuizWithoutTier = useCallback(() => {
+    setSelectedTier(null);
+    try {
+      window.localStorage.removeItem(DISCOVER_TIER_STORAGE_KEY);
+    } catch {
+      // localStorage may be unavailable; safe to ignore.
+    }
+    trackEvent("lp_discover_closing_quiz_tapped").catch(() => {});
+    trackEvent(
+      "quiz_started",
+      { properties: { source: "lp_discover", tier: null } },
+      { includeAuth: false }
+    ).catch(() => {});
+    setQuizOpen(true);
+  }, []);
+
   return (
     <div className="min-h-screen bg-white text-charcoal">
-      <GlassHeader />
+      <DiscoverHeader />
 
       {/* ================================ HERO =============================== */}
       {/* Full-bleed styled flat-lay of the Reserve Collection on the forest
           background. Desktop: photo left, copy right. Mobile: photo top,
           copy below. This is intentionally the first frame a visitor sees. */}
-      <section className="pt-20 sm:pt-24 lg:pt-28 pb-14 md:pb-20">
+      <section className="pt-16 sm:pt-20 lg:pt-24 pb-14 md:pb-20">
         <div className="max-w-7xl mx-auto px-5 sm:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-14 items-center">
+          {/* Round-3 hero rebalance: 60/40 photo-dominant split on desktop
+              (image col-span-3, copy col-span-2 out of 5), keeps overlay
+              copy legible without going full-bleed. Mobile stays stacked. */}
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-12 items-center">
             {/* Photo. Two <Image> tags so we can crop tighter on mobile via
                 CSS. The landscape asset is the default; the portrait asset
                 takes over below 640px for a tighter framing on phones. */}
-            <div className="relative w-full aspect-[4/5] sm:aspect-[4/3] bg-forest rounded-md overflow-hidden order-first">
+            <div className="lg:col-span-3 relative w-full aspect-[4/5] sm:aspect-[4/3] bg-forest rounded-md overflow-hidden order-first">
               <Image
                 src={HERO_PORTRAIT}
                 alt=""
@@ -279,13 +290,13 @@ export default function DiscoverLPClient() {
                 alt="An open Mully Reserve Collection box surrounded by folded apparel, a leather accessory, and a Perficio golf-shoe bag, all styled on a forest-green backdrop."
                 fill
                 priority
-                sizes="(min-width: 1024px) 50vw, 100vw"
+                sizes="(min-width: 1024px) 60vw, 100vw"
                 className="object-cover hidden sm:block"
               />
             </div>
 
             {/* Copy */}
-            <div className="text-center lg:text-left">
+            <div className="lg:col-span-2 text-center lg:text-left">
               <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-4">
                 Mully Reserve
               </div>
@@ -362,27 +373,30 @@ export default function DiscoverLPClient() {
         </div>
       </section>
 
-      {/* ============================ WHAT'S INSIDE ==========================
-          Reinstated. Three large flat lays side by side. The visual density
-          delta is the argument, so the photos are the primary content and
-          the labels are supporting. */}
+      {/* ============================ THE EDIT (Round 3) =====================
+          Round-3 rewrite: three large flat lays remain (the visual density
+          delta is still the argument), but the section title, intro, and
+          three columns are now curation-framed. Item counts and category
+          tables have been removed everywhere; the point is the edit, not
+          the inventory. */}
       <section id="whats-inside" className="py-16 md:py-24">
         <div className="max-w-7xl mx-auto px-5 sm:px-8">
           <div className="text-center mb-10 sm:mb-14">
             <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-4">
-              What&rsquo;s inside
+              The curation
             </div>
             <h2 className="font-serif text-3xl sm:text-4xl text-forest">
-              See the three boxes side by side.
+              The difference is the edit.
             </h2>
             <p className="mt-4 text-sm sm:text-base text-charcoal/70 max-w-2xl mx-auto leading-relaxed">
-              Same photographer, same background, same lighting, same angle.
-              The difference you see is the difference you get.
+              Every box is built from the same question: what would we hand
+              you for the season ahead? The tiers change how much of the
+              answer you get.
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
             {TIERS.map((tier) => (
-              <TierFlatlayCard key={tier.id} tier={tier} />
+              <TierEditColumn key={tier.id} tier={tier} />
             ))}
           </div>
         </div>
@@ -486,9 +500,7 @@ export default function DiscoverLPClient() {
           <div className="mt-8 flex justify-center">
             <button
               type="button"
-              onClick={() =>
-                startTierFlow(TIERS.find((t) => t.emphasized) ?? TIERS[1])
-              }
+              onClick={openQuizWithoutTier}
               className="bg-forest hover:bg-forest/90 text-bone py-3.5 px-10 rounded-md text-sm font-medium tracking-wide transition cursor-pointer"
             >
               Take the style quiz
@@ -519,6 +531,10 @@ export default function DiscoverLPClient() {
         </div>
       ) : null}
 
+      {/* Legal-only footer (Round 3). Members reach their dashboard
+          through the main site, not through this acquisition surface. */}
+      <DiscoverFooter />
+
       {/* Quiz modal, portaled to body so mobile fixed positioning escapes
           the stacking context of the sticky footer. */}
       {quizOpen ? (
@@ -530,16 +546,92 @@ export default function DiscoverLPClient() {
 
 /* ---------- Quiz portal wrapper --------------------------------------- */
 
+/**
+ * Round-3 viewport fix: use 100dvh (dynamic viewport height) on the
+ * portal so the modal sizes correctly when the mobile address bar
+ * collapses, and route the scrollbar to a single inner region so the
+ * shared QuizModal (whose internal steps are already compact) has a
+ * predictable frame to render inside. Matches the pattern already used
+ * by /lp/_shared/QuizLauncher so both entry points behave identically.
+ */
 function QuizPortal({ onClose }: { onClose: () => void }) {
   // Client-only component. QuizPortal is only rendered when the tier CTA
   // is clicked (quizOpen === true), which cannot happen during SSR, so
   // document.body is guaranteed to exist by the time this runs.
   if (typeof document === "undefined") return null;
   return createPortal(
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-white">
-      <QuizModal source="lp_discover" onClose={onClose} />
+    <div className="fixed inset-0 z-[100] overflow-y-auto bg-white">
+      <div className="min-h-[100dvh] px-4 pt-5 pb-10 sm:pt-12 sm:pb-16">
+        <QuizModal source="lp_discover" onClose={onClose} />
+      </div>
     </div>,
     document.body
+  );
+}
+
+/* ---------- Stripped nav for /lp/discover (Round 3) ------------------
+ * The Round-3 brief calls for a nav that’s a logo only, plus a footer
+ * that’s legal-only. Existing members reach their dashboard through the
+ * main site, not through this acquisition surface. Both components live
+ * inline here so they cannot leak into any other page.
+ */
+
+function DiscoverHeader() {
+  return (
+    <header className="absolute top-0 left-0 right-0 z-40">
+      <div className="max-w-7xl mx-auto px-5 sm:px-8 h-16 flex items-center">
+        <Link
+          href="/"
+          className="flex items-center gap-2 text-forest"
+          aria-label="Mully home"
+        >
+          <svg
+            viewBox="0 0 1002 540"
+            fill="currentColor"
+            className="h-5 w-auto"
+            aria-hidden="true"
+          >
+            <path
+              d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z"
+              fillRule="evenodd"
+            />
+          </svg>
+          <span className="font-serif text-2xl font-bold tracking-wide">
+            mully.
+          </span>
+        </Link>
+      </div>
+    </header>
+  );
+}
+
+function DiscoverFooter() {
+  const year = new Date().getFullYear();
+  return (
+    <footer className="border-t border-forest/15 bg-white">
+      <div className="max-w-7xl mx-auto px-5 sm:px-8 py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-charcoal/60">
+        <div>
+          &copy; {year} Mully. All rights reserved.
+        </div>
+        <ul className="flex items-center gap-6">
+          <li>
+            <Link href="/terms" className="hover:text-forest transition">
+              Terms
+            </Link>
+          </li>
+          <li>
+            <Link href="/privacy" className="hover:text-forest transition">
+              Privacy
+            </Link>
+          </li>
+          <li>
+            <Link href="/contact" className="hover:text-forest transition">
+              Contact
+            </Link>
+          </li>
+        </ul>
+      </div>
+    </footer>
   );
 }
 
@@ -679,22 +771,12 @@ function TierCard({
           <span className="text-xs text-charcoal/60">first box</span>
         </div>
 
-        {/* Positioning: 3-line slot on md+, natural on mobile */}
-        <p className="mt-4 text-sm text-charcoal/75 leading-relaxed md:min-h-[4.5rem]">
-          {tier.positioning}
+        {/* Round-3 body: single curation-framed paragraph per tier. Fixed
+            min-h keeps all three cards' price/BEST FOR/CTA rows on the
+            same baseline across the grid. */}
+        <p className="mt-4 text-sm text-charcoal/80 leading-relaxed md:min-h-[8rem]">
+          {tier.bodyCopy}
         </p>
-
-        {/* Bullets: 3-item slot on md+, natural on mobile */}
-        <ul className="mt-4 space-y-2 text-sm text-charcoal/80 leading-relaxed md:min-h-[6.75rem]">
-          {tier.contents.map((line) => (
-            <li key={line} className="flex gap-2.5">
-              <span aria-hidden className="text-forest/60 mt-1">
-                &bull;
-              </span>
-              <span>{line}</span>
-            </li>
-          ))}
-        </ul>
 
         {/* Renewal transparency, full body size, directly under contents. */}
         <p className="mt-5 text-sm text-forest leading-relaxed font-medium md:min-h-[2.75rem]">
@@ -727,14 +809,18 @@ function TierCard({
   );
 }
 
-/* ---------- Tier flat lay card (What's Inside section) ---------------- */
+/* ---------- Tier edit column (The difference is the edit) -------------
+ * Round-3 replacement for TierFlatlayCard. Photo on top, tier name, short
+ * curation-framed paragraph. No item counts, no category tables, per the
+ * copy directive.
+ */
 
-function TierFlatlayCard({ tier }: { tier: TierConfig }) {
+function TierEditColumn({ tier }: { tier: TierConfig }) {
   return (
     <figure className="flex flex-col">
       <PlaceholderFrame
         src={tier.image}
-        alt={`${tier.title} flat lay showing every included piece.`}
+        alt={`${tier.title} flat lay showing the shape of the tier.`}
         note={tier.imageNote}
         aspect="aspect-square"
         bg="bg-forest"
@@ -742,22 +828,10 @@ function TierFlatlayCard({ tier }: { tier: TierConfig }) {
         variant="large"
       />
       <figcaption className="mt-5 flex flex-col flex-1">
-        <div className="flex items-baseline justify-between gap-3">
-          <h3 className="font-serif text-xl text-forest">{tier.title}</h3>
-          <span className="text-[10px] tracking-[0.28em] uppercase text-forest/60">
-            {tier.itemLabels.length} pieces
-          </span>
-        </div>
-        <ul className="mt-4 space-y-1.5 text-sm text-charcoal/80 md:min-h-[9rem]">
-          {tier.itemLabels.map((item, i) => (
-            <li key={i} className="flex items-baseline justify-between gap-3 border-b border-forest/10 py-1.5">
-              <span className="text-charcoal/85">{item.category}</span>
-              <span className="text-[10px] tracking-[0.22em] uppercase text-forest/60">
-                {item.brandTier} · {item.season}
-              </span>
-            </li>
-          ))}
-        </ul>
+        <h3 className="font-serif text-xl text-forest">{tier.title}</h3>
+        <p className="mt-3 text-sm text-charcoal/80 leading-relaxed">
+          {tier.editCopy}
+        </p>
       </figcaption>
     </figure>
   );
@@ -810,6 +884,20 @@ function TrustStrip() {
 
 /* ---------- Timeline (horizontal desktop, vertical stepper mobile) ---- */
 
+/**
+ * Meteorological Northern-Hemisphere seasons — aligns with how apparel
+ * boxes are actually named in the trade. Spring = Mar/Apr/May, Summer =
+ * Jun/Jul/Aug, Fall = Sep/Oct/Nov, Winter = Dec/Jan/Feb. Confirmed with
+ * Drew in Round 3.
+ */
+function seasonFromDate(d: Date): "Spring" | "Summer" | "Fall" | "Winter" {
+  const m = d.getMonth(); // 0 = January
+  if (m >= 2 && m <= 4) return "Spring";
+  if (m >= 5 && m <= 7) return "Summer";
+  if (m >= 8 && m <= 10) return "Fall";
+  return "Winter";
+}
+
 function Timeline({ selectedTier }: { selectedTier: DiscoverTier | null }) {
   const today = useMemo(() => new Date(), []);
   const tierMeta = useMemo(() => {
@@ -832,6 +920,13 @@ function Timeline({ selectedTier }: { selectedTier: DiscoverTier | null }) {
       d.setDate(d.getDate() + days);
       return d;
     };
+    // Box 1 uses the visitor's selected tier name (or a neutral fallback).
+    // Boxes 2–4 are always the full Reserve edit, dynamically named by the
+    // meteorological season of their ship date so "Winter Collection" reads
+    // right in December and "Summer Collection" reads right in July.
+    const b2 = plus(90);
+    const b3 = plus(180);
+    const b4 = plus(270);
     return [
       {
         boxLabel: "Box 1",
@@ -842,22 +937,22 @@ function Timeline({ selectedTier }: { selectedTier: DiscoverTier | null }) {
       },
       {
         boxLabel: "Box 2",
-        date: fmt(plus(90)),
-        title: "Reserve Collection",
+        date: fmt(b2),
+        title: `Reserve ${seasonFromDate(b2)} Collection`,
         price: "$250",
         highlight: false,
       },
       {
         boxLabel: "Box 3",
-        date: fmt(plus(180)),
-        title: "Reserve Collection",
+        date: fmt(b3),
+        title: `Reserve ${seasonFromDate(b3)} Collection`,
         price: "$250",
         highlight: false,
       },
       {
         boxLabel: "Box 4",
-        date: fmt(plus(270)),
-        title: "Reserve Collection",
+        date: fmt(b4),
+        title: `Reserve ${seasonFromDate(b4)} Collection`,
         price: "$250",
         highlight: false,
       },
@@ -966,8 +1061,9 @@ function Timeline({ selectedTier }: { selectedTier: DiscoverTier | null }) {
       </ol>
 
       <p className="mt-8 text-center text-xs text-charcoal/55 max-w-lg mx-auto leading-relaxed">
-        Every membership renews as the full Reserve Collection at $250 per
-        quarter. Your first-box choice does not change the renewal price.
+        Every box is curated for the season it ships in. Winter boxes lean
+        layers and travel. Summer boxes lean lightweight. The renewal price
+        is always $250 per quarter.
       </p>
     </div>
   );
