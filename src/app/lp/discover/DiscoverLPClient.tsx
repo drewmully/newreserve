@@ -391,10 +391,12 @@ export default function DiscoverLPClient() {
       </section>
 
       {/* =============================== TIER CARDS ========================== */}
-      <section id="tiers" className="pb-10 md:pb-14">
+      <section id="tiers" className="pt-6 md:pt-10 pb-10 md:pb-14">
         <div className="max-w-6xl mx-auto px-5 sm:px-8">
-          <div className="text-center mb-10 sm:mb-14">
-            <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-4">
+          {/* Section header. Compact on desktop so the tier cards fit above
+              the fold at 900px viewport height. */}
+          <div className="text-center mb-6 sm:mb-8">
+            <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-3">
               Choose your first box
             </div>
             <h2 className="font-serif text-3xl sm:text-4xl text-forest">
@@ -803,60 +805,67 @@ function TierCard({
         </div>
       ) : null}
 
-      {/* Image slot: fixed aspect ratio, identical across all three cards */}
+      {/* Image slot: 5:3 landscape crop keeps all three cards' upper
+          halves at identical height while trimming ~80px of vertical
+          real estate versus the previous 4:3 crop — the full card now
+          fits above the fold at 1440×900. */}
       <PlaceholderFrame
         src={tier.image}
         alt={`${tier.title} first-box contents flat lay.`}
         note={tier.imageNote}
-        aspect="aspect-[4/3]"
+        aspect="aspect-[5/3]"
         bg="bg-forest"
         sizes="(min-width: 768px) 32vw, 92vw"
         variant="dense"
       />
 
-      {/* Card body */}
-      <div className="flex flex-col flex-1 p-6 sm:p-7">
-        <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-3">
+      {/* Card body. Padding + vertical rhythm tightened so the full card
+          (image → title → price → body → renewal → BEST FOR → CTA) fits
+          within ~640px of vertical space at md+. */}
+      <div className="flex flex-col flex-1 p-5 sm:p-6">
+        <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-2">
           {tier.eyebrow}
         </div>
         <h3 className="font-serif text-2xl text-forest">{tier.title}</h3>
-        <div className="mt-4 flex items-baseline gap-2">
-          <span className="font-serif text-4xl text-forest">
+        <div className="mt-3 flex items-baseline gap-2">
+          <span className="font-serif text-3xl text-forest">
             {tier.firstBoxPrice}
           </span>
           <span className="text-xs text-charcoal/60">first box</span>
         </div>
 
-        {/* Round-3 body: single curation-framed paragraph per tier. Fixed
-            min-h keeps all three cards' price/BEST FOR/CTA rows on the
-            same baseline across the grid. */}
-        <p className="mt-4 text-sm text-charcoal/80 leading-relaxed md:min-h-[8rem]">
+        {/* Body copy. min-h reduced from 8rem to 5rem — the three copies
+            are 1-2 lines each, and the previous 8rem reserved ~80px of
+            dead space that pushed the CTA below the fold. */}
+        <p className="mt-3 text-sm text-charcoal/80 leading-relaxed md:min-h-[5rem]">
           {tier.bodyCopy}
         </p>
 
-        {/* Renewal transparency, full body size, directly under contents. */}
-        <p className="mt-5 text-sm text-forest leading-relaxed font-medium md:min-h-[2.75rem]">
+        {/* Renewal transparency, verbatim identical string across all
+            three tiers — no min-h needed since the height is always equal. */}
+        <p className="mt-4 text-sm text-forest leading-relaxed font-medium">
           Renews at $250 per quarter as the full Reserve Collection. Skip or
           cancel any time.
         </p>
 
-        {/* BEST FOR block: identical slot height across tiers */}
-        <div className="mt-5 pt-5 border-t border-forest/10">
-          <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-2">
+        {/* BEST FOR block. min-h dropped: bestFor lines are short and the
+            grid alignment holds without a reserved slot. */}
+        <div className="mt-4 pt-4 border-t border-forest/10">
+          <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-1.5">
             Best for
           </div>
-          <p className="text-sm text-charcoal/70 leading-relaxed md:min-h-[2.75rem]">
+          <p className="text-sm text-charcoal/70 leading-relaxed">
             {tier.bestFor}
           </p>
         </div>
 
-        {/* Spacer to push CTA to the bottom on md+ */}
-        <div className="flex-1" />
+        {/* Spacer pushes CTA to the bottom on md+ so all three CTAs align. */}
+        <div className="flex-1 min-h-[1rem]" />
 
         <button
           type="button"
           onClick={onSelect}
-          className="mt-6 w-full bg-forest hover:bg-forest/90 text-bone py-3.5 rounded-md text-sm font-medium tracking-wide transition cursor-pointer"
+          className="mt-5 w-full bg-forest hover:bg-forest/90 text-bone py-3 rounded-md text-sm font-medium tracking-wide transition cursor-pointer"
         >
           {tier.ctaLabel}
         </button>
