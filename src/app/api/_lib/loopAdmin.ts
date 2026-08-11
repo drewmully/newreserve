@@ -357,14 +357,24 @@ export async function updateLoopSubscriptionNextBillingDate(
   nextBillingDateEpoch: number
 ): Promise<void> {
   const sub = (await getLoopSubscriptionById(subscriptionId)) as Record<string, unknown> | null;
-  const billingPolicy = (sub?.billingPolicy as Record<string, unknown>) ?? {
-    interval: "MONTH",
-    intervalCount: 3,
-  };
-  const deliveryPolicy = (sub?.deliveryPolicy as Record<string, unknown>) ?? {
-    interval: "MONTH",
-    intervalCount: 3,
-  };
+  const billingPolicy = sub?.billingPolicy as Record<string, unknown> | undefined;
+  const deliveryPolicy = sub?.deliveryPolicy as Record<string, unknown> | undefined;
+
+  if (!billingPolicy && !deliveryPolicy) {
+    throw new Error(
+      `Loop subscription ${subscriptionId} is missing both billingPolicy and deliveryPolicy — refusing to guess a cadence`
+    );
+  }
+  if (!billingPolicy) {
+    throw new Error(
+      `Loop subscription ${subscriptionId} is missing billingPolicy — refusing to guess a cadence`
+    );
+  }
+  if (!deliveryPolicy) {
+    throw new Error(
+      `Loop subscription ${subscriptionId} is missing deliveryPolicy — refusing to guess a cadence`
+    );
+  }
 
   const url = `${BASE_URL}/subscription/${encodeURIComponent(subscriptionId)}/frequency`;
   const res = await fetchWithRetry(url, {
