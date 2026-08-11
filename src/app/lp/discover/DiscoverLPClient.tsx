@@ -493,6 +493,17 @@ export default function DiscoverLPClient() {
                 that names every item and why it was picked for you. The
                 packaging is part of the product.
               </p>
+              {/* Anchor back to the tier row so anyone convinced by the
+                  unboxing frame can jump straight to choosing a first box
+                  without hunting for the CTA. */}
+              <div className="mt-8">
+                <a
+                  href="#tiers"
+                  className="inline-block bg-forest hover:bg-forest/90 text-bone py-3 px-8 rounded-md text-sm font-medium tracking-wide transition"
+                >
+                  Choose your first box
+                </a>
+              </div>
             </div>
           </div>
         </div>
