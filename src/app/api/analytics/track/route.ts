@@ -75,6 +75,7 @@ const VALID_EVENTS = new Set([
   "lp_discover_view",
   "lp_discover_tier_selected",
   "lp_discover_timeline_interacted",
+  "lp_discover_sticky_cta_tapped",
 ]);
 
 /**

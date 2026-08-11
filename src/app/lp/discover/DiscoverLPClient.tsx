@@ -1,53 +1,42 @@
 "use client";
 
 /**
- * Mully Reserve — /lp/discover landing page.
+ * Mully Reserve /lp/discover landing page.
  *
  * Three-tier acquisition page. Every tier is the FIRST BOX of the same
- * Reserve membership; subsequent quarterly cycles bill at the full Reserve
- * Collection rate regardless of tier chosen today.
+ * Reserve membership; renewals cycle at the full quarterly rate.
  *
- * COPY RULES (verified — do not violate):
- *   - No em-dashes anywhere on the page.
+ * FLOW (rebuilt 2026-08-11 after review):
+ *   1. User taps a tier CTA.
+ *   2. We stash the tier in localStorage under `mully_discover_tier`,
+ *      fire lp_discover_tier_selected, and open the same QuizModal used
+ *      by /lp/subscription (source: "lp_discover").
+ *   3. Quiz completes and routes to /lp/reserve/reveal/{profileId} as
+ *      normal.
+ *   4. ReserveCheckoutCTA on the reveal page reads the stashed tier and
+ *      applies the matching Shopify discount code + `discover_tier` cart
+ *      attribute + visible "First Box Edition" line-item property. The
+ *      orders-paid webhook then adds a `discover-tier-<tier>` order tag
+ *      and prepends a pick-ticket note.
+ *
+ * COPY RULES (verified, do not violate):
+ *   - No em-dashes anywhere on the page. Use periods or commas.
  *   - The words cheap / discount / deal / save must not appear.
- *   - No percent-off framing. Never "X% off", never "you save $Y".
- *   - Lower tiers are described by contents and experience, not price.
- *   - Voice: confident, direct, private-club register. Never a coupon.
- *
- * Data wiring:
- *   - `createMembershipCheckout("member", { discountCodes, attributes })`
- *     is the single seam. `discountCodes` is passed straight through to
- *     Shopify Storefront cartCreate; `attributes` become order note
- *     attributes for the orders-paid webhook.
- *   - Discount codes MULLY_DISCOVER (fixed $200 off Reserve Member,
- *     one-per-customer, product-scoped) and MULLY_SIGNATURE (fixed $125
- *     off, same rules) were created in Shopify admin on 2026-08-11.
- *   - The `discover_tier` cart attribute carries the choice into
- *     orders-paid where the FIRST order is tagged `discover-tier-<tier>`.
- *     Loop renewals cannot inherit the cart attribute.
- *
- * Analytics:
- *   - `lp_discover_view` on mount.
- *   - `lp_discover_tier_selected` on any tier CTA click (property: tier).
- *   - `lp_discover_timeline_interacted` when a member expands a timeline
- *     node.
- *   - Existing `quiz_started` / `quiz_step_completed` / `quiz_completed`
- *     from QuizLauncher/QuizModal continue to fire (source:
- *     "lp_discover").
+ *   - No percent-off framing.
+ *   - Lower tiers described by contents and experience, not price.
+ *   - Voice: confident, factual, private-club register.
  */
 
 import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { GlassHeader } from "@/app/components/ClientComponents";
 import { captureAttributionFromUrl } from "@/lib/attribution";
-import { createMembershipCheckout } from "@/lib/shopifyCheckout";
 import { trackEvent } from "@/lib/tracking";
-import { CuratorStrip } from "../_shared/CuratorStrip";
-import { QuizLauncher } from "../_shared/QuizLauncher";
-import { RECENT_BOX_PRODUCTS } from "../_shared/products";
+import { QuizModal } from "../_shared/QuizModal";
 
-/* ---------- Tier definitions ------------------------------------------- */
+/* ---------- Types + tiers --------------------------------------------- */
 
 type DiscoverTier = "discovery" | "signature" | "reserve";
 
@@ -60,9 +49,16 @@ interface TierConfig {
   contents: string[];
   bestFor: string;
   ctaLabel: string;
-  /** Shopify discount code passed to cartCreate. Empty string = no code. */
-  discountCode: string;
   emphasized?: boolean;
+  /**
+   * Flat-lay hero for the tier card and the What's Inside section. When
+   * `image` is undefined we render a PlaceholderFrame with the shot
+   * direction copy in `imageNote`. Populate `image` once the final
+   * photograph is delivered.
+   */
+  image?: string;
+  imageNote: string;
+  itemLabels: { category: string; brandTier: string; season: string }[];
 }
 
 const TIERS: TierConfig[] = [
@@ -72,16 +68,20 @@ const TIERS: TierConfig[] = [
     title: "Discovery",
     firstBoxPrice: "$50",
     positioning:
-      "Your first look at what Reserve does. A shorter edit built around one hero piece and the accessories that finish it.",
+      "One hero piece and the accessories that finish it. A shorter first shipment for members trying the format.",
     contents: [
-      "One layer or polo, chosen for your climate and fit",
+      "One layer or polo chosen for your climate and fit",
       "One accessory pairing (belt, socks, or headwear)",
-      "Curator notes on how to wear the pieces on and off the course",
+      "Curator notes on how to wear it on and off the course",
     ],
-    bestFor:
-      "The player curious about the membership who wants a low-commitment way in.",
+    bestFor: "Curious members who want a low-commitment way in.",
     ctaLabel: "Start with Discovery",
-    discountCode: "MULLY_DISCOVER",
+    imageNote:
+      "FLAT LAY, 2 PIECES. Forest green paper background. Overhead 90 degree. One folded polo or 1/4 zip + one accessory (belt or headwear) + Mully hangtag. Minimal negative space, single soft key light from upper-left.",
+    itemLabels: [
+      { category: "Layer", brandTier: "Premium", season: "Fall" },
+      { category: "Accessory", brandTier: "Core", season: "Fall" },
+    ],
   },
   {
     id: "signature",
@@ -89,17 +89,22 @@ const TIERS: TierConfig[] = [
     title: "Signature Preview",
     firstBoxPrice: "$125",
     positioning:
-      "A broader introduction to the Reserve mix. Two or three pieces chosen to work as a full outfit for your next round.",
+      "Two or three pieces styled to layer into a full outfit for your next round.",
     contents: [
       "Two apparel pieces styled to layer together",
-      "One accessory pairing selected to complete the look",
+      "One accessory pairing to complete the look",
       "Curator notes and care guidance",
     ],
-    bestFor:
-      "The member ready for a real outfit out of the gate, not just a taste.",
+    bestFor: "Members ready for a real outfit out of the gate.",
     ctaLabel: "Start with Signature Preview",
-    discountCode: "MULLY_SIGNATURE",
     emphasized: true,
+    imageNote:
+      "FLAT LAY, 3 to 4 PIECES. Same forest background, same 90 degree overhead, same lighting as Discovery. One layer + one polo + one bottom or accessory + Mully box lid corner in frame. Visibly denser than Discovery, still styled.",
+    itemLabels: [
+      { category: "Layer", brandTier: "Premium", season: "Fall" },
+      { category: "Polo", brandTier: "Premium", season: "Fall" },
+      { category: "Accessory", brandTier: "Core", season: "Fall" },
+    ],
   },
   {
     id: "reserve",
@@ -113,67 +118,56 @@ const TIERS: TierConfig[] = [
       "Full editorial styling notes for the season",
       "Priority selection into next quarter's rotation",
     ],
-    bestFor:
-      "The member who already knows the format and wants the whole edit on arrival.",
+    bestFor: "Members who want the full edit on arrival.",
     ctaLabel: "Start with Reserve Collection",
-    discountCode: "",
+    imageNote:
+      "FLAT LAY, 5 to 6 PIECES. Same forest background, same 90 degree overhead, same lighting. Two layers + one polo + one bottom + two accessories + open Mully box in frame. Visibly the fullest of the three. This photo must read as the most product per square inch.",
+    itemLabels: [
+      { category: "Layer", brandTier: "Premium", season: "Fall" },
+      { category: "Layer", brandTier: "Premium", season: "Fall" },
+      { category: "Polo", brandTier: "Premium", season: "Fall" },
+      { category: "Bottom", brandTier: "Premium", season: "Fall" },
+      { category: "Accessory", brandTier: "Core", season: "Fall" },
+      { category: "Accessory", brandTier: "Core", season: "Fall" },
+    ],
   },
 ];
 
-/* ---------- Timeline definition --------------------------------------- */
+/* ---------- Hero + unboxing imagery ---------------------------------- */
 
-interface TimelineNode {
-  id: string;
-  label: string;
-  headline: string;
-  body: string;
-}
+/**
+ * The hero uses the existing Reserve Collection styled flat-lay on the
+ * forest background. Landscape crop on desktop, portrait crop on mobile.
+ */
+const HERO_LANDSCAPE = "/lp/hero/hero-landscape-4x3.webp";
+const HERO_PORTRAIT = "/lp/hero/hero-portrait-4x5.webp";
 
-const TIMELINE: TimelineNode[] = [
-  {
-    id: "today",
-    label: "Today",
-    headline: "You pick your first box.",
-    body: "Three ways into the same membership. Choose the entry that matches how you want to start.",
-  },
-  {
-    id: "quiz",
-    label: "Next",
-    headline: "Two minutes with the style quiz.",
-    body: "You tell us your fit, your favorite brands, and how you play. Our curators build your first shipment against your answers, not a template.",
-  },
-  {
-    id: "first-box",
-    label: "Within days",
-    headline: "Your first box ships.",
-    body: "Hand-selected pieces from Rhone, Greyson, Quiet Golf, Topo, and the rest of our rotation. Curator notes included.",
-  },
-  {
-    id: "renewal",
-    label: "Every quarter",
-    headline: "The full Reserve Collection.",
-    body: "From your second shipment onward, you receive the complete quarterly edit at the standard Reserve rate of $250 per quarter. Skip any quarter, adjust your profile any time.",
-  },
-];
+/**
+ * The unboxing photo uses the existing closed branded box on white. Once a
+ * shot with tissue + insert card is delivered, swap this constant.
+ */
+const UNBOXING_IMAGE = "/consult-hero-box.jpg";
+const UNBOXING_NOTE =
+  "Replace with a 4:3 landscape shot of the closed Mully box on bone paper, tissue folded to one side, insert card angled forward, high three-quarter camera, one soft key from upper-right. Same bone-white paper background as the current placeholder so the swap is one-line.";
 
-/* ---------- FAQ definition -------------------------------------------- */
+/* ---------- FAQ ------------------------------------------------------- */
 
 const FAQ: { q: string; a: string }[] = [
   {
     q: "How is Discovery different from Reserve Collection?",
-    a: "Discovery ships a shorter first shipment focused on one hero piece and its accessories. Reserve Collection ships the full quarterly edit of four to six pieces from day one. Both continue as the same quarterly membership afterward.",
+    a: "Discovery ships a shorter first box built around one hero piece. Reserve Collection ships the full quarterly edit of four to six pieces on day one.",
   },
   {
     q: "What happens after my first box?",
-    a: "Every tier renews as the full Reserve Collection at $250 per quarter. You never re-select a tier; the first choice only determines what arrives on shipment one.",
+    a: "Every membership renews as the full Reserve Collection at $250 per quarter. Your first-box choice only determines what arrives on shipment one.",
   },
   {
     q: "Can I skip a quarter or cancel?",
-    a: "Yes. You can skip any quarter from your dashboard, and you can cancel from your dashboard at any time before the next cycle.",
+    a: "Yes. Skip any quarter from your dashboard, or cancel any time before the next cycle.",
   },
   {
     q: "Who curates the box?",
-    a: "Our editorial team, who play the game. Every shipment is built against your quiz answers by hand; nothing is auto-picked.",
+    a: "Our editorial team, who play the game. Every shipment is built against your quiz answers by hand.",
   },
   {
     q: "Which brands are in the rotation?",
@@ -185,105 +179,156 @@ const FAQ: { q: string; a: string }[] = [
   },
 ];
 
+const DISCOVER_TIER_STORAGE_KEY = "mully_discover_tier";
+
 /* ---------- Component -------------------------------------------------- */
 
 export default function DiscoverLPClient() {
-  const [checkoutState, setCheckoutState] = useState<{
-    tier: DiscoverTier | null;
-    loading: boolean;
-    error: string | null;
-  }>({ tier: null, loading: false, error: null });
+  const [selectedTier, setSelectedTier] = useState<DiscoverTier | null>(null);
+  const [quizOpen, setQuizOpen] = useState(false);
+  const [showStickyCTA, setShowStickyCTA] = useState(false);
 
   useEffect(() => {
     captureAttributionFromUrl();
     trackEvent("lp_discover_view").catch(() => {});
   }, []);
 
-  const startCheckout = useCallback(async (tier: TierConfig) => {
-    setCheckoutState({ tier: tier.id, loading: true, error: null });
+  // Sticky mobile CTA appears after user scrolls past the tier cards.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const tierEl = document.getElementById("tiers");
+    if (!tierEl) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          // Once the tier grid's bottom leaves the viewport upward, show
+          // the sticky. When it returns into view, hide it.
+          setShowStickyCTA(!entry.isIntersecting && entry.boundingClientRect.top < 0);
+        }
+      },
+      { threshold: 0, rootMargin: "0px" }
+    );
+    io.observe(tierEl);
+    return () => io.disconnect();
+  }, []);
+
+  // Body-scroll lock + hide the sticky footer while the quiz modal is open.
+  useEffect(() => {
+    if (!quizOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.setAttribute("data-consult-open", "true");
+    return () => {
+      document.body.style.overflow = prev;
+      document.documentElement.removeAttribute("data-consult-open");
+    };
+  }, [quizOpen]);
+
+  const startTierFlow = useCallback((tier: TierConfig) => {
+    setSelectedTier(tier.id);
+    try {
+      window.localStorage.setItem(DISCOVER_TIER_STORAGE_KEY, tier.id);
+    } catch {
+      // localStorage may be unavailable in private mode; the reveal CTA
+      // gracefully falls back to no-tier behavior.
+    }
     trackEvent("lp_discover_tier_selected", {
       properties: { tier: tier.id },
     }).catch(() => {});
-    try {
-      await createMembershipCheckout("member", {
-        discountCodes: tier.discountCode ? [tier.discountCode] : undefined,
-        attributes: [
-          { key: "discover_tier", value: tier.id },
-          { key: "lp_source", value: "lp_discover" },
-        ],
-      });
-      // createMembershipCheckout navigates the browser away; the state
-      // below only matters if navigation fails silently.
-      setCheckoutState({ tier: tier.id, loading: false, error: null });
-    } catch (err) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : "Something went wrong. Please try again in a moment.";
-      setCheckoutState({ tier: tier.id, loading: false, error: message });
-    }
+    // quiz_started fires here (mirroring QuizLauncher's behavior) so the
+    // funnel from tier selection → quiz start → completion is unbroken.
+    trackEvent(
+      "quiz_started",
+      { properties: { source: "lp_discover", tier: tier.id } },
+      { includeAuth: false }
+    ).catch(() => {});
+    setQuizOpen(true);
   }, []);
 
-  const gridShots = useMemo(
-    () =>
-      [
-        RECENT_BOX_PRODUCTS[0],
-        RECENT_BOX_PRODUCTS[2],
-        RECENT_BOX_PRODUCTS[4],
-        RECENT_BOX_PRODUCTS[3],
-      ].filter(Boolean),
-    []
-  );
+  const onStickyCTA = useCallback(() => {
+    trackEvent("lp_discover_sticky_cta_tapped").catch(() => {});
+    const el = document.getElementById("tiers");
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
 
   return (
     <div className="min-h-screen bg-white text-charcoal">
       <GlassHeader />
 
-      {/* ============================== HERO ============================== */}
-      <section className="pt-24 sm:pt-28 lg:pt-32 pb-14 md:pb-20">
-        <div className="max-w-5xl mx-auto px-5 sm:px-8 text-center">
-          <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-5">
-            Mully Reserve
-          </div>
-          <h1 className="font-serif text-4xl sm:text-5xl md:text-6xl text-forest leading-[1.05]">
-            Discover your first box.
-          </h1>
-          <p className="mt-5 text-base sm:text-lg text-charcoal/70 max-w-2xl mx-auto leading-relaxed">
-            Three ways into one membership. Pick the shipment that fits how you
-            want to start. Every choice becomes the same quarterly Reserve
-            curation from the second box forward.
-          </p>
-          <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
-            <a
-              href="#tiers"
-              className="w-full sm:w-auto bg-ember hover:bg-ember/90 text-bone py-3.5 px-10 rounded-md text-sm font-medium tracking-wide transition cursor-pointer"
-            >
-              See the three boxes
-            </a>
-            <Link
-              href="#how-it-works"
-              className="text-sm underline text-charcoal/70 hover:text-charcoal transition"
-            >
-              How the membership works
-            </Link>
+      {/* ================================ HERO =============================== */}
+      {/* Full-bleed styled flat-lay of the Reserve Collection on the forest
+          background. Desktop: photo left, copy right. Mobile: photo top,
+          copy below. This is intentionally the first frame a visitor sees. */}
+      <section className="pt-20 sm:pt-24 lg:pt-28 pb-14 md:pb-20">
+        <div className="max-w-7xl mx-auto px-5 sm:px-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-14 items-center">
+            {/* Photo. Two <Image> tags so we can crop tighter on mobile via
+                CSS. The landscape asset is the default; the portrait asset
+                takes over below 640px for a tighter framing on phones. */}
+            <div className="relative w-full aspect-[4/5] sm:aspect-[4/3] bg-forest rounded-md overflow-hidden order-first">
+              <Image
+                src={HERO_PORTRAIT}
+                alt=""
+                fill
+                priority
+                sizes="100vw"
+                className="object-cover sm:hidden"
+              />
+              <Image
+                src={HERO_LANDSCAPE}
+                alt="An open Mully Reserve Collection box surrounded by folded apparel, a leather accessory, and a Perficio golf-shoe bag, all styled on a forest-green backdrop."
+                fill
+                priority
+                sizes="(min-width: 1024px) 50vw, 100vw"
+                className="object-cover hidden sm:block"
+              />
+            </div>
+
+            {/* Copy */}
+            <div className="text-center lg:text-left">
+              <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-4">
+                Mully Reserve
+              </div>
+              <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl text-forest leading-[1.05]">
+                Discover your first box.
+              </h1>
+              <p className="mt-5 text-base sm:text-lg text-charcoal/75 max-w-xl mx-auto lg:mx-0 leading-relaxed">
+                Three ways into one membership. Pick your first shipment.
+                Every box after renews as the full Reserve Collection at{" "}
+                <span className="font-medium text-forest">
+                  $250 per quarter
+                </span>
+                .
+              </p>
+              <div className="mt-8 flex flex-col sm:flex-row items-center lg:items-start justify-center lg:justify-start gap-3">
+                <a
+                  href="#tiers"
+                  className="w-full sm:w-auto bg-forest hover:bg-forest/90 text-bone py-3.5 px-10 rounded-md text-sm font-medium tracking-wide transition cursor-pointer text-center"
+                >
+                  See the three boxes
+                </a>
+                <Link
+                  href="#how-it-works"
+                  className="text-sm underline text-charcoal/70 hover:text-charcoal transition"
+                >
+                  How the membership works
+                </Link>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
-      {/* ============================ TIER CARDS ========================== */}
-      <section id="tiers" className="pb-16 md:pb-24">
+      {/* =============================== TIER CARDS ========================== */}
+      <section id="tiers" className="pb-10 md:pb-14">
         <div className="max-w-6xl mx-auto px-5 sm:px-8">
           <div className="text-center mb-10 sm:mb-14">
             <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-4">
-              Choose your entry
+              Choose your first box
             </div>
             <h2 className="font-serif text-3xl sm:text-4xl text-forest">
-              Three first boxes, one membership.
+              One membership. Three ways in.
             </h2>
-            <p className="mt-4 text-sm text-charcoal/60 max-w-xl mx-auto leading-relaxed">
-              Pricing shown is your first shipment only. Every tier renews as
-              the full Reserve Collection at $250 per quarter.
-            </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -291,122 +336,133 @@ export default function DiscoverLPClient() {
               <TierCard
                 key={tier.id}
                 tier={tier}
-                loading={
-                  checkoutState.loading && checkoutState.tier === tier.id
-                }
-                onSelect={() => startCheckout(tier)}
+                selected={selectedTier === tier.id}
+                onSelect={() => startTierFlow(tier)}
               />
             ))}
           </div>
-
-          {checkoutState.error ? (
-            <p className="mt-6 text-center text-sm text-ember">
-              {checkoutState.error}
-            </p>
-          ) : null}
-
-          <p className="mt-8 text-center text-xs text-charcoal/50 max-w-xl mx-auto leading-relaxed">
-            Prices above are for your first shipment. From your second
-            shipment forward, your Reserve membership continues at $250 per
-            quarter as the full Reserve Collection. Skip or cancel any time
-            before the next cycle.
-          </p>
         </div>
       </section>
 
-      {/* ========================== HOW IT WORKS ========================== */}
+      {/* ============================ TRUST STRIP ============================ */}
+      <TrustStrip />
+
+      {/* ============================= TIMELINE ============================== */}
       <section id="how-it-works" className="bg-bone py-16 md:py-24">
-        <div className="max-w-4xl mx-auto px-5 sm:px-8">
-          <div className="text-center mb-12 sm:mb-16">
+        <div className="max-w-5xl mx-auto px-5 sm:px-8">
+          <div className="text-center mb-10 sm:mb-14">
             <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-4">
               How Reserve works
             </div>
             <h2 className="font-serif text-3xl sm:text-4xl text-forest">
-              A quarterly rhythm, curated by hand.
+              A quarterly rhythm, priced up front.
             </h2>
           </div>
-          <Timeline nodes={TIMELINE} />
+          <Timeline selectedTier={selectedTier} />
         </div>
       </section>
 
-      {/* ============================ WARDROBE ============================ */}
-      <section className="py-16 md:py-24">
-        <div className="max-w-6xl mx-auto px-5 sm:px-8">
+      {/* ============================ WHAT'S INSIDE ==========================
+          Reinstated. Three large flat lays side by side. The visual density
+          delta is the argument, so the photos are the primary content and
+          the labels are supporting. */}
+      <section id="whats-inside" className="py-16 md:py-24">
+        <div className="max-w-7xl mx-auto px-5 sm:px-8">
           <div className="text-center mb-10 sm:mb-14">
             <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-4">
-              Recent shipments
+              What&rsquo;s inside
             </div>
             <h2 className="font-serif text-3xl sm:text-4xl text-forest">
-              What our members opened this quarter.
+              See the three boxes side by side.
             </h2>
+            <p className="mt-4 text-sm sm:text-base text-charcoal/70 max-w-2xl mx-auto leading-relaxed">
+              Same photographer, same background, same lighting, same angle.
+              The difference you see is the difference you get.
+            </p>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
-            {gridShots.map((product) => (
-              <div
-                key={product.title}
-                className="aspect-[3/4] bg-bone-dark relative overflow-hidden"
-              >
-                <Image
-                  src={product.image}
-                  alt={`${product.vendor} ${product.title}`}
-                  fill
-                  sizes="(min-width: 768px) 22vw, 45vw"
-                  className="object-cover"
-                />
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8">
+            {TIERS.map((tier) => (
+              <TierFlatlayCard key={tier.id} tier={tier} />
             ))}
           </div>
         </div>
       </section>
 
-      {/* =========================== CURATORS ============================ */}
+      {/* ============================ UNBOXING MOMENT =========================
+          One frame of the closed branded box + tissue + insert card.
+          Currently uses the existing closed-box photo on white; replace
+          with the styled shot per UNBOXING_NOTE when it lands. */}
       <section className="bg-bone py-16 md:py-24">
-        <div className="max-w-6xl mx-auto px-5 sm:px-8">
-          <div className="text-center mb-10 sm:mb-14">
-            <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-4">
-              Meet the curators
+        <div className="max-w-7xl mx-auto px-5 sm:px-8">
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-14 items-center">
+            <div className="lg:col-span-3 relative aspect-[4/3] w-full bg-white rounded-md overflow-hidden border border-forest/10">
+              <Image
+                src={UNBOXING_IMAGE}
+                alt="The closed forest-green Mully Reserve box, embossed logo forward, shot on a neutral bone-white paper background."
+                fill
+                sizes="(min-width: 1024px) 60vw, 100vw"
+                className="object-contain p-6 sm:p-10"
+              />
+              <div
+                className="absolute bottom-3 right-3 text-[10px] tracking-[0.24em] uppercase text-forest/50 bg-white/85 backdrop-blur px-2 py-1 rounded"
+                title={UNBOXING_NOTE}
+              >
+                Placeholder shot
+              </div>
             </div>
-            <h2 className="font-serif text-3xl sm:text-4xl text-forest">
-              Editors who play the game.
-            </h2>
+            <div className="lg:col-span-2">
+              <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-4">
+                The unboxing
+              </div>
+              <h2 className="font-serif text-3xl sm:text-4xl text-forest leading-[1.1]">
+                Built for the moment you open it.
+              </h2>
+              <p className="mt-5 text-sm sm:text-base text-charcoal/75 leading-relaxed">
+                Rigid magnetic box, tissue-wrapped pieces, an insert card
+                that names every item and why it was picked for you. The
+                packaging is part of the product.
+              </p>
+            </div>
           </div>
-          <CuratorStrip />
         </div>
       </section>
 
-      {/* ========================= MEMBER REVIEWS ========================
-          Reuses the Junip Reserve Member widget already used on
-          /lp/subscription. The junip script is loaded globally in
-          layout.tsx and hydrates the matching product-review node. */}
-      <section className="bg-white py-16 md:py-24">
+      {/* ============================ MEMBER REVIEWS ==========================
+          Reuses the same Junip Reserve Member widget from /lp/subscription.
+          Star color and photo-first sort are controlled via the
+          .junip-review CSS overrides in globals.css (added in this pass).
+      ============================================================== */}
+      <section className="bg-bone py-16 md:py-24">
         <div className="max-w-6xl mx-auto px-5 sm:px-8">
           <div className="text-center mb-10 sm:mb-12">
             <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-4">
               Member reviews
             </div>
             <h2 className="font-serif text-3xl sm:text-4xl text-forest">
-              What members are saying
+              What members say.
             </h2>
           </div>
-          <span
-            className="junip-product-review"
-            data-product-id="8501257044160"
-          />
+          <div className="junip-discover-scope">
+            <span
+              className="junip-product-review"
+              data-product-id="8501257044160"
+            />
+          </div>
         </div>
       </section>
 
-      {/* ============================== FAQ =============================== */}
-      <section className="bg-bone py-16 md:py-24">
+      {/* ================================ FAQ ================================ */}
+      <section className="bg-white py-16 md:py-24">
         <div className="max-w-3xl mx-auto px-5 sm:px-8">
           <div className="text-center mb-10 sm:mb-12">
             <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-4">
               Questions
             </div>
             <h2 className="font-serif text-3xl sm:text-4xl text-forest">
-              Common questions, answered.
+              Common questions.
             </h2>
           </div>
-          <div className="divide-y divide-forest/15 bg-white border border-forest/15 rounded-md">
+          <div className="divide-y divide-forest/15 bg-bone border border-forest/15 rounded-md">
             {FAQ.map((item) => (
               <FAQItem key={item.q} question={item.q} answer={item.a} />
             ))}
@@ -414,8 +470,8 @@ export default function DiscoverLPClient() {
         </div>
       </section>
 
-      {/* ============================ FINAL CTA =========================== */}
-      <section className="py-16 md:py-24">
+      {/* ============================= FINAL CTA ============================= */}
+      <section className="bg-bone py-16 md:py-24">
         <div className="max-w-3xl mx-auto px-5 sm:px-8 text-center">
           <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-4">
             Ready when you are
@@ -423,33 +479,142 @@ export default function DiscoverLPClient() {
           <h2 className="font-serif text-3xl sm:text-4xl text-forest">
             Not sure which box is right?
           </h2>
-          <p className="mt-4 text-sm sm:text-base text-charcoal/70 leading-relaxed">
-            Take the two-minute style quiz. Our curators will suggest the entry
-            that fits how you play and what you already own.
+          <p className="mt-4 text-sm sm:text-base text-charcoal/75 leading-relaxed">
+            Take the two-minute style quiz. Our curators recommend the entry
+            that fits how you play.
           </p>
           <div className="mt-8 flex justify-center">
-            <QuizLauncher
-              variant="primary-pill"
-              label="Take the style quiz"
-              source="lp_discover"
-            />
+            <button
+              type="button"
+              onClick={() =>
+                startTierFlow(TIERS.find((t) => t.emphasized) ?? TIERS[1])
+              }
+              className="bg-forest hover:bg-forest/90 text-bone py-3.5 px-10 rounded-md text-sm font-medium tracking-wide transition cursor-pointer"
+            >
+              Take the style quiz
+            </button>
           </div>
         </div>
       </section>
 
-      {/* =========================== MOBILE STICKY ======================== */}
-      <div
-        data-lp-sticky
-        className="fixed bottom-0 left-0 right-0 z-30 md:hidden bg-white/95 backdrop-blur border-t border-forest/15"
-      >
-        <div className="max-w-md mx-auto px-4 py-3">
-          <a
-            href="#tiers"
-            className="block w-full text-center bg-ember hover:bg-ember/90 text-bone py-3 rounded-md text-sm font-medium tracking-wide transition"
-          >
-            See the three boxes
-          </a>
+      {/* ============================ MOBILE STICKY ==========================
+          Appears once the user scrolls past the tier cards. Hidden while
+          the quiz modal is open (via [data-consult-open="true"] rule in
+          globals.css).
+      ============================================================== */}
+      {showStickyCTA ? (
+        <div
+          data-lp-sticky
+          className="fixed bottom-0 left-0 right-0 z-30 md:hidden bg-white/95 backdrop-blur border-t border-forest/15 animate-fade-up"
+        >
+          <div className="max-w-md mx-auto px-4 py-3">
+            <button
+              type="button"
+              onClick={onStickyCTA}
+              className="block w-full text-center bg-forest hover:bg-forest/90 text-bone py-3 rounded-md text-sm font-medium tracking-wide transition"
+            >
+              Choose your box
+            </button>
+          </div>
         </div>
+      ) : null}
+
+      {/* Quiz modal, portaled to body so mobile fixed positioning escapes
+          the stacking context of the sticky footer. */}
+      {quizOpen ? (
+        <QuizPortal onClose={() => setQuizOpen(false)} />
+      ) : null}
+    </div>
+  );
+}
+
+/* ---------- Quiz portal wrapper --------------------------------------- */
+
+function QuizPortal({ onClose }: { onClose: () => void }) {
+  // Client-only component. QuizPortal is only rendered when the tier CTA
+  // is clicked (quizOpen === true), which cannot happen during SSR, so
+  // document.body is guaranteed to exist by the time this runs.
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-white">
+      <QuizModal source="lp_discover" onClose={onClose} />
+    </div>,
+    document.body
+  );
+}
+
+/* ---------- Placeholder frame ----------------------------------------
+ * Renders a real photo if `src` is provided; otherwise renders a
+ * correctly-proportioned frame containing the shot direction so the
+ * layout is production-shaped and can accept a final image with zero
+ * layout rework.
+ */
+
+function PlaceholderFrame({
+  src,
+  alt,
+  note,
+  aspect = "aspect-square",
+  bg = "bg-forest",
+  sizes,
+  variant = "dense",
+}: {
+  src?: string;
+  alt: string;
+  note: string;
+  aspect?: string;
+  bg?: string;
+  sizes: string;
+  /** "dense" for tier cards, "large" for the What's Inside section. */
+  variant?: "dense" | "large";
+}) {
+  if (src) {
+    return (
+      <div className={`relative w-full ${aspect} ${bg} overflow-hidden`}>
+        <Image src={src} alt={alt} fill sizes={sizes} className="object-cover" />
+      </div>
+    );
+  }
+  return (
+    <div
+      className={`relative w-full ${aspect} ${bg} overflow-hidden`}
+      role="img"
+      aria-label={alt}
+    >
+      {/* Corner tag */}
+      <div className="absolute top-3 left-3 text-[9px] tracking-[0.28em] uppercase text-bone/80 border border-bone/40 px-2 py-1 rounded-sm bg-forest/40">
+        Photo placeholder
+      </div>
+      {/* Camera icon */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center px-4 sm:px-6 text-center text-bone">
+        <svg
+          viewBox="0 0 24 24"
+          className={variant === "large" ? "w-10 h-10 mb-4 opacity-60" : "w-7 h-7 mb-3 opacity-60"}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.25}
+          aria-hidden="true"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.174-1.26.207-2.152 1.31-2.152 2.586v10.503a2.25 2.25 0 002.25 2.25h15.75a2.25 2.25 0 002.25-2.25V9.99c0-1.276-.891-2.379-2.152-2.586a44.63 44.63 0 00-1.134-.174 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"
+          />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"
+          />
+        </svg>
+        <p
+          className={
+            variant === "large"
+              ? "text-[11px] sm:text-xs leading-relaxed text-bone/90 max-w-md"
+              : "text-[10px] sm:text-[11px] leading-relaxed text-bone/85 max-w-[22ch] sm:max-w-[26ch]"
+          }
+        >
+          {note}
+        </p>
       </div>
     </div>
   );
@@ -457,129 +622,353 @@ export default function DiscoverLPClient() {
 
 /* ---------- Tier card ------------------------------------------------- */
 
+/**
+ * Alignment strategy: the card is a flex column. Every text row that can
+ * vary in height across tiers gets a `min-h` slot sized to the worst-case
+ * content. That guarantees the price row of every card sits on the same
+ * baseline, ditto positioning, ditto renewal line, ditto BEST FOR block,
+ * ditto CTA. The image slot is a fixed aspect ratio so the top edges of
+ * every card align regardless of tier.
+ */
 function TierCard({
   tier,
-  loading,
+  selected,
   onSelect,
 }: {
   tier: TierConfig;
-  loading: boolean;
+  selected: boolean;
   onSelect: () => void;
 }) {
+  const isEmphasized = !!tier.emphasized;
   return (
     <div
       className={
-        tier.emphasized
-          ? "relative flex flex-col bg-white border border-forest/40 rounded-md p-6 sm:p-7 shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
-          : "relative flex flex-col bg-white border border-forest/15 rounded-md p-6 sm:p-7"
+        (isEmphasized
+          ? "relative flex flex-col bg-white border-2 border-forest rounded-md overflow-hidden shadow-[0_8px_24px_-12px_rgba(20,45,30,0.25)] "
+          : "relative flex flex-col bg-white border border-forest/20 rounded-md overflow-hidden ") +
+        (selected ? " ring-2 ring-forest/40 ring-offset-2" : "")
       }
     >
-      {tier.emphasized ? (
-        <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-forest text-bone text-[10px] tracking-[0.28em] uppercase px-3 py-1 rounded-sm">
+      {isEmphasized ? (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 bg-forest text-bone text-[10px] tracking-[0.28em] uppercase px-3 py-1 rounded-sm shadow-sm">
           Most chosen
         </div>
       ) : null}
-      <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-3">
-        {tier.eyebrow}
-      </div>
-      <h3 className="font-serif text-2xl text-forest">{tier.title}</h3>
-      <div className="mt-4 flex items-baseline gap-2">
-        <span className="font-serif text-4xl text-forest">
-          {tier.firstBoxPrice}
-        </span>
-        <span className="text-xs text-charcoal/55">first box</span>
-      </div>
-      <p className="mt-5 text-sm text-charcoal/70 leading-relaxed">
-        {tier.positioning}
-      </p>
-      <ul className="mt-5 space-y-2.5">
-        {tier.contents.map((line) => (
-          <li
-            key={line}
-            className="flex gap-2.5 text-sm text-charcoal/75 leading-relaxed"
-          >
-            <span aria-hidden className="text-forest/60 mt-1">
-              &bull;
-            </span>
-            <span>{line}</span>
-          </li>
-        ))}
-      </ul>
-      <div className="mt-5 pt-5 border-t border-forest/10">
-        <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-2">
-          Best for
+
+      {/* Image slot: fixed aspect ratio, identical across all three cards */}
+      <PlaceholderFrame
+        src={tier.image}
+        alt={`${tier.title} first-box contents flat lay.`}
+        note={tier.imageNote}
+        aspect="aspect-[4/3]"
+        bg="bg-forest"
+        sizes="(min-width: 768px) 32vw, 92vw"
+        variant="dense"
+      />
+
+      {/* Card body */}
+      <div className="flex flex-col flex-1 p-6 sm:p-7">
+        <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-3">
+          {tier.eyebrow}
         </div>
-        <p className="text-sm text-charcoal/70 leading-relaxed">
-          {tier.bestFor}
+        <h3 className="font-serif text-2xl text-forest">{tier.title}</h3>
+        <div className="mt-4 flex items-baseline gap-2">
+          <span className="font-serif text-4xl text-forest">
+            {tier.firstBoxPrice}
+          </span>
+          <span className="text-xs text-charcoal/60">first box</span>
+        </div>
+
+        {/* Positioning: 3-line slot on md+, natural on mobile */}
+        <p className="mt-4 text-sm text-charcoal/75 leading-relaxed md:min-h-[4.5rem]">
+          {tier.positioning}
         </p>
+
+        {/* Bullets: 3-item slot on md+, natural on mobile */}
+        <ul className="mt-4 space-y-2 text-sm text-charcoal/80 leading-relaxed md:min-h-[6.75rem]">
+          {tier.contents.map((line) => (
+            <li key={line} className="flex gap-2.5">
+              <span aria-hidden className="text-forest/60 mt-1">
+                &bull;
+              </span>
+              <span>{line}</span>
+            </li>
+          ))}
+        </ul>
+
+        {/* Renewal transparency, full body size, directly under contents. */}
+        <p className="mt-5 text-sm text-forest leading-relaxed font-medium md:min-h-[2.75rem]">
+          Renews at $250 per quarter as the full Reserve Collection. Skip or
+          cancel any time.
+        </p>
+
+        {/* BEST FOR block: identical slot height across tiers */}
+        <div className="mt-5 pt-5 border-t border-forest/10">
+          <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-2">
+            Best for
+          </div>
+          <p className="text-sm text-charcoal/70 leading-relaxed md:min-h-[2.75rem]">
+            {tier.bestFor}
+          </p>
+        </div>
+
+        {/* Spacer to push CTA to the bottom on md+ */}
+        <div className="flex-1" />
+
+        <button
+          type="button"
+          onClick={onSelect}
+          className="mt-6 w-full bg-forest hover:bg-forest/90 text-bone py-3.5 rounded-md text-sm font-medium tracking-wide transition cursor-pointer"
+        >
+          {tier.ctaLabel}
+        </button>
       </div>
-      <button
-        type="button"
-        disabled={loading}
-        onClick={onSelect}
-        className={
-          tier.emphasized
-            ? "mt-6 w-full bg-ember hover:bg-ember/90 disabled:opacity-60 text-bone py-3.5 rounded-md text-sm font-medium tracking-wide transition cursor-pointer"
-            : "mt-6 w-full bg-forest hover:bg-forest/90 disabled:opacity-60 text-bone py-3.5 rounded-md text-sm font-medium tracking-wide transition cursor-pointer"
-        }
-      >
-        {loading ? "Loading…" : tier.ctaLabel}
-      </button>
-      <p className="mt-3 text-[11px] text-charcoal/50 leading-relaxed text-center">
-        Renews at $250 per quarter as the full Reserve Collection.
-      </p>
     </div>
   );
 }
 
-/* ---------- Timeline -------------------------------------------------- */
+/* ---------- Tier flat lay card (What's Inside section) ---------------- */
 
-function Timeline({ nodes }: { nodes: TimelineNode[] }) {
-  const [expanded, setExpanded] = useState<string | null>(nodes[0]?.id ?? null);
+function TierFlatlayCard({ tier }: { tier: TierConfig }) {
+  return (
+    <figure className="flex flex-col">
+      <PlaceholderFrame
+        src={tier.image}
+        alt={`${tier.title} flat lay showing every included piece.`}
+        note={tier.imageNote}
+        aspect="aspect-square"
+        bg="bg-forest"
+        sizes="(min-width: 768px) 32vw, 92vw"
+        variant="large"
+      />
+      <figcaption className="mt-5 flex flex-col flex-1">
+        <div className="flex items-baseline justify-between gap-3">
+          <h3 className="font-serif text-xl text-forest">{tier.title}</h3>
+          <span className="text-[10px] tracking-[0.28em] uppercase text-forest/60">
+            {tier.itemLabels.length} pieces
+          </span>
+        </div>
+        <ul className="mt-4 space-y-1.5 text-sm text-charcoal/80 md:min-h-[9rem]">
+          {tier.itemLabels.map((item, i) => (
+            <li key={i} className="flex items-baseline justify-between gap-3 border-b border-forest/10 py-1.5">
+              <span className="text-charcoal/85">{item.category}</span>
+              <span className="text-[10px] tracking-[0.22em] uppercase text-forest/60">
+                {item.brandTier} · {item.season}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </figcaption>
+    </figure>
+  );
+}
 
-  const toggle = useCallback((id: string) => {
-    setExpanded((prev) => {
-      const next = prev === id ? null : id;
-      if (next) {
-        trackEvent("lp_discover_timeline_interacted", {
-          properties: { node: next },
-        }).catch(() => {});
-      }
-      return next;
-    });
+/* ---------- Trust strip ----------------------------------------------- */
+
+function TrustStrip() {
+  const items = [
+    {
+      icon: (
+        <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6h9.75a2.25 2.25 0 012.25 2.25v9m-12 0h13.5m-13.5 0a1.5 1.5 0 01-1.5-1.5V6.75m1.5 10.5a1.5 1.5 0 001.5-1.5v-.75m15-8.25v9a1.5 1.5 0 01-1.5 1.5m1.5-10.5h-4.5a2.25 2.25 0 00-2.25 2.25v.75m6.75-3l-3-3m3 3l-3 3" />
+        </svg>
+      ),
+      label: "Free US shipping on every box",
+    },
+    {
+      icon: (
+        <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2m4-2a8 8 0 11-16 0 8 8 0 0116 0z" />
+        </svg>
+      ),
+      label: "Skip or cancel any time before ship",
+    },
+    {
+      icon: (
+        <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.5 20.25a7.5 7.5 0 0115 0" />
+        </svg>
+      ),
+      label: "Curated by humans who play the game",
+    },
+  ];
+  return (
+    <div className="border-y border-forest/15 bg-white">
+      <div className="max-w-5xl mx-auto px-5 sm:px-8 py-4">
+        <ul className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-6 text-xs sm:text-sm text-charcoal/80">
+          {items.map((item) => (
+            <li key={item.label} className="flex items-center gap-2 text-forest/80">
+              {item.icon}
+              <span className="text-charcoal/75">{item.label}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Timeline (horizontal desktop, vertical stepper mobile) ---- */
+
+function Timeline({ selectedTier }: { selectedTier: DiscoverTier | null }) {
+  const today = useMemo(() => new Date(), []);
+  const tierMeta = useMemo(() => {
+    const active = TIERS.find((t) => t.id === selectedTier);
+    return {
+      label: active?.title ?? "Your selected tier",
+      price: active?.firstBoxPrice ?? "Pick a tier",
+    };
+  }, [selectedTier]);
+
+  const nodes = useMemo(() => {
+    const fmt = (d: Date) =>
+      d.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+    const plus = (days: number) => {
+      const d = new Date(today);
+      d.setDate(d.getDate() + days);
+      return d;
+    };
+    return [
+      {
+        boxLabel: "Box 1",
+        date: fmt(today),
+        title: tierMeta.label,
+        price: tierMeta.price,
+        highlight: true,
+      },
+      {
+        boxLabel: "Box 2",
+        date: fmt(plus(90)),
+        title: "Reserve Collection",
+        price: "$250",
+        highlight: false,
+      },
+      {
+        boxLabel: "Box 3",
+        date: fmt(plus(180)),
+        title: "Reserve Collection",
+        price: "$250",
+        highlight: false,
+      },
+      {
+        boxLabel: "Box 4",
+        date: fmt(plus(270)),
+        title: "Reserve Collection",
+        price: "$250",
+        highlight: false,
+      },
+    ];
+  }, [today, tierMeta]);
+
+  const onNodeClick = useCallback((boxLabel: string) => {
+    trackEvent("lp_discover_timeline_interacted", {
+      properties: { node: boxLabel.toLowerCase().replace(" ", "_") },
+    }).catch(() => {});
   }, []);
 
   return (
-    <div className="border-l border-forest/20 pl-6 sm:pl-8 space-y-6">
-      {nodes.map((node) => {
-        const open = expanded === node.id;
-        return (
-          <div key={node.id} className="relative">
+    <div>
+      {/* Desktop: horizontal 4-node row */}
+      <div className="hidden md:block">
+        <div className="relative">
+          {/* Connector line */}
+          <div
+            aria-hidden
+            className="absolute top-5 left-8 right-8 h-px bg-forest/25"
+          />
+          <ol className="grid grid-cols-4 gap-4 relative">
+            {nodes.map((node) => (
+              <li
+                key={node.boxLabel}
+                className="flex flex-col items-center text-center"
+                onClick={() => onNodeClick(node.boxLabel)}
+              >
+                <span
+                  aria-hidden
+                  className={
+                    node.highlight
+                      ? "w-10 h-10 rounded-full bg-forest text-bone flex items-center justify-center text-[11px] font-medium border-2 border-forest ring-4 ring-white"
+                      : "w-10 h-10 rounded-full bg-white text-forest flex items-center justify-center text-[11px] font-medium border-2 border-forest/30 ring-4 ring-bone"
+                  }
+                >
+                  {node.boxLabel.replace("Box ", "")}
+                </span>
+                <div className="mt-4 text-[10px] tracking-[0.28em] uppercase text-forest/60">
+                  {node.date}
+                </div>
+                <div
+                  className={
+                    node.highlight
+                      ? "mt-1 font-serif text-lg text-forest"
+                      : "mt-1 font-serif text-lg text-charcoal/85"
+                  }
+                >
+                  {node.title}
+                </div>
+                <div
+                  className={
+                    node.highlight
+                      ? "mt-1 text-sm font-medium text-forest"
+                      : "mt-1 text-sm text-charcoal/70"
+                  }
+                >
+                  {node.price}
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+      </div>
+
+      {/* Mobile: vertical stepper */}
+      <ol className="md:hidden border-l border-forest/25 pl-6 space-y-6">
+        {nodes.map((node) => (
+          <li
+            key={node.boxLabel}
+            className="relative"
+            onClick={() => onNodeClick(node.boxLabel)}
+          >
             <span
               aria-hidden
-              className="absolute -left-[33px] sm:-left-[41px] top-1 w-3 h-3 rounded-full bg-forest"
+              className={
+                node.highlight
+                  ? "absolute -left-[33px] top-1 w-4 h-4 rounded-full bg-forest border-2 border-bone"
+                  : "absolute -left-[31px] top-1.5 w-3 h-3 rounded-full bg-white border-2 border-forest/40"
+              }
             />
-            <button
-              type="button"
-              onClick={() => toggle(node.id)}
-              className="text-left w-full cursor-pointer group"
-              aria-expanded={open}
+            <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60">
+              {node.boxLabel} &middot; {node.date}
+            </div>
+            <div
+              className={
+                node.highlight
+                  ? "mt-1 font-serif text-lg text-forest"
+                  : "mt-1 font-serif text-lg text-charcoal/85"
+              }
             >
-              <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60">
-                {node.label}
-              </div>
-              <div className="mt-1 font-serif text-lg sm:text-xl text-forest group-hover:text-forest/80 transition-colors">
-                {node.headline}
-              </div>
-            </button>
-            {open ? (
-              <p className="mt-2 text-sm text-charcoal/70 leading-relaxed max-w-xl animate-fade-up">
-                {node.body}
-              </p>
-            ) : null}
-          </div>
-        );
-      })}
+              {node.title}
+            </div>
+            <div
+              className={
+                node.highlight
+                  ? "mt-0.5 text-sm font-medium text-forest"
+                  : "mt-0.5 text-sm text-charcoal/70"
+              }
+            >
+              {node.price}
+            </div>
+          </li>
+        ))}
+      </ol>
+
+      <p className="mt-8 text-center text-xs text-charcoal/55 max-w-lg mx-auto leading-relaxed">
+        Every membership renews as the full Reserve Collection at $250 per
+        quarter. Your first-box choice does not change the renewal price.
+      </p>
     </div>
   );
 }
@@ -596,11 +985,11 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
         className="w-full flex items-center justify-between gap-4 px-5 py-4 text-left cursor-pointer group"
         aria-expanded={open}
       >
-        <span className="text-sm font-medium text-obsidian group-hover:text-forest transition-colors duration-300">
+        <span className="text-sm font-medium text-forest group-hover:text-forest/80 transition-colors">
           {question}
         </span>
         <svg
-          className={`w-4 h-4 text-charcoal/30 shrink-0 transition-transform duration-300 ${
+          className={`w-4 h-4 text-charcoal/40 shrink-0 transition-transform duration-300 ${
             open ? "rotate-180" : ""
           }`}
           fill="none"
@@ -617,7 +1006,7 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
       </button>
       {open ? (
         <div className="px-5 pb-4 animate-fade-up">
-          <p className="text-sm text-charcoal/55 leading-relaxed">{answer}</p>
+          <p className="text-sm text-charcoal/70 leading-relaxed">{answer}</p>
         </div>
       ) : null}
     </div>

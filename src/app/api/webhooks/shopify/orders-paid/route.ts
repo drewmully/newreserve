@@ -46,10 +46,17 @@ import { shopifyGraphQL } from "@/app/api/_lib/shopifyAdmin";
 
 /**
  * Allowed values of the `discover_tier` cart attribute set by /lp/discover.
- * Any other value is ignored and no tag is written. Keep this list in sync
- * with TIERS in src/app/lp/discover/DiscoverLPClient.tsx.
+ * Any other value is ignored and no tag / note is written. Keep this list
+ * in sync with TIERS in src/app/lp/discover/DiscoverLPClient.tsx.
+ *
+ * label is the human-readable edit name shown to warehouse pickers in the
+ * order note prepend. Do NOT change casing without briefing warehouse ops.
  */
-const DISCOVER_TIERS = new Set(["discovery", "signature", "reserve"]);
+const DISCOVER_TIERS: Record<string, { label: string }> = {
+  discovery: { label: "Discovery" },
+  signature: { label: "Signature Preview" },
+  reserve: { label: "Reserve Collection" },
+};
 
 /**
  * Extracts the numeric variant id from the rangefinder variant GID env var,
@@ -811,7 +818,8 @@ export async function POST(request: NextRequest) {
   const discoverTierTag = (async () => {
     try {
       const tier = orderAttr("discover_tier");
-      if (!tier || !DISCOVER_TIERS.has(tier)) return;
+      const meta = tier ? DISCOVER_TIERS[tier] : null;
+      if (!tier || !meta) return;
       if (isSubscriptionRecurring) {
         console.log(
           `[orders-paid] discover_tier: skipping recurring order ${order.id}`
@@ -819,33 +827,77 @@ export async function POST(request: NextRequest) {
         return;
       }
       const tagToAdd = `discover-tier-${tier}`;
-      // Do not add if the tag is already present (idempotent for retries).
-      if (tagList.includes(tagToAdd.toLowerCase())) return;
+      const alreadyTagged = tagList.includes(tagToAdd.toLowerCase());
+      // Warehouse note flag — what a picker sees at the top of the order in
+      // Shopify admin and (via ShipHero passthrough) at the top of the pick
+      // ticket. Explicit "pack shortened edit" copy for lower tiers so a
+      // Discovery order doesn't get packed as the full Reserve Collection.
+      const noteFlagLine = `⛑ FIRST BOX: ${meta.label.toUpperCase()}. Pack the ${meta.label} edit, not the full Reserve Collection.`;
+      const currentNote = order.note ?? "";
+      const noteAlreadyStamped = currentNote.includes("⛑ FIRST BOX:");
+      const nextNote = noteAlreadyStamped
+        ? currentNote
+        : currentNote
+          ? `${noteFlagLine}\n\n${currentNote}`
+          : noteFlagLine;
+
+      if (alreadyTagged && noteAlreadyStamped) return;
+
       const orderGid = `gid://shopify/Order/${order.id}`;
-      const result = await shopifyGraphQL<{
-        tagsAdd: {
-          node: { id: string } | null;
-          userErrors: Array<{ field: string[]; message: string }>;
-        };
-      }>(
-        `mutation AddDiscoverTag($id: ID!, $tags: [String!]!) {
-          tagsAdd(id: $id, tags: $tags) {
-            node { id }
-            userErrors { field message }
-          }
-        }`,
-        { id: orderGid, tags: [tagToAdd] }
-      );
-      if (result.tagsAdd.userErrors.length > 0) {
-        console.error(
-          `[orders-paid] discover_tier tagsAdd userErrors for order ${order.id}:`,
-          result.tagsAdd.userErrors
+
+      if (!alreadyTagged) {
+        const tagResult = await shopifyGraphQL<{
+          tagsAdd: {
+            node: { id: string } | null;
+            userErrors: Array<{ field: string[]; message: string }>;
+          };
+        }>(
+          `mutation AddDiscoverTag($id: ID!, $tags: [String!]!) {
+            tagsAdd(id: $id, tags: $tags) {
+              node { id }
+              userErrors { field message }
+            }
+          }`,
+          { id: orderGid, tags: [tagToAdd] }
         );
-        return;
+        if (tagResult.tagsAdd.userErrors.length > 0) {
+          console.error(
+            `[orders-paid] discover_tier tagsAdd userErrors for order ${order.id}:`,
+            tagResult.tagsAdd.userErrors
+          );
+        } else {
+          console.log(
+            `[orders-paid] discover_tier: tagged order ${order.id} with ${tagToAdd}`
+          );
+        }
       }
-      console.log(
-        `[orders-paid] discover_tier: tagged order ${order.id} with ${tagToAdd}`
-      );
+
+      if (!noteAlreadyStamped) {
+        const noteResult = await shopifyGraphQL<{
+          orderUpdate: {
+            order: { id: string } | null;
+            userErrors: Array<{ field: string[]; message: string }>;
+          };
+        }>(
+          `mutation PrependDiscoverNote($input: OrderInput!) {
+            orderUpdate(input: $input) {
+              order { id }
+              userErrors { field message }
+            }
+          }`,
+          { input: { id: orderGid, note: nextNote } }
+        );
+        if (noteResult.orderUpdate.userErrors.length > 0) {
+          console.error(
+            `[orders-paid] discover_tier orderUpdate userErrors for order ${order.id}:`,
+            noteResult.orderUpdate.userErrors
+          );
+        } else {
+          console.log(
+            `[orders-paid] discover_tier: prepended pick note on order ${order.id}`
+          );
+        }
+      }
     } catch (err) {
       console.error("[orders-paid] discover_tier tagging failed:", err);
     }
