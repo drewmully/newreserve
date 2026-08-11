@@ -391,10 +391,11 @@ export default function DiscoverLPClient() {
       </section>
 
       {/* =============================== TIER CARDS ========================== */}
-      <section id="tiers" className="pt-6 md:pt-10 pb-10 md:pb-14">
+      <section id="tiers" className="pt-14 sm:pt-16 md:pt-20 pb-10 md:pb-14">
         <div className="max-w-6xl mx-auto px-5 sm:px-8">
-          {/* Section header. Compact on desktop so the tier cards fit above
-              the fold at 900px viewport height. */}
+          {/* Section header. Extra top padding so the eyebrow breathes off
+              the hero edge; margin below the header stays compact so the
+              tier cards still fit above the fold at 1440×900. */}
           <div className="text-center mb-6 sm:mb-8">
             <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-3">
               Choose your first box
