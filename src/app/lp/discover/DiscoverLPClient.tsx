@@ -35,6 +35,29 @@ import { captureAttributionFromUrl } from "@/lib/attribution";
 import { trackEvent } from "@/lib/tracking";
 import { QuizModal } from "../_shared/QuizModal";
 
+/* ---------- Image assets ---------------------------------------------
+ * Round-3.1 (2026-08-11): all placeholder frames swapped for the final
+ * production photography. Naming from the delivered file set. Declared
+ * before TIERS so the config array can reference them directly.
+ *
+ * The hero is a single 16:9-ish landscape shot with products center-right
+ * and an open forest-green field on the left. We treat it as full-bleed
+ * with overlaid text over the left third, a subtle dark scrim to protect
+ * the light sweep in the upper-left, and a right-biased focal point so
+ * mobile crops keep the products in frame.
+ */
+const HERO_IMAGE = "/lp/discover/Hero-8.jpg";
+
+const TIER_IMAGE_DISCOVERY = "/lp/discover/Discovery.jpg";
+const TIER_IMAGE_SIGNATURE = "/lp/discover/Signature-2.jpg";
+const TIER_IMAGE_RESERVE = "/lp/discover/Reserve-3.jpg";
+
+const EDIT_IMAGE_DISCOVERY = "/lp/discover/Box-Preview-Discovery-5.jpg";
+const EDIT_IMAGE_SIGNATURE = "/lp/discover/Box-Preview-Signature-4.jpg";
+const EDIT_IMAGE_RESERVE = "/lp/discover/Box-Preview-Reserve-6.jpg";
+
+const UNBOXING_IMAGE = "/lp/discover/Unboxing-7.jpg";
+
 /* ---------- Types + tiers --------------------------------------------- */
 
 type DiscoverTier = "discovery" | "signature" | "reserve";
@@ -80,8 +103,8 @@ const TIERS: TierConfig[] = [
       "A taste. One piece we believe in, finished with the right accessories.",
     bestFor: "Curious members who want a low-commitment way in.",
     ctaLabel: "Start with Discovery",
-    imageNote:
-      "FLAT LAY, 2 PIECES. Forest green paper background. Overhead 90 degree. One folded polo or 1/4 zip + one accessory (belt or headwear) + Mully hangtag. Minimal negative space, single soft key light from upper-left.",
+    image: TIER_IMAGE_DISCOVERY,
+    imageNote: "",
   },
   {
     id: "signature",
@@ -97,8 +120,8 @@ const TIERS: TierConfig[] = [
     bestFor: "Members ready for a real outfit out of the gate.",
     ctaLabel: "Start with Signature Preview",
     emphasized: true,
-    imageNote:
-      "FLAT LAY, 3 to 4 PIECES. Same forest background, same 90 degree overhead, same lighting as Discovery. One layer + one polo + one bottom or accessory + Mully box lid corner in frame. Visibly denser than Discovery, still styled.",
+    image: TIER_IMAGE_SIGNATURE,
+    imageNote: "",
   },
   {
     id: "reserve",
@@ -113,27 +136,22 @@ const TIERS: TierConfig[] = [
       "The kit. Everything we would pull for your quarter, styled as one edit. Retail value clears the membership price, but the point is that you did not have to choose any of it.",
     bestFor: "Members who want the full edit on arrival.",
     ctaLabel: "Start with Reserve Collection",
-    imageNote:
-      "FLAT LAY, 5 to 6 PIECES. Same forest background, same 90 degree overhead, same lighting. Two layers + one polo + one bottom + two accessories + open Mully box in frame. Visibly the fullest of the three. This photo must read as the most product per square inch.",
+    image: TIER_IMAGE_RESERVE,
+    imageNote: "",
   },
 ];
 
-/* ---------- Hero + unboxing imagery ---------------------------------- */
-
 /**
- * The hero uses the existing Reserve Collection styled flat-lay on the
- * forest background. Landscape crop on desktop, portrait crop on mobile.
+ * Per-tier flat lay used in the "The difference is the edit" section.
+ * These are the wider/denser box previews (Box-Preview-*). Kept separate
+ * from the tier-card thumbnail so the section can tell a bigger, denser
+ * story than the card grid.
  */
-const HERO_LANDSCAPE = "/lp/hero/hero-landscape-4x3.webp";
-const HERO_PORTRAIT = "/lp/hero/hero-portrait-4x5.webp";
-
-/**
- * The unboxing photo uses the existing closed branded box on white. Once a
- * shot with tissue + insert card is delivered, swap this constant.
- */
-const UNBOXING_IMAGE = "/consult-hero-box.jpg";
-const UNBOXING_NOTE =
-  "Replace with a 4:3 landscape shot of the closed Mully box on bone paper, tissue folded to one side, insert card angled forward, high three-quarter camera, one soft key from upper-right. Same bone-white paper background as the current placeholder so the swap is one-line.";
+const EDIT_IMAGE_BY_TIER: Record<DiscoverTier, string> = {
+  discovery: EDIT_IMAGE_DISCOVERY,
+  signature: EDIT_IMAGE_SIGNATURE,
+  reserve: EDIT_IMAGE_RESERVE,
+};
 
 /* ---------- FAQ ------------------------------------------------------- */
 
@@ -263,67 +281,109 @@ export default function DiscoverLPClient() {
     <div className="min-h-screen bg-white text-charcoal">
       <DiscoverHeader />
 
-      {/* ================================ HERO =============================== */}
-      {/* Full-bleed styled flat-lay of the Reserve Collection on the forest
-          background. Desktop: photo left, copy right. Mobile: photo top,
-          copy below. This is intentionally the first frame a visitor sees. */}
-      <section className="pt-16 sm:pt-20 lg:pt-24 pb-14 md:pb-20">
-        <div className="max-w-7xl mx-auto px-5 sm:px-8">
-          {/* Round-3 hero rebalance: 60/40 photo-dominant split on desktop
-              (image col-span-3, copy col-span-2 out of 5), keeps overlay
-              copy legible without going full-bleed. Mobile stays stacked. */}
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-12 items-center">
-            {/* Photo. Two <Image> tags so we can crop tighter on mobile via
-                CSS. The landscape asset is the default; the portrait asset
-                takes over below 640px for a tighter framing on phones. */}
-            <div className="lg:col-span-3 relative w-full aspect-[4/5] sm:aspect-[4/3] bg-forest rounded-md overflow-hidden order-first">
-              <Image
-                src={HERO_PORTRAIT}
-                alt=""
-                fill
-                priority
-                sizes="100vw"
-                className="object-cover sm:hidden"
-              />
-              <Image
-                src={HERO_LANDSCAPE}
-                alt="An open Mully Reserve Collection box surrounded by folded apparel, a leather accessory, and a Perficio golf-shoe bag, all styled on a forest-green backdrop."
-                fill
-                priority
-                sizes="(min-width: 1024px) 60vw, 100vw"
-                className="object-cover hidden sm:block"
-              />
-            </div>
+      {/* ================================ HERO ===============================
+          Round-3.1 full-bleed treatment. The delivered hero photo has
+          products center-right and an open forest field on the left, so
+          text overlays the left third and a soft dark scrim protects
+          against the light sweep in the upper-left. The image itself sets
+          its own focal point on the right (object-position) so mobile
+          crops keep the products in frame instead of squashing the layout. */}
+      <section className="relative w-full overflow-hidden bg-forest">
+        {/* Photo. Aspect-ratio ladder: taller on phones so the text zone
+            has real vertical room, then progressively wider on larger
+            screens where the landscape frame breathes. */}
+        <div className="relative w-full aspect-[3/4] sm:aspect-[16/10] lg:aspect-[21/9] min-h-[640px] sm:min-h-[520px] lg:min-h-[640px]">
+          {/* Mobile crop: use a picture element so we can bias the focal
+              point to the bottom-right on phones (products in the lower
+              half, text zone free on top) and to the middle-right on
+              desktop (products right, text zone left). */}
+          <Image
+            src={HERO_IMAGE}
+            alt="A Rhone chino, striped polo, leather belt, and wallet arranged on a forest-green paper background under a single soft key light."
+            fill
+            priority
+            sizes="100vw"
+            className="object-cover sm:hidden"
+            style={{ objectPosition: "70% 85%" }}
+          />
+          <Image
+            src={HERO_IMAGE}
+            alt=""
+            fill
+            priority
+            sizes="100vw"
+            className="object-cover hidden sm:block"
+            style={{ objectPosition: "75% 50%" }}
+            aria-hidden
+          />
 
-            {/* Copy */}
-            <div className="lg:col-span-2 text-center lg:text-left">
-              <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-4">
-                Mully Reserve
-              </div>
-              <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl text-forest leading-[1.05]">
-                Discover your first box.
-              </h1>
-              <p className="mt-5 text-base sm:text-lg text-charcoal/75 max-w-xl mx-auto lg:mx-0 leading-relaxed">
-                Three ways into one membership. Pick your first shipment.
-                Every box after renews as the full Reserve Collection at{" "}
-                <span className="font-medium text-forest">
-                  $250 per quarter
-                </span>
-                .
-              </p>
-              <div className="mt-8 flex flex-col sm:flex-row items-center lg:items-start justify-center lg:justify-start gap-3">
-                <a
-                  href="#tiers"
-                  className="w-full sm:w-auto bg-forest hover:bg-forest/90 text-bone py-3.5 px-10 rounded-md text-sm font-medium tracking-wide transition cursor-pointer text-center"
-                >
-                  See the three boxes
-                </a>
-                <Link
-                  href="#how-it-works"
-                  className="text-sm underline text-charcoal/70 hover:text-charcoal transition"
-                >
-                  How the membership works
-                </Link>
+          {/* Desktop scrim (left-to-right). Fades out well before the
+              product zone. */}
+          <div
+            aria-hidden
+            className="absolute inset-0 pointer-events-none hidden sm:block"
+            style={{
+              background:
+                "linear-gradient(90deg, rgba(11,26,18,0.72) 0%, rgba(11,26,18,0.55) 28%, rgba(11,26,18,0.15) 55%, rgba(11,26,18,0) 78%)",
+            }}
+          />
+          {/* Mobile scrim (top-to-bottom). Products live in the lower half
+              on phones, so we darken the top instead of the left. */}
+          <div
+            aria-hidden
+            className="absolute inset-0 pointer-events-none sm:hidden"
+            style={{
+              background:
+                "linear-gradient(180deg, rgba(11,26,18,0.75) 0%, rgba(11,26,18,0.55) 30%, rgba(11,26,18,0.2) 55%, rgba(11,26,18,0) 78%)",
+            }}
+          />
+          {/* Extra scrim to knock down the light sweep in the upper-left
+              on desktop. Absent on mobile where the top gradient covers it. */}
+          <div
+            aria-hidden
+            className="absolute inset-0 pointer-events-none hidden sm:block"
+            style={{
+              background:
+                "radial-gradient(60% 60% at 15% 25%, rgba(11,26,18,0.35) 0%, rgba(11,26,18,0) 65%)",
+            }}
+          />
+
+          {/* Overlay copy. Anchored to the top on mobile (so text sits
+              above the products), centered vertically on desktop (so text
+              sits over the empty left field). Text is bone/cream over
+              deep forest — passes AAA at these sizes. */}
+          <div className="absolute inset-0 flex items-start pt-24 sm:items-center sm:pt-0">
+            <div className="max-w-7xl mx-auto w-full px-5 sm:px-8">
+              <div className="max-w-xl lg:max-w-lg text-bone">
+                <div className="text-[10px] tracking-[0.28em] uppercase text-bone/80 mb-4">
+                  Mully Reserve
+                </div>
+                <h1 className="font-serif text-4xl sm:text-5xl lg:text-6xl leading-[1.05]">
+                  Discover your first box.
+                </h1>
+                <p className="mt-5 text-base sm:text-lg text-bone/85 leading-relaxed">
+                  Three ways into one membership. Pick your first
+                  shipment. Every box after renews as the full Reserve
+                  Collection at{" "}
+                  <span className="font-medium text-bone">
+                    $250 per quarter
+                  </span>
+                  .
+                </p>
+                <div className="mt-8 flex flex-col sm:flex-row items-start gap-3">
+                  <a
+                    href="#tiers"
+                    className="w-full sm:w-auto bg-bone hover:bg-white text-forest py-3.5 px-10 rounded-md text-sm font-medium tracking-wide transition cursor-pointer text-center"
+                  >
+                    See the three boxes
+                  </a>
+                  <Link
+                    href="#how-it-works"
+                    className="text-sm underline text-bone/85 hover:text-bone transition sm:self-center"
+                  >
+                    How the membership works
+                  </Link>
+                </div>
               </div>
             </div>
           </div>
@@ -409,20 +469,14 @@ export default function DiscoverLPClient() {
       <section className="bg-bone py-16 md:py-24">
         <div className="max-w-7xl mx-auto px-5 sm:px-8">
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-14 items-center">
-            <div className="lg:col-span-3 relative aspect-[4/3] w-full bg-white rounded-md overflow-hidden border border-forest/10">
+            <div className="lg:col-span-3 relative aspect-[4/3] w-full bg-forest rounded-md overflow-hidden border border-forest/10">
               <Image
                 src={UNBOXING_IMAGE}
-                alt="The closed forest-green Mully Reserve box, embossed logo forward, shot on a neutral bone-white paper background."
+                alt="The closed forest-green Mully Reserve box with tissue and an insert card, styled on a bone paper background."
                 fill
                 sizes="(min-width: 1024px) 60vw, 100vw"
-                className="object-contain p-6 sm:p-10"
+                className="object-cover"
               />
-              <div
-                className="absolute bottom-3 right-3 text-[10px] tracking-[0.24em] uppercase text-forest/50 bg-white/85 backdrop-blur px-2 py-1 rounded"
-                title={UNBOXING_NOTE}
-              >
-                Placeholder shot
-              </div>
             </div>
             <div className="lg:col-span-2">
               <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-4">
@@ -577,12 +631,14 @@ function QuizPortal({ onClose }: { onClose: () => void }) {
  */
 
 function DiscoverHeader() {
+  // Sits over the full-bleed hero. The hero is dark forest with a dark
+  // scrim on the left, so the logo renders in bone/cream for legibility.
   return (
     <header className="absolute top-0 left-0 right-0 z-40">
       <div className="max-w-7xl mx-auto px-5 sm:px-8 h-16 flex items-center">
         <Link
           href="/"
-          className="flex items-center gap-2 text-forest"
+          className="flex items-center gap-2 text-bone"
           aria-label="Mully home"
         >
           <svg
@@ -816,10 +872,14 @@ function TierCard({
  */
 
 function TierEditColumn({ tier }: { tier: TierConfig }) {
+  // The "box preview" flat lay is intentionally the denser cousin of the
+  // tier-card thumbnail. Uses object-cover on a square frame so all three
+  // columns share exactly the same shape.
+  const editSrc = EDIT_IMAGE_BY_TIER[tier.id];
   return (
     <figure className="flex flex-col">
       <PlaceholderFrame
-        src={tier.image}
+        src={editSrc}
         alt={`${tier.title} flat lay showing the shape of the tier.`}
         note={tier.imageNote}
         aspect="aspect-square"
