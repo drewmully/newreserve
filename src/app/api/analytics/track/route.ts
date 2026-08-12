@@ -81,6 +81,16 @@ const VALID_EVENTS = new Set([
   // brought the visitor here. Used to build the paid-attribution funnel:
   // lp_text_mully_view -> attribution.inbound.<source> (Supabase event).
   "lp_text_mully_view",
+  // Fires when the visitor actually TAPS the "Text Martine" CTA on
+  // /text-mully. This is the true intent signal (they're leaving the LP for
+  // the SMS app), and is what each paid channel should optimize toward:
+  //   Meta: mapped to `Lead` standard event via CAPI, deduped with the
+  //         client-side fbq('track', 'Lead', ..., {eventID}) using
+  //         properties.event_id
+  //   X:    fires a twq('event', 'tw-od2vz-sms_click') from the LP
+  //   GA4:  fires gtag('event', 'sms_click', ...) from the LP; imported
+  //         into Google Ads as a conversion action of category `Contact`
+  "sms_click",
 ]);
 
 /**

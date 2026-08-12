@@ -81,6 +81,11 @@ const META_EVENT_MAP: Record<string, string> = {
   // Consult LP phone capture (Martine funnel)
   lp_consult_view: "ViewContent",
   lp_consult_submit: "Lead",
+  // Paid-media SMS bridge (/text-mully). The tap on "Text Martine" is the
+  // conversion moment; mapped to Meta `Lead` so ad delivery can optimize
+  // against it. Deduped with the client-side fbq('track', 'Lead', ...,
+  // {eventID: <event_id>}) via properties.event_id.
+  sms_click: "Lead",
 };
 
 function sha256hex(value: string): string {
@@ -405,6 +410,12 @@ const GOOGLE_ADS_LABEL_ENV: Record<string, string> = {
   initiate_checkout: "GOOGLE_ADS_LABEL_CHECKOUT_INIT",
   checkout_clicked: "GOOGLE_ADS_LABEL_CHECKOUT_INIT",
   purchase: "GOOGLE_ADS_LABEL_FUNNEL_CONVERSION",
+  // Paid-media SMS bridge (/text-mully) — the tap on "Text Martine" fires
+  // this Google Ads conversion so Google can optimize Search delivery
+  // toward SMS handoffs. Configure the label in Google Ads > Conversions
+  // as a Contact-category conversion, then set GOOGLE_ADS_LABEL_SMS_CLICK
+  // in the environment.
+  sms_click: "GOOGLE_ADS_LABEL_SMS_CLICK",
 };
 
 /**
