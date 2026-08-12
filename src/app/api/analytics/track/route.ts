@@ -76,6 +76,11 @@ const VALID_EVENTS = new Set([
   "lp_discover_tier_selected",
   "lp_discover_timeline_interacted",
   "lp_discover_sticky_cta_tapped",
+  // Paid-media SMS bridge (mymully.com/text-mully). Fires once on page mount
+  // with property `src=x|meta|google|email`, which is the paid channel that
+  // brought the visitor here. Used to build the paid-attribution funnel:
+  // lp_text_mully_view -> attribution.inbound.<source> (Supabase event).
+  "lp_text_mully_view",
 ]);
 
 /**

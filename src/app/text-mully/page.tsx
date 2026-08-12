@@ -84,6 +84,29 @@ export default function TextMullyPage() {
           } catch (_e) {}
         }
 
+        // Fire PostHog event (via server-side track endpoint so we don't need
+        // to load posthog-js from a static page). Fire-and-forget; no await.
+        try {
+          var payload = JSON.stringify({
+            event_name: "lp_text_mully_view",
+            properties: { src: src },
+            page_url: window.location.href,
+          });
+          if (navigator.sendBeacon) {
+            navigator.sendBeacon(
+              "/api/analytics/track",
+              new Blob([payload], { type: "application/json" })
+            );
+          } else {
+            fetch("/api/analytics/track", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: payload,
+              keepalive: true,
+            }).catch(function(){});
+          }
+        } catch (_e) {}
+
         // Auto-redirect on mobile
         if (isMobile) {
           setTimeout(function(){ window.location.href = href; }, 60);
