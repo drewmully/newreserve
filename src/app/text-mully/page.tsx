@@ -416,8 +416,8 @@ export default function TextMullyPage() {
               </span>
               <span>
                 A real curator, not a bot.{" "}
-                <strong style={{ fontWeight: 600 }}>No pressure, no auto-replies</strong>{" "}
-                &mdash; Martine reads every message.
+                <strong style={{ fontWeight: 600 }}>No pressure, no auto-replies.</strong>{" "}
+                Martine reads every message.
               </span>
             </li>
           </ul>
