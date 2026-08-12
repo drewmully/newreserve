@@ -1,18 +1,29 @@
 /**
  * GET /text-mully
  *
- * Paid-media SMS bridge page. Same auto-open-iMessage pattern as
- * /text-martine, but source-aware via ?src=x|meta|google|email so the
- * pre-filled SMS body varies by channel, and with a rolling image
- * carousel of the Discover LP photography below the CTA card.
+ * Paid-media SMS bridge. Warms the visitor with Martine's value prop
+ * (free $25 credit + style consult + real curator, not a bot), then opens
+ * a pre-filled SMS. Source-aware via ?src=x|meta|google|email so the
+ * pre-filled body varies by channel and downstream Supabase attribution
+ * tags the inbound correctly.
  *
  * The route stays static (edge-cached). The `src` param is read on the
- * client so the page HTML is one artifact; the pre-filled body and any
- * pixel event are chosen at runtime.
+ * client so the page HTML is one artifact; the pre-filled body, any
+ * pixel event, and the auto-redirect are all resolved at runtime.
+ *
+ * Analytics fired on this page:
+ *   - lp_text_mully_view (once on mount) — PostHog only
+ *   - sms_click (on tap of the primary CTA)
+ *       * PostHog beacon carrying { src, event_id }
+ *       * Meta fbq('track', 'Lead', {content_name: 'sms_click', src},
+ *                  {eventID: event_id}) client-side; matching CAPI fire
+ *                  from /api/analytics/track dedupes on event_id.
+ *       * X Pixel twq('event', 'tw-od2vz-sms_click') client-side
+ *       * GA4 gtag('event', 'sms_click', {src}) client-side (imported to
+ *                  Google Ads as a Contact-category conversion)
  *
  * Sticky bottom "Text Martine" CTA on mobile keeps the primary action
- * in viewport as the carousel scrolls, in case the auto-redirect is
- * blocked by an in-app browser.
+ * in viewport as the value prop and carousel scroll past it.
  */
 
 export const dynamic = "force-static";
@@ -43,7 +54,8 @@ const CAROUSEL_IMAGES = [
 
 export const metadata = {
   title: "Text Martine — Mully",
-  description: "Open a message to Martine with a note already started.",
+  description:
+    "Text with Martine, our in-house golf stylist. Two-minute style consult, plus $25 off your first box.",
   robots: { index: false, follow: false },
 };
 
@@ -73,7 +85,7 @@ export default function TextMullyPage() {
         var links = document.querySelectorAll("[data-sms-link]");
         for (var i = 0; i < links.length; i++) links[i].setAttribute("href", href);
 
-        // Fire X Pixel event for paid-channel visits (pixel is initialized in layout)
+        // Fire X Pixel VIEW event for paid-channel visits (pixel initialized in layout)
         if (typeof window.twq === "function") {
           try {
             window.twq("event", "tw-od2vz-sms_visit", {
@@ -84,10 +96,9 @@ export default function TextMullyPage() {
           } catch (_e) {}
         }
 
-        // Fire PostHog event (via server-side track endpoint so we don't need
-        // to load posthog-js from a static page). Fire-and-forget; no await.
+        // Fire PostHog lp_text_mully_view (page-load event) via server-side track endpoint
         try {
-          var payload = JSON.stringify({
+          var viewPayload = JSON.stringify({
             event_name: "lp_text_mully_view",
             properties: { src: src },
             page_url: window.location.href,
@@ -95,13 +106,13 @@ export default function TextMullyPage() {
           if (navigator.sendBeacon) {
             navigator.sendBeacon(
               "/api/analytics/track",
-              new Blob([payload], { type: "application/json" })
+              new Blob([viewPayload], { type: "application/json" })
             );
           } else {
             fetch("/api/analytics/track", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: payload,
+              body: viewPayload,
               keepalive: true,
             }).catch(function(){});
           }
@@ -111,6 +122,104 @@ export default function TextMullyPage() {
         if (isMobile) {
           setTimeout(function(){ window.location.href = href; }, 60);
         }
+
+        // ─── SMS CLICK HANDLER ────────────────────────────────────────
+        // Fires when the user actually taps any [data-sms-link] CTA.
+        // Emits ONE dedupable event across PostHog, Meta CAPI + Pixel,
+        // X Pixel, and GA4. The same event_id is used everywhere so
+        // Meta collapses the Pixel + CAPI mirror to a single Lead.
+        function uuid() {
+          if (window.crypto && window.crypto.randomUUID) {
+            try { return window.crypto.randomUUID(); } catch (_e) {}
+          }
+          return (
+            Date.now().toString(36) +
+            "-" +
+            Math.random().toString(36).slice(2, 10) +
+            "-" +
+            Math.random().toString(36).slice(2, 10)
+          );
+        }
+
+        function fireSmsClick() {
+          var eventId = uuid();
+
+          // 1) PostHog + Meta CAPI (server-side) via track endpoint.
+          //    Server-side CAPI reads properties.event_id and echoes it to
+          //    Meta so the client fbq('track', 'Lead', ..., {eventID}) below
+          //    dedupes cleanly.
+          try {
+            var payload = JSON.stringify({
+              event_name: "sms_click",
+              properties: { src: src, event_id: eventId },
+              page_url: window.location.href,
+            });
+            if (navigator.sendBeacon) {
+              navigator.sendBeacon(
+                "/api/analytics/track",
+                new Blob([payload], { type: "application/json" })
+              );
+            } else {
+              fetch("/api/analytics/track", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: payload,
+                keepalive: true,
+              }).catch(function(){});
+            }
+          } catch (_e) {}
+
+          // 2) Meta Pixel client-side mirror. Same eventID as the CAPI fire
+          //    → Meta dedupes to a single Lead. Without this fbq call the
+          //    server-side event still counts, but browser-signal quality is
+          //    lower and match rate drops.
+          if (typeof window.fbq === "function") {
+            try {
+              window.fbq(
+                "track",
+                "Lead",
+                { content_name: "sms_click", src: src },
+                { eventID: eventId }
+              );
+            } catch (_e) {}
+          }
+
+          // 3) X Pixel click event
+          if (typeof window.twq === "function") {
+            try {
+              window.twq("event", "tw-od2vz-sms_click", {
+                contents: [{ content_id: src }],
+                conversion_id: eventId,
+                email_address: null,
+              });
+            } catch (_e) {}
+          }
+
+          // 4) GA4 client-side. Imported into Google Ads as a Contact
+          //    conversion so Search delivery optimizes toward this event.
+          if (typeof window.gtag === "function") {
+            try {
+              window.gtag("event", "sms_click", {
+                src: src,
+                event_id: eventId,
+                transport_type: "beacon",
+              });
+            } catch (_e) {}
+          }
+        }
+
+        // Attach to every SMS anchor. Use mousedown/touchstart AND click
+        // so the event fires before the sms: navigation begins tearing
+        // down the page — critical because Safari kills pending network
+        // requests on sms: navigation.
+        function attachTracker(el) {
+          if (!el || el.__smsClickBound) return;
+          el.__smsClickBound = true;
+          el.addEventListener("pointerdown", fireSmsClick, { once: false, passive: true });
+          el.addEventListener("click", fireSmsClick, { once: false, passive: true });
+        }
+        var smsAnchors = document.querySelectorAll("[data-sms-link]");
+        for (var j = 0; j < smsAnchors.length; j++) attachTracker(smsAnchors[j]);
 
         // Copy-to-clipboard for the desktop number
         document.addEventListener("click", function(e){
@@ -146,7 +255,7 @@ export default function TextMullyPage() {
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        padding: "40px 16px 120px", // extra bottom padding so sticky CTA doesn't cover content
+        padding: "40px 16px 120px",
         fontFamily:
           "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif",
         color: "#1A1A1A",
@@ -154,11 +263,11 @@ export default function TextMullyPage() {
     >
       <div
         style={{
-          maxWidth: 480,
+          maxWidth: 520,
           width: "100%",
           background: "#FFFFFF",
           borderRadius: 12,
-          padding: "40px 32px",
+          padding: "40px 32px 32px",
           textAlign: "center",
           boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
         }}
@@ -167,30 +276,152 @@ export default function TextMullyPage() {
           src="/team/martine-square.webp"
           width={96}
           height={96}
-          alt="Martine"
+          alt="Martine, Mully's in-house golf stylist"
           style={{
             width: 96,
             height: 96,
             borderRadius: "50%",
             display: "block",
-            margin: "0 auto 20px",
+            margin: "0 auto 12px",
           }}
         />
+        <p
+          style={{
+            margin: "0 0 4px 0",
+            fontSize: 11,
+            letterSpacing: "1.4px",
+            textTransform: "uppercase",
+            color: "#8A7A5C",
+            fontWeight: 600,
+          }}
+        >
+          Meet Martine
+        </p>
         <h1
           style={{
             fontFamily: 'Georgia, "Times New Roman", Times, serif',
-            fontSize: 26,
+            fontSize: 28,
             lineHeight: 1.2,
-            margin: "0 0 12px 0",
+            margin: "0 0 10px 0",
             fontWeight: "normal",
           }}
         >
-          Text Martine
+          Text with your golf stylist.
         </h1>
-        <p style={{ margin: "0 0 24px 0", fontSize: 15, color: "#4A4A4A", lineHeight: 1.55 }}>
-          On your phone? Tap the button below and a message will open with a note
-          already started.
+        <p
+          style={{
+            margin: "0 0 24px 0",
+            fontSize: 15,
+            color: "#4A4A4A",
+            lineHeight: 1.55,
+          }}
+        >
+          Martine curates every Mully Reserve box. Send her a text and she&apos;ll
+          walk you through what fits your game, in about two minutes.
         </p>
+
+        {/* What you get */}
+        <div
+          style={{
+            background: "#F9F6F0",
+            border: "1px solid #EDE7DE",
+            borderRadius: 10,
+            padding: "20px 22px",
+            textAlign: "left",
+            margin: "0 0 24px 0",
+          }}
+        >
+          <p
+            style={{
+              margin: "0 0 12px 0",
+              fontSize: 11,
+              letterSpacing: "1.4px",
+              textTransform: "uppercase",
+              color: "#8A7A5C",
+              fontWeight: 600,
+              textAlign: "center",
+            }}
+          >
+            What you get
+          </p>
+          <ul
+            style={{
+              margin: 0,
+              padding: 0,
+              listStyle: "none",
+              fontSize: 14.5,
+              color: "#1A1A1A",
+              lineHeight: 1.5,
+            }}
+          >
+            <li style={{ padding: "8px 0", display: "flex", gap: 12 }}>
+              <span
+                aria-hidden="true"
+                style={{
+                  flex: "0 0 22px",
+                  fontWeight: 700,
+                  color: "#8A7A5C",
+                  fontFamily: 'Georgia, "Times New Roman", Times, serif',
+                }}
+              >
+                01
+              </span>
+              <span>
+                <strong style={{ fontWeight: 600 }}>$25 off your first box.</strong>{" "}
+                Martine sends you a code after your consult.
+              </span>
+            </li>
+            <li
+              style={{
+                padding: "8px 0",
+                display: "flex",
+                gap: 12,
+                borderTop: "1px solid #EDE7DE",
+              }}
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  flex: "0 0 22px",
+                  fontWeight: 700,
+                  color: "#8A7A5C",
+                  fontFamily: 'Georgia, "Times New Roman", Times, serif',
+                }}
+              >
+                02
+              </span>
+              <span>
+                A <strong style={{ fontWeight: 600 }}>two-minute style consult</strong>{" "}
+                so your first box actually fits how and where you play.
+              </span>
+            </li>
+            <li
+              style={{
+                padding: "8px 0",
+                display: "flex",
+                gap: 12,
+                borderTop: "1px solid #EDE7DE",
+              }}
+            >
+              <span
+                aria-hidden="true"
+                style={{
+                  flex: "0 0 22px",
+                  fontWeight: 700,
+                  color: "#8A7A5C",
+                  fontFamily: 'Georgia, "Times New Roman", Times, serif',
+                }}
+              >
+                03
+              </span>
+              <span>
+                A real curator, not a bot.{" "}
+                <strong style={{ fontWeight: 600 }}>No pressure, no auto-replies</strong>{" "}
+                &mdash; Martine reads every message.
+              </span>
+            </li>
+          </ul>
+        </div>
 
         <a
           data-sms-link
@@ -200,20 +431,63 @@ export default function TextMullyPage() {
             background: "#1A1A1A",
             color: "#FFFFFF",
             textDecoration: "none",
-            padding: "14px 28px",
+            padding: "16px 32px",
             borderRadius: 999,
             fontSize: 15,
             fontWeight: 600,
             letterSpacing: "0.2px",
+            width: "100%",
+            maxWidth: 340,
+            boxSizing: "border-box",
           }}
         >
-          Text Martine
+          Text Martine &middot; Claim $25
         </a>
+        <p style={{ margin: "12px 0 0 0", fontSize: 12, color: "#8A8A8A" }}>
+          Opens your Messages app with the first line already written.
+        </p>
 
+        {/* What Martine will ask */}
         <div
           style={{
-            marginTop: 28,
-            paddingTop: 24,
+            marginTop: 24,
+            paddingTop: 22,
+            borderTop: "1px solid #EDE7DE",
+            textAlign: "left",
+          }}
+        >
+          <p
+            style={{
+              margin: "0 0 10px 0",
+              fontSize: 11,
+              letterSpacing: "1.4px",
+              textTransform: "uppercase",
+              color: "#8A7A5C",
+              fontWeight: 600,
+              textAlign: "center",
+            }}
+          >
+            What Martine will ask
+          </p>
+          <p
+            style={{
+              margin: 0,
+              fontSize: 13.5,
+              color: "#4A4A4A",
+              lineHeight: 1.6,
+              textAlign: "center",
+            }}
+          >
+            Where you play. Your usual size. What you keep reaching for.
+            That&apos;s it. She takes it from there.
+          </p>
+        </div>
+
+        {/* Desktop fallback */}
+        <div
+          style={{
+            marginTop: 24,
+            paddingTop: 20,
             borderTop: "1px solid #EDE7DE",
           }}
         >
@@ -246,7 +520,7 @@ export default function TextMullyPage() {
               Tap to copy
             </span>
           </button>
-          <p style={{ margin: "18px 0 0 0", fontSize: 12, color: "#8A8A8A" }}>
+          <p style={{ margin: "14px 0 0 0", fontSize: 12, color: "#8A8A8A" }}>
             Or call the same number if you prefer:{" "}
             <a
               href={`tel:${NUMBER_E164}`}
@@ -332,7 +606,7 @@ export default function TextMullyPage() {
             boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
           }}
         >
-          Text Martine
+          Text Martine &middot; Claim $25
         </a>
       </div>
 
