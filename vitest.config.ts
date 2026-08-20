@@ -34,7 +34,7 @@ export default defineConfig({
         },
         test: {
           name: "api",
-          include: ["tests/api/**/*.test.ts"],
+          include: ["tests/api/**/*.test.ts", "tests/events/**/*.test.ts"],
           environment: "node",
           setupFiles: ["tests/setup/api.setup.ts"],
         },
