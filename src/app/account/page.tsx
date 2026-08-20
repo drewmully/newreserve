@@ -5,7 +5,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMembership, type FitProfile, type StoreCreditState, type SubscriptionsState } from "../context/MembershipContext";
 import { trackEvent } from "@/lib/tracking";
-import { LOOP_CHANGE_PLAN_OPTIONS } from "@/lib/membershipConfig";
+import {
+  LOOP_CHANGE_PLAN_OPTIONS,
+  extractVariantIdFromLoopSubscription,
+  isLegacyVariantId,
+  resolveVariantIdFromSellingPlanId,
+} from "@/lib/membershipConfig";
 
 interface OrderLineItem {
   name: string;
@@ -787,10 +792,20 @@ function SubscriptionManagerModal({ open, onClose }: { open: boolean; onClose: (
         }),
       });
       if (!res.ok) {
-        const payload = (await res.json().catch(() => null)) as { error?: string } | null;
-        const message = payload?.error ?? "Subscription action failed.";
+        const payload = (await res.json().catch(() => null)) as { error?: string; detail?: string } | null;
+        const message = payload?.detail
+          ? `${payload.error ?? "Subscription action failed."} — ${payload.detail}`
+          : payload?.error ?? "Subscription action failed.";
         console.error(`[SubManager] ${path} failed:`, message);
-        setError(message);
+        // Surface a friendlier hint when Loop refuses a frequency change on a
+        // legacy variant. Users see actionable guidance instead of "Loop API error".
+        if (/loop/i.test(message) && /selling.?plan|variant|frequency/i.test(message)) {
+          setError(
+            "We couldn't upgrade your legacy subscription automatically. Our team has been notified — reply to any Mully email and we'll move you over in minutes."
+          );
+        } else {
+          setError(message);
+        }
         return;
       }
       await loadSubscriptions(token);
@@ -803,6 +818,23 @@ function SubscriptionManagerModal({ open, onClose }: { open: boolean; onClose: (
   }
 
   async function handleChangePlan(sellingPlanShopifyId: number) {
+    // If the active subscription is on a legacy variant, Loop's frequency
+    // endpoint can't move them — we need to swap to the new Reserve variant.
+    const activeSub =
+      subscriptions.find((s) => s.id === selectedSubscriptionId) ??
+      subscriptions[0] ??
+      null;
+    const currentVariantId = extractVariantIdFromLoopSubscription(
+      activeSub as Record<string, unknown> | null
+    );
+    if (isLegacyVariantId(currentVariantId)) {
+      const variantShopifyId = resolveVariantIdFromSellingPlanId(sellingPlanShopifyId);
+      if (variantShopifyId) {
+        await callAction("/api/loop/subscription/swap-product", { variantShopifyId });
+        setView("main");
+        return;
+      }
+    }
     await callAction("/api/loop/subscription/change-plan", { sellingPlanShopifyId });
     setView("main");
   }
