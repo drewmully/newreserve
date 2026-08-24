@@ -50,7 +50,7 @@ function CounterPill() {
         }
         setCount(data.count);
       } catch {
-        // silent — floor is already shown
+        // silent - floor is already shown
       }
     }
     tick();
@@ -135,7 +135,7 @@ export default function SwingBoxLanding() {
       <header className={styles.hero}>
         <div className={styles.wrap}>
           <span className={styles.eyebrow}>
-            Pre-sale <span className={styles.dot}>·</span> First 100 members
+            October pre-sale <span className={styles.dot}>·</span> Founding 100 cohort
           </span>
 
           <h1 className={styles.h1}>
@@ -147,13 +147,14 @@ export default function SwingBoxLanding() {
           <p className={styles.heroLede}>
             An offseason mobility system led by Irving Fryar Jr. Ten minutes a
             day, coached inside a private community, so you show up to spring
-            faster, looser, and hitting it further.
+            faster, looser, and hitting it further. This is the founding cohort.
+            It only ships if all 100 spots fill.
           </p>
 
           <div className={styles.heroArtWrap}>
             <Image
               src="/swingbox/hero-art.jpg"
-              alt="Irving Fryar Jr. with the Swing Box: drill deck, Fryar Recovery Balm, resistance ring, and a phone showing the Hip Flexor Mobility Flow."
+              alt="Irving Fryar Jr. with The Swing Box: drill cards, training equipment, supplements, and a phone showing the Hip Flexor Mobility Flow."
               width={1400}
               height={1400}
               priority
@@ -174,9 +175,9 @@ export default function SwingBoxLanding() {
               <span className={styles.ctaPrice}>$29.99/mo</span>
             </a>
             <p className={styles.ctaMeta}>
-              Ships October <span className={styles.pipe}>|</span> Cancel
-              anytime <span className={styles.pipe}>|</span> Founding rate
-              locked for life
+              Ships October <span className={styles.pipe}>|</span> Community
+              kicks off October <span className={styles.pipe}>|</span> +15%
+              after the founding 100
             </p>
           </div>
         </div>
@@ -197,8 +198,8 @@ export default function SwingBoxLanding() {
                   <path d="M10 24c0 2.2 6.3 4 14 4s14-1.8 14-4" />
                 </svg>
               </span>
-              <b>Premium Recovery Tools</b>
-              <p>Balm, ring, and rotating props each month.</p>
+              <b>Training Equipment</b>
+              <p>Premium tools, physically shipped, built for the drills.</p>
             </li>
             <li className={styles.includesItem}>
               <span className={styles.includesIcon} aria-hidden>
@@ -210,7 +211,7 @@ export default function SwingBoxLanding() {
                   <path d="M32 31l6-3" />
                 </svg>
               </span>
-              <b>Drills &amp; Mobility Programs</b>
+              <b>Drill Cards</b>
               <p>A new deck of coached drills every 30 days.</p>
             </li>
             <li className={styles.includesItem}>
@@ -220,8 +221,8 @@ export default function SwingBoxLanding() {
                   <ellipse cx="24" cy="24" rx="10" ry="6" />
                 </svg>
               </span>
-              <b>Exclusive Gear &amp; Accessories</b>
-              <p>Member-only kit you won&rsquo;t find on the site.</p>
+              <b>Supplements</b>
+              <p>Recovery-focused stack, delivered with every box.</p>
             </li>
             <li className={styles.includesItem}>
               <span className={styles.includesIcon} aria-hidden>
@@ -232,8 +233,8 @@ export default function SwingBoxLanding() {
                   <circle cx="24" cy="39" r="1.2" />
                 </svg>
               </span>
-              <b>Digital Coaching &amp; Community</b>
-              <p>Private group with Irving, weekly check-ins.</p>
+              <b>Coaching &amp; Community</b>
+              <p>Private group with Irving, kicks off October.</p>
             </li>
           </ul>
         </div>
@@ -272,19 +273,20 @@ export default function SwingBoxLanding() {
               Train with Irving. And 99 golfers doing the same work.
             </h2>
             <p className={styles.body}>
-              Every founding member gets pulled into a private Facebook group
-              the day you claim. That&rsquo;s where Irving coaches drills,
-              answers questions, drops the daily flows, and keeps the group
-              honest through the offseason.
+              The community goes live in October, the same month your first box
+              lands. Every founding member gets pulled into a private Facebook
+              group where Irving coaches drills, answers questions, drops the
+              daily flows, and keeps the group honest through the offseason.
             </p>
             <p className={styles.body}>
               Bombing it like Irving isn&rsquo;t about swing tips. It&rsquo;s
               about moving like him. This is the room where that happens.
             </p>
             <ul className={styles.communityList}>
+              <li>Kicks off October, same month your first box ships</li>
               <li>Weekly live drills and Q&amp;A with Irving</li>
               <li>Daily 10-minute flows for the whole group</li>
-              <li>Progress check-ins from October through spring</li>
+              <li>Founding rate locked. +15% once the 100 fills.</li>
             </ul>
             <a
               className={styles.ctaBtnSm}
@@ -308,32 +310,40 @@ export default function SwingBoxLanding() {
               <summary>When does my first box ship?</summary>
               <p>
                 Founding boxes ship the first week of October, in one batch,
-                straight from our Michigan warehouse. Tracking hits your inbox
-                the day it leaves.
+                straight from our Michigan warehouse. The community kicks off
+                that same week so the group starts training together.
               </p>
             </details>
             <details>
-              <summary>How does the community actually work?</summary>
+              <summary>Why only if all 100 fill?</summary>
               <p>
-                The day you claim your box, you get an invite to a private
-                Facebook group. Irving posts daily flows, hosts weekly live
-                sessions, and answers questions. It&rsquo;s the real product.
-                The box makes it physical.
+                The Founding 100 is a cohort. The value is Irving coaching a
+                room of 100 golfers doing the same work at the same time. If
+                fewer than 100 claim by the ship date, nobody gets charged and
+                nothing ships.
               </p>
             </details>
             <details>
               <summary>What&rsquo;s in the first box?</summary>
               <p>
-                A drill deck built by Irving, Fryar Recovery Balm, a resistance
-                ring, and access to the digital coaching library. Every box
-                after brings a new drill deck, new props, new focus.
+                Drill cards built by Irving, training equipment sized to the
+                drills, a recovery-focused supplement stack, and access to the
+                private coaching community. Every box after brings a new deck,
+                new equipment, new focus.
+              </p>
+            </details>
+            <details>
+              <summary>Does the price ever change?</summary>
+              <p>
+                Founding 100 members lock $29.99/mo for life. Once the cohort
+                fills, the price steps up 15% for everyone after. Your rate
+                stays locked as long as you stay subscribed.
               </p>
             </details>
             <details>
               <summary>Can I cancel?</summary>
               <p>
-                Anytime, in two taps from your account. Your founding rate
-                stays locked as long as you stay subscribed.
+                Anytime, in two taps from your account.
               </p>
             </details>
           </div>
