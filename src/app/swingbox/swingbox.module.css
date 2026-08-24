@@ -49,6 +49,9 @@
   left: 50%;
   transform: translateX(-50%);
   z-index: 60;
+  transition: opacity 260ms ease, transform 260ms ease;
+  opacity: 1;
+  pointer-events: auto;
   display: inline-flex;
   align-items: center;
   gap: 10px;
@@ -64,6 +67,11 @@
   text-decoration: none;
   box-shadow: 0 12px 30px -12px rgba(0, 0, 0, 0.5);
   max-width: calc(100vw - 24px);
+}
+.counterHidden {
+  opacity: 0;
+  transform: translate(-50%, -140%);
+  pointer-events: none;
 }
 .counterDot {
   width: 8px;
@@ -130,7 +138,7 @@
    Hero
    ============================================================ */
 .hero {
-  padding: 84px 0 24px;
+  padding: 110px 0 24px;
   background:
     radial-gradient(600px 400px at 50% 0%, rgba(63,122,82,0.15), transparent 70%),
     var(--cream);
@@ -197,24 +205,35 @@
 }
 .ctaBtn {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  justify-content: center;
+  gap: 8px;
   width: 100%;
   max-width: 460px;
   background: var(--flag);
   color: #fff;
   text-decoration: none;
   font-family: var(--font-display);
-  font-size: 20px;
+  font-size: 22px;
+  line-height: 1;
   letter-spacing: 0.02em;
   text-transform: uppercase;
+  text-align: center;
   padding: 20px 24px;
   border-radius: 14px;
   box-shadow:
     0 1px 0 rgba(255,255,255,0.25) inset,
     0 18px 30px -14px rgba(200,64,46,0.6);
   transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+@media (min-width: 520px) {
+  .ctaBtn {
+    flex-direction: row;
+    justify-content: space-between;
+    text-align: left;
+    gap: 14px;
+  }
 }
 .ctaBtn:hover {
   transform: translateY(-1px);

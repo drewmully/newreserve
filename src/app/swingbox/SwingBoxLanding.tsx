@@ -30,6 +30,7 @@ function CounterPill() {
   const [count, setCount] = useState<number>(12);
   const [goal] = useState<number>(100);
   const [bump, setBump] = useState<boolean>(false);
+  const [hidden, setHidden] = useState<boolean>(false);
   const previous = useRef<number>(12);
 
   useEffect(() => {
@@ -58,13 +59,33 @@ function CounterPill() {
     };
   }, []);
 
+  // Hide the pill once the primary CTA is visible on screen (the user already
+  // saw the counter in the hero; keeping it fixed causes overlap with body
+  // copy on scroll). Re-show when scrolling back up.
+  useEffect(() => {
+    const cta = document.getElementById("claim");
+    if (!cta) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) {
+          // Hide when the CTA (or anything past it) is in view.
+          setHidden(e.isIntersecting || e.boundingClientRect.top < 0);
+        }
+      },
+      { rootMargin: "-40px 0px 0px 0px", threshold: 0 }
+    );
+    io.observe(cta);
+    return () => io.disconnect();
+  }, []);
+
   const pct = Math.max(0, Math.min(100, (count / goal) * 100));
 
   return (
     <a
       href="#claim"
-      className={styles.counter}
+      className={`${styles.counter} ${hidden ? styles.counterHidden : ""}`}
       aria-label={`${count} of ${goal} founding members claimed`}
+      aria-hidden={hidden}
     >
       <span className={styles.counterDot} aria-hidden />
       <span className={styles.counterText}>
