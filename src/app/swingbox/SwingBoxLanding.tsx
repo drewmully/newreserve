@@ -1,14 +1,16 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import styles from "./swingbox.module.css";
+import { startSwingBoxCheckout } from "@/lib/swingBoxCheckout";
 
-// Shopify subscription cart permalink — drops user into checkout with the
-// monthly selling plan already applied so they can't buy without it.
-// Product: Swing Box (Founding 100) · Variant 48885734637760 · Plan 3654713536
-const CHECKOUT_URL =
-  "https://checkout.mymully.com/cart/48885734637760:1?selling_plan=3654713536";
+// Product-page fallback used if JS is disabled. Real click path goes through
+// the Storefront API cartCreate mutation (see swingBoxCheckout.ts) because
+// Shopify cart permalinks don't support selling plans (required for this
+// subscription-only variant).
+const FALLBACK_PRODUCT_URL =
+  "https://checkout.mymully.com/products/swing-box-founding-100";
 
 const IG_URL = "https://www.instagram.com/fryarfitnessgolf/";
 
@@ -59,23 +61,23 @@ function CounterPill() {
     };
   }, []);
 
-  // Hide the pill once the primary CTA is visible on screen (the user already
-  // saw the counter in the hero; keeping it fixed causes overlap with body
-  // copy on scroll). Re-show when scrolling back up.
+  // Hide the pill only after the user has actually scrolled the page a bit.
+  // Simpler and more predictable than IntersectionObserver on the CTA, which
+  // false-positives when the hero is short and the CTA is initially visible.
   useEffect(() => {
-    const cta = document.getElementById("claim");
-    if (!cta) return;
-    const io = new IntersectionObserver(
-      (entries) => {
-        for (const e of entries) {
-          // Hide when the CTA (or anything past it) is in view.
-          setHidden(e.isIntersecting || e.boundingClientRect.top < 0);
-        }
-      },
-      { rootMargin: "-40px 0px 0px 0px", threshold: 0 }
-    );
-    io.observe(cta);
-    return () => io.disconnect();
+    let raf = 0;
+    function onScroll() {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        // Threshold: about the hero height. Show in hero, hide once user has
+        // scrolled past it into the includes strip.
+        setHidden(window.scrollY > 720);
+      });
+    }
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
   const pct = Math.max(0, Math.min(100, (count / goal) * 100));
@@ -107,6 +109,24 @@ function CounterPill() {
 }
 
 export default function SwingBoxLanding() {
+  const handleClaim = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
+    // Intercept the click and start a Storefront-API cart with the correct
+    // selling plan applied. Only intercept plain left-clicks so cmd/ctrl-
+    // click and middle-click still open in a new tab via the href fallback.
+    if (
+      e.defaultPrevented ||
+      e.button !== 0 ||
+      e.metaKey ||
+      e.ctrlKey ||
+      e.shiftKey ||
+      e.altKey
+    ) {
+      return;
+    }
+    e.preventDefault();
+    startSwingBoxCheckout();
+  }, []);
+
   return (
     <main className={styles.page}>
       <CounterPill />
@@ -146,10 +166,11 @@ export default function SwingBoxLanding() {
           <div className={styles.ctaBlock} id="claim">
             <a
               className={styles.ctaBtn}
-              href={CHECKOUT_URL}
+              href={FALLBACK_PRODUCT_URL}
+              onClick={handleClaim}
               rel="noopener"
             >
-              Claim your founding box
+              <span>Claim your founding box</span>
               <span className={styles.ctaPrice}>$29.99/mo</span>
             </a>
             <p className={styles.ctaMeta}>
@@ -267,7 +288,8 @@ export default function SwingBoxLanding() {
             </ul>
             <a
               className={styles.ctaBtnSm}
-              href={CHECKOUT_URL}
+              href={FALLBACK_PRODUCT_URL}
+              onClick={handleClaim}
               rel="noopener"
             >
               Claim your spot &middot; $29.99/mo
