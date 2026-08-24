@@ -175,9 +175,8 @@ export default function SwingBoxLanding() {
               <span className={styles.ctaPrice}>$29.99/mo</span>
             </a>
             <p className={styles.ctaMeta}>
-              Ships October <span className={styles.pipe}>|</span> Community
-              kicks off October <span className={styles.pipe}>|</span> +15%
-              after the founding 100
+              Pre-Sale: October Cohort <span className={styles.pipe}>|</span>{" "}
+              +15% after the founding 100
             </p>
           </div>
         </div>
