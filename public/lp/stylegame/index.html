@@ -28,6 +28,8 @@ window.MULLY_STYLEGAME_CONFIG = {
   posthogHost: "",
   ogUrl: "https://www.mymully.com/lp/stylegame",
   shareCaption: "Twelve golf-style profiles. One is yours. Find yours in 90 seconds.",
+  xHandle: "@mymully",
+  igHandle: "@mullyreserve",
 };
 </script>
 <script src="/lp/stylegame/runtime-config.js"></script>
@@ -858,9 +860,10 @@ function depositUrl(R){ const q=new URLSearchParams({deposit:5,profile:R.key,nam
 </script>
 
 <script>
-/* Phase 1a additive analytics adapter. It monkey-patches navigation and listens to existing controls; authored game code above is unchanged. */
+/* Phase 1a/1b additive adapter. Analytics + share targets + depositUrl. Authored game code above is unchanged. */
 (function () {
   var config = window.MULLY_STYLEGAME_CONFIG || {};
+  var lastShare = { blob: null, filename: null, caption: null, url: null };
   var started = false;
   var configured = false;
   var gameNames = ['split', 'assoc', 'color', 'foursome', 'fit', 'bag'];
@@ -967,6 +970,206 @@ function depositUrl(R){ const q=new URLSearchParams({deposit:5,profile:R.key,nam
     }, false);
 
     try { if (typeof MODEL !== 'undefined' && config.depositUrl) MODEL.depositUrl = config.depositUrl; } catch (_) {}
+
+    // ---------- SHARE TARGETS (Phase 1b) ----------
+    // Wrap the authored shareCard so we can offer X + Instagram Story + Native + Copy.
+    // We do not touch the canvas render logic; we intercept the toBlob step by monkey-patching HTMLCanvasElement.toBlob only during our shareCard call.
+    if (typeof window.shareCard === 'function') {
+      var originalShareCard = window.shareCard;
+      window.shareCard = async function (R, C, btn) {
+        var state = gameState();
+        var mode = state && state.gift ? 'gift' : 'self';
+        var name = R && R.P && R.P.name ? R.P.name : 'my golf style';
+        var oneIn = C && C.oneIn ? C.oneIn : '';
+        var xHandle = config.xHandle || '@mymully';
+        var igHandle = config.igHandle || '@mullyreserve';
+        var siteUrl = config.ogUrl || (location.origin + location.pathname);
+        // Two captions: X (short, with handle), IG (paste-ready with handle).
+        var xText = state && state.gift
+          ? "They're " + name + '. 1 in ' + oneIn + " golfers. Find yours \u2192 " + xHandle + "'s Style Game"
+          : "I'm " + name + '. 1 in ' + oneIn + " golfers. Find yours \u2192 " + xHandle + "'s Style Game";
+        var igText = state && state.gift
+          ? "They're " + name + '. 1 in ' + oneIn + ' golfers. Find yours: ' + siteUrl + ' \u00b7 ' + igHandle
+          : "I'm " + name + '. 1 in ' + oneIn + ' golfers. Find yours: ' + siteUrl + ' \u00b7 ' + igHandle;
+
+        // Render once, cache blob for all share targets.
+        var toBlob = HTMLCanvasElement.prototype.toBlob;
+        var captured = null;
+        HTMLCanvasElement.prototype.toBlob = function (cb, type, quality) {
+          return toBlob.call(this, function (blob) {
+            captured = blob;
+            lastShare.blob = blob;
+            lastShare.filename = 'my-golf-style.png';
+            lastShare.caption = igText;
+            lastShare.url = siteUrl;
+            cb(blob);
+          }, type, quality);
+        };
+
+        // Suppress the authored navigator.share call by temporarily shadowing it,
+        // then invoke authored shareCard so the canvas paints and toBlob runs.
+        var origCanShare = navigator.canShare;
+        var origShare = navigator.share;
+        navigator.canShare = function () { return false; };
+        navigator.share = undefined;
+        try {
+          await originalShareCard.call(this, R, C, btn);
+        } catch (_) {}
+        navigator.canShare = origCanShare;
+        navigator.share = origShare;
+        HTMLCanvasElement.prototype.toBlob = toBlob;
+        if (btn) btn.textContent = '\u21EA';
+
+        openShareSheet({ mode: mode, xText: xText, igText: igText, siteUrl: siteUrl, xHandle: xHandle, igHandle: igHandle });
+      };
+    }
+  }
+
+  function openShareSheet(opts) {
+    // Remove any prior sheet.
+    var existing = document.getElementById('sg-share-sheet');
+    if (existing) existing.remove();
+
+    var sheet = document.createElement('div');
+    sheet.id = 'sg-share-sheet';
+    sheet.setAttribute('role', 'dialog');
+    sheet.setAttribute('aria-modal', 'true');
+    sheet.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.45);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);animation:sg-fade .18s ease-out;';
+    var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    var canNative = !!(navigator.share);
+    var body = document.createElement('div');
+    body.style.cssText = 'width:100%;max-width:520px;background:#faf7f2;color:#141816;border-top-left-radius:22px;border-top-right-radius:22px;padding:22px 20px 32px;font-family:-apple-system,Helvetica,Arial,sans-serif;box-shadow:0 -12px 40px rgba(0,0,0,.25);';
+    body.innerHTML = '<div style="width:44px;height:5px;background:rgba(20,24,22,.18);border-radius:3px;margin:0 auto 18px;"></div>' +
+      '<div style="font:500 20px/1.2 Iowan Old Style,Palatino,Georgia,serif;text-align:center;margin-bottom:4px;">Share your card</div>' +
+      '<div style="font:400 13px/1.35 -apple-system,Helvetica,Arial,sans-serif;text-align:center;opacity:.65;margin-bottom:22px;">' + opts.xHandle + ' + ' + opts.igHandle + ' get tagged automatically</div>' +
+      '<div id="sg-share-targets" style="display:flex;flex-direction:column;gap:10px;"></div>' +
+      '<button id="sg-share-cancel" style="width:100%;margin-top:14px;padding:14px;background:transparent;border:0;font:500 15px -apple-system,Helvetica,Arial,sans-serif;color:rgba(20,24,22,.55);cursor:pointer;">Cancel</button>';
+    sheet.appendChild(body);
+    document.body.appendChild(sheet);
+
+    // Inject keyframes once.
+    if (!document.getElementById('sg-share-css')) {
+      var st = document.createElement('style');
+      st.id = 'sg-share-css';
+      st.textContent = '@keyframes sg-fade{from{opacity:0}to{opacity:1}}#sg-share-sheet button.sg-target{display:flex;align-items:center;gap:14px;width:100%;padding:16px 18px;background:#fff;border:1px solid rgba(20,24,22,.08);border-radius:14px;font:500 16px -apple-system,Helvetica,Arial,sans-serif;color:#141816;cursor:pointer;text-align:left;transition:transform .12s ease,background .12s ease;}#sg-share-sheet button.sg-target:hover{background:#f2ede4;transform:translateY(-1px);}#sg-share-sheet .sg-ico{width:32px;height:32px;display:flex;align-items:center;justify-content:center;background:#141816;color:#faf7f2;border-radius:8px;font-weight:700;font-size:15px;}#sg-share-sheet .sg-sub{display:block;font-weight:400;font-size:12px;opacity:.6;margin-top:2px;}';
+      document.head.appendChild(st);
+    }
+
+    var targets = body.querySelector('#sg-share-targets');
+    function addTarget(icon, label, sub, onClick, kind) {
+      var b = document.createElement('button');
+      b.className = 'sg-target';
+      b.innerHTML = '<span class="sg-ico">' + icon + '</span><span><span>' + label + '</span><span class="sg-sub">' + sub + '</span></span>';
+      b.onclick = function () {
+        capture('sg_share_target', { target: kind, mode: opts.mode });
+        onClick();
+      };
+      targets.appendChild(b);
+    }
+
+    // X — always works. Pre-filled tweet with @mymully tag.
+    addTarget('X', 'Post to X', 'Auto-tags ' + opts.xHandle, function () {
+      var url = 'https://twitter.com/intent/tweet?text=' + encodeURIComponent(opts.xText) + '&url=' + encodeURIComponent(opts.siteUrl);
+      window.open(url, '_blank', 'noopener,noreferrer,width=550,height=680');
+      closeShareSheet();
+    }, 'x');
+
+    // Instagram Story — mobile only.
+    if (isMobile) {
+      addTarget('IG', 'Share to Instagram Story', 'Tag ' + opts.igHandle + ' after \u2014 caption copied', function () {
+        shareToInstagramStory(opts);
+      }, 'instagram_story');
+    }
+
+    // Native share sheet (mobile) or Copy caption fallback (desktop).
+    if (canNative) {
+      addTarget('\u2925', 'More apps\u2026', 'Native share sheet', function () {
+        nativeShareBlob(opts.igText);
+      }, 'native');
+    }
+    addTarget('\u2398', 'Copy caption', 'For manual Instagram/Facebook posts', function () {
+      copyToClipboard(opts.igText).then(function () {
+        toast('Caption copied. Save the image if you need it.');
+        // Also trigger a download in case they lost the render.
+        downloadBlob();
+      });
+      closeShareSheet();
+    }, 'copy_caption');
+
+    document.getElementById('sg-share-cancel').onclick = closeShareSheet;
+    sheet.addEventListener('click', function (e) { if (e.target === sheet) closeShareSheet(); });
+  }
+
+  function closeShareSheet() {
+    var el = document.getElementById('sg-share-sheet');
+    if (el) el.remove();
+  }
+
+  function toast(msg) {
+    var t = document.createElement('div');
+    t.textContent = msg;
+    t.style.cssText = 'position:fixed;left:50%;bottom:32px;transform:translateX(-50%);background:#141816;color:#faf7f2;padding:12px 18px;border-radius:22px;font:500 14px -apple-system,Helvetica,Arial,sans-serif;z-index:100000;box-shadow:0 10px 30px rgba(0,0,0,.35);';
+    document.body.appendChild(t);
+    setTimeout(function () { t.style.transition = 'opacity .3s'; t.style.opacity = '0'; }, 2200);
+    setTimeout(function () { t.remove(); }, 2600);
+  }
+
+  function copyToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text);
+    return new Promise(function (resolve) {
+      var ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px';
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); } catch (_) {}
+      ta.remove();
+      resolve();
+    });
+  }
+
+  function downloadBlob() {
+    if (!lastShare.blob) return;
+    var url = URL.createObjectURL(lastShare.blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = lastShare.filename || 'my-golf-style.png';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+
+  function nativeShareBlob(text) {
+    if (!lastShare.blob || !navigator.share) { closeShareSheet(); return; }
+    var file = new File([lastShare.blob], lastShare.filename || 'my-golf-style.png', { type: 'image/png' });
+    var payload = { text: text, title: 'My golf style' };
+    if (navigator.canShare && navigator.canShare({ files: [file] })) payload.files = [file];
+    navigator.share(payload).catch(function () {}).finally(closeShareSheet);
+  }
+
+  function shareToInstagramStory(opts) {
+    // Copy caption first so they can paste as sticker after IG opens.
+    copyToClipboard(opts.igText);
+    downloadBlob();
+    // Attempt deep link. iOS supports instagram-stories:// with pasteboard-based background sharing;
+    // Android supports com.instagram.share.ADD_TO_STORY intent. Neither can pre-fill a mention sticker \u2014 that's a hard IG platform limit.
+    // Simplest reliable path across both: open the IG app, user long-presses to paste image, adds mention manually.
+    // We use a two-step approach: try the deep link, and after 1200ms fall back to a toast with instructions.
+    var opened = false;
+    var startedAt = Date.now();
+    function fallback() {
+      if (opened) return;
+      opened = true;
+      toast('Image saved + caption copied. Open Instagram \u2192 Story \u2192 add photo \u2192 tag ' + opts.igHandle);
+      closeShareSheet();
+    }
+    // Trigger deep link.
+    var isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    try {
+      var link = isIOS ? 'instagram://story-camera' : 'intent://story-camera#Intent;package=com.instagram.android;scheme=instagram;end';
+      window.location.href = link;
+    } catch (_) {}
+    // If we're still visible after 1.2s the app didn't open \u2014 show manual instructions.
+    setTimeout(function () {
+      if (document.visibilityState === 'visible' && Date.now() - startedAt < 3000) fallback();
+      else fallback();
+    }, 1200);
   }
 
   function start() {

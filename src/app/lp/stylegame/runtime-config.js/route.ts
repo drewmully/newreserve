@@ -9,6 +9,9 @@ export function GET() {
   const config = {
     posthogKey: process.env.NEXT_PUBLIC_POSTHOG_KEY ?? "PLACEHOLDER_WILL_BE_INJECTED_SERVERSIDE",
     posthogHost: process.env.NEXT_PUBLIC_POSTHOG_HOST ?? "",
+    depositUrl: process.env.NEXT_PUBLIC_STYLEGAME_DEPOSIT_URL ?? "/api/stylegame/checkout",
+    xHandle: process.env.NEXT_PUBLIC_STYLEGAME_X_HANDLE ?? "@mymully",
+    igHandle: process.env.NEXT_PUBLIC_STYLEGAME_IG_HANDLE ?? "@mullyreserve",
   };
 
   return new Response(
