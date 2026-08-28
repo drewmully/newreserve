@@ -17,8 +17,30 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
+  // Phase 1a: serve the authored Style Game HTML as a static asset. This avoids
+  // React hydration altering the quiz's self-contained inline scripts.
+  async rewrites() {
+    return {
+      beforeFiles: [
+        {
+          source: "/lp/stylegame",
+          destination: "/lp/stylegame/index.html",
+        },
+      ],
+    };
+  },
   async headers() {
     return [
+      {
+        // Keep the document fresh while the static game is iterated in preview.
+        source: "/lp/stylegame/index.html",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=60",
+          },
+        ],
+      },
       {
         source: "/:path*",
         headers: securityHeaders,
