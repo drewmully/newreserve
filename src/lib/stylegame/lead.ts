@@ -291,3 +291,92 @@ export async function recordLeadLoopPause(
     .eq("id", leadId);
   if (error) throw error;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 4: stylist approval workflow
+// ---------------------------------------------------------------------------
+
+/**
+ * Shape of a single stylist pick. Kept loose because the stylist can
+ * hand-enter these; we only require enough to identify what shipped.
+ */
+export interface StylistPick {
+  variant_id?: string; // numeric or GID; either is fine
+  title?: string;
+  sku?: string;
+  size?: string;
+  color?: string;
+  msrp?: number;
+  [k: string]: unknown;
+}
+
+/**
+ * Load a single lead row for the approval flow. Returns the whole row so
+ * the caller can validate status, presence of loop_subscription_id, etc.
+ */
+export async function getLeadById(
+  leadId: string,
+): Promise<Record<string, unknown> | null> {
+  const sb = getSupabaseService();
+  const { data, error } = await sb
+    .from("stylegame_lead")
+    .select("*")
+    .eq("id", leadId)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as Record<string, unknown> | null) ?? null;
+}
+
+/**
+ * Persist stylist approval on the row. Sets status='approved', stamps
+ * approved_at, stores picks + notes, and updates next_billing_date to the
+ * new imminent-bill epoch the caller passed to Loop.
+ *
+ * Idempotent: safe to re-run with the same picks. Does NOT change status
+ * back from later terminal states (billed/declined/refunded).
+ */
+export async function markLeadApproved(params: {
+  leadId: string;
+  picks: StylistPick[];
+  stylistNotes?: string | null;
+  nextBillingEpochSeconds: number;
+}): Promise<void> {
+  const sb = getSupabaseService();
+  const { leadId, picks, stylistNotes, nextBillingEpochSeconds } = params;
+  const { error } = await sb
+    .from("stylegame_lead")
+    .update({
+      status: "approved",
+      approved_at: new Date().toISOString(),
+      picks: picks as unknown as Record<string, unknown>[],
+      stylist_notes: stylistNotes ?? null,
+      next_billing_date: new Date(
+        nextBillingEpochSeconds * 1000,
+      ).toISOString(),
+    })
+    .eq("id", leadId)
+    .in("status", ["paid", "approved"]); // only advance from paid; re-run from approved is fine
+  if (error) throw error;
+}
+
+/**
+ * Persist stylist decline on the row. Sets status='declined' and stores
+ * any reason as stylist_notes. Loop cancellation is handled at the route
+ * level so we can fail loud on either side without half-writing state.
+ */
+export async function markLeadDeclined(params: {
+  leadId: string;
+  reason?: string | null;
+}): Promise<void> {
+  const sb = getSupabaseService();
+  const { leadId, reason } = params;
+  const { error } = await sb
+    .from("stylegame_lead")
+    .update({
+      status: "declined",
+      stylist_notes: reason ?? null,
+    })
+    .eq("id", leadId)
+    .in("status", ["paid", "played", "declined"]); // block already-approved rows from being force-declined
+  if (error) throw error;
+}
