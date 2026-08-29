@@ -43,6 +43,7 @@ import {
 } from "@/lib/stylegame/lead";
 import { updateLoopSubscriptionNextBillingDate } from "@/app/api/_lib/loopAdmin";
 import { sendPlainText } from "@/lib/email/resend";
+import { captureStylegameEvent } from "@/lib/stylegame/analytics";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -189,6 +190,21 @@ export async function POST(req: NextRequest) {
       { name: "flow", value: "stylegame" },
       { name: "category", value: "approve" },
     ],
+  });
+
+  // Fire PostHog server-side event. Distinct id: shopify_customer_id if we
+  // have it (it's set by the orders-paid webhook), otherwise anon.
+  const distinctId =
+    (lead.shopify_customer_id != null
+      ? String(lead.shopify_customer_id)
+      : (lead.mully_anon_id as string | null)) ?? null;
+  await captureStylegameEvent("sg_approved", distinctId, {
+    lead_id: leadId,
+    profile_key: (lead.profile_key as string | null) ?? null,
+    profile_name: (lead.profile_name as string | null) ?? null,
+    picks_count: picks.length,
+    shopify_order_name: (lead.shopify_order_name as string | null) ?? null,
+    utm_source: (lead.utm_source as string | null) ?? null,
   });
 
   return NextResponse.json({
