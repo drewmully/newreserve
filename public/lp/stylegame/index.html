@@ -882,7 +882,67 @@ function depositUrl(R){ const q=new URLSearchParams({deposit:5,profile:R.key,nam
     } catch (_) { return null; }
   }
 
-  var anonId = cookie('mully_anon_id');
+  function readAnonFromStorage() {
+    try { return localStorage.getItem('mully_anon_id'); } catch (_) { return null; }
+  }
+  function writeAnonCookie(id) {
+    try {
+      var maxAge = 60 * 60 * 24 * 365; // 1 year
+      document.cookie = 'mully_anon_id=' + encodeURIComponent(id) + '; path=/; max-age=' + maxAge + '; SameSite=Lax';
+    } catch (_) {}
+  }
+  function ensureAnonId() {
+    var id = cookie('mully_anon_id') || readAnonFromStorage();
+    if (!id) {
+      try {
+        id = (crypto && crypto.randomUUID) ? ('anon-' + crypto.randomUUID()) : ('anon-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+      } catch (_) {
+        id = 'anon-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+      }
+      try { localStorage.setItem('mully_anon_id', id); } catch (_) {}
+    }
+    writeAnonCookie(id);
+    return id;
+  }
+  var anonId = ensureAnonId();
+
+  // POST the full quiz result to /api/stylegame/played so it lands in
+  // stylegame_lead BEFORE the customer clicks the CTA. Non-blocking:
+  // failures are logged but never surface to the user.
+  var playedPosted = false;
+  function postPlayed(state) {
+    if (playedPosted) return;
+    playedPosted = true;
+    var R = null;
+    try { R = (typeof resolve === 'function') ? resolve() : null; } catch (_) {}
+    if (!R) return;
+    var payload = {
+      quiz_result: {
+        profile: R.key,
+        name: R.P && R.P.name,
+        confidence: R.confidence,
+        pcts: {
+          prep: R.pcts && R.pcts[0],
+          modern: R.pcts && R.pcts[1],
+          classic: R.pcts && R.pcts[2],
+          athletic: R.pcts && R.pcts[3]
+        },
+        color: Math.round(((state && state.colorZone) || 0) * 100),
+        fit: state && state.fit,
+        gift: !!(state && state.gift)
+      },
+      utms: utm
+    };
+    try {
+      fetch('/api/stylegame/played', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        credentials: 'same-origin',
+        keepalive: true
+      }).catch(function () {});
+    } catch (_) {}
+  }
   function eventProps(props) {
     var base = { funnel: 'stylegame', mully_anon_id: anonId || undefined };
     Object.keys(utm).forEach(function (key) { base[key] = utm[key]; });
@@ -950,7 +1010,10 @@ function depositUrl(R){ const q=new URLSearchParams({deposit:5,profile:R.key,nam
         if (!isBack && gameNames.indexOf(priorName) !== -1 && priorName !== name) {
           capture('sg_game_complete', { game: priorName, mode: state && state.gift ? 'gift' : 'self' });
         }
-        if (!isBack && name === 'finale') capture('sg_finale', { mode: state && state.gift ? 'gift' : 'self' });
+        if (!isBack && name === 'finale') {
+          capture('sg_finale', { mode: state && state.gift ? 'gift' : 'self' });
+          try { postPlayed(state); } catch (_) {}
+        }
         if (!isBack && name === 'profile') capture('sg_card_view', { mode: state && state.gift ? 'gift' : 'self' });
         return originalGo.apply(this, arguments);
       };

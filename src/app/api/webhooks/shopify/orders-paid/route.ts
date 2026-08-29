@@ -44,6 +44,23 @@ import { processSponsorship } from "@/app/api/_lib/sponsorship";
 import { getSupabaseService } from "@/app/api/_lib/supabaseService";
 import { provisionPaidMemberFromLoop } from "@/app/api/_lib/provisionPaidMember";
 import { shopifyGraphQL } from "@/app/api/_lib/shopifyAdmin";
+import {
+  isStylegameOrder,
+  linkOrderToLead,
+  recordLeadLoopPause,
+} from "@/lib/stylegame/lead";
+import {
+  getLoopRawSubscriptions,
+  updateLoopSubscriptionNextBillingDate,
+} from "@/app/api/_lib/loopAdmin";
+
+const STYLEGAME_PAUSE_DAYS = 60;
+// Numeric Shopify variant id of Reserve Member Quarterly ($250).
+// The Style Game selling plan is attached to this variant — any active Loop
+// subscription for the buyer on this variant IS the subscription we just
+// created via the /api/stylegame/checkout cart. Matching by variant avoids
+// depending on Loop returning `sellingPlanShopifyId` on the raw sub payload.
+const STYLEGAME_VARIANT_NUMERIC_ID = 47601025122496;
 
 /**
  * Allowed values of the `discover_tier` cart attribute set by /lp/discover.
@@ -939,8 +956,117 @@ export async function POST(request: NextRequest) {
     // Runs in parallel with analytics so it never delays the 200 response.
     // Non-fatal: all errors are caught inside persistOrderToSupabase.
     persistOrderToSupabase(order),
+    // ── Style Game funnel: link paid order to stylegame_lead + pause cycle 2
+    // Non-fatal: every branch logs and swallows so the webhook still 200s.
+    stylegamePersist(order),
   ]);
 
   // Shopify expects a 200 response quickly or it will retry
   return NextResponse.json({ ok: true });
+}
+
+/**
+ * Style Game funnel post-purchase handler.
+ *
+ * 1. Detects `funnel=stylegame` (cart attribute) OR a line item on the
+ *    Style Game selling plan.
+ * 2. Upserts the matching `stylegame_lead` row → status `paid`.
+ * 3. Pushes the Loop subscription's next_billing_date out `STYLEGAME_PAUSE_DAYS`
+ *    days so cycle 2 does not auto-bill before the stylist approves picks.
+ *
+ * Failures at every step are logged and swallowed. This block never
+ * throws — the webhook still 200s.
+ */
+async function stylegamePersist(order: {
+  id: number;
+  name?: string | null;
+  email?: string | null;
+  customer?: { id?: number | null; email?: string | null } | null;
+  note_attributes?: Array<{ name: string; value: string }> | null;
+  line_items?: Array<{
+    properties?: Array<{ name: string; value: string }> | null;
+    selling_plan_allocation?: {
+      selling_plan?: { id?: number | null } | null;
+    } | null;
+  }> | null;
+}): Promise<void> {
+  try {
+    if (!isStylegameOrder(order)) return;
+
+    // 1. Link the order to a stylegame_lead row.
+    const linked = await linkOrderToLead(order);
+    console.log(
+      `[orders-paid] stylegame: order ${order.id} linked to lead ${linked.id} (matched=${linked.matched})`
+    );
+
+    if (linked.matched === "already") {
+      // Idempotency — the pause has already been applied.
+      return;
+    }
+
+    // 2. Pause cycle 2 in Loop.
+    const shopifyCustomerId = order.customer?.id
+      ? String(order.customer.id)
+      : null;
+    if (!shopifyCustomerId) {
+      console.warn(
+        `[orders-paid] stylegame: order ${order.id} has no customer.id — cannot pause Loop subscription. Lead row still saved.`
+      );
+      return;
+    }
+
+    // Retry once at 15s because Loop can lag Shopify by a few seconds
+    // when the subscription is being provisioned from the checkout.
+    let sub: { id?: string; status?: string } | null = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const rawSubs = await getLoopRawSubscriptions(shopifyCustomerId).catch(
+        (err) => {
+          console.warn(
+            `[orders-paid] stylegame: Loop raw-subs attempt ${attempt + 1} failed for ${shopifyCustomerId}:`,
+            err
+          );
+          return [] as Array<Record<string, unknown>>;
+        }
+      );
+      sub =
+        rawSubs.find((s) => {
+          if (String((s as { status?: string }).status ?? "").toUpperCase() !== "ACTIVE") return false;
+          const lines =
+            ((s as { lines?: Array<{ variantShopifyId?: number | string | null }> })
+              .lines ?? []);
+          return lines.some(
+            (l) => Number(l.variantShopifyId) === STYLEGAME_VARIANT_NUMERIC_ID
+          );
+        }) as { id?: string; status?: string } | null;
+      if (sub) break;
+      if (attempt === 0) {
+        await new Promise((r) => setTimeout(r, 15000));
+      }
+    }
+
+    if (!sub || !sub.id) {
+      console.warn(
+        `[orders-paid] stylegame: no ACTIVE Loop subscription on variant ${STYLEGAME_VARIANT_NUMERIC_ID} found for customer ${shopifyCustomerId} after retry. Cycle 2 will bill on default cadence.`
+      );
+      return;
+    }
+
+    const nextEpochSeconds = Math.floor(
+      (Date.now() + STYLEGAME_PAUSE_DAYS * 86400 * 1000) / 1000
+    );
+    await updateLoopSubscriptionNextBillingDate(
+      String(sub.id),
+      nextEpochSeconds
+    );
+    await recordLeadLoopPause(
+      linked.id,
+      String(sub.id),
+      nextEpochSeconds
+    );
+    console.log(
+      `[orders-paid] stylegame: paused Loop subscription ${sub.id} for order ${order.id} until ${new Date(nextEpochSeconds * 1000).toISOString()}`
+    );
+  } catch (err) {
+    console.error("[orders-paid] stylegame: unexpected error (swallowed):", err);
+  }
 }
