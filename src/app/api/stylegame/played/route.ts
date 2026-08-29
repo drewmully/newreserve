@@ -23,6 +23,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { insertPlayedLead, QuizResult } from "@/lib/stylegame/lead";
+import { captureStylegameEvent } from "@/lib/stylegame/analytics";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -80,6 +81,22 @@ export async function POST(req: NextRequest) {
       referer: req.headers.get("referer"),
       user_agent: req.headers.get("user-agent"),
     });
+
+    // Fire PostHog server-side capture only when a NEW row was created.
+    // Duplicate posts within the 5-minute idempotency window should not
+    // fan out to PostHog again.
+    if (created) {
+      await captureStylegameEvent("sg_played", anon, {
+        lead_id: id,
+        profile_key: quiz.profile,
+        profile_name: quiz.name,
+        confidence: quiz.confidence,
+        gift: !!quiz.gift,
+        utm_source: utms.utm_source ?? null,
+        utm_medium: utms.utm_medium ?? null,
+        utm_campaign: utms.utm_campaign ?? null,
+      });
+    }
 
     return NextResponse.json({ ok: true, id, created });
   } catch (err) {

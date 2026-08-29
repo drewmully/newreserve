@@ -22,6 +22,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { captureStylegameEvent } from "@/lib/stylegame/analytics";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -171,6 +172,20 @@ export async function GET(req: NextRequest) {
     const gqlErrors = json?.errors ?? [];
 
     if (checkoutUrl) {
+      // Fire PostHog server-side event for the funnel. Client-side
+      // sg_cta_click already fires from the game HTML; this is the
+      // authoritative "server accepted the checkout intent" event and
+      // gives us a clean redirect count that isn't blocked by ad blockers.
+      const anon = search.get("mully_anon_id");
+      await captureStylegameEvent("sg_checkout_start", anon, {
+        profile_key: profile || null,
+        profile_name: name || null,
+        confidence: Number(confidence) || null,
+        gift: gift === "1" || gift === "true",
+        utm_source: search.get("utm_source") || null,
+        utm_medium: search.get("utm_medium") || null,
+        utm_campaign: search.get("utm_campaign") || null,
+      });
       return NextResponse.redirect(checkoutUrl, 303);
     }
 

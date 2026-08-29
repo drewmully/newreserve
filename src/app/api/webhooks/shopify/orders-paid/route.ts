@@ -49,6 +49,7 @@ import {
   linkOrderToLead,
   recordLeadLoopPause,
 } from "@/lib/stylegame/lead";
+import { captureStylegameEvent } from "@/lib/stylegame/analytics";
 import {
   getLoopRawSubscriptions,
   updateLoopSubscriptionNextBillingDate,
@@ -1003,6 +1004,32 @@ async function stylegamePersist(order: {
       // Idempotency — the pause has already been applied.
       return;
     }
+
+    // Fire PostHog server-side sg_paid event. Distinct id: shopify_customer_id
+    // if present (aligns with post-purchase identify), else fall back to the
+    // mully_anon_id captured on the order (same id used by client-side
+    // PostHog SDK on /lp/stylegame).
+    const sgAttrs = order.note_attributes ?? [];
+    const sgReadAttr = (key: string) =>
+      sgAttrs.find((a) => a.name === key)?.value ?? null;
+    const sgMullyAnonId = sgReadAttr("mully_anon_id");
+    const posthogDistinctId =
+      (order.customer?.id != null
+        ? String(order.customer.id)
+        : sgMullyAnonId) ?? null;
+    // Fire and forget — captureStylegameEvent never throws.
+    await captureStylegameEvent("sg_paid", posthogDistinctId, {
+      lead_id: linked.id,
+      shopify_order_id: String(order.id),
+      shopify_order_name: order.name ?? null,
+      profile_key: sgReadAttr("stylegame_profile"),
+      profile_name: sgReadAttr("stylegame_profile_name"),
+      utm_source: sgReadAttr("utm_source"),
+      utm_medium: sgReadAttr("utm_medium"),
+      utm_campaign: sgReadAttr("utm_campaign"),
+      value: 5,
+      currency: "USD",
+    });
 
     // 2. Pause cycle 2 in Loop.
     const shopifyCustomerId = order.customer?.id

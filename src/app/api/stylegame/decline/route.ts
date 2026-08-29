@@ -39,6 +39,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getLeadById, markLeadDeclined } from "@/lib/stylegame/lead";
 import { cancelLoopSubscription } from "@/app/api/_lib/loopAdmin";
 import { sendPlainText } from "@/lib/email/resend";
+import { captureStylegameEvent } from "@/lib/stylegame/analytics";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -145,6 +146,19 @@ export async function POST(req: NextRequest) {
       });
     }
   }
+
+  // Fire PostHog server-side event.
+  const distinctId =
+    (lead.shopify_customer_id != null
+      ? String(lead.shopify_customer_id)
+      : (lead.mully_anon_id as string | null)) ?? null;
+  await captureStylegameEvent("sg_declined", distinctId, {
+    lead_id: leadId,
+    profile_key: (lead.profile_key as string | null) ?? null,
+    reason: reason || null,
+    had_loop_subscription: !!loopSubscriptionId,
+    utm_source: (lead.utm_source as string | null) ?? null,
+  });
 
   return NextResponse.json({
     ok: true,
