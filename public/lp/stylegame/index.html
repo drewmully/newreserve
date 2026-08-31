@@ -595,7 +595,7 @@ function factCopy(pct,label){ label=label||'picked this too';
 function fact(o,siblings,label){ factN++; let el;
   if(factN%2===0){ const PL=S.gift?PROPS_GIFT:PROPS; el=h('div','fact prop',`<span class="wm">mully.</span>${PL[(factN/2-1)%PL.length]}`); }
   else { el=h('div','fact',factCopy(share(o,siblings),label)); } document.getElementById('app').append(el); requestAnimationFrame(()=>el.classList.add('on')); clearTimeout(factT); document.querySelectorAll('.fact').forEach(f=>{if(f!==el)f.remove();}); factT=setTimeout(()=>{el.classList.remove('on');setTimeout(()=>el.remove(),350);},el.classList.contains('prop')?2400:1700); }
-function apply(o,w=1){ if(!o)return; if(navigator.vibrate)navigator.vibrate(8); if(o.v)for(let i=0;i<4;i++)S.v[i]+=o.v[i]*w; if(o.c)S.color+=o.c*w; if(o.p)S.pattern+=o.p*w; if(o.f)S.fabric+=o.f*w; if(o.fit!==undefined)S.fit=o.fit; save(); strip(); }
+function apply(o,w=1){ if(!o)return; if(window._sgOnPick)try{window._sgOnPick(o,w,S.step,FLOW&&FLOW[S.step]);}catch(_){} if(navigator.vibrate)navigator.vibrate(8); if(o.v)for(let i=0;i<4;i++)S.v[i]+=o.v[i]*w; if(o.c)S.color+=o.c*w; if(o.p)S.pattern+=o.p*w; if(o.f)S.fabric+=o.f*w; if(o.fit!==undefined)S.fit=o.fit; save(); strip(); }
 function leaders(){ const idx=[0,1,2,3].sort((a,b)=>S.v[b]-S.v[a]); const tot=S.v.reduce((a,b)=>a+Math.max(b,0),0)||1; return {first:idx[0],second:idx[1],pct:Math.round(Math.max(S.v[idx[0]],0)/tot*100),gap:S.v[idx[0]]-S.v[idx[1]],tot}; }
 
 // ---------- PROGRESS DOTS ----------
@@ -906,6 +906,41 @@ function depositUrl(R){ const q=new URLSearchParams({deposit:5,profile:R.key,nam
   }
   var anonId = ensureAnonId();
 
+  // ---- Per-question pick logger (Phase 7) ----
+  // The game calls window._sgOnPick(o, w, step, screen) inside apply() on every
+  // scoring choice. We capture a compact snapshot so a stylist can replay the
+  // click-by-click sequence, and so we can re-score offline if weights change.
+  // Passive observer only; we never touch the game's scoring or copy.
+  var picks = [];
+  var pickSeq = 0;
+  var pickT0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  window._sgOnPick = function (o, w, step, screen) {
+    if (!o || typeof o !== 'object') return;
+    // Only log scoring choices (anything with an axis vector, color, pattern,
+    // fabric or fit signal). Skip programmatic apply() calls that carry none.
+    var isScoring = !!(o.v || o.c != null || o.p != null || o.f != null || o.fit !== undefined);
+    if (!isScoring) return;
+    var now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    var entry = {
+      seq: pickSeq++,
+      step: (typeof step === 'number') ? step : null,
+      screen: screen || null,
+      w: typeof w === 'number' ? w : 1,
+      t_ms: Math.round(now - pickT0),
+      o: {}
+    };
+    if (o.v && o.v.length === 4) entry.o.v = [o.v[0], o.v[1], o.v[2], o.v[3]];
+    if (o.c != null) entry.o.c = o.c;
+    if (o.p != null) entry.o.p = o.p;
+    if (o.f != null) entry.o.f = o.f;
+    if (o.fit !== undefined) entry.o.fit = o.fit;
+    if (o.t != null) entry.o.t = String(o.t).slice(0, 60);
+    if (o.k != null) entry.o.k = String(o.k).slice(0, 40);
+    if (o.z != null) entry.o.z = o.z; // color zone marker on palette picks
+    // Hard cap to keep payload small and defend against runaway loops.
+    if (picks.length < 200) picks.push(entry);
+  };
+
   // POST the full quiz result to /api/stylegame/played so it lands in
   // stylegame_lead BEFORE the customer clicks the CTA. Non-blocking:
   // failures are logged but never surface to the user.
@@ -917,6 +952,7 @@ function depositUrl(R){ const q=new URLSearchParams({deposit:5,profile:R.key,nam
     try { R = (typeof resolve === 'function') ? resolve() : null; } catch (_) {}
     if (!R) return;
     var payload = {
+      picks: picks.slice(),
       quiz_result: {
         profile: R.key,
         name: R.P && R.P.name,

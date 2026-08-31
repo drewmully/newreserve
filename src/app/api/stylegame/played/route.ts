@@ -22,7 +22,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { insertPlayedLead, QuizResult } from "@/lib/stylegame/lead";
+import { insertPlayedLead, QuizResult, StylegamePick } from "@/lib/stylegame/lead";
 import { captureStylegameEvent } from "@/lib/stylegame/analytics";
 
 export const runtime = "nodejs";
@@ -30,6 +30,7 @@ export const dynamic = "force-dynamic";
 
 interface RequestBody {
   quiz_result?: QuizResult;
+  picks?: StylegamePick[];
   utms?: {
     utm_source?: string;
     utm_medium?: string;
@@ -73,6 +74,7 @@ export async function POST(req: NextRequest) {
     const { id, created } = await insertPlayedLead({
       mully_anon_id: anon,
       quiz_result: quiz,
+      picks: Array.isArray(body.picks) ? body.picks : null,
       utm_source: utms.utm_source ?? null,
       utm_medium: utms.utm_medium ?? null,
       utm_campaign: utms.utm_campaign ?? null,
@@ -92,6 +94,7 @@ export async function POST(req: NextRequest) {
         profile_name: quiz.name,
         confidence: quiz.confidence,
         gift: !!quiz.gift,
+        pick_count: Array.isArray(body.picks) ? body.picks.length : 0,
         utm_source: utms.utm_source ?? null,
         utm_medium: utms.utm_medium ?? null,
         utm_campaign: utms.utm_campaign ?? null,
