@@ -177,3 +177,10 @@ Track first successful renewal per contract via
 `public.subscription_events`. Only once every migrated row has ≥ 1
 successful attempt AND 30 days have passed is it safe to plan the Loop
 decommission (separate PR).
+
+## Resilience behavior
+
+- Loop admin calls retry up to 3 times with 2s/4s/8s exponential backoff (max ~14s of backoff + 3x15s per-call = ~59s worst-case per Loop operation).
+- Shopify mutations retry up to 3 times with 1s/2s/4s backoff (max ~7s + 3x30s per-call = ~97s worst-case per Shopify operation).
+- Total worst-case route runtime: ~3 minutes if all external calls hit max retries. Well within the 300s maxDuration ceiling.
+- If Loop is TRULY down (all 3 retries exhaust), the route returns 502 and the audit row is NOT written (fails before the initial planned-row insert). Retry the migration when Loop recovers — no cleanup needed.

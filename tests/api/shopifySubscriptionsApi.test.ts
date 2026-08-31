@@ -273,16 +273,28 @@ describe("shopifySubscriptionsApi", () => {
     expect(summary?.prepaidRemaining).toBe(3);
   });
 
-  it("throws on non-200 responses", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+  it("throws on non-200 responses (after retry wrapper exhausts on 5xx)", async () => {
+    // PR #129: subscriptionsGraphQL now retries 5xx / 429 via
+    // `withShopifyRetry`. Mock all 3 attempts so the wrapper exhausts and
+    // surfaces the ShopifyRetryableHttpError.
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: false,
       status: 500,
       text: async () => "internal server error",
       json: async () => ({}),
     } as unknown as Response);
+    // Speed up backoff for this one test.
+    vi.useFakeTimers();
     const api = await loadApi();
-    await expect(
-      api.pauseContract("gid://shopify/SubscriptionContract/7")
-    ).rejects.toThrow(/Shopify Subscriptions API error 500/);
+    const p = api.pauseContract("gid://shopify/SubscriptionContract/7");
+    // Drain fake timers so the retry sleeps resolve.
+    const drain = (async () => {
+      for (let i = 0; i < 10; i++) {
+        await vi.advanceTimersByTimeAsync(10_000);
+        await Promise.resolve();
+      }
+    })();
+    await expect(Promise.race([p, drain.then(() => p)])).rejects.toThrow(/500/);
+    vi.useRealTimers();
   });
 });
