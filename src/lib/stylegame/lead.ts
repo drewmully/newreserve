@@ -34,9 +34,34 @@ export interface QuizResult {
   gift?: boolean | null;
 }
 
+/**
+ * One entry in the click-by-click pick log captured by the game's
+ * `window._sgOnPick` hook. The shape is deliberately loose so we can add
+ * new signals to `o` without breaking the DB payload — everything lands
+ * inside `stylegame_lead.picks` as jsonb.
+ */
+export interface StylegamePick {
+  seq?: number | null;
+  step?: number | null;
+  screen?: string | null;
+  w?: number | null;
+  t_ms?: number | null;
+  o?: {
+    v?: number[] | null;
+    c?: number | null;
+    p?: number | null;
+    f?: number | null;
+    fit?: number | null;
+    t?: string | null;
+    k?: string | null;
+    z?: number | null;
+  } | null;
+}
+
 export interface UpsertPlayedInput {
   mully_anon_id?: string | null;
   quiz_result: QuizResult;
+  picks?: StylegamePick[] | null;
   utm_source?: string | null;
   utm_medium?: string | null;
   utm_campaign?: string | null;
@@ -50,6 +75,60 @@ function toInt(value: unknown): number | null {
   if (value === null || value === undefined || value === "") return null;
   const n = typeof value === "number" ? value : parseInt(String(value), 10);
   return Number.isFinite(n) ? n : null;
+}
+
+function toNum(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Normalize the client-supplied picks array before it hits jsonb. Keeps only
+ * the shape we documented in `StylegamePick`, caps at 200 entries and 60/40
+ * chars on the human-readable option labels. Anything unrecognized is dropped
+ * silently rather than throwing — a bad picks payload should never fail the
+ * played endpoint.
+ */
+function sanitizePicks(
+  raw: StylegamePick[] | null | undefined
+): StylegamePick[] | null {
+  if (!Array.isArray(raw)) return null;
+  const out: StylegamePick[] = [];
+  for (const p of raw.slice(0, 200)) {
+    if (!p || typeof p !== "object") continue;
+    const src = (p.o && typeof p.o === "object") ? p.o : {};
+    const cleanO: NonNullable<StylegamePick["o"]> = {};
+    if (Array.isArray(src.v) && src.v.length === 4) {
+      cleanO.v = src.v.map((n) => toNum(n) ?? 0);
+    }
+    if (src.c != null) cleanO.c = toNum(src.c);
+    if (src.p != null) cleanO.p = toNum(src.p);
+    if (src.f != null) cleanO.f = toNum(src.f);
+    if (src.fit !== undefined) cleanO.fit = toNum(src.fit);
+    if (src.t != null) cleanO.t = String(src.t).slice(0, 60);
+    if (src.k != null) cleanO.k = String(src.k).slice(0, 40);
+    if (src.z != null) cleanO.z = toNum(src.z);
+    // Drop entries that carry no scoring signal AND no identifying metadata
+    // — keeps garbage out of jsonb without failing the whole request.
+    if (
+      Object.keys(cleanO).length === 0 &&
+      p.seq == null &&
+      p.step == null &&
+      !p.screen
+    ) {
+      continue;
+    }
+    out.push({
+      seq: toInt(p.seq),
+      step: toInt(p.step),
+      screen: p.screen != null ? String(p.screen).slice(0, 40) : null,
+      w: toNum(p.w),
+      t_ms: toInt(p.t_ms),
+      o: cleanO,
+    });
+  }
+  return out.length > 0 ? out : null;
 }
 
 /**
@@ -93,6 +172,7 @@ export async function insertPlayedLead(
     fit: toInt(r.fit),
     gift: !!r.gift,
     quiz_result_json: r as unknown as Record<string, unknown>,
+    picks: sanitizePicks(input.picks),
     utm_source: input.utm_source ?? null,
     utm_medium: input.utm_medium ?? null,
     utm_campaign: input.utm_campaign ?? null,
