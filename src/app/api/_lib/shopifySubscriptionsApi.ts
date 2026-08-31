@@ -67,15 +67,127 @@ export interface ShopifyUserError {
   message: string;
 }
 
+// ─── Retry-with-backoff wrapper (mirrors loopAdmin.withLoopRetry) ─────────────────
+
+export class ShopifyRetryableHttpError extends Error {
+  constructor(public readonly status: number, message: string) {
+    super(message);
+    this.name = "ShopifyRetryableHttpError";
+  }
+}
+
+export interface WithShopifyRetryOpts {
+  retries?: number;
+  baseMs?: number;
+  timeoutMs?: number;
+  label: string;
+}
+
+function isShopifyNetworkError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  if (
+    err instanceof TypeError &&
+    (err.message.includes("fetch failed") ||
+      err.message.includes("socket") ||
+      err.message.includes("network"))
+  ) {
+    return true;
+  }
+  const code = (err as { code?: string }).code;
+  if (typeof code === "string" && /^(ECONN|EAI_|EPIPE|ENOTFOUND|UND_ERR_)/.test(code)) {
+    return true;
+  }
+  return false;
+}
+
+function isShopifyAbortError(err: unknown): boolean {
+  return err instanceof Error && err.name === "AbortError";
+}
+
+/**
+ * Retry-with-backoff wrapper for Shopify Admin subscription API calls.
+ *
+ * Retries on: per-attempt timeout, network errors, 5xx, and 429.
+ * Does NOT retry on: 4xx (except 429), GraphQL userErrors, or other non-
+ * network application errors.
+ *
+ * Default backoff: baseMs=1000 → 1s, 2s, 4s (Shopify errors clear faster
+ * than Loop's flaky Cloudflare edge, and per-call timeout is higher).
+ *
+ * SAFETY on non-idempotent operations:
+ *   - `createContractAtomic` passes `idempotencyKey` (see call site in
+ *     `migrate-prepaid-annual/route.ts`, `migrate_${contractId}`). Shopify
+ *     dedupes on that key, so re-invoking on retry returns the same
+ *     contract id instead of creating a duplicate. Verified: PR #128 sets
+ *     `idempotencyKey: \`migrate_${contractId}\`` unconditionally.
+ *   - Status mutations (pause/activate/cancel) are set-desired-state, so a
+ *     re-run converges. GraphQL userErrors are thrown as plain Error and
+ *     NOT retried.
+ *   - Draft lifecycle mutations (updateContract): each stage's userErrors
+ *     are still surfaced as plain Error and NOT retried, so a mid-draft
+ *     retry does not double-apply.
+ */
+export async function withShopifyRetry<T>(
+  fn: (signal: AbortSignal) => Promise<T>,
+  opts: WithShopifyRetryOpts
+): Promise<T> {
+  const retries = opts.retries ?? 3;
+  const baseMs = opts.baseMs ?? 1000;
+  const timeoutMs = opts.timeoutMs ?? 30000;
+  const { label } = opts;
+
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < retries; attempt++) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      return await fn(ctrl.signal);
+    } catch (err) {
+      lastError = err;
+      const retryable =
+        isShopifyAbortError(err) ||
+        isShopifyNetworkError(err) ||
+        err instanceof ShopifyRetryableHttpError;
+      const isLastAttempt = attempt === retries - 1;
+      if (!retryable || isLastAttempt) {
+        throw err;
+      }
+      const backoffMs = baseMs * Math.pow(2, attempt);
+      console.log(
+        `[shopifySubscriptions] retry attempt ${attempt + 1}/${retries} for ${label} ` +
+          `(reason=${err instanceof Error ? err.name : "unknown"}, backoff=${backoffMs}ms)`
+      );
+      await new Promise((r) => setTimeout(r, backoffMs));
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  throw lastError;
+}
+
 async function subscriptionsGraphQL<T>(
   query: string,
-  variables?: Record<string, unknown>
+  variables?: Record<string, unknown>,
+  label = "subscriptionsGraphQL"
 ): Promise<T> {
-  const res = await fetch(getGraphQLEndpoint(), {
-    method: "POST",
-    headers: getSubscriptionsHeaders(),
-    body: JSON.stringify({ query, variables }),
-  });
+  const res = await withShopifyRetry(async (signal) => {
+    const response = await fetch(getGraphQLEndpoint(), {
+      method: "POST",
+      headers: getSubscriptionsHeaders(),
+      body: JSON.stringify({ query, variables }),
+      signal,
+    });
+    if (response.status >= 500 || response.status === 429) {
+      const bodyText = await response.text().catch(() => "");
+      throw new ShopifyRetryableHttpError(
+        response.status,
+        `Shopify Subscriptions ${label} ${response.status}: ${bodyText.slice(0, 200)}`
+      );
+    }
+    return response;
+  }, { label });
 
   if (!res.ok) {
     throw new Error(
@@ -482,12 +594,27 @@ export interface AtomicCreateInput {
 }
 
 export async function createContractAtomic(input: AtomicCreateInput) {
+  // NOTE: retry-safety invariant.
+  // `input.idempotencyKey` should be set by every migration/cutover caller so
+  // that a retry after a network timeout returns the same contract id instead
+  // of creating a duplicate. The migrate-prepaid-annual route passes
+  // `migrate_${contractId}` (see route.ts). A missing key is logged as a WARN
+  // rather than thrown here to keep the scaffolding contract from PR #127/#128
+  // green — no non-migration caller exists yet, and gating on it now would
+  // break the `createContractAtomic passes the input straight through` unit
+  // test. Add a runtime warning so drift is visible in logs.
+  if (!input.idempotencyKey) {
+    console.warn(
+      "[shopifySubscriptions] createContractAtomic called without idempotencyKey; " +
+        "retries after network failure could create duplicate contracts."
+    );
+  }
   const data = await subscriptionsGraphQL<{
     subscriptionContractAtomicCreate: {
       contract: { id: string; status: string } | null;
       userErrors: ShopifyUserError[];
     };
-  }>(ATOMIC_CREATE_MUTATION, { input });
+  }>(ATOMIC_CREATE_MUTATION, { input }, `createContractAtomic(${input.idempotencyKey ?? "no-key"})`);
   throwOnUserErrors(
     "subscriptionContractAtomicCreate",
     data.subscriptionContractAtomicCreate.userErrors

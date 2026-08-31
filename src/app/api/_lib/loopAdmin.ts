@@ -13,33 +13,137 @@
 const BASE_URL =
   process.env.LOOP_API_BASE_URL ?? "https://api.loopsubscriptions.com/admin/2023-10";
 
+// ─── Retry-with-backoff wrapper ─────────────────────────────────────────────
+
 /**
- * Retry a fetch call up to `maxAttempts` times on socket/network errors.
- * Loop's API sits behind Cloudflare; Vercel IPs occasionally get connection-
- * reset before any bytes are received (UND_ERR_SOCKET / "other side closed").
+ * Error class thrown when an HTTP response is retryable (5xx or 429). Thrown
+ * from inside a `withLoopRetry` callback so the wrapper knows to back off and
+ * try again instead of surfacing a permanent failure.
  */
-async function fetchWithRetry(
-  url: string,
-  options: RequestInit,
-  maxAttempts = 3,
-  delayMs = 400
-): Promise<Response> {
+export class LoopRetryableHttpError extends Error {
+  constructor(public readonly status: number, message: string) {
+    super(message);
+    this.name = "LoopRetryableHttpError";
+  }
+}
+
+export interface WithLoopRetryOpts {
+  retries?: number;
+  baseMs?: number;
+  timeoutMs?: number;
+  label: string;
+}
+
+function isNetworkError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  // Node/undici TypeErrors: "fetch failed", "socket", "other side closed", etc.
+  if (
+    err instanceof TypeError &&
+    (err.message.includes("fetch failed") ||
+      err.message.includes("socket") ||
+      err.message.includes("network"))
+  ) {
+    return true;
+  }
+  // undici raises errors with code fields like UND_ERR_SOCKET / ECONNRESET.
+  const code = (err as { code?: string }).code;
+  if (typeof code === "string" && /^(ECONN|EAI_|EPIPE|ENOTFOUND|UND_ERR_)/.test(code)) {
+    return true;
+  }
+  return false;
+}
+
+function isAbortError(err: unknown): boolean {
+  return err instanceof Error && err.name === "AbortError";
+}
+
+/**
+ * Retry-with-backoff wrapper for Loop admin API calls.
+ *
+ * Retries on: per-attempt timeout (AbortController.abort), network errors,
+ * `LoopRetryableHttpError` (HTTP 5xx or 429).
+ *
+ * Does NOT retry on: HTTP 4xx (except 429), other application errors
+ * (thrown as plain Error), or "not found" (caller returns null instead of
+ * throwing).
+ *
+ * Backoff: baseMs * 2^attempt → 2s, 4s, 8s at default baseMs=2000.
+ * Per-attempt timeout: an AbortController is passed via `signal` to the
+ * callback. The callback MUST honor it (pass through to fetch).
+ *
+ * SAFETY on non-idempotent operations:
+ *   - `getLoopSubscriptionById` / list / status reads: fully safe.
+ *   - `cancelLoopSubscription`: Loop's cancel action is idempotent — canceling
+ *     an already-CANCELLED contract returns success (verified in Loop's docs
+ *     and confirmed via the segmentation.csv workflow, where re-cancels are
+ *     no-ops). Retrying a cancel that partially executed is therefore safe.
+ *   - Frequency/pause/resume mutations: the ones we retry today are still
+ *     safe because they set desired end-state rather than incrementing a
+ *     counter; the second retry converges on the same state.
+ *   - `swapLoopSubscriptionProduct`: also state-setting (variant + quantity),
+ *     so re-applying it is a no-op.
+ */
+export async function withLoopRetry<T>(
+  fn: (signal: AbortSignal) => Promise<T>,
+  opts: WithLoopRetryOpts
+): Promise<T> {
+  const retries = opts.retries ?? 3;
+  const baseMs = opts.baseMs ?? 2000;
+  const timeoutMs = opts.timeoutMs ?? 15000;
+  const { label } = opts;
+
   let lastError: unknown;
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+
+  for (let attempt = 0; attempt < retries; attempt++) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
-      const res = await fetch(url, options); // fetchWithRetry inner call — do not replace
-      return res;
+      return await fn(ctrl.signal);
     } catch (err) {
       lastError = err;
-      const isSocketError =
-        err instanceof TypeError &&
-        (err.message.includes("fetch failed") || err.message.includes("socket"));
-      if (!isSocketError || attempt === maxAttempts) throw err;
-      console.warn(`[loopAdmin] fetch attempt ${attempt} failed (socket error), retrying in ${delayMs}ms…`);
-      await new Promise((r) => setTimeout(r, delayMs * attempt));
+      const retryable =
+        isAbortError(err) ||
+        isNetworkError(err) ||
+        err instanceof LoopRetryableHttpError;
+      const isLastAttempt = attempt === retries - 1;
+      if (!retryable || isLastAttempt) {
+        throw err;
+      }
+      const backoffMs = baseMs * Math.pow(2, attempt);
+      console.log(
+        `[loopAdmin] retry attempt ${attempt + 1}/${retries} for ${label} ` +
+          `(reason=${err instanceof Error ? err.name : "unknown"}, backoff=${backoffMs}ms)`
+      );
+      await new Promise((r) => setTimeout(r, backoffMs));
+    } finally {
+      clearTimeout(timer);
     }
   }
+
   throw lastError;
+}
+
+/**
+ * Wrap `fetch` for Loop admin calls: applies the retry wrapper + per-attempt
+ * abort signal, and converts retryable HTTP statuses (5xx, 429) into a
+ * `LoopRetryableHttpError` so the wrapper knows to back off.
+ */
+async function loopFetch(
+  url: string,
+  options: RequestInit,
+  label: string
+): Promise<Response> {
+  return withLoopRetry(async (signal) => {
+    const res = await fetch(url, { ...options, signal });
+    if (res.status >= 500 || res.status === 429) {
+      const bodyText = await res.text().catch(() => "");
+      throw new LoopRetryableHttpError(
+        res.status,
+        `Loop ${label} ${res.status}: ${bodyText.slice(0, 200)}`
+      );
+    }
+    return res;
+  }, { label });
 }
 
 const LOOP_MANAGE_URL_FALLBACK =
@@ -94,7 +198,7 @@ export async function getLoopSubscriptionStatus(
   customerIdentifier: string
 ): Promise<LoopSubscriptionStatus> {
   const url = `${BASE_URL}/customer/${encodeURIComponent(customerIdentifier)}/subscription`;
-  const res = await fetchWithRetry(url, { headers: getLoopHeaders() });
+  const res = await loopFetch(url, { headers: getLoopHeaders() }, `getLoopSubscriptionStatus(${customerIdentifier})`);
 
   if (!res.ok) {
     throw new Error(
@@ -174,7 +278,7 @@ export async function getLoopRawSubscriptions(
   customerIdentifier: string
 ): Promise<LoopSubscription[]> {
   const url = `${BASE_URL}/customer/${encodeURIComponent(customerIdentifier)}/subscription`;
-  const res = await fetchWithRetry(url, { headers: getLoopHeaders() });
+  const res = await loopFetch(url, { headers: getLoopHeaders() }, `getLoopRawSubscriptions(${customerIdentifier})`);
   if (!res.ok) {
     throw new Error(`Loop API error ${res.status}: ${await res.text()}`);
   }
@@ -192,7 +296,7 @@ export async function getLoopSubscriptionById(
   subscriptionId: string
 ): Promise<LoopSubscription | null> {
   const url = `${BASE_URL}/subscription/${encodeURIComponent(subscriptionId)}`;
-  const res = await fetchWithRetry(url, { headers: getLoopHeaders() });
+  const res = await loopFetch(url, { headers: getLoopHeaders() }, `getLoopSubscriptionById(${subscriptionId})`);
   if (!res.ok) {
     throw new Error(`Loop API error ${res.status}: ${await res.text()}`);
   }
@@ -217,11 +321,15 @@ async function loopSubscriptionMutation(
   body?: Record<string, unknown>
 ): Promise<void> {
   const url = `${BASE_URL}/subscription/${subscriptionId}/${action}`;
-  const res = await fetchWithRetry(url, {
-    method: "POST",
-    headers: getLoopHeaders(),
-    ...(body ? { body: JSON.stringify(body) } : {}),
-  });
+  const res = await loopFetch(
+    url,
+    {
+      method: "POST",
+      headers: getLoopHeaders(),
+      ...(body ? { body: JSON.stringify(body) } : {}),
+    },
+    `loopSubscriptionMutation(${subscriptionId}, ${action})`
+  );
   if (!res.ok) {
     throw new Error(`Loop ${action} error ${res.status}: ${await res.text()}`);
   }
@@ -231,7 +339,7 @@ const STOREFRONT_BASE_URL = BASE_URL.replace("/admin/", "/storefront/");
 
 async function generateLoopSessionToken(shopifyCustomerId: string): Promise<string> {
   const url = `${BASE_URL}/customer/${encodeURIComponent(shopifyCustomerId)}/sessionToken`;
-  const res = await fetchWithRetry(url, { method: "POST", headers: getLoopHeaders() });
+  const res = await loopFetch(url, { method: "POST", headers: getLoopHeaders() }, `generateLoopSessionToken(${shopifyCustomerId})`);
   if (!res.ok) {
     throw new Error(`Loop sessionToken error ${res.status}: ${await res.text()}`);
   }
@@ -243,11 +351,15 @@ async function generateLoopSessionToken(shopifyCustomerId: string): Promise<stri
 
 async function exchangeLoopSessionTokenForAccessToken(sessionToken: string): Promise<string> {
   const url = `${STOREFRONT_BASE_URL}/auth/refreshToken`;
-  const res = await fetchWithRetry(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sessionToken }),
-  });
+  const res = await loopFetch(
+    url,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionToken }),
+    },
+    "exchangeLoopSessionTokenForAccessToken"
+  );
   if (!res.ok) {
     throw new Error(`Loop auth/refreshToken error ${res.status}: ${await res.text()}`);
   }
@@ -274,14 +386,18 @@ export async function swapLoopSubscriptionProduct(params: {
   const body: Record<string, unknown> = { variantShopifyId, quantity };
   if (sellingPlanGroupId != null) body.sellingPlanGroupId = sellingPlanGroupId;
 
-  const res = await fetchWithRetry(url, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${accessToken}`,
+  const res = await loopFetch(
+    url,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(body),
     },
-    body: JSON.stringify(body),
-  });
+    `swapLoopSubscriptionProduct(${subscriptionId})`
+  );
 
   if (!res.ok) {
     throw new Error(`Loop swap error ${res.status}: ${await res.text()}`);
@@ -314,14 +430,18 @@ export async function updateLoopSubscriptionLineAttributes(params: {
 
   const url = `${STOREFRONT_BASE_URL}/subscription/${encodeURIComponent(subscriptionId)}/line/${encodeURIComponent(lineId)}/attribute`;
 
-  const res = await fetchWithRetry(url, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${accessToken}`,
+  const res = await loopFetch(
+    url,
+    {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ attributes: attrArray }),
     },
-    body: JSON.stringify({ attributes: attrArray }),
-  });
+    `updateLoopSubscriptionLineAttributes(${subscriptionId})`
+  );
 
   const text = await res.text();
   let parsed: unknown = text;
@@ -377,11 +497,15 @@ export async function updateLoopSubscriptionNextBillingDate(
   }
 
   const url = `${BASE_URL}/subscription/${encodeURIComponent(subscriptionId)}/frequency`;
-  const res = await fetchWithRetry(url, {
-    method: "PUT",
-    headers: getLoopHeaders(),
-    body: JSON.stringify({ billingPolicy, deliveryPolicy, discountType: "OLD", nextBillingDateEpoch }),
-  });
+  const res = await loopFetch(
+    url,
+    {
+      method: "PUT",
+      headers: getLoopHeaders(),
+      body: JSON.stringify({ billingPolicy, deliveryPolicy, discountType: "OLD", nextBillingDateEpoch }),
+    },
+    `updateLoopSubscriptionNextBillingDate(${subscriptionId})`
+  );
   if (!res.ok) {
     throw new Error(`Loop frequency error ${res.status}: ${await res.text()}`);
   }

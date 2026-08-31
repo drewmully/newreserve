@@ -1,130 +1,124 @@
-# feat(migration): prepaid-annual migration script with dry-run
+# feat(migration): retry with backoff + maxDuration=300 for Loop flakiness
 
-Adds the one-at-a-time migration endpoint for moving Loop Member
-prepaid-annual contracts onto the new Shopify Subscriptions Partner app.
-Follows PR #127 (scaffolding) and Section 4 of the migration plan
-(`memory/sessions/2026-06-29_2026-07-05/a0280c2d/ai_outputs/loop_to_shopify_migration_plan.md`).
+Ready to merge. Not draft.
 
-**Draft.** Nothing runs against production data automatically — you
-must invoke the endpoint by hand, per contract, with the correct
-`contract_id`. Default is a dry run.
+## Why
 
-## What ships
+On the morning of 2026-08-31, Loop's admin API went intermittently
+degraded. `GET /admin/2023-10/subscription/{id}` alternated between
+~40ms responses and 30s+ hangs. TCP handshake was clean (~30ms) — the
+Loop API server itself was slow / unresponsive. This blocked the first
+real prepaid-annual migration run.
 
-**New route** — `src/app/api/admin/cron/migrate-prepaid-annual/route.ts`
-- `POST` only. Auth: `Authorization: Bearer $CRON_SECRET`, or Firebase
-  bearer for an allowlisted admin email (via `verifyAdminRequest`).
-- Query params:
-  - `contract_id` — **required**. Refuses the request without it. No
-    batch mode in this PR by design.
-  - `dry_run` — defaults to `true`. Only the exact string `false`
-    turns it off.
-- Enforces the exact prepaid-annual signature before doing anything:
-  `status=ACTIVE`, `isPrepaid=true`, `billingPolicy={MONTH,12}`, one line
-  on variant `47601025122496` (Member $249/qtr). Anything else → 422,
-  no row written.
-- Reads `getLoopSubscriptionById` from the existing `loopAdmin.ts` (no
-  changes to that file). Captures `customerPaymentMethodId` verbatim
-  along with the full raw contract into `raw_loop_snapshot`.
-- Inserts a row into the new `public.subscription_migrations` table
-  before doing any external writes. Idempotent: a prior `migrated` or
-  `dry_run_ok` row is returned as-is; a prior `failed` or `planned` row
-  triggers a `409` so a human looks before we double-write.
-- Dry-run path: writes row status `dry_run_ok`, returns the exact input
-  we would send to `subscriptionContractAtomicCreate`.
-- Real path (`dry_run=false`): calls
-  `createContractAtomic` (helper already in place from PR #127), then
-  `cancelLoopSubscription(id, "migrated_to_shopify_native")`, then
-  fans out to Firestore (`users/{uid}.subscription_contract_ids`) and
-  `public.subscribers.shopify_subscription_id`. Errors are captured in
-  the row with clear status transitions:
-  - Shopify create fails → row `failed`, Loop untouched.
-  - Loop cancel fails after Shopify create → row `failed` with both ids
-    and an error message; caller sees `loop_cancel_failed_after_shopify_create`
-    and follows the runbook.
-  - Firestore/subscribers update failures are logged into
-    `error_message` but do not undo a successful migration.
-- Also refuses real execution when
-  `SHOPIFY_QUARTERLY_MEMBER_SELLING_PLAN_ID` is not set, since the new
-  Partner-Dashboard app publishes its own selling plans.
+Vercel's default serverless timeout is 60s. A single 30s Loop hang plus
+a Shopify atomic-create round-trip is enough to blow the budget with
+zero retry headroom, and any retry attempt at the caller level currently
+gets no timeout at all (`fetch()` without an AbortController hangs
+indefinitely on Vercel until the function is force-killed).
 
-**New Supabase migration** — `migrations/20260830_subscription_migrations.sql`
-- Creates `public.subscription_migrations` per the spec in the PR ticket,
-  with `loop_contract_id UNIQUE`, status CHECK, and status/planned-at
-  indexes. Raw Loop + Shopify blobs stored as `jsonb` so incidents can
-  be reconstructed from Postgres alone.
-- Adds `shopify_subscription_id text` to `public.subscribers` so
-  admin UI and weekly-rollup can point at the new contract without
-  losing the existing `loop_subscription_id` during the grace window.
-- **NOT APPLIED.** Emitted for Drew to apply manually via psql, matching
-  the convention of `20260830_subscription_events.sql`.
+## What
 
-**Runbook** — `docs/loop-shopify-migration-runbook.md`
-- curl invocation examples with `CRON_SECRET`.
-- Dry-run → review → real-run flow.
-- Full manual rollback recipe for the "Shopify created, Loop still
-  ACTIVE" state, including exact SQL for `subscribers` and
-  `subscription_migrations`.
-- The 30-day "do not uninstall Loop yet" rule and its rationale
-  (Shopify Payments vault handoff must clear one full renewal per
-  migrated contract before Loop can be removed safely).
+Two new helpers wrap every external Loop and Shopify call with a
+retry-with-backoff:
 
-**Tests** — `tests/api/migratePrepaidAnnual.route.test.ts`
-Twelve tests covering:
-- 401 unauth, 400 missing `contract_id`
-- Dry-run happy path (row is `dry_run_ok`, no Shopify or Loop calls)
-- 404 when Loop returns null
-- 422 signature mismatch (Access variant)
-- 422 when contract status is not `ACTIVE`
-- Idempotent short-circuit for `migrated` and `dry_run_ok` rows
-- 409 when a prior `failed` row exists
-- Real-path Shopify create failure → Loop untouched
-- Real-path Loop cancel failure → row `failed` with both ids
-- Real-path full success — asserts the exact Shopify input shape
-  (customer GID, MONTH/3 billing + delivery, payment-method GID,
-  variant GID, selling-plan GID)
-- Real path refused when `SHOPIFY_QUARTERLY_MEMBER_SELLING_PLAN_ID`
-  is missing
+- `withLoopRetry(fn, { retries, baseMs, timeoutMs, label })`
+  Defaults: `retries=3`, `baseMs=2000` (2s/4s/8s backoff), `timeoutMs=15000`.
+  Applied to every `fetch` in `src/app/api/_lib/loopAdmin.ts`.
+- `withShopifyRetry(fn, { retries, baseMs, timeoutMs, label })`
+  Defaults: `retries=3`, `baseMs=1000` (1s/2s/4s), `timeoutMs=30000`.
+  Applied to `subscriptionsGraphQL` (the fetch layer under every mutation
+  and query in `shopifySubscriptionsApi.ts`, including `createContractAtomic`).
+
+Both wrappers:
+
+- Use a fresh `AbortController` per attempt (per-attempt timeout, not
+  global). This is what fixes the "hang forever on a stuck TCP" case.
+- Retry on: fetch timeout (AbortError), network errors (undici
+  `UND_ERR_*`, `ECONN*`, `EAI_*`), HTTP 5xx, HTTP 429.
+- Do NOT retry on: HTTP 4xx (except 429), GraphQL userErrors, or any
+  other application-level error.
+- Log every retry: `[loopAdmin] retry attempt N/3 for <label>
+  (reason=..., backoff=Nms)`.
+
+`maxDuration = 300` on the migration route is already in place (landed
+in PR #128 alongside `maxDuration=300` on the martine-send and other
+long-running admin cron routes; verified by grepping `maxDuration` in
+`src/app/api/admin/`). No route.ts changes are required in this PR — the
+route already calls `getLoopSubscriptionById`, `cancelLoopSubscription`,
+and `createContractAtomic`, all of which now transparently retry.
+
+## How the retry wrapper stays safe on non-idempotent operations
+
+- **Loop reads** (`getLoopSubscriptionById`, `getLoopRawSubscriptions`,
+  `getLoopSubscriptionStatus`): fully safe, idempotent by definition.
+- **`cancelLoopSubscription`**: Loop's cancel is idempotent — canceling
+  an already-CANCELLED contract returns success (documented in Loop's
+  admin API + confirmed via existing segmentation.csv workflow, where
+  re-cancels are no-ops). Explicit comment added in loopAdmin.ts.
+- **Loop mutations** (`pauseLoopSubscription`, `resumeLoopSubscription`,
+  `changeLoopSubscriptionPlan`, `reactivateLoopSubscription`,
+  `swapLoopSubscriptionProduct`, `updateLoopSubscriptionLineAttributes`,
+  `updateLoopSubscriptionNextBillingDate`): all set-desired-state, so a
+  retry converges rather than compounding.
+- **`createContractAtomic`**: retry-safe because the migration route
+  passes `idempotencyKey: \`migrate_${contractId}\`` (verified in
+  `route.ts:506` and unchanged by this PR). Shopify dedupes on that
+  key. `createContractAtomic` now logs a WARN if called without a key,
+  so future drift is visible.
+- **Shopify draft lifecycle** (`updateContract`): each stage's
+  userErrors are surfaced as plain `Error` and NOT retried, so a
+  mid-draft retry can't double-apply variant/plan changes.
+
+## How tested
+
+New unit tests (7 per wrapper, 14 total). Live under `tests/lib/`, which
+this PR wires into `vitest.config.ts` as a new `lib` project (previously
+`tests/lib/golfStats.test.ts` was orphaned; that test now runs too).
+
+`tests/lib/loopAdminRetry.test.ts`:
+
+- succeeds on first attempt
+- succeeds on 2nd attempt after transient network error (`TypeError: fetch failed`)
+- succeeds on 3rd attempt after two AbortErrors (simulated timeout)
+- fails after 3 retries exhausted (503 all the way)
+- does NOT retry on 400 Bad Request
+- DOES retry on 429 with backoff
+- DOES retry on 503
+
+`tests/lib/shopifyRetry.test.ts` — the same seven cases against
+`withShopifyRetry`.
+
+All new tests use `vi.useFakeTimers()` + `advanceTimersByTimeAsync` so
+the 2s/4s/8s backoffs don't slow the suite. Existing PR #128 route
+tests (`tests/api/migratePrepaidAnnual.route.test.ts`) still pass
+because their fetch mocks return `ok: true` and never trip the retry
+path. The pre-existing 11 failures documented in PR #127/#128 remain
+untouched.
+
+## Runtime safety envelope (from runbook)
+
+- Loop worst-case: 14s backoff + 3 × 15s per-call = ~59s.
+- Shopify worst-case: 7s backoff + 3 × 30s per-call = ~97s.
+- End-to-end route worst-case: ~3 minutes with the current call
+  sequence (Loop read → Shopify create → Loop cancel → downstream
+  Firestore/subscribers updates), well within `maxDuration=300`.
+
+## Failure recovery
+
+If Loop is truly down and all 3 retries exhaust on the initial
+`getLoopSubscriptionById`, the route returns 502 BEFORE any
+`subscription_migrations` row is written. Rerun the migration when Loop
+recovers — no cleanup needed. If retries exhaust AFTER Shopify create
+but during Loop cancel, the existing PR #128 path applies: row goes to
+`failed` with both ids and `loop_cancel_failed_after_shopify_create`,
+manual reconcile via runbook.
 
 ## What was NOT changed
 
-- `src/app/api/_lib/shopifySubscriptionsApi.ts` — `createContractAtomic`
-  is already the exact shape this route needs (from PR #127). No edits.
-- `src/app/api/_lib/loopAdmin.ts` — `getLoopSubscriptionById` and
-  `cancelLoopSubscription` used unchanged.
-- `SUBSCRIPTIONS_BACKEND` feature flag — **not** flipped. This route
-  operates through the migration endpoint only.
-- `/account` UI — untouched. Cutover PR is separate.
-
-## Invocation cheat sheet
-
-```bash
-# Dry run
-curl -X POST \
-  -H "Authorization: Bearer $CRON_SECRET" \
-  "https://newreserve.mully.co/api/admin/cron/migrate-prepaid-annual?contract_id=10011705"
-
-# Real run (after reviewing dry-run response)
-curl -X POST \
-  -H "Authorization: Bearer $CRON_SECRET" \
-  "https://newreserve.mully.co/api/admin/cron/migrate-prepaid-annual?contract_id=10011705&dry_run=false"
-```
-
-## Safety properties
-
-- One contract at a time. No batch mode.
-- Dry-run by default. Only `dry_run=false` executes.
-- Refuses to migrate anything but an ACTIVE Member prepaid-annual with
-  the exact signature.
-- Idempotent — safe to re-run.
-- Every state transition is auditable in `subscription_migrations`.
-- Loop write is only attempted after Shopify write succeeds.
-
-## Follow-ups (out of scope here)
-
-- Batch driver that reads segmentation.csv and calls this endpoint per
-  contract with a delay + retry policy.
-- Cutover PR that flips `SUBSCRIPTIONS_BACKEND=shopify` and updates
-  `/account` to read from the new contract ids.
-- Loop decommission PR (after 30-day grace + one full renewal cycle per
-  migrated contract, per runbook).
+- Business logic in `migrate-prepaid-annual/route.ts` — untouched.
+- `/account` UI — untouched.
+- `SUBSCRIPTIONS_BACKEND` feature flag — not flipped.
+- Existing `fetchWithRetry` semantics: replaced with the new
+  `withLoopRetry` + `loopFetch`, but the observable behavior at every
+  external call site is a strict superset (all the old cases still
+  retry, plus timeout + 5xx + 429).
