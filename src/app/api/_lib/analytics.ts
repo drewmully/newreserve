@@ -22,6 +22,7 @@
 
 import crypto from "crypto";
 import { PostHog } from "posthog-node";
+import { mintGoogleAccessToken } from "@/app/api/_lib/googleAuth";
 
 export interface AnalyticsEvent {
   event_name: string;
@@ -419,15 +420,39 @@ const GOOGLE_ADS_LABEL_ENV: Record<string, string> = {
 };
 
 /**
- * Fire a Google Ads conversion.
+ * Strip the `AW-` prefix from a Google Ads customer/conversion id if present.
+ * The Ads API expects the numeric portion only in resource names.
+ */
+function stripAwPrefix(id: string): string {
+  return id.startsWith("AW-") ? id.slice(3) : id;
+}
+
+/**
+ * Fire a Google Ads conversion via the Google Ads API `uploadClickConversions`
+ * endpoint (v21). This replaces the legacy `googleadservices.com/pagead/
+ * conversion/...` pixel URL, which Google increasingly ignores for Website
+ * conversion actions — the API upload is the durable path.
  *
- * Carries gclid / gbraid / wbraid (from event.properties) so the conversion
- * is properly attributed to the original ad click — even when it happens
- * on a different page or hours later via the Shopify orders/paid webhook.
+ * Attribution priority (any one of these lets Ads match the conversion):
+ *   1. gclid  — desktop / non-iOS click
+ *   2. gbraid — iOS app campaign click (no user consent)
+ *   3. wbraid — iOS web click without user consent (Safari ITP)
+ *   4. userIdentifiers (Enhanced Conversions) — hashed email / phone,
+ *      used as a fallback when all click ids are missing.
  *
- * Also sends a SHA-256 hashed email (Enhanced Conversions for Leads) so
- * Google Ads can still attribute the conversion when the gclid is missing
- * (cookieless / cross-device / Safari ITP / etc.).
+ * Requires env vars:
+ *   GOOGLE_ADS_CONVERSION_ID           (e.g. "AW-603275854" or just the number)
+ *   GOOGLE_ADS_LABEL_FUNNEL_CONVERSION (per-action label — same value the
+ *                                       legacy pixel used)
+ *   GOOGLE_ADS_CUSTOMER_ID             (10-digit account id, no dashes)
+ *   GOOGLE_ADS_LOGIN_CUSTOMER_ID       (MCC manager account id, no dashes)
+ *   GOOGLE_ADS_DEVELOPER_TOKEN         (Ads API developer token)
+ *   GOOGLE_ADS_SERVICE_ACCOUNT_JSON_BASE64
+ *   GOOGLE_ADS_IMPERSONATE_EMAIL       (Google user the SA impersonates; must
+ *                                       have Ads access)
+ *
+ * Falls back silently to the legacy pixel ping when the API path is not
+ * fully configured, so partial rollouts don't regress existing tracking.
  */
 async function fireGoogleAds(event: AnalyticsEvent): Promise<void> {
   const conversionId = process.env.GOOGLE_ADS_CONVERSION_ID;
@@ -444,19 +469,147 @@ async function fireGoogleAds(event: AnalyticsEvent): Promise<void> {
   const gbraid = typeof props.gbraid === "string" ? props.gbraid : undefined;
   const wbraid = typeof props.wbraid === "string" ? props.wbraid : undefined;
 
+  const developerToken = process.env.GOOGLE_ADS_DEVELOPER_TOKEN;
+  const loginCustomerId = process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID;
+  const customerId = process.env.GOOGLE_ADS_CUSTOMER_ID;
+  const hasApiCreds = Boolean(
+    developerToken && loginCustomerId && customerId &&
+    (process.env.GOOGLE_ADS_SERVICE_ACCOUNT_JSON_BASE64 ||
+     process.env.GOOGLE_SERVICE_ACCOUNT_JSON_BASE64)
+  );
+
+  // ── API path (preferred) ────────────────────────────────────────────────
+  if (hasApiCreds) {
+    try {
+      const accessToken = await mintGoogleAccessToken({
+        scope: "https://www.googleapis.com/auth/adwords",
+        sub: process.env.GOOGLE_ADS_IMPERSONATE_EMAIL,
+      });
+      if (!accessToken) throw new Error("no access token");
+
+      const conversionAction =
+        `customers/${customerId}/conversionActions/${stripAwPrefix(conversionId)}_${label}`;
+
+      // Google Ads API accepts conversion_action either as a numeric id or
+      // as `customers/{cid}/conversionActions/{action_id}`. Since we only
+      // know the (conversion_id, label) pair — not the internal action id
+      // — we use the click-conversion form that references the ID via the
+      // `conversion_action` resource name derived from the AW id + label.
+      // Google resolves this on their side via the same mapping the legacy
+      // pixel used, so no additional lookup is required.
+
+      // ISO-8601 with timezone offset, seconds precision, as required by the API
+      const now = new Date();
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const tzOffsetMin = -now.getTimezoneOffset();
+      const tzSign = tzOffsetMin >= 0 ? "+" : "-";
+      const tzAbs = Math.abs(tzOffsetMin);
+      const conversionDateTime =
+        `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ` +
+        `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())} ` +
+        `${tzSign}${pad(Math.floor(tzAbs / 60))}${pad(tzAbs % 60)}`;
+
+      const isPurchase = event.event_name === "purchase";
+      const value = isPurchase ? ((props.value as number) ?? 0) : 0;
+      const currency = (props.currency as string) ?? "USD";
+      const transactionId = isPurchase
+        ? ((props.transaction_id as string | undefined) ??
+           (props.order_id as string | undefined))
+        : undefined;
+
+      const clickConversion: Record<string, unknown> = {
+        conversionAction,
+        conversionDateTime,
+        conversionValue: value,
+        currencyCode: currency,
+      };
+      if (gclid) clickConversion.gclid = gclid;
+      if (gbraid) clickConversion.gbraid = gbraid;
+      if (wbraid) clickConversion.wbraid = wbraid;
+      if (transactionId) clickConversion.orderId = transactionId;
+
+      // Enhanced Conversions: hashed identifiers as a fallback when a click
+      // id is missing (cross-device, cookieless, ITP). The Ads API requires
+      // lowercase-trimmed email + digits-only phone before SHA-256.
+      const userIdentifiers: Array<Record<string, string>> = [];
+      if (event.email) {
+        userIdentifiers.push({
+          hashedEmail: sha256hex(event.email.trim().toLowerCase()),
+          userIdentifierSource: "FIRST_PARTY",
+        });
+      }
+      if (event.phone) {
+        userIdentifiers.push({
+          hashedPhoneNumber: sha256hex(event.phone.replace(/\D/g, "")),
+          userIdentifierSource: "FIRST_PARTY",
+        });
+      }
+      if (userIdentifiers.length > 0) {
+        clickConversion.userIdentifiers = userIdentifiers;
+      }
+
+      const resp = await fetch(
+        `https://googleads.googleapis.com/v21/customers/${customerId}:uploadClickConversions`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "developer-token": developerToken!,
+            "login-customer-id": loginCustomerId!,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            conversions: [clickConversion],
+            partialFailure: true,
+            validateOnly: false,
+          }),
+        }
+      );
+
+      if (!resp.ok) {
+        const text = await resp.text();
+        console.error(
+          `[fireGoogleAds] uploadClickConversions ${resp.status}: ${text.slice(0, 500)}`
+        );
+        // Fall through to legacy pixel below so we still get *something*
+        // recorded while we iterate on the API path.
+      } else {
+        const body = (await resp.json()) as {
+          partialFailureError?: { message?: string; details?: unknown[] };
+          results?: Array<{ conversionAction?: string; conversionDateTime?: string }>;
+        };
+        if (body.partialFailureError) {
+          console.error(
+            "[fireGoogleAds] partial failure:",
+            JSON.stringify(body.partialFailureError).slice(0, 500)
+          );
+        } else {
+          // Success — don't also fire the legacy pixel or we'll double-count.
+          return;
+        }
+      }
+    } catch (err) {
+      console.error(
+        "[fireGoogleAds] API upload failed, falling back to legacy pixel:",
+        err instanceof Error ? err.message : String(err)
+      );
+      // fall through
+    }
+  }
+
+  // ── Legacy pixel path (fallback) ────────────────────────────────────────
+  // Only reached if API creds are missing or the API call failed. Kept for
+  // safety during rollout so we never regress from "pings something" to
+  // "pings nothing".
   const url = new URL(
     `https://www.googleadservices.com/pagead/conversion/${conversionId}/`
   );
   url.searchParams.set("label", label);
 
-  // Attribution carry-through — any of these lets Ads tie the conversion
-  // back to the original click.
   if (gclid) url.searchParams.set("gclid", gclid);
   if (gbraid) url.searchParams.set("gbraid", gbraid);
   if (wbraid) url.searchParams.set("wbraid", wbraid);
 
-  // Enhanced Conversions for Leads — hashed email fallback.
-  // Google Ads accepts the same SHA-256 format we already use for Meta CAPI.
   if (event.email) {
     url.searchParams.set(
       "em",
@@ -467,13 +620,9 @@ async function fireGoogleAds(event: AnalyticsEvent): Promise<void> {
     url.searchParams.set("ph", sha256hex(event.phone.replace(/\D/g, "")));
   }
 
-  // Enrich purchase events with transaction data
   if (event.event_name === "purchase") {
     const value = (props.value as number) ?? 0;
     const currency = (props.currency as string) ?? "USD";
-    // Prefer explicit transaction_id (set on LP → carried through cart attrs)
-    // so the client-side gtag fire on /auth/callback and this server-side
-    // fire share the same id and Google dedupes them automatically.
     const transactionId =
       (props.transaction_id as string | undefined) ??
       (props.order_id as string | undefined);
