@@ -26,6 +26,8 @@
  * in viewport as the value prop and carousel scroll past it.
  */
 
+import TextMullyAnalytics from "@/app/text-mully/TextMullyAnalytics";
+
 export const dynamic = "force-static";
 export const revalidate = 3600;
 
@@ -96,130 +98,10 @@ export default function TextMullyPage() {
           } catch (_e) {}
         }
 
-        // Fire PostHog lp_text_mully_view (page-load event) via server-side track endpoint
-        try {
-          var viewPayload = JSON.stringify({
-            event_name: "lp_text_mully_view",
-            properties: { src: src },
-            page_url: window.location.href,
-          });
-          if (navigator.sendBeacon) {
-            navigator.sendBeacon(
-              "/api/analytics/track",
-              new Blob([viewPayload], { type: "application/json" })
-            );
-          } else {
-            fetch("/api/analytics/track", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: viewPayload,
-              keepalive: true,
-            }).catch(function(){});
-          }
-        } catch (_e) {}
-
         // Auto-redirect on mobile
         if (isMobile) {
           setTimeout(function(){ window.location.href = href; }, 60);
         }
-
-        // ─── SMS CLICK HANDLER ────────────────────────────────────────
-        // Fires when the user actually taps any [data-sms-link] CTA.
-        // Emits ONE dedupable event across PostHog, Meta CAPI + Pixel,
-        // X Pixel, and GA4. The same event_id is used everywhere so
-        // Meta collapses the Pixel + CAPI mirror to a single Lead.
-        function uuid() {
-          if (window.crypto && window.crypto.randomUUID) {
-            try { return window.crypto.randomUUID(); } catch (_e) {}
-          }
-          return (
-            Date.now().toString(36) +
-            "-" +
-            Math.random().toString(36).slice(2, 10) +
-            "-" +
-            Math.random().toString(36).slice(2, 10)
-          );
-        }
-
-        function fireSmsClick() {
-          var eventId = uuid();
-
-          // 1) PostHog + Meta CAPI (server-side) via track endpoint.
-          //    Server-side CAPI reads properties.event_id and echoes it to
-          //    Meta so the client fbq('track', 'Lead', ..., {eventID}) below
-          //    dedupes cleanly.
-          try {
-            var payload = JSON.stringify({
-              event_name: "sms_click",
-              properties: { src: src, event_id: eventId },
-              page_url: window.location.href,
-            });
-            if (navigator.sendBeacon) {
-              navigator.sendBeacon(
-                "/api/analytics/track",
-                new Blob([payload], { type: "application/json" })
-              );
-            } else {
-              fetch("/api/analytics/track", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: payload,
-                keepalive: true,
-              }).catch(function(){});
-            }
-          } catch (_e) {}
-
-          // 2) Meta Pixel client-side mirror. Same eventID as the CAPI fire
-          //    → Meta dedupes to a single Lead. Without this fbq call the
-          //    server-side event still counts, but browser-signal quality is
-          //    lower and match rate drops.
-          if (typeof window.fbq === "function") {
-            try {
-              window.fbq(
-                "track",
-                "Lead",
-                { content_name: "sms_click", src: src },
-                { eventID: eventId }
-              );
-            } catch (_e) {}
-          }
-
-          // 3) X Pixel click event
-          if (typeof window.twq === "function") {
-            try {
-              window.twq("event", "tw-od2vz-sms_click", {
-                contents: [{ content_id: src }],
-                conversion_id: eventId,
-                email_address: null,
-              });
-            } catch (_e) {}
-          }
-
-          // 4) GA4 client-side. Imported into Google Ads as a Contact
-          //    conversion so Search delivery optimizes toward this event.
-          if (typeof window.gtag === "function") {
-            try {
-              window.gtag("event", "sms_click", {
-                src: src,
-                event_id: eventId,
-                transport_type: "beacon",
-              });
-            } catch (_e) {}
-          }
-        }
-
-        // Attach to every SMS anchor. Use mousedown/touchstart AND click
-        // so the event fires before the sms: navigation begins tearing
-        // down the page — critical because Safari kills pending network
-        // requests on sms: navigation.
-        function attachTracker(el) {
-          if (!el || el.__smsClickBound) return;
-          el.__smsClickBound = true;
-          el.addEventListener("pointerdown", fireSmsClick, { once: false, passive: true });
-          el.addEventListener("click", fireSmsClick, { once: false, passive: true });
-        }
-        var smsAnchors = document.querySelectorAll("[data-sms-link]");
-        for (var j = 0; j < smsAnchors.length; j++) attachTracker(smsAnchors[j]);
 
         // Copy-to-clipboard for the desktop number
         document.addEventListener("click", function(e){
@@ -624,6 +506,7 @@ export default function TextMullyPage() {
         }}
       />
       <script dangerouslySetInnerHTML={{ __html: bootstrap }} />
+      <TextMullyAnalytics />
     </main>
   );
 }

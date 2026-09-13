@@ -177,6 +177,7 @@ const META_STANDARD_EVENTS: Record<string, string> = {
   // Consult LP phone capture (Martine funnel)
   lp_consult_view: "ViewContent",
   lp_consult_submit: "Lead",
+  sms_click: "Lead",
 };
 
 // Purchase-side gate: only mirror Meta Purchase when the order contains
@@ -227,6 +228,10 @@ function mirrorToMetaPixel(
     if (eventName === "purchase") {
       eventData.value = properties.value ?? 0;
       eventData.currency = properties.currency ?? "USD";
+    }
+    if (eventName === "sms_click") {
+      eventData.content_name = "sms_click";
+      eventData.src = properties.src;
     }
     // {eventID} is Meta's dedup key against server-side CAPI; it MUST match
     // the event_id we pass through to fireMetaCAPI on the server.
@@ -407,6 +412,26 @@ function mirrorToGtag(
   }
 }
 
+function mirrorToXPixel(
+  eventName: string,
+  eventId: string,
+  properties: Record<string, unknown>
+): void {
+  if (eventName !== "sms_click" || typeof window === "undefined") return;
+  const twq = (window as unknown as { twq?: (...args: unknown[]) => void }).twq;
+  if (typeof twq !== "function") return;
+
+  try {
+    twq("event", "tw-od2vz-sms_click", {
+      contents: [{ content_id: properties.src }],
+      conversion_id: eventId,
+      email_address: null,
+    });
+  } catch {
+    // Tracking must never block navigation.
+  }
+}
+
 function getBrowserProperties(): Record<string, string | number | undefined> {
   if (typeof window === "undefined") return {};
 
@@ -440,6 +465,7 @@ export interface TrackEventPayload {
 
 interface TrackEventOptions {
   includeAuth?: boolean;
+  navigation?: boolean;
 }
 
 export interface IdentifyAnalyticsUserInput {
@@ -566,25 +592,43 @@ export async function trackEvent(
     // so Meta dedupes the two and counts the event once.
     mirrorToMetaPixel(eventName, eventId, mergedProperties);
 
+    mirrorToXPixel(eventName, eventId, mergedProperties);
+
     // Mirror to client-side OpenAI Ads pixel (oaiq). No-op when
     // NEXT_PUBLIC_OPENAI_PIXEL_ID is not configured. Uses the SAME eventId
     // we pass to server-side OpenAI CAPI so OpenAI dedupes the two.
     mirrorToOpenAI(eventName, eventId, mergedProperties);
 
+    const body = JSON.stringify({
+      event_name: eventName,
+      user_id,
+      email,
+      phone,
+      segments,
+      anonymous_id,
+      page_url:
+        typeof window !== "undefined" ? window.location.href : undefined,
+      properties: mergedProperties,
+    });
+
+    if (options.navigation && typeof navigator.sendBeacon === "function") {
+      let accepted = false;
+      try {
+        accepted = navigator.sendBeacon(
+          "/api/analytics/track",
+          new Blob([body], { type: "application/json" })
+        );
+      } catch {
+        // Fall through to keepalive fetch with the same event id.
+      }
+      if (accepted) return;
+    }
+
     await fetch("/api/analytics/track", {
       method: "POST",
       headers,
-      body: JSON.stringify({
-        event_name: eventName,
-        user_id,
-        email,
-        phone,
-        segments,
-        anonymous_id,
-        page_url:
-          typeof window !== "undefined" ? window.location.href : undefined,
-        properties: mergedProperties,
-      }),
+      body,
+      keepalive: options.navigation,
     });
   } catch {
     // Tracking must never break the app

@@ -153,6 +153,58 @@ describe("trackEvent", () => {
     expect(body.properties.$session_id).toBe(body.properties.session_id);
   });
 
+  it("keeps identity within a browser and separates a new browser store", async () => {
+    const { trackEvent } = await import("@/lib/tracking");
+    await trackEvent("page_view", {}, { includeAuth: false });
+    await trackEvent("page_view", {}, { includeAuth: false });
+
+    const firstBrowserIds = vi.mocked(fetch).mock.calls.map(([, init]) =>
+      JSON.parse(String(init?.body)).anonymous_id
+    );
+    localStorage.clear();
+    await trackEvent("page_view", {}, { includeAuth: false });
+    const secondBrowserId = JSON.parse(
+      String(vi.mocked(fetch).mock.calls[2]![1]?.body)
+    ).anonymous_id;
+
+    expect(firstBrowserIds[0]).toBe(firstBrowserIds[1]);
+    expect(secondBrowserId).not.toBe(firstBrowserIds[0]);
+  });
+
+  it("reuses one event id when navigation delivery falls back from beacon", async () => {
+    const sendBeacon = vi.fn().mockReturnValue(false);
+    Object.defineProperty(navigator, "sendBeacon", {
+      configurable: true,
+      value: sendBeacon,
+    });
+    const { trackEvent } = await import("@/lib/tracking");
+
+    await trackEvent(
+      "sms_click",
+      { properties: { src: "meta" } },
+      { includeAuth: false, navigation: true }
+    );
+
+    const beaconBody = JSON.parse(await (sendBeacon.mock.calls[0]![1] as Blob).text());
+    const fetchBody = JSON.parse(String(vi.mocked(fetch).mock.calls[0]![1]?.body));
+    expect(fetchBody.properties.event_id).toBe(beaconBody.properties.event_id);
+    expect(vi.mocked(fetch).mock.calls[0]![1]).toEqual(
+      expect.objectContaining({ keepalive: true })
+    );
+  });
+
+  it("assigns distinct event ids to separate completed activations", async () => {
+    const { trackEvent } = await import("@/lib/tracking");
+
+    await trackEvent("sms_click", {}, { includeAuth: false });
+    await trackEvent("sms_click", {}, { includeAuth: false });
+
+    const eventIds = vi.mocked(fetch).mock.calls.map(([, init]) =>
+      JSON.parse(String(init?.body)).properties.event_id
+    );
+    expect(eventIds[0]).not.toBe(eventIds[1]);
+  });
+
   it("identifies the PostHog browser user after login", async () => {
     const { identifyAnalyticsUser } = await import("@/lib/tracking");
 
