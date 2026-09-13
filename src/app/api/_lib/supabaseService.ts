@@ -6,6 +6,23 @@
  */
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
+export type JobOutcome = "success" | "empty" | "skipped" | "partial" | "failed";
+export type SourceOutcome = Exclude<JobOutcome, "partial">;
+
+export function summarizeSourceOutcomes(outcomes: SourceOutcome[]): JobOutcome {
+  if (outcomes.includes("failed")) {
+    return outcomes.some((outcome) => outcome === "success" || outcome === "empty")
+      ? "partial"
+      : "failed";
+  }
+  if (outcomes.includes("skipped")) {
+    return outcomes.some((outcome) => outcome === "success" || outcome === "empty")
+      ? "partial"
+      : "skipped";
+  }
+  return outcomes.includes("success") ? "success" : "empty";
+}
+
 let cached: SupabaseClient | null = null;
 
 export function getSupabaseService(): SupabaseClient {
@@ -38,8 +55,14 @@ export async function withJobRun<T>(
     bumpRows: (rowsIn?: number, rowsOut?: number) => void;
     setWatermark: (w: string) => void;
     setMeta: (m: Record<string, unknown>) => void;
+    setOutcome: (outcome: JobOutcome) => void;
   }) => Promise<T>
-): Promise<{ ok: true; runId: number; result: T } | { ok: false; runId: number; error: string }> {
+): Promise<
+  | { ok: true; outcome: "success" | "empty"; runId: number; result: T }
+  | { ok: false; outcome: "skipped" | "partial"; runId: number; result: T }
+  | { ok: false; outcome: "failed"; runId: number; result: T }
+  | { ok: false; outcome: "failed"; runId: number; error: string }
+> {
   const sb = getSupabaseService();
   const { data: started, error: startErr } = await sb
     .from("job_runs")
@@ -57,6 +80,7 @@ export async function withJobRun<T>(
   let rowsOut = 0;
   let watermark: string | null = null;
   let meta: Record<string, unknown> = {};
+  let outcome: JobOutcome = "success";
 
   try {
     const result = await fn({
@@ -71,21 +95,31 @@ export async function withJobRun<T>(
       setMeta: (m) => {
         meta = { ...meta, ...m };
       },
+      setOutcome: (nextOutcome) => {
+        outcome = nextOutcome;
+      },
     });
+
+    const healthy: boolean = outcome === "success" || outcome === "empty";
 
     await sb
       .from("job_runs")
       .update({
-        status: "ok",
+        // The existing job_runs contract uses running/ok/error. Keep that
+        // compatibility while exposing the richer contract in meta.outcome.
+        status: healthy ? "ok" : "error",
         finished_at: new Date().toISOString(),
         rows_in: rowsIn,
         rows_out: rowsOut,
-        watermark,
-        meta,
+        watermark: healthy ? watermark : null,
+        meta: { ...meta, outcome },
       })
       .eq("id", runId);
 
-    return { ok: true, runId, result };
+    if (outcome === "success" || outcome === "empty") {
+      return { ok: true, outcome, runId, result };
+    }
+    return { ok: false, outcome, runId, result };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await sb
@@ -95,11 +129,11 @@ export async function withJobRun<T>(
         finished_at: new Date().toISOString(),
         rows_in: rowsIn,
         rows_out: rowsOut,
-        watermark,
-        meta,
+        watermark: null,
+        meta: { ...meta, outcome: "failed" },
         error: message,
       })
       .eq("id", runId);
-    return { ok: false, runId, error: message };
+    return { ok: false, outcome: "failed", runId, error: message };
   }
 }

@@ -22,7 +22,12 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getSupabaseService, withJobRun } from "@/app/api/_lib/supabaseService";
+import {
+  getSupabaseService,
+  SourceOutcome,
+  summarizeSourceOutcomes,
+  withJobRun,
+} from "@/app/api/_lib/supabaseService";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -70,17 +75,20 @@ async function mintGoogleToken(scope: string): Promise<string | null> {
 }
 
 type FlatRow = { pull_date: string; source: string; metric: string; value: number; raw?: unknown };
+type SourcePull = { outcome: SourceOutcome; rows: FlatRow[]; reason?: string };
 
-async function pullGA4(startISO: string, endISO: string, log: (k: string, v: unknown) => void): Promise<FlatRow[]> {
+async function pullGA4(startISO: string, endISO: string): Promise<SourcePull> {
   const propId = process.env.GA_PROPERTY_ID;
   if (!propId) {
-    log("ga4_skipped", "missing GA_PROPERTY_ID");
-    return [];
+    return { outcome: "skipped", rows: [], reason: "missing GA_PROPERTY_ID" };
   }
   const token = await mintGoogleToken("https://www.googleapis.com/auth/analytics.readonly");
   if (!token) {
-    log("ga4_skipped", "missing GOOGLE_SERVICE_ACCOUNT_JSON_BASE64");
-    return [];
+    return {
+      outcome: "skipped",
+      rows: [],
+      reason: "missing GOOGLE_SERVICE_ACCOUNT_JSON_BASE64",
+    };
   }
   const accountEvent = process.env.GA_ACCOUNT_EVENT || "account_created";
   const purchaseEvent = process.env.GA_PURCHASE_EVENT || "purchase";
@@ -125,16 +133,19 @@ async function pullGA4(startISO: string, endISO: string, log: (k: string, v: unk
   for (const [d, v] of visitors) rows.push({ pull_date: d, source: "ga4", metric: "visitors", value: v });
   for (const [d, v] of accounts) rows.push({ pull_date: d, source: "ga4", metric: "accounts_created", value: v });
   for (const [d, v] of purchases) rows.push({ pull_date: d, source: "ga4", metric: "purchases", value: v });
-  return rows;
+  return { outcome: rows.length > 0 ? "success" : "empty", rows };
 }
 
-async function pullPostHog(startISO: string, endISO: string, log: (k: string, v: unknown) => void): Promise<FlatRow[]> {
+async function pullPostHog(startISO: string, endISO: string): Promise<SourcePull> {
   const projectId = process.env.POSTHOG_PROJECT_ID;
   const apiKey = process.env.POSTHOG_PERSONAL_API_KEY;
   const host = process.env.POSTHOG_HOST || "https://us.posthog.com";
   if (!projectId || !apiKey) {
-    log("posthog_skipped", "missing POSTHOG_PROJECT_ID or POSTHOG_PERSONAL_API_KEY");
-    return [];
+    return {
+      outcome: "skipped",
+      rows: [],
+      reason: "missing POSTHOG_PROJECT_ID or POSTHOG_PERSONAL_API_KEY",
+    };
   }
 
   async function runHogQL(query: string): Promise<Array<[string, number]>> {
@@ -184,7 +195,7 @@ async function pullPostHog(startISO: string, endISO: string, log: (k: string, v:
   for (const [d, v] of await runHogQL(visitorsQ)) rows.push({ pull_date: d, source: "posthog", metric: "visitors", value: v });
   for (const [d, v] of await runHogQL(accountsQ)) rows.push({ pull_date: d, source: "posthog", metric: "accounts_created", value: v });
   for (const [d, v] of await runHogQL(purchasesQ)) rows.push({ pull_date: d, source: "posthog", metric: "purchases", value: v });
-  return rows;
+  return { outcome: rows.length > 0 ? "success" : "empty", rows };
 }
 
 export async function GET(req: NextRequest) {
@@ -199,22 +210,23 @@ export async function GET(req: NextRequest) {
   start.setUTCDate(end.getUTCDate() - days);
   const fmt = (d: Date) => d.toISOString().slice(0, 10);
 
-  const result = await withJobRun("traffic-pull", async ({ setMeta, bumpRows }) => {
-    const meta: Record<string, unknown> = { range: [fmt(start), fmt(end)] };
-    const log = (k: string, v: unknown) => {
-      meta[k] = v;
-    };
-
-    const ga4 = await pullGA4(fmt(start), fmt(end), log).catch((e) => {
-      log("ga4_error", e instanceof Error ? e.message : String(e));
-      return [] as FlatRow[];
+  const result = await withJobRun("traffic-pull", async ({ setMeta, bumpRows, setOutcome }) => {
+    const ga4 = await pullGA4(fmt(start), fmt(end)).catch((e): SourcePull => {
+      return {
+        outcome: "failed",
+        rows: [],
+        reason: e instanceof Error ? e.message : String(e),
+      };
     });
-    const ph = await pullPostHog(fmt(start), fmt(end), log).catch((e) => {
-      log("posthog_error", e instanceof Error ? e.message : String(e));
-      return [] as FlatRow[];
+    const ph = await pullPostHog(fmt(start), fmt(end)).catch((e): SourcePull => {
+      return {
+        outcome: "failed",
+        rows: [],
+        reason: e instanceof Error ? e.message : String(e),
+      };
     });
 
-    const all = [...ga4, ...ph].filter((r) => r.pull_date && Number.isFinite(r.value));
+    const all = [...ga4.rows, ...ph.rows].filter((r) => r.pull_date && Number.isFinite(r.value));
     if (all.length > 0) {
       const svc = getSupabaseService();
       const { error } = await svc
@@ -224,11 +236,19 @@ export async function GET(req: NextRequest) {
     }
 
     bumpRows(all.length, all.length);
-    meta.ga4_rows = ga4.length;
-    meta.posthog_rows = ph.length;
-    setMeta(meta);
-    return { ga4_rows: ga4.length, posthog_rows: ph.length };
+    const outcome = summarizeSourceOutcomes([ga4.outcome, ph.outcome]);
+    setOutcome(outcome);
+    setMeta({
+      range: [fmt(start), fmt(end)],
+      sources: {
+        ga4: { outcome: ga4.outcome, rows: ga4.rows.length, reason: ga4.reason },
+        posthog: { outcome: ph.outcome, rows: ph.rows.length, reason: ph.reason },
+      },
+    });
+    return { ga4_rows: ga4.rows.length, posthog_rows: ph.rows.length };
   });
 
-  return NextResponse.json(result);
+  return NextResponse.json(result, {
+    status: result.ok ? 200 : result.outcome === "skipped" ? 503 : 500,
+  });
 }

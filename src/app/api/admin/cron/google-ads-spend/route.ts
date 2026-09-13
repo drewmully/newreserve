@@ -69,9 +69,10 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const days = Number(url.searchParams.get("days") || "14");
 
-  const result = await withJobRun("google-ads-spend", async ({ setMeta, bumpRows }) => {
+  const result = await withJobRun("google-ads-spend", async ({ setMeta, bumpRows, setOutcome }) => {
     const { missing, env } = reqEnv();
     if (missing.length > 0) {
+      setOutcome("skipped");
       setMeta({ skipped: true, missing });
       return { skipped: true, missing };
     }
@@ -132,6 +133,7 @@ export async function GET(req: NextRequest) {
     }));
 
     if (rows.length === 0) {
+      setOutcome("empty");
       setMeta({ rows: 0, range: [fmt(start), fmt(end)] });
       return { rows: 0 };
     }
@@ -154,6 +156,7 @@ export async function GET(req: NextRequest) {
     });
 
     bumpRows(j.results?.length || 0, rows.length);
+    setOutcome("success");
     setMeta({
       rows: rows.length,
       range: [fmt(start), fmt(end)],
@@ -166,5 +169,7 @@ export async function GET(req: NextRequest) {
     };
   });
 
-  return NextResponse.json(result);
+  return NextResponse.json(result, {
+    status: result.ok ? 200 : result.outcome === "skipped" ? 503 : 500,
+  });
 }
