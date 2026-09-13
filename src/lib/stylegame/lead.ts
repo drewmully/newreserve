@@ -15,6 +15,7 @@
  */
 
 import { getSupabaseService } from "@/app/api/_lib/supabaseService";
+import { readTrustedOrderAnon } from "@/lib/stylegame/context";
 
 export const STYLEGAME_SELLING_PLAN_ID = "3671163072"; // Shopify SellingPlan
 export const STYLEGAME_CART_ATTR_KEY = "funnel"; // value = "stylegame"
@@ -256,7 +257,7 @@ export async function linkOrderToLead(
   const readAttr = (key: string) =>
     attrs.find((a) => a.name === key)?.value ?? null;
 
-  const anon = readAttr("mully_anon_id");
+  const anon = readTrustedOrderAnon(attrs);
   const email = order.email ?? order.customer?.email ?? null;
   const stylegameResultRaw = readAttr("stylegame_result");
   let quizResult: QuizResult = {};

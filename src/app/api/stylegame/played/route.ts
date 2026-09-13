@@ -24,6 +24,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { insertPlayedLead, QuizResult, StylegamePick } from "@/lib/stylegame/lead";
 import { captureStylegameEvent } from "@/lib/stylegame/analytics";
+import {
+  readTrustedCheckoutAnon,
+  sanitizeStylegameAttribution,
+} from "@/lib/stylegame/context";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,16 +42,6 @@ interface RequestBody {
     utm_content?: string;
     utm_term?: string;
   };
-}
-
-function readCookie(cookieHeader: string | null, name: string): string | null {
-  if (!cookieHeader) return null;
-  const parts = cookieHeader.split(/;\s*/);
-  for (const p of parts) {
-    const [k, ...rest] = p.split("=");
-    if (k === name) return decodeURIComponent(rest.join("="));
-  }
-  return null;
 }
 
 export async function POST(req: NextRequest) {
@@ -66,20 +60,22 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const cookieHeader = req.headers.get("cookie");
-  const anon = readCookie(cookieHeader, "mully_anon_id");
+  const trackingAllowed = req.headers.get("sec-gpc") !== "1";
+  const anon = readTrustedCheckoutAnon(req.headers);
   const utms = body.utms ?? {};
+  const readUtm = (key: keyof NonNullable<RequestBody["utms"]>) =>
+    trackingAllowed ? sanitizeStylegameAttribution(utms[key] ?? null) : null;
 
   try {
     const { id, created } = await insertPlayedLead({
       mully_anon_id: anon,
       quiz_result: quiz,
       picks: Array.isArray(body.picks) ? body.picks : null,
-      utm_source: utms.utm_source ?? null,
-      utm_medium: utms.utm_medium ?? null,
-      utm_campaign: utms.utm_campaign ?? null,
-      utm_content: utms.utm_content ?? null,
-      utm_term: utms.utm_term ?? null,
+      utm_source: readUtm("utm_source"),
+      utm_medium: readUtm("utm_medium"),
+      utm_campaign: readUtm("utm_campaign"),
+      utm_content: readUtm("utm_content"),
+      utm_term: readUtm("utm_term"),
       referer: req.headers.get("referer"),
       user_agent: req.headers.get("user-agent"),
     });
@@ -95,9 +91,9 @@ export async function POST(req: NextRequest) {
         confidence: quiz.confidence,
         gift: !!quiz.gift,
         pick_count: Array.isArray(body.picks) ? body.picks.length : 0,
-        utm_source: utms.utm_source ?? null,
-        utm_medium: utms.utm_medium ?? null,
-        utm_campaign: utms.utm_campaign ?? null,
+        utm_source: readUtm("utm_source"),
+        utm_medium: readUtm("utm_medium"),
+        utm_campaign: readUtm("utm_campaign"),
       });
     }
 

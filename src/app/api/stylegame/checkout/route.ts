@@ -14,6 +14,7 @@
  *   NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN — public storefront token (matches swingBoxCheckout)
  *   SHOPIFY_STYLEGAME_VARIANT_ID         — variant GID, defaults to RES-MEM 47601025122496
  *   SHOPIFY_STYLEGAME_SELLING_PLAN_ID    — selling plan GID for cycle-1-$5 plan
+ *   SHOPIFY_WEBHOOK_SECRET                — signs browser context for orders/paid verification
  *
  * If SHOPIFY_STYLEGAME_SELLING_PLAN_ID is missing the route returns a 503
  * with a clear message (per PR #109's "fail loudly" preference) so we notice
@@ -23,6 +24,14 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { captureStylegameEvent } from "@/lib/stylegame/analytics";
+import {
+  readTrustedCheckoutAnon,
+  sanitizeStylegameAttribution,
+  sanitizeStylegameId,
+  signStylegameContext,
+  STYLEGAME_CONTEXT_VERSION,
+  STYLEGAME_IDENTITY_SOURCE,
+} from "@/lib/stylegame/context";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -100,25 +109,43 @@ export async function GET(req: NextRequest) {
     gift: gift === "1" || gift === "true",
   });
 
+  const trackingAllowed = req.headers.get("sec-gpc") !== "1";
+  const trustedAnon = readTrustedCheckoutAnon(req.headers);
+  const sessionId = trackingAllowed
+    ? sanitizeStylegameId(search.get("stylegame_session_id"))
+    : null;
+  const contextSecret = process.env.SHOPIFY_WEBHOOK_SECRET;
   const attributes: { key: string; value: string }[] = [
     { key: "funnel", value: "stylegame" },
     { key: "stylegame_stage", value: "vaulted" },
+    { key: "stylegame_context_version", value: STYLEGAME_CONTEXT_VERSION },
   ];
   if (profile) attributes.push({ key: "stylegame_profile", value: profile });
   if (name) attributes.push({ key: "stylegame_profile_name", value: name });
   attributes.push({ key: "stylegame_result", value: quizJson });
   if (gift) attributes.push({ key: "gift", value: gift });
 
-  // UTMs + anon id — pass-through if present.
+  if (trustedAnon && contextSecret) {
+    attributes.push({ key: "mully_anon_id", value: trustedAnon });
+    attributes.push({ key: "stylegame_identity_source", value: STYLEGAME_IDENTITY_SOURCE });
+    attributes.push({
+      key: "stylegame_context_signature",
+      value: signStylegameContext(trustedAnon, sessionId, contextSecret),
+    });
+  }
+  if (sessionId) attributes.push({ key: "stylegame_session_id", value: sessionId });
+
+  // Attribution is descriptive context only; it is never used as ownership.
   for (const key of [
     "utm_source",
     "utm_medium",
     "utm_campaign",
     "utm_content",
     "utm_term",
-    "mully_anon_id",
   ]) {
-    const value = search.get(key);
+    const value = trackingAllowed
+      ? sanitizeStylegameAttribution(search.get(key))
+      : null;
     if (value) attributes.push({ key, value });
   }
 
@@ -176,15 +203,22 @@ export async function GET(req: NextRequest) {
       // sg_cta_click already fires from the game HTML; this is the
       // authoritative "server accepted the checkout intent" event and
       // gives us a clean redirect count that isn't blocked by ad blockers.
-      const anon = search.get("mully_anon_id");
-      await captureStylegameEvent("sg_checkout_start", anon, {
+      await captureStylegameEvent("sg_checkout_start", trustedAnon, {
+        context_version: STYLEGAME_CONTEXT_VERSION,
+        session_id: sessionId,
         profile_key: profile || null,
         profile_name: name || null,
         confidence: Number(confidence) || null,
         gift: gift === "1" || gift === "true",
-        utm_source: search.get("utm_source") || null,
-        utm_medium: search.get("utm_medium") || null,
-        utm_campaign: search.get("utm_campaign") || null,
+        utm_source: trackingAllowed
+          ? sanitizeStylegameAttribution(search.get("utm_source"))
+          : null,
+        utm_medium: trackingAllowed
+          ? sanitizeStylegameAttribution(search.get("utm_medium"))
+          : null,
+        utm_campaign: trackingAllowed
+          ? sanitizeStylegameAttribution(search.get("utm_campaign"))
+          : null,
       });
       return NextResponse.redirect(checkoutUrl, 303);
     }

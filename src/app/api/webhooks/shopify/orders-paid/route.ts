@@ -51,6 +51,11 @@ import {
 } from "@/lib/stylegame/lead";
 import { captureStylegameEvent } from "@/lib/stylegame/analytics";
 import {
+  readTrustedOrderAnon,
+  sanitizeStylegameAttribution,
+  sanitizeStylegameId,
+} from "@/lib/stylegame/context";
+import {
   getLoopRawSubscriptions,
   updateLoopSubscriptionNextBillingDate,
 } from "@/app/api/_lib/loopAdmin";
@@ -1012,21 +1017,24 @@ async function stylegamePersist(order: {
     const sgAttrs = order.note_attributes ?? [];
     const sgReadAttr = (key: string) =>
       sgAttrs.find((a) => a.name === key)?.value ?? null;
-    const sgMullyAnonId = sgReadAttr("mully_anon_id");
+    const sgMullyAnonId = readTrustedOrderAnon(sgAttrs);
+    const sgSessionId = sanitizeStylegameId(sgReadAttr("stylegame_session_id"));
     const posthogDistinctId =
       (order.customer?.id != null
         ? String(order.customer.id)
         : sgMullyAnonId) ?? null;
     // Fire and forget — captureStylegameEvent never throws.
     await captureStylegameEvent("sg_paid", posthogDistinctId, {
+      context_version: sgReadAttr("stylegame_context_version"),
+      session_id: sgSessionId,
       lead_id: linked.id,
       shopify_order_id: String(order.id),
       shopify_order_name: order.name ?? null,
       profile_key: sgReadAttr("stylegame_profile"),
       profile_name: sgReadAttr("stylegame_profile_name"),
-      utm_source: sgReadAttr("utm_source"),
-      utm_medium: sgReadAttr("utm_medium"),
-      utm_campaign: sgReadAttr("utm_campaign"),
+      utm_source: sanitizeStylegameAttribution(sgReadAttr("utm_source")),
+      utm_medium: sanitizeStylegameAttribution(sgReadAttr("utm_medium")),
+      utm_campaign: sanitizeStylegameAttribution(sgReadAttr("utm_campaign")),
       value: 5,
       currency: "USD",
     });

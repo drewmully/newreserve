@@ -853,7 +853,7 @@ function stylistValue(R){
     `Skip anything ${avoid.toLowerCase()}. ${S.gift?'The card':'You'} told us, without saying it.`,
     T('fitnote')];
 }
-function depositUrl(R){ const q=new URLSearchParams({deposit:5,profile:R.key,name:R.P.name,confidence:R.confidence,prep:R.pcts[0],modern:R.pcts[1],classic:R.pcts[2],athletic:R.pcts[3],color:Math.round((S.colorZone||0)*100),fit:S.fit}); return MODEL.depositUrl+'?'+q.toString(); }
+function depositUrl(R){ const q=new URLSearchParams({deposit:5,profile:R.key,name:R.P.name,confidence:R.confidence,prep:R.pcts[0],modern:R.pcts[1],classic:R.pcts[2],athletic:R.pcts[3],color:Math.round((S.colorZone||0)*100),fit:S.fit}); try { const context=window._sgCheckoutContext?window._sgCheckoutContext():{}; Object.keys(context).forEach(k=>{if(context[k])q.set(k,context[k]);}); } catch(_){} return MODEL.depositUrl+'?'+q.toString(); }
 
 // ---------- BOOT ----------
 (function boot(){ const hash=location.hash.slice(1); const start=(hash==='profile'&&S.result)?'profile':'split'; if(start==='split'){fresh();save();} setFlow(); giftBtn.classList.toggle('on',S.gift); giftBtn.textContent=S.gift?'Gift mode ✓':'Buying a gift?'; go(start); })();
@@ -867,11 +867,13 @@ function depositUrl(R){ const q=new URLSearchParams({deposit:5,profile:R.key,nam
   var started = false;
   var configured = false;
   var gameNames = ['split', 'assoc', 'color', 'foursome', 'fit', 'bag'];
+  var trackingAllowed = true;
+  try { trackingAllowed = navigator.globalPrivacyControl !== true; } catch (_) {}
   var utm = {};
   try {
     var params = new URLSearchParams(window.location.search);
     params.forEach(function (value, key) {
-      if (key.indexOf('utm_') === 0 && value) utm[key] = value;
+      if (trackingAllowed && key.indexOf('utm_') === 0 && value) utm[key] = value.slice(0, 128);
     });
   } catch (_) {}
 
@@ -904,7 +906,25 @@ function depositUrl(R){ const q=new URLSearchParams({deposit:5,profile:R.key,nam
     writeAnonCookie(id);
     return id;
   }
-  var anonId = ensureAnonId();
+  var anonId = trackingAllowed ? ensureAnonId() : null;
+  var sessionId = null;
+  if (trackingAllowed) {
+    try {
+      sessionId = sessionStorage.getItem('mully_stylegame_session_id');
+      if (!sessionId) {
+        sessionId = (crypto && crypto.randomUUID) ? ('sgs-' + crypto.randomUUID()) : ('sgs-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+        sessionStorage.setItem('mully_stylegame_session_id', sessionId);
+      }
+    } catch (_) {}
+  }
+  window._sgCheckoutContext = function () {
+    var context = { stylegame_context_version: '1' };
+    if (!trackingAllowed) return context;
+    if (anonId) context.mully_anon_id = anonId;
+    if (sessionId) context.stylegame_session_id = sessionId;
+    Object.keys(utm).forEach(function (key) { context[key] = utm[key]; });
+    return context;
+  };
 
   // ---- Per-question pick logger (Phase 7) ----
   // The game calls window._sgOnPick(o, w, step, screen) inside apply() on every
@@ -1273,6 +1293,10 @@ function depositUrl(R){ const q=new URLSearchParams({deposit:5,profile:R.key,nam
 
   function start() {
     config = window.MULLY_STYLEGAME_CONFIG || config;
+    if (!trackingAllowed) {
+      installHooks();
+      return;
+    }
     loadPostHog().then(function () {
       installHooks();
       capture('sg_view', { analytics_configured: configured });

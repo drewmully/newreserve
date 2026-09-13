@@ -46,7 +46,8 @@ export async function captureStylegameEvent(
     process.env.POSTHOG_PROJECT_API_KEY ?? process.env.NEXT_PUBLIC_POSTHOG_KEY;
   if (!apiKey) return;
 
-  const distinct = (distinctId ?? "").trim() || "stylegame_anon_unknown";
+  const distinct = (distinctId ?? "").trim();
+  if (!distinct) return;
 
   const host =
     process.env.POSTHOG_HOST ??
