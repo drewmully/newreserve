@@ -105,11 +105,11 @@ export function ShopLanding({ products, productsByCategory, theme }: Props) {
                 <ArrowUpRight />
               </Link>
               <Link
-                href="#layering-guide"
+                href="#gift-tiers"
                 className="inline-flex h-11 items-center gap-2 border bg-transparent px-6 text-xs font-semibold uppercase tracking-[0.2em] text-white transition-colors hover:bg-white/10"
                 style={{ borderColor: "rgba(255,255,255,0.4)" }}
               >
-                The Layering Guide
+                Shop Gifts
               </Link>
             </div>
           </div>
@@ -125,22 +125,19 @@ export function ShopLanding({ products, productsByCategory, theme }: Props) {
               <Link
                 key={cat.handle}
                 href={`/shop/collection/${cat.handle}`}
-                className="group flex flex-col justify-between gap-8 px-5 py-8 transition-colors hover:bg-cream sm:px-6 sm:py-10"
+                className="group relative flex flex-col justify-between gap-8 px-5 py-8 transition-colors hover:bg-cream sm:px-6 sm:py-10"
                 data-testid={`shop-intent-${cat.key}`}
               >
-                <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-charcoal/50">
-                  {cat.eyebrow}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-charcoal/50">
+                    {cat.eyebrow}
+                  </div>
+                  <ArrowUpRight className="h-4 w-4 shrink-0 text-charcoal/40 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
                 </div>
                 <div>
-                  <div className="flex items-end justify-between gap-2">
-                    <span className="font-serif text-2xl tracking-tight text-charcoal sm:text-3xl">
-                      {cat.label}
-                    </span>
-                    <ArrowUpRight
-                      className="text-charcoal/40 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5"
-                      style={{ color: undefined }}
-                    />
-                  </div>
+                  <span className="font-serif text-2xl tracking-tight text-charcoal sm:text-3xl">
+                    {cat.label}
+                  </span>
                   <p className="mt-3 hidden text-xs text-charcoal/60 lg:block">
                     {cat.detail}
                   </p>
@@ -195,102 +192,48 @@ export function ShopLanding({ products, productsByCategory, theme }: Props) {
         </div>
       </section>
 
-      {/* ═══ THE LAYERING GUIDE ═══ */}
+      {/* ═══ THE LAYERING RULE (slim strip) ═══ */}
       <section
         id="layering-guide"
         className="border-y border-charcoal/10 bg-cream"
       >
-        <div className="mx-auto max-w-7xl px-6 py-16 md:px-12 md:py-24">
-          <div className="mb-12 flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
-            <div>
+        <div className="mx-auto max-w-7xl px-6 py-6 md:px-12 md:py-8">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between md:gap-8">
+            <div className="flex flex-col gap-1 md:flex-row md:items-baseline md:gap-4">
               <div
-                className="text-[10px] font-mono uppercase tracking-[0.2em]"
+                className="text-[10px] font-mono uppercase tracking-[0.28em]"
                 style={{ color: theme.accent }}
               >
-                The Layering Guide · No. 01
+                The Layering Rule
               </div>
-              <h2 className="mt-2 font-serif text-3xl tracking-tight text-charcoal sm:text-5xl">
-                Eight ways to dress a fall round.
-              </h2>
-              <p className="mt-4 max-w-xl text-sm text-charcoal/70">
-                Base, mid, outer. A palette per outfit, keyed to the light
-                you&apos;ll actually play in. Rotate through as the season pulls
-                colder.
+              <p className="text-sm text-charcoal/70">
+                One base you can sweat in, one mid you can zip up, one outer
+                you can throw off at the turn.
               </p>
             </div>
-            <div className="flex flex-wrap gap-3">
-              {theme.layerPalette.map((c) => (
+            <div className="flex flex-wrap items-center gap-2">
+              {theme.layerPalette.slice(0, 5).map((c) => (
                 <div
                   key={c.hex}
-                  className="flex items-center gap-2 border border-charcoal/10 bg-white px-3 py-2"
+                  className="flex items-center gap-1.5 border border-charcoal/10 bg-white px-2 py-1"
+                  title={c.name}
                 >
                   <span
-                    className="inline-block h-4 w-4 rounded-full"
+                    className="inline-block h-3 w-3 rounded-full"
                     style={{ backgroundColor: c.hex }}
                   />
-                  <span className="text-[10px] font-mono uppercase tracking-[0.2em] text-charcoal/70">
+                  <span className="text-[9px] font-mono uppercase tracking-[0.2em] text-charcoal/60">
                     {c.name}
                   </span>
                 </div>
               ))}
             </div>
           </div>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {theme.outfits.map((o) => (
-              <div
-                key={o.number}
-                className="group flex flex-col border border-charcoal/10 bg-white transition-colors hover:border-charcoal/30"
-              >
-                <div className="flex h-40 flex-col overflow-hidden">
-                  {o.palette.map((hex, i) => (
-                    <div
-                      key={i}
-                      className="flex-1"
-                      style={{ backgroundColor: hex }}
-                    />
-                  ))}
-                </div>
-                <div className="flex flex-1 flex-col justify-between gap-6 px-5 py-5">
-                  <div>
-                    <div className="flex items-center justify-between gap-2">
-                      <span
-                        className="text-[10px] font-mono uppercase tracking-[0.25em]"
-                        style={{ color: theme.accent }}
-                      >
-                        {o.number}
-                      </span>
-                      <span className="border border-charcoal/15 px-2 py-0.5 text-[9px] font-mono uppercase tracking-[0.2em] text-charcoal/50">
-                        {o.context === "on-course"
-                          ? "On course"
-                          : o.context === "clubhouse"
-                            ? "Clubhouse"
-                            : "Either"}
-                      </span>
-                    </div>
-                    <div className="mt-3 font-serif text-lg tracking-tight text-charcoal">
-                      {o.title}
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-3 gap-1 text-[9px] font-mono uppercase tracking-[0.2em] text-charcoal/50">
-                    <span>Outer</span>
-                    <span>Mid</span>
-                    <span>Base</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <p className="mt-10 text-[10px] font-mono uppercase tracking-[0.2em] text-charcoal/40">
-            Inspired by classic menswear layering theory, remixed for the
-            course.
-          </p>
         </div>
       </section>
 
       {/* ═══ GIFT TIERS ═══ */}
-      <section className="bg-white">
+      <section id="gift-tiers" className="bg-white">
         <div className="mx-auto max-w-7xl px-6 py-16 md:px-12 md:py-24">
           <div className="mb-10">
             <div
