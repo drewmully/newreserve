@@ -11,12 +11,16 @@ import {
   resolveVariantBySelection,
   getDefaultProductVariant,
   hasVariantChoices,
+  getProductVariants,
   type ProductVariantSelection,
 } from "@/lib/productVariants";
 import { ProductVariantSelector } from "../../components/ProductVariantSelector";
 import { orderProductImagesBySelection } from "@/lib/shopDisplay";
 import { ProductImageGallery } from "./ShopClient";
 import { ShopProductCard } from "./ShopProductCard";
+import { getSizeGuide } from "@/lib/sizeCharts";
+import { SizeFitChart } from "./SizeFitChart";
+import { NotifyMeInline } from "./NotifyMeInline";
 
 interface ShopPDPClientProps {
   product: ShopifyProduct;
@@ -47,6 +51,7 @@ export function ShopPDPClient({
   );
   const [added, setAdded] = useState(false);
   const [openAccordion, setOpenAccordion] = useState<string | null>("sizing");
+  const [sizeChartOpen, setSizeChartOpen] = useState(false);
 
   const selectedVariant = useMemo(
     () => resolveVariantBySelection(product, selection),
@@ -75,6 +80,21 @@ export function ShopPDPClient({
   const editorialHeadline = product.editorialHeadline || product.whyWeLikeIt;
   const editorialBody = product.editorialBody || product.description;
   const detailImages = orderedImages.slice(1, 5);
+
+  const sizeGuide = getSizeGuide(product.slug);
+  const productHasVariantChoices = hasVariantChoices(product);
+  // Show size chips when the product genuinely has choices, OR when we know
+  // the product should have sizes (curated size guide present) so shoppers
+  // still see the fit story even before variants are wired.
+  const showVariantSelector = productHasVariantChoices || Boolean(sizeGuide);
+  const allVariantsSoldOut =
+    getProductVariants(product).every((v) => v.availableForSale === false);
+  const currentVariantUnavailable = displayVariant?.availableForSale === false;
+  const sizeSelected = sizeGuide
+    ? selection[
+        Object.keys(selection).find((k) => /^size$/i.test(k)) ?? "Size"
+      ]
+    : undefined;
   const sameBrandProducts = relatedProducts
     .filter((p) => p.brand === product.brand && p.slug !== product.slug)
     .slice(0, 8);
@@ -120,6 +140,13 @@ export function ShopPDPClient({
 
   return (
     <div className="mx-auto max-w-7xl">
+      {sizeChartOpen && sizeGuide && (
+        <SizeFitChart
+          guide={sizeGuide}
+          productName={product.name}
+          onClose={() => setSizeChartOpen(false)}
+        />
+      )}
       {/* Top: gallery + buy box */}
       <div className="grid gap-10 md:grid-cols-2 md:gap-14 lg:gap-20">
         <div>
@@ -158,38 +185,76 @@ export function ShopPDPClient({
 
           <div className="my-8 border-t border-dashed border-charcoal/15" />
 
-          {hasVariantChoices(product) && (
-            <div className="mb-8">
-              <ProductVariantSelector
-                product={product}
-                selection={selection}
-                onChange={(optionName, optionValue) =>
-                  setSelection((current) => ({
-                    ...current,
-                    [optionName]: optionValue,
-                  }))
-                }
-              />
+          {showVariantSelector && (
+            <div className="mb-6">
+              {sizeGuide && (
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="text-[10px] font-mono uppercase tracking-[0.24em] text-charcoal/50">
+                    Size
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setSizeChartOpen(true)}
+                    className="text-[11px] uppercase tracking-[0.18em] text-charcoal/70 underline underline-offset-4 hover:text-charcoal"
+                  >
+                    Size &amp; fit
+                  </button>
+                </div>
+              )}
+              {productHasVariantChoices ? (
+                <ProductVariantSelector
+                  product={product}
+                  selection={selection}
+                  onChange={(optionName, optionValue) =>
+                    setSelection((current) => ({
+                      ...current,
+                      [optionName]: optionValue,
+                    }))
+                  }
+                />
+              ) : (
+                // Fallback greyed chips when we know the product should carry
+                // sizes but Shopify hasn't been set up yet. Non-interactive.
+                <div className="flex flex-wrap gap-2">
+                  {sizeGuide!.chart.rows.map((row) => (
+                    <span
+                      key={row.size}
+                      className="cursor-not-allowed rounded-full border border-charcoal/10 bg-cream px-3 py-2 text-xs font-medium text-charcoal/30"
+                    >
+                      {row.size}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
-          <button
-            onClick={handleAdd}
-            disabled={displayVariant?.availableForSale === false}
-            className="flex w-full items-center justify-center py-4 text-[11px] font-mono uppercase tracking-[0.28em] text-white transition-opacity duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-            style={{
-              backgroundColor:
-                displayVariant?.availableForSale === false
+          {allVariantsSoldOut ? (
+            <NotifyMeInline
+              productSlug={product.slug}
+              productName={product.name}
+              variantId={displayVariant?.id}
+              selectedSize={sizeSelected}
+              accent={accent}
+            />
+          ) : (
+            <button
+              onClick={handleAdd}
+              disabled={currentVariantUnavailable}
+              className="flex w-full items-center justify-center py-4 text-[11px] font-mono uppercase tracking-[0.28em] text-white transition-opacity duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              style={{
+                backgroundColor: currentVariantUnavailable
                   ? "#8a8a8a"
                   : accent,
-            }}
-          >
-            {displayVariant?.availableForSale === false
-              ? "Unavailable"
-              : added
-                ? "Added to cart"
-                : "Add to cart"}
-          </button>
+              }}
+            >
+              {currentVariantUnavailable
+                ? "Sold out"
+                : added
+                  ? "Added to cart"
+                  : "Add to cart"}
+            </button>
+          )}
 
           {/* Trust strip */}
           <div className="mt-6 grid grid-cols-3 gap-0 border border-charcoal/10 bg-cream/50 text-center">
