@@ -165,23 +165,23 @@ export function ShopLanding({ products, productsByCategory, theme }: Props) {
                 The {theme.season} Edit · {new Date().getFullYear()}
               </div>
               <h2 className="mt-2 font-serif text-3xl tracking-tight text-charcoal sm:text-5xl">
-                Every piece, hand-picked.
+                Twenty-seven pieces. Zero filler.
               </h2>
               <p className="mt-4 max-w-xl text-sm text-charcoal/70">
-                A season of layers built for the 6 a.m. tee time, the range
-                session at lunch, and the seat at the bar after.
+                A season built for the 6 a.m. tee time, the range at lunch,
+                and the seat at the bar after.
               </p>
             </div>
             <Link
               href="/shop/collection/shop-all"
               className="hidden text-xs font-semibold uppercase tracking-[0.2em] text-charcoal/70 transition-colors hover:text-charcoal sm:inline-flex sm:items-center sm:gap-1"
             >
-              View all <ArrowUpRight />
+              See all <ArrowUpRight />
             </Link>
           </div>
 
           {fallEdit.length === 0 ? (
-            <EmptyState message="Products land here as we add them in Shopify. Any product in Shop — Tops, Bottoms, Outerwear, Tech, Bags, or Accessories will appear." />
+            <EmptyState message="Nothing here yet. New pieces drop weekly." />
           ) : (
             <div className="grid grid-cols-2 gap-x-5 gap-y-10 md:grid-cols-3 md:gap-x-8 lg:grid-cols-4">
               {fallEdit.map((p) => (
@@ -207,8 +207,8 @@ export function ShopLanding({ products, productsByCategory, theme }: Props) {
                 The Layering Rule
               </div>
               <p className="text-sm text-charcoal/70">
-                One base you can sweat in, one mid you can zip up, one outer
-                you can throw off at the turn.
+                A base you can sweat in. A mid you can zip up. An outer you
+                throw off at the turn.
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -243,7 +243,7 @@ export function ShopLanding({ products, productsByCategory, theme }: Props) {
               Shop by gift
             </div>
             <h2 className="mt-2 font-serif text-3xl tracking-tight text-charcoal sm:text-4xl">
-              Find the right one.
+              For the guy who has enough polos.
             </h2>
           </div>
           <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
@@ -266,9 +266,9 @@ export function ShopLanding({ products, productsByCategory, theme }: Props) {
       <section className="border-t border-charcoal/10 bg-cream">
         <div className="mx-auto grid max-w-7xl grid-cols-1 gap-8 px-6 py-12 sm:grid-cols-3 md:px-12">
           {[
-            { k: "Free shipping", v: "On US orders over $75" },
-            { k: "Members save 15%", v: "On every piece, every order" },
-            { k: "Real returns", v: "30 days, no questions" },
+            { k: "Free shipping", v: "US orders over $75." },
+            { k: "Members save 15%", v: "Every piece. Every order." },
+            { k: "Returns that work", v: "30 days. No questions." },
           ].map((item) => (
             <div key={item.k} className="flex flex-col gap-1">
               <div

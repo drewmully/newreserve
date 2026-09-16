@@ -47,7 +47,7 @@ const INTERSTITIALS = [
   {
     eyebrow: "Style Tip",
     headline: "The layering rule",
-    body: "One base you can sweat in, one mid you can zip up, one outer you can throw off at the turn. Everything else is season.",
+    body: "A base you can sweat in. A mid you can zip up. An outer you throw off at the turn. Everything else is season.",
     image:
       "https://images.unsplash.com/photo-1587174486073-ae5e5cff23aa?auto=format&fit=crop&w=1200&q=70",
     imageAlt: "Layered fall menswear",
@@ -189,8 +189,8 @@ export default async function ShopCollectionPage({ params }: Props) {
           {products.length === 0 ? (
             <div className="rounded-none border border-dashed border-charcoal/20 bg-cream/60 px-8 py-20 text-center">
               <p className="mx-auto max-w-md text-sm text-charcoal/60">
-                Nothing in {cat.label.toLowerCase()} yet. New pieces drop into
-                this collection from Shopify Admin — check back soon.
+                Nothing in {cat.label.toLowerCase()} yet. New pieces land here
+                every week.
               </p>
             </div>
           ) : (
