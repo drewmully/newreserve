@@ -2,10 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCollectionProducts, type ShopifyProduct } from "@/lib/shopify";
-import { ShopHeader } from "../../../components/ShopHeader";
+import { ShopSeasonalHeader } from "../../components/ShopSeasonalHeader";
 import { ShopProductCard } from "../../components/ShopProductCard";
 import { ScrollToTop } from "../../components/ScrollToTop";
+import { ShopPasswordGate } from "../../components/ShopPasswordGate";
 import { GIFT_TIERS, SHOP_CATEGORIES } from "../../shopCollections";
+import { getSeasonalTheme } from "../../seasonalTheme";
 
 export const revalidate = 3600;
 
@@ -35,6 +37,7 @@ export default async function ShopGiftTierPage({ params }: Props) {
   if (!TIER_KEYS.has(tierKey)) notFound();
 
   const tier = GIFT_TIERS.find((t) => t.key === (tierKey as GiftTierKey))!;
+  const theme = getSeasonalTheme();
 
   // Reuse the six category collection fetch — a gift tier is a tag filter
   // across the whole shop catalog, not its own Shopify collection. Product
@@ -57,23 +60,27 @@ export default async function ShopGiftTierPage({ params }: Props) {
   );
 
   return (
-    <div className="min-h-screen bg-bone">
-      <ShopHeader />
+    <div className="min-h-screen bg-white">
+      <ShopSeasonalHeader accent={theme.accent} />
       <ScrollToTop />
+      <ShopPasswordGate accent={theme.accent} />
 
       <main className="shop-main pb-24">
         <section className="border-b border-charcoal/10 bg-cream">
           <div className="mx-auto max-w-7xl px-6 py-12 md:px-12 md:py-16">
             <Link
               href="/shop"
-              className="text-[11px] font-mono uppercase tracking-[0.2em] text-charcoal/50 transition-colors hover:text-forest"
+              className="text-[11px] font-mono uppercase tracking-[0.2em] text-charcoal/50 transition-colors hover:text-charcoal"
             >
               ← Shop
             </Link>
-            <div className="mt-4 text-[10px] font-mono uppercase tracking-[0.2em] text-ember">
+            <div
+              className="mt-4 text-[10px] font-mono uppercase tracking-[0.2em]"
+              style={{ color: theme.accent }}
+            >
               {tier.accent}
             </div>
-            <h1 className="mt-2 font-serif text-4xl tracking-tight text-forest sm:text-6xl">
+            <h1 className="mt-2 font-serif text-4xl tracking-tight text-charcoal sm:text-6xl">
               Gifts {tier.title}
             </h1>
             <p className="mt-4 max-w-xl text-sm text-charcoal/70">
@@ -94,7 +101,7 @@ export default async function ShopGiftTierPage({ params }: Props) {
           ) : (
             <div className="grid grid-cols-2 gap-x-5 gap-y-10 md:grid-cols-3 md:gap-x-8 lg:grid-cols-4">
               {products.map((p) => (
-                <ShopProductCard key={p.slug} product={p} />
+                <ShopProductCard key={p.slug} product={p} accent={theme.accent} />
               ))}
             </div>
           )}

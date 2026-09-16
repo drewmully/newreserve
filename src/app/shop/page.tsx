@@ -4,22 +4,27 @@ import {
   getCollectionProducts,
   type ShopifyProduct,
 } from "@/lib/shopify";
-import { ShopHeader } from "../components/ShopHeader";
+import { ShopSeasonalHeader } from "./components/ShopSeasonalHeader";
 import { ShopLanding } from "./components/ShopLanding";
+import { MullyWordmark } from "./components/MullyWordmark";
 import { SHOP_CATEGORIES } from "./shopCollections";
+import { getSeasonalTheme } from "./seasonalTheme";
 
 export const metadata: Metadata = {
-  title: "Shop | Mully",
+  title: "Shop | mully.",
   description:
-    "Fall 2026 Styling Edit. Layers for the 6 a.m. tee time, the range, and the seat at the bar after — curated by Mully.",
+    "Fall 2026 · The Layering Edit. Golf apparel and equipment curated by Mully.",
 };
 
-// Revalidate ISR every hour so new products / tag changes surface without a redeploy.
+// ISR one hour — collection contents, product tags, and seasonal
+// theme swaps all refresh on the same cadence.
 export const revalidate = 3600;
 
 export default async function ShopPage() {
-  // Fetch each of the six category collections independently so one 404 or
-  // Shopify hiccup doesn't blank the entire landing page.
+  const theme = getSeasonalTheme();
+
+  // Fetch each category collection independently so one 404 doesn't blank
+  // the whole landing.
   const settled = await Promise.allSettled(
     SHOP_CATEGORIES.map(({ handle }) => getCollectionProducts(handle))
   );
@@ -39,8 +44,6 @@ export default async function ShopPage() {
       return;
     }
     productsByCategory[cat.handle] = result.value;
-    // Merge for the Fall Edit grid, deduped by slug. Collection order in
-    // SHOP_CATEGORIES governs tie-breaking — Tops first, Accessories last.
     for (const p of result.value) {
       if (!seen.has(p.slug)) {
         seen.add(p.slug);
@@ -50,52 +53,47 @@ export default async function ShopPage() {
   });
 
   return (
-    <div className="min-h-screen bg-bone">
-      <ShopHeader />
+    <div className="min-h-screen bg-white">
+      <ShopSeasonalHeader accent={theme.accent} />
       <main className="shop-main pb-0">
-        <ShopLanding products={merged} productsByCategory={productsByCategory} />
+        <ShopLanding
+          products={merged}
+          productsByCategory={productsByCategory}
+          theme={theme}
+        />
       </main>
 
-      {/* Footer — matches the pre-existing /shop chrome. */}
-      <footer className="bg-forest px-6 py-10 md:px-12">
-        <div className="mx-auto flex max-w-6xl flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <span className="flex items-center gap-2 text-bone">
-            <svg
-              viewBox="0 0 1002 540"
-              fill="currentColor"
-              className="h-4 w-auto"
-              aria-hidden="true"
-            >
-              <path
-                d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z"
-                fillRule="evenodd"
-              />
-            </svg>
-            <span className="font-serif text-xl font-bold tracking-wide">
-              mully.
-            </span>
-          </span>
-          <div className="flex items-center gap-8">
+      {/* Shop-branded footer, dissociated from the main site's forest green. */}
+      <footer className="border-t border-charcoal/10 bg-white">
+        <div className="mx-auto flex max-w-7xl flex-col gap-6 px-6 py-12 md:flex-row md:items-center md:justify-between md:px-12">
+          <MullyWordmark accent={theme.accent} className="text-3xl" />
+          <div className="flex flex-wrap items-center gap-8">
             <Link
               href="/policies/terms"
-              className="text-sm text-bone/50 transition-colors duration-300 hover:text-bone"
+              className="text-xs font-mono uppercase tracking-[0.2em] text-charcoal/50 transition-colors hover:text-charcoal"
             >
               Terms
             </Link>
             <Link
               href="/policies/privacy"
-              className="text-sm text-bone/50 transition-colors duration-300 hover:text-bone"
+              className="text-xs font-mono uppercase tracking-[0.2em] text-charcoal/50 transition-colors hover:text-charcoal"
             >
               Privacy
             </Link>
             <Link
               href="/faq"
-              className="text-sm text-bone/50 transition-colors duration-300 hover:text-bone"
+              className="text-xs font-mono uppercase tracking-[0.2em] text-charcoal/50 transition-colors hover:text-charcoal"
             >
               FAQ
             </Link>
+            <Link
+              href="/"
+              className="text-xs font-mono uppercase tracking-[0.2em] text-charcoal/50 transition-colors hover:text-charcoal"
+            >
+              mymully.com
+            </Link>
           </div>
-          <p className="text-xs text-bone/30">
+          <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-charcoal/40">
             &copy; {new Date().getFullYear()} Mully Group, Inc.
           </p>
         </div>

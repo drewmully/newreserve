@@ -12,7 +12,14 @@ import { useMembership } from "../../context/MembershipContext";
  *
  * No AI copy, no truncation of the title — full text wraps to two lines.
  */
-export function ShopProductCard({ product }: { product: ShopifyProduct }) {
+export function ShopProductCard({
+  product,
+  accent,
+}: {
+  product: ShopifyProduct;
+  /** Optional accent hex used for the member-price highlight, per seasonal theme. */
+  accent?: string;
+}) {
   // Same defensive pattern ShopClient uses for the public /shop.
   let tier: string | null = null;
   try {
@@ -52,7 +59,7 @@ export function ShopProductCard({ product }: { product: ShopifyProduct }) {
           <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-charcoal/50">
             {product.collection || "Accessories"}
           </div>
-          <h3 className="mt-1 font-serif text-base leading-snug text-forest sm:text-lg">
+          <h3 className="mt-1 font-serif text-base leading-snug text-charcoal sm:text-lg">
             {product.name}
           </h3>
         </div>
@@ -62,7 +69,10 @@ export function ShopProductCard({ product }: { product: ShopifyProduct }) {
               ${product.price.toFixed(0)}
             </span>
           )}
-          <span className="text-sm font-semibold text-forest">
+          <span
+            className="text-sm font-semibold"
+            style={{ color: accent ?? "var(--color-charcoal)" }}
+          >
             ${displayPrice.toFixed(0)}
           </span>
         </div>
