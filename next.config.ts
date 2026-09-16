@@ -94,6 +94,17 @@ const nextConfig: NextConfig = {
         hostname: "www.haversham.com",
         pathname: "/wp-content/**",
       },
+      {
+        // Unsplash — editorial interstitial cards on /shop collection pages.
+        protocol: "https",
+        hostname: "images.unsplash.com",
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
+        hostname: "source.unsplash.com",
+        pathname: "/**",
+      },
     ],
   },
 };

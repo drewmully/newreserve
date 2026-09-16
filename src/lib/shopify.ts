@@ -101,6 +101,10 @@ export interface ShopifyProduct {
   aboutBrand: string;
   whyWeLikeIt: string;
   sizing: string;
+  /** Single-sentence editorial hook (custom.editorial_headline). */
+  editorialHeadline?: string;
+  /** Multi-paragraph editorial deep copy (custom.editorial_body). */
+  editorialBody?: string;
   options: ShopifyProductOption[];
   variants: ShopifyProductVariant[];
   /** First variant GID — required for cart mutations. Undefined if Shopify returned no variants. */
@@ -213,6 +217,8 @@ interface RawProduct {
   aboutBrandMeta: { value: string } | null;
   whyWeLikeItMeta: { value: string } | null;
   sizingMeta: { value: string } | null;
+  editorialHeadlineMeta: { value: string } | null;
+  editorialBodyMeta: { value: string } | null;
 }
 
 interface RawCartLine {
@@ -280,6 +286,8 @@ function mapProduct(raw: RawProduct): ShopifyProduct {
     aboutBrand: raw.aboutBrandMeta?.value ?? "",
     whyWeLikeIt: raw.whyWeLikeItMeta?.value ?? "",
     sizing: raw.sizingMeta?.value ?? "",
+    editorialHeadline: raw.editorialHeadlineMeta?.value ?? "",
+    editorialBody: raw.editorialBodyMeta?.value ?? "",
     options: raw.options.map((option) => ({
       name: option.name,
       values: option.values,
@@ -353,6 +361,8 @@ const PRODUCT_FIELDS = `
   aboutBrandMeta: metafield(namespace: "custom", key: "about_brand") { value }
   whyWeLikeItMeta: metafield(namespace: "custom", key: "why_we_like_it") { value }
   sizingMeta: metafield(namespace: "custom", key: "sizing") { value }
+  editorialHeadlineMeta: metafield(namespace: "custom", key: "editorial_headline") { value }
+  editorialBodyMeta: metafield(namespace: "custom", key: "editorial_body") { value }
 `;
 
 const CART_LINE_FIELDS = `
