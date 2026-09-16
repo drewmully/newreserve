@@ -32,12 +32,25 @@ interface Props {
 export function ShopLanding({ products, productsByCategory, theme }: Props) {
   const fallEdit = useMemo(() => products.slice(0, 8), [products]);
 
+  // Gift tier merchandising. First try tags (gift-under-100, gift-100-300,
+  // gift-300-plus) then fall back to price so any Shopify product lands in the
+  // right bucket even before it's tagged.
   const giftProducts = useMemo(() => {
-    const buckets: Record<string, ShopifyProduct[]> = {};
-    for (const tier of GIFT_TIERS) {
-      buckets[tier.key] = products.filter((p) =>
-        p.tags?.some((t) => t.toLowerCase() === tier.tag)
-      );
+    const buckets: Record<string, ShopifyProduct[]> = {
+      under100: [],
+      hundredToThree: [],
+      threeHundredPlus: [],
+    };
+    for (const p of products) {
+      const tags = (p.tags ?? []).map((t) => t.toLowerCase());
+      let bucket: keyof typeof buckets | null = null;
+      if (tags.includes("gift-under-100")) bucket = "under100";
+      else if (tags.includes("gift-100-300")) bucket = "hundredToThree";
+      else if (tags.includes("gift-300-plus")) bucket = "threeHundredPlus";
+      else if (p.price < 100) bucket = "under100";
+      else if (p.price < 300) bucket = "hundredToThree";
+      else bucket = "threeHundredPlus";
+      buckets[bucket].push(p);
     }
     return buckets;
   }, [products]);
@@ -163,7 +176,7 @@ export function ShopLanding({ products, productsByCategory, theme }: Props) {
               </p>
             </div>
             <Link
-              href="/shop/collection/shop-outerwear"
+              href="/shop/collection/shop-all"
               className="hidden text-xs font-semibold uppercase tracking-[0.2em] text-charcoal/70 transition-colors hover:text-charcoal sm:inline-flex sm:items-center sm:gap-1"
             >
               View all <ArrowUpRight />
@@ -201,7 +214,7 @@ export function ShopLanding({ products, productsByCategory, theme }: Props) {
               </h2>
               <p className="mt-4 max-w-xl text-sm text-charcoal/70">
                 Base, mid, outer. A palette per outfit, keyed to the light
-                you'll actually play in. Rotate through as the season pulls
+                you&apos;ll actually play in. Rotate through as the season pulls
                 colder.
               </p>
             </div>

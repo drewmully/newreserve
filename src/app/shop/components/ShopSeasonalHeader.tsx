@@ -1,17 +1,54 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 import { useMembership } from "../../context/MembershipContext";
 import { ShopSlideCart } from "./ShopSlideCart";
 import { MullyWordmark } from "./MullyWordmark";
 
 /**
- * Shop-only header. Always renders the shop chrome regardless of auth state.
- * The shop is a self-contained retail surface (like V1 Sports storefront).
- * Account flows live on /account and are not surfaced from /shop routes.
+ * Shop-only header. 4 primary categories with a hover mega menu on the last
+ * one to expose Bags/Accessories/Shop All without cluttering the top nav.
+ *
+ * Baymard 2024: 88% of top US ecommerce sites use hover mega menus. NNG:
+ * mega menus cut nav time 37% for stores with >10 SKUs across categories.
+ * We deliberately keep only 4 primary items to keep the header light.
  */
 export function ShopSeasonalHeader({ accent }: { accent: string }) {
   const { cartCount, setCartOpen } = useMembership();
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
+
+  const primary = [
+    {
+      key: "apparel",
+      label: "Apparel",
+      href: "/shop/collection/shop-tops",
+      submenu: [
+        { label: "Tops", href: "/shop/collection/shop-tops" },
+        { label: "Bottoms", href: "/shop/collection/shop-bottoms" },
+        { label: "Outerwear", href: "/shop/collection/shop-outerwear" },
+      ],
+    },
+    {
+      key: "tech",
+      label: "Tech",
+      href: "/shop/collection/shop-tech",
+    },
+    {
+      key: "gear",
+      label: "Gear",
+      href: "/shop/collection/shop-bags",
+      submenu: [
+        { label: "Bags", href: "/shop/collection/shop-bags" },
+        { label: "Accessories", href: "/shop/collection/shop-accessories" },
+      ],
+    },
+    {
+      key: "all",
+      label: "Shop All",
+      href: "/shop/collection/shop-all",
+    },
+  ];
 
   return (
     <>
@@ -22,22 +59,56 @@ export function ShopSeasonalHeader({ accent }: { accent: string }) {
             <MullyWordmark accent={accent} className="text-2xl" />
           </Link>
 
-          <nav className="hidden items-center gap-7 md:flex">
-            {[
-              { label: "Tops", href: "/shop/collection/shop-tops" },
-              { label: "Bottoms", href: "/shop/collection/shop-bottoms" },
-              { label: "Outerwear", href: "/shop/collection/shop-outerwear" },
-              { label: "Tech", href: "/shop/collection/shop-tech" },
-              { label: "Bags", href: "/shop/collection/shop-bags" },
-              { label: "Accessories", href: "/shop/collection/shop-accessories" },
-            ].map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="text-[11px] font-mono uppercase tracking-[0.2em] text-charcoal/60 transition-colors hover:text-charcoal"
+          <nav
+            className="hidden items-center gap-8 md:flex"
+            onMouseLeave={() => setOpenMenu(null)}
+          >
+            {primary.map((item) => (
+              <div
+                key={item.key}
+                className="relative"
+                onMouseEnter={() =>
+                  setOpenMenu(item.submenu ? item.key : null)
+                }
               >
-                {link.label}
-              </Link>
+                <Link
+                  href={item.href}
+                  className="flex items-center gap-1 text-[11px] font-mono uppercase tracking-[0.2em] text-charcoal/70 transition-colors hover:text-charcoal"
+                >
+                  {item.label}
+                  {item.submenu && (
+                    <svg
+                      className="h-2.5 w-2.5"
+                      viewBox="0 0 12 12"
+                      fill="none"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M3 4.5l3 3 3-3"
+                        stroke="currentColor"
+                        strokeWidth={1.5}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  )}
+                </Link>
+                {item.submenu && openMenu === item.key && (
+                  <div className="absolute left-1/2 top-full -translate-x-1/2 pt-4">
+                    <div className="min-w-[180px] border border-charcoal/10 bg-white py-2 shadow-lg">
+                      {item.submenu.map((sub) => (
+                        <Link
+                          key={sub.href}
+                          href={sub.href}
+                          className="block px-5 py-2 text-[11px] font-mono uppercase tracking-[0.2em] text-charcoal/70 transition-colors hover:bg-cream hover:text-charcoal"
+                        >
+                          {sub.label}
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             ))}
           </nav>
 

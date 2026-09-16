@@ -8,7 +8,6 @@ import {
   PRIVATE_RELEASES_COLLECTION_HANDLE,
   PRO_SHOP_COLLECTION_HANDLE,
 } from "@/lib/shopify";
-import { Accordion } from "../components/ShopClient";
 import { ShopPDPClient } from "../components/ShopPDPClient";
 import { ShopSeasonalHeader } from "../components/ShopSeasonalHeader";
 import { ScrollToTop } from "../components/ScrollToTop";
@@ -91,12 +90,30 @@ export default async function ProductPage({ params, searchParams }: Props) {
   const initialSelection = getVariantSelection(preferredVariant);
   const theme = getSeasonalTheme();
 
-  const accordionItems = [
-    { title: "Description", content: product.description },
-    { title: "Material", content: product.material },
-    { title: "About the Brand", content: product.aboutBrand },
-    { title: "Sizing", content: product.sizing },
-  ].filter((item) => item.content);
+  // Related products for the "More from Brand" and "You may also like" rails.
+  let related: Awaited<ReturnType<typeof getCollectionProducts>> = [];
+  try {
+    const [proShop, privateReleases] = await Promise.allSettled([
+      getCollectionProducts(PRO_SHOP_COLLECTION_HANDLE),
+      getCollectionProducts(PRIVATE_RELEASES_COLLECTION_HANDLE),
+    ]);
+    const groups: Array<{
+      handle: string;
+      products: Awaited<ReturnType<typeof getCollectionProducts>>;
+    }> = [];
+    if (proShop.status === "fulfilled") {
+      groups.push({ handle: PRO_SHOP_COLLECTION_HANDLE, products: proShop.value });
+    }
+    if (privateReleases.status === "fulfilled") {
+      groups.push({
+        handle: PRIVATE_RELEASES_COLLECTION_HANDLE,
+        products: privateReleases.value,
+      });
+    }
+    related = mergeCollectionProductsBySlug(groups);
+  } catch (err) {
+    console.error("[ProductPage] related fetch failed:", err);
+  }
 
   return (
     <div className="min-h-screen bg-white">
@@ -125,15 +142,8 @@ export default async function ProductPage({ params, searchParams }: Props) {
               product={product}
               initialSelection={initialSelection}
               accent={theme.accent}
+              relatedProducts={related}
             />
-
-            {accordionItems.length > 0 && (
-              <div className="mt-16 border-t border-charcoal/10 pt-10">
-                <div className="mx-auto max-w-3xl">
-                  <Accordion items={accordionItems} />
-                </div>
-              </div>
-            )}
           </div>
         </section>
       </main>
