@@ -2,88 +2,63 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import {
   getCollectionProducts,
-  mergeCollectionProductsBySlug,
-  PRIVATE_RELEASES_COLLECTION_HANDLE,
-  PRO_SHOP_COLLECTION_HANDLE,
+  type ShopifyProduct,
 } from "@/lib/shopify";
-import { BRAND_INFO, COLLECTION_INFO } from "./products";
-import { ShopGrid } from "./components/ShopClient";
 import { ShopHeader } from "../components/ShopHeader";
+import { ShopLanding } from "./components/ShopLanding";
+import { SHOP_CATEGORIES } from "./shopCollections";
 
 export const metadata: Metadata = {
-  title: "Shop | Mully Reserve",
+  title: "Shop | Mully",
   description:
-    "Curated golf products from the best brands at Reserve pricing.",
+    "Fall 2026 Styling Edit. Layers for the 6 a.m. tee time, the range, and the seat at the bar after — curated by Mully.",
 };
 
-// Revalidate ISR every hour
+// Revalidate ISR every hour so new products / tag changes surface without a redeploy.
 export const revalidate = 3600;
 
 export default async function ShopPage() {
-  // Fetch collections independently so one failure doesn't hide the other.
-  const catalogCollections = [
-    { label: "pro-shop", handle: PRO_SHOP_COLLECTION_HANDLE },
-    { label: "private-releases", handle: PRIVATE_RELEASES_COLLECTION_HANDLE },
-  ] as const;
-
+  // Fetch each of the six category collections independently so one 404 or
+  // Shopify hiccup doesn't blank the entire landing page.
   const settled = await Promise.allSettled(
-    catalogCollections.map(({ handle }) => getCollectionProducts(handle))
+    SHOP_CATEGORIES.map(({ handle }) => getCollectionProducts(handle))
   );
 
-  const successfulCollections: Array<{
-    handle: string;
-    products: Awaited<ReturnType<typeof getCollectionProducts>>;
-  }> = [];
+  const productsByCategory: Record<string, ShopifyProduct[]> = {};
+  const seen = new Set<string>();
+  const merged: ShopifyProduct[] = [];
 
-  settled.forEach((result, index) => {
-    const entry = catalogCollections[index];
-    if (result.status === "fulfilled") {
-      successfulCollections.push({
-        handle: entry.handle,
-        products: result.value,
-      });
+  settled.forEach((result, idx) => {
+    const cat = SHOP_CATEGORIES[idx];
+    if (result.status !== "fulfilled") {
+      console.error(
+        `[ShopPage] Shopify collection "${cat.handle}" failed:`,
+        result.reason
+      );
+      productsByCategory[cat.handle] = [];
       return;
     }
-
-    console.error(
-      `[ShopPage] Shopify collection "${entry.label}" failed:`,
-      result.reason
-    );
+    productsByCategory[cat.handle] = result.value;
+    // Merge for the Fall Edit grid, deduped by slug. Collection order in
+    // SHOP_CATEGORIES governs tie-breaking — Tops first, Accessories last.
+    for (const p of result.value) {
+      if (!seen.has(p.slug)) {
+        seen.add(p.slug);
+        merged.push(p);
+      }
+    }
   });
-
-  const products = mergeCollectionProductsBySlug(successfulCollections);
-
-  // Derive filter lists from live products
-  const brands = [...new Set(products.map((p) => p.brand))];
-  const collections = [...new Set(products.map((p) => p.collection))];
-
-  // Keep only brands/collections that have a curated info card
-  const knownBrands = brands.filter((b) => b in BRAND_INFO);
-  const knownCollections = collections.filter((c) => c in COLLECTION_INFO);
 
   return (
     <div className="min-h-screen bg-bone">
-      {/* ─── HEADER ─── */}
       <ShopHeader />
-
-      {/* ─── PAGE CONTENT ─── */}
-      <main className="shop-main pb-24 px-6 md:px-12">
-        <div className="max-w-7xl mx-auto">
-          <ShopGrid
-            products={products}
-            brands={knownBrands.length > 0 ? knownBrands : brands}
-            collections={
-              knownCollections.length > 0 ? knownCollections : collections
-            }
-            sourceContext="public-shop"
-            privateReleasesHandle={PRIVATE_RELEASES_COLLECTION_HANDLE}
-          />
-        </div>
+      <main className="shop-main pb-0">
+        <ShopLanding products={merged} productsByCategory={productsByCategory} />
       </main>
 
-      {/* ─── FOOTER ─── */}
-      <footer className="py-10 px-6 md:px-12 bg-forest">
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      {/* Footer — matches the pre-existing /shop chrome. */}
+      <footer className="bg-forest px-6 py-10 md:px-12">
+        <div className="mx-auto flex max-w-6xl flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <span className="flex items-center gap-2 text-bone">
             <svg
               viewBox="0 0 1002 540"
@@ -103,19 +78,19 @@ export default async function ShopPage() {
           <div className="flex items-center gap-8">
             <Link
               href="/policies/terms"
-              className="text-sm text-bone/50 hover:text-bone transition-colors duration-300"
+              className="text-sm text-bone/50 transition-colors duration-300 hover:text-bone"
             >
               Terms
             </Link>
             <Link
               href="/policies/privacy"
-              className="text-sm text-bone/50 hover:text-bone transition-colors duration-300"
+              className="text-sm text-bone/50 transition-colors duration-300 hover:text-bone"
             >
               Privacy
             </Link>
             <Link
               href="/faq"
-              className="text-sm text-bone/50 hover:text-bone transition-colors duration-300"
+              className="text-sm text-bone/50 transition-colors duration-300 hover:text-bone"
             >
               FAQ
             </Link>

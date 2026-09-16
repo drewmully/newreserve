@@ -107,6 +107,10 @@ export interface ShopifyProduct {
   variantId: string | undefined;
   /** Shopify collection handles this product belongs to (filled when merging collection queries). */
   sourceCollections?: string[];
+  /** Product tags from Shopify Admin. Used by /shop for gift-tier merchandising.
+   *  Optional so editorial/affiliate/destination-derived pseudo-products don't
+   *  need to carry an empty array. */
+  tags?: string[];
 }
 
 export interface ShopifyProductOption {
@@ -201,6 +205,7 @@ interface RawProduct {
   vendor: string;
   productType: string;
   description: string;
+  tags: string[];
   options: Array<{ name: string; values: string[] }>;
   variants: { nodes: RawVariant[] };
   images: { nodes: Array<{ url: string; altText?: string | null }> };
@@ -281,6 +286,7 @@ function mapProduct(raw: RawProduct): ShopifyProduct {
     })),
     variants,
     variantId: defaultVariant?.id,
+    tags: raw.tags ?? [],
   };
 }
 
@@ -315,6 +321,7 @@ const PRODUCT_FIELDS = `
   vendor
   productType
   description
+  tags
   options {
     name
     values
