@@ -99,7 +99,8 @@ export default async function ShopCollectionPage({ params }: Props) {
     console.error(`[/shop/collection/${handle}] Shopify fetch failed:`, err);
   }
 
-  // Build a flat list of items — products with editorial cards inserted every 4.
+  // Build a flat list of items — editorial cards drop into the grid like a
+  // product card at deterministic-but-spaced positions (every ~5 slots).
   type GridItem =
     | { kind: "product"; product: (typeof products)[number] }
     | {
@@ -107,15 +108,21 @@ export default async function ShopCollectionPage({ params }: Props) {
         card: (typeof INTERSTITIALS)[number];
       };
 
-  const gridItems: GridItem[] = [];
-  products.forEach((p, i) => {
-    gridItems.push({ kind: "product", product: p });
-    // After every 4 products, insert an editorial card (but not at the very end).
-    if ((i + 1) % 4 === 0 && i !== products.length - 1) {
-      const card = INTERSTITIALS[Math.floor(i / 4) % INTERSTITIALS.length];
-      gridItems.push({ kind: "editorial", card });
-    }
-  });
+  const gridItems: GridItem[] = products.map((p) => ({
+    kind: "product" as const,
+    product: p,
+  }));
+
+  // Insert one editorial card per ~5 product slots, at pseudo-random offsets
+  // seeded by handle so the layout is stable per collection.
+  const seed = Array.from(handle).reduce((a, c) => a + c.charCodeAt(0), 0);
+  const cardsToInsert = Math.min(INTERSTITIALS.length, Math.floor(products.length / 5) + 1);
+  for (let c = 0; c < cardsToInsert; c++) {
+    // Bias insertion to positions 2 through end-2 so cards don't land at the extremes.
+    const bucketStart = 2 + Math.floor((c * gridItems.length) / cardsToInsert);
+    const pos = Math.min(gridItems.length, Math.max(2, bucketStart + ((seed + c * 7) % 3)));
+    gridItems.splice(pos, 0, { kind: "editorial", card: INTERSTITIALS[c] });
+  }
 
   return (
     <div className="min-h-screen bg-white">
@@ -198,30 +205,35 @@ export default async function ShopCollectionPage({ params }: Props) {
                 ) : (
                   <div
                     key={`e-${idx}`}
-                    className="col-span-2 flex flex-col overflow-hidden border border-charcoal/10 bg-cream md:flex-row lg:col-span-4"
+                    className="group flex flex-col overflow-hidden border border-charcoal/10 bg-cream"
                   >
-                    <div className="relative h-56 w-full md:h-auto md:w-1/2">
+                    <div className="relative aspect-square w-full overflow-hidden bg-cream">
                       <Image
                         src={item.card.image}
                         alt={item.card.imageAlt}
                         fill
-                        sizes="(max-width: 768px) 100vw, 50vw"
-                        className="object-cover"
+                        sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                        className="object-cover transition-transform duration-500 group-hover:scale-[1.02]"
                       />
                     </div>
-                    <div className="flex flex-1 flex-col justify-center gap-4 px-8 py-10 md:px-12">
-                      <div
-                        className="text-[10px] font-mono uppercase tracking-[0.28em]"
-                        style={{ color: theme.accent }}
-                      >
-                        {item.card.eyebrow}
+                    <div className="flex flex-1 flex-col justify-between gap-3 px-4 py-4">
+                      <div>
+                        <div
+                          className="text-[9px] font-mono uppercase tracking-[0.28em]"
+                          style={{ color: theme.accent }}
+                        >
+                          {item.card.eyebrow}
+                        </div>
+                        <h3 className="mt-2 font-serif text-lg leading-tight tracking-tight text-charcoal">
+                          {item.card.headline}
+                        </h3>
+                        <p className="mt-2 text-xs leading-relaxed text-charcoal/70">
+                          {item.card.body}
+                        </p>
                       </div>
-                      <h3 className="font-serif text-2xl leading-tight tracking-tight text-charcoal md:text-3xl">
-                        {item.card.headline}
-                      </h3>
-                      <p className="max-w-md text-sm leading-relaxed text-charcoal/70">
-                        {item.card.body}
-                      </p>
+                      <div className="text-[9px] font-mono uppercase tracking-[0.2em] text-charcoal/40">
+                        From the editors
+                      </div>
                     </div>
                   </div>
                 )

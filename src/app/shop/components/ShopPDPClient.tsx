@@ -188,14 +188,11 @@ export function ShopPDPClient({
           {showVariantSelector && (
             <div className="mb-6">
               {sizeGuide && (
-                <div className="mb-3 flex items-center justify-between">
-                  <p className="text-[10px] font-mono uppercase tracking-[0.24em] text-charcoal/50">
-                    Size
-                  </p>
+                <div className="mb-2 flex justify-end">
                   <button
                     type="button"
                     onClick={() => setSizeChartOpen(true)}
-                    className="text-[11px] uppercase tracking-[0.18em] text-charcoal/70 underline underline-offset-4 hover:text-charcoal"
+                    className="text-[10px] font-mono uppercase tracking-[0.18em] text-charcoal/60 underline underline-offset-4 hover:text-charcoal"
                   >
                     Size &amp; fit
                   </button>
