@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import {
   getCollectionProducts,
   type ShopifyProduct,
 } from "@/lib/shopify";
 import { ShopSeasonalHeader } from "./components/ShopSeasonalHeader";
 import { ShopLanding } from "./components/ShopLanding";
-import { MullyWordmark } from "./components/MullyWordmark";
+import { ShopFooter } from "./components/ShopFooter";
 import { SHOP_CATEGORIES } from "./shopCollections";
 import { getSeasonalTheme } from "./seasonalTheme";
 
@@ -63,41 +62,7 @@ export default async function ShopPage() {
         />
       </main>
 
-      {/* Shop-branded footer, dissociated from the main site's forest green. */}
-      <footer className="border-t border-charcoal/10 bg-white">
-        <div className="mx-auto flex max-w-7xl flex-col gap-6 px-6 py-12 md:flex-row md:items-center md:justify-between md:px-12">
-          <MullyWordmark accent={theme.accent} className="text-3xl" />
-          <div className="flex flex-wrap items-center gap-8">
-            <Link
-              href="/policies/terms"
-              className="text-xs font-mono uppercase tracking-[0.2em] text-charcoal/50 transition-colors hover:text-charcoal"
-            >
-              Terms
-            </Link>
-            <Link
-              href="/policies/privacy"
-              className="text-xs font-mono uppercase tracking-[0.2em] text-charcoal/50 transition-colors hover:text-charcoal"
-            >
-              Privacy
-            </Link>
-            <Link
-              href="/faq"
-              className="text-xs font-mono uppercase tracking-[0.2em] text-charcoal/50 transition-colors hover:text-charcoal"
-            >
-              FAQ
-            </Link>
-            <Link
-              href="/"
-              className="text-xs font-mono uppercase tracking-[0.2em] text-charcoal/50 transition-colors hover:text-charcoal"
-            >
-              mymully.com
-            </Link>
-          </div>
-          <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-charcoal/40">
-            &copy; {new Date().getFullYear()} Mully Group, Inc.
-          </p>
-        </div>
-      </footer>
+      <ShopFooter accent={theme.accent} />
     </div>
   );
 }

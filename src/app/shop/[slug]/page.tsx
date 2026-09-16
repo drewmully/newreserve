@@ -8,20 +8,20 @@ import {
   PRIVATE_RELEASES_COLLECTION_HANDLE,
   PRO_SHOP_COLLECTION_HANDLE,
 } from "@/lib/shopify";
-import {
-  Accordion,
-  BackLink,
-} from "../components/ShopClient";
-import { ProductDetailClient } from "../components/ProductDetailClient";
-import { ShopHeader } from "../../components/ShopHeader";
+import { Accordion } from "../components/ShopClient";
+import { ShopPDPClient } from "../components/ShopPDPClient";
+import { ShopSeasonalHeader } from "../components/ShopSeasonalHeader";
+import { ScrollToTop } from "../components/ScrollToTop";
+import { ShopPasswordGate } from "../components/ShopPasswordGate";
+import { ShopFooter } from "../components/ShopFooter";
+import { getSeasonalTheme } from "../seasonalTheme";
 import { getVariantById, getVariantSelection } from "@/lib/productVariants";
 
-// Revalidate ISR every hour
 export const revalidate = 3600;
 
 interface Props {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ from?: string; variant?: string }>;
+  searchParams: Promise<{ variant?: string }>;
 }
 
 export async function generateStaticParams() {
@@ -54,7 +54,6 @@ export async function generateStaticParams() {
       slug: p.slug,
     }));
   } catch {
-    // Shopify unavailable at build time — pages generated on demand
     return [];
   }
 }
@@ -65,7 +64,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const product = await getProductByHandle(slug);
     if (!product) return {};
     return {
-      title: `${product.name} | ${product.brand} | Mully Reserve`,
+      title: `${product.name} | ${product.brand} | Mully Shop`,
       description: product.description,
     };
   } catch {
@@ -75,8 +74,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function ProductPage({ params, searchParams }: Props) {
   const { slug } = await params;
-  const { from, variant: requestedVariantId } = await searchParams;
-  const backHref = from === "dashboard" ? "/dashboard?tab=shop" : "/shop";
+  const { variant: requestedVariantId } = await searchParams;
+
   let product;
   try {
     product = await getProductByHandle(slug);
@@ -90,77 +89,56 @@ export default async function ProductPage({ params, searchParams }: Props) {
     ? getVariantById(product, requestedVariantId)
     : null;
   const initialSelection = getVariantSelection(preferredVariant);
+  const theme = getSeasonalTheme();
 
   const accordionItems = [
     { title: "Description", content: product.description },
     { title: "Material", content: product.material },
     { title: "About the Brand", content: product.aboutBrand },
-    { title: "Why We Like It", content: product.whyWeLikeIt },
     { title: "Sizing", content: product.sizing },
-  ].filter((item) => item.content); // hide empty accordion rows
+  ].filter((item) => item.content);
 
   return (
-    <div className="min-h-screen bg-bone">
-      {/* HEADER */}
-      <ShopHeader />
+    <div className="min-h-screen bg-white">
+      <ShopSeasonalHeader accent={theme.accent} />
+      <ScrollToTop />
+      <ShopPasswordGate accent={theme.accent} />
 
-      {/* PRODUCT DETAIL */}
-      <main className="shop-main pb-24 px-6 md:px-12">
-        <div className="max-w-6xl mx-auto">
-          <BackLink href={backHref}>Back to Shop</BackLink>
+      <main className="shop-main pb-24">
+        {/* Breadcrumb band */}
+        <section className="border-b border-charcoal/10">
+          <div className="mx-auto max-w-7xl px-6 py-6 md:px-12">
+            <div className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.2em] text-charcoal/50">
+              <Link href="/shop" className="transition-colors hover:text-charcoal">
+                Shop
+              </Link>
+              <span>/</span>
+              <span className="text-charcoal/70">{product.brand}</span>
+            </div>
+          </div>
+        </section>
 
-          <ProductDetailClient
-            product={product}
-            initialSelection={initialSelection}
-            detailsFooter={<Accordion items={accordionItems} />}
-          />
-        </div>
+        {/* Product detail */}
+        <section className="px-6 py-12 md:px-12 md:py-16">
+          <div className="mx-auto max-w-7xl">
+            <ShopPDPClient
+              product={product}
+              initialSelection={initialSelection}
+              accent={theme.accent}
+            />
+
+            {accordionItems.length > 0 && (
+              <div className="mt-16 border-t border-charcoal/10 pt-10">
+                <div className="mx-auto max-w-3xl">
+                  <Accordion items={accordionItems} />
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
       </main>
 
-      {/* FOOTER */}
-      <footer className="py-10 px-6 md:px-12 bg-forest">
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <span className="flex items-center gap-2 text-bone">
-            <svg
-              viewBox="0 0 1002 540"
-              fill="currentColor"
-              className="h-4 w-auto"
-              aria-hidden="true"
-            >
-              <path
-                d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z"
-                fillRule="evenodd"
-              />
-            </svg>
-            <span className="font-serif text-xl font-bold tracking-wide">
-              mully.
-            </span>
-          </span>
-          <div className="flex items-center gap-8">
-            <Link
-              href="/policies/terms"
-              className="text-sm text-bone/50 hover:text-bone transition-colors duration-300"
-            >
-              Terms
-            </Link>
-            <Link
-              href="/policies/privacy"
-              className="text-sm text-bone/50 hover:text-bone transition-colors duration-300"
-            >
-              Privacy
-            </Link>
-            <Link
-              href="/faq"
-              className="text-sm text-bone/50 hover:text-bone transition-colors duration-300"
-            >
-              FAQ
-            </Link>
-          </div>
-          <p className="text-xs text-bone/30">
-            &copy; {new Date().getFullYear()} Mully Group, Inc.
-          </p>
-        </div>
-      </footer>
+      <ShopFooter accent={theme.accent} />
     </div>
   );
 }

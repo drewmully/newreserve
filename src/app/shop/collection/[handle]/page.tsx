@@ -6,6 +6,7 @@ import { ShopSeasonalHeader } from "../../components/ShopSeasonalHeader";
 import { ShopProductCard } from "../../components/ShopProductCard";
 import { ScrollToTop } from "../../components/ScrollToTop";
 import { ShopPasswordGate } from "../../components/ShopPasswordGate";
+import { ShopFooter } from "../../components/ShopFooter";
 import { SHOP_CATEGORIES, SHOP_CATEGORY_HANDLES } from "../../shopCollections";
 import { getSeasonalTheme } from "../../seasonalTheme";
 
@@ -53,22 +54,29 @@ export default async function ShopCollectionPage({ params }: Props) {
       <ShopPasswordGate accent={theme.accent} />
 
       <main className="shop-main pb-24">
+        {/* Breadcrumb band */}
+        <section className="border-b border-charcoal/10">
+          <div className="mx-auto max-w-7xl px-6 py-6 md:px-12">
+            <div className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.2em] text-charcoal/50">
+              <Link href="/shop" className="transition-colors hover:text-charcoal">
+                Shop
+              </Link>
+              <span>/</span>
+              <span className="text-charcoal/70">{cat.label}</span>
+            </div>
+          </div>
+        </section>
+
         {/* Header band */}
-        <section className="border-b border-charcoal/10 bg-cream">
-          <div className="mx-auto max-w-7xl px-6 py-12 md:px-12 md:py-16">
-            <Link
-              href="/shop"
-              className="text-[11px] font-mono uppercase tracking-[0.2em] text-charcoal/50 transition-colors hover:text-charcoal"
-            >
-              ← Shop
-            </Link>
+        <section className="border-b border-charcoal/10">
+          <div className="mx-auto max-w-7xl px-6 py-14 md:px-12 md:py-20">
             <div
-              className="mt-4 text-[10px] font-mono uppercase tracking-[0.2em]"
+              className="text-[10px] font-mono uppercase tracking-[0.28em]"
               style={{ color: theme.accent }}
             >
               {cat.eyebrow}
             </div>
-            <h1 className="mt-2 font-serif text-4xl tracking-tight text-charcoal sm:text-6xl">
+            <h1 className="mt-3 font-serif text-4xl tracking-tight text-charcoal sm:text-6xl">
               {cat.label}
             </h1>
             <p className="mt-4 max-w-xl text-sm text-charcoal/70">
@@ -95,6 +103,8 @@ export default async function ShopCollectionPage({ params }: Props) {
           )}
         </section>
       </main>
+
+      <ShopFooter accent={theme.accent} />
     </div>
   );
 }
