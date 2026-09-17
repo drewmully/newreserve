@@ -14,13 +14,18 @@ import {
   getProductVariants,
   type ProductVariantSelection,
 } from "@/lib/productVariants";
-import { ProductVariantSelector } from "../../components/ProductVariantSelector";
 import { orderProductImagesBySelection } from "@/lib/shopDisplay";
 import { ProductImageGallery } from "./ShopClient";
 import { ShopProductCard } from "./ShopProductCard";
 import { getSizeGuide } from "@/lib/sizeCharts";
 import { SizeFitChart } from "./SizeFitChart";
-import { NotifyMeInline } from "./NotifyMeInline";
+import { BreadcrumbTrail } from "./pdp/BreadcrumbTrail";
+import { ProofChip } from "./pdp/ProofChip";
+import { PromoPill } from "./pdp/PromoPill";
+import { PdpVariantGrid } from "./pdp/PdpVariantGrid";
+import { BuyBoxAction } from "./pdp/BuyBoxAction";
+import { PdpAccordion } from "./pdp/PdpAccordion";
+import { WaysToWear } from "./pdp/WaysToWear";
 
 interface ShopPDPClientProps {
   product: ShopifyProduct;
@@ -30,14 +35,26 @@ interface ShopPDPClientProps {
 }
 
 /**
- * Huckberry-style PDP anatomy:
- *  - Left: gallery
- *  - Right: brand chip → title + price → editorial subhead → variant chips
- *      → Add to cart → trust badges → delivery estimate
- *  - Below: big editorial section with H2 headline + long body
- *  - Detail image grid (if 2+ images)
- *  - Accordion: Sizing, Materials & Care, About the Brand
- *  - Related-brand and related-collection carousels (if provided)
+ * Huckberry-anatomy PDP.
+ *
+ * Layout, top → bottom:
+ *   1. Breadcrumb funnel (Shop / Category / Subcategory)
+ *   2. Two-column grid:
+ *        LEFT  → gallery
+ *        RIGHT → buy box:
+ *                brand · title + price
+ *                rating chip + optional bestseller badge
+ *                Buy 2 Save 15% promo pill
+ *                editorial hook
+ *                color swatches (always shown, even 1 color)
+ *                fit tile grid + size chip grid + inseam chip grid (all visible
+ *                even when a variant is OOS)
+ *                Add-to-cart OR Pre-order button with tiny notify-me chip
+ *                trust strip
+ *   3. Editorial deep-copy band + detail image collage
+ *   4. Structured accordion (Features · Fit & Sizing · Materials · About brand)
+ *   5. Ways to Wear It (outfit cards → new-tab product drawer)
+ *   6. More from Brand + You may also like rails
  */
 export function ShopPDPClient({
   product,
@@ -50,7 +67,6 @@ export function ShopPDPClient({
     getInitialVariantSelection(product, initialSelection)
   );
   const [added, setAdded] = useState(false);
-  const [openAccordion, setOpenAccordion] = useState<string | null>("sizing");
   const [sizeChartOpen, setSizeChartOpen] = useState(false);
 
   const selectedVariant = useMemo(
@@ -83,18 +99,13 @@ export function ShopPDPClient({
 
   const sizeGuide = getSizeGuide(product.slug);
   const productHasVariantChoices = hasVariantChoices(product);
-  // Show size chips when the product genuinely has choices, OR when we know
-  // the product should have sizes (curated size guide present) so shoppers
-  // still see the fit story even before variants are wired.
-  const showVariantSelector = productHasVariantChoices || Boolean(sizeGuide);
   const allVariantsSoldOut =
     getProductVariants(product).every((v) => v.availableForSale === false);
   const currentVariantUnavailable = displayVariant?.availableForSale === false;
-  const sizeSelected = sizeGuide
-    ? selection[
-        Object.keys(selection).find((k) => /^size$/i.test(k)) ?? "Size"
-      ]
-    : undefined;
+  const unavailable = allVariantsSoldOut || currentVariantUnavailable;
+  const sizeKey = Object.keys(selection).find((k) => /^size$/i.test(k));
+  const sizeSelected = sizeKey ? selection[sizeKey] : undefined;
+
   const sameBrandProducts = relatedProducts
     .filter((p) => p.brand === product.brand && p.slug !== product.slug)
     .slice(0, 8);
@@ -113,7 +124,7 @@ export function ShopPDPClient({
         name: product.name,
         brand: product.brand,
         collection: product.collection,
-        source: "shop_pdp_v3",
+        source: "shop_pdp_v4",
         price: product.price,
         reserve_price: product.reservePrice,
       },
@@ -135,8 +146,12 @@ export function ShopPDPClient({
     setTimeout(() => setAdded(false), 2000);
   };
 
-  const toggleAccordion = (id: string) =>
-    setOpenAccordion(openAccordion === id ? null : id);
+  // Merge current product into the catalog used by Ways to Wear so its own
+  // handle resolves for the drawer preview.
+  const outfitsCatalog = useMemo(
+    () => [product, ...relatedProducts.filter((p) => p.slug !== product.slug)],
+    [product, relatedProducts]
+  );
 
   return (
     <div className="mx-auto max-w-7xl">
@@ -147,6 +162,16 @@ export function ShopPDPClient({
           onClose={() => setSizeChartOpen(false)}
         />
       )}
+
+      {/* Breadcrumb */}
+      <div className="mb-6">
+        <BreadcrumbTrail
+          productType={product.collection}
+          subcategory={product.subcategory}
+          brand={product.brand}
+        />
+      </div>
+
       {/* Top: gallery + buy box */}
       <div className="grid gap-10 md:grid-cols-2 md:gap-14 lg:gap-20">
         <div>
@@ -158,23 +183,34 @@ export function ShopPDPClient({
         </div>
 
         <div className="flex flex-col">
-          <span className="mb-4 inline-flex w-fit border border-charcoal/15 bg-white px-2.5 py-1 text-[10px] font-mono uppercase tracking-[0.24em] text-charcoal/70">
+          <span className="mb-3 inline-flex w-fit text-[11px] font-mono uppercase tracking-[0.24em] text-charcoal/60">
             {product.brand}
           </span>
 
-          <h1 className="font-serif text-3xl leading-tight tracking-tight text-charcoal md:text-4xl">
-            {product.name}
-          </h1>
-
-          <div className="mt-4 flex items-baseline gap-3">
-            {showStrikethrough && (
-              <span className="text-sm text-charcoal/40 line-through">
-                ${retailPrice!.toFixed(2)}
+          <div className="flex items-baseline justify-between gap-4">
+            <h1 className="font-serif text-3xl leading-tight tracking-tight text-charcoal md:text-4xl">
+              {product.name}
+            </h1>
+            <div className="flex items-baseline gap-2 whitespace-nowrap">
+              {showStrikethrough && (
+                <span className="text-sm text-charcoal/40 line-through">
+                  ${retailPrice!.toFixed(0)}
+                </span>
+              )}
+              <span className="font-serif text-2xl text-charcoal">
+                ${price.toFixed(0)}
               </span>
-            )}
-            <span className="font-serif text-2xl text-charcoal">
-              ${price.toFixed(2)}
-            </span>
+            </div>
+          </div>
+
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+            <ProofChip
+              rating={product.rating}
+              reviewCount={product.reviewCount}
+              reviewsUrl={product.reviewsUrl}
+              badge={product.badge}
+            />
+            <PromoPill />
           </div>
 
           {editorialHeadline && (
@@ -185,73 +221,87 @@ export function ShopPDPClient({
 
           <div className="my-8 border-t border-dashed border-charcoal/15" />
 
-          {showVariantSelector && (
-            <div className="mb-6">
-              {sizeGuide && (
-                <div className="mb-2 flex justify-end">
+          {/* Variant grid — always show, even if OOS or single color. */}
+          <div className="mb-6">
+            {sizeGuide && (
+              <div className="mb-2 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setSizeChartOpen(true)}
+                  className="text-[10px] font-mono uppercase tracking-[0.18em] text-charcoal/60 underline underline-offset-4 hover:text-charcoal"
+                >
+                  Size &amp; fit
+                </button>
+              </div>
+            )}
+            {productHasVariantChoices ? (
+              <PdpVariantGrid
+                product={product}
+                selection={selection}
+                onChange={(name, value) =>
+                  setSelection((current) => ({ ...current, [name]: value }))
+                }
+                singleColorFallback="Standard"
+              />
+            ) : sizeGuide ? (
+              // Fallback: product should carry sizes but variants aren't wired.
+              <div className="space-y-6">
+                <div>
+                  <p className="mb-3 text-[10px] font-mono uppercase tracking-[0.22em] text-charcoal/50">
+                    Color
+                  </p>
                   <button
                     type="button"
-                    onClick={() => setSizeChartOpen(true)}
-                    className="text-[10px] font-mono uppercase tracking-[0.18em] text-charcoal/60 underline underline-offset-4 hover:text-charcoal"
-                  >
-                    Size &amp; fit
-                  </button>
+                    disabled
+                    aria-label="Standard color"
+                    className="h-10 w-10 rounded-full border border-charcoal/15 opacity-70"
+                    style={{ backgroundColor: "#c4c4c4" }}
+                  />
                 </div>
-              )}
-              {productHasVariantChoices ? (
-                <ProductVariantSelector
-                  product={product}
-                  selection={selection}
-                  onChange={(optionName, optionValue) =>
-                    setSelection((current) => ({
-                      ...current,
-                      [optionName]: optionValue,
-                    }))
-                  }
+                <div>
+                  <p className="mb-3 text-[10px] font-mono uppercase tracking-[0.22em] text-charcoal/50">
+                    Size
+                  </p>
+                  <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6">
+                    {sizeGuide.chart.rows.map((row) => (
+                      <span
+                        key={row.size}
+                        className="flex h-11 cursor-not-allowed items-center justify-center rounded-sm border border-charcoal/10 bg-cream text-[13px] text-charcoal/30"
+                      >
+                        {row.size}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              // No sizes and no variant choices — still show a single color swatch.
+              <div>
+                <p className="mb-3 text-[10px] font-mono uppercase tracking-[0.22em] text-charcoal/50">
+                  Color
+                </p>
+                <button
+                  type="button"
+                  disabled
+                  aria-label="Standard color"
+                  className="h-10 w-10 rounded-full border border-charcoal/15 opacity-70"
+                  style={{ backgroundColor: "#c4c4c4" }}
                 />
-              ) : (
-                // Fallback greyed chips when we know the product should carry
-                // sizes but Shopify hasn't been set up yet. Non-interactive.
-                <div className="flex flex-wrap gap-2">
-                  {sizeGuide!.chart.rows.map((row) => (
-                    <span
-                      key={row.size}
-                      className="cursor-not-allowed rounded-full border border-charcoal/10 bg-cream px-3 py-2 text-xs font-medium text-charcoal/30"
-                    >
-                      {row.size}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+              </div>
+            )}
+          </div>
 
-          {allVariantsSoldOut ? (
-            <NotifyMeInline
-              productSlug={product.slug}
-              productName={product.name}
-              variantId={displayVariant?.id}
-              selectedSize={sizeSelected}
-              accent={accent}
-            />
-          ) : (
-            <button
-              onClick={handleAdd}
-              disabled={currentVariantUnavailable}
-              className="flex w-full items-center justify-center py-4 text-[11px] font-mono uppercase tracking-[0.28em] text-white transition-opacity duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-              style={{
-                backgroundColor: currentVariantUnavailable
-                  ? "#8a8a8a"
-                  : accent,
-              }}
-            >
-              {currentVariantUnavailable
-                ? "Sold out"
-                : added
-                  ? "Added to cart"
-                  : "Add to cart"}
-            </button>
-          )}
+          <BuyBoxAction
+            onAddToCart={handleAdd}
+            added={added}
+            isUnavailable={unavailable}
+            preOrderEtaWeeks={product.preOrderEtaWeeks}
+            accent={accent}
+            productSlug={product.slug}
+            productName={product.name}
+            variantId={displayVariant?.id}
+            selectedSize={sizeSelected}
+          />
 
           {/* Trust strip */}
           <div className="mt-6 grid grid-cols-3 gap-0 border border-charcoal/10 bg-cream/50 text-center">
@@ -273,6 +323,13 @@ export function ShopPDPClient({
               </div>
             ))}
           </div>
+
+          {/* Accordion sits right below the buy box on the right column. */}
+          <PdpAccordion
+            product={product}
+            sizeGuide={sizeGuide}
+            onOpenSizeChart={() => setSizeChartOpen(true)}
+          />
         </div>
       </div>
 
@@ -327,42 +384,8 @@ export function ShopPDPClient({
         </section>
       )}
 
-      {/* Accordion */}
-      <section className="mt-20 border-t border-charcoal/10">
-        {[
-          { id: "sizing", label: "Sizing & Fit", body: product.sizing },
-          {
-            id: "materials",
-            label: "Materials & Care",
-            body: product.material,
-          },
-          { id: "brand", label: `About ${product.brand}`, body: product.aboutBrand },
-        ]
-          .filter((row) => row.body && row.body.trim().length > 0)
-          .map((row) => (
-            <div key={row.id} className="border-b border-charcoal/10">
-              <button
-                onClick={() => toggleAccordion(row.id)}
-                className="flex w-full items-center justify-between py-6 text-left transition-colors hover:bg-cream/40"
-              >
-                <span className="font-serif text-lg tracking-tight text-charcoal md:text-xl">
-                  {row.label}
-                </span>
-                <span
-                  className="text-2xl text-charcoal/40"
-                  aria-hidden="true"
-                >
-                  {openAccordion === row.id ? "−" : "+"}
-                </span>
-              </button>
-              {openAccordion === row.id && (
-                <div className="pb-6 pr-8 text-[15px] leading-relaxed text-charcoal/70">
-                  {row.body}
-                </div>
-              )}
-            </div>
-          ))}
-      </section>
+      {/* Ways to Wear It */}
+      <WaysToWear currentProduct={product} catalog={outfitsCatalog} />
 
       {/* Related products */}
       {sameBrandProducts.length > 0 && (

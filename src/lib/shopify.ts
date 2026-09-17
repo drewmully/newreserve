@@ -105,6 +105,31 @@ export interface ShopifyProduct {
   editorialHeadline?: string;
   /** Multi-paragraph editorial deep copy (custom.editorial_body). */
   editorialBody?: string;
+  /** Bullet list of product features (one per line). custom.features */
+  features?: string;
+  /** Bullet list of fit-and-sizing notes (one per line). custom.fit_notes */
+  fitNotes?: string;
+  /** Bullet list of material and care notes (one per line). custom.materials_bullets */
+  materialsBullets?: string;
+  /** Numeric average rating, e.g. 4.5. custom.rating */
+  rating?: number;
+  /** Total review count, e.g. 1103. custom.review_count */
+  reviewCount?: number;
+  /** Outbound URL to full reviews on the brand's site. custom.reviews_url */
+  reviewsUrl?: string;
+  /** Pre-order ship estimate in weeks when the product is sold out. custom.pre_order_eta_weeks */
+  preOrderEtaWeeks?: number;
+  /** PDP breadcrumb subcategory label (e.g. "5 Pocket Pants"). custom.subcategory */
+  subcategory?: string;
+  /**
+   * JSON string with the Ways to Wear outfits for this product.
+   * Shape: [{ "name": "Saturday round", "handles": ["other-product-slug", ...] }]
+   * The current product itself is added as "This Item" at render time.
+   * custom.outfits
+   */
+  outfitsJson?: string;
+  /** Optional short badge shown after the product name (e.g. "Bestseller"). custom.badge */
+  badge?: string;
   options: ShopifyProductOption[];
   variants: ShopifyProductVariant[];
   /** First variant GID — required for cart mutations. Undefined if Shopify returned no variants. */
@@ -219,6 +244,16 @@ interface RawProduct {
   sizingMeta: { value: string } | null;
   editorialHeadlineMeta: { value: string } | null;
   editorialBodyMeta: { value: string } | null;
+  featuresMeta: { value: string } | null;
+  fitNotesMeta: { value: string } | null;
+  materialsBulletsMeta: { value: string } | null;
+  ratingMeta: { value: string } | null;
+  reviewCountMeta: { value: string } | null;
+  reviewsUrlMeta: { value: string } | null;
+  preOrderEtaWeeksMeta: { value: string } | null;
+  subcategoryMeta: { value: string } | null;
+  outfitsMeta: { value: string } | null;
+  badgeMeta: { value: string } | null;
 }
 
 interface RawCartLine {
@@ -288,6 +323,16 @@ function mapProduct(raw: RawProduct): ShopifyProduct {
     sizing: raw.sizingMeta?.value ?? "",
     editorialHeadline: raw.editorialHeadlineMeta?.value ?? "",
     editorialBody: raw.editorialBodyMeta?.value ?? "",
+    features: raw.featuresMeta?.value ?? "",
+    fitNotes: raw.fitNotesMeta?.value ?? "",
+    materialsBullets: raw.materialsBulletsMeta?.value ?? "",
+    rating: raw.ratingMeta?.value ? Number(raw.ratingMeta.value) : undefined,
+    reviewCount: raw.reviewCountMeta?.value ? Number(raw.reviewCountMeta.value) : undefined,
+    reviewsUrl: raw.reviewsUrlMeta?.value ?? "",
+    preOrderEtaWeeks: raw.preOrderEtaWeeksMeta?.value ? Number(raw.preOrderEtaWeeksMeta.value) : undefined,
+    subcategory: raw.subcategoryMeta?.value ?? "",
+    outfitsJson: raw.outfitsMeta?.value ?? "",
+    badge: raw.badgeMeta?.value ?? "",
     options: raw.options.map((option) => ({
       name: option.name,
       values: option.values,
@@ -363,6 +408,16 @@ const PRODUCT_FIELDS = `
   sizingMeta: metafield(namespace: "custom", key: "sizing") { value }
   editorialHeadlineMeta: metafield(namespace: "custom", key: "editorial_headline") { value }
   editorialBodyMeta: metafield(namespace: "custom", key: "editorial_body") { value }
+  featuresMeta: metafield(namespace: "custom", key: "features") { value }
+  fitNotesMeta: metafield(namespace: "custom", key: "fit_notes") { value }
+  materialsBulletsMeta: metafield(namespace: "custom", key: "materials_bullets") { value }
+  ratingMeta: metafield(namespace: "custom", key: "rating") { value }
+  reviewCountMeta: metafield(namespace: "custom", key: "review_count") { value }
+  reviewsUrlMeta: metafield(namespace: "custom", key: "reviews_url") { value }
+  preOrderEtaWeeksMeta: metafield(namespace: "custom", key: "pre_order_eta_weeks") { value }
+  subcategoryMeta: metafield(namespace: "custom", key: "subcategory") { value }
+  outfitsMeta: metafield(namespace: "custom", key: "outfits") { value }
+  badgeMeta: metafield(namespace: "custom", key: "badge") { value }
 `;
 
 const CART_LINE_FIELDS = `
