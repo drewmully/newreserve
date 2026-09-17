@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
   getCollectionProducts,
@@ -122,21 +121,8 @@ export default async function ProductPage({ params, searchParams }: Props) {
       <ShopPasswordGate accent={theme.accent} />
 
       <main className="shop-main pb-24">
-        {/* Breadcrumb band */}
-        <section className="border-b border-charcoal/10">
-          <div className="mx-auto max-w-7xl px-6 py-6 md:px-12">
-            <div className="flex items-center gap-2 text-[11px] font-mono uppercase tracking-[0.2em] text-charcoal/50">
-              <Link href="/shop" className="transition-colors hover:text-charcoal">
-                Shop
-              </Link>
-              <span>/</span>
-              <span className="text-charcoal/70">{product.brand}</span>
-            </div>
-          </div>
-        </section>
-
-        {/* Product detail */}
-        <section className="px-6 py-12 md:px-12 md:py-16">
+        {/* Product detail (breadcrumb is rendered inside ShopPDPClient) */}
+        <section className="px-6 py-8 md:px-12 md:py-12">
           <div className="mx-auto max-w-7xl">
             <ShopPDPClient
               product={product}
