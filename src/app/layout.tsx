@@ -192,6 +192,29 @@ export default async function RootLayout({
           aria-hidden="true"
           style={{ display: "none" }}
         />
+        {/*
+          Alhena AI (formerly Gleen) — customer support chat widget on
+          every page. Config must run before the SDK loads because the
+          SDK reads document.gleenConfig on init. Both use
+          strategy="afterInteractive" so they load after hydration and
+          don't block first paint.
+
+          Replaced Intercom on 2026-09-17. If you need to change the
+          company or region, update document.gleenConfig here and the
+          change ships on the next deploy.
+        */}
+        <Script
+          id="alhena-config"
+          strategy="afterInteractive"
+          dangerouslySetInnerHTML={{
+            __html: `document.gleenConfig = { company: "mullygroup-inc-", apiBaseUrl: "https://app.alhena.ai" };`,
+          }}
+        />
+        <Script
+          id="alhena-sdk"
+          strategy="afterInteractive"
+          src="https://app.alhena.ai/sdk/gleenWidget.js"
+        />
         <Providers>{children}</Providers>
         <AnalyticsTracker />
         <Suspense fallback={null}>

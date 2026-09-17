@@ -18,11 +18,6 @@ const EmailLinkHandler = dynamic(
   { ssr: false }
 );
 
-const IntercomWidget = dynamic(
-  () => import("../components/IntercomWidget").then((mod) => mod.IntercomWidget),
-  { ssr: false }
-);
-
 const MEMBERSHIP_EXEMPT_PREFIXES = [
   "/",
   "/faq",
@@ -30,8 +25,8 @@ const MEMBERSHIP_EXEMPT_PREFIXES = [
   "/mulligan",
   "/policies",
   "/reservecard",
-  // Standalone pitch / preview pages that don't need Firebase auth,
-  // Intercom, or the Back9 welcome overlay.
+  // Standalone pitch / preview pages that don't need Firebase auth
+  // or the Back9 welcome overlay.
   "/swingbox",
 ];
 
@@ -54,7 +49,6 @@ export function Providers({ children }: { children: ReactNode }) {
       </Suspense>
       {shouldWrapWithMembership ? (
         <MembershipProvider>
-          <IntercomWidget />
           <Back9WelcomeOverlay />
           {children}
         </MembershipProvider>
