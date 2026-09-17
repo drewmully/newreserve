@@ -165,7 +165,7 @@ export function ShopLanding({ products, productsByCategory, theme }: Props) {
                 The {theme.season} Edit · {new Date().getFullYear()}
               </div>
               <h2 className="mt-2 font-serif text-3xl tracking-tight text-charcoal sm:text-5xl">
-                Twenty-seven pieces. Zero filler.
+                Nothing we wouldn't wear.
               </h2>
               <p className="mt-4 max-w-xl text-sm text-charcoal/70">
                 A season built for the 6 a.m. tee time, the range at lunch,

@@ -60,7 +60,7 @@ export interface SeasonalTheme {
 const FALL_THEME: SeasonalTheme = {
   season: "fall",
   eyebrow: "Fall 2026 · The Layering Edit",
-  headline: ["Dress the round.", "Wear it home."],
+  headline: ["The layering edit.", "For a great fall season."],
   heroImage: "/shop/hero-fall-2026.jpg",
   // Burgundy pulled slightly warmer than the source guide (source #6E1E2B → #8A2432).
   accent: "#8A2432",
