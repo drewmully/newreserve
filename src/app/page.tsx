@@ -1,36 +1,35 @@
 /**
- * Homepage — server-side redirect fallback.
+ * Homepage — canonical Mully landing page.
  *
- * The primary redirect (and query-param forwarding) happens in
- * `src/middleware.ts`, which routes ALL `/` traffic to /lp/consult and
- * sets the sticky `mr_ab` cookie for the consult A/B bucket.
+ * 2026-09-18: consolidated to a single winning surface. Previously `/`
+ * redirected to /lp/consult, where a mr_ab cookie split traffic 50/50 between
+ * modal_quiz and inline_quiz arms. Data over 30 days showed inline_quiz won
+ * top-of-funnel decisively (session→CTA click 1.70% vs 0.97% for modal_quiz
+ * and 1.17% for /lp/discover). Winner is now `/` for everyone; /lp/consult,
+ * /lp/discover, /lp/subscription 301 to `/` in middleware. Modal-quiz arm
+ * and the mr_ab bucket cookie are retired.
  *
- * This server component is a defensive fallback for the case where
- * middleware is bypassed (e.g. maintenance rewrites, config regressions).
- * It mirrors the middleware routing so behaviour is consistent even when
- * middleware doesn't run.
+ * The reveal step (/lp/reserve/reveal/{profileId}) has been rebuilt as a
+ * tier picker (Discovery $50 first / Signature $125 first / Reserve $250)
+ * so the final click carries the discount lever that made /lp/discover win
+ * on reveal→CTA click rate (41.4%).
  */
 
-import { redirect } from "next/navigation";
+import type { Metadata } from "next";
+import ConsultQuizFirstClient from "./lp/consult/ConsultQuizFirstClient";
 
-const HOMEPAGE_DESTINATION = "/lp/consult";
+export const metadata: Metadata = {
+  title: "Mully — Personalized golf apparel, curated by hand",
+  description:
+    "Take the 60-second style quiz and see your quarterly picks before you commit. $250 / quarter, cancel after your first, 96% renewal.",
+  openGraph: {
+    title: "Mully — Personalized golf apparel, curated by hand",
+    description:
+      "Take the 60-second style quiz and see your quarterly picks before you commit. $250 / quarter, cancel after your first, 96% renewal.",
+    images: ["/founders/martine-hero.webp"],
+  },
+};
 
-export default async function Home({
-  searchParams,
-}: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
-  const sp = await searchParams;
-  const usp = new URLSearchParams();
-  for (const [k, v] of Object.entries(sp)) {
-    if (v == null) continue;
-    if (Array.isArray(v)) {
-      for (const item of v) if (item != null) usp.append(k, item);
-    } else {
-      usp.append(k, v);
-    }
-  }
-
-  const qs = usp.toString();
-  redirect(qs ? `${HOMEPAGE_DESTINATION}?${qs}` : HOMEPAGE_DESTINATION);
+export default function Home() {
+  return <ConsultQuizFirstClient />;
 }

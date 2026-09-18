@@ -20,10 +20,12 @@ export function RevealPageView({
   bucket: StyleBucket;
   /**
    * Optional reveal variant tag included in the analytics event so we can
-   * segment reveal_viewed by v1 (legacy) vs v2 (Brick). Currently v2 ships
-   * to 100% of traffic.
+   * segment reveal_viewed by generation:
+   *   v1 — legacy edit-grid page
+   *   v2 — pick-ticket Brick
+   *   v3_tier_picker — current: three-tier selection surface (2026-09-18)
    */
-  variant?: "v1" | "v2";
+  variant?: "v1" | "v2" | "v3_tier_picker";
 }) {
   useEffect(() => {
     trackEvent(

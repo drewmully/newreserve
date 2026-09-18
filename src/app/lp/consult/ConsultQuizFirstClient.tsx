@@ -74,7 +74,7 @@ export default function ConsultQuizFirstClient() {
             </h1>
             <p className="text-sm sm:text-base text-charcoal/65 mt-3 max-w-md mx-auto leading-relaxed">
               Six questions, 60 seconds. See your quarterly picks before you
-              commit — no phone number required.
+              commit. No phone number required.
             </p>
           </div>
 

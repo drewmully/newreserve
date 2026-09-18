@@ -10,6 +10,15 @@
  *   browser. We pass only the profileId + styleBucket + line-item-property
  *   payload from the server so the CTA can stamp them onto the cart for
  *   later attribution + fulfillment.
+ *
+ * Tier picker (2026-09-18):
+ *   The reveal page is now a 3-tier picker. The visitor's selected tier is
+ *   passed to this button as a prop rather than read from localStorage. The
+ *   old /lp/discover localStorage bridge (mully_discover_tier) is removed
+ *   because /lp/discover is retired and the tier decision now happens on
+ *   the reveal page itself. The Shopify discount codes and cart attributes
+ *   remain unchanged, so the orders-paid webhook and downstream fulfillment
+ *   still work exactly as they did before.
  */
 
 import { useCallback, useState } from "react";
@@ -18,57 +27,38 @@ import { trackEvent } from "@/lib/tracking";
 import type { StyleBucket } from "@/lib/styleProfiles/types";
 
 /**
- * Storage bridge used by /lp/discover. When a visitor picks a tier on that
- * page we stash the choice under this key so the reveal CTA (this file) can
- * apply the matching Shopify discount code + cart attribute + FIRST-BOX
- * line-item property when it starts checkout. Cleared once consumed so a
- * later organic visit to /lp/reserve/reveal doesn't accidentally reapply.
+ * Canonical tier taxonomy for the reveal page.
  *
- * The tier -> discount-code -> display-name map is inlined here (rather
- * than imported from DiscoverLPClient) so this reveal path stays a
- * self-contained page and doesn't force a bundle from the discover LP.
+ * The tier ids match the storage/event taxonomy used since 2026-06 on the
+ * previous /lp/discover tier picker. Discovery and Signature carry Shopify
+ * discount codes that reduce the first quarter's price; Reserve is the full
+ * quarterly rate. Every tier renews at $250 / quarter after the first.
  */
-const DISCOVER_TIER_STORAGE_KEY = "mully_discover_tier";
-const DISCOVER_TIER_MAP: Record<
-  string,
-  { code: string; label: string; firstBoxPrice: string }
+export type ReserveTier = "discovery" | "signature" | "reserve";
+
+export const TIER_META: Record<
+  ReserveTier,
+  { code: string; label: string; firstBoxPrice: string; renewalCopy: string }
 > = {
   discovery: {
     code: "MULLY_DISCOVER",
     label: "Discovery",
     firstBoxPrice: "$50",
+    renewalCopy: "then $250 / quarter",
   },
   signature: {
     code: "MULLY_SIGNATURE",
     label: "Signature Preview",
     firstBoxPrice: "$125",
+    renewalCopy: "then $250 / quarter",
   },
   reserve: {
     code: "", // full-price tier, no code applied
     label: "Reserve Collection",
     firstBoxPrice: "$250",
+    renewalCopy: "$250 / quarter",
   },
 };
-
-function readAndConsumeDiscoverTier():
-  | { tier: string; code: string; label: string; firstBoxPrice: string }
-  | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(DISCOVER_TIER_STORAGE_KEY);
-    if (!raw) return null;
-    const meta = DISCOVER_TIER_MAP[raw];
-    if (!meta) {
-      window.localStorage.removeItem(DISCOVER_TIER_STORAGE_KEY);
-      return null;
-    }
-    // Do NOT consume here — checkout may be retried after an error. The
-    // orders-paid webhook is the authoritative consumer via note-attr.
-    return { tier: raw, ...meta };
-  } catch {
-    return null;
-  }
-}
 
 export interface QuizLineItemPropsInput {
   styleBucket: StyleBucket | null;
@@ -84,37 +74,27 @@ export interface QuizLineItemPropsInput {
 export function ReserveCheckoutCTA({
   profileId,
   styleBucket,
+  tier,
   quizLineItemProps,
 }: {
   profileId: string;
   styleBucket: StyleBucket;
+  /**
+   * Reserve tier chosen on the reveal page. Determines the discount code +
+   * cart attribute stamped on checkout. Required — no localStorage fallback.
+   */
+  tier: ReserveTier;
   /** Quiz answers to stamp onto the Reserve subscription line as Shopify
    *  line item properties. Visible in admin + order webhook. */
   quizLineItemProps: QuizLineItemPropsInput;
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const tierMeta = TIER_META[tier];
 
   const onClick = useCallback(async () => {
     setError(null);
     setLoading(true);
-
-    // Read the mr_ab bucket cookie so we can stamp the /lp/consult A/B
-    // arm the visitor started on onto both the PostHog reveal_cta_clicked
-    // event and the Shopify checkout attributes. This is what lets us tie
-    // final Purchase back to modal_quiz vs inline_quiz for CVR analysis.
-    // Cookie-based (not prop-based) because the reveal page can be reached
-    // from either arm without a variant hint in the URL.
-    const mrAb = (() => {
-      if (typeof document === "undefined") return null;
-      const match = document.cookie.match(/(?:^|;\s*)mr_ab=(\d+)/);
-      if (!match) return null;
-      const n = Number(match[1]);
-      if (!Number.isFinite(n)) return null;
-      return n;
-    })();
-    const abVariant: "modal_quiz" | "inline_quiz" | null =
-      mrAb === null ? null : mrAb >= 50 ? "inline_quiz" : "modal_quiz";
 
     trackEvent(
       "reveal_cta_clicked",
@@ -122,10 +102,8 @@ export function ReserveCheckoutCTA({
         properties: {
           profileId,
           styleBucket,
-          tier: "member",
+          tier, // discovery | signature | reserve
           source: "lp_reveal",
-          ab_variant: abVariant,
-          mr_ab_bucket: mrAb,
         },
       },
       { includeAuth: false }
@@ -168,46 +146,26 @@ export function ReserveCheckoutCTA({
         value: quizLineItemProps.playFrequency,
       });
     }
-
-    // /lp/discover bridge. If the visitor picked a tier on /lp/discover
-    // before starting the quiz, apply the matching discount code, stamp a
-    // discover_tier cart attribute for the orders-paid webhook, override
-    // the lp_source for attribution, and add a VISIBLE First Box Edition
-    // line-item property so the ShipHero packing slip and Shopify admin
-    // line item show the picker which edit to pack.
-    const discover = readAndConsumeDiscoverTier();
-    if (discover) {
-      lineProps.push({
-        key: "First Box Edition",
-        value: discover.label,
-      });
-    }
+    // Visible first-box edition line-item property — surfaces on ShipHero
+    // packing slips and Shopify admin so fulfillment knows which edit to pack.
+    lineProps.push({
+      key: "First Box Edition",
+      value: tierMeta.label,
+    });
 
     try {
       await createMembershipCheckout("member", {
         returnPath: "/auth/callback",
-        discountCodes: discover && discover.code ? [discover.code] : undefined,
+        discountCodes: tierMeta.code ? [tierMeta.code] : undefined,
         attributes: [
-          {
-            key: "lp_source",
-            value: discover ? "lp_discover" : "lp_reveal",
-          },
+          { key: "lp_source", value: "lp_reveal" },
           { key: "quiz_profile_id", value: profileId },
           { key: "style_bucket", value: styleBucket },
-          // Discover tier is the signal the orders-paid webhook reads to
-          // apply the discover-tier-<tier> order tag on the first order.
-          ...(discover
-            ? [{ key: "discover_tier", value: discover.tier }]
-            : []),
-          // A/B stamps flow into Shopify order attributes so the
-          // orders-paid webhook can pass them through to PostHog
-          // purchase events, closing the funnel loop by arm.
-          ...(abVariant
-            ? [{ key: "ab_variant", value: abVariant }]
-            : []),
-          ...(mrAb !== null
-            ? [{ key: "mr_ab_bucket", value: String(mrAb) }]
-            : []),
+          // Tier chosen on the reveal picker; the orders-paid webhook reads
+          // this to apply a discover-tier-<tier> order tag on the first order
+          // (kept as `discover_tier` for backward compatibility with the
+          // existing webhook + downstream reporting).
+          { key: "discover_tier", value: tier },
         ],
         subscriptionLineAttributes: lineProps,
       });
@@ -219,7 +177,7 @@ export function ReserveCheckoutCTA({
       );
       setLoading(false);
     }
-  }, [profileId, styleBucket, quizLineItemProps]);
+  }, [profileId, styleBucket, tier, tierMeta, quizLineItemProps]);
 
   return (
     <div>
@@ -229,7 +187,9 @@ export function ReserveCheckoutCTA({
         disabled={loading}
         className="w-full rounded-md bg-ember py-4 text-base font-medium tracking-wide text-bone transition hover:bg-ember/90 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {loading ? "Opening checkout…" : "Start your Reserve — $250 / quarter"}
+        {loading
+          ? "Opening checkout…"
+          : `Start Reserve · ${tierMeta.firstBoxPrice} first quarter`}
       </button>
       {error && (
         <p className="mt-3 text-center text-sm text-red-700" role="alert">

@@ -1,50 +1,24 @@
 /**
- * /lp/discover
+ * /lp/discover — DEPRECATED route (2026-09-18).
  *
- * Three-tier acquisition LP for Mully Reserve. Every tier is the FIRST BOX
- * of the same Reserve membership; the subscription cycles at the full
- * quarterly rate on subsequent orders regardless of which tier a member
- * chooses today.
+ * Middleware 301s this path to `/`. Kept as a defensive fallback in case
+ * middleware is bypassed. Renders the winning inline-quiz LP directly.
  *
- * Tiers (first-box price only):
- *   1. Discovery         — introductory first box
- *   2. Signature Preview — enhanced first box
- *   3. Reserve Collection — full first box (no code applied)
- *
- * Discount plumbing (see DiscoverLPClient):
- *   - Discovery selects MULLY_DISCOVER   (Shopify code, product-scoped,
- *                                         one-per-customer, first-order only)
- *   - Signature Preview selects MULLY_SIGNATURE (same rules)
- *   - Reserve Collection uses no code
- *
- * Cart-level tagging:
- *   - `discover_tier` cart attribute carries "discovery" | "signature" |
- *     "reserve" into checkout → becomes an order note-attribute →
- *     orders-paid webhook stamps `discover-tier-<tier>` on the FIRST
- *     order only (Loop renewals cannot inherit the cart attribute).
- *
- * Copy constraints (locked, verified in review):
- *   - No em-dashes anywhere.
- *   - The words "cheap", "discount", "deal", "save", and any percent-off
- *     framing must not appear on the page.
- *   - Voice: confident, direct, club-like. Never a coupon.
+ * The tier-picker mechanic that made /lp/discover win reveal→CTA click
+ * rate has been relocated to the reveal page for ALL traffic, so no
+ * discover-specific pre-quiz tier UI is served anymore. DiscoverLPClient
+ * is dead code and safe to delete.
  */
 
 import type { Metadata } from "next";
-import DiscoverLPClient from "./DiscoverLPClient";
+import ConsultQuizFirstClient from "../consult/ConsultQuizFirstClient";
 
 export const metadata: Metadata = {
-  title: "Mully Reserve · Discover Your First Box",
+  title: "Mully — Personalized golf apparel, curated by hand",
   description:
-    "Three ways in. One membership. Pick the first box that fits how you golf; each renews as the full quarterly Reserve edit.",
-  openGraph: {
-    title: "Mully Reserve · Discover Your First Box",
-    description:
-      "Choose your entry into Reserve. Quarterly curation of premium golf apparel, hand-picked by our editors.",
-    images: ["/reserve-flatlay-hero.webp"],
-  },
+    "Take the 60-second style quiz and see your quarterly picks before you commit. $250 / quarter, cancel after your first, 96% renewal.",
 };
 
-export default function DiscoverLPPage() {
-  return <DiscoverLPClient />;
+export default function DiscoverPage() {
+  return <ConsultQuizFirstClient />;
 }
