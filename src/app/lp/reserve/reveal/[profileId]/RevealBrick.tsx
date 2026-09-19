@@ -1,21 +1,24 @@
 "use client";
 
 /**
- * Reveal Page — Tier Picker (2026-09-18 rewrite).
+ * Reveal Page — Tier Picker (2026-09-18 rewrite, 2026-09-18 image update).
  *
- * Design shift: the reveal step is now the last conversion moment. Previous
- * versions (pick-ticket, edit grid) validated the quiz answers but did not
- * give the visitor an active choice. On 30 days of PostHog data, /lp/discover
- * beat every other entry on reveal→CTA click (41.4% vs 24.5% for the inline
- * quiz) because it made the visitor choose a price tier before checkout,
- * which self-selects intent and applies a discount on the smaller tiers.
+ * The reveal step is the last conversion moment. Three tiers:
  *
- * This surface relocates that mechanic to the shared reveal page, so every
- * completed quiz flows through it. Three tiers:
+ *   Discovery ($50 first, then $250/quarter, 2 to 4 pieces, ~$60 retail)
+ *   Signature ($125 first, then $250/quarter, 3 to 5 pieces, ~$160 retail)
+ *   Reserve   ($250 first, then $250/quarter, 4 to 6 pieces, ~$310 retail)
  *
- *   Discovery ($50 first, then $250/quarter)
- *   Signature ($125 first, then $250/quarter)
- *   Reserve   ($250/quarter, full)
+ * Each card renders a small square thumbnail of that tier's real Box-Preview
+ * photograph (assets shared with the retired /lp/discover surface). Tapping
+ * the thumbnail opens a lightbox with a large image and a clear close button
+ * so a visitor can inspect the shipment before selecting a tier.
+ *
+ * The trust-chip row below the CTA reflects the currently selected tier. On
+ * initial load, before the visitor has actively tapped a tier card, the chips
+ * default to Reserve's numbers (4 to 6 pieces / $310 in retail) so the
+ * aspirational spec is the baseline. A card tap syncs the chips to that tier
+ * for the remainder of the session.
  *
  * Copy rules (must hold across the file):
  *   - No em or double dashes anywhere. Use commas, periods, parentheses.
@@ -25,7 +28,8 @@
  *   - Limit text. Chip icons + short lines. No AI filler.
  */
 
-import { useState } from "react";
+import Image from "next/image";
+import { useCallback, useEffect, useState } from "react";
 import type { StyleBucket } from "@/lib/styleProfiles/types";
 import {
   ReserveCheckoutCTA,
@@ -60,7 +64,40 @@ const TIER_ORDER: ReserveTier[] = ["discovery", "signature", "reserve"];
 const TIER_BLURB: Record<ReserveTier, string> = {
   discovery: "A shorter first shipment. Try the format before you go all in.",
   signature: "Half the first quarter, curated the same way. Most-picked.",
-  reserve: "The full quarterly edit from day one. Four to six pieces.",
+  reserve: "The full quarterly edit from day one.",
+};
+
+// Piece counts + retail per tier. Retail = +25% of first-quarter price,
+// rounded to the nearest $10. Discovery: $50 -> $60. Signature: $125 -> $160.
+// Reserve: $250 -> $310.
+const TIER_SPECS: Record<ReserveTier, { pieces: string; retail: string }> = {
+  discovery: { pieces: "2 to 4 pieces", retail: "$60 in retail" },
+  signature: { pieces: "3 to 5 pieces", retail: "$160 in retail" },
+  reserve: { pieces: "4 to 6 pieces", retail: "$310 in retail" },
+};
+
+// Preview photography per tier. These are the same production photos we shot
+// for /lp/discover; the reveal tier picker inherits them so every visitor
+// coming through the quiz sees a real edit before committing.
+const TIER_IMAGES: Record<
+  ReserveTier,
+  { thumb: string; full: string; alt: string }
+> = {
+  discovery: {
+    thumb: "/lp/discover/Box-Preview-Discovery-5.jpg",
+    full: "/lp/discover/Box-Preview-Discovery-5.jpg",
+    alt: "A Discovery first shipment: two to four Mully pieces laid out on natural linen.",
+  },
+  signature: {
+    thumb: "/lp/discover/Box-Preview-Signature-4.jpg",
+    full: "/lp/discover/Box-Preview-Signature-4.jpg",
+    alt: "A Signature Preview shipment: three to five Mully pieces laid out on natural linen.",
+  },
+  reserve: {
+    thumb: "/lp/discover/Box-Preview-Reserve-6.jpg",
+    full: "/lp/discover/Box-Preview-Reserve-6.jpg",
+    alt: "A full Reserve Collection quarter: four to six Mully pieces laid out on natural linen.",
+  },
 };
 
 // Which tier gets the visual center weight + default selection.
@@ -71,6 +108,11 @@ const DEFAULT_TIER: ReserveTier = "signature";
 // Small label on the visually-central tier.
 const RECOMMENDED_TIER: ReserveTier = "signature";
 
+// The chips row defaults to Reserve numbers on first paint (before any tier
+// card is tapped), so the visitor sees the aspirational quarter spec first
+// even though Signature is pre-selected in the picker.
+const DEFAULT_CHIPS_TIER: ReserveTier = "reserve";
+
 export function RevealBrick({
   profileId,
   bucket,
@@ -78,6 +120,25 @@ export function RevealBrick({
   alreadyConverted,
 }: RevealBrickProps) {
   const [selectedTier, setSelectedTier] = useState<ReserveTier>(DEFAULT_TIER);
+
+  // Chips display a separate tier state so we can keep Reserve's numbers up
+  // by default and switch to the visitor's own pick only after they tap.
+  const [chipsTouched, setChipsTouched] = useState(false);
+  const chipsTier: ReserveTier = chipsTouched ? selectedTier : DEFAULT_CHIPS_TIER;
+  const chipsSpec = TIER_SPECS[chipsTier];
+
+  const [lightboxTier, setLightboxTier] = useState<ReserveTier | null>(null);
+  const closeLightbox = useCallback(() => setLightboxTier(null), []);
+
+  // Escape closes the lightbox.
+  useEffect(() => {
+    if (!lightboxTier) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") closeLightbox();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [lightboxTier, closeLightbox]);
 
   if (alreadyConverted) {
     return <BrickConvertedState />;
@@ -109,7 +170,11 @@ export function RevealBrick({
               key={tier}
               tier={tier}
               selected={selectedTier === tier}
-              onSelect={() => setSelectedTier(tier)}
+              onSelect={() => {
+                setSelectedTier(tier);
+                setChipsTouched(true);
+              }}
+              onOpenImage={() => setLightboxTier(tier)}
               recommended={tier === RECOMMENDED_TIER}
             />
           ))}
@@ -128,10 +193,11 @@ export function RevealBrick({
           </p>
         </div>
 
-        {/* Trust points, brief */}
+        {/* Trust points. First two chips reflect the current tier (piece
+            count + retail value); the last two are static across tiers. */}
         <ul className="mt-6 grid grid-cols-2 gap-2.5 sm:gap-3">
-          <Chip icon={<IconBox />} text="4 to 6 pieces" />
-          <Chip icon={<IconGift />} text="$300+ in retail" />
+          <Chip icon={<IconBox />} text={chipsSpec.pieces} />
+          <Chip icon={<IconGift />} text={chipsSpec.retail} />
           <Chip icon={<IconTruck />} text="Ships in 2 days" />
           <Chip icon={<IconStar />} text="96% renewal" />
         </ul>
@@ -140,6 +206,13 @@ export function RevealBrick({
           Built by golfers in Detroit
         </p>
       </section>
+
+      {lightboxTier && (
+        <ImageLightbox
+          tier={lightboxTier}
+          onClose={closeLightbox}
+        />
+      )}
     </main>
   );
 }
@@ -152,15 +225,18 @@ function TierCard({
   tier,
   selected,
   onSelect,
+  onOpenImage,
   recommended,
 }: {
   tier: ReserveTier;
   selected: boolean;
   onSelect: () => void;
+  onOpenImage: () => void;
   recommended: boolean;
 }) {
   const meta = TIER_META[tier];
   const blurb = TIER_BLURB[tier];
+  const image = TIER_IMAGES[tier];
 
   return (
     <label
@@ -198,6 +274,54 @@ function TierCard({
           ].join(" ")}
         />
 
+        {/* Product thumbnail. Nested <button> is invalid inside <label>, so
+            we use a keyboard-accessible span with role=button and stop the
+            click so the surrounding label doesn't also toggle the radio. */}
+        <span
+          role="button"
+          tabIndex={0}
+          aria-label={`View a larger preview of the ${meta.label} shipment`}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onOpenImage();
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              e.stopPropagation();
+              onOpenImage();
+            }
+          }}
+          className="group relative block h-16 w-16 flex-shrink-0 overflow-hidden rounded-md border border-forest/15 bg-bone-dark/20 sm:h-20 sm:w-20"
+        >
+          <Image
+            src={image.thumb}
+            alt={image.alt}
+            fill
+            sizes="80px"
+            className="object-cover transition group-hover:scale-[1.02]"
+          />
+          {/* Tiny expand cue on the corner. Not a label, just a visual hint. */}
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute bottom-1 right-1 flex h-4 w-4 items-center justify-center rounded-sm bg-charcoal/70 text-bone"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2.4}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              width="10"
+              height="10"
+            >
+              <path d="M5 5h5M5 5v5M19 19h-5M19 19v-5" />
+            </svg>
+          </span>
+        </span>
+
         {/* Label + blurb */}
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between gap-3">
@@ -220,6 +344,72 @@ function TierCard({
         </div>
       </div>
     </label>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Image lightbox                                                            */
+/* -------------------------------------------------------------------------- */
+
+function ImageLightbox({
+  tier,
+  onClose,
+}: {
+  tier: ReserveTier;
+  onClose: () => void;
+}) {
+  const image = TIER_IMAGES[tier];
+  const meta = TIER_META[tier];
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={`${meta.label} shipment preview`}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-charcoal/85 px-4 py-6 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      {/* Close button. Sits on the backdrop so it works even when the image
+          box is tapped through by a passthrough. */}
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Close preview"
+        className="absolute right-4 top-4 z-10 flex h-11 w-11 items-center justify-center rounded-full border border-bone/30 bg-charcoal/70 text-bone shadow-lg transition hover:bg-charcoal focus:outline-none focus:ring-2 focus:ring-bone/80 sm:right-6 sm:top-6"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2.2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          width="22"
+          height="22"
+        >
+          <path d="M6 6l12 12M18 6l-12 12" />
+        </svg>
+      </button>
+
+      <div
+        className="relative w-full max-w-3xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="relative aspect-[4/5] w-full overflow-hidden rounded-lg bg-charcoal sm:aspect-[3/2]">
+          <Image
+            src={image.full}
+            alt={image.alt}
+            fill
+            sizes="(max-width: 768px) 100vw, 768px"
+            className="object-contain"
+            priority
+          />
+        </div>
+        <p className="mt-3 text-center text-xs uppercase tracking-[0.22em] text-bone/80">
+          {meta.label} · {TIER_SPECS[tier].pieces} · {TIER_SPECS[tier].retail}
+        </p>
+      </div>
+    </div>
   );
 }
 
