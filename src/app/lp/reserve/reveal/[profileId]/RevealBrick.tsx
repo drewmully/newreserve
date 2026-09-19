@@ -71,9 +71,9 @@ const TIER_BLURB: Record<ReserveTier, string> = {
 // rounded to the nearest $10. Discovery: $50 -> $60. Signature: $125 -> $160.
 // Reserve: $250 -> $310.
 const TIER_SPECS: Record<ReserveTier, { pieces: string; retail: string }> = {
-  discovery: { pieces: "2 to 4 pieces", retail: "$60 in retail" },
-  signature: { pieces: "3 to 5 pieces", retail: "$160 in retail" },
-  reserve: { pieces: "4 to 6 pieces", retail: "$310 in retail" },
+  discovery: { pieces: "2 to 4 pieces", retail: "$60+ in retail" },
+  signature: { pieces: "3 to 5 pieces", retail: "$160+ in retail" },
+  reserve: { pieces: "4 to 6 pieces", retail: "$310+ in retail" },
 };
 
 // Preview photography per tier. These are the same production photos we shot
@@ -108,11 +108,6 @@ const DEFAULT_TIER: ReserveTier = "signature";
 // Small label on the visually-central tier.
 const RECOMMENDED_TIER: ReserveTier = "signature";
 
-// The chips row defaults to Reserve numbers on first paint (before any tier
-// card is tapped), so the visitor sees the aspirational quarter spec first
-// even though Signature is pre-selected in the picker.
-const DEFAULT_CHIPS_TIER: ReserveTier = "reserve";
-
 export function RevealBrick({
   profileId,
   bucket,
@@ -121,11 +116,10 @@ export function RevealBrick({
 }: RevealBrickProps) {
   const [selectedTier, setSelectedTier] = useState<ReserveTier>(DEFAULT_TIER);
 
-  // Chips display a separate tier state so we can keep Reserve's numbers up
-  // by default and switch to the visitor's own pick only after they tap.
-  const [chipsTouched, setChipsTouched] = useState(false);
-  const chipsTier: ReserveTier = chipsTouched ? selectedTier : DEFAULT_CHIPS_TIER;
-  const chipsSpec = TIER_SPECS[chipsTier];
+  // Chips always mirror the currently selected tier so the numbers next to
+  // the CTA match the tier the visitor is about to check out with. On first
+  // paint that is DEFAULT_TIER (Signature).
+  const chipsSpec = TIER_SPECS[selectedTier];
 
   const [lightboxTier, setLightboxTier] = useState<ReserveTier | null>(null);
   const closeLightbox = useCallback(() => setLightboxTier(null), []);
@@ -170,10 +164,7 @@ export function RevealBrick({
               key={tier}
               tier={tier}
               selected={selectedTier === tier}
-              onSelect={() => {
-                setSelectedTier(tier);
-                setChipsTouched(true);
-              }}
+              onSelect={() => setSelectedTier(tier)}
               onOpenImage={() => setLightboxTier(tier)}
               recommended={tier === RECOMMENDED_TIER}
             />
@@ -391,20 +382,23 @@ function ImageLightbox({
         </svg>
       </button>
 
+      {/* The image sizes to its own intrinsic aspect ratio (currently 1:1
+          for all three tier photos). The wrapper caps the width and height
+          so the image plus its caption always fit inside the viewport with
+          padding for the close button. */}
       <div
-        className="relative w-full max-w-3xl"
+        className="flex max-h-[calc(100vh-6rem)] max-w-[min(90vw,42rem)] flex-col items-center"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="relative aspect-[4/5] w-full overflow-hidden rounded-lg bg-charcoal sm:aspect-[3/2]">
-          <Image
-            src={image.full}
-            alt={image.alt}
-            fill
-            sizes="(max-width: 768px) 100vw, 768px"
-            className="object-contain"
-            priority
-          />
-        </div>
+        <Image
+          src={image.full}
+          alt={image.alt}
+          width={1080}
+          height={1080}
+          sizes="(max-width: 768px) 90vw, 42rem"
+          className="h-auto max-h-[calc(100vh-9rem)] w-auto max-w-full rounded-lg"
+          priority
+        />
         <p className="mt-3 text-center text-xs uppercase tracking-[0.22em] text-bone/80">
           {meta.label} · {TIER_SPECS[tier].pieces} · {TIER_SPECS[tier].retail}
         </p>
