@@ -23,10 +23,73 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { shopifyGraphQL } from "@/app/api/_lib/shopifyAdmin";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
+
+/**
+ * Mint a short-lived Admin API access token via the client_credentials grant
+ * against the mully-subscriptions-api app (which has the read_shopify_payments
+ * scope). The token is valid for 24h; we mint fresh on every invocation since
+ * the report only runs weekly.
+ */
+async function mintPaymentsAccessToken(): Promise<string> {
+  const domain = process.env.SHOPIFY_STORE_DOMAIN;
+  const clientId = process.env.SHOPIFY_PAYMENTS_CLIENT_ID;
+  const clientSecret = process.env.SHOPIFY_PAYMENTS_CLIENT_SECRET;
+  if (!domain || !clientId || !clientSecret) {
+    throw new Error(
+      "Missing SHOPIFY_STORE_DOMAIN / SHOPIFY_PAYMENTS_CLIENT_ID / SHOPIFY_PAYMENTS_CLIENT_SECRET."
+    );
+  }
+  const res = await fetch(`https://${domain}/admin/oauth/access_token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      client_id: clientId,
+      client_secret: clientSecret,
+      grant_type: "client_credentials",
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Token mint failed ${res.status}: ${body}`);
+  }
+  const data: { access_token: string; scope?: string; expires_in?: number } =
+    await res.json();
+  return data.access_token;
+}
+
+async function paymentsGraphQL<T>(
+  token: string,
+  query: string,
+  variables?: Record<string, unknown>
+): Promise<T> {
+  const domain = process.env.SHOPIFY_STORE_DOMAIN;
+  const version = process.env.SHOPIFY_ADMIN_API_VERSION ?? "2024-10";
+  if (!domain) throw new Error("Missing SHOPIFY_STORE_DOMAIN");
+  const res = await fetch(
+    `https://${domain}/admin/api/${version}/graphql.json`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Access-Token": token,
+      },
+      body: JSON.stringify({ query, variables }),
+    }
+  );
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`Shopify HTTP ${res.status}: ${text}`);
+  }
+  const json: { data?: T; errors?: unknown } = JSON.parse(text);
+  if (json.errors) {
+    throw new Error(`Shopify GraphQL errors: ${JSON.stringify(json.errors)}`);
+  }
+  if (!json.data) throw new Error("Shopify returned no data");
+  return json.data;
+}
 
 function isAuthorized(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
@@ -66,7 +129,10 @@ interface OrdersCountResp {
   ordersCount: { count: number };
 }
 
-async function fetchAllDisputes(startISO: string): Promise<DisputeNode[]> {
+async function fetchAllDisputes(
+  token: string,
+  startISO: string
+): Promise<DisputeNode[]> {
   const q = `
     query Disputes($cursor: String) {
       shopifyPaymentsAccount {
@@ -97,7 +163,9 @@ async function fetchAllDisputes(startISO: string): Promise<DisputeNode[]> {
   let cursor: string | null = null;
   const startMs = Date.parse(startISO);
   while (true) {
-    const data: DisputesResp = await shopifyGraphQL<DisputesResp>(q, { cursor });
+    const data: DisputesResp = await paymentsGraphQL<DisputesResp>(token, q, {
+      cursor,
+    });
     const acct = data.shopifyPaymentsAccount;
     if (!acct) break;
     for (const e of acct.disputes.edges) {
@@ -113,14 +181,22 @@ async function fetchAllDisputes(startISO: string): Promise<DisputeNode[]> {
   return results.filter((d) => Date.parse(d.initiatedAt) >= startMs);
 }
 
-async function fetchOrderCount(startISO: string, endISO: string): Promise<number> {
+async function fetchOrderCount(
+  token: string,
+  startISO: string,
+  endISO: string
+): Promise<number> {
   const q = `
     query OrdersCount($query: String!) {
       ordersCount(query: $query, limit: 10000) { count }
     }
   `;
   const query = `created_at:>=${startISO} created_at:<=${endISO}`;
-  const data: OrdersCountResp = await shopifyGraphQL<OrdersCountResp>(q, { query });
+  const data: OrdersCountResp = await paymentsGraphQL<OrdersCountResp>(
+    token,
+    q,
+    { query }
+  );
   return data.ordersCount?.count ?? 0;
 }
 
@@ -137,9 +213,10 @@ export async function GET(req: NextRequest) {
   const start = new Date(now.getTime() - days * 24 * 60 * 60 * 1000).toISOString();
 
   try {
+    const token = await mintPaymentsAccessToken();
     const [disputes, orderCount] = await Promise.all([
-      fetchAllDisputes(start),
-      fetchOrderCount(start, end),
+      fetchAllDisputes(token, start),
+      fetchOrderCount(token, start, end),
     ]);
 
     const shaped = disputes.map((d) => ({
