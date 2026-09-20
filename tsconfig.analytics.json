@@ -6,7 +6,8 @@
   "include": [
     "src/lib/analytics/**/*.ts",
     "src/lib/analytics/**/*.json",
-    "tests/api/analyticsContracts.test.ts"
+    "tests/api/analyticsContracts.test.ts",
+    "tests/api/analyticsLean*.test.ts"
   ],
   "exclude": ["node_modules"]
 }
