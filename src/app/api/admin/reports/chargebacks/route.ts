@@ -97,7 +97,7 @@ async function fetchAllDisputes(startISO: string): Promise<DisputeNode[]> {
   let cursor: string | null = null;
   const startMs = Date.parse(startISO);
   while (true) {
-    const data = await shopifyGraphQL<DisputesResp>(q, { cursor });
+    const data: DisputesResp = await shopifyGraphQL<DisputesResp>(q, { cursor });
     const acct = data.shopifyPaymentsAccount;
     if (!acct) break;
     for (const e of acct.disputes.edges) {
@@ -120,7 +120,7 @@ async function fetchOrderCount(startISO: string, endISO: string): Promise<number
     }
   `;
   const query = `created_at:>=${startISO} created_at:<=${endISO}`;
-  const data = await shopifyGraphQL<OrdersCountResp>(q, { query });
+  const data: OrdersCountResp = await shopifyGraphQL<OrdersCountResp>(q, { query });
   return data.ordersCount?.count ?? 0;
 }
 
