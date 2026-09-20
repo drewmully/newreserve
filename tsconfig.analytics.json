@@ -6,6 +6,7 @@
   "include": [
     "src/lib/analytics/**/*.ts",
     "src/lib/analytics/**/*.json",
+    "src/app/api/analytics/ingest/**/*.ts",
     "tests/api/analyticsContracts.test.ts",
     "tests/api/analyticsLean*.test.ts"
   ],
