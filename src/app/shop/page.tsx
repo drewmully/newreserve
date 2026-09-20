@@ -54,7 +54,7 @@ export default async function ShopPage() {
   return (
     <div className="min-h-screen bg-white">
       <ShopSeasonalHeader accent={theme.accent} />
-      <main className="shop-main pb-0">
+      <main className="shop-main shop-main--hero pb-0">
         <ShopLanding
           products={merged}
           productsByCategory={productsByCategory}
