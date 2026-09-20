@@ -53,6 +53,11 @@ jobs:
           node-version: "20.20.1"
           cache: npm
       - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify generated schema files match their checked-in contracts
+        run: |
+          node scripts/analytics/generate-staging.mjs
+          node scripts/analytics/generate-reporting-sql.mjs
+          git diff --exit-code -- sql/analytics/001_staging.sql sql/analytics/014_reporting_views.sql
       - run: npm test -- --project api tests/api/analyticsContracts.test.ts tests/api/analyticsLean
       - run: npx tsc --project tsconfig.analytics.json
       - run: npx eslint src/lib/analytics src/app/api/analytics/ingest src/app/api/_lib/supabaseService.ts tests/api/analyticsContracts.test.ts tests/api/analyticsLean*.test.ts scripts/analytics/*.mjs
