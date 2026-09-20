@@ -1,0 +1,1650 @@
+{
+  "contractVersion": "lean-v1-draft.1",
+  "scope": "logical-shape-only; not a production migration or metric certification",
+  "source": {
+    "url": "https://docs.google.com/spreadsheets/d/1irN9OS5z6nJOU46jeAFnwv4h6oFJC5m-gkSGzrxFREA/edit",
+    "workbookDate": "2026-09-13",
+    "capturedDate": "2026-09-19",
+    "fieldApprovalStatus": "preserved from workbook; unresolved choices require review"
+  },
+  "tables": [
+    {
+      "name": "customers",
+      "grain": "One canonical customer per selected publication.",
+      "primaryKey": [
+        "customer_id",
+        "publication_id"
+      ],
+      "fields": [
+        {
+          "name": "customer_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "primary key",
+          "definition": "Canonical non-PII surrogate customer key; unique within a publication.",
+          "source": "Lean identity_map → customers contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "publication_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "version",
+          "definition": "Selected immutable semantic publication vintage; all related facts and views use the same vintage.",
+          "source": "External atomic publication control",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "identity_status",
+          "logicalType": "ENUM",
+          "nullable": false,
+          "role": "quality",
+          "definition": "resolved, unresolved, conflicting or removed; only resolved, permitted identity can support new-customer metrics.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "analytics_permitted",
+          "logicalType": "BOOLEAN",
+          "nullable": false,
+          "role": "quality",
+          "definition": "Current approved analytics permission after consent and removal policy.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "history_complete",
+          "logicalType": "BOOLEAN",
+          "nullable": false,
+          "role": "quality",
+          "definition": "True only when independently required eligible order history, identity migrations and backfills are certified complete, not merely all arrived rows.",
+          "source": "External history/coverage controls plus identity reconciliation",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "first_eligible_order_id",
+          "logicalType": "STRING",
+          "nullable": true,
+          "role": "foreign key",
+          "definition": "Exactly one earliest eligible paid Shopify order across complete canonical customer history, chosen by paid_at then stable order_id tie-break. Null until history and identity are ready.",
+          "source": "orders at selected publication",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "first_eligible_order_at",
+          "logicalType": "TIMESTAMP_UTC",
+          "nullable": true,
+          "role": "time",
+          "definition": "paid_at of first_eligible_order_id; never profile creation or first tracked event.",
+          "source": "orders.paid_at",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "acquisition_date",
+          "logicalType": "DATE",
+          "nullable": true,
+          "role": "time",
+          "definition": "America/New_York date of first_eligible_order_at, defining the customer acquisition cohort.",
+          "source": "Customer-level first eligible order",
+          "status": "Proposed field-level elaboration; approval required"
+        }
+      ],
+      "semanticRules": [
+        "Canonical IDs must not be raw email, address or phone; do not export personal profiles.",
+        "New-customer classification is withheld when complete first-order history cannot be proven.",
+        "An eligible renewal does not create a second new customer; unresolved historical migrations block first-order certification.",
+        "Removal/merge corrections require a new publication and consistent downstream rebuilding."
+      ],
+      "publicationGates": [
+        "Unique customer_id within publication; first order belongs to this customer in the same publication.",
+        "Earliest-order reconciliation includes historical source systems, canceled/test eligibility policy and migrations.",
+        "Restricted access and deletion propagation pass before release."
+      ],
+      "openDecisions": [
+        "Approve canonical merge/erasure policy and full-history start/legacy-system evidence.",
+        "Approve earliest-paid-order eligibility and deterministic simultaneous-order tie-break."
+      ]
+    },
+    {
+      "name": "identity_map",
+      "grain": "One namespaced identifier validity interval and mapping version per publication.",
+      "primaryKey": [
+        "source_namespace",
+        "source_identifier",
+        "valid_from",
+        "mapping_version",
+        "publication_id"
+      ],
+      "fields": [
+        {
+          "name": "source_namespace",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "key",
+          "definition": "Source system + tenant/project/shop + identifier type; Firebase UID and Shopify customer ID are not the same namespace.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "source_identifier",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "key",
+          "definition": "Original source identifier in its declared namespace; restricted where necessary.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "customer_id",
+          "logicalType": "STRING",
+          "nullable": true,
+          "role": "foreign key",
+          "definition": "Single canonical customer only when deterministically resolved and permitted; null for unresolved/conflicting records.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "valid_from",
+          "logicalType": "TIMESTAMP_UTC",
+          "nullable": false,
+          "role": "key/time",
+          "definition": "Inclusive business-valid start of mapping interval.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "valid_to",
+          "logicalType": "TIMESTAMP_UTC",
+          "nullable": true,
+          "role": "time",
+          "definition": "Exclusive business-valid end; null means open-ended, not necessarily approved.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "evidence_type",
+          "logicalType": "ENUM",
+          "nullable": false,
+          "role": "provenance",
+          "definition": "Approved deterministic evidence class; no IP/device similarity or temporal proximity.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "evidence_ref",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "provenance",
+          "definition": "Safe reference to restricted evidence; not the secret or personal payload.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "mapping_version",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "key/version",
+          "definition": "Approved identity-rule version.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "resolution_status",
+          "logicalType": "ENUM",
+          "nullable": false,
+          "role": "quality",
+          "definition": "resolved, pending, conflicting, rejected or removed.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "consent_status",
+          "logicalType": "ENUM",
+          "nullable": false,
+          "role": "quality",
+          "definition": "permitted, denied or unknown under approved analytics policy.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "removal_status",
+          "logicalType": "ENUM",
+          "nullable": false,
+          "role": "quality",
+          "definition": "active, removal_pending or removed; disabled is not synonymous with erased.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "publication_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "version",
+          "definition": "Selected immutable semantic publication vintage; all related facts and views use the same vintage.",
+          "source": "External atomic publication control",
+          "status": "Proposed field-level elaboration; approval required"
+        }
+      ],
+      "semanticRules": [
+        "Choose one mapping version/publication, valid at the relevant action/order time, before joining.",
+        "Only resolved + permitted + active mapping rows can supply customer_id; ambiguity produces null and diagnostics.",
+        "Do not join every customer identifier back to events or sessions."
+      ],
+      "publicationGates": [
+        "No overlapping eligible intervals with competing targets for the same identifier.",
+        "Resolved permitted targets exist in customers in the same publication.",
+        "Evidence and removal decisions remain auditable in restricted operational controls."
+      ],
+      "openDecisions": [
+        "Approve permitted evidence classes, validity-time treatment, retention and removal propagation."
+      ]
+    },
+    {
+      "name": "orders",
+      "grain": "One canonical shop-qualified Shopify order per publication.",
+      "primaryKey": [
+        "order_id",
+        "publication_id"
+      ],
+      "fields": [
+        {
+          "name": "order_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "primary key",
+          "definition": "Shop-qualified canonical order key.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "source_order_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "provenance",
+          "definition": "Original Shopify order ID.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "shop_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "scope",
+          "definition": "Shop namespace; lean reporting scope selects one approved shop.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "customer_id",
+          "logicalType": "STRING",
+          "nullable": true,
+          "role": "foreign key",
+          "definition": "Deterministically resolved canonical customer, or null without evidence.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "checkout_id",
+          "logicalType": "STRING",
+          "nullable": true,
+          "role": "business key",
+          "definition": "Shop-qualified checkout key observed and validated from Shopify.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "created_at",
+          "logicalType": "TIMESTAMP_UTC",
+          "nullable": false,
+          "role": "time",
+          "definition": "Source order creation time; not automatically the purchase/conversion clock.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "paid_at",
+          "logicalType": "TIMESTAMP_UTC",
+          "nullable": true,
+          "role": "time",
+          "definition": "Approved first successful paid/eligible conversion timestamp; null when no qualifying payment state is established.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "commerce_source",
+          "logicalType": "ENUM",
+          "nullable": false,
+          "role": "dimension",
+          "definition": "Approved source/order class such as storefront, subscription_renewal or other; not marketing channel.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "eligibility_status",
+          "logicalType": "ENUM",
+          "nullable": false,
+          "role": "quality",
+          "definition": "eligible, excluded_test, excluded_cancelled, pending or other explicitly approved reason.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "checkout_session_key",
+          "logicalType": "STRING",
+          "nullable": true,
+          "role": "foreign key",
+          "definition": "At most one independently verified session where checkout occurred; null is retained.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "checkout_link_status",
+          "logicalType": "ENUM",
+          "nullable": false,
+          "role": "quality",
+          "definition": "matched, pending, missing, conflicting or not_applicable.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "checkout_link_method",
+          "logicalType": "ENUM",
+          "nullable": false,
+          "role": "provenance",
+          "definition": "corroborated_checkout_id, verified_first_party_context, none or unresolved; no proximity inference.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "evidence_ref",
+          "logicalType": "STRING",
+          "nullable": true,
+          "role": "provenance",
+          "definition": "Safe reference to verified checkout linkage evidence.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "link_version",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "version",
+          "definition": "Checkout-link decision/rule version.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "shipping_country",
+          "logicalType": "STRING",
+          "nullable": true,
+          "role": "dimension",
+          "definition": "Approved coarse shipping country; not session or ad-delivery location.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "shipping_region",
+          "logicalType": "STRING",
+          "nullable": true,
+          "role": "dimension",
+          "definition": "Approved coarse shipping region; no street address.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "source_updated_at",
+          "logicalType": "TIMESTAMP_UTC",
+          "nullable": false,
+          "role": "time",
+          "definition": "Last source order update used in this publication.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "purchase_date",
+          "logicalType": "DATE",
+          "nullable": true,
+          "role": "time",
+          "definition": "America/New_York date of paid_at for eligible-order, acquisition and AOV reporting.",
+          "source": "orders.paid_at",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "acquisition_eligible",
+          "logicalType": "BOOLEAN",
+          "nullable": false,
+          "role": "quality",
+          "definition": "Whether the approved acquisition model applies to this eligible order class; renewal treatment is explicit.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "source_currency",
+          "logicalType": "ISO_4217_CODE",
+          "nullable": false,
+          "role": "currency",
+          "definition": "Original transaction/report currency. Preserve even when not USD; never silently convert or discard.",
+          "source": "Current lean publication rule: preserve source_currency on every monetary fact",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "report_currency",
+          "logicalType": "ISO_4217_CODE",
+          "nullable": false,
+          "role": "currency",
+          "definition": "USD for lean-v1 reporting. Does not assert a conversion took place.",
+          "source": "Approved USD-only reporting policy",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "purchase_merchandise_gross_usd",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Frozen qualifying-purchase merchandise quantity × pre-discount price, excluding tax, shipping, duties, tips, fees and later refunds Null/withheld when required currency, evidence or coverage is unavailable; never a fabricated zero.",
+          "source": "Shopify purchase-time order/line evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "purchase_discount_usd",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Positive purchase-time merchandise discount magnitude only; shipping discounts stay outside merchandise Null/withheld when required currency, evidence or coverage is unavailable; never a fabricated zero.",
+          "source": "Shopify purchase-time allocations",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "purchase_merchandise_net_usd",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "purchase_merchandise_gross_usd minus purchase_discount_usd at the qualifying purchase; excludes later refunds and all non-merchandise components Null/withheld when required currency, evidence or coverage is unavailable; never a fabricated zero.",
+          "source": "Reconciled purchase-time order value",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "publication_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "version",
+          "definition": "Selected immutable semantic publication vintage; all related facts and views use the same vintage.",
+          "source": "External atomic publication control",
+          "status": "Proposed field-level elaboration; approval required"
+        }
+      ],
+      "semanticRules": [
+        "Order existence, financial ledger and payments are independently sourced and reconciled.",
+        "Keep eligible untracked orders and renewals; neither missing session nor missing customer erases store sales.",
+        "AOV uses frozen purchase_merchandise_net_usd, not later ledger net divided by purchase-day order counts.",
+        "Post-purchase order edits require an approved movement/correction policy; never silently rewrite the purchase snapshot.",
+        "Checkout linkage is not acquisition attribution; require consent, ownership and corroborated server context.",
+        "Preserve source_currency even for quarantined/non-USD orders; USD metrics fail their complete scope rather than silently omitting them."
+      ],
+      "publicationGates": [
+        "Idempotent order upsert; unique order_id per publication; reconcile source counts and purchase-time totals.",
+        "Eligible orders have paid_at, purchase_date and approved eligibility evidence.",
+        "matched checkout status requires a resolvable session and safe evidence; conflicting links stay null.",
+        "Purchase-time net equals gross minus merchandise discounts; independently sum order_items before comparison."
+      ],
+      "openDecisions": [
+        "Approve paid_at semantics, excluded/canceled/part-paid orders, purchases subsequently refunded, edits and renewal eligibility.",
+        "Approve how historical purchase-time snapshots are reconstructed when only current order state is available."
+      ]
+    },
+    {
+      "name": "order_items",
+      "grain": "One source Shopify order line per publication.",
+      "primaryKey": [
+        "order_item_id",
+        "publication_id"
+      ],
+      "fields": [
+        {
+          "name": "order_item_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "primary key",
+          "definition": "shop_id + source order ID + source line ID, stable across delivery retries.",
+          "source": "Shopify source order line",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "order_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "foreign key",
+          "definition": "Parent shop-qualified canonical order.",
+          "source": "Shopify source order",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "source_line_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "provenance",
+          "definition": "Original source line ID, retained for adjustments/refund allocation.",
+          "source": "Shopify line",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "sku",
+          "logicalType": "STRING",
+          "nullable": true,
+          "role": "dimension",
+          "definition": "Purchase-time SKU. Missing source SKU is unknown and kept in an explicit reporting unknown bucket; never inferred from click context.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "product_id",
+          "logicalType": "STRING",
+          "nullable": true,
+          "role": "dimension",
+          "definition": "Shop-qualified purchase-time product ID when supplied.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "quantity",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": false,
+          "role": "measure",
+          "definition": "Positive qualifying purchase quantity before later returns; units metric is gross purchased units, not net kept units.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "item_class",
+          "logicalType": "ENUM",
+          "nullable": false,
+          "role": "quality",
+          "definition": "merchandise, gift_card, other or unknown; only approved merchandise class enters merchandise KPIs.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "purchase_value_complete",
+          "logicalType": "BOOLEAN",
+          "nullable": false,
+          "role": "quality",
+          "definition": "Purchase-time quantity, class, gross price and allocated discounts reconciled.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "source_currency",
+          "logicalType": "ISO_4217_CODE",
+          "nullable": false,
+          "role": "currency",
+          "definition": "Original transaction/report currency. Preserve even when not USD; never silently convert or discard.",
+          "source": "Current lean publication rule: preserve source_currency on every monetary fact",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "report_currency",
+          "logicalType": "ISO_4217_CODE",
+          "nullable": false,
+          "role": "currency",
+          "definition": "USD for lean-v1 reporting. Does not assert a conversion took place.",
+          "source": "Approved USD-only reporting policy",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "unit_price_usd",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Purchase-time merchandise price per unit before allocated discounts Null/withheld when required currency, evidence or coverage is unavailable; never a fabricated zero.",
+          "source": "Shopify original line price",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "purchase_gross_usd",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Purchase-time quantity × unit_price_usd for an eligible merchandise line Null/withheld when required currency, evidence or coverage is unavailable; never a fabricated zero.",
+          "source": "Deterministic financial normalization",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "purchase_discount_usd",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Positive allocated purchase-time merchandise discount magnitude; allocation across lines must reconcile Null/withheld when required currency, evidence or coverage is unavailable; never a fabricated zero.",
+          "source": "Deterministic financial normalization",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "purchase_net_usd",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "purchase_gross_usd minus purchase_discount_usd; excludes later refunds Null/withheld when required currency, evidence or coverage is unavailable; never a fabricated zero.",
+          "source": "Deterministic financial normalization",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "unit_cost_usd",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Optional evidenced purchase-time unit cost, unavailable when historical cost evidence is missing; does not establish landed cost or margin readiness Null/withheld when required currency, evidence or coverage is unavailable; never a fabricated zero.",
+          "source": "Optional cost evidence only",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "cost_evidence_ref",
+          "logicalType": "STRING",
+          "nullable": true,
+          "role": "provenance",
+          "definition": "Optional restricted source/version reference for historical cost evidence.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "publication_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "version",
+          "definition": "Selected immutable semantic publication vintage; all related facts and views use the same vintage.",
+          "source": "External atomic publication control",
+          "status": "Proposed field-level elaboration; approval required"
+        }
+      ],
+      "semanticRules": [
+        "Purchase-time product attributes do not change with later catalog edits.",
+        "Line financial values are snapshots; sales_ledger supplies dated sales/refund movements.",
+        "Offer membership is overlapping; filter using a semijoin, never multiply item totals.",
+        "Do not require cost availability for sales metrics; no margin KPI is certified."
+      ],
+      "publicationGates": [
+        "Unique source line per parent/publication; parent exists.",
+        "Line purchase net sums reconcile to order purchase merchandise net for approved merchandise class.",
+        "Unknown SKU is retained and disclosed; incomplete classifications block affected merchandise metrics."
+      ],
+      "openDecisions": [
+        "Approve item classification, purchase snapshot policy and discount allocation; confirm historical SKU and optional cost evidence."
+      ]
+    },
+    {
+      "name": "sales_ledger",
+      "grain": "One deduplicated source financial movement allocation component per publication.",
+      "primaryKey": [
+        "ledger_entry_id",
+        "publication_id"
+      ],
+      "fields": [
+        {
+          "name": "ledger_entry_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "primary key",
+          "definition": "Deterministic source movement + component + allocation slice key; retries retain the same key.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "source_movement_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "provenance",
+          "definition": "Shop-qualified stable financial movement identifier; shared by its non-overlapping allocation slices.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "order_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "foreign key",
+          "definition": "Authoritative parent order; ledger existence is not inferred from an event.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "order_item_id",
+          "logicalType": "STRING",
+          "nullable": true,
+          "role": "foreign key",
+          "definition": "Validated line allocation for item-level components. Null for order-level or unresolved allocation; retain in store totals.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "component",
+          "logicalType": "ENUM",
+          "nullable": false,
+          "role": "dimension",
+          "definition": "merchandise_gross, merchandise_discount, merchandise_refund, shipping_net, tax_net, duty_net, other_sales_adjustment or fee. Each source amount belongs to exactly one component.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "movement_kind",
+          "logicalType": "ENUM",
+          "nullable": false,
+          "role": "dimension",
+          "definition": "sale, discount, refund, adjustment or reversal; a refund does not create a new order conversion.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "effective_at",
+          "logicalType": "TIMESTAMP_UTC",
+          "nullable": false,
+          "role": "time",
+          "definition": "Financial movement occurrence/effective timestamp from source evidence, not original order date for later refunds.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "report_date",
+          "logicalType": "DATE",
+          "nullable": false,
+          "role": "time",
+          "definition": "America/New_York date of effective_at.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "source_amount",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": false,
+          "role": "measure",
+          "definition": "Signed amount in source_currency for this exclusive allocation slice; preserve original precision/provenance.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "source_currency",
+          "logicalType": "ISO_4217_CODE",
+          "nullable": false,
+          "role": "currency",
+          "definition": "Original transaction/report currency. Preserve even when not USD; never silently convert or discard.",
+          "source": "Current lean publication rule: preserve source_currency on every monetary fact",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "report_currency",
+          "logicalType": "ISO_4217_CODE",
+          "nullable": false,
+          "role": "currency",
+          "definition": "USD for lean-v1 reporting. Does not assert a conversion took place.",
+          "source": "Approved USD-only reporting policy",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "amount_usd",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Signed component amount; positive gross sale, negative discount/refund, signed reversals and other component adjustments Null/withheld when required currency, evidence or coverage is unavailable; never a fabricated zero.",
+          "source": "Deterministic financial normalization",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "sales_eligible",
+          "logicalType": "BOOLEAN",
+          "nullable": false,
+          "role": "quality",
+          "definition": "Approved source component and parent eligibility permit sales reporting; separate from paid conversion counts.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "product_allocation_status",
+          "logicalType": "ENUM",
+          "nullable": false,
+          "role": "quality",
+          "definition": "allocated, order_level, unresolved or not_applicable; product revenue/refund metrics require allocated merchandise components.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "reverses_entry_id",
+          "logicalType": "STRING",
+          "nullable": true,
+          "role": "foreign key",
+          "definition": "Prior ledger entry reversed/corrected, if applicable; same publication replay must retain coherent correction history.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "publication_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "version",
+          "definition": "Selected immutable semantic publication vintage; all related facts and views use the same vintage.",
+          "source": "External atomic publication control",
+          "status": "Proposed field-level elaboration; approval required"
+        }
+      ],
+      "semanticRules": [
+        "Exclusive components: gross does not already net discounts; merchandise_refund is the actual post-discount merchandise reversal, not the gross returned price plus another discount reversal.",
+        "Split a gross customer refund into merchandise, shipping, tax and duties once using source evidence; never also count its all-in refund total as merchandise_refund.",
+        "If an original component is corrected/reversed, retain a signed correction in the same component and do not also classify it as a second economic refund.",
+        "Net merchandise = merchandise_gross + merchandise_discount + merchandise_refund. Proposed total sales additionally includes shipping_net + tax_net + duty_net + approved other_sales_adjustment; excludes fee, gift-card liability issuance and payments.",
+        "Product refund reporting uses merchandise_refund effective date and validated order_item_id only; a payment refund or order-level allocation guess is not product refund evidence.",
+        "Do not sum both a source movement total and its allocations. Components must reconcile to each source movement before publication.",
+        "Unallocated merchandise remains in store totals but blocks a fully reconciled SKU view; an explicit unallocated diagnostic row is not a guessed SKU."
+      ],
+      "publicationGates": [
+        "Unique ledger_entry_id; allocation totals reconcile source_movement_id.",
+        "Required order references resolve; non-null item reference belongs to the same order.",
+        "Component sign/reversal tests, source refund split, currency, dates and count reconciliation pass.",
+        "A product metric requires complete merchandise line allocation over its requested date/scope, including later refunds."
+      ],
+      "openDecisions": [
+        "Approve total-sales component policy, adjustment recognition and gift card/tip treatment.",
+        "Confirm refund components and historical line allocations available in source; choose withholding vs explicitly partial diagnostic product reporting."
+      ]
+    },
+    {
+      "name": "payments",
+      "grain": "One source payment transaction per publication.",
+      "primaryKey": [
+        "payment_id",
+        "publication_id"
+      ],
+      "fields": [
+        {
+          "name": "payment_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "primary key",
+          "definition": "Shop/gateway-qualified transaction ID; distinct captures/refunds retain distinct IDs.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "source_transaction_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "provenance",
+          "definition": "Original source transaction ID for idempotency and reconciliation.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "order_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "foreign key",
+          "definition": "Parent canonical order.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "parent_payment_id",
+          "logicalType": "STRING",
+          "nullable": true,
+          "role": "foreign key",
+          "definition": "Source-linked capture/transaction being refunded or adjusted, if available.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "transaction_kind",
+          "logicalType": "ENUM",
+          "nullable": false,
+          "role": "dimension",
+          "definition": "authorization, capture, sale, refund, void, chargeback or adjustment.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "transaction_status",
+          "logicalType": "ENUM",
+          "nullable": false,
+          "role": "quality",
+          "definition": "pending, succeeded, failed or cancelled, normalized from source evidence.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "settled_at",
+          "logicalType": "TIMESTAMP_UTC",
+          "nullable": true,
+          "role": "time",
+          "definition": "Cash settlement/effective success time approved for collected-cash reporting; null until verifiable.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "report_date",
+          "logicalType": "DATE",
+          "nullable": true,
+          "role": "time",
+          "definition": "America/New_York date of settled_at.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "source_amount",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": false,
+          "role": "measure",
+          "definition": "Signed source cash amount: positive receipts, negative cash returns/chargebacks; authorization is not collected cash.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "source_currency",
+          "logicalType": "ISO_4217_CODE",
+          "nullable": false,
+          "role": "currency",
+          "definition": "Original transaction/report currency. Preserve even when not USD; never silently convert or discard.",
+          "source": "Current lean publication rule: preserve source_currency on every monetary fact",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "report_currency",
+          "logicalType": "ISO_4217_CODE",
+          "nullable": false,
+          "role": "currency",
+          "definition": "USD for lean-v1 reporting. Does not assert a conversion took place.",
+          "source": "Approved USD-only reporting policy",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "cash_amount_usd",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Signed qualifying settled cash movement; excludes payment authorizations and duplicate pending states Null/withheld when required currency, evidence or coverage is unavailable; never a fabricated zero.",
+          "source": "Deterministic financial normalization",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "cash_eligible",
+          "logicalType": "BOOLEAN",
+          "nullable": false,
+          "role": "quality",
+          "definition": "Approved succeeded/settled transaction kind; no inferred settlement from paid order events.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "publication_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "version",
+          "definition": "Selected immutable semantic publication vintage; all related facts and views use the same vintage.",
+          "source": "External atomic publication control",
+          "status": "Proposed field-level elaboration; approval required"
+        }
+      ],
+      "semanticRules": [
+        "Net collected cash sums eligible receipts minus refund/chargeback cash on their cash-effective dates.",
+        "Cash includes whatever customer-paid tax/shipping is in the qualified transaction; never add it to sales_ledger revenue.",
+        "This is customer payment cash, not gateway payout net of fees/reserves or bank deposits.",
+        "Never join raw payments × raw ledger × raw items then sum."
+      ],
+      "publicationGates": [
+        "Stable IDs deduplicate retries; parent order resolves.",
+        "cash_eligible requires approved settlement evidence, settled_at and compatible currency.",
+        "Transaction lifecycle and source cash reconciliation pass independently of order and ledger checks."
+      ],
+      "openDecisions": [
+        "Approve whether source success times adequately represent collected cash; true settlement timestamps may be unavailable.",
+        "Approve chargeback/adjustment inclusion and fee/payout exclusions."
+      ]
+    },
+    {
+      "name": "sessions",
+      "grain": "One scoped observed visit at one sessionization version per publication.",
+      "primaryKey": [
+        "session_key",
+        "publication_id"
+      ],
+      "fields": [
+        {
+          "name": "session_key",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "primary key",
+          "definition": "project/site namespace + source_session_id + sessionization_version.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "source_session_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "provenance",
+          "definition": "Validated native session identifier; fallback requires explicit approved policy.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "sessionization_version",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "version",
+          "definition": "Approved visit boundary rules.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "started_at",
+          "logicalType": "TIMESTAMP_UTC",
+          "nullable": false,
+          "role": "time",
+          "definition": "Measured session start.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "ended_at",
+          "logicalType": "TIMESTAMP_UTC",
+          "nullable": true,
+          "role": "time",
+          "definition": "Measured end when established; open/late sessions may remain incomplete.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "report_date",
+          "logicalType": "DATE",
+          "nullable": false,
+          "role": "time",
+          "definition": "America/New_York session-entry date.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "entry_page",
+          "logicalType": "STRING",
+          "nullable": true,
+          "role": "dimension",
+          "definition": "Sanitized first eligible page path.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "traffic_source",
+          "logicalType": "STRING",
+          "nullable": true,
+          "role": "dimension",
+          "definition": "Observed normalized session-entry source, not assumed organic when unknown.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "utm_source",
+          "logicalType": "STRING",
+          "nullable": true,
+          "role": "dimension",
+          "definition": "Normalized observed entry UTM source.",
+          "source": "Expansion of lean sessions.utm_*",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "utm_medium",
+          "logicalType": "STRING",
+          "nullable": true,
+          "role": "dimension",
+          "definition": "Normalized observed entry UTM medium.",
+          "source": "Expansion of lean sessions.utm_*",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "utm_campaign",
+          "logicalType": "STRING",
+          "nullable": true,
+          "role": "dimension",
+          "definition": "Observed entry campaign name; not automatically a provider campaign ID.",
+          "source": "Expansion of lean sessions.utm_*",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "campaign_id",
+          "logicalType": "STRING",
+          "nullable": true,
+          "role": "dimension",
+          "definition": "Validated provider/account-qualified campaign key only when a deterministic mapping exists.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "device_type",
+          "logicalType": "STRING",
+          "nullable": true,
+          "role": "dimension",
+          "definition": "Observed entry device category; no device-based identity inference.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "observed_geo",
+          "logicalType": "STRING",
+          "nullable": true,
+          "role": "dimension",
+          "definition": "Privacy-approved coarse observed session geography; not shipping/ad delivery geo.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "customer_id",
+          "logicalType": "STRING",
+          "nullable": true,
+          "role": "foreign key",
+          "definition": "One unambiguous evidence-backed customer for the visit; null on conflicting shared-device identity.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "identity_status",
+          "logicalType": "ENUM",
+          "nullable": false,
+          "role": "quality",
+          "definition": "resolved, anonymous, conflicting, restricted or pending.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "eligible_event_count",
+          "logicalType": "INTEGER",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Deduplicated eligible action count; null when unavailable.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "funnel_flags",
+          "logicalType": "MAP<STRING,BOOLEAN?>",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Versioned approved stage-reach flags. Missing/unknown is not false; membership does not imply sequential progression.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "behavior_complete",
+          "logicalType": "BOOLEAN",
+          "nullable": false,
+          "role": "quality",
+          "definition": "Certified measurement window and source coverage for this session's approved behavior scope.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "conversion_window_complete",
+          "logicalType": "BOOLEAN",
+          "nullable": false,
+          "role": "quality",
+          "definition": "Seven-day proposed order window plus approved ingestion grace has elapsed and behavior/commerce coverage passes.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "analytics_eligible",
+          "logicalType": "BOOLEAN",
+          "nullable": false,
+          "role": "quality",
+          "definition": "Approved versioned test/bot/internal/consent rules permit this session in measured reporting.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "converted_session",
+          "logicalType": "BOOLEAN",
+          "nullable": true,
+          "role": "measure",
+          "definition": "True if at least one eligible orders.checkout_session_key matches and paid_at is within [started_at, started_at + 7 days); final false only when conversion_window_complete. Null until mature for published rate.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "funnel_version",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "version",
+          "definition": "Versioned stage definitions and event eligibility mapping used by funnel_flags.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "publication_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "version",
+          "definition": "Selected immutable semantic publication vintage; all related facts and views use the same vintage.",
+          "source": "External atomic publication control",
+          "status": "Proposed field-level elaboration; approval required"
+        }
+      ],
+      "semanticRules": [
+        "No arbitrary customer assignment on shared devices; do not discard anonymous visits.",
+        "One visit may yield multiple orders; converted_session contributes at most one.",
+        "Server events extend a browser session only with verified context.",
+        "Use native IDs where valid; no nearest-timestamp or silent fallback session assignment.",
+        "Entry date remains denominator date even if an eligible order converts later.",
+        "Session conversion is checkout-linked and distinct from the 30-day acquisition model."
+      ],
+      "publicationGates": [
+        "Key uniqueness and source namespace/version validation.",
+        "Canonical event counts and stage flags reconcile approved event families.",
+        "Conversion denominator contains only mature, behavior-complete sessions with complete eligible-order coverage."
+      ],
+      "openDecisions": [
+        "Approve seven-day interval boundary, ingestion grace, sessionization and bot/internal/consent policy.",
+        "Approve exact funnel stages; Style Game is an optional approved stage rather than a guaranteed observed field."
+      ]
+    },
+    {
+      "name": "marketing_spend_daily",
+      "grain": "One provider/account/campaign/New York day/base-report row per publication.",
+      "primaryKey": [
+        "provider",
+        "account_id",
+        "campaign_key",
+        "report_date",
+        "base_report_id",
+        "publication_id"
+      ],
+      "fields": [
+        {
+          "name": "provider",
+          "logicalType": "ENUM",
+          "nullable": false,
+          "role": "key",
+          "definition": "google_ads or meta_ads once authorized; source inventory approved externally.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "account_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "key",
+          "definition": "Provider-qualified account identifier.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "campaign_key",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "key",
+          "definition": "provider + account_id + source_campaign_id; reserved explicitly controlled account_unallocated bucket only for reconciled unmapped spend.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "source_campaign_id",
+          "logicalType": "STRING",
+          "nullable": true,
+          "role": "provenance",
+          "definition": "Original provider campaign ID; null only for approved explicitly unallocated account spend.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "report_date",
+          "logicalType": "DATE",
+          "nullable": false,
+          "role": "key/time",
+          "definition": "Source account daily date, accepted only when account timezone is America/New_York.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "base_report_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "key/version",
+          "definition": "Exactly one selected base daily report definition per provider; not an ad/device/geo/placement breakdown.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "source_timezone",
+          "logicalType": "IANA_TIMEZONE",
+          "nullable": false,
+          "role": "provenance",
+          "definition": "Actual account reporting timezone; daily totals cannot be relabeled from another zone.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "source_currency",
+          "logicalType": "ISO_4217_CODE",
+          "nullable": false,
+          "role": "currency",
+          "definition": "Original ad-account/report currency retained.",
+          "source": "Lean core spend contract explicitly preserves source_currency",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "source_amount",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": false,
+          "role": "measure",
+          "definition": "Source spend amount after provider unit scaling, in source_currency; original scaling provenance retained in staging.",
+          "source": "Lean spend source amount expanded to a named logical field",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "report_currency",
+          "logicalType": "ISO_4217_CODE",
+          "nullable": false,
+          "role": "currency",
+          "definition": "USD-only reporting designation, never evidence of FX conversion.",
+          "source": "Lean spend report currency expanded to a named logical field",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "spend_usd",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Compatible USD source spend; non-USD or non-New-York inputs block required scope totals Null/withheld when required currency, evidence or coverage is unavailable; never a fabricated zero.",
+          "source": "Provider spend normalized from source_amount",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "impressions",
+          "logicalType": "INTEGER",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Compatible base-report delivered impressions when source semantics/reconciliation are approved.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "clicks",
+          "logicalType": "INTEGER",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Only an approved comparable click definition; provider 'all clicks' and 'link clicks' are not automatically compatible.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "click_definition",
+          "logicalType": "STRING",
+          "nullable": true,
+          "role": "version",
+          "definition": "Versioned primitive definition controlling whether CTR/CPC may be compared or pooled.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "channel",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "dimension",
+          "definition": "Approved provider/campaign-to-channel mapping; keep unknown explicitly rather than infer organic.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "source_updated_at",
+          "logicalType": "TIMESTAMP_UTC",
+          "nullable": false,
+          "role": "time",
+          "definition": "Source extract/update vintage used in this publication.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "publication_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "version",
+          "definition": "Selected immutable semantic publication vintage; all related facts and views use the same vintage.",
+          "source": "External atomic publication control",
+          "status": "Proposed field-level elaboration; approval required"
+        }
+      ],
+      "semanticRules": [
+        "Source/account/date expectations come from an independently managed external registry, never from arrived rows.",
+        "Exactly one approved base report per provider; do not combine campaign totals with ad, geo, device, placement or other overlapping reports.",
+        "Provider/platform conversion counts, modeled revenue and native ROAS are outside lean metric scope.",
+        "USD only; preserve source currency and block whole requested scope if any required account is non-USD or currency unknown.",
+        "America/New_York account daily timezone required. Other zones need separately approved finer-grain extraction and alignment, not date relabeling.",
+        "No direct daily-spend-to-customer/order/session/SKU join or arbitrary allocation. Aggregate both sides independently at approved comparison grain.",
+        "Zero spend requires certified expected account/date coverage, including explicit no-spend evidence; missing campaign rows are not independently proof of zero."
+      ],
+      "publicationGates": [
+        "External expected account/date inventory and active campaign/report coverage reconcile provider totals.",
+        "Base-report uniqueness, authorized access, source recency, currency and actual account timezone pass.",
+        "Optional click/impression definitions and totals validated separately from spend."
+      ],
+      "openDecisions": [
+        "Approve all expected accounts, campaign key mapping, reporting scope, base report and freshness/grace thresholds.",
+        "Confirm Google/Meta authorization and account timezones; define cross-provider click compatibility before optional CTR/CPC."
+      ]
+    },
+    {
+      "name": "order_attribution",
+      "grain": "One eligible order × single-touch model version × publication, including explicit unattributed/not_applicable.",
+      "primaryKey": [
+        "order_id",
+        "model_version",
+        "publication_id"
+      ],
+      "fields": [
+        {
+          "name": "order_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "foreign key/key",
+          "definition": "Eligible canonical order receiving one classification/bucket.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "model_version",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "key/version",
+          "definition": "Approved complete attribution rule version; never mix models.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "publication_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "key/version",
+          "definition": "Same immutable publication as all joined facts.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "acquisition_session_key",
+          "logicalType": "STRING",
+          "nullable": true,
+          "role": "foreign key",
+          "definition": "Selected prior qualifying acquisition session; can differ from order checkout session.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "touch_event_key",
+          "logicalType": "STRING",
+          "nullable": true,
+          "role": "foreign key",
+          "definition": "Optional exact canonical touch; if present, must belong to acquisition_session_key.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "channel",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "dimension",
+          "definition": "Approved observed acquisition channel or explicit unattributed/not_applicable; null context is never organic.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "campaign_id",
+          "logicalType": "STRING",
+          "nullable": true,
+          "role": "dimension",
+          "definition": "Validated provider/account-qualified campaign key; null for unmatched/noncampaign credit.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "attribution_status",
+          "logicalType": "ENUM",
+          "nullable": false,
+          "role": "quality",
+          "definition": "attributed, unattributed, not_applicable or pending; pending blocks finalized attribution outputs.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "lookback_days",
+          "logicalType": "INTEGER",
+          "nullable": false,
+          "role": "parameter",
+          "definition": "30-day last eligible non-direct-session lookback proposed; approval required.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "conversion_time_basis",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "parameter",
+          "definition": "Proposed orders.paid_at; must match selected model version and acquisition date basis.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "credit_weight",
+          "logicalType": "DECIMAL(12,9)",
+          "nullable": false,
+          "role": "measure",
+          "definition": "Exactly 1 in single-touch v1, including unassigned buckets. No multiple weighted rows per order.",
+          "source": "Current lean-flow.ts field contract",
+          "status": "Carried from lean flow; type proposed"
+        },
+        {
+          "name": "conversion_date",
+          "logicalType": "DATE",
+          "nullable": false,
+          "role": "time",
+          "definition": "America/New_York date of orders.paid_at; acquisition ROAS compares order purchase value credited on this date with same-date spend.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "attribution_complete",
+          "logicalType": "BOOLEAN",
+          "nullable": false,
+          "role": "quality",
+          "definition": "Eligible order, lookback behavior, consent/identity evidence, maturity/grace and model/publication controls pass.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        }
+      ],
+      "semanticRules": [
+        "Select exactly one model and publication; there must be one attribution row for every eligible order, including renewal/not_applicable rows.",
+        "Proposed last eligible non-direct session in [paid_at - 30 days, paid_at]; no after-conversion touches.",
+        "First-order customer credit is taken only from attribution for customers.first_eligible_order_id, not every later order.",
+        "For single-touch v1 weighted new customers count each certified first customer once at weight 1; unassigned buckets remain visible.",
+        "ROAS uses purchase-time net merchandise value on conversion_date, not later-refund ledger net or acquisition-session entry date.",
+        "Other date/revenue bases need a separately approved metric/model; native platform ROAS is not reproduced.",
+        "Renewals retain commerce revenue; acquisition applicability and not_applicable assignment follow approved order-class policy."
+      ],
+      "publicationGates": [
+        "Exactly one row per eligible order/model/publication; weights sum to one including unassigned rows.",
+        "Session identity evidence permitted and in approved lookback; optional touch belongs to that session.",
+        "Campaign/channel mapping and independently expected spend comparison scope pass.",
+        "Unattributed share and pending coverage disclosed; null/missing touch cannot become an organic classification."
+      ],
+      "openDecisions": [
+        "Approve model, 30-day boundaries, paid_at conversion clock, fallback for direct-only traffic, renewal classes and ingestion grace.",
+        "Approve purchase-value first-party ROAS definition; a refund-adjusted ledger variant is not in lean v1."
+      ]
+    },
+    {
+      "name": "order_item_offers",
+      "grain": "One purchased order-line/offer membership per publication.",
+      "primaryKey": [
+        "order_item_id",
+        "offer_id",
+        "publication_id"
+      ],
+      "fields": [
+        {
+          "name": "order_item_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "foreign key/key",
+          "definition": "Canonical purchased line with verified offer membership.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "offer_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "key",
+          "definition": "Stable approved offer namespace + ID; multiple offers can apply to the same line.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "membership_basis",
+          "logicalType": "ENUM",
+          "nullable": false,
+          "role": "provenance",
+          "definition": "source_line_discount, approved_bundle_rule or other approved evidence; no inferred click-to-sale ownership.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "evidence_ref",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "provenance",
+          "definition": "Safe source/business-rule evidence reference.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "offer_mapping_version",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "version",
+          "definition": "Approved offer definition/membership version.",
+          "source": "Proposed normalization of approved source evidence",
+          "status": "Proposed field-level elaboration; approval required"
+        },
+        {
+          "name": "publication_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "version",
+          "definition": "Selected immutable semantic publication vintage; all related facts and views use the same vintage.",
+          "source": "External atomic publication control",
+          "status": "Proposed field-level elaboration; approval required"
+        }
+      ],
+      "semanticRules": [
+        "Rows encode membership only. No allocation_weight or exclusive sales ownership is implemented.",
+        "Filter a distinct order_item_id set using an EXISTS/semijoin, then aggregate line ledger values once.",
+        "One line may contribute to each separate offer slice; do not sum slices to a store total.",
+        "Observed event offer_id is context, not proof of purchased offer membership."
+      ],
+      "publicationGates": [
+        "Unique membership key and resolvable line; reproducible approved evidence.",
+        "Offer-filtered totals reconcile distinct selected line set; stacked offers do not multiply values."
+      ],
+      "openDecisions": [
+        "Approve offer taxonomy and membership evidence; exclusive allocation requires a separate versioned weights contract and approval."
+      ]
+    }
+  ]
+}
