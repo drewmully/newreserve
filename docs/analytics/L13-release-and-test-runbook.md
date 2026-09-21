@@ -80,9 +80,11 @@ production sign-off.
 - Review the stack in order, starting with L01a/L01b. Rebase or retarget each
   successor onto main after its predecessor is merged, then rerun checks.
   Do not merge the tip into its predecessor and assume it reached main.
-- Audit all existing `withJobRun` callers before L02. Old callbacks lacking
-  explicit completion evidence will return unverified/error. Add genuine
-  per-source completion checks and review alerts, not blanket success calls.
+- Incorporate the local L02 compatibility correction before merging that slice.
+  The audit found 13 legacy callers: retain their operational wrapper and use
+  the separate strict wrapper for new analytics jobs. Legacy success and
+  watermarks are not analytics evidence. See the local compatibility audit;
+  do not add blanket success calls or deploy the old draft's global behavior.
 - L03 remains disabled unless its new flag is enabled. Confirm bad HMAC,
   oversized requests and missing configuration do not invoke business effects.
 - Review SQL collision behavior, source ID conventions, metric decisions,
@@ -90,8 +92,8 @@ production sign-off.
 
 ## Staging acceptance sequence
 
-1. **Access and isolation.** Obtain a fresh MyMully Supabase invitation and
-   verify the actual project. Provision an approved isolated database. Inspect
+1. **Access and isolation.** Reconfirm the accepted MyMully access and intended
+   project at execution time. Provision an approved isolated database. Inspect
    existing schemas and server role before manually applying 001, 003, 004,
    013, 014, 015 in order. These SQL files are not rerunnable migrations.
 2. **Live bindings.** Implement/review the Shopify API-to-evidence mapping,
