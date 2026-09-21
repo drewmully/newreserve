@@ -12,7 +12,7 @@ vi.mock("@supabase/supabase-js", () => ({
     }),
   }),
 }));
-import { withJobRun } from "@/app/api/_lib/supabaseService";
+import { withJobRun, withAnalyticsJobRun } from "@/app/api/_lib/supabaseService";
 const complete = { paginationComplete: true, writesComplete: true, schemaValid: true, sourceRows: 1, writtenRows: 1, evidenceRef: "fixture" };
 beforeEach(() => { mocks.updates.length = 0; mocks.fail = false; process.env.SUPABASE_SERVICE_ROLE_KEY = "synthetic"; });
 describe("truthful shared job wrapper", () => {
@@ -25,24 +25,53 @@ describe("truthful shared job wrapper", () => {
     expect(assessCompletion({ ...complete, schemaValid: false })).toBe("schema_drift");
   });
   it("does not turn a normal return into completeness evidence", async () => {
-    expect((await withJobRun("fixture", async c => { c.setWatermark("unsafe"); return { rows: 3 }; })).ok).toBe(false);
+    expect((await withAnalyticsJobRun("fixture", async c => { c.setWatermark("unsafe"); return { rows: 3 }; })).ok).toBe(false);
     expect(mocks.updates[0].watermark).toBeNull();
   });
   it("reports missing auth instead of a green skipped run", async () => {
-    const result = await withJobRun("fixture", async () => ({ skipped: true, missing: ["TOKEN"] }));
+    const result = await withAnalyticsJobRun("fixture", async () => ({ skipped: true, missing: ["TOKEN"] }));
     expect(result.ok).toBe(false);
     expect(mocks.updates[0].meta).toMatchObject({ analytics_outcome: "missing_auth" });
   });
   it("commits a proposed checkpoint only with explicit successful evidence", async () => {
-    expect((await withJobRun("fixture", async c => { c.setWatermark("next"); c.complete(complete); return 1; })).ok).toBe(true);
+    expect((await withAnalyticsJobRun("fixture", async c => { c.setWatermark("next"); c.complete(complete); return 1; })).ok).toBe(true);
     expect(mocks.updates[0].watermark).toBe("next");
   });
   it("clears a proposed watermark on a thrown partial write", async () => {
-    await withJobRun("fixture", async c => { c.setWatermark("unsafe"); throw new Error("write failed"); });
+    await withAnalyticsJobRun("fixture", async c => { c.setWatermark("unsafe"); throw new Error("write failed"); });
     expect(mocks.updates[0].watermark).toBeNull();
   });
   it("fails loudly if status writes themselves fail", async () => {
     mocks.fail = true;
     await expect(withJobRun("fixture", async () => 1)).rejects.toThrow("could not be persisted");
+  });
+  it("preserves an operational job's result and watermark without certifying analytics", async () => {
+    const result = await withJobRun("legacy", async c => {
+      c.setWatermark("poll-cursor");
+      c.setMeta({ analytics_outcome: "complete", analytics_checkpoint: "forged" });
+      return { stage: "polling" };
+    });
+    expect(result).toMatchObject({ ok: true, result: { stage: "polling" } });
+    expect(mocks.updates[0]).toMatchObject({
+      status: "ok", watermark: "poll-cursor",
+      meta: { completion_policy: "operational", analytics_outcome: "unverified", analytics_checkpoint: null },
+    });
+  });
+  it("preserves legacy skipped results without claiming verified empty", async () => {
+    expect((await withJobRun("legacy", async () => ({ skipped: true, missing: ["TOKEN"] }))).ok).toBe(true);
+    expect(mocks.updates[0].meta).toMatchObject({ analytics_outcome: "unverified" });
+  });
+  it("does not overwrite a known partial outcome with a later complete call", async () => {
+    const result = await withAnalyticsJobRun("strict", async c => {
+      c.setWatermark("unsafe"); c.incomplete("partial"); c.complete(complete);
+    });
+    expect(result.ok).toBe(false);
+    expect(mocks.updates[0]).toMatchObject({ watermark: null, meta: { analytics_outcome: "partial" } });
+  });
+  it("clears legacy watermarks on failure as well", async () => {
+    expect((await withJobRun("legacy", async c => {
+      c.setWatermark("unsafe"); throw new Error("write failed");
+    })).ok).toBe(false);
+    expect(mocks.updates[0].watermark).toBeNull();
   });
 });
