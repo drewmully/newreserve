@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSupabaseService } from "@/app/api/_lib/supabaseService";
+import { getAnalyticsSupabase } from "@/lib/analytics/serverClient";
+import { createReceiptStore } from "@/lib/analytics/rpcStore";
 import { acceptShopifyReceipt } from "@/lib/analytics/receipts";
 export const runtime = "nodejs";
 /** New subscription is opt-in. Existing checkout/webhook routes are untouched. */
@@ -25,14 +26,7 @@ export async function POST(req: NextRequest) {
       body: Buffer.concat(chunks), signature: req.headers.get("x-shopify-hmac-sha256") ?? "",
       secret, allowedShop, shop: req.headers.get("x-shopify-shop-domain") ?? "",
       topic: req.headers.get("x-shopify-topic") ?? "", deliveryId: req.headers.get("x-shopify-webhook-id") ?? "",
-    }, async r => {
-      const { data, error } = await getSupabaseService().rpc("lean_accept_receipt", {
-        p_source: r.source, p_delivery_id: r.deliveryId, p_business_key: r.businessKey,
-        p_topic: r.topic, p_payload_hash: r.payloadHash, p_payload: r.payload,
-      });
-      if (error || data == null) throw new Error("receipt_unavailable");
-      return String(data);
-    });
+    }, r => createReceiptStore(getAnalyticsSupabase())(r));
     return NextResponse.json({ accepted: true, receiptId: id }, { status: 202 });
   } catch (e) {
     const code = e instanceof Error ? e.message : "";

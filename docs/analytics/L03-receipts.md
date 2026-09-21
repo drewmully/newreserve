@@ -12,6 +12,15 @@ returns 503 so the sender retries; acknowledgment follows durable commit only.
 
 ## Before activation
 
+The local follow-up uses `createReceiptStore` and an explicitly configured
+analytics-only client. Set `LEAN_ANALYTICS_SUPABASE_URL` and
+`LEAN_ANALYTICS_SUPABASE_SERVICE_ROLE_KEY` through server-side deployment secrets.
+There is no fallback to `SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, the existing
+application's service key, or a hard-coded production project. The URL must be an
+HTTPS base URL. A valid delivery with missing database configuration returns 503.
+Invalid signatures are rejected before a database client is constructed.
+These changes must remain in the receipt PR before activation.
+
 Apply reviewed 001 and 003 SQL in a disposable Supabase project; verify the
 server-only service_role grant and anonymous denial. Provision the explicit shop
 allowlist and webhook secret through deployment secrets, never PR content.
