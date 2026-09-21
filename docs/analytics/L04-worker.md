@@ -18,3 +18,20 @@ slow-transform lease expiry and authorization-denied replay. PGlite tests cover
 transaction and fencing semantics but do not prove network timeout behavior or
 production multi-connection performance. Domain transforms and scheduled worker
 wiring are intentionally reviewed separately.
+
+## Local RPC wiring follow-up
+
+`createWorkerStore` now binds the worker interface to the claim/finish/fail RPCs.
+It validates returned IDs and response shapes, preserves a false fencing result
+as lost lease, sanitizes database errors, and propagates ambiguous completion
+responses without issuing a failure write. `createReceiptStore` uses the same
+RPC port for atomic receipt persistence.
+
+The local receipt-to-report harness uses these source adapters against the real
+SQL functions via a local named-argument transport. Unit tests exercise malformed
+responses and transport failures; HTTP handler tests mock Supabase transport.
+Neither substitutes for a real PostgREST test.
+
+No scheduled worker endpoint is enabled or added. The live Shopify evidence
+adapter, source enrichment and production publication orchestrator remain
+separate implementation work; the synthetic fixture transformer is test-only.
