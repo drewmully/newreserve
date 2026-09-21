@@ -28,21 +28,35 @@ export function getSupabaseService(): SupabaseClient {
   return cached;
 }
 
-/**
- * Wrap a cron / ingestion job with structured logging to public.job_runs.
- * Always returns the wrapped result; never swallows errors silently.
- */
-export async function withJobRun<T>(
-  jobName: string,
-  fn: (ctx: {
+type JobContext = {
     runId: number;
     bumpRows: (rowsIn?: number, rowsOut?: number) => void;
     setWatermark: (w: string) => void;
     setMeta: (m: Record<string, unknown>) => void;
+};
+type AnalyticsJobContext = JobContext & {
     complete: (evidence: CompletionEvidence) => void;
     incomplete: (outcome: "missing_auth" | "partial" | "schema_drift") => void;
-  }) => Promise<T>
-): Promise<{ ok: true; runId: number; result: T } | { ok: false; runId: number; error: string }> {
+};
+type JobResult<T> = { ok: true; runId: number; result: T } | { ok: false; runId: number; error: string };
+
+/** Compatibility wrapper for existing operational jobs. A normal return is NOT
+ * analytics completion evidence. Its watermark is operational, never certified.
+ */
+export function withJobRun<T>(jobName: string, fn: (ctx: JobContext) => Promise<T>): Promise<JobResult<T>> {
+  return recordJobRun(jobName, fn, false);
+}
+
+/** Opt-in analytics wrapper. Only explicit completeness evidence can checkpoint.
+ * A recorded incomplete outcome cannot be overwritten by a later complete call.
+ */
+export function withAnalyticsJobRun<T>(jobName: string, fn: (ctx: AnalyticsJobContext) => Promise<T>): Promise<JobResult<T>> {
+  return recordJobRun(jobName, fn, true);
+}
+
+async function recordJobRun<T>(
+  jobName: string, fn: (ctx: AnalyticsJobContext) => Promise<T>, strict: boolean,
+): Promise<JobResult<T>> {
   const sb = getSupabaseService();
   const { data: started, error: startErr } = await sb
     .from("job_runs")
@@ -51,7 +65,7 @@ export async function withJobRun<T>(
     .single();
 
   if (startErr || !started) {
-    // job_runs is itself broken — fail loudly but still try the work
+    // Do not perform unlogged work when the start record cannot be persisted.
     throw new Error(`Failed to record job start for ${jobName}: ${startErr?.message ?? "unknown"}`);
   }
 
@@ -76,13 +90,16 @@ export async function withJobRun<T>(
         meta = { ...meta, ...m };
       },
       complete: (evidence) => {
-        outcome = assessCompletion(evidence);
+        const assessed = assessCompletion(evidence);
+        if (!outcome || canCheckpoint(outcome)) outcome = assessed;
         meta = { ...meta, completion_evidence: evidence };
       },
       incomplete: (value) => { outcome = value; },
     });
-    outcome ??= legacyOutcome(result, meta);
-    const incomplete = !canCheckpoint(outcome);
+    // Never allow an operational job (or caller-supplied metadata) to claim
+    // analytics completeness. Preserve its historical return/checkpoint behavior.
+    outcome = strict ? outcome ?? legacyOutcome(result, meta) : "unverified";
+    const incomplete = strict && !canCheckpoint(outcome);
     const { error: finishError } = await sb
       .from("job_runs")
       .update({
@@ -91,7 +108,9 @@ export async function withJobRun<T>(
         rows_in: rowsIn,
         rows_out: rowsOut,
         watermark: incomplete ? null : watermark,
-        meta: { ...meta, analytics_outcome: outcome },
+        meta: { ...meta, completion_policy: strict ? "analytics" : "operational",
+          analytics_outcome: outcome, analytics_checkpoint: strict && !incomplete ? watermark : null,
+          watermark_scope: strict ? "analytics" : "operational" },
         error: incomplete ? `Run not certified: ${outcome}` : null,
       })
       .eq("id", runId);
@@ -108,7 +127,9 @@ export async function withJobRun<T>(
         rows_in: rowsIn,
         rows_out: rowsOut,
         watermark: null,
-        meta: { ...meta, analytics_outcome: "failed" },
+        meta: { ...meta, completion_policy: strict ? "analytics" : "operational",
+          analytics_outcome: "failed", analytics_checkpoint: null,
+          watermark_scope: strict ? "analytics" : "operational" },
         error: message,
       })
       .eq("id", runId);
