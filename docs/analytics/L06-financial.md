@@ -16,3 +16,12 @@ discount, refund, tax, shipping and settlement records. Bind and reconcile
 source IDs, component totals, parent transactions and original purchase evidence
 before activation. Review settlement-clock policy and adjustment eligibility.
 The tested financial transformation is not a settlement certification.
+
+## Follow-up source adapter
+
+L14 adds a read-only Shopify transaction reader and source-shape payment mapper,
+including negative refund transactions and validated parent links. It leaves all
+cash-settlement fields unproven and does not manufacture sales-ledger allocations
+from payment totals. See [L14 mapping and tests](L14-shopify-source-mapping.md).
+The source reader is implemented but has not been called against the customer
+store; component-level sales/refund mapping and settlement validation remain open.
