@@ -1,4 +1,16 @@
 {
+  "git": {
+    "deploymentEnabled": {
+      "feat/analytics-l06-finance": false,
+      "feat/analytics-l07-identity": false,
+      "feat/analytics-l08-context": false,
+      "feat/analytics-l09-sessions": false,
+      "feat/analytics-l10-spend": false,
+      "feat/analytics-l11-attribution": false,
+      "feat/analytics-l12-reporting": false,
+      "feat/analytics-l13-release": false
+    }
+  },
   "crons": [
     {
       "path": "/api/email/process",
