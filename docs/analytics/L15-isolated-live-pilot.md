@@ -4,9 +4,9 @@ Status: September 22, 2026. The bounded, single-order live-test path is implemen
 
 ## Why merging was not necessary
 
-The isolated local branch combines the existing PR stack with the latest fetched `main`. It is a separate copy for editing and testing; neither GitHub `main` nor MyMully's running application has been changed.
+Initial compatibility tests used an isolated local branch combining the existing PR stack with the then-latest fetched `main`. For publication, the changes were transferred onto the existing PR heads without importing unrelated `main` changes. Neither GitHub `main` nor MyMully's running application has been changed.
 
-All 14 existing PRs were rechecked: #146 through #159 report `MERGEABLE` and `CLEAN`, with passing analytics checks and no recorded review approval. They are stacked, not 14 independent PRs targeting `main`; see the [first PR](https://github.com/drewmully/newreserve/pull/146) and [last PR](https://github.com/drewmully/newreserve/pull/159).
+Before these updates, all 14 existing PRs (#146 through #159) reported `MERGEABLE` and `CLEAN`, with passing analytics checks and no recorded review approval. Updated heads require fresh CI; consult GitHub for current status. They are stacked, not 14 independent PRs targeting `main`; see the [first PR](https://github.com/drewmully/newreserve/pull/146) and [last PR](https://github.com/drewmully/newreserve/pull/159).
 
 Do not merge the stack indiscriminately or infer that a green PR deploys the entire data pipeline. Merge approval, a paid isolated test, database migrations, and production activation are separate decisions.
 
@@ -59,7 +59,7 @@ All test Shopify records were synthetic, source-shaped responses. No customer or
 | Git whitespace check | Passed | No diff-format issues |
 | Full application suite | 632 passed, 11 tests failed, one suite-load failure | Whole application is not green |
 
-The full-app failure names match the recorded baseline and earlier source-mapping run: blog routes (three), home document coverage, membership cart persistence (two), mulligan page, analytics dispatcher, inbound email, reply approval, mulligan API, and upgrade-modal suite loading. These failures were not repaired in this scoped analytics change.
+The full-application results above are from the isolated compatibility branch, not a claim of green full-app CI on each PR. The failure names match the recorded baseline and earlier source-mapping run: blog routes (three), home document coverage, membership cart persistence (two), mulligan page, analytics dispatcher, inbound email, reply approval, mulligan API, and upgrade-modal suite loading. These failures were not repaired in this scoped analytics change.
 
 The new tests cover:
 
@@ -134,13 +134,12 @@ The narrow hosted-test path is wired, but the full production pipeline is not ce
 - **Broader source coverage:** Settlement/payout evidence, identity/checkout/offer mapping, behavioral events and advertising sources.
 - **Release:** Independent reconciliation and authorized certification/selection of complete publications, plus approved production reporting sources.
 
-## Reviewable code split
+## Placement in existing PRs
 
-New work remains local. No PR was merged or pushed as part of this wiring task, and existing green GitHub checks do not cover these unpushed commits.
+The implementation is folded into the existing stack rather than creating four additional PRs. Publishing these branch updates does not merge any PR, provision a hosted database, or activate the pipeline.
 
-- **L14:** Original purchase and payment source mapping, retained from the previous work.
-- **L15:** Bounded financial source reader and sales/refund mapping.
-- **L16:** Isolated run registration, retained source, leases, atomic facts/report writes, and read-only export grants.
-- **L17:** Authenticated runner route, actual runtime orchestration, integration tests and this runbook.
+- **[PR #152](https://github.com/drewmully/newreserve/pull/152), finance:** Original purchase/payment source mapping and source-shaped tests. Includes branch-specific Vercel review-deployment guards.
+- **[PR #159](https://github.com/drewmully/newreserve/pull/159), release/testing:** Bounded financial source reader and sales/refund mapping; isolated run registration, retained source, leases, atomic fact/report writes and read-only export grants; authenticated runner, integration tests and this runbook.
+- **Intermediate PRs #153–158:** Receive the updated finance ancestor without rewriting history. Their own functional scope is unchanged.
 
-Publishing these changes can trigger repository CI/preview automation. Review that action separately from local commits, production merges, and paid hosted-test provisioning.
+GitHub PR CI can run on publication. `vercel.json` disables Git-triggered deployments only for the eight updated review branches (`feat/analytics-l06-finance` through `feat/analytics-l13-release`); unspecified branches, including `main`, retain their prior behavior. This is a review-push guard, not approval to deploy or run a paid hosted test ([Vercel Git configuration](https://vercel.com/docs/project-configuration/git-configuration)).
