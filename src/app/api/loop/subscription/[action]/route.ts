@@ -27,9 +27,11 @@ import {
 } from "@/app/api/_lib/loopUserContext";
 import {
   isSupportedSellingPlanId,
+  isLegacyVariantId,
   normalizeShopifyNumericId,
   resolveMemberTierFromVariantId,
-  SHOPIFY_MEMBERSHIP_PLANS,
+  resolveVariantIdFromSellingPlanId,
+  extractVariantIdFromLoopSubscription,
 } from "@/lib/membershipConfig";
 import { startFlow, type EmailFlow } from "@/lib/email/sequences";
 
@@ -157,6 +159,14 @@ export async function POST(
     const subscriptionId = sub.id;
     const cancelReason = body.reason as string | undefined;
 
+    // Detect legacy subscriptions: Loop's `/frequency` endpoint cannot move
+    // a subscription between variants, so a legacy member calling
+    // "change-plan" needs to be re-routed to a product swap instead.
+    const currentVariantId = extractVariantIdFromLoopSubscription(
+      sub as Record<string, unknown>
+    );
+    const isLegacySub = isLegacyVariantId(currentVariantId);
+
     switch (action) {
       case "pause":
         await pauseLoopSubscription(subscriptionId);
@@ -167,9 +177,69 @@ export async function POST(
       case "cancel":
         await cancelLoopSubscription(subscriptionId, cancelReason ?? "");
         break;
-      case "change-plan":
+      case "change-plan": {
+        // Legacy → Reserve must swap the variant; pure frequency change won't work.
+        if (isLegacySub) {
+          const targetVariantId = resolveVariantIdFromSellingPlanId(
+            sellingPlanShopifyId!
+          );
+          const targetTier = targetVariantId
+            ? resolveMemberTierFromVariantId(targetVariantId)
+            : null;
+          if (!targetVariantId || !targetTier) {
+            return NextResponse.json(
+              {
+                error: "Unsupported plan for legacy upgrade",
+                detail: `Could not map sellingPlanShopifyId=${sellingPlanShopifyId} to a Reserve variant.`,
+              },
+              { status: 400 }
+            );
+          }
+          if (!context.shopifyCustomerId) {
+            return NextResponse.json(
+              { error: "No Shopify customer ID found" },
+              { status: 400 }
+            );
+          }
+          const subLines = (sub as { lines?: Array<{ id?: string | number }> })
+            .lines;
+          const lineId = subLines?.[0]?.id;
+          if (!lineId) {
+            return NextResponse.json(
+              { error: "No subscription line found" },
+              { status: 400 }
+            );
+          }
+          await swapLoopSubscriptionProduct({
+            shopifyCustomerId: context.shopifyCustomerId,
+            subscriptionId,
+            lineId: String(lineId),
+            variantShopifyId: targetVariantId,
+            quantity: 1,
+          });
+          await context.userRef.update({
+            tier: targetTier,
+            isLegacy: false,
+            legacyPlan: null,
+            updated_at: Date.now(),
+          });
+          try {
+            const email = context.email;
+            const firstName =
+              (context.userData.username as string | undefined) ?? null;
+            const emailFlow: EmailFlow =
+              targetTier === "member" ? "member" : "access";
+            if (email) {
+              await startFlow(uid, email, firstName, emailFlow);
+            }
+          } catch (err) {
+            console.error("[change-plan/legacy-swap] email flow trigger failed:", err);
+          }
+          break;
+        }
         await changeLoopSubscriptionPlan(subscriptionId, sellingPlanShopifyId!);
         break;
+      }
       case "reactivate":
         await reactivateLoopSubscription(subscriptionId);
         break;

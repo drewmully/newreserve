@@ -203,6 +203,48 @@ export function resolveLegacyFromVariantId(
   return { isLegacy: legacyPlan !== null, legacyPlan };
 }
 
+/**
+ * Map a Shopify selling-plan ID to its corresponding Reserve variant ID.
+ * Used when a legacy subscription needs a product swap instead of a
+ * frequency change (Loop's `/frequency` endpoint can't move a sub between
+ * variants — see `swapLoopSubscriptionProduct`).
+ */
+export function resolveVariantIdFromSellingPlanId(
+  sellingPlanId: unknown
+): number | null {
+  const normalized = normalizePositiveIntegerString(sellingPlanId);
+  if (!normalized) return null;
+  for (const plan of Object.values(SHOPIFY_MEMBERSHIP_PLANS)) {
+    if (String(plan.sellingPlanId) === normalized) return plan.variantId;
+  }
+  return null;
+}
+
+/**
+ * Extract the variant ID from a Loop subscription record.
+ * Loop nests it under `lines[0].variantShopifyId` on the storefront shape,
+ * but the admin list endpoint returns `shopify_variant_id` / `variant_id`.
+ */
+export function extractVariantIdFromLoopSubscription(
+  sub: Record<string, unknown> | null | undefined
+): string | null {
+  if (!sub) return null;
+  const lines = sub.lines as Array<Record<string, unknown>> | undefined;
+  const lineVariant = lines?.[0]?.variantShopifyId;
+  const raw =
+    lineVariant ??
+    (sub as Record<string, unknown>).shopify_variant_id ??
+    (sub as Record<string, unknown>).variant_id ??
+    null;
+  return normalizePositiveIntegerString(raw);
+}
+
+export function isLegacyVariantId(variantId: unknown): boolean {
+  const normalized = normalizePositiveIntegerString(variantId);
+  if (!normalized) return false;
+  return Boolean(LEGACY_VARIANT_PLAN_MAP[normalized]);
+}
+
 export function getTierLabel(
   tier: MemberTier,
   isLegacy: boolean,
