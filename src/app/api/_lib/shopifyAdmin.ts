@@ -217,6 +217,204 @@ export interface StoreCreditBalance {
   currency: string;
 }
 
+export type ShopifyUserError = {
+  field: string[] | null;
+  message: string;
+};
+
+/**
+ * Create a Shopify customer with just an email. Used by signup flows
+ * that need a Shopify customer to attach store credit to. Returns the
+ * numeric customer id (without the gid:// prefix). Throws on Shopify
+ * userErrors so callers can surface them.
+ *
+ * Idempotency: the caller should resolveCustomerByEmail() first. This
+ * helper does NOT itself dedupe — if you call it with an email that
+ * already exists Shopify will return a userErrors payload.
+ */
+export async function createShopifyCustomer(input: {
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  tags?: string[];
+}): Promise<string> {
+  const mutation = `
+    mutation CreateCustomer($input: CustomerInput!) {
+      customerCreate(input: $input) {
+        customer { id }
+        userErrors { field message }
+      }
+    }
+  `;
+
+  const variables: Record<string, unknown> = {
+    input: {
+      email: input.email,
+      ...(input.firstName ? { firstName: input.firstName } : {}),
+      ...(input.lastName ? { lastName: input.lastName } : {}),
+      ...(input.tags?.length ? { tags: input.tags } : {}),
+      // Do NOT send marketing consent here — that should be a separate,
+      // explicit opt-in. Customers can still be emailed transactionally.
+    },
+  };
+
+  const data = await shopifyGraphQL<{
+    customerCreate: {
+      customer: { id: string } | null;
+      userErrors: ShopifyUserError[];
+    };
+  }>(mutation, variables);
+
+  const payload = data.customerCreate;
+  if (payload.userErrors.length > 0) {
+    throw new Error(
+      `Shopify customerCreate userErrors: ${payload.userErrors
+        .map((e) => `${(e.field ?? []).join(".") || "(root)"}: ${e.message}`)
+        .join("; ")}`
+    );
+  }
+  if (!payload.customer) {
+    throw new Error("Shopify customerCreate returned no customer");
+  }
+
+  // "gid://shopify/Customer/12345" → "12345"
+  const numericId = payload.customer.id.split("/").pop();
+  if (!numericId) {
+    throw new Error(`Unexpected customer GID format: ${payload.customer.id}`);
+  }
+  return numericId;
+}
+
+/**
+ * Resolve an existing Shopify customer by email, or create a new one if
+ * none exists. Returns the numeric customer id. Convenience wrapper for
+ * signup flows that need a customer guaranteed to exist.
+ */
+export async function resolveOrCreateCustomerByEmail(input: {
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  tags?: string[];
+}): Promise<{ customerId: string; created: boolean }> {
+  const existing = await resolveCustomerByEmail(input.email);
+  if (existing) {
+    return { customerId: existing, created: false };
+  }
+
+  try {
+    const customerId = await createShopifyCustomer(input);
+    return { customerId, created: true };
+  } catch (err) {
+    // Race: another writer may have created the customer between our
+    // lookup and our create. Re-resolve before giving up.
+    const after = await resolveCustomerByEmail(input.email);
+    if (after) {
+      return { customerId: after, created: false };
+    }
+    throw err;
+  }
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// Store credit
+// ────────────────────────────────────────────────────────────────────────
+
+export type StoreCreditMutationResult =
+  | {
+      ok: true;
+      accountId: string;
+      balanceAmount: number;
+      currencyCode: string;
+      transactionAmount: number;
+    }
+  | { ok: false; error: string; userErrors?: ShopifyUserError[] };
+
+/**
+ * Add funds to a customer's store credit account. If the customer
+ * doesn't have a USD account yet, Shopify auto-creates one. Mirrors the
+ * Mully-Hub `creditCustomerStoreCredit` pattern.
+ *
+ * https://shopify.dev/docs/api/admin-graphql/latest/mutations/storeCreditAccountCredit
+ */
+export async function creditCustomerStoreCredit(input: {
+  customerId: string;
+  amount: number;
+  currencyCode?: string;
+}): Promise<StoreCreditMutationResult> {
+  const currencyCode = input.currencyCode ?? "USD";
+  if (!Number.isFinite(input.amount) || input.amount <= 0) {
+    return { ok: false, error: "Amount must be a positive number" };
+  }
+
+  const gid = input.customerId.startsWith("gid://")
+    ? input.customerId
+    : `gid://shopify/Customer/${input.customerId}`;
+
+  const mutation = `
+    mutation CreditStoreCredit($id: ID!, $creditInput: StoreCreditAccountCreditInput!) {
+      storeCreditAccountCredit(id: $id, creditInput: $creditInput) {
+        storeCreditAccountTransaction {
+          amount { amount currencyCode }
+          account {
+            id
+            balance { amount currencyCode }
+          }
+        }
+        userErrors { field message }
+      }
+    }
+  `;
+
+  try {
+    const data = await shopifyGraphQL<{
+      storeCreditAccountCredit: {
+        storeCreditAccountTransaction: {
+          amount: { amount: string; currencyCode: string };
+          account: {
+            id: string;
+            balance: { amount: string; currencyCode: string };
+          };
+        } | null;
+        userErrors: ShopifyUserError[];
+      };
+    }>(mutation, {
+      id: gid,
+      creditInput: {
+        creditAmount: {
+          amount: input.amount.toFixed(2),
+          currencyCode,
+        },
+      },
+    });
+
+    const payload = data.storeCreditAccountCredit;
+    if (payload.userErrors.length > 0) {
+      return {
+        ok: false,
+        error: payload.userErrors.map((e) => e.message).join("; "),
+        userErrors: payload.userErrors,
+      };
+    }
+    if (!payload.storeCreditAccountTransaction) {
+      return { ok: false, error: "Shopify returned no transaction payload" };
+    }
+
+    const txn = payload.storeCreditAccountTransaction;
+    return {
+      ok: true,
+      accountId: txn.account.id,
+      balanceAmount: Number(txn.account.balance.amount),
+      currencyCode: txn.account.balance.currencyCode,
+      transactionAmount: Number(txn.amount.amount),
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Unknown Shopify error",
+    };
+  }
+}
+
 /**
  * Fetch the store-credit balance for a Shopify customer.
  * Accepts either a numeric ID string or a full GID.

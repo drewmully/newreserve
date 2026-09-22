@@ -1,0 +1,1121 @@
+import Image from "next/image";
+import type { Metadata } from "next";
+import {
+  ScrollReveal,
+  StatCounter,
+  ScrollChevron,
+  FadeInSection,
+  GlassHeader,
+  FloatingCTA,
+} from "../components/ClientComponents";
+import { NechvEmailCTA } from "../components/NechvEmailCTA";
+
+export const metadata: Metadata = {
+  title: "NECHV × Mully Reserve — $25 store credit on signup",
+  description:
+    "NECHV exclusive: join Mully Reserve and get $25 in store credit added to your account on signup. Member pricing on 40+ premium golf brands, early drop access, and private club benefits.",
+  robots: { index: false, follow: false },
+  openGraph: {
+    title: "NECHV × Mully Reserve — $25 store credit on signup",
+    description:
+      "NECHV exclusive: $25 in store credit when you join Mully Reserve.",
+    type: "website",
+  },
+};
+
+export default async function NechvLanding() {
+  return (
+    <div className="min-h-screen bg-bone">
+      {/* ─── GLASS HEADER ─── */}
+      <GlassHeader />
+
+      {/* ─── HERO — LIGHT EDITORIAL ─── */}
+      <section id="hero" className="relative min-h-[92vh] md:min-h-screen flex flex-col justify-center px-6 md:px-12 lg:px-20 pt-16 pb-6 md:pt-24 md:pb-8"
+        style={{ backgroundColor: '#F5F3EF' }}
+      >
+        {/* ── Two-column hero content ── */}
+        <div className="relative max-w-7xl mx-auto w-full grid md:grid-cols-[45%_55%] gap-4 md:gap-12 lg:gap-20 items-center z-10">
+
+          {/* Mobile hero image — above headline on small screens */}
+          <div className="md:hidden flex justify-center mb-1 animate-fade-up">
+            <Image
+              src="/hero-shelf.png"
+              alt="Premium golf gear on display"
+              width={600}
+              height={500}
+              className="w-full max-w-[260px] object-contain"
+              priority
+            />
+          </div>
+
+          {/* LEFT COLUMN — headline, subtext, value props, CTA */}
+          <div className="max-w-xl text-center md:text-left mx-auto md:mx-0">
+            <div className="animate-fade-up-delay-0 mb-3 md:mb-8">
+              <span className="inline-flex items-center gap-2.5 text-[11px] tracking-[0.38em] uppercase font-medium">
+                <span className="w-10 h-px bg-forest/20" />
+                <span className="gold-shimmer-text">NECHV × Mully Reserve</span>
+                <span className="w-10 h-px bg-forest/20" />
+              </span>
+              <span className="gold-accent-line mt-2.5" />
+            </div>
+
+            {/* NECHV exclusive perk callout — reinforces the $25 in store credit */}
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-ember/10 border border-ember/25 text-ember text-[11px] tracking-[0.18em] uppercase font-semibold mb-4 md:mb-5 animate-fade-up-delay-0">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              <span>NECHV Exclusive · $25 store credit on signup</span>
+            </div>
+
+            <h1 className="font-serif text-3xl sm:text-5xl md:text-[3.5rem] lg:text-6xl xl:text-7xl text-forest leading-[1.05] tracking-tight mb-3 md:mb-7 animate-fade-up-delay-1">
+              Built for golfers<br />who buy the good brands.
+            </h1>
+
+            <p className="text-sm md:text-lg text-charcoal leading-relaxed mb-3 md:mb-4 max-w-sm sm:max-w-md mx-auto md:mx-0 animate-fade-up-delay-2">
+              Member pricing on Greyson, Rhone, Quiet Golf, Penfold, and more. Sign up through NECHV and we&rsquo;ll drop <span className="font-semibold text-forest">$25 in store credit</span> into your account.
+            </p>
+
+            {/* Value prop bullets — brand-led, no subscription-box framing */}
+            <ul className="flex flex-col gap-2 mb-5 md:mb-8 max-w-sm sm:max-w-md mx-auto md:mx-0 text-left animate-fade-up-delay-2">
+              <li className="text-sm md:text-base text-forest/85 flex items-start gap-2.5">
+                <span className="text-ember shrink-0 mt-[2px]">&#10022;</span>
+                <span>Member pricing on 40+ premium brands</span>
+              </li>
+              <li className="text-sm md:text-base text-forest/85 flex items-start gap-2.5">
+                <span className="text-ember shrink-0 mt-[2px]">&#10022;</span>
+                <span>Average members save $400+ annually</span>
+              </li>
+              <li className="text-sm md:text-base text-forest/85 flex items-start gap-2.5">
+                <span className="text-ember shrink-0 mt-[2px]">&#10022;</span>
+                <span>Personalized curation, hand-picked and shipped to your door</span>
+              </li>
+            </ul>
+
+            <div className="animate-fade-up-delay-3">
+              <div className="max-w-xs sm:max-w-md mx-auto md:mx-0">
+                <NechvEmailCTA variant="hero" ctaText="CLAIM $25 CREDIT" />
+              </div>
+              <p className="text-[11px] text-charcoal/50 tracking-wide mt-2">
+                $25 store credit applied on signup &middot; No credit card required
+              </p>
+            </div>
+          </div>
+
+          {/* RIGHT COLUMN — Desktop hero shelf image */}
+          <div className="hidden md:flex items-center justify-center animate-fade-up-delay-2">
+            <Image
+              src="/hero-shelf.png"
+              alt="Premium golf gear on display"
+              width={706}
+              height={658}
+              className="w-full max-w-lg lg:max-w-xl object-contain"
+              priority
+            />
+          </div>
+        </div>
+
+        {/* ── BRAND STRIP — inside hero, full width below CTA ── */}
+        <div className="relative z-10 max-w-7xl mx-auto w-full mt-8 md:mt-12 animate-fade-up-delay-3">
+          <BrandStrip />
+        </div>
+      </section>
+
+      {/* ─── STATS BAR — dark, continuation of hero ─── */}
+      <section className="stats-dark-section py-16 md:py-20 px-6 md:px-12">
+        <div className="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-4 relative stats-gold-dividers">
+          <StatCounter end={10} suffix="+" label="Products Delivered" dark displayAs="hundreds-k" />
+          <StatCounter end={40} suffix="+" label="Brand Partners" dark />
+          <StatCounter end={250} prefix="$" suffix="+" label="Avg. Member Savings" dark />
+          <StatCounter end={96} suffix="%" label="Renewal Rate" dark />
+        </div>
+      </section>
+
+      {/* ─── HOW MULLY RESERVE WORKS — 4-step plain-English explainer (EARLY) ─── */}
+      <section id="how-it-works" className="py-20 md:py-24 px-6 md:px-12 bg-bone">
+        <div className="max-w-6xl mx-auto">
+          <ScrollReveal>
+            <div className="text-center mb-14 md:mb-16">
+              <span className="inline-flex items-center gap-2.5 text-xs tracking-[0.35em] uppercase text-sage/80 font-medium mb-5">
+                <span className="w-7 h-px bg-sage/40" />
+                How It Works
+                <span className="w-7 h-px bg-sage/40" />
+              </span>
+              <h2 className="font-serif text-3xl md:text-5xl lg:text-[3.25rem] text-obsidian leading-tight mb-5">
+                A membership for golfers<br className="hidden md:block" /> who want better gear and access.
+              </h2>
+              <p className="text-base md:text-lg text-charcoal/65 max-w-2xl mx-auto">
+                Four steps. No initiation fee. Cancel anytime.
+              </p>
+            </div>
+          </ScrollReveal>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 lg:gap-6">
+            <ScrollReveal delay={0}>
+              <SimpleStep
+                number="1"
+                title="Join free"
+                description="Enter your email to unlock Reserve Access. No credit card required. Upgrade anytime."
+              />
+            </ScrollReveal>
+            <ScrollReveal delay={0.08}>
+              <SimpleStep
+                number="2"
+                title="Unlock insider pricing"
+                description="Reserve pricing activates on 40+ premium brands. Rhone, Greyson, Quiet Golf, Penfold and more."
+              />
+            </ScrollReveal>
+            <ScrollReveal delay={0.16}>
+              <SimpleStep
+                number="3"
+                title="Shop the pro shop"
+                description="Browse curated gear at member pricing. Early access on every drop. Free 2-day shipping."
+              />
+            </ScrollReveal>
+            <ScrollReveal delay={0.24}>
+              <SimpleStep
+                number="4"
+                title="Use club access"
+                description="Tap into private club tee times, fittings, and member-only experiences as they drop."
+              />
+            </ScrollReveal>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── JOIN TODAY AND GET — immediate-gratification block ─── */}
+      <section className="py-14 md:py-16 px-6 md:px-12 bg-cream">
+        <div className="max-w-4xl mx-auto">
+          <ScrollReveal>
+            <div className="rounded-2xl border border-forest/10 bg-bone/70 backdrop-blur-sm p-8 md:p-10 shadow-[0_1px_0_rgba(255,255,255,0.6)_inset,0_20px_50px_-30px_rgba(0,0,0,0.2)]">
+              <div className="flex flex-col md:flex-row md:items-start gap-6 md:gap-10">
+                <div className="md:w-1/3">
+                  <span className="inline-block text-[11px] tracking-[0.3em] uppercase text-ember font-semibold mb-3">
+                    Join Today &amp; Get
+                  </span>
+                  <h3 className="font-serif text-2xl md:text-3xl text-obsidian leading-tight">
+                    Access unlocks instantly.
+                  </h3>
+                </div>
+                <div className="md:w-2/3 flex flex-col gap-3">
+                  <ImmediateBenefit
+                    label="$25 store credit"
+                    description="Applied to your account the moment you sign up through NECHV. Spend it on anything in the pro shop."
+                  />
+                  <ImmediateBenefit
+                    label="Members-only pricing"
+                    description="Reserve pricing activates the moment you join. Shop 40+ brands at insider rates."
+                  />
+                  <ImmediateBenefit
+                    label="First access to the next drop"
+                    description="You’ll be first in line when the next curated release goes live to members."
+                  />
+                  <ImmediateBenefit
+                    label="No credit card required"
+                    description="Start free, upgrade when you’re ready. Cancel anytime. No commitments."
+                  />
+                </div>
+              </div>
+            </div>
+          </ScrollReveal>
+        </div>
+      </section>
+
+      {/* ─── WHAT IS MULLY RESERVE — Feature Cards ─── */}
+      <section id="reserve" className="py-24 md:py-36 px-6 md:px-12 bg-bone">
+        <div className="max-w-6xl mx-auto">
+          <ScrollReveal>
+            <div className="max-w-3xl mx-auto text-center mb-20">
+              <span className="inline-flex items-center gap-2.5 text-xs tracking-[0.35em] uppercase text-sage/80 font-medium mb-6">
+                <span className="w-7 h-px bg-sage/40" />
+                The Program
+                <span className="w-7 h-px bg-sage/40" />
+              </span>
+              <h2 className="font-serif text-3xl md:text-5xl lg:text-6xl text-obsidian leading-tight mb-8">
+                What you get as a member.
+              </h2>
+              <p className="text-lg text-charcoal/65 leading-relaxed">
+                Mully Reserve is one membership that bundles insider pricing,
+                curated gear drops, and private club access. Everything you’d
+                expect from a top-tier club, without the initiation fee.
+              </p>
+            </div>
+          </ScrollReveal>
+
+          <div className="grid md:grid-cols-3 gap-6 lg:gap-8">
+            <ScrollReveal delay={0}>
+              <FeatureCard
+                image="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/Colorado_Hoodie.webp?v=1771960357"
+                title="Save on every brand"
+                description="Reserve pricing on 40+ premium brands like Rhone, Greyson, and Quiet Golf. Average members save $400+ annually."
+              />
+            </ScrollReveal>
+            <ScrollReveal delay={0.12}>
+              <FeatureCard
+                image="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/ChatGPT_Image_Feb_24_2026_02_24_48_PM.png?v=1771961106"
+                title="First access to every drop"
+                description="Members see new releases before anyone else. Hand-picked gear from the brands you already wear."
+              />
+            </ScrollReveal>
+            <ScrollReveal delay={0.24}>
+              <FeatureCard
+                image="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/ChatGPT_Image_Feb_24_2026_02_25_26_PM.png?v=1771961138"
+                title="Private club access"
+                description="Tee times at private courses, fittings with pros, and member-only experiences as they open up through the year."
+              />
+            </ScrollReveal>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── MANIFESTO — Full Cinematic Moment ─── */}
+      <section className="relative min-h-[55vh] md:min-h-[65vh] flex items-center justify-center px-6 md:px-12 overflow-hidden manifesto-section">
+        {/* Grain overlay */}
+        <div className="hero-grain-overlay" style={{ opacity: 0.04 }} />
+        {/* Subtle moving gradient */}
+        <div className="manifesto-ambient-light" />
+        {/* Decorative oversized quote marks */}
+        <div className="absolute top-8 left-6 md:left-16 pointer-events-none">
+          <span className="font-serif text-[10rem] md:text-[16rem] leading-none text-bone/[0.06] select-none">
+            &ldquo;
+          </span>
+        </div>
+
+        <ScrollReveal>
+          <div className="relative max-w-4xl mx-auto text-center">
+            <blockquote className="font-serif text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl text-bone/95 leading-[1.12] mb-10">
+              The golf world has private clubs.
+              <br />
+              We built something better.
+            </blockquote>
+            <div className="flex items-center justify-center gap-4 mb-8">
+              <span className="w-16 h-px bg-gradient-to-r from-transparent via-ember/50 to-transparent" />
+            </div>
+            <p className="text-bone/50 text-base md:text-lg tracking-wide max-w-lg mx-auto leading-relaxed">
+              Premium gear, insider pricing, and a community that plays at a
+              higher level, without the initiation fee.
+            </p>
+          </div>
+        </ScrollReveal>
+      </section>
+
+      {/* ─── MEMBERSHIP TIERS ─── */}
+      <section id="tiers" className="py-24 md:py-36 px-6 md:px-12 bg-cream relative overflow-hidden">
+        {/* Subtle gradient blobs for glass card refraction */}
+        <div className="absolute top-1/4 -left-32 w-96 h-96 bg-forest/[0.04] rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-1/3 -right-24 w-80 h-80 bg-sage/[0.06] rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute top-2/3 left-1/3 w-64 h-64 bg-taupe/[0.08] rounded-full blur-3xl pointer-events-none" />
+
+        <div className="max-w-6xl mx-auto relative">
+          <ScrollReveal>
+            <div className="text-center mb-20">
+              <span className="inline-flex items-center gap-2.5 text-xs tracking-[0.35em] uppercase text-sage/80 font-medium mb-6">
+                <span className="w-7 h-px bg-sage/40" />
+                Membership
+                <span className="w-7 h-px bg-sage/40" />
+              </span>
+              <h2 className="font-serif text-3xl md:text-5xl lg:text-6xl text-obsidian leading-tight mb-6">
+                Choose Your Level
+              </h2>
+              <p className="text-lg text-charcoal/65 max-w-xl mx-auto">
+                The full club experience. A fraction of the cost.
+              </p>
+            </div>
+          </ScrollReveal>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5 lg:gap-4 items-end">
+            {/* ── Tier 1 — Free ── */}
+            <ScrollReveal delay={0}>
+              <div className="rounded-2xl p-7 md:p-8 flex flex-col card-hover h-full glass-card glass-card-light tier-card-shimmer tier-border-sage tier-bg-free">
+                <div className="h-5 mb-3" />
+                <span className="text-[11px] tracking-[0.25em] uppercase text-sage font-medium">
+                  Free
+                </span>
+                <div className="mt-2 mb-5">
+                  <span className="font-serif text-3xl text-obsidian">$0</span>
+                </div>
+                <div className="border-t border-taupe/12 pt-5 flex-1 flex flex-col">
+                  <ul className="space-y-3 flex-1">
+                    <TierFeature text="Browse Reserve pricing" />
+                    <TierFeature text="Drop notifications" />
+                    <TierFeature text="Community access" />
+                  </ul>
+                  <a
+                    href="/login"
+                    className="mt-8 block w-full text-center h-12 leading-[3rem] rounded-xl border border-forest/80 text-forest text-sm font-medium tracking-wider uppercase hover:bg-forest hover:text-bone transition-all duration-300 btn-press"
+                  >
+                    Start Free
+                  </a>
+                </div>
+              </div>
+            </ScrollReveal>
+
+            {/* ── Tier 2 — Reserve Access ($99/yr) ── */}
+            <ScrollReveal delay={0.08}>
+              <div className="rounded-2xl p-7 md:p-8 flex flex-col card-hover h-full glass-card glass-card-light tier-card-shimmer tier-border-forest tier-bg-access">
+                <div className="h-5 mb-3">
+                  <span className="text-[9px] tracking-[0.15em] uppercase text-forest/60 font-semibold">Best Value</span>
+                </div>
+                <span className="text-[11px] tracking-[0.25em] uppercase text-forest font-medium">
+                  Reserve Access
+                </span>
+                <div className="mt-2 mb-5">
+                  <span className="font-serif text-3xl text-obsidian">$99</span>
+                  <span className="text-charcoal/40 text-sm ml-1">/year</span>
+                </div>
+                <div className="border-t border-taupe/12 pt-5 flex-1 flex flex-col">
+                  <ul className="space-y-3 flex-1">
+                    <TierFeature text="Reserve pricing on all gear" />
+                    <TierFeature text="Early drop access" />
+                    <TierFeature text="Partner benefits" />
+                    <TierFeature text="Free 2-day shipping" />
+                  </ul>
+                  <a
+                    href="/login"
+                    className="mt-8 block w-full text-center h-12 leading-[3rem] rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-all duration-300 btn-press"
+                  >
+                    Get Reserve Access
+                  </a>
+                </div>
+              </div>
+            </ScrollReveal>
+
+            {/* ── Tier 3 — Reserve Member ($249/qtr, THE HERO) ── */}
+            <ScrollReveal delay={0.16}>
+              <div className="relative h-full tier-member-hero">
+                {/* Badge */}
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-20">
+                  <span className="inline-block badge-gold text-[10px] tracking-[0.2em] uppercase font-semibold px-4 py-1.5 rounded-full whitespace-nowrap badge-shimmer">
+                    Most Popular
+                  </span>
+                </div>
+
+                <div className="rounded-2xl overflow-hidden relative flex flex-col card-hover h-full glass-card glass-card-dark tier-card-shimmer tier-border-gold tier-member-glow">
+                  <Image
+                    src="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/Untitled_design_17.png?v=1771516197"
+                    alt=""
+                    aria-hidden="true"
+                    width={176}
+                    height={176}
+                    sizes="176px"
+                    draggable={false}
+                    className="absolute -top-4 -left-4 w-44 h-44 object-cover object-right-bottom opacity-[0.18] -rotate-6 pointer-events-none select-none"
+                  />
+
+                  <div className="relative z-10 p-7 md:p-9 flex flex-col flex-1">
+                    <div className="h-5 mb-3" />
+                    <span className="text-[11px] tracking-[0.25em] uppercase text-bone/80 font-medium">
+                      Reserve Member
+                    </span>
+                    <div className="mt-2 mb-5">
+                      <span className="font-serif text-3xl text-bone">$249</span>
+                      <span className="text-bone/45 text-sm ml-1">/quarter</span>
+                    </div>
+                    <div className="border-t border-bone/10 pt-5 flex-1 flex flex-col">
+                      <ul className="space-y-3 flex-1">
+                        <TierFeature text="Everything in Access" light />
+                        <TierFeature text="Quarterly curated box" light />
+                        <TierFeature text="Guaranteed access windows" light />
+                        <TierFeature text="Concierge support" light />
+                        <TierFeature text="Invite-only events" light />
+                      </ul>
+                      <a
+                        href="/login"
+                        className="mt-8 block w-full text-center h-12 leading-[3rem] rounded-xl bg-bone text-forest text-sm font-medium tracking-wider uppercase hover:bg-bone-dark transition-all duration-300 btn-press"
+                      >
+                        Become a Member
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </ScrollReveal>
+
+            {/* ── Tier 4 — Reserve Black ── */}
+            <ScrollReveal delay={0.24}>
+              <div className="rounded-2xl p-7 md:p-8 flex flex-col card-hover h-full relative overflow-hidden tier-black-glass tier-card-shimmer tier-black-gold-border">
+                <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-ember/30 to-transparent" />
+                <div className="h-5 mb-3">
+                  <span className="text-[9px] tracking-[0.15em] uppercase text-bone/30 font-semibold">Invite Only</span>
+                </div>
+                <span className="text-[11px] tracking-[0.25em] uppercase text-bone/50 font-medium">
+                  Reserve Black
+                </span>
+                <div className="mt-2 mb-5">
+                  <span className="font-serif text-3xl text-bone/90">By Invitation</span>
+                </div>
+                <div className="border-t border-bone/8 pt-5 flex-1 flex flex-col">
+                  <ul className="space-y-3 flex-1">
+                    <TierFeature text="Everything in Member" dark />
+                    <TierFeature text="$1,000 quarterly credit" dark />
+                    <TierFeature text="Personal stylist" dark />
+                    <TierFeature text="Concierge phone line" dark />
+                    <TierFeature text="Invite-only experiences" dark />
+                  </ul>
+                  <div className="mt-8 block w-full text-center h-12 leading-[3rem] rounded-xl border border-bone/12 text-bone/35 text-sm font-medium tracking-wider uppercase cursor-default">
+                    Request Invite
+                  </div>
+                </div>
+              </div>
+            </ScrollReveal>
+          </div>
+
+          <ScrollReveal delay={0.3}>
+            <p className="text-center text-sm text-charcoal/40 mt-12">
+              Start free. Upgrade or cancel anytime. No commitments.
+            </p>
+          </ScrollReveal>
+        </div>
+      </section>
+
+      {/* ─── RECENT RELEASES ─── */}
+      <section className="py-24 md:py-36 px-6 md:px-12 bg-cream">
+        <div className="max-w-6xl mx-auto">
+          <ScrollReveal>
+            <div className="text-center mb-16">
+              <span className="inline-flex items-center gap-2.5 text-xs tracking-[0.35em] uppercase text-sage/80 font-medium mb-6">
+                <span className="w-7 h-px bg-sage/40" />
+                The Drop
+                <span className="w-7 h-px bg-sage/40" />
+              </span>
+              <h2 className="font-serif text-3xl md:text-5xl lg:text-6xl text-obsidian leading-tight mb-6">
+                Recent Releases
+              </h2>
+              <p className="text-lg text-charcoal/65 max-w-xl mx-auto">
+                A look at what Reserve members have accessed. Updated
+                periodically. No&nbsp;spam.
+              </p>
+            </div>
+          </ScrollReveal>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            <ScrollReveal delay={0}>
+              <ReleaseCard
+                name="Windbreaker"
+                category="Forresters"
+                tag="Reserve Priced"
+                image="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/FO_WindBlockerM_Black-1.jpg?v=1775579847"
+              />
+            </ScrollReveal>
+            <ScrollReveal delay={0.12}>
+              <ReleaseCard
+                name="Celtic Polo"
+                category="Quiet Golf"
+                tag="Available"
+                image="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/celticpoloslatefront_3b541e30-412e-4873-85c7-cb8b8b618e68.jpg?v=1771520789"
+              />
+            </ScrollReveal>
+            <ScrollReveal delay={0.24}>
+              <ReleaseCard
+                name="Golf Tour Trouser"
+                category="Rhone"
+                tag="Available"
+                image="https://cdn.shopify.com/s/files/1/0561/0530/4256/files/GolfTourTrouser-TidalGreen-102181-355_2_2000x_395dbcbe-7daa-4221-bfba-4f32b89f8a89.webp?v=1771520721"
+              />
+            </ScrollReveal>
+          </div>
+
+          <ScrollReveal>
+            <div className="text-center mt-12">
+              <a
+                href="#"
+                className="inline-flex items-center gap-3 text-sm tracking-wider uppercase text-forest font-medium group px-6 py-3 rounded-lg border border-forest/20 hover:bg-forest hover:text-bone transition-all duration-300"
+              >
+                <span>View All Past Drops</span>
+                <svg
+                  className="w-4 h-4 transition-transform duration-300 group-hover:translate-x-1"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M17 8l4 4m0 0l-4 4m4-4H3"
+                  />
+                </svg>
+              </a>
+            </div>
+          </ScrollReveal>
+        </div>
+      </section>
+
+      {/* ─── FINAL CTA — Dark cinematic close ─── */}
+      <section id="bottom-cta" className="py-28 md:py-40 px-6 md:px-12 relative overflow-hidden bottom-cta-dark">
+        <div className="hero-grain-overlay" style={{ opacity: 0.04 }} />
+
+        <ScrollReveal>
+          <div className="relative max-w-4xl mx-auto z-10">
+            <div className="grid md:grid-cols-2 gap-12 md:gap-16 items-center">
+              {/* Left: Message */}
+              <div className="text-center md:text-left">
+                <h2 className="font-serif text-3xl md:text-5xl lg:text-[3.5rem] text-bone leading-tight mb-6">
+                  Built for players
+                  <br />
+                  who care.
+                </h2>
+                <p className="text-lg text-bone/50 leading-relaxed mb-4">
+                  Earn your edge. Join Mully Reserve and get access to what
+                  matters. Without the noise.
+                </p>
+                <p className="text-sm text-bone/30 italic">
+                  &ldquo;Taste. Earned.&rdquo;
+                </p>
+              </div>
+
+              {/* Right: CTA Card */}
+              <div className="rounded-2xl p-8 md:p-10 bottom-cta-card-glass">
+                <h3 className="font-serif text-xl text-bone mb-2">
+                  Unlock Reserve Access
+                </h3>
+                <p className="text-sm text-bone/45 mb-6">
+                  Complimentary. No credit card required.
+                </p>
+                <NechvEmailCTA variant="bottom" />
+                <p className="text-xs text-bone/30 mt-4 text-center">
+                  Join 2,400+ members already inside.
+                </p>
+                <p className="text-[11px] text-bone/20 mt-2 text-center">
+                  4.9&#9733; from 2,400+ members
+                </p>
+              </div>
+            </div>
+          </div>
+        </ScrollReveal>
+      </section>
+
+      {/* ─── FLOATING CTA BAR ─── */}
+      <FloatingCTA />
+
+      {/* ─── FOOTER ─── */}
+      <footer className="py-16 px-6 md:px-12 bg-forest topo-pattern footer-glass-border">
+        <div className="max-w-6xl mx-auto">
+          {/* Top — Logo + Nav columns */}
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-10 mb-14">
+            {/* Logo */}
+            <div className="col-span-2 md:col-span-4 lg:col-span-1 mb-4 lg:mb-0">
+              <span className="flex items-center gap-2 text-bone mb-3">
+                <svg viewBox="0 0 1002 540" fill="currentColor" className="h-5 w-auto" aria-hidden="true"><path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" /></svg>
+                <span className="font-serif text-2xl font-bold tracking-wide">mully.</span>
+              </span>
+              <p className="text-sm text-bone/50 leading-relaxed max-w-xs">
+                Members-only access to the best golf has to offer.
+              </p>
+            </div>
+
+            {/* Company */}
+            <div>
+              <h4 className="text-xs tracking-[0.25em] uppercase text-bone/70 font-medium mb-4">
+                Company
+              </h4>
+              <ul className="space-y-2.5">
+                <FooterLink href="/outings">Outings &amp; Groups</FooterLink>
+                <FooterLink href="/blog">Blog</FooterLink>
+                <FooterLink href="/faq">FAQ</FooterLink>
+                <FooterLink href="/login">Log In</FooterLink>
+              </ul>
+            </div>
+
+            {/* Partners */}
+            <div>
+              <h4 className="text-xs tracking-[0.25em] uppercase text-bone/70 font-medium mb-4">
+                Partners
+              </h4>
+              <ul className="space-y-2.5">
+                <FooterLink href="/affiliates">Affiliates</FooterLink>
+                <FooterLink href="/influencers">Influencers</FooterLink>
+              </ul>
+            </div>
+
+            {/* Policies */}
+            <div>
+              <h4 className="text-xs tracking-[0.25em] uppercase text-bone/70 font-medium mb-4">
+                Policies
+              </h4>
+              <ul className="space-y-2.5">
+                <FooterLink href="/returns">Returns</FooterLink>
+                <FooterLink href="/policies/privacy">Privacy Policy</FooterLink>
+                <FooterLink href="/policies/shipping">Shipping Policy</FooterLink>
+                <FooterLink href="/policies/terms">Terms of Service</FooterLink>
+              </ul>
+            </div>
+          </div>
+
+          {/* Contact + Socials */}
+          <div className="border-t border-bone/15 pt-8 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+            <div>
+              <p className="text-sm text-bone/70 mb-1">
+                Info@MyMully.com
+              </p>
+              <p className="text-xs text-bone/40">
+                555 Friendly St., Pontiac, MI 48341
+              </p>
+            </div>
+
+            {/* Social icons */}
+            <div className="flex items-center gap-4">
+              <a href="https://instagram.com/MullyReserve" target="_blank" rel="noopener noreferrer" className="text-bone/50 hover:text-bone transition-colors duration-300" aria-label="Instagram">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
+              </a>
+              <a href="https://tiktok.com/@Mullybox" target="_blank" rel="noopener noreferrer" className="text-bone/50 hover:text-bone transition-colors duration-300" aria-label="TikTok">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1v-3.5a6.37 6.37 0 00-.79-.05A6.34 6.34 0 003.15 15.2a6.34 6.34 0 0010.86 4.48V13a8.28 8.28 0 005.58 2.16V11.7a4.83 4.83 0 01-3.77-1.24V6.69h3.77z"/></svg>
+              </a>
+              <a href="https://facebook.com/Mullybox" target="_blank" rel="noopener noreferrer" className="text-bone/50 hover:text-bone transition-colors duration-300" aria-label="Facebook">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+              </a>
+              <a href="https://x.com/MyMully" target="_blank" rel="noopener noreferrer" className="text-bone/50 hover:text-bone transition-colors duration-300" aria-label="X">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+              </a>
+              <a href="https://youtube.com/@Mullybox" target="_blank" rel="noopener noreferrer" className="text-bone/50 hover:text-bone transition-colors duration-300" aria-label="YouTube">
+                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+              </a>
+            </div>
+          </div>
+
+          {/* Copyright */}
+          <div className="mt-8">
+            <p className="text-xs text-bone/25">
+              &copy; {new Date().getFullYear()} Mully Group, Inc. All rights
+              reserved.
+            </p>
+          </div>
+        </div>
+      </footer>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   COMPONENTS
+   ═══════════════════════════════════════════ */
+
+/* ── Brand strip — infinite-scroll marquee inside hero ── */
+function BrandStrip() {
+  const brands = [
+    { name: "Rhone", src: "/brands/rhone.png" },
+    { name: "Greyson", src: "/brands/greyson.png" },
+    { name: "Quiet Golf", src: "/brands/quiet-golf.png" },
+    { name: "Field Day Sporting Co.", src: "/brands/field-day.png" },
+    { name: "Arnie's", src: "/brands/arnies.png" },
+    { name: "Harlestons", src: "/brands/harlestons.png" },
+    { name: "Topo Athletic", src: "/brands/topo.png" },
+    { name: "Hyperice", src: "/brands/hyperice.png" },
+    { name: "Feetures", src: "/brands/feetures.png" },
+  ];
+
+  // Duplicate the array for seamless loop
+  const looped = [...brands, ...brands];
+
+  return (
+    <div aria-label="Featured brand partners" className="w-full">
+      <div className="text-center mb-5 md:mb-6 px-2">
+        <span className="inline-flex items-center justify-center gap-2 md:gap-2.5 text-[9px] md:text-[11px] tracking-[0.25em] md:tracking-[0.3em] uppercase text-forest/60 font-medium whitespace-nowrap">
+          <span className="hidden sm:block w-7 h-px bg-forest/20" />
+          Members get pricing on brands like
+          <span className="hidden sm:block w-7 h-px bg-forest/20" />
+        </span>
+      </div>
+
+      {/* Infinite-scroll marquee — all viewports */}
+      <div className="overflow-hidden brand-marquee-mask">
+        <div className="brand-marquee flex items-center gap-10 md:gap-16 whitespace-nowrap">
+          {looped.map((b, i) => (
+            <div
+              key={`${b.name}-${i}`}
+              className="flex items-center justify-center h-8 md:h-10 shrink-0"
+              title={b.name}
+            >
+              <Image
+                src={b.src}
+                alt={b.name}
+                width={140}
+                height={40}
+                unoptimized
+                className="max-h-full w-auto object-contain opacity-70"
+                style={{ filter: "grayscale(100%) contrast(1.05)" }}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MullyMark({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 28 28"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+    >
+      <rect
+        x="5"
+        y="3"
+        width="2.5"
+        height="22"
+        rx="1.25"
+        fill="currentColor"
+      />
+      <path d="M7.5 4L21 9.5L7.5 15V4Z" fill="currentColor" />
+      <ellipse
+        cx="6.25"
+        cy="26"
+        rx="4"
+        ry="1"
+        fill="currentColor"
+        opacity="0.3"
+      />
+    </svg>
+  );
+}
+
+/* ── Glassmorphic Reserve Member Card (dark-aware) ── */
+function MemberCard({ size = "lg" }: { size?: "sm" | "lg" }) {
+  const isSmall = size === "sm";
+  return (
+    <div
+      className={`relative ${isSmall ? "w-[240px] aspect-[1.6/1] rounded-xl" : "w-[360px] lg:w-[400px] aspect-[1.6/1] rounded-2xl"} overflow-hidden member-card-shimmer`}
+      style={{
+        background: "linear-gradient(135deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.14) 100%)",
+        backdropFilter: "blur(24px) saturate(1.8)",
+        WebkitBackdropFilter: "blur(24px) saturate(1.8)",
+        border: "1px solid rgba(255,255,255,0.22)",
+        boxShadow: isSmall
+          ? "0 4px 20px -4px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.25)"
+          : "0 8px 32px -4px rgba(0,0,0,0.4), 0 32px 72px -12px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.30), inset 0 0 0 0.5px rgba(255,255,255,0.15)",
+      }}
+    >
+      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
+      <div className={`relative z-10 h-full flex flex-col justify-between ${isSmall ? "p-4" : "p-7"}`}>
+        <div className="flex items-start justify-between">
+          <div className={`flex items-center gap-1.5 text-bone/90 ${isSmall ? "" : "gap-2"}`}>
+            <svg viewBox="0 0 1002 540" fill="currentColor" className={`${isSmall ? "h-3" : "h-4"} w-auto`} aria-hidden="true">
+              <path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" />
+            </svg>
+            <span className={`font-serif font-bold tracking-wide ${isSmall ? "text-xs" : "text-sm"}`}>mully.</span>
+          </div>
+          <span className={`tracking-[0.2em] uppercase text-bone/30 font-medium ${isSmall ? "text-[7px]" : "text-[9px]"}`}>EST. 2026</span>
+        </div>
+        <div className="text-center">
+          <span className={`tracking-[0.4em] uppercase text-bone/60 font-medium ${isSmall ? "text-[9px]" : "text-[11px]"}`}>
+            Mully Reserve
+          </span>
+        </div>
+        <div className="flex items-end justify-between">
+          <div>
+            <span className={`block tracking-[0.2em] uppercase text-bone/30 mb-0.5 ${isSmall ? "text-[7px]" : "text-[9px] mb-1"}`}>Member</span>
+            <span className={`text-bone/70 tracking-widest font-light ${isSmall ? "text-xs" : "text-sm"}`}>0001 &nbsp;2847</span>
+          </div>
+          <span className={`tracking-[0.15em] uppercase text-bone/25 font-medium ${isSmall ? "text-[7px]" : "text-[9px]"}`}>
+            Reserve Member
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Dark glass feature card with ken-burns ── */
+function FeatureCard({
+  image,
+  title,
+  description,
+}: {
+  image: string;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="rounded-2xl overflow-hidden group h-full feature-card-dark relative">
+      <div className="relative aspect-[3/2] overflow-hidden">
+        <Image
+          src={image}
+          alt={title}
+          fill
+          sizes="(min-width: 1024px) 360px, (min-width: 768px) 33vw, 100vw"
+          className="w-full h-full object-cover transition-transform duration-[1.2s] group-hover:scale-110"
+          draggable={false}
+        />
+        {/* Gradient fade into card body */}
+        <div className="absolute inset-0 bg-gradient-to-t from-[#111]/80 via-[#111]/20 to-transparent pointer-events-none" />
+      </div>
+      <div className="p-6 md:p-7">
+        <h3 className="font-serif text-xl md:text-2xl text-bone mb-2">{title}</h3>
+        <p className="text-sm text-bone/50 leading-relaxed">{description}</p>
+      </div>
+    </div>
+  );
+}
+
+/* ── Simple numbered step card used in the early "How It Works" section ── */
+function SimpleStep({
+  number,
+  title,
+  description,
+}: {
+  number: string;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="relative h-full p-6 md:p-7 rounded-2xl bg-cream/80 border border-forest/10 hover:border-forest/20 transition-colors duration-300">
+      <div className="flex items-center gap-3 mb-4">
+        <span className="flex items-center justify-center w-8 h-8 rounded-full bg-forest text-bone font-serif text-sm">
+          {number}
+        </span>
+        <span className="h-px flex-1 bg-gradient-to-r from-forest/20 to-transparent" />
+      </div>
+      <h3 className="font-serif text-lg md:text-xl text-obsidian mb-2 leading-tight">
+        {title}
+      </h3>
+      <p className="text-sm text-charcoal/70 leading-relaxed">{description}</p>
+    </div>
+  );
+}
+
+/* ── Immediate-benefit row for the "Join Today & Get" block ── */
+function ImmediateBenefit({
+  label,
+  description,
+}: {
+  label: string;
+  description: string;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <svg
+        className="w-5 h-5 mt-0.5 shrink-0 text-ember"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2.5}
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M5 13l4 4L19 7"
+        />
+      </svg>
+      <div>
+        <p className="text-sm font-semibold text-obsidian leading-snug">{label}</p>
+        <p className="text-sm text-charcoal/60 leading-relaxed">{description}</p>
+      </div>
+    </div>
+  );
+}
+
+function TierFeature({
+  text,
+  light,
+  dark,
+}: {
+  text: string;
+  light?: boolean;
+  dark?: boolean;
+}) {
+  const checkColor = dark
+    ? "text-taupe"
+    : light
+      ? "text-bone/80"
+      : "text-forest";
+  const textColor = dark
+    ? "text-bone/45"
+    : light
+      ? "text-bone/80"
+      : "text-charcoal/65";
+
+  return (
+    <li className="flex items-start gap-3">
+      <svg
+        className={`w-4 h-4 mt-0.5 shrink-0 ${checkColor}`}
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2.5}
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M5 13l4 4L19 7"
+        />
+      </svg>
+      <span className={`text-sm ${textColor}`}>{text}</span>
+    </li>
+  );
+}
+
+function StepCard({
+  number,
+  icon,
+  title,
+  description,
+  dark,
+}: {
+  number: string;
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  dark?: boolean;
+}) {
+  return (
+    <div className="text-center px-4">
+      <div
+        className={`w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-5 ${dark ? "" : "bg-forest/10"}`}
+        style={dark ? {
+          background: 'rgba(255,255,255,0.06)',
+          backdropFilter: 'blur(12px)',
+          border: '1px solid rgba(255,255,255,0.10)',
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)'
+        } : undefined}
+      >
+        {icon}
+      </div>
+      <span className={`font-serif text-xs tracking-[0.2em] uppercase block mb-3 ${dark ? "text-ember/60" : "text-sage"}`}>
+        Step {number}
+      </span>
+      <h3 className={`font-serif text-xl mb-3 ${dark ? "text-bone" : "text-obsidian"}`}>{title}</h3>
+      <p className={`text-sm leading-relaxed max-w-xs mx-auto ${dark ? "text-bone/45" : "text-charcoal/55"}`}>
+        {description}
+      </p>
+    </div>
+  );
+}
+
+function FooterLink({
+  href,
+  children,
+}: {
+  href: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <li>
+      <a
+        href={href}
+        className="text-sm text-bone/50 hover:text-bone transition-colors duration-300 link-hover-underline"
+      >
+        {children}
+      </a>
+    </li>
+  );
+}
+
+function ReleaseCard({
+  name,
+  category,
+  tag,
+  image,
+  pattern,
+}: {
+  name: string;
+  category: string;
+  tag: string;
+  image?: string;
+  pattern?: string;
+}) {
+  const tagStyle =
+    tag === "Available"
+      ? "bg-forest/10 text-forest"
+      : tag === "Sold Out"
+        ? "bg-charcoal/10 text-charcoal/50"
+        : "bg-sage/15 text-sage";
+
+  return (
+    <div className="group bg-bone rounded-2xl border border-taupe/15 overflow-hidden card-hover h-full relative">
+      <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-sage/40 to-transparent z-10" />
+      <div className="release-img-wrap">
+        {image ? (
+          <div className="release-img-inner aspect-[4/3] relative bg-cream">
+            <Image
+              src={image}
+              alt={name}
+              fill
+              sizes="(min-width: 1024px) 360px, (min-width: 640px) 50vw, 100vw"
+              className="w-full h-full object-cover"
+              draggable={false}
+            />
+          </div>
+        ) : (
+          <div
+            className={`release-img-inner aspect-[4/3] ${pattern || ""} relative flex items-center justify-center`}
+          >
+            <MullyMark className="w-14 h-14 text-bone opacity-10" />
+          </div>
+        )}
+      </div>
+      <div className="p-6">
+        <span className="text-xs tracking-[0.2em] uppercase text-forest font-medium">
+          {category}
+        </span>
+        <h4 className="font-serif text-lg text-obsidian mt-1.5 mb-3">
+          {name}
+        </h4>
+        <span
+          className={`inline-block text-xs tracking-wider uppercase font-medium px-3 py-1 rounded-full ${tagStyle}`}
+        >
+          {tag}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
+   ICONS
+   ═══════════════════════════════════════════ */
+
+function EnvelopeIcon({ light }: { light?: boolean }) {
+  return (
+    <svg
+      className={`w-6 h-6 ${light ? "text-bone/70" : "text-forest"}`}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={1.5}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75"
+      />
+    </svg>
+  );
+}
+
+function KeyIcon({ light }: { light?: boolean }) {
+  return (
+    <svg
+      className={`w-6 h-6 ${light ? "text-bone/70" : "text-forest"}`}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={1.5}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z"
+      />
+    </svg>
+  );
+}
+
+function BellIcon({ light }: { light?: boolean }) {
+  return (
+    <svg
+      className={`w-6 h-6 ${light ? "text-bone/70" : "text-forest"}`}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={1.5}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"
+      />
+    </svg>
+  );
+}
