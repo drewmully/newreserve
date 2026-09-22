@@ -1,7 +1,8 @@
 # MyMully: Shopify source mapping and test results
 
-Prepared September 22, 2026. This is a local, additive implementation on top of
-the analytics PR stack, not a deployment or a completed live Shopify pipeline.
+Prepared September 22, 2026. This additive source-mapping implementation is
+included in existing [PR #152](https://github.com/drewmully/newreserve/pull/152),
+not a deployment or a completed live Shopify pipeline.
 The source fixtures use Shopify's documented GraphQL response shape, but they
 are synthetic records, not downloaded customer orders.
 
@@ -114,14 +115,15 @@ npm test
 
 ## What still needs to happen
 
-1. Review and publish this local slice as a stacked PR. It has not been pushed,
-   merged, rebased onto newer main, or deployed.
-2. Implement the separate sales ledger: original sales components, refunds
-   allocated to items/tax/shipping/duties, adjustments and independent source
-   reconciliation. A negative refund payment is not a merchandise-refund ledger.
-3. Add approved classification configuration and durable source retention, then
-   integrate the asynchronous source reader with worker orchestration. The current
-   worker's transform is synchronous; this module is not silently wired into it.
+1. Review this slice in existing PR #152. The downstream bounded financial
+   mapper, durable source retention and manual test runner are included in
+   [PR #159](https://github.com/drewmully/newreserve/pull/159); consult its
+   `L15-isolated-live-pilot.md` runbook for the combined scope and test results.
+2. Review that pilot's supported sales/refund components and deliberate
+   exclusions. A negative refund payment alone is not a merchandise-refund ledger.
+3. Supply real approved classification/financial policy and connect asynchronous
+   source hydration to the continuous receipt worker. The manual pilot is a
+   separate path; this module is not silently wired into the general worker.
 4. Validate a small, explicitly approved sample of actual orders using the
    runtime app's read permission. Browser access or an accepted Shopify invite
    alone does not validate that runtime token or query.
