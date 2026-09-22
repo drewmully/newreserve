@@ -26,3 +26,12 @@ The existing bulk helper may cancel another bulk operation and is not reused
 automatically. Run bounded historical batches only after the customer approves
 the time window and provider resource limits. This PR is a tested transform and
 pagination foundation, not a live Shopify sync.
+
+## Follow-up source adapter
+
+L14 now adds a separate version-pinned, read-only GraphQL order reader and an
+actual source-shape mapper. It deliberately does not reuse the older operational
+Shopify client or bulk helper. See [L14 mapping and tests](L14-shopify-source-mapping.md)
+for the supported fields, conservative exclusions, local test results and
+remaining worker integration. The earlier integration checklist above describes
+the L05 starting point; no live source activation has occurred.
