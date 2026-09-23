@@ -11,6 +11,8 @@ import { runObservedReportJob } from "@/lib/analytics/observedReportJob";
 import type { AnalyticsRpcClient } from "@/lib/analytics/rpcStore";
 import { runFullReportJob } from "@/lib/analytics/fullReportJob";
 import { fullFixture, fullProject, fullShop } from "../fixtures/analyticsFull";
+import { refreshFixture } from "../fixtures/analyticsRefresh";
+import { prepareRefresh } from "@/lib/analytics/refreshPlan";
 
 const connectionString = process.env.LOCAL_POSTGRES_TEST_URL;
 const shop = "concurrency-fixture.myshopify.com", project = "aaaaaaaaaaaaaaaaaaaa";
@@ -63,7 +65,7 @@ describe.skipIf(!connectionString)("real PostgreSQL concurrent analytics workers
     // CI service is disposable; the explicit local reset also permits repeat runs.
     for (const name of ["001_staging", "003_receipts", "004_worker", "013_release", "014_reporting_views",
       "015_backfill", "016_shopify_pilot", "017_shopify_pipeline", "018_history_jobs", "019_spend_jobs", "020_observed_report_jobs",
-      "021_full_report_jobs", "022_full_release", "023_posthog_export", "024_full_orchestration"])
+      "021_full_report_jobs", "022_full_release", "023_posthog_export", "024_full_orchestration", "025_refresh_queue"])
       await admin.query(readFileSync(`sql/analytics/${name}.sql`, "utf8"));
     await admin.query(`insert into lean_private.pipeline_scope(shop,project_ref,enabled,from_time,until_time,policy,approval_ref,actor_ref)
       values($1,$2,true,'2026-01-01','2026-02-01',$3,'fixture:scope','fixture:operator')`,
@@ -73,7 +75,8 @@ describe.skipIf(!connectionString)("real PostgreSQL concurrent analytics workers
   afterAll(async () => { await a?.end(); await b?.end(); await admin?.end(); });
   beforeEach(async () => {
     await a.query("rollback"); await b.query("rollback");
-    await admin.query(`truncate lean_private.full_builds; truncate lean_private.receipts cascade; truncate lean_private.publications cascade;
+    await admin.query(`truncate lean_private.refresh_queue; truncate lean_private.refresh_limits;
+      truncate lean_private.full_builds cascade; truncate lean_private.receipts cascade; truncate lean_private.publications cascade;
       truncate lean_private.history_jobs cascade; truncate lean_private.spend_jobs; truncate lean_private.report_builds cascade`);
   });
   const receipt = () => admin.query(`select public.lean_accept_receipt('shopify',$1,$2,'orders/updated',$3,$4)`,
@@ -90,6 +93,63 @@ describe.skipIf(!connectionString)("real PostgreSQL concurrent analytics workers
   }
   const finish = async (client: Client, args: unknown[]) =>
     (await client.query("select public.lean_pipeline_finish($1,$2,$3,$4) result", args)).rows[0].result;
+  async function refresh() {
+    const bundle = prepareRefresh(refreshFixture());
+    await admin.query("select public.lean_refresh_register($1)", [JSON.stringify(bundle)]);
+    await admin.query(`insert into lean_private.refresh_limits
+      (project_ref,enabled,max_daily_steps,approval_ref,actor_ref) values($1,true,5,'fixture','fixture')`, [fullProject]);
+    await admin.query("update lean_private.refresh_queue set enabled=true where run_id=$1", [bundle.runId]);
+    await admin.query("update lean_private.full_builds set enabled=true where run_id=$1", [bundle.runId]);
+    return bundle;
+  }
+  it("serializes refresh claims across real connections and stops expired ambiguous leases", async () => {
+    const bundle = await refresh(), token = randomUUID();
+    const sql = "select public.lean_refresh_claim($1,$2) result";
+    await a.query("begin");
+    expect((await a.query(sql, [fullProject, token])).rows[0].result.state).toBe("claimed");
+    const competing = b.query(sql, [fullProject, randomUUID()]);
+    await a.query("commit");
+    expect((await competing).rows[0].result.state).toBe("busy");
+    await admin.query("update lean_private.refresh_queue set lease_until=now()-interval '1 second' where run_id=$1", [bundle.runId]);
+    expect((await b.query(sql, [fullProject, randomUUID()])).rows[0].result.state).toBe("ambiguous");
+    expect((await admin.query("select used_steps,status from lean_private.refresh_queue")).rows)
+      .toEqual([{ used_steps: 1, status: "blocked" }]);
+  });
+  it("runs a registered refresh through the actual five-report builder and acknowledges completion", async () => {
+    const bundle = await refresh(), f = fullFixture(), token = randomUUID();
+    await admin.query("select public.lean_refresh_claim($1,$2)", [fullProject, token]);
+    await admin.query(`update lean_private.report_builds set enabled=true,completed_at=now(),result_hash='fixture'
+      where run_id=$1`, [bundle.base.runId]);
+    const publication = `observed:${bundle.base.runId}`;
+    await admin.query("insert into lean_private.publications(publication_id,contract_version) values($1,'lean-v1-draft.1')", [publication]);
+    for (const [table, rows] of Object.entries(f.base))
+      await admin.query(`insert into lean_private.${table} select * from jsonb_populate_recordset(null::lean_private.${table},$1)`,
+        [JSON.stringify(rows.map(r => ({ ...r, publication_id: publication })))]);
+    const adapter: AnalyticsRpcClient = { async rpc(name, args) {
+      if (!["lean_full_inputs", "lean_full_claim", "lean_full_fail", "lean_full_finish"].includes(name)) throw new Error("unexpected_rpc");
+      const entries = Object.entries(args);
+      const result = await a.query(`select public.${name}(${entries.map(([k], i) => `${k}=>$${i + 1}`).join(",")}) result`,
+        entries.map(([, v]) => typeof v === "object" ? JSON.stringify(v) : v));
+      return { data: result.rows[0].result, error: null };
+    } };
+    const result = await runFullReportJob({ client: adapter, projectRef: fullProject,
+      databaseUrl: `https://${fullProject}.supabase.co`, runId: bundle.runId,
+      posthogKey: "fixture", request: async () => Response.json(f.wire) });
+    expect(result.state).toBe("complete");
+    expect((await admin.query("select public.lean_refresh_finish($1,$2,$3,'complete') result",
+      [fullProject, bundle.runId, token])).rows[0].result).toBe(true);
+    expect((await admin.query("select status from lean_private.refresh_queue")).rows).toEqual([{ status: "complete" }]);
+    expect((await admin.query("select * from lean_private.selected_publications")).rows).toEqual([]);
+    expect((await admin.query("select count(*)::int n from lean_private.report_store_daily")).rows).toEqual([{ n: 1 }]);
+  });
+  it("fences a refresh publication after its project kill switch changes", async () => {
+    const bundle = await refresh();
+    await admin.query("select public.lean_refresh_claim($1,$2)", [fullProject, randomUUID()]);
+    await admin.query("update lean_private.refresh_limits set enabled=false where project_ref=$1", [fullProject]);
+    await expect(a.query("insert into lean_private.publications(publication_id,contract_version) values($1,'lean-v1-draft.1')",
+      [`full:${bundle.runId}`])).rejects.toThrow("refresh disabled");
+    expect((await admin.query("select * from lean_private.publications")).rows).toEqual([]);
+  });
   it("serializes two report completions without duplicate facts or a partial publication", async () => {
     await admin.query(`insert into lean_private.history_jobs
       (run_id,project_ref,shop,from_time,until_time,page_size,max_pages,approval_ref,actor_ref,enabled)
