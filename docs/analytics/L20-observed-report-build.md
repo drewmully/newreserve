@@ -17,7 +17,9 @@ part of this PR.
   block the build, rather than becoming zero spend or missing orders.
 - The mapper deduplicates overlapping order revisions, applies the approved
   product classifications, and refuses unsupported orders. It does not silently
-  drop edited/tax-inclusive/cancelled/non-USD/gift-card orders.
+  drop edited/tax-inclusive/cancelled/non-USD/gift-card orders. L21 adds an
+  explicit revision-bound original-purchase handoff; using it withholds the
+  partial base commerce reports until the full build replaces every named order.
 - Stored facts and three report tables are written atomically. Store/product
   observations and campaign spend are labeled `observed_unverified`; cash,
   customer counts, attributed revenue, ROAS, NCAC and MER remain withheld.
@@ -47,6 +49,8 @@ selected views do not show these rows. Do not certify this observed-only build
 as a complete release: independent account/history coverage, source totals,
 financial policies, identity/consent, session/attribution and cohort evidence
 remain separate requirements. There is no new PostHog reader grant.
+L21 adds a separate all-domain build and dormant reporting-only export role;
+it does not upgrade this observed-only publication into a certified release.
 
 ## Tests
 

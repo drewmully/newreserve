@@ -7,6 +7,7 @@ import { sourceArray, sourceObject, sourceString } from "./shopifySource";
 import { acquisitionDaily, type Facts, type ReportScope } from "./reporting";
 import { validateCandidateGraph } from "./certification";
 import { decimal, micros, type Row } from "./primitives";
+import { deferredOrders } from "./deferredCommerce";
 
 /** Saved sources only: no vendor credentials, source discovery or live requests.
  * This joins selected observations, NOT independently certified store coverage.
@@ -24,16 +25,27 @@ export async function runObservedReportJob(options: {
   const definition = "observed-sources-v1", fromDate = sourceString(input.fromDate), throughDate = sourceString(input.throughDate);
   const dates = reportDates(fromDate, throughDate);
   if (dates.length > 31) throw new Error("report_date_budget");
-  const policy = sourceObject(input.policy) as PipelinePolicy;
+  const rawPolicy = sourceObject(input.policy), policy = rawPolicy as PipelinePolicy;
+  const deferred = deferredOrders(rawPolicy.deferredOrders);
+  const matched = new Set<string>();
   const sources = sourceArray(input.history);
   if (sources.length > 100) throw new Error("report_order_budget");
   const skus = new Set<unknown>();
-  const records: RetainedCommerce[] = sources.map(value => {
+  const records: RetainedCommerce[] = sources.flatMap(value => {
     const item = sourceObject(value), source = sourceObject(item.source) as PilotSource;
+    const handoff = deferred.find(d => d.orderGid === source.commerce.order.id);
+    if (handoff) {
+      if (source.commerce.shop !== shop ||
+          Date.parse(String(source.commerce.order.updatedAt)) !== Date.parse(handoff.sourceUpdatedAt))
+        throw new Error("deferred_revision_mismatch");
+      matched.add(handoff.orderGid);
+      return [];
+    }
     for (const line of sourceArray(sourceObject(source.commerce.order.lineItems).nodes))
       skus.add(sourceObject(line).sku ?? "unknown");
-    return { source, policy: mappingPolicy(source, policy), evidenceRef: sourceString(item.evidenceRef) };
+    return [{ source, policy: mappingPolicy(source, policy), evidenceRef: sourceString(item.evidenceRef) }];
   });
+  if (matched.size !== deferred.length) throw new Error("deferred_source_missing");
   if (skus.size * dates.length > 20000) throw new Error("report_product_budget");
   const result = buildCommerceCandidate(records, { shop, publication, definition, fromDate, throughDate });
   const bases = sourceArray(input.spend) as SpendBase[];
@@ -67,6 +79,14 @@ export async function runObservedReportJob(options: {
   for (const row of acquisition) row.readiness = Object.fromEntries(
     Object.entries(row.readiness as Record<string, string>).map(([k, v]) => [k, v === "ready" ? "observed_unverified" : v]));
   const reports = { ...result.reports, acquisition_daily: acquisition };
+  // These base reports are deliberately unusable as complete commerce totals.
+  // The full build must supply every deferred original purchase before proceeding.
+  if (deferred.length) for (const rows of Object.values(reports)) for (const row of rows) {
+    const readiness = row.readiness as Record<string, string>;
+    for (const name of Object.keys(readiness)) {
+      if (name !== "spend_usd") { row[name] = null; readiness[name] = "withheld"; }
+    }
+  }
   const payload = { facts: result.facts, reports };
   if (Buffer.byteLength(JSON.stringify(payload)) > 16000000) throw new Error("report_payload_budget");
   // Never catch and replay: the write may have committed before a lost response.

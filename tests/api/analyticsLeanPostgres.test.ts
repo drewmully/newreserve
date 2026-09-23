@@ -9,6 +9,8 @@ import { mapPilotSource, type PilotPolicy } from "@/lib/analytics/shopifyPilotMa
 import type { PilotSource } from "@/lib/analytics/shopifyPilotSource";
 import { runObservedReportJob } from "@/lib/analytics/observedReportJob";
 import type { AnalyticsRpcClient } from "@/lib/analytics/rpcStore";
+import { runFullReportJob } from "@/lib/analytics/fullReportJob";
+import { fullFixture, fullProject, fullShop } from "../fixtures/analyticsFull";
 
 const connectionString = process.env.LOCAL_POSTGRES_TEST_URL;
 const shop = "concurrency-fixture.myshopify.com", project = "aaaaaaaaaaaaaaaaaaaa";
@@ -45,14 +47,14 @@ describe.skipIf(!connectionString)("real PostgreSQL concurrent analytics workers
     await admin.connect(); await a.connect(); await b.connect();
     // Only this dedicated fixture database and its fixture reader roles are reset.
     // Refuse to drop roles shared with another database: DROP ROLE will fail closed.
-    await admin.query("drop schema if exists lean_analytics cascade; drop schema if exists lean_private cascade");
+    await admin.query("drop schema if exists lean_export cascade; drop schema if exists lean_analytics cascade; drop schema if exists lean_private cascade");
     await admin.query(`do $$ declare f regprocedure; begin
       for f in select oid::regprocedure from pg_proc
         where pronamespace='public'::regnamespace and starts_with(proname,'lean_') loop
         execute format('drop function %s',f);
       end loop;
     end $$;
-    drop role if exists lean_pilot_reader; drop role if exists lean_observed_reader;`);
+    drop role if exists lean_pilot_reader; drop role if exists lean_observed_reader; drop role if exists lean_posthog_reader;`);
     await admin.query(`do $$ begin
       if not exists(select 1 from pg_roles where rolname='service_role') then create role service_role; end if;
       if not exists(select 1 from pg_roles where rolname='anon') then create role anon; end if;
@@ -60,7 +62,8 @@ describe.skipIf(!connectionString)("real PostgreSQL concurrent analytics workers
     end $$`);
     // CI service is disposable; the explicit local reset also permits repeat runs.
     for (const name of ["001_staging", "003_receipts", "004_worker", "013_release", "014_reporting_views",
-      "015_backfill", "016_shopify_pilot", "017_shopify_pipeline", "018_history_jobs", "019_spend_jobs", "020_observed_report_jobs"])
+      "015_backfill", "016_shopify_pilot", "017_shopify_pipeline", "018_history_jobs", "019_spend_jobs", "020_observed_report_jobs",
+      "021_full_report_jobs", "022_full_release", "023_posthog_export", "024_full_orchestration"])
       await admin.query(readFileSync(`sql/analytics/${name}.sql`, "utf8"));
     await admin.query(`insert into lean_private.pipeline_scope(shop,project_ref,enabled,from_time,until_time,policy,approval_ref,actor_ref)
       values($1,$2,true,'2026-01-01','2026-02-01',$3,'fixture:scope','fixture:operator')`,
@@ -70,8 +73,8 @@ describe.skipIf(!connectionString)("real PostgreSQL concurrent analytics workers
   afterAll(async () => { await a?.end(); await b?.end(); await admin?.end(); });
   beforeEach(async () => {
     await a.query("rollback"); await b.query("rollback");
-    await admin.query(`truncate lean_private.receipts cascade; truncate lean_private.publications cascade;
-      truncate lean_private.history_jobs cascade; truncate lean_private.spend_jobs; truncate lean_private.report_builds`);
+    await admin.query(`truncate lean_private.full_builds; truncate lean_private.receipts cascade; truncate lean_private.publications cascade;
+      truncate lean_private.history_jobs cascade; truncate lean_private.spend_jobs; truncate lean_private.report_builds cascade`);
   });
   const receipt = () => admin.query(`select public.lean_accept_receipt('shopify',$1,$2,'orders/updated',$3,$4)`,
     [randomUUID(), JSON.stringify([shop, "gid://shopify/Order/1"]), "a".repeat(64), JSON.stringify({ admin_graphql_api_id: "gid://shopify/Order/1" })]);
@@ -163,5 +166,38 @@ describe.skipIf(!connectionString)("real PostgreSQL concurrent analytics workers
     expect((await competing).rows[0].result).toBe(false);
     expect((await admin.query("select page_count,row_count,complete from lean_private.history_jobs")).rows)
       .toEqual([{ page_count: 1, row_count: 1, complete: true }]);
+  });
+  it("lets only one concurrent full-report worker query the vendor and commits all five reports once", async () => {
+    const f = fullFixture();
+    await admin.query(`insert into lean_private.report_builds
+      (run_id,project_ref,shop,history_runs,from_date,through_date,policy,approval_ref,actor_ref,enabled,completed_at,result_hash)
+      values('base',$1,$2,array['fixture-history'],'2026-01-01','2026-01-01','{}','fixture','fixture',true,now(),'fixture')`,
+    [fullProject, fullShop]);
+    await admin.query("insert into lean_private.publications(publication_id,contract_version) values('observed:base','lean-v1-draft.1')");
+    for (const [table, rows] of Object.entries(f.base))
+      await admin.query(`insert into lean_private.${table} select * from jsonb_populate_recordset(null::lean_private.${table},$1)`,
+        [JSON.stringify(rows.map(r => ({ ...r, publication_id: "observed:base" })))]);
+    await admin.query(`insert into lean_private.full_builds
+      (run_id,project_ref,base_run,policy,evidence,behavior,approval_ref,actor_ref,enabled)
+      values('fixture',$1,'base',$2,$3,$4,'fixture','fixture',true)`,
+    [fullProject, JSON.stringify(f.policy), JSON.stringify(f.evidence), JSON.stringify(f.behavior)]);
+    let reads = 0, release!: () => void, vendorCalls = 0;
+    const barrier = new Promise<void>(resolve => { release = resolve; });
+    const adapter = (pg: Client): AnalyticsRpcClient => ({ async rpc(name, args) {
+      if (!["lean_full_inputs", "lean_full_claim", "lean_full_fail", "lean_full_finish"].includes(name)) throw new Error("unexpected_rpc");
+      const entries = Object.entries(args);
+      const result = await pg.query(`select public.${name}(${entries.map(([k], i) => `${k}=>$${i + 1}`).join(",")}) result`,
+        entries.map(([, v]) => typeof v === "object" ? JSON.stringify(v) : v));
+      if (name === "lean_full_inputs") { if (++reads === 2) release(); await barrier; }
+      return { data: result.rows[0].result, error: null };
+    } });
+    const opts = { projectRef: fullProject, databaseUrl: `https://${fullProject}.supabase.co`, runId: "fixture",
+      posthogKey: "fixture", request: async () => { vendorCalls++; return Response.json(f.wire); } };
+    const results = await Promise.all([runFullReportJob({ ...opts, client: adapter(a) }),
+      runFullReportJob({ ...opts, client: adapter(b) })]);
+    expect(results.map(r => r.state).sort()).toEqual(["busy_or_exhausted", "complete"]);
+    expect(vendorCalls).toBe(1);
+    expect((await admin.query("select count(*)::int n from lean_private.report_store_daily")).rows[0]).toEqual({ n: 1 });
+    expect((await admin.query("select count(*)::int n from lean_private.report_funnel_daily")).rows[0]).toEqual({ n: 2 });
   });
 });
