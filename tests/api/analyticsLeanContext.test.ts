@@ -11,7 +11,7 @@ describe("consent-aware collection and bounded checkout context", () => {
     ["reserve", "reveal"], ["style_game", "completed"], ["text_mully", "activated"],
   ] as const)("supports %s %s without personal payloads", (journey, step) => {
     const event = collectionEvent({ journey, step, analyticsPermitted: true, sessionId: "a".repeat(32), eventId: "b".repeat(32) });
-    expect(Object.keys(event!.properties).sort()).toEqual(["$insert_id", "$session_id", "collection_version", "journey", "step"].sort());
+    expect(Object.keys(event!.properties).sort()).toEqual(["$insert_id", "$session_id", "collection_version", "journey", "step", "analytics_permitted"].sort());
   });
   it("uses a stable supplied event id so retries do not create a new activation", () => {
     const e = { journey: "text_mully" as const, step: "activated", analyticsPermitted: true, sessionId: "a".repeat(32), eventId: "b".repeat(32) };
