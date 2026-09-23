@@ -1,8 +1,10 @@
 # L13: release controls, backfill checkpoints and test runbook
 
 This draft completes the planned core PR split, not production integration.
-Live adapters, journey instrumentation, scheduler bindings and customer policy
-approval remain implementation work. No migration, source subscription, live
+The Shopify receipt worker and opt-in scheduler are now implemented; see
+[L16](L16-automatic-processing-and-merge-checklist.md). Other live adapters,
+journey instrumentation, full-coverage release and customer policy approval
+remain separate work. No hosted migration, source subscription, live
 backfill, production setting or warehouse connection has been applied.
 
 ## What this draft adds
@@ -53,9 +55,10 @@ candidate. Prepare evidence and report rows first, lock the publication against
 writers for final validation, then certify and select transactionally. Do not
 allow a gap where facts change after validation but before certification.
 
-PGlite executes PostgreSQL locally but does not prove multi-connection behavior,
-Supabase/PostgREST permissions, network ambiguity or PostHog sync semantics.
-Verify these in an approved staging environment.
+PGlite tests are supplemented by four real multi-connection PostgreSQL tests
+for the automatic worker. These still do not prove hosted Supabase/PostgREST
+permissions, real network ambiguity or PostHog sync semantics. Verify those
+in an approved staging environment.
 
 ## Local verification
 
@@ -95,10 +98,11 @@ production sign-off.
 1. **Access and isolation.** Reconfirm the accepted MyMully access and intended
    project at execution time. Provision an approved isolated database. Inspect
    existing schemas and server role before manually applying 001, 003, 004,
-   013, 014, 015 in order. These SQL files are not rerunnable migrations.
-2. **Live bindings.** Implement/review the Shopify API-to-evidence mapping,
+  013, 014, 015, 016, 017 in order. These SQL files are not rerunnable migrations.
+2. **Live bindings.** Validate the implemented Shopify API-to-evidence mapping
+   and receipt worker using L16; separately implement/review
    Google Ads client/account metadata, native PostHog reader/logical event view,
-   identity source and worker/scheduler wiring. Add Reserve, Style Game and
+   identity source and approved scheduler hosting. Add Reserve, Style Game and
    Text-to-Mully callers only after consent/session/context rules are approved.
    Firebase is needed only if the approved identity evidence requires it.
 3. **Privacy and access.** Verify anonymous/authenticated app users cannot read
@@ -135,6 +139,7 @@ production sign-off.
     exports instead of views, implement that reviewed boundary before release.
     Connect the bounded query layer and test rejection of unsupported cuts.
 
-Only after all applicable evidence is reviewed should MyMully authorize merges,
+Disabled-by-default code can be reviewed and merged separately from activation.
+Only after all applicable evidence is reviewed should MyMully authorize
 production migrations, subscriptions, schedules, backfills and publication.
 Meta and subscription extensions remain conditional, not silently enabled.

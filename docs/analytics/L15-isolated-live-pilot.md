@@ -2,6 +2,13 @@
 
 Status: September 22, 2026. The bounded, single-order live-test path is implemented and tested locally; it has not been deployed or run against customer data. This is not a claim that the full production analytics pipeline is finished.
 
+Update: [L16 automatic processing](L16-automatic-processing-and-merge-checklist.md)
+now wires the separate webhook queue to hydration, retained snapshots, candidate
+facts and latest observed-order reports. Its opt-in scheduler and queue-health
+checks are implemented, not hosted or activated. The single-order pilot below
+remains available for the first isolated live test; the historical test counts
+in this document describe that earlier pilot revision.
+
 ## Why merging was not necessary
 
 Initial compatibility tests used an isolated local branch combining the existing PR stack with the then-latest fetched `main`. For publication, the changes were transferred onto the existing PR heads without importing unrelated `main` changes. Neither GitHub `main` nor MyMully's running application has been changed.
@@ -129,8 +136,8 @@ Success requires matching run ID, row count, dates, six-decimal amounts and with
 The narrow hosted-test path is wired, but the full production pipeline is not certified or activated. Outstanding work must not be presented as merely accepting an invitation.
 
 - **Live validation:** Real read credentials, selected sample, actual catalog/financial approvals, isolated migrations and Supabase-to-PostHog readback.
-- **Continuous ingestion:** Connect the existing general webhook receipt queue to live order hydration/materialization, process source revisions across orders, and approve coverage/backfill bounds. The manual pilot is a separate path, not a replacement for that worker.
-- **Scheduling/monitoring:** Production dispatch cadence, alerts, source freshness checks, failed-work operations and replay ownership.
+- **Continuous ingestion:** The L16 receipt-to-report worker is now implemented. Approve source coverage/backfill bounds and validate real event delivery; a healthy observed queue does not prove complete historical coverage.
+- **Scheduling/monitoring:** The opt-in dispatcher, counts-only health endpoint, staleness and audited dead-work retry are implemented. Hosting, cadence approval, log-alert delivery and operator ownership remain activation tasks.
 - **Broader source coverage:** Settlement/payout evidence, identity/checkout/offer mapping, behavioral events and advertising sources.
 - **Release:** Independent reconciliation and authorized certification/selection of complete publications, plus approved production reporting sources.
 

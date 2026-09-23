@@ -44,6 +44,20 @@ jobs:
   contracts:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: fixture_owner
+          POSTGRES_PASSWORD: fixture_local_only
+          POSTGRES_DB: analytics_test_pipeline
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fixture_owner -d analytics_test_pipeline"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      LOCAL_POSTGRES_TEST_URL: postgresql://fixture_owner:fixture_local_only@127.0.0.1:5432/analytics_test_pipeline
     steps:
       - uses: actions/checkout@v4
         with:
