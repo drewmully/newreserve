@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { useMembership } from "../../context/MembershipContext";
 import { ShopSlideCart } from "./ShopSlideCart";
 import { MullyWordmark } from "./MullyWordmark";
+import { ShopAnnouncementBar } from "./ShopAnnouncementBar";
 
 /**
  * Shop-only header. 4 primary categories with a hover mega menu on the last
@@ -13,10 +15,51 @@ import { MullyWordmark } from "./MullyWordmark";
  * Baymard 2024: 88% of top US ecommerce sites use hover mega menus. NNG:
  * mega menus cut nav time 37% for stores with >10 SKUs across categories.
  * We deliberately keep only 4 primary items to keep the header light.
+ *
+ * Two visual states, driven by route and scroll position (Huckberry pattern):
+ *
+ *  - **Transparent-on-hero**: on `/shop` while the user is inside the top
+ *    ~90% of the viewport, the header sits directly on top of the seasonal
+ *    hero image with white text and no background. This integrates the
+ *    header into the hero photograph.
+ *  - **Solid**: on every other shop route, and on `/shop` after the user has
+ *    scrolled past the hero, the header renders on a solid white background
+ *    with charcoal text and a soft bottom border.
+ *
+ * The dark announcement bar always renders above the header.
  */
 export function ShopSeasonalHeader({ accent }: { accent: string }) {
   const { cartCount, setCartOpen } = useMembership();
   const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const pathname = usePathname();
+  const [scrolledPastHero, setScrolledPastHero] = useState(false);
+
+  // Only the /shop landing has a full-viewport dark hero the header can
+  // sit on. Every other route starts with white/cream content.
+  const hasHero = pathname === "/shop";
+
+  useEffect(() => {
+    if (!hasHero) return;
+    // Flip to the solid state once the user has scrolled past ~85vh — a
+    // touch before the hero fully leaves so the transition feels tight.
+    const threshold = () => Math.round(window.innerHeight * 0.85);
+    const onScroll = () => setScrolledPastHero(window.scrollY > threshold());
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [hasHero]);
+
+  const isTransparent = hasHero && !scrolledPastHero;
+  const tone: "light" | "dark" = isTransparent ? "light" : "dark";
+
+  // Colors switch together so the whole header reads coherently.
+  const linkColor = isTransparent
+    ? "text-white/85 hover:text-white"
+    : "text-charcoal/70 hover:text-charcoal";
+  const iconColor = isTransparent ? "text-white" : "text-charcoal";
+  const headerBg = isTransparent
+    ? "bg-transparent"
+    : "bg-white/95 backdrop-blur-md border-b border-charcoal/10";
 
   const primary = [
     {
@@ -52,11 +95,24 @@ export function ShopSeasonalHeader({ accent }: { accent: string }) {
 
   return (
     <>
-      <style>{`.shop-main { padding-top: 4rem; }`}</style>
-      <header className="fixed left-0 right-0 top-0 z-40 border-b border-charcoal/10 bg-white/95 backdrop-blur-md">
+      {/*
+        Global padding rule: on non-hero routes we push the main content down
+        by (announcement 32px + header 64px) = 6rem. On the /shop landing,
+        the hero is intentionally allowed to render under the header, so
+        `shop-main` sits at 0 there and the hero occupies the full viewport
+        below the announcement strip.
+      */}
+      <style>{`
+        .shop-main { padding-top: 6rem; }
+        .shop-main--hero { padding-top: 2rem; } /* just clears announcement bar; hero sits behind transparent header */
+      `}</style>
+      <ShopAnnouncementBar />
+      <header
+        className={`fixed left-0 right-0 top-8 z-40 transition-colors duration-300 ${headerBg}`}
+      >
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6 md:px-12">
           <Link href="/shop" aria-label="Mully Shop home">
-            <MullyWordmark accent={accent} className="text-2xl" />
+            <MullyWordmark accent={accent} tone={tone} className="text-2xl" />
           </Link>
 
           <nav
@@ -73,7 +129,7 @@ export function ShopSeasonalHeader({ accent }: { accent: string }) {
               >
                 <Link
                   href={item.href}
-                  className="flex items-center gap-1 text-[11px] font-mono uppercase tracking-[0.2em] text-charcoal/70 transition-colors hover:text-charcoal"
+                  className={`flex items-center gap-1 text-[11px] font-mono uppercase tracking-[0.2em] transition-colors ${linkColor}`}
                 >
                   {item.label}
                   {item.submenu && (
@@ -114,7 +170,7 @@ export function ShopSeasonalHeader({ accent }: { accent: string }) {
 
           <button
             onClick={() => setCartOpen(true)}
-            className="relative flex items-center gap-2 text-charcoal transition-opacity duration-200 hover:opacity-70"
+            className={`relative flex items-center gap-2 transition-opacity duration-200 hover:opacity-70 ${iconColor}`}
             aria-label="Cart"
           >
             <svg

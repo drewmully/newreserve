@@ -113,7 +113,7 @@ export function ShopLanding({ products, productsByCategory, theme }: Props) {
       {/* ═══ 1. HERO ═══ */}
       <section className="relative">
         <div
-          className="relative h-[calc(100vh-4rem)] min-h-[560px] w-full overflow-hidden"
+          className="relative h-screen min-h-[600px] w-full overflow-hidden"
           style={{ backgroundColor: theme.heroOverlay }}
         >
           <Image
