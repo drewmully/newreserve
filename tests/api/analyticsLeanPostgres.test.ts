@@ -58,7 +58,7 @@ describe.skipIf(!connectionString)("real PostgreSQL concurrent analytics workers
     end $$`);
     // CI service is disposable; the explicit local reset also permits repeat runs.
     for (const name of ["001_staging", "003_receipts", "004_worker", "013_release", "014_reporting_views",
-      "015_backfill", "016_shopify_pilot", "017_shopify_pipeline"])
+      "015_backfill", "016_shopify_pilot", "017_shopify_pipeline", "018_history_jobs"])
       await admin.query(readFileSync(`sql/analytics/${name}.sql`, "utf8"));
     await admin.query(`insert into lean_private.pipeline_scope(shop,project_ref,enabled,from_time,until_time,policy,approval_ref,actor_ref)
       values($1,$2,true,'2026-01-01','2026-02-01',$3,'fixture:scope','fixture:operator')`,
@@ -68,7 +68,8 @@ describe.skipIf(!connectionString)("real PostgreSQL concurrent analytics workers
   afterAll(async () => { await a?.end(); await b?.end(); await admin?.end(); });
   beforeEach(async () => {
     await a.query("rollback"); await b.query("rollback");
-    await admin.query(`truncate lean_private.receipts cascade; truncate lean_private.publications cascade`);
+    await admin.query(`truncate lean_private.receipts cascade; truncate lean_private.publications cascade;
+      truncate lean_private.history_jobs cascade`);
   });
   const receipt = () => admin.query(`select public.lean_accept_receipt('shopify',$1,$2,'orders/updated',$3,$4)`,
     [randomUUID(), JSON.stringify([shop, "gid://shopify/Order/1"]), "a".repeat(64), JSON.stringify({ admin_graphql_api_id: "gid://shopify/Order/1" })]);
@@ -114,5 +115,19 @@ describe.skipIf(!connectionString)("real PostgreSQL concurrent analytics workers
     const finishing = finish(b, ready);
     await a.query("commit");
     expect(await finishing).toBe(true);
+  });
+  it("history checkpoints serialize two real connections without duplicate pages", async () => {
+    await admin.query(`insert into lean_private.history_jobs
+      (run_id,project_ref,shop,from_time,until_time,page_size,max_pages,approval_ref,actor_ref,enabled)
+      values('history',$1,$2,'2026-01-01','2026-02-01',2,5,'fixture:scope','fixture:actor',true)`, [project, shop]);
+    const sql = "select public.lean_history_commit('history',$1,$2,0,null,null,true,$3) result";
+    const args = [project, shop, JSON.stringify([{ source: source("2026-01-02T00:00:00Z") }])];
+    await a.query("begin");
+    expect((await a.query(sql, args)).rows[0].result).toBe(true);
+    const competing = b.query(sql, args);
+    await a.query("commit");
+    expect((await competing).rows[0].result).toBe(false);
+    expect((await admin.query("select page_count,row_count,complete from lean_private.history_jobs")).rows)
+      .toEqual([{ page_count: 1, row_count: 1, complete: true }]);
   });
 });
