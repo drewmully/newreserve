@@ -7,7 +7,7 @@ on:
       - "src/app/api/_lib/supabaseService.ts"
       - "src/app/api/analytics/ingest/**"
       - "tests/api/analytics*.test.ts"
-      - "tests/fixtures/analyticsFull.ts"
+      - "tests/fixtures/analytics*.ts"
       - "sql/analytics/**"
       - "scripts/analytics/**"
       - "docs/analytics/**"
@@ -26,7 +26,7 @@ on:
       - "src/app/api/_lib/supabaseService.ts"
       - "src/app/api/analytics/ingest/**"
       - "tests/api/analytics*.test.ts"
-      - "tests/fixtures/analyticsFull.ts"
+      - "tests/fixtures/analytics*.ts"
       - "sql/analytics/**"
       - "scripts/analytics/**"
       - "docs/analytics/**"
@@ -76,4 +76,4 @@ jobs:
           git diff --exit-code -- sql/analytics/001_staging.sql sql/analytics/014_reporting_views.sql
       - run: npm test -- --project api tests/api/analyticsContracts.test.ts tests/api/analyticsLean
       - run: npx tsc --project tsconfig.analytics.json
-      - run: npx eslint src/lib/analytics src/app/api/analytics/ingest src/app/api/_lib/supabaseService.ts tests/api/analyticsContracts.test.ts tests/api/analyticsLean*.test.ts tests/fixtures/analyticsFull.ts scripts/analytics/*.mjs
+      - run: npx eslint src/lib/analytics src/app/api/analytics/ingest src/app/api/_lib/supabaseService.ts tests/api/analyticsContracts.test.ts tests/api/analyticsLean*.test.ts tests/fixtures/analytics*.ts scripts/analytics/*.mjs
