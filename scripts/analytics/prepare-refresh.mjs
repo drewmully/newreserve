@@ -16,13 +16,14 @@ export function prepareFile(inputPath, outputPath) {
   try {
     const entry = join(root, "src/lib/analytics/refreshPlan.ts");
     const view = join(root, "src/lib/analytics/behaviorView.ts");
+    const mully = join(root, "src/lib/analytics/mymullyRefresh.ts");
     const options = {
       target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS,
       moduleResolution: ts.ModuleResolutionKind.Node10, esModuleInterop: true,
       resolveJsonModule: true, skipLibCheck: true, noEmitOnError: true,
       strict: true, rootDir: join(root, "src"), outDir: scratch,
     };
-    const program = ts.createProgram([entry, view], options);
+    const program = ts.createProgram([entry, view, mully], options);
     const diagnostics = ts.getPreEmitDiagnostics(program);
     if (diagnostics.some(d => d.category === ts.DiagnosticCategory.Error))
       throw new Error("refresh_preparation_compile_failed");
@@ -31,8 +32,11 @@ export function prepareFile(inputPath, outputPath) {
     const require = createRequire(import.meta.url);
     const compiled = source => join(scratch, relative(options.rootDir, source).replace(/\.ts$/, ".js"));
     if (!compiled(entry).startsWith(scratch + sep)) throw new Error("invalid_preparation_path");
-    const bundle = require(compiled(entry)).prepareRefresh(input);
-    const diagnostic = require(compiled(view)).behaviorDiagnosticView(input.behavior);
+    const customerSource = input.kind === "mully-source-v1"
+      ? require(compiled(mully)).prepareMullyRefresh(input) : null;
+    const bundle = customerSource?.bundle ?? require(compiled(entry)).prepareRefresh(input);
+    const diagnostic = require(compiled(view)).behaviorDiagnosticView(
+      customerSource ? customerSource.refresh.behavior : input.behavior);
     mkdirSync(outputPath, { recursive: true, mode: 0o700 });
     // Never silently overwrite an existing reviewed bundle.
     writeFileSync(join(outputPath, "refresh-bundle.json"), JSON.stringify(bundle, null, 2) + "\n",
