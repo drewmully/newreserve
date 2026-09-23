@@ -19,7 +19,8 @@ create function public.lean_claim_work(p_token text, p_limit integer, p_lease_se
 returns table(work_id bigint,receipt_id bigint,topic text,payload jsonb,attempts integer)
 language plpgsql security definer set search_path=pg_catalog as $$
 begin
-  if length(p_token) < 32 or p_limit not between 1 and 50 or p_lease_seconds not between 30 and 300 then
+  if p_token is null or p_limit is null or p_lease_seconds is null
+     or length(p_token) < 32 or p_limit not between 1 and 50 or p_lease_seconds not between 30 and 300 then
     raise exception 'invalid lease bounds';
   end if;
   update lean_private.work w set state='dead',lease_token=null,lease_until=null,last_error_code='attempts_exhausted'
@@ -43,8 +44,8 @@ returns boolean language plpgsql security definer set search_path=pg_catalog as 
 declare r lean_private.work;
 begin
   select * into r from lean_private.work where work_id=p_work_id for update;
-  if not found or r.state<>'leased' or r.lease_token<>p_token or r.lease_until<=now() then return false; end if;
-  if length(p_version) not between 1 and 100 or jsonb_typeof(p_facts)<>'object' then
+  if not found or p_token is null or r.state<>'leased' or r.lease_token is distinct from p_token or r.lease_until<=now() then return false; end if;
+  if p_version is null or p_facts is null or length(p_version) not between 1 and 100 or jsonb_typeof(p_facts)<>'object' then
     raise exception 'invalid projection';
   end if;
   insert into lean_private.projections(receipt_id,transform_version,facts)
@@ -58,7 +59,7 @@ end $$;
 create function public.lean_fail_work(p_work_id bigint,p_token text,p_code text)
 returns boolean language plpgsql security definer set search_path=pg_catalog as $$
 begin
-  if p_code not in ('transform_failed','unsupported_topic','schema_drift','storage_failed') then
+  if p_code is null or p_code not in ('transform_failed','unsupported_topic','schema_drift','storage_failed') then
     raise exception 'invalid safe error code';
   end if;
   update lean_private.work set state=case when attempts>=5 then 'dead' else 'pending' end,
@@ -70,7 +71,7 @@ end $$;
 create function public.lean_replay_work(p_work_id bigint,p_approval text,p_actor text)
 returns boolean language plpgsql security definer set search_path=pg_catalog as $$
 begin
-  if length(trim(p_approval))=0 or length(trim(p_actor))=0 then raise exception 'approval required'; end if;
+  if p_approval is null or p_actor is null or length(trim(p_approval))=0 or length(trim(p_actor))=0 then raise exception 'approval required'; end if;
   update lean_private.work set state='pending',attempts=0,available_at=now(),completed_at=null,
     lease_token=null,lease_until=null,last_error_code=null
     where work_id=p_work_id and state in ('done','dead');
