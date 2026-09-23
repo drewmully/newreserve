@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "incremental": false
+  },
+  "include": [
+    "src/lib/analytics/**/*.ts",
+    "src/lib/analytics/**/*.json",
+    "tests/api/analyticsContracts.test.ts"
+  ],
+  "exclude": ["node_modules"]
+}
