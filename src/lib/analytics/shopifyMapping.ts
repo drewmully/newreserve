@@ -41,7 +41,7 @@ const statuses: Readonly<Record<string, PaymentEvidence["status"]>> = {
   PENDING: "pending", AWAITING_RESPONSE: "pending",
 };
 type MappedTransaction = { payment: PaymentEvidence; processedAt: string | null };
-function transactions(order: SourceObject, shop: string, orderId: string, currency: string, test: boolean): MappedTransaction[] {
+export function mapShopifyTransactions(order: SourceObject, shop: string, orderId: string, currency: string, test: boolean): MappedTransaction[] {
   const rows = sourceArray(order.transactions);
   const count = sourceObject(order.transactionsCount);
   if (count.precision !== "EXACT" || !Number.isSafeInteger(count.count) || count.count !== rows.length || rows.length > 250)
@@ -142,7 +142,7 @@ export function mapShopifyAnalyticsOrder(document: ShopifyOrderDocument, policy:
   if (!lines.length) throw new Error("shopify_empty_order_requires_review");
   if (subtotal !== money(order.subtotalPriceSet, currency)) throw new Error("shopify_subtotal_mismatch");
   const originalTotal = money(order.originalTotalPriceSet, currency);
-  const txs = transactions(order, shop, id, currency, test);
+  const txs = mapShopifyTransactions(order, shop, id, currency, test);
   const captures = txs.filter(t => t.payment.status === "succeeded" && ["capture", "sale"].includes(t.payment.kind));
   for (const capture of captures) {
     if (capture.processedAt && (Date.parse(capture.processedAt) < Date.parse(createdAt) ||

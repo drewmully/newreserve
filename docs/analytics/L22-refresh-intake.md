@@ -7,7 +7,7 @@ run, enables a job, installs a schedule, releases a report or contacts a vendor.
 
 ## Implemented path
 
-1. An authorized source exporter produces the 17 evidence sections consumed by
+1. Source adapters or authorized exporters produce the 17 evidence sections consumed by
    `FullBuildEvidence`. The intake binds each packet to a project, shop, date
    window, source ID, record reference, approved schema, capture timestamp and
    SHA-256 payload digest. Empty sections must be explicit, never silently
@@ -137,8 +137,10 @@ requires named selected fields and describes optional materialization.
 
 ## Still required for full live implementation
 
-The intake is a verified-export protocol, not an automated customer-specific
-adapter. These real integrations cannot be substituted with fixture evidence:
+The intake is a verified-export protocol. L23 adds an executable adapter for
+existing Supabase customer rows, Shopify order/customer links, explicit permission
+timelines, additional PostHog identifiers and optionally approved Shopify
+success-time cash. These remaining integrations cannot be substituted with fixture evidence:
 
 - Authoritative identity links, historical analytics permission, current
   permission and deletion/removal feeds. Marketing/SMS consent and Firebase

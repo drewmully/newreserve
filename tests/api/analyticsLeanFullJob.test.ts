@@ -6,6 +6,7 @@ import { fullFixture, fullProject, fullShop } from "../fixtures/analyticsFull";
 import { runFullReportJob } from "@/lib/analytics/fullReportJob";
 import type { AnalyticsRpcClient } from "@/lib/analytics/rpcStore";
 import { POST } from "@/app/api/analytics/ingest/full/route";
+import { readMullyCustomers, mapMullySource, mullyCustomerId } from "@/lib/analytics/mymullySource";
 const port = vi.hoisted(() => ({ client: null as AnalyticsRpcClient | null }));
 vi.mock("@/lib/analytics/serverClient", () => ({ getAnalyticsSupabase: () => port.client }));
 let db: PGlite;
@@ -65,6 +66,38 @@ it("runs the source reader through real SQL inserts for all five reports, withou
   expect((await db.query("select * from lean_private.certifications")).rows).toEqual([]);
   expect((await db.query<{ manifest: unknown }>("select manifest from lean_private.full_builds")).rows[0].manifest)
     .toMatchObject({ nativeEvents: 1, logicalEvents: 1 });
+});
+it("persists real-schema customer mappings through the full job without inventing complete customer history", async () => {
+  const f = fullFixture();
+  const snapshot = await readMullyCustomers({ projectRef: fullProject, shop: fullShop,
+    capturedAt: f.policy.asOf, customerIds: ["123"], entities: ["shopify"] }, "fixture",
+  async () => Response.json([{ id: "123", firebase_uid: "uid-fixture", entity: "shopify",
+    created_at: "2025-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" }],
+  { headers: { "Content-Range": "0-0/1" } }));
+  const mapped = mapMullySource({ snapshot, mappingVersion: f.policy.mappingVersion,
+    orders: [{ shop: fullShop, apiVersion: "2026-07",
+      order: { id: "gid://shopify/Order/1", customer: { id: "gid://shopify/Customer/123" } } }],
+    permissions: [{ customerId: "123", from: "2025-01-01T00:00:00Z", to: null,
+      permitted: true, removed: false, evidenceRef: "fixture:analytics-authority" }],
+  });
+  const evidence = { ...f.evidence, ...mapped, proofs: [], externalControls: {} };
+  f.behavior.families.page_view.identityNamespace = "shopify_customer";
+  f.wire.results[0][3] = "123";
+  await db.exec("delete from lean_private.full_builds");
+  await db.query(`insert into lean_private.full_builds
+    (run_id,project_ref,base_run,policy,evidence,behavior,approval_ref,actor_ref,enabled)
+    values('fixture',$1,'base',$2,$3,$4,'fixture:approval','fixture:actor',true)`,
+  [fullProject, JSON.stringify(f.policy), JSON.stringify(evidence), JSON.stringify(f.behavior)]);
+  const opt = { ...options(), request: vi.fn(async () => Response.json(f.wire)) };
+  expect(await runFullReportJob(opt)).toMatchObject({ state: "complete" });
+  const canonical = mullyCustomerId(fullProject, fullShop, "123");
+  expect((await db.query("select customer_id from lean_private.orders where publication_id='full:fixture'")).rows)
+    .toEqual([{ customer_id: canonical }]);
+  expect((await db.query("select customer_id,history_complete from lean_private.customers where publication_id='full:fixture'")).rows)
+    .toEqual([{ customer_id: canonical, history_complete: false }]);
+  expect((await db.query("select new_customers from lean_private.report_store_daily")).rows)
+    .toEqual([{ new_customers: null }]);
+  expect((await db.query("select * from lean_export.store_daily")).rows).toEqual([]);
 });
 it("does not query the vendor again after completion or while disabled/blocked", async () => {
   const opt = options(); await runFullReportJob(opt); await runFullReportJob(opt);
