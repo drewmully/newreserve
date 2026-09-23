@@ -1,0 +1,1157 @@
+{
+  "source": "https://docs.google.com/spreadsheets/d/1irN9OS5z6nJOU46jeAFnwv4h6oFJC5m-gkSGzrxFREA/edit",
+  "approval": "proposed; explicit release approval required",
+  "views": [
+    {
+      "name": "store_daily",
+      "fields": [
+        {
+          "name": "shop_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "key/scope",
+          "definition": "Single approved store scope; same scope across independent inputs."
+        },
+        {
+          "name": "publication_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "version",
+          "definition": "Selected immutable semantic publication vintage; all related facts and views use the same vintage."
+        },
+        {
+          "name": "definition_version",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "key/version",
+          "definition": "Approved metric, calendar, eligibility and transformation contract version."
+        },
+        {
+          "name": "readiness",
+          "logicalType": "MAP<STRING,ENUM>",
+          "nullable": false,
+          "role": "quality",
+          "definition": "Per-metric state: ready, pending, withheld or not_applicable. One ready sales metric does not certify spend/cohort/behavior."
+        },
+        {
+          "name": "is_stale",
+          "logicalType": "BOOLEAN",
+          "nullable": false,
+          "role": "quality",
+          "definition": "True only for explicitly labeled last-good output retained after a failed/new pending candidate."
+        },
+        {
+          "name": "report_date",
+          "logicalType": "DATE",
+          "nullable": false,
+          "role": "key/time",
+          "definition": "America/New_York calendar date; ledger effective, cash settlement, order paid, first-customer paid and spend source-day inputs are separately aggregated onto this date."
+        },
+        {
+          "name": "gross_merchandise_sales_usd",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Sum eligible sales_ledger.amount_usd for merchandise_gross on ledger report_date. Null when this metric's gates fail; zero only after complete evidence."
+        },
+        {
+          "name": "discounts_usd",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Negative of sum eligible merchandise_discount ledger amounts on ledger report_date; positive normal discount magnitude, corrections may reverse. Null when this metric's gates fail; zero only after complete evidence."
+        },
+        {
+          "name": "refunds_usd",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Negative of sum eligible merchandise_refund ledger amounts on refund effective/report_date; merchandise only, signed corrections permitted. Null when this metric's gates fail; zero only after complete evidence."
+        },
+        {
+          "name": "net_merchandise_sales_usd",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Gross merchandise sales minus discount magnitude minus merchandise refund magnitude on ledger effective dates. Null when this metric's gates fail; zero only after complete evidence."
+        },
+        {
+          "name": "shipping_net_usd",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Signed eligible shipping_net ledger components. Null when this metric's gates fail; zero only after complete evidence."
+        },
+        {
+          "name": "tax_net_usd",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Signed eligible tax_net ledger components. Null when this metric's gates fail; zero only after complete evidence."
+        },
+        {
+          "name": "duty_net_usd",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Signed eligible duty_net ledger components. Null when this metric's gates fail; zero only after complete evidence."
+        },
+        {
+          "name": "other_sales_adjustments_usd",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Signed approved other_sales_adjustment ledger components; never fees or payment totals. Null when this metric's gates fail; zero only after complete evidence."
+        },
+        {
+          "name": "total_sales_usd",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Net merchandise + shipping net + tax net + duty net + approved other sales adjustments; explicit proposal, not presumed native Shopify metric parity. Null when this metric's gates fail; zero only after complete evidence."
+        },
+        {
+          "name": "collected_cash_usd",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Sum cash-eligible payments.cash_amount_usd on payments.report_date, independently aggregated. Null when this metric's gates fail; zero only after complete evidence."
+        },
+        {
+          "name": "eligible_orders",
+          "logicalType": "INTEGER",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Count distinct eligible orders.order_id on orders.purchase_date, including approved renewal classes; source purchase counts, not event counts. Null when this metric's gates fail; zero only after complete evidence."
+        },
+        {
+          "name": "purchase_merchandise_net_usd",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Sum qualifying orders.purchase_merchandise_net_usd on orders.purchase_date; no later refunds. Null when this metric's gates fail; zero only after complete evidence."
+        },
+        {
+          "name": "new_customers",
+          "logicalType": "INTEGER",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Count canonical customers once on customers.acquisition_date, with identity permission and complete first-order history. Null when this metric's gates fail; zero only after complete evidence."
+        },
+        {
+          "name": "spend_usd",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Total complete independently expected authorized base daily spend on the same New York calendar date. Null when this metric's gates fail; zero only after complete evidence."
+        },
+        {
+          "name": "ncac_usd",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "spend_usd / new_customers; zero denominator gives null. Null when this metric's gates fail; zero only after complete evidence."
+        },
+        {
+          "name": "mer",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "net_merchandise_sales_usd / spend_usd over same calendar scope; ledger refunds remain on their effective dates; zero spend gives null. Null when this metric's gates fail; zero only after complete evidence."
+        },
+        {
+          "name": "aov_usd",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "purchase_merchandise_net_usd / eligible_orders; original discounted merchandise purchase value, not ledger-net-after-refunds AOV; zero orders gives null. Null when this metric's gates fail; zero only after complete evidence."
+        }
+      ]
+    },
+    {
+      "name": "acquisition_daily",
+      "fields": [
+        {
+          "name": "shop_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "key/scope",
+          "definition": "Single approved store scope; same scope across independent inputs."
+        },
+        {
+          "name": "publication_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "version",
+          "definition": "Selected immutable semantic publication vintage; all related facts and views use the same vintage."
+        },
+        {
+          "name": "definition_version",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "key/version",
+          "definition": "Approved metric, calendar, eligibility and transformation contract version."
+        },
+        {
+          "name": "readiness",
+          "logicalType": "MAP<STRING,ENUM>",
+          "nullable": false,
+          "role": "quality",
+          "definition": "Per-metric state: ready, pending, withheld or not_applicable. One ready sales metric does not certify spend/cohort/behavior."
+        },
+        {
+          "name": "is_stale",
+          "logicalType": "BOOLEAN",
+          "nullable": false,
+          "role": "quality",
+          "definition": "True only for explicitly labeled last-good output retained after a failed/new pending candidate."
+        },
+        {
+          "name": "report_date",
+          "logicalType": "DATE",
+          "nullable": false,
+          "role": "key/time",
+          "definition": "Attributed order conversion_date (= New York paid_at date) and same-day ad-account spend date; NOT acquisition-session entry date or ledger refund date."
+        },
+        {
+          "name": "channel",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "key",
+          "definition": "Approved acquisition/spend channel mapping, including distinct unattributed/not_applicable/unknown buckets."
+        },
+        {
+          "name": "campaign_bucket",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "key",
+          "definition": "Qualified campaign key when mapped, else controlled non-null bucket (unattributed, not_applicable, no_campaign or spend_unallocated); no invented campaign IDs."
+        },
+        {
+          "name": "model_version",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "key/version",
+          "definition": "Exactly one approved single-touch model."
+        },
+        {
+          "name": "attributed_purchase_merchandise_net_usd",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Sum orders.purchase_merchandise_net_usd × order_attribution.credit_weight for eligible orders in the selected bucket/model/publication. Retain unattributed/not_applicable buckets as diagnostic purchase value; ROAS applies only to approved applicable comparison scope. Null when this metric's gates fail; zero only after complete evidence."
+        },
+        {
+          "name": "credited_orders",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Sum single-touch credit_weight for eligible orders in the selected bucket, including explicit diagnostic unassigned/not_applicable rows; v1 weights are 1. Null when this metric's gates fail; zero only after complete evidence."
+        },
+        {
+          "name": "weighted_new_customers",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Sum credit_weight only for each permitted history-complete customer's first_eligible_order_id, once. Later orders never add another new customer. Null when this metric's gates fail; zero only after complete evidence."
+        },
+        {
+          "name": "spend_usd",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Independently summed base spend at compatible campaign/channel/date. Null for attribution buckets with no meaningful spend counterpart; known zero requires source coverage. Null when this metric's gates fail; zero only after complete evidence."
+        },
+        {
+          "name": "first_party_roas",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "attributed_purchase_merchandise_net_usd / spend_usd for approved matched comparison scope only; zero/missing spend gives null. Null when this metric's gates fail; zero only after complete evidence."
+        },
+        {
+          "name": "ncac_usd",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "spend_usd / weighted_new_customers for approved matched comparison scope only; zero or incomplete customers gives null. Null when this metric's gates fail; zero only after complete evidence."
+        }
+      ]
+    },
+    {
+      "name": "product_daily",
+      "fields": [
+        {
+          "name": "shop_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "key/scope",
+          "definition": "Single approved store scope; same scope across independent inputs."
+        },
+        {
+          "name": "publication_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "version",
+          "definition": "Selected immutable semantic publication vintage; all related facts and views use the same vintage."
+        },
+        {
+          "name": "definition_version",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "key/version",
+          "definition": "Approved metric, calendar, eligibility and transformation contract version."
+        },
+        {
+          "name": "readiness",
+          "logicalType": "MAP<STRING,ENUM>",
+          "nullable": false,
+          "role": "quality",
+          "definition": "Per-metric state: ready, pending, withheld or not_applicable. One ready sales metric does not certify spend/cohort/behavior."
+        },
+        {
+          "name": "is_stale",
+          "logicalType": "BOOLEAN",
+          "nullable": false,
+          "role": "quality",
+          "definition": "True only for explicitly labeled last-good output retained after a failed/new pending candidate."
+        },
+        {
+          "name": "report_date",
+          "logicalType": "DATE",
+          "nullable": false,
+          "role": "key/time",
+          "definition": "Units use orders.purchase_date; ledger sales/refunds use their own effective/report_date. The clocks are labeled, not treated as identical purchase cohorts."
+        },
+        {
+          "name": "sku_bucket",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "key",
+          "definition": "Purchase-time order_items.sku or explicit unknown SKU bucket; never inferred from event context."
+        },
+        {
+          "name": "units",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Sum eligible merchandise order_items.quantity on parent purchase_date, before later returns. Null when this metric's gates fail; zero only after complete evidence."
+        },
+        {
+          "name": "gross_merchandise_sales_usd",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Sum allocated eligible merchandise_gross ledger amounts on effective date. Null when this metric's gates fail; zero only after complete evidence."
+        },
+        {
+          "name": "discounts_usd",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Negative of allocated eligible merchandise_discount ledger amounts on effective date. Null when this metric's gates fail; zero only after complete evidence."
+        },
+        {
+          "name": "refunds_usd",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Negative of allocated eligible merchandise_refund ledger amounts on refund effective date, net of original discount already reflected in the refund. Null when this metric's gates fail; zero only after complete evidence."
+        },
+        {
+          "name": "net_merchandise_sales_usd",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Allocated merchandise gross minus discount and merchandise refund magnitudes on each movement's effective date. Null when this metric's gates fail; zero only after complete evidence."
+        }
+      ]
+    },
+    {
+      "name": "customer_cohorts",
+      "fields": [
+        {
+          "name": "shop_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "key/scope",
+          "definition": "Single approved store scope; same scope across independent inputs."
+        },
+        {
+          "name": "publication_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "version",
+          "definition": "Selected immutable semantic publication vintage; all related facts and views use the same vintage."
+        },
+        {
+          "name": "definition_version",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "key/version",
+          "definition": "Approved metric, calendar, eligibility and transformation contract version."
+        },
+        {
+          "name": "readiness",
+          "logicalType": "MAP<STRING,ENUM>",
+          "nullable": false,
+          "role": "quality",
+          "definition": "Per-metric state: ready, pending, withheld or not_applicable. One ready sales metric does not certify spend/cohort/behavior."
+        },
+        {
+          "name": "is_stale",
+          "logicalType": "BOOLEAN",
+          "nullable": false,
+          "role": "quality",
+          "definition": "True only for explicitly labeled last-good output retained after a failed/new pending candidate."
+        },
+        {
+          "name": "cohort_month",
+          "logicalType": "DATE",
+          "nullable": false,
+          "role": "key/time",
+          "definition": "First day of New York month containing customers.acquisition_date; assigned once at customer level."
+        },
+        {
+          "name": "observation_age_days",
+          "logicalType": "INTEGER",
+          "nullable": false,
+          "role": "key/parameter",
+          "definition": "Common nonnegative follow-up horizon H days measured from each customer's first_eligible_order_at, not days since report generation."
+        },
+        {
+          "name": "acquisition_definition_version",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "key/version",
+          "definition": "Approved first eligible paid order, identity and cohort rules; not a marketing attribution-model switch."
+        },
+        {
+          "name": "as_of_at",
+          "logicalType": "TIMESTAMP_UTC",
+          "nullable": false,
+          "role": "time",
+          "definition": "Publication cutoff through which all required source facts/refunds and grace are complete."
+        },
+        {
+          "name": "mature",
+          "logicalType": "BOOLEAN",
+          "nullable": false,
+          "role": "quality",
+          "definition": "Every included first-order cohort member has reached first_eligible_order_at + H days plus approved grace, with full required source history; incomplete cohorts withheld rather than survivor-selected."
+        },
+        {
+          "name": "cohort_customers",
+          "logicalType": "INTEGER",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Count distinct permitted history-certified canonical customers assigned to the full acquisition month; denominator held fixed for a publication and cohort definition. Null when this metric's gates fail; zero only after complete evidence."
+        },
+        {
+          "name": "repeat_customers",
+          "logicalType": "INTEGER",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Distinct cohort customers with at least one additional eligible order beyond first_eligible_order_id, with paid_at in [first_eligible_order_at, first_eligible_order_at + H days); multiple repeat orders count once. Null when this metric's gates fail; zero only after complete evidence."
+        },
+        {
+          "name": "observed_net_merchandise_sales_usd",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Select cohort customers' eligible orders with paid_at in [first_eligible_order_at, first_eligible_order_at + H days). Include each selected order's original merchandise sale and discount ledger components once, even if their source effective_at precedes payment/cohort start; include its eligible post-purchase merchandise adjustments/refunds effective before that H-day endpoint. Require original-versus-adjustment classification and source lineage. Never also add the purchase snapshot. Exclude refunds effective at or after the endpoint. Null when this metric's gates fail; zero only after complete evidence."
+        },
+        {
+          "name": "repeat_purchase_rate",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "repeat_customers / cohort_customers when the entire requested cohort age is mature; zero denominator gives null. Null when this metric's gates fail; zero only after complete evidence."
+        },
+        {
+          "name": "revenue_ltv_usd",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "observed_net_merchandise_sales_usd / cohort_customers at explicit mature H-day age, complete history and one as-of publication. Null when this metric's gates fail; zero only after complete evidence."
+        }
+      ]
+    },
+    {
+      "name": "funnel_daily",
+      "fields": [
+        {
+          "name": "shop_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "key/scope",
+          "definition": "Single approved store scope; same scope across independent inputs."
+        },
+        {
+          "name": "publication_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "version",
+          "definition": "Selected immutable semantic publication vintage; all related facts and views use the same vintage."
+        },
+        {
+          "name": "definition_version",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "key/version",
+          "definition": "Approved metric, calendar, eligibility and transformation contract version."
+        },
+        {
+          "name": "readiness",
+          "logicalType": "MAP<STRING,ENUM>",
+          "nullable": false,
+          "role": "quality",
+          "definition": "Per-metric state: ready, pending, withheld or not_applicable. One ready sales metric does not certify spend/cohort/behavior."
+        },
+        {
+          "name": "is_stale",
+          "logicalType": "BOOLEAN",
+          "nullable": false,
+          "role": "quality",
+          "definition": "True only for explicitly labeled last-good output retained after a failed/new pending candidate."
+        },
+        {
+          "name": "report_date",
+          "logicalType": "DATE",
+          "nullable": false,
+          "role": "key/time",
+          "definition": "America/New_York sessions.report_date (entry-date cohort), never order conversion date."
+        },
+        {
+          "name": "stage_id",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "key",
+          "definition": "Approved stage key in sessions.funnel_flags, plus reserved all_sessions row; stage reach is not necessarily sequential."
+        },
+        {
+          "name": "funnel_version",
+          "logicalType": "STRING",
+          "nullable": false,
+          "role": "key/version",
+          "definition": "Approved stage, event-family and behavioral eligibility definitions."
+        },
+        {
+          "name": "measured_sessions",
+          "logicalType": "INTEGER",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Count distinct analytics-eligible, behavior-complete sessions for this stage; all_sessions is whole measured denominator. Null when this metric's gates fail; zero only after complete evidence."
+        },
+        {
+          "name": "stage_reached_sessions",
+          "logicalType": "INTEGER",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Count distinct eligible behavior-complete sessions whose approved stage flag is true; for all_sessions equals measured_sessions. Null when this metric's gates fail; zero only after complete evidence."
+        },
+        {
+          "name": "mature_sessions",
+          "logicalType": "INTEGER",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Count distinct stage-population sessions with behavior_complete and conversion_window_complete; explicit denominator for conversion. Null when this metric's gates fail; zero only after complete evidence."
+        },
+        {
+          "name": "converted_sessions",
+          "logicalType": "INTEGER",
+          "nullable": true,
+          "role": "measure",
+          "definition": "Count distinct sessions in the same mature stage population with converted_session=true; multiple orders count once. Null when this metric's gates fail; zero only after complete evidence."
+        },
+        {
+          "name": "session_conversion_rate",
+          "logicalType": "DECIMAL(20,6)",
+          "nullable": true,
+          "role": "measure",
+          "definition": "converted_sessions / mature_sessions at selected stage; zero denominator gives null. Core store-level session conversion uses stage_id=all_sessions. Null when this metric's gates fail; zero only after complete evidence."
+        }
+      ]
+    }
+  ],
+  "metrics": [
+    {
+      "id": "gross_merchandise_sales",
+      "title": "Gross merchandise sales",
+      "contract": {
+        "Formula": "SUM(sales_ledger.amount_usd where sales_eligible and component=merchandise_gross)",
+        "Numerator": "SUM(store_daily.gross_merchandise_sales_usd)",
+        "Denominator": "Not applicable",
+        "Date / vintage": "sales_ledger.report_date = New York effective_at date; refunds/adjustments keep their own effective dates.",
+        "Query route": "store_daily\nproduct_daily (allocated merchandise only)",
+        "Allowed cuts": "store_daily.shop_id\nstore_daily.report_date (bounded range; roll up dates only)\nproduct_daily.sku_bucket (separate product route only; no spend allocation)",
+        "Required readiness": "Complete independently expected Shopify sales/refund history for requested dates; deduplicated reconciled components; approved eligibility; all required currency USD; one publication/definition.",
+        "Limitations": "Before merchandise discounts/refunds; signed gross corrections retained. Excludes tax, shipping, duties, tips, fees and gift-card liability.",
+        "Contract state": "Proposed metric contract; approval and data validation required",
+        "Reviewer decision / notes": "Pending"
+      }
+    },
+    {
+      "id": "discounts",
+      "title": "Merchandise discounts",
+      "contract": {
+        "Formula": "-SUM(sales_ledger.amount_usd where sales_eligible and component=merchandise_discount)",
+        "Numerator": "SUM(store_daily.discounts_usd)",
+        "Denominator": "Not applicable",
+        "Date / vintage": "sales_ledger.report_date = New York effective_at date; refunds/adjustments keep their own effective dates.",
+        "Query route": "store_daily\nproduct_daily (allocated merchandise only)",
+        "Allowed cuts": "store_daily.shop_id\nstore_daily.report_date (bounded range; roll up dates only)\nproduct_daily.sku_bucket (separate product route only; no spend allocation)",
+        "Required readiness": "Complete independently expected Shopify sales/refund history for requested dates; deduplicated reconciled components; approved eligibility; all required currency USD; one publication/definition.",
+        "Limitations": "Positive normal discount magnitude; signed corrections can reverse it. Shipping discounts are not merchandise discounts.",
+        "Contract state": "Proposed metric contract; approval and data validation required",
+        "Reviewer decision / notes": "Pending"
+      }
+    },
+    {
+      "id": "refunds",
+      "title": "Merchandise refunds",
+      "contract": {
+        "Formula": "-SUM(sales_ledger.amount_usd where sales_eligible and component=merchandise_refund)",
+        "Numerator": "SUM(store_daily.refunds_usd)",
+        "Denominator": "Not applicable",
+        "Date / vintage": "sales_ledger.report_date = New York effective_at date; refunds/adjustments keep their own effective dates.",
+        "Query route": "store_daily\nproduct_daily (allocated merchandise only)",
+        "Allowed cuts": "store_daily.shop_id\nstore_daily.report_date (bounded range; roll up dates only)\nproduct_daily.sku_bucket (separate product route only; no spend allocation)",
+        "Required readiness": "Complete independently expected Shopify sales/refund history for requested dates; deduplicated reconciled components; approved eligibility; all required currency USD; one publication/definition.",
+        "Limitations": "Actual discounted merchandise reversal only, not all-in customer refund or payment refund. Product cut additionally requires complete validated line allocations and uses refund effective date.",
+        "Contract state": "Proposed metric contract; approval and data validation required",
+        "Reviewer decision / notes": "Pending"
+      }
+    },
+    {
+      "id": "net_merchandise_sales",
+      "title": "Net merchandise sales",
+      "contract": {
+        "Formula": "SUM(store_daily.gross_merchandise_sales_usd) - SUM(store_daily.discounts_usd) - SUM(store_daily.refunds_usd)",
+        "Numerator": "SUM(store_daily.net_merchandise_sales_usd)",
+        "Denominator": "Not applicable",
+        "Date / vintage": "sales_ledger.report_date = New York effective_at date; refunds/adjustments keep their own effective dates.",
+        "Query route": "store_daily\nproduct_daily (allocated merchandise only)",
+        "Allowed cuts": "store_daily.shop_id\nstore_daily.report_date (bounded range; roll up dates only)\nproduct_daily.sku_bucket (separate product route only; no spend allocation)",
+        "Required readiness": "Complete independently expected Shopify sales/refund history for requested dates; deduplicated reconciled components; approved eligibility; all required currency USD; one publication/definition.",
+        "Limitations": "Not collected cash or frozen purchase value; later refunds reduce their own effective dates. Product variant uses product_daily with full allocation gate.",
+        "Contract state": "Proposed metric contract; approval and data validation required",
+        "Reviewer decision / notes": "Pending"
+      }
+    },
+    {
+      "id": "total_sales",
+      "title": "Total sales - proposed component definition",
+      "contract": {
+        "Formula": "SUM(store_daily.net_merchandise_sales_usd + store_daily.shipping_net_usd + store_daily.tax_net_usd + store_daily.duty_net_usd + store_daily.other_sales_adjustments_usd)",
+        "Numerator": "SUM(store_daily.total_sales_usd)",
+        "Denominator": "Not applicable",
+        "Date / vintage": "sales_ledger.report_date = New York effective_at date; refunds/adjustments keep their own effective dates.",
+        "Query route": "store_daily",
+        "Allowed cuts": "store_daily.shop_id\nstore_daily.report_date (bounded range; roll up dates only)",
+        "Required readiness": "Complete independently expected Shopify sales/refund history for requested dates; deduplicated reconciled components; approved eligibility; all required currency USD; one publication/definition.",
+        "Limitations": "Includes net shipping/tax/duties and explicitly approved other sales adjustments; excludes fees, cash transactions, gift-card liability issuance and unapproved tips. Not automatically native Shopify report parity.",
+        "Contract state": "Proposed metric contract; approval and data validation required",
+        "Reviewer decision / notes": "Pending"
+      }
+    },
+    {
+      "id": "spend",
+      "title": "Advertising spend",
+      "contract": {
+        "Formula": "SUM(marketing_spend_daily.spend_usd from one approved base report per provider)",
+        "Numerator": "SUM(store_daily.spend_usd)",
+        "Denominator": "Not applicable",
+        "Date / vintage": "marketing_spend_daily.report_date in actual America/New_York account timezone; no daily timezone relabeling.",
+        "Query route": "store_daily\nacquisition_daily (matched channel/campaign spend scope)",
+        "Allowed cuts": "store_daily.shop_id\nstore_daily.report_date (bounded range; roll up dates only)\nacquisition_daily.channel with campaign_bucket only within approved hierarchy",
+        "Required readiness": "External expected provider/account/date registry, active/base-report scope, authorization, reconciliation, freshness and America/New_York account timezone all pass; every required monetary input USD.",
+        "Limitations": "Spend only; no GA/Meta native conversion ROAS or provider breakdown certification. Missing account/date is unknown, not zero.",
+        "Contract state": "Proposed metric contract; approval and data validation required",
+        "Reviewer decision / notes": "Pending"
+      }
+    },
+    {
+      "id": "collected_cash",
+      "title": "Net collected customer cash",
+      "contract": {
+        "Formula": "SUM(payments.cash_amount_usd where cash_eligible)",
+        "Numerator": "SUM(store_daily.collected_cash_usd)",
+        "Denominator": "Not applicable",
+        "Date / vintage": "payments.report_date from approved settled_at; not order date or sales-ledger effective date.",
+        "Query route": "store_daily",
+        "Allowed cuts": "store_daily.shop_id\nstore_daily.report_date (bounded range; roll up dates only)",
+        "Required readiness": "Independent complete transaction lifecycle/settlement evidence, cash reconciliation, compatible USD and one publication.",
+        "Limitations": "Receipts minus refund/chargeback cash under approved policy; not sales, bank deposits or fee-net gateway payouts.",
+        "Contract state": "Proposed metric contract; approval and data validation required",
+        "Reviewer decision / notes": "Pending"
+      }
+    },
+    {
+      "id": "eligible_orders",
+      "title": "Eligible paid orders",
+      "contract": {
+        "Formula": "COUNT DISTINCT orders.order_id where eligibility_status=eligible within purchase_date range",
+        "Numerator": "SUM(store_daily.eligible_orders)",
+        "Denominator": "Not applicable",
+        "Date / vintage": "orders.purchase_date = New York paid_at date.",
+        "Query route": "store_daily",
+        "Allowed cuts": "store_daily.shop_id\nstore_daily.report_date (bounded range; roll up dates only)",
+        "Required readiness": "Complete independent order import, approved eligibility/paid clock, deduplication and selected publication; event/session coverage not required.",
+        "Limitations": "A purchase event does not establish an order; multiple payments or events do not add orders. Renewal/refund/cancellation policy must be approved.",
+        "Contract state": "Proposed metric contract; approval and data validation required",
+        "Reviewer decision / notes": "Pending"
+      }
+    },
+    {
+      "id": "new_customers",
+      "title": "New customers",
+      "contract": {
+        "Formula": "COUNT DISTINCT customers.customer_id on customers.acquisition_date with complete permitted history",
+        "Numerator": "SUM(store_daily.new_customers)",
+        "Denominator": "Not applicable",
+        "Date / vintage": "customers.acquisition_date from the one first eligible paid order over all complete history.",
+        "Query route": "store_daily\nacquisition_daily (weighted first-order route)",
+        "Allowed cuts": "store_daily.shop_id\nstore_daily.report_date (bounded range; roll up dates only)\nacquisition_daily.channel/campaign_bucket only via customers.first_eligible_order_id and selected model",
+        "Required readiness": "Deterministic permitted canonical identity, full independent eligible order history (including legacy/migrations), customer-level first-order certification, one publication.",
+        "Limitations": "Not newly created profiles, first measured sessions or first observed events. Acquisition buckets count each first customer once, not once per order.",
+        "Contract state": "Proposed metric contract; approval and data validation required",
+        "Reviewer decision / notes": "Pending"
+      }
+    },
+    {
+      "id": "ncac",
+      "title": "Blended new-customer acquisition cost",
+      "contract": {
+        "Formula": "SUM(store_daily.spend_usd) / SUM(store_daily.new_customers)",
+        "Numerator": "SUM(store_daily.spend_usd)",
+        "Denominator": "SUM(store_daily.new_customers)",
+        "Date / vintage": "Same bounded New York calendar date range: ad-account spend date versus customer first paid order date.",
+        "Query route": "store_daily\nacquisition_daily (separate attributed nCAC: SUM(spend_usd)/SUM(weighted_new_customers))",
+        "Allowed cuts": "store_daily.shop_id\nstore_daily.report_date (bounded range; roll up dates only)\nacquisition_daily.channel/campaign_bucket in separately approved matching scope",
+        "Required readiness": "External expected provider/account/date registry, active/base-report scope, authorization, reconciliation, freshness and America/New_York account timezone all pass; every required monetary input USD. Deterministic permitted canonical identity, full independent eligible order history (including legacy/migrations), customer-level first-order certification, one publication.",
+        "Limitations": "Null for zero/incomplete denominator. Blended calendar ratio is not individual customer cost or causal attribution. Weighted attributed denominator uses first order only at weight 1 in v1.",
+        "Contract state": "Proposed metric contract; approval and data validation required",
+        "Reviewer decision / notes": "Pending"
+      }
+    },
+    {
+      "id": "mer",
+      "title": "MER - ledger net merchandise / spend",
+      "contract": {
+        "Formula": "SUM(store_daily.net_merchandise_sales_usd) / SUM(store_daily.spend_usd)",
+        "Numerator": "SUM(store_daily.net_merchandise_sales_usd)",
+        "Denominator": "SUM(store_daily.spend_usd)",
+        "Date / vintage": "Same New York calendar range; sales use ledger effective dates (including later refunds), spend uses account daily dates.",
+        "Query route": "store_daily",
+        "Allowed cuts": "store_daily.shop_id\nstore_daily.report_date (bounded range; roll up dates only)",
+        "Required readiness": "Complete independently expected Shopify sales/refund history for requested dates; deduplicated reconciled components; approved eligibility; all required currency USD; one publication/definition. External expected provider/account/date registry, active/base-report scope, authorization, reconciliation, freshness and America/New_York account timezone all pass; every required monetary input USD.",
+        "Limitations": "Blended whole-store ratio, not attributed or incremental ROAS. Includes approved commerce classes including renewals. Zero spend gives null; negative net sales may yield negative MER.",
+        "Contract state": "Proposed metric contract; approval and data validation required",
+        "Reviewer decision / notes": "Pending"
+      }
+    },
+    {
+      "id": "first_party_roas",
+      "title": "First-party ROAS - attributed purchase value / spend",
+      "contract": {
+        "Formula": "SUM(acquisition_daily.attributed_purchase_merchandise_net_usd) / SUM(acquisition_daily.spend_usd)",
+        "Numerator": "SUM(acquisition_daily.attributed_purchase_merchandise_net_usd)",
+        "Denominator": "SUM(acquisition_daily.spend_usd)",
+        "Date / vintage": "Attributed purchase value credited on order paid/conversion date and compared with same-calendar-date New York spend; not acquisition-session entry-date spend.",
+        "Query route": "acquisition_daily",
+        "Allowed cuts": "acquisition_daily.shop_id\nacquisition_daily.report_date\nacquisition_daily.channel\nacquisition_daily.campaign_bucket within channel; exactly one model_version",
+        "Required readiness": "External expected provider/account/date registry, active/base-report scope, authorization, reconciliation, freshness and America/New_York account timezone all pass; every required monetary input USD. Complete applicable orders/purchase values and attribution lookback, deterministic touch/campaign mapping, one model/publication and no pending attribution.",
+        "Limitations": "Purchase-time net merchandise, before later refunds. Not ledger-net, native platform or causal ROAS. Unmatched/unassigned/no-denominator buckets remain visible without fabricated zero spend.",
+        "Contract state": "Proposed metric contract; approval and data validation required",
+        "Reviewer decision / notes": "Pending"
+      }
+    },
+    {
+      "id": "aov",
+      "title": "AOV - original discounted merchandise purchase value",
+      "contract": {
+        "Formula": "SUM(store_daily.purchase_merchandise_net_usd) / SUM(store_daily.eligible_orders)",
+        "Numerator": "SUM(store_daily.purchase_merchandise_net_usd)",
+        "Denominator": "SUM(store_daily.eligible_orders)",
+        "Date / vintage": "Both numerator and denominator use the same eligible orders.purchase_date (New York paid_at).",
+        "Query route": "store_daily",
+        "Allowed cuts": "store_daily.shop_id\nstore_daily.report_date (bounded range; roll up dates only)",
+        "Required readiness": "Complete eligible orders and reconciled original purchase-time values/discounts in USD; one publication and identical eligibility scope.",
+        "Limitations": "Excludes later refunds, tax, shipping, duty and fees; not ledger-net-after-refunds AOV. Denominator zero gives null. Never average daily AOVs.",
+        "Contract state": "Proposed metric contract; approval and data validation required",
+        "Reviewer decision / notes": "Pending"
+      }
+    },
+    {
+      "id": "units",
+      "title": "Gross purchased merchandise units",
+      "contract": {
+        "Formula": "SUM(order_items.quantity for merchandise lines whose parent order is eligible in purchase_date range)",
+        "Numerator": "SUM(product_daily.units)",
+        "Denominator": "Not applicable",
+        "Date / vintage": "Parent orders.purchase_date, not refund date.",
+        "Query route": "product_daily",
+        "Allowed cuts": "product_daily.shop_id\nproduct_daily.report_date\nproduct_daily.sku_bucket",
+        "Required readiness": "Complete eligible purchase lines, known quantity/classification and approved purchase snapshot at one publication.",
+        "Limitations": "Before later returns; not net units retained. Missing SKU retained in explicit unknown bucket. Offer filtering is membership-only and nonadditive.",
+        "Contract state": "Proposed metric contract; approval and data validation required",
+        "Reviewer decision / notes": "Pending"
+      }
+    },
+    {
+      "id": "measured_sessions",
+      "title": "Measured eligible sessions",
+      "contract": {
+        "Formula": "SUM(funnel_daily.measured_sessions where stage_id=all_sessions)",
+        "Numerator": "SUM(funnel_daily.measured_sessions where stage_id=all_sessions)",
+        "Denominator": "Not applicable",
+        "Date / vintage": "sessions.report_date: New York visit entry date.",
+        "Query route": "funnel_daily",
+        "Allowed cuts": "funnel_daily.shop_id\nfunnel_daily.report_date\nfunnel_daily.stage_id (one separately approved stage; do not sum stages)",
+        "Required readiness": "Approved sessionization, event-family deduplication, behavior completeness, privacy/eligibility and one publication/funnel version.",
+        "Limitations": "Measured tracking coverage only; anonymous sessions retained. Stage rows overlap and are not additive. Commerce completeness is not required merely to report measured visits.",
+        "Contract state": "Proposed metric contract; approval and data validation required",
+        "Reviewer decision / notes": "Pending"
+      }
+    },
+    {
+      "id": "session_conversion",
+      "title": "Mature checkout-linked session conversion",
+      "contract": {
+        "Formula": "SUM(funnel_daily.converted_sessions where stage_id=all_sessions) / SUM(funnel_daily.mature_sessions where stage_id=all_sessions)",
+        "Numerator": "SUM(funnel_daily.converted_sessions at one selected stage)",
+        "Denominator": "SUM(funnel_daily.mature_sessions at the same selected stage)",
+        "Date / vintage": "New York session-entry cohorts; eligible order paid_at in [session started_at, started_at + 7 days); seven-day proposal plus approved ingestion grace.",
+        "Query route": "funnel_daily",
+        "Allowed cuts": "funnel_daily.shop_id\nfunnel_daily.report_date\nfunnel_daily.stage_id (all_sessions for core metric; one stage for explicitly labeled stage-conditioned metric)",
+        "Required readiness": "Behavior complete, conversion_window_complete, independent order coverage, verified checkout linkage and one session/funnel/publication version.",
+        "Limitations": "Each mature session counted once even with several orders. Open/incomplete windows are null, not false/zero; not the acquisition attribution window or GA conversion rate.",
+        "Contract state": "Proposed metric contract; approval and data validation required",
+        "Reviewer decision / notes": "Pending"
+      }
+    },
+    {
+      "id": "repeat_purchase",
+      "title": "Mature H-day repeat purchase rate",
+      "contract": {
+        "Formula": "SUM(customer_cohorts.repeat_customers) / SUM(customer_cohorts.cohort_customers) at one H and definition",
+        "Numerator": "SUM(customer_cohorts.repeat_customers)",
+        "Denominator": "SUM(customer_cohorts.cohort_customers)",
+        "Date / vintage": "First eligible paid order cohort; additional eligible orders paid within [first_eligible_order_at, first_eligible_order_at + H days).",
+        "Query route": "customer_cohorts",
+        "Allowed cuts": "customer_cohorts.shop_id\ncustomer_cohorts.cohort_month\ncustomer_cohorts.observation_age_days (select one comparable age)",
+        "Required readiness": "Deterministic permitted canonical identity, full independent eligible order history (including legacy/migrations), customer-level first-order certification, one publication. Entire cohort age mature plus approved grace, complete order follow-up and fixed acquisition definition/as-of publication.",
+        "Limitations": "Distinct customers, not repeat orders; no survivor-only mature subset of an immature cohort. Zero cohort denominator gives null. No subscription churn claim.",
+        "Contract state": "Proposed metric contract; approval and data validation required",
+        "Reviewer decision / notes": "Pending"
+      }
+    },
+    {
+      "id": "revenue_ltv",
+      "title": "Observed H-day revenue LTV",
+      "contract": {
+        "Formula": "SUM(customer_cohorts.observed_net_merchandise_sales_usd) / SUM(customer_cohorts.cohort_customers) at one H and definition",
+        "Numerator": "SUM(customer_cohorts.observed_net_merchandise_sales_usd)",
+        "Denominator": "SUM(customer_cohorts.cohort_customers)",
+        "Date / vintage": "Select orders by paid_at in [first_eligible_order_at, first_eligible_order_at + H days). Include their original sale/discount ledger components once even if recorded before payment; include eligible post-purchase adjustments/refunds effective before the same endpoint. Require original components before the endpoint, classified source lineage and one common as_of_at/version. Daily ledger reporting is unchanged.",
+        "Query route": "customer_cohorts",
+        "Allowed cuts": "customer_cohorts.shop_id\ncustomer_cohorts.cohort_month\ncustomer_cohorts.observation_age_days (one common mature age)",
+        "Required readiness": "Deterministic permitted canonical identity, full independent eligible order history (including legacy/migrations), customer-level first-order certification, one publication. Complete independently expected Shopify sales/refund history for requested dates; deduplicated reconciled components; approved eligibility; all required currency USD; one publication/definition. Whole cohort mature; complete in-window late-arrival/refund vintage.",
+        "Limitations": "Observed net merchandise per original cohort customer, not predictive/profit LTV. Refunds effective after H are excluded, late-arriving in-H facts restate later publications. Zero cohort denominator gives null.",
+        "Contract state": "Proposed metric contract; approval and data validation required",
+        "Reviewer decision / notes": "Pending"
+      }
+    },
+    {
+      "id": "ctr",
+      "title": "Optional CTR",
+      "contract": {
+        "Formula": "SUM(marketing_spend_daily.clicks) / SUM(marketing_spend_daily.impressions)",
+        "Numerator": "SUM(marketing_spend_daily.clicks)",
+        "Denominator": "SUM(marketing_spend_daily.impressions)",
+        "Date / vintage": "marketing_spend_daily.report_date in America/New_York account timezone.",
+        "Query route": "marketing_spend_daily (bounded approved primitive aggregate; not yet a column in five reporting views)",
+        "Allowed cuts": "marketing_spend_daily.provider\nmarketing_spend_daily.account_id\nmarketing_spend_daily.campaign_key within account\nmarketing_spend_daily.report_date",
+        "Required readiness": "External expected provider/account/date registry, active/base-report scope, authorization, reconciliation, freshness and America/New_York account timezone all pass; every required monetary input USD. Optional primitives present/reconciled; compare only approved impression/click definitions and one base-report version.",
+        "Limitations": "Ratio 0–1, display as percent. Click definitions must be compatible; no provider all-click/link-click mixing. Zero or missing denominator gives null; ratio of sums, not mean of daily ratios. No device/geo/placement/native conversion breakdowns.",
+        "Contract state": "Optional metric proposal; primitives and bounded route need separate approval",
+        "Reviewer decision / notes": "Pending"
+      }
+    },
+    {
+      "id": "cpc",
+      "title": "Optional CPC",
+      "contract": {
+        "Formula": "SUM(marketing_spend_daily.spend_usd) / SUM(marketing_spend_daily.clicks)",
+        "Numerator": "SUM(marketing_spend_daily.spend_usd)",
+        "Denominator": "SUM(marketing_spend_daily.clicks)",
+        "Date / vintage": "marketing_spend_daily.report_date in America/New_York account timezone.",
+        "Query route": "marketing_spend_daily (bounded approved primitive aggregate; not yet a column in five reporting views)",
+        "Allowed cuts": "marketing_spend_daily.provider\nmarketing_spend_daily.account_id\nmarketing_spend_daily.campaign_key within account\nmarketing_spend_daily.report_date",
+        "Required readiness": "External expected provider/account/date registry, active/base-report scope, authorization, reconciliation, freshness and America/New_York account timezone all pass; every required monetary input USD. Optional primitives present/reconciled; compare only approved impression/click definitions and one base-report version.",
+        "Limitations": "USD per approved comparable click; not cost per conversion. Zero or missing denominator gives null; ratio of sums, not mean of daily ratios. No device/geo/placement/native conversion breakdowns.",
+        "Contract state": "Optional metric proposal; primitives and bounded route need separate approval",
+        "Reviewer decision / notes": "Pending"
+      }
+    },
+    {
+      "id": "cpm",
+      "title": "Optional CPM",
+      "contract": {
+        "Formula": "1000 * SUM(marketing_spend_daily.spend_usd) / SUM(marketing_spend_daily.impressions)",
+        "Numerator": "1000 * SUM(marketing_spend_daily.spend_usd)",
+        "Denominator": "SUM(marketing_spend_daily.impressions)",
+        "Date / vintage": "marketing_spend_daily.report_date in America/New_York account timezone.",
+        "Query route": "marketing_spend_daily (bounded approved primitive aggregate; not yet a column in five reporting views)",
+        "Allowed cuts": "marketing_spend_daily.provider\nmarketing_spend_daily.account_id\nmarketing_spend_daily.campaign_key within account\nmarketing_spend_daily.report_date",
+        "Required readiness": "External expected provider/account/date registry, active/base-report scope, authorization, reconciliation, freshness and America/New_York account timezone all pass; every required monetary input USD. Optional primitives present/reconciled; compare only approved impression/click definitions and one base-report version.",
+        "Limitations": "USD per thousand compatible impressions; not unique reach/frequency. Zero or missing denominator gives null; ratio of sums, not mean of daily ratios. No device/geo/placement/native conversion breakdowns.",
+        "Contract state": "Optional metric proposal; primitives and bounded route need separate approval",
+        "Reviewer decision / notes": "Pending"
+      }
+    }
+  ],
+  "joins": [
+    {
+      "id": 1,
+      "from": "orders",
+      "fromKey": "customer_id + publication_id",
+      "to": "customers",
+      "toKey": "customer_id + publication_id",
+      "cardinality": "Many to at most one",
+      "conditions": "Same selected immutable publication_id; select relevant definition/version before joining. LEFT lookup; null customer_id is valid and retained. Non-null keys must resolve; only permitted unambiguous identity supports customer metrics.",
+      "risk": "Inner join drops anonymous/unresolved commerce or visits; guessing a customer contaminates first-order cohorts."
+    },
+    {
+      "id": 2,
+      "from": "sessions",
+      "fromKey": "customer_id + publication_id",
+      "to": "customers",
+      "toKey": "customer_id + publication_id",
+      "cardinality": "Many to at most one",
+      "conditions": "Same selected immutable publication_id; select relevant definition/version before joining. LEFT lookup; null customer_id is valid and retained. Non-null keys must resolve; only permitted unambiguous identity supports customer metrics.",
+      "risk": "Inner join drops anonymous/unresolved commerce or visits; guessing a customer contaminates first-order cohorts."
+    },
+    {
+      "id": 3,
+      "from": "analytics_events",
+      "fromKey": "customer_id + publication_id",
+      "to": "customers",
+      "toKey": "customer_id + publication_id",
+      "cardinality": "Many to at most one",
+      "conditions": "Same selected immutable publication_id; select relevant definition/version before joining. LEFT lookup; null customer_id is valid and retained. Non-null keys must resolve; only permitted unambiguous identity supports customer metrics.",
+      "risk": "Inner join drops anonymous/unresolved commerce or visits; guessing a customer contaminates first-order cohorts."
+    },
+    {
+      "id": 4,
+      "from": "identity_map",
+      "fromKey": "customer_id + publication_id",
+      "to": "customers",
+      "toKey": "customer_id + publication_id",
+      "cardinality": "Many selected mappings to at most one customer",
+      "conditions": "Same selected immutable publication_id; select relevant definition/version before joining. Before use select mapping_version and one valid interval per namespaced identifier; resolved/permitted/active only. Null unresolved mappings remain diagnostics.",
+      "risk": "Joining all intervals/versions or all identifiers fans out customers and events."
+    },
+    {
+      "id": 5,
+      "from": "analytics_events",
+      "fromKey": "identity_namespace + distinct_id + publication_id",
+      "to": "identity_map",
+      "toKey": "source_namespace + source_identifier + publication_id",
+      "cardinality": "Many events to at most one selected mapping",
+      "conditions": "Same selected immutable publication_id; select relevant definition/version before joining. LEFT conditional lookup, with occurred_at >= valid_from and (valid_to is null or occurred_at < valid_to); one approved mapping_version, resolved/permitted/active only. Null distinct_id gives no match; overlapping/conflicting candidates produce unresolved null, not arbitrary selection.",
+      "risk": "Raw identity_map is interval/version grain, not unique on bare identifier; equality join alone is unsafe."
+    },
+    {
+      "id": 6,
+      "from": "customers",
+      "fromKey": "first_eligible_order_id + publication_id",
+      "to": "orders",
+      "toKey": "order_id + publication_id",
+      "cardinality": "One customer to zero or one first order",
+      "conditions": "Same selected immutable publication_id; select relevant definition/version before joining. LEFT lookup; nullable until history_complete and permitted canonical identity. Matched order.customer_id must equal customer.customer_id; select earliest approved paid order over full history.",
+      "risk": "A minimum order only inside report dates falsely labels returning customers new."
+    },
+    {
+      "id": 7,
+      "from": "analytics_events",
+      "fromKey": "session_key + publication_id",
+      "to": "sessions",
+      "toKey": "session_key + publication_id",
+      "cardinality": "Many to at most one",
+      "conditions": "Same selected immutable publication_id; select relevant definition/version before joining. LEFT lookup, scoped/versioned session_key; null event session remains visible. Build final diagnostic view after session derivation from normalized base.",
+      "risk": "Timestamp inference invents visits; publishing a circular session/event dependency fails."
+    },
+    {
+      "id": 8,
+      "from": "orders",
+      "fromKey": "checkout_session_key + publication_id",
+      "to": "sessions",
+      "toKey": "session_key + publication_id",
+      "cardinality": "Many orders to at most one checkout session; reverse one session to zero/many orders",
+      "conditions": "Same selected immutable publication_id; select relevant definition/version before joining. LEFT lookup; require checkout_link_status=matched and deterministic approved evidence for non-null link. Null missing/pending/conflicting/not_applicable orders remain.",
+      "risk": "Assuming one order per session overcounts conversion or drops sales; checkout context is not acquisition attribution."
+    },
+    {
+      "id": 9,
+      "from": "analytics_events",
+      "fromKey": "order_id + publication_id",
+      "to": "orders",
+      "toKey": "order_id + publication_id",
+      "cardinality": "Many actions to at most one order",
+      "conditions": "Same selected immutable publication_id; select relevant definition/version before joining. LEFT diagnostic lookup or distinct-key semijoin; validated shop-qualified non-null keys only. Null order links retained.",
+      "risk": "Summing a repeated order value per event multiplies revenue; purchase events cannot establish financial truth."
+    },
+    {
+      "id": 10,
+      "from": "analytics_events",
+      "fromKey": "source_event_uuid",
+      "to": "events",
+      "toKey": "uuid",
+      "cardinality": "Many publication occurrences to one representative native record in fixed project scope",
+      "conditions": "Read-only lineage lookup in exactly the PostHog project identified by normalization/source configuration; native uuid uniqueness verified. Native records have no proposed publication_id. Retention may remove raw evidence, which must be reported as unavailable, not recreated.",
+      "risk": "Bare UUID across projects or native retries mistaken for canonical actions; native types/receipt fields are not certified."
+    },
+    {
+      "id": 11,
+      "from": "order_items",
+      "fromKey": "order_id + publication_id",
+      "to": "orders",
+      "toKey": "order_id + publication_id",
+      "cardinality": "Many to one",
+      "conditions": "Same selected immutable publication_id; select relevant definition/version before joining. Required parent must resolve; quarantine invalid rows and fail affected coverage rather than silently dropping them. Aggregate each child independently to required order/date grain before combining child measures.",
+      "risk": "Raw items × ledger × payments Cartesian multiplication; amounts have different clocks and meanings."
+    },
+    {
+      "id": 12,
+      "from": "sales_ledger",
+      "fromKey": "order_id + publication_id",
+      "to": "orders",
+      "toKey": "order_id + publication_id",
+      "cardinality": "Many to one",
+      "conditions": "Same selected immutable publication_id; select relevant definition/version before joining. Required parent must resolve; quarantine invalid rows and fail affected coverage rather than silently dropping them. Aggregate each child independently to required order/date grain before combining child measures.",
+      "risk": "Raw items × ledger × payments Cartesian multiplication; amounts have different clocks and meanings."
+    },
+    {
+      "id": 13,
+      "from": "payments",
+      "fromKey": "order_id + publication_id",
+      "to": "orders",
+      "toKey": "order_id + publication_id",
+      "cardinality": "Many to one",
+      "conditions": "Same selected immutable publication_id; select relevant definition/version before joining. Required parent must resolve; quarantine invalid rows and fail affected coverage rather than silently dropping them. Aggregate each child independently to required order/date grain before combining child measures.",
+      "risk": "Raw items × ledger × payments Cartesian multiplication; amounts have different clocks and meanings."
+    },
+    {
+      "id": 14,
+      "from": "sales_ledger",
+      "fromKey": "order_item_id + publication_id",
+      "to": "order_items",
+      "toKey": "order_item_id + publication_id",
+      "cardinality": "Many allocated components to at most one line",
+      "conditions": "Same selected immutable publication_id; select relevant definition/version before joining. LEFT lookup; non-null line must belong to the same order_id. Product metrics require product_allocation_status=allocated and complete eligible merchandise allocation; null order-level/unresolved rows stay in store totals. Refunds use ledger effective/report_date.",
+      "risk": "Dropping null allocations understates store sales; guessed refund allocation corrupts SKU sales; repeated purchase snapshot sums across movements overcount units."
+    },
+    {
+      "id": 15,
+      "from": "order_item_offers",
+      "fromKey": "order_item_id + publication_id",
+      "to": "order_items",
+      "toKey": "order_item_id + publication_id",
+      "cardinality": "Many offer memberships to one purchased line",
+      "conditions": "Same selected immutable publication_id; select relevant definition/version before joining. Required parent; reporting uses a DISTINCT order_item_id EXISTS/semijoin for a selected offer set, then sums each selected line/ledger slice once. No exclusive allocation is defined.",
+      "risk": "Offers overlap and slices are nonadditive; ordinary many-offer join multiplies line sales."
+    },
+    {
+      "id": 16,
+      "from": "sales_ledger",
+      "fromKey": "reverses_entry_id + publication_id",
+      "to": "sales_ledger",
+      "toKey": "ledger_entry_id + publication_id",
+      "cardinality": "Many correction references to at most one original component",
+      "conditions": "Same selected immutable publication_id; select relevant definition/version before joining. Nullable reference; resolve to original movement slice with coherent component/order/currency. Diagnostic relation only; no summing both sides as new independent sales.",
+      "risk": "Counting correction plus original as two positive movements or also classifying reversal as another refund."
+    },
+    {
+      "id": 17,
+      "from": "payments",
+      "fromKey": "parent_payment_id + publication_id",
+      "to": "payments",
+      "toKey": "payment_id + publication_id",
+      "cardinality": "Many child transactions to at most one parent transaction",
+      "conditions": "Same selected immutable publication_id; select relevant definition/version before joining. Nullable source-provided parent link; order/currency compatibility required. Aggregate signed eligible cash transaction rows once; parent lookup is diagnostic.",
+      "risk": "Counting authorizations plus captures or parent capture repeatedly for each refund."
+    },
+    {
+      "id": 18,
+      "from": "order_attribution",
+      "fromKey": "order_id + publication_id",
+      "to": "orders",
+      "toKey": "order_id + publication_id",
+      "cardinality": "One to one over eligible orders within one model/publication",
+      "conditions": "Same selected immutable publication_id; select relevant definition/version before joining. Exactly one selected model_version; every eligible order receives one row including unattributed/not_applicable. Required order resolves; paid_at matches conversion basis. Weighted first customer uses only customers.first_eligible_order_id.",
+      "risk": "Multiple model/publication rows multiply sales; counting all customer orders multiplies acquisition denominators."
+    },
+    {
+      "id": 19,
+      "from": "order_attribution",
+      "fromKey": "acquisition_session_key + publication_id",
+      "to": "sessions",
+      "toKey": "session_key + publication_id",
+      "cardinality": "Many order credits to at most one acquisition session",
+      "conditions": "Same selected immutable publication_id; select relevant definition/version before joining. LEFT lookup at exactly one model_version; nullable for unassigned/not_applicable. Deterministic permitted customer link, approved pre-conversion window and eligibility required; session may differ from checkout_session_key.",
+      "risk": "Checkout/acquisition conflation and after-conversion touches fabricate attribution."
+    },
+    {
+      "id": 20,
+      "from": "order_attribution",
+      "fromKey": "touch_event_key + publication_id",
+      "to": "analytics_events",
+      "toKey": "event_key + publication_id",
+      "cardinality": "Many credits to at most one optional canonical touch",
+      "conditions": "Same selected immutable publication_id; select relevant definition/version before joining. LEFT lookup at one model_version; null optional touch retained. Non-null touch requires non-null acquisition_session_key equal to analytics_events.session_key and approved in-window eligible event evidence.",
+      "risk": "An arbitrary event from another visit or raw duplicate cannot certify the selected acquisition touch."
+    },
+    {
+      "id": 21,
+      "from": "acquisition_daily",
+      "fromKey": "campaign_bucket + report_date + publication_id",
+      "to": "marketing_spend_daily",
+      "toKey": "campaign_key + report_date + publication_id",
+      "cardinality": "One reporting row to at most one independently prepared compatible campaign/day spend aggregate",
+      "conditions": "Same selected immutable publication_id; select relevant definition/version before joining. Approved comparison/lineage route only: first select one acquisition model/definition and one provider base_report_id, externally approved shop/account scope, USD and America/New_York day. Independently aggregate spend to campaign_key/report_date/publication and verify uniqueness before alignment. Match only qualified campaign buckets with consistent channel mapping. Keep unassigned/not_applicable/no_campaign rows with null denominator; use the independently expected calendar/scope to retain spend-only dates/campaigns. Never join daily spend directly to orders, customers, sessions or raw attribution rows.",
+      "risk": "Raw base reports, multiple models, or unmatched campaign labels can multiply/misallocate spend. This is a guarded aggregate-construction/lineage relation, not permission to re-add spend to already aggregated view measures."
+    },
+    {
+      "id": 22,
+      "from": "subscriptions",
+      "fromKey": "customer_id + publication_id",
+      "to": "customers",
+      "toKey": "customer_id + publication_id",
+      "cardinality": "OPTIONAL many to at most one",
+      "conditions": "Same selected immutable publication_id; select relevant definition/version before joining. Not implemented; nullable deterministic customer link only after optional module approval.",
+      "risk": "Optional outline does not establish churn, MRR or customer history completeness."
+    },
+    {
+      "id": 23,
+      "from": "subscription_billing_cycles",
+      "fromKey": "subscription_id + publication_id",
+      "to": "subscriptions",
+      "toKey": "subscription_id + publication_id",
+      "cardinality": "OPTIONAL many to one",
+      "conditions": "Same selected immutable publication_id; select relevant definition/version before joining. Not implemented; required source contract reference must resolve after optional module approval.",
+      "risk": "Migration, prepaid terms and lifecycle deduplication remain unresolved."
+    },
+    {
+      "id": 24,
+      "from": "subscription_billing_cycles",
+      "fromKey": "order_id + publication_id",
+      "to": "orders",
+      "toKey": "order_id + publication_id",
+      "cardinality": "OPTIONAL provisional many to at most one; must be confirmed",
+      "conditions": "Same selected immutable publication_id; select relevant definition/version before joining. Not implemented; nullable only when a verified source-generated order exists. No money measures imported from the outline; validate one-obligation-to-order assumptions before implementing.",
+      "risk": "Retries, grouped billing or split orders may require a different optional grain; never multiply independent order sales."
+    }
+  ]
+}
