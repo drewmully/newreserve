@@ -7,6 +7,8 @@ import { readFileSync } from "node:fs";
 import { beforeAll, afterAll, beforeEach, describe, expect, it } from "vitest";
 import { mapPilotSource, type PilotPolicy } from "@/lib/analytics/shopifyPilotMapping";
 import type { PilotSource } from "@/lib/analytics/shopifyPilotSource";
+import { runObservedReportJob } from "@/lib/analytics/observedReportJob";
+import type { AnalyticsRpcClient } from "@/lib/analytics/rpcStore";
 
 const connectionString = process.env.LOCAL_POSTGRES_TEST_URL;
 const shop = "concurrency-fixture.myshopify.com", project = "aaaaaaaaaaaaaaaaaaaa";
@@ -58,7 +60,7 @@ describe.skipIf(!connectionString)("real PostgreSQL concurrent analytics workers
     end $$`);
     // CI service is disposable; the explicit local reset also permits repeat runs.
     for (const name of ["001_staging", "003_receipts", "004_worker", "013_release", "014_reporting_views",
-      "015_backfill", "016_shopify_pilot", "017_shopify_pipeline", "018_history_jobs"])
+      "015_backfill", "016_shopify_pilot", "017_shopify_pipeline", "018_history_jobs", "019_spend_jobs", "020_observed_report_jobs"])
       await admin.query(readFileSync(`sql/analytics/${name}.sql`, "utf8"));
     await admin.query(`insert into lean_private.pipeline_scope(shop,project_ref,enabled,from_time,until_time,policy,approval_ref,actor_ref)
       values($1,$2,true,'2026-01-01','2026-02-01',$3,'fixture:scope','fixture:operator')`,
@@ -69,7 +71,7 @@ describe.skipIf(!connectionString)("real PostgreSQL concurrent analytics workers
   beforeEach(async () => {
     await a.query("rollback"); await b.query("rollback");
     await admin.query(`truncate lean_private.receipts cascade; truncate lean_private.publications cascade;
-      truncate lean_private.history_jobs cascade`);
+      truncate lean_private.history_jobs cascade; truncate lean_private.spend_jobs; truncate lean_private.report_builds`);
   });
   const receipt = () => admin.query(`select public.lean_accept_receipt('shopify',$1,$2,'orders/updated',$3,$4)`,
     [randomUUID(), JSON.stringify([shop, "gid://shopify/Order/1"]), "a".repeat(64), JSON.stringify({ admin_graphql_api_id: "gid://shopify/Order/1" })]);
@@ -85,6 +87,38 @@ describe.skipIf(!connectionString)("real PostgreSQL concurrent analytics workers
   }
   const finish = async (client: Client, args: unknown[]) =>
     (await client.query("select public.lean_pipeline_finish($1,$2,$3,$4) result", args)).rows[0].result;
+  it("serializes two report completions without duplicate facts or a partial publication", async () => {
+    await admin.query(`insert into lean_private.history_jobs
+      (run_id,project_ref,shop,from_time,until_time,page_size,max_pages,approval_ref,actor_ref,enabled)
+      values('history',$1,$2,'2026-01-01','2026-02-01',2,2,'fixture:approval','fixture:actor',true)`, [project, shop]);
+    await admin.query("select public.lean_history_commit('history',$1,$2,0,null,null,true,$3::jsonb)",
+      [project, shop, JSON.stringify([{ source: source("2026-01-02T00:00:00Z") }])]);
+    await admin.query(`insert into lean_private.report_builds
+      (run_id,project_ref,shop,history_runs,from_date,through_date,policy,approval_ref,actor_ref,enabled)
+      values('report',$1,$2,array['history'],'2025-12-31','2026-01-02',$3,'fixture:approval','fixture:actor',true)`,
+      [project, shop, JSON.stringify({ ...policy, productClasses: { "3": "merchandise" } })]);
+    // Barrier guarantees both workers read the same uncompleted input first.
+    let readers = 0, unblock!: () => void;
+    const bothRead = new Promise<void>(resolve => { unblock = resolve; });
+    const adapter = (pg: Client): AnalyticsRpcClient => ({ async rpc(name, input) {
+      if (!["lean_report_inputs", "lean_report_finish"].includes(name)) throw new Error("unknown_rpc");
+      const pairs = Object.entries(input);
+      const result = await pg.query(`select public.${name}(${pairs.map(([k], i) => `${k}=>$${i + 1}`).join(",")}) result`,
+        pairs.map(([, value]) => typeof value === "object" ? JSON.stringify(value) : value));
+      if (name === "lean_report_inputs") {
+        if (++readers === 2) unblock();
+        await bothRead;
+      }
+      return { data: result.rows[0].result, error: null };
+    } });
+    const options = { projectRef: project, databaseUrl: `https://${project}.supabase.co`, runId: "report" };
+    expect(await Promise.all([runObservedReportJob({ ...options, client: adapter(a) }),
+      runObservedReportJob({ ...options, client: adapter(b) })])).toEqual([
+      { state: "complete", certification: "unverified" }, { state: "complete", certification: "unverified" }]);
+    expect((await admin.query("select count(*)::int n from lean_private.orders")).rows[0]).toEqual({ n: 1 });
+    expect((await admin.query("select count(*)::int n from lean_private.report_store_daily")).rows[0]).toEqual({ n: 3 });
+    expect((await admin.query("select * from lean_private.selected_publications")).rows).toHaveLength(0);
+  });
   it("SKIP LOCKED gives two open transactions different receipts", async () => {
     await receipt(); await receipt(); await a.query("begin"); await b.query("begin");
     const first = await claim(a, randomUUID()), second = await claim(b, randomUUID());
