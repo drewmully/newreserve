@@ -11,7 +11,7 @@ export function signCheckoutContext(input: {
   project: string; shop: string; checkoutId: string; sessionId: string; serverSubject: string;
   analyticsPermitted: boolean; now: number; ttlSeconds: number;
 }, secret: string): string | null {
-  if (!input.analyticsPermitted) return null;
+  if (input.analyticsPermitted !== true) return null;
   if (![input.project, input.shop, input.checkoutId, input.serverSubject].every(s => s.length > 0 && s.length <= 200) ||
       !/^[a-f0-9-]{32,64}$/i.test(input.sessionId) || !Number.isSafeInteger(input.now) ||
       !Number.isInteger(input.ttlSeconds) || input.ttlSeconds < 60 || input.ttlSeconds > 86400) throw new Error("invalid_context");
@@ -28,7 +28,7 @@ export function verifyCheckoutContext(token: string, expected: {
   project: string; shop: string; checkoutId: string; serverSubject: string;
   analyticsPermitted: boolean; now: number;
 }, secret: string): CheckoutContext | null {
-  if (!expected.analyticsPermitted || token.length > 3000) return null;
+  if (expected.analyticsPermitted !== true || token.length > 3000) return null;
   try {
     const parts = token.split(".");
     if (parts.length !== 2 || !/^[a-zA-Z0-9_-]+$/.test(parts[0]) || !/^[a-zA-Z0-9_-]{43}$/.test(parts[1])) return null;

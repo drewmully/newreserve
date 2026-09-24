@@ -59,8 +59,9 @@ Configuration values in synthetic fixtures are examples, not customer approvals.
 
 `analytics_events` is currently an in-memory logical relation used by the full
 build, with only counts, coverage and a digest persisted. A saved queryable
-PostHog `analytics_events` view is NOT installed by this change. Existing journey
-collection helpers are NOT newly wired into every customer journey here.
+PostHog `analytics_events` view is NOT installed by this change. L24 now wires
+the supported Reserve/Style Game/Text Mully start events and Storefront carts;
+it does not claim every journey or the permission lifecycle is integrated.
 
 ## Inputs that must not be invented
 
@@ -138,7 +139,7 @@ without an approved replacement still block.
 1. Review and merge the stack in order: #162, #163, #164, #165. Keep all runtime
    flags off. Merging is not permission to deploy, query sources or spend.
 2. In an approved isolated database, apply dependencies through migration 020,
-   then 021, 022, 023 and 024 in order. Migration 023 intentionally creates a new
+   then 021 through 026 in order. Migration 023 intentionally creates a new
    `lean_posthog_reader` NOLOGIN role and refuses an existing name. Do not bypass
    a role collision or apply migrations blindly to production.
 3. Populate disabled history/spend/base/full job records with exact source
@@ -201,12 +202,12 @@ No warehouse source, saved view, dashboard or report was created in the live UI.
 
 ## Test and rollback checklist
 
-The latest local regression passed 452 tests across 34 files with zero skipped,
+The latest local regression passed 520 tests across 41 files with zero skipped,
 including ten real PostgreSQL integration/concurrency tests. Analytics
 TypeScript, ESLint, generated-SQL parity and diff checks passed.
 This is not a claim that unrelated whole-application tests are green.
 
-- Run `npm test -- --project api tests/api/analyticsContracts.test.ts tests/api/analyticsLean`.
+- Run `npm test -- --project api tests/api/analyticsContracts.test.ts tests/api/analyticsLean tests/api/analyticsTrack.route.test.ts`.
   Set `LOCAL_POSTGRES_TEST_URL` only to the guarded loopback disposable
   `analytics_test_pipeline` database with `fixture_owner` to include concurrency.
 - Run `npx tsc --project tsconfig.analytics.json` and the analytics ESLint command

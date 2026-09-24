@@ -14,6 +14,8 @@ export async function readSourceFile(inputPath, outputPath, env = process.env, r
   if (!env.LEAN_MULLY_SOURCE_READ_KEY?.trim()) throw new Error("mully_source_read_key_required");
   if (statSync(inputPath).size > 8000000 || existsSync(outputPath)) throw new Error("mully_source_file_budget");
   const input = JSON.parse(readFileSync(inputPath, "utf8"));
+  if (input.kind !== undefined && !["journey-receipts-v1", "journey-permissions-v1"].includes(input.kind))
+    throw new Error("mully_source_kind");
   if (!input.approvalRef?.trim() || input.projectRef !== env.LEAN_MULLY_SOURCE_PROJECT_REF ||
       input.shop !== env.LEAN_SHOPIFY_SHOP_DOMAIN) throw new Error("mully_source_target_mismatch");
   const scratch = mkdtempSync(join(tmpdir(), "mully-source-"));
@@ -22,18 +24,34 @@ export async function readSourceFile(inputPath, outputPath, env = process.env, r
       moduleResolution: ts.ModuleResolutionKind.Node10, esModuleInterop: true,
       resolveJsonModule: true, skipLibCheck: true, noEmitOnError: true,
       strict: true, rootDir: join(root, "src"), outDir: scratch };
-    const program = ts.createProgram([join(root, "src/lib/analytics/mymullySource.ts")], options);
+    const journey = input.kind === "journey-receipts-v1";
+    const permissions = input.kind === "journey-permissions-v1";
+    const program = ts.createProgram([join(root, `src/lib/analytics/${permissions ? "journeyPermissions" : journey ? "journeySource" : "mymullySource"}.ts`)], options);
     if (ts.getPreEmitDiagnostics(program).some(d => d.category === ts.DiagnosticCategory.Error) ||
         program.emit().emitSkipped) throw new Error("mully_source_compile_failed");
     const require = createRequire(import.meta.url);
-    const { orderCustomerIds, readMullyCustomers } = require(join(scratch, "lib/analytics/mymullySource.js"));
-    if (!Array.isArray(input.orders) || input.orders.some(doc => doc.shop !== input.shop))
+    if (!permissions && (!Array.isArray(input.orders) || input.orders.some(doc => doc.shop !== input.shop)))
       throw new Error("mully_order_shop_mismatch");
-    const snapshot = await readMullyCustomers({ projectRef: input.projectRef, shop: input.shop,
-      entities: input.entities, customerIds: orderCustomerIds(input.orders), capturedAt: new Date().toISOString(),
-    }, env.LEAN_MULLY_SOURCE_READ_KEY, request);
+    const common = { projectRef: input.projectRef, shop: input.shop, capturedAt: new Date().toISOString() };
+    let snapshot;
+    if (permissions) {
+      const { readJourneyPermissions } = require(join(scratch, "lib/analytics/journeyPermissions.js"));
+      if (input.posthogProject !== env.LEAN_POSTHOG_PROJECT_ID) throw new Error("journey_permission_project");
+      snapshot = await readJourneyPermissions({ ...common, posthogProject: input.posthogProject,
+        from: input.from, until: input.until }, env.LEAN_MULLY_SOURCE_READ_KEY, request);
+    } else if (journey) {
+      const { orderCartTokens, readJourneyReceipts } = require(join(scratch, "lib/analytics/journeySource.js"));
+      snapshot = await readJourneyReceipts({ ...common, requestedCarts: orderCartTokens(input.orders) },
+        env.LEAN_MULLY_SOURCE_READ_KEY, request);
+    } else {
+      const { orderCustomerIds, readMullyCustomers } = require(join(scratch, "lib/analytics/mymullySource.js"));
+      snapshot = await readMullyCustomers({ ...common,
+        entities: input.entities, customerIds: orderCustomerIds(input.orders),
+      }, env.LEAN_MULLY_SOURCE_READ_KEY, request);
+    }
     writeFileSync(outputPath, JSON.stringify(snapshot, null, 2) + "\n", { flag: "wx", mode: 0o600 });
-    return { state: "snapshot_only", customers: snapshot.customers.length, digest: snapshot.digest,
+    return { state: "snapshot_only", ...(permissions ? { grants: snapshot.grants.length } :
+      journey ? { receipts: snapshot.receipts.length } : { customers: snapshot.customers.length }), digest: snapshot.digest,
       registered: false, enabled: false };
   } finally { rmSync(scratch, { recursive: true, force: true }); }
 }

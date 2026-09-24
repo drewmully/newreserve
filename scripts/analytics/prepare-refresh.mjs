@@ -33,7 +33,7 @@ export function prepareFile(inputPath, outputPath) {
     const compiled = source => join(scratch, relative(options.rootDir, source).replace(/\.ts$/, ".js"));
     if (!compiled(entry).startsWith(scratch + sep)) throw new Error("invalid_preparation_path");
     const customerSource = input.kind === "mully-source-v1"
-      ? require(compiled(mully)).prepareMullyRefresh(input) : null;
+      ? require(compiled(mully)).prepareMullyRefresh(input, { checkoutSecret: process.env.LEAN_CHECKOUT_CONTEXT_SECRET }) : null;
     const bundle = customerSource?.bundle ?? require(compiled(entry)).prepareRefresh(input);
     const diagnostic = require(compiled(view)).behaviorDiagnosticView(
       customerSource ? customerSource.refresh.behavior : input.behavior);

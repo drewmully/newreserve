@@ -21,6 +21,7 @@
  * Returns: { checkoutUrl } - caller should redirect the browser to it.
  */
 import { NextResponse } from "next/server";
+import { attachJourneyCart } from "@/lib/analytics/journeyRuntime";
 
 export const runtime = "nodejs";
 
@@ -125,7 +126,7 @@ export async function POST(req: Request) {
             attributes: $attributes,
             buyerIdentity: $buyerIdentity
           }) {
-            cart { checkoutUrl }
+            cart { id checkoutUrl }
             userErrors { field message code }
           }
         }`,
@@ -156,6 +157,7 @@ export async function POST(req: Request) {
   }
 
   // Append email pre-fill to the checkout URL so Shopify skips the email step.
+  await attachJourneyCart(req, json?.data?.cartCreate?.cart?.id);
   let finalUrl = checkoutUrl;
   try {
     const u = new URL(checkoutUrl);
