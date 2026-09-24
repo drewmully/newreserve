@@ -48,7 +48,8 @@ beforeEach(async () => {
   await db.exec("truncate lean_private.history_jobs cascade");
   await db.query(`insert into lean_private.history_jobs
     (run_id,project_ref,shop,from_time,until_time,page_size,max_pages,approval_ref,actor_ref,enabled)
-    values('fixture',$1,$2,'2026-01-01','2026-02-01',2,2,'fixture:approval','fixture:operator',true)`, [project, shop]);
+    values('fixture',$1,$2,'2026-01-01T00:00:00Z','2026-02-01T00:00:00Z',2,2,
+      'fixture:approval','fixture:operator',true)`, [project, shop]);
 });
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
 afterAll(async () => { await db?.close(); });
@@ -61,7 +62,8 @@ it("persists update-time scope and accepts an older order only when its update i
   await db.exec("truncate lean_private.history_jobs cascade");
   await db.query(`insert into lean_private.history_jobs
     (run_id,project_ref,shop,from_time,until_time,page_size,max_pages,approval_ref,actor_ref,enabled,scan_basis)
-    values('fixture',$1,$2,'2026-01-02','2026-01-03',2,2,'fixture','fixture',true,'updated_at')`, [project, shop]);
+    values('fixture',$1,$2,'2026-01-02T00:00:00Z','2026-01-03T00:00:00Z',2,2,
+      'fixture','fixture',true,'updated_at')`, [project, shop]);
   expect((await client.rpc("lean_history_read", args)).data).toMatchObject({ scanBasis: "updated_at" });
   const old = row(); old.source.commerce.order.createdAt = "2025-01-01T00:00:00Z";
   expect((await commit({ p_rows: [old] })).data).toBe(true);
@@ -75,7 +77,8 @@ it("rejects backwards update-time pages without advancing the checkpoint", async
   await db.exec("truncate lean_private.history_jobs cascade");
   await db.query(`insert into lean_private.history_jobs
     (run_id,project_ref,shop,from_time,until_time,page_size,max_pages,approval_ref,actor_ref,enabled,scan_basis)
-    values('fixture',$1,$2,'2026-01-01','2026-02-01',2,2,'fixture','fixture',true,'updated_at')`, [project, shop]);
+    values('fixture',$1,$2,'2026-01-01T00:00:00Z','2026-02-01T00:00:00Z',2,2,
+      'fixture','fixture',true,'updated_at')`, [project, shop]);
   expect((await commit()).data).toBe(true);
   const earlier = row("2"); earlier.source.commerce.order.updatedAt = "2026-01-02T00:00:00Z";
   expect((await commit({ p_rows: [earlier], p_expected_page: 1, p_expected_cursor: "next",

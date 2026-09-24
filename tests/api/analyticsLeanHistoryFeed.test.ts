@@ -38,7 +38,8 @@ beforeEach(async () => {
   await db.query(`insert into lean_private.history_feeds
     (feed_id,project_ref,shop,scan_basis,start_time,stop_time,watermark,window_seconds,overlap_seconds,
     lag_seconds,page_size,max_pages,max_daily_steps,approval_ref,actor_ref)
-    values('fixture',$1,$2,'updated_at','2026-01-01','2026-01-04','2026-01-01',86400,3600,300,5,2,10,'fixture:approval','fixture:operator')`,
+    values('fixture',$1,$2,'updated_at','2026-01-01T00:00:00Z','2026-01-04T00:00:00Z',
+      '2026-01-01T00:00:00Z',86400,3600,300,5,2,10,'fixture:approval','fixture:operator')`,
   [project, shop]);
 });
 afterEach(() => vi.unstubAllEnvs());
@@ -57,18 +58,22 @@ it("resumes the same immutable window and advances only after complete storage",
   await db.exec("update lean_private.history_feeds set enabled=true");
   expect((await next()).data).toEqual({ state: "ready", runId: "feed:fixture:1" });
   expect((await next()).data).toEqual({ state: "ready", runId: "feed:fixture:1" });
-  expect((await db.query("select watermark::text from lean_private.history_feeds")).rows)
-    .toEqual([{ watermark: "2026-01-01 00:00:00+00" }]);
+  expect((await db.query(`select to_char(watermark at time zone 'UTC',
+    'YYYY-MM-DD"T"HH24:MI:SS"Z"') watermark from lean_private.history_feeds`)).rows)
+    .toEqual([{ watermark: "2026-01-01T00:00:00Z" }]);
   const committed = await client.rpc("lean_history_commit", {
     p_run: "feed:fixture:1", p_project_ref: project, p_shop: shop, p_expected_page: 0,
     p_expected_cursor: null, p_next_cursor: null, p_complete: true, p_rows: [],
   });
   expect(committed).toEqual({ data: true, error: null });
   expect((await next()).data).toEqual({ state: "ready", runId: "feed:fixture:2" });
-  const windows = await db.query("select run_id,from_time::text,until_time::text from lean_private.history_jobs order by run_id");
+  const windows = await db.query(`select run_id,
+    to_char(from_time at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS"Z"') from_time,
+    to_char(until_time at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS"Z"') until_time
+    from lean_private.history_jobs order by run_id`);
   expect(windows.rows).toEqual([
-    { run_id: "feed:fixture:1", from_time: "2026-01-01 00:00:00+00", until_time: "2026-01-02 00:00:00+00" },
-    { run_id: "feed:fixture:2", from_time: "2026-01-01 23:00:00+00", until_time: "2026-01-03 00:00:00+00" },
+    { run_id: "feed:fixture:1", from_time: "2026-01-01T00:00:00Z", until_time: "2026-01-02T00:00:00Z" },
+    { run_id: "feed:fixture:2", from_time: "2026-01-01T23:00:00Z", until_time: "2026-01-03T00:00:00Z" },
   ]);
   expect((await db.query("select * from lean_private.history_feed_completions")).rows).toHaveLength(1);
 });

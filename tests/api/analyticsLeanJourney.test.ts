@@ -47,9 +47,13 @@ beforeAll(async () => {
     alter default privileges in schema lean_private grant all on tables to anon,authenticated,service_role;`);
   await db.exec(readFileSync("sql/analytics/026_journey_authority.sql", "utf8"));
   await db.exec(readFileSync("sql/analytics/031_draft_receipts.sql", "utf8"));
+  await db.exec(readFileSync("sql/analytics/037_canonical_journey_timestamps.sql", "utf8"));
 }, 30000);
 beforeEach(async () => {
   now = Date.now();
+  // Exercise the SQL/JSON boundary under a non-UTC database session even when
+  // the test runner itself is launched with TZ=UTC.
+  await db.exec("set time zone 'America/Los_Angeles'");
   await db.exec("truncate lean_private.journey_grants cascade");
   await db.query(`insert into lean_private.journey_grants
     (token_hash,project_ref,posthog_project,shop,subject_id,session_id,valid_from,expires_at,permission_evidence_ref,approval_ref)
