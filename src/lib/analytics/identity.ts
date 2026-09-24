@@ -35,6 +35,9 @@ export function resolveTemporalIdentity(input: {
       input.removedCustomers.has(m.customer_id as string))) return { customerId: null, status: "removed" };
   if (mappings.some(m => m.resolution_status === "conflicting") ||
       new Set(mappings.map(m => m.customer_id).filter(Boolean)).size > 1) return { customerId: null, status: "conflicting" };
+  // An anonymous/unresolved subject can withdraw too. Do not let the absence
+  // of a canonical customer bypass an explicit analytics denial.
+  if (mappings.some(m => m.consent_status !== "permitted")) return { customerId: null, status: "not_permitted" };
   if (!mappings.length || mappings.some(m => m.resolution_status !== "resolved" || !m.customer_id)) return { customerId: null, status: "unresolved" };
   const id = mappings[0].customer_id as string;
   if (!input.currentlyPermitted.has(id) || mappings.some(m => m.consent_status !== "permitted")) return { customerId: null, status: "not_permitted" };
