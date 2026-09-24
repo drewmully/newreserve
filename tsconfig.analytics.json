@@ -8,6 +8,9 @@
     "src/lib/analytics/**/*.json",
     "src/app/api/analytics/ingest/**/*.ts",
     "src/app/api/analytics/journey/**/*.ts",
+    "src/app/analytics-preferences/page.tsx",
+    "src/app/policies/layout.tsx",
+    "src/app/text-mully/page.tsx",
     "tests/api/analyticsContracts.test.ts",
     "tests/api/analyticsLean*.test.ts"
   ],

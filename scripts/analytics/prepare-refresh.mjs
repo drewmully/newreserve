@@ -35,8 +35,11 @@ export function prepareFile(inputPath, outputPath) {
     const customerSource = input.kind === "mully-source-v1"
       ? require(compiled(mully)).prepareMullyRefresh(input, { checkoutSecret: process.env.LEAN_CHECKOUT_CONTEXT_SECRET }) : null;
     const bundle = customerSource?.bundle ?? require(compiled(entry)).prepareRefresh(input);
-    const diagnostic = require(compiled(view)).behaviorDiagnosticView(
-      customerSource ? customerSource.refresh.behavior : input.behavior);
+    const diagnostic = bundle.full.policy.behaviorMode === "excluded"
+      ? { state: "excluded", materialize: false, query: null,
+        reason: "Explicit commerce-only scope; behavioral metrics remain withheld." }
+      : require(compiled(view)).behaviorDiagnosticView(
+        customerSource ? customerSource.refresh.behavior : input.behavior);
     mkdirSync(outputPath, { recursive: true, mode: 0o700 });
     // Never silently overwrite an existing reviewed bundle.
     writeFileSync(join(outputPath, "refresh-bundle.json"), JSON.stringify(bundle, null, 2) + "\n",

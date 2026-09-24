@@ -66,7 +66,9 @@ describe.skipIf(!connectionString)("real PostgreSQL concurrent analytics workers
     for (const name of ["001_staging", "003_receipts", "004_worker", "013_release", "014_reporting_views",
       "015_backfill", "016_shopify_pilot", "017_shopify_pipeline", "018_history_jobs", "019_spend_jobs", "020_observed_report_jobs",
       "021_full_report_jobs", "022_full_release", "023_posthog_export", "024_full_orchestration", "025_refresh_queue",
-      "026_journey_authority", "027_history_update_scans", "028_refresh_health"])
+      "026_journey_authority", "027_history_update_scans", "028_refresh_health",
+      "029_journey_decisions", "030_scoped_release", "031_draft_receipts", "032_history_feeds", "033_scoped_health",
+      "034_commerce_only_refresh"])
       await admin.query(readFileSync(`sql/analytics/${name}.sql`, "utf8"));
     await admin.query(`insert into lean_private.pipeline_scope(shop,project_ref,enabled,from_time,until_time,policy,approval_ref,actor_ref)
       values($1,$2,true,'2026-01-01','2026-02-01',$3,'fixture:scope','fixture:operator')`,

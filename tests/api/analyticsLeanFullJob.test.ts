@@ -29,11 +29,12 @@ beforeAll(async () => {
     alter default privileges in schema public grant execute on functions to anon,authenticated,service_role;`);
   for (const migration of ["001_staging", "013_release", "014_reporting_views", "018_history_jobs",
     "019_spend_jobs", "020_observed_report_jobs", "021_full_report_jobs", "022_full_release", "023_posthog_export",
-    "024_full_orchestration"])
+    "024_full_orchestration", "026_journey_authority", "029_journey_decisions", "030_scoped_release"])
     await db.exec(readFileSync(`sql/analytics/${migration}.sql`, "utf8"));
 }, 30000);
 beforeEach(async () => {
   port.client = client;
+  await db.exec("truncate lean_private.journey_grants cascade; truncate lean_private.journey_policies;");
   vi.stubGlobal("fetch", () => { throw new Error("external_network_forbidden"); });
   await db.exec("truncate lean_private.full_builds; truncate lean_private.report_builds cascade; truncate lean_private.publications cascade;");
   await db.exec("truncate lean_private.history_jobs cascade; truncate lean_private.spend_jobs");
@@ -104,6 +105,41 @@ it("does not query the vendor again after completion or while disabled/blocked",
   expect(opt.request).toHaveBeenCalledTimes(1);
   await db.exec("update lean_private.full_builds set enabled=false");
   expect(await runFullReportJob(opt)).toEqual({ state: "disabled" });
+  expect(opt.request).toHaveBeenCalledTimes(1);
+});
+it("builds explicitly scoped commerce without a PostHog key or request and keeps browser metrics withheld", async () => {
+  const f = fullFixture();
+  await db.exec("delete from lean_private.full_builds");
+  await db.query(`insert into lean_private.full_builds
+    (run_id,project_ref,base_run,policy,evidence,behavior,approval_ref,actor_ref,enabled)
+    values('fixture',$1,'base',$2,$3,'{}','fixture:approval','fixture:actor',true)`,
+  [fullProject, JSON.stringify({ ...f.policy, behaviorMode: "excluded" }), JSON.stringify(f.evidence)]);
+  const opt = { ...options(), posthogKey: "", request: vi.fn(async () => { throw new Error("no_vendor"); }) };
+  expect(await runFullReportJob(opt)).toMatchObject({ state: "complete" });
+  expect(opt.request).not.toHaveBeenCalled();
+  expect((await db.query("select * from lean_private.report_store_daily")).rows[0]).toMatchObject({
+    eligible_orders: 1, collected_cash_usd: "20.000000",
+  });
+  const manifest = (await db.query<{ manifest: { nativeEvents: number; gates: { gates: Record<string, boolean> }[] } }>(
+    "select manifest from lean_private.full_builds")).rows[0].manifest;
+  expect(manifest.nativeEvents).toBe(0);
+  expect(manifest.gates[0].gates).toMatchObject({ behavior: false, attribution: false, orders: true });
+  const funnels = (await db.query<{ readiness: Record<string, string> }>(
+    "select readiness from lean_private.report_funnel_daily")).rows;
+  expect(funnels.every(r => Object.values(r.readiness).every(v => v === "withheld"))).toBe(true);
+  await expect(db.query(`select public.lean_scoped_release('fixture',$1,array['funnel_daily'],$2,
+    'fixture:signoff','fixture:review','fixture:operator')`,
+  [fullProject, JSON.stringify({ funnel_daily: null })])).rejects.toThrow();
+  await db.query(`select public.lean_scoped_release('fixture',$1,array['store_daily'],$2,
+    'fixture:signoff','fixture:review','fixture:operator')`,
+  [fullProject, JSON.stringify({ store_daily: null })]);
+  expect((await db.query("select domain from lean_private.selected_publications")).rows)
+    .toEqual([{ domain: "store_daily" }]);
+});
+it("does not silently downgrade a required behavior source after an outage", async () => {
+  const opt = { ...options(), request: vi.fn(async () => new Response(null, { status: 503 })) };
+  await expect(runFullReportJob(opt)).rejects.toThrow("full_transform_unavailable");
+  expect((await db.query("select * from lean_private.report_store_daily")).rows).toEqual([]);
   expect(opt.request).toHaveBeenCalledTimes(1);
 });
 it("rejects policy changes, wrong targets and runtime registration", async () => {
@@ -267,6 +303,62 @@ it("exports only a reviewed selection and gives the dormant PostHog role read-on
   } finally { await db.exec("reset role"); }
   await db.query("select public.lean_full_export('fixture',$1,'fixture:retry','fixture:operator')", [fullProject]);
   expect((await db.query("select count(*)::int n from lean_export.store_daily")).rows[0]).toEqual({ n: 1 });
+});
+it("can review and export one independently ready reporting domain without certifying the others", async () => {
+  await runFullReportJob(options());
+  expect((await db.query(`select has_function_privilege('service_role',
+    'public.lean_scoped_release(text,text,text[],jsonb,text,text,text)','execute') allowed`)).rows)
+    .toEqual([{ allowed: false }]);
+  await db.query(`select public.lean_scoped_release('fixture',$1,array['store_daily'],$2,
+    'fixture:store-signoff','fixture:store-reconciliation','fixture:operator')`,
+  [fullProject, JSON.stringify({ store_daily: null })]);
+  expect((await db.query("select domain from lean_private.selected_publications")).rows)
+    .toEqual([{ domain: "store_daily" }]);
+  expect((await db.query("select state from lean_private.publications where publication_id='full:fixture'")).rows)
+    .toEqual([{ state: "certified" }]);
+  await expect(db.query(`select public.lean_scoped_export('fixture',$1,array['product_daily'],
+    'fixture:export','fixture:operator')`, [fullProject])).rejects.toThrow("selection");
+  const result = await db.query<{ counts: unknown }>(`select public.lean_scoped_export('fixture',$1,
+    array['store_daily'],'fixture:export','fixture:operator') counts`, [fullProject]);
+  expect(result.rows[0].counts).toEqual({ store_daily: 1 });
+  expect((await db.query("select count(*)::int n from lean_export.product_daily")).rows[0]).toEqual({ n: 0 });
+});
+it("scoped release preserves withheld metrics and rolls back a multi-domain stale selection", async () => {
+  const f = fullFixture(); f.evidence.dateCoverage[0].gates.cash = false;
+  await db.exec("delete from lean_private.full_builds");
+  await db.query(`insert into lean_private.full_builds
+    (run_id,project_ref,base_run,policy,evidence,behavior,approval_ref,actor_ref,enabled)
+    values('fixture',$1,'base',$2,$3,$4,'fixture:approval','fixture:actor',true)`,
+  [fullProject, JSON.stringify(f.policy), JSON.stringify(f.evidence), JSON.stringify(f.behavior)]);
+  await runFullReportJob(options());
+  await expect(db.query(`select public.lean_scoped_release('fixture',$1,array['store_daily','product_daily'],$2,
+    'fixture:signoff','fixture:review','fixture:operator')`,
+  [fullProject, JSON.stringify({ store_daily: null, product_daily: "stale" })])).rejects.toThrow("selection");
+  expect((await db.query("select * from lean_private.selected_publications")).rows).toEqual([]);
+  expect((await db.query("select * from lean_private.certifications")).rows).toEqual([]);
+  await db.query(`select public.lean_scoped_release('fixture',$1,array['store_daily'],$2,
+    'fixture:signoff','fixture:review','fixture:operator')`,
+  [fullProject, JSON.stringify({ store_daily: null })]);
+  expect((await db.query("select collected_cash_usd,readiness from lean_analytics.store_daily")).rows[0])
+    .toMatchObject({ collected_cash_usd: null,
+      readiness: expect.objectContaining({ collected_cash_usd: "withheld", eligible_orders: "ready" }) });
+});
+it("blocks selection and replay while a downstream privacy removal is unverified", async () => {
+  await runFullReportJob(options());
+  await db.query(`insert into lean_private.journey_policies
+    (project_ref,shop,posthog_project,policy_version,approval_ref,ttl_seconds,enabled)
+    values($1,$2,'353503','fixture:v1','fixture:privacy',3600,true)`, [fullProject, fullShop]);
+  await db.query(`select public.lean_journey_issue($1,$2,'353503','fixture:v1',$3,$4,$5,null)`,
+    [fullProject, fullShop, "b".repeat(64), "c".repeat(64), "11111111-1111-4111-8111-111111111111"]);
+  await db.query("select public.lean_journey_withdraw($1,$2,$3)", [fullProject, fullShop, "b".repeat(64)]);
+  await expect(db.query(`select public.lean_scoped_release('fixture',$1,array['store_daily'],$2,
+    'fixture:signoff','fixture:reconciliation','fixture:operator')`,
+  [fullProject, JSON.stringify({ store_daily: null })])).rejects.toThrow("privacy removal");
+  await db.exec(`update lean_private.journey_removals set downstream_verified_at=clock_timestamp(),
+    downstream_evidence_ref='fixture:verified-deletion'`);
+  await expect(db.query(`select public.lean_scoped_release('fixture',$1,array['store_daily'],$2,
+    'fixture:signoff','fixture:reconciliation','fixture:operator')`,
+  [fullProject, JSON.stringify({ store_daily: null })])).rejects.toThrow("privacy removal");
 });
 it("rejects a missing report day rather than marking an incomplete output complete", async () => {
   const wrapped: AnalyticsRpcClient = { async rpc(name, args) {

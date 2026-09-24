@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { readFileSync } from "node:fs";
 import { Script } from "node:vm";
+import { webcrypto } from "node:crypto";
 const ports = vi.hoisted(() => ({ attach: vi.fn(), capture: vi.fn(), legacy: vi.fn(), lead: vi.fn() }));
 vi.mock("@/lib/analytics/journeyRuntime", () => ({
   attachJourneyCart: ports.attach, captureJourney: ports.capture,
@@ -72,3 +73,45 @@ it("keeps all executable Style Game inline scripts syntactically valid", () => {
   }
   expect(checked).toBeGreaterThan(0);
 });
+it.each(["randomUUID", "getRandomValues", "unavailable"] as const)(
+  "tracks Text Mully views and single clicks without claiming activation (%s)",
+  async mode => {
+    const page = readFileSync("src/app/text-mully/page.tsx", "utf8");
+    const template = page.match(/const bootstrap = `([\s\S]*?)`;/)?.[1];
+    expect(template).toBeTruthy();
+    const script = template!
+      .replaceAll("${defaultSrcJson}", JSON.stringify("email"))
+      .replaceAll("${bodiesJson}", JSON.stringify({ email: "Fixture message" }))
+      .replaceAll("${numberE164Json}", JSON.stringify("+15555550123"));
+    const listeners: Record<string, () => void> = {};
+    const attributes: Record<string, string> = {};
+    const anchor = {
+      setAttribute: (key: string, value: string) => { attributes[key] = value; },
+      addEventListener: (name: string, listener: () => void) => { listeners[name] = listener; },
+    };
+    const requests: Blob[] = [];
+    const navigator = { userAgent: "Desktop", sendBeacon: (url: string, body: Blob) => {
+      expect(url).toBe("/api/analytics/track"); requests.push(body); return true;
+    } };
+    const location = { search: "?src=email", href: "https://fixture.invalid/text-mully?src=email" };
+    const crypto = mode === "randomUUID" ? webcrypto
+      : mode === "getRandomValues" ? { getRandomValues: webcrypto.getRandomValues.bind(webcrypto) } : undefined;
+    new Script(script).runInNewContext({
+      window: { location, crypto }, navigator, URLSearchParams, Blob, Uint8Array,
+      document: { querySelectorAll: () => [anchor], addEventListener: vi.fn() },
+      setTimeout: vi.fn(), Element: class {},
+    });
+    expect(Object.keys(listeners)).toEqual(["click"]);
+    expect(attributes.href).toBe("sms:+15555550123?&body=Fixture%20message");
+    listeners.click(); listeners.click();
+    const payloads = await Promise.all(requests.map(async body => JSON.parse(await body.text())));
+    expect(payloads.map(p => p.event_name)).toEqual(["lp_text_mully_view", "sms_click", "sms_click"]);
+    const ids = payloads.map(p => p.properties.event_id);
+    if (mode === "unavailable") expect(ids).toEqual([null, null, null]);
+    else {
+      for (const id of ids) expect(id).toMatch(/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i);
+      expect(new Set(ids).size).toBe(3);
+    }
+    expect(location.href).toBe("https://fixture.invalid/text-mully?src=email");
+  },
+);
