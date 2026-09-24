@@ -19,6 +19,7 @@ on:
       - "src/lib/swingBoxCheckout.ts"
       - "tests/api/analytics*.test.ts"
       - "tests/fixtures/analytics*.ts"
+      - "tests/fixtures/*.mjs"
       - "sql/analytics/**"
       - "scripts/analytics/**"
       - "docs/analytics/**"
@@ -49,6 +50,7 @@ on:
       - "src/lib/swingBoxCheckout.ts"
       - "tests/api/analytics*.test.ts"
       - "tests/fixtures/analytics*.ts"
+      - "tests/fixtures/*.mjs"
       - "sql/analytics/**"
       - "scripts/analytics/**"
       - "docs/analytics/**"
@@ -98,6 +100,6 @@ jobs:
           git diff --exit-code -- sql/analytics/001_staging.sql sql/analytics/014_reporting_views.sql
       - run: npm test -- --project api tests/api/analyticsContracts.test.ts tests/api/analyticsLean tests/api/analyticsTrack.route.test.ts
       - run: npx tsc --project tsconfig.analytics.json
-      - run: npx eslint src/lib/analytics src/app/api/analytics/ingest src/app/api/analytics/journey src/app/api/_lib/supabaseService.ts tests/api/analyticsContracts.test.ts tests/api/analyticsLean*.test.ts tests/fixtures/analytics*.ts scripts/analytics/*.mjs
+      - run: npx eslint src/lib/analytics src/app/api/analytics/ingest src/app/api/analytics/journey src/app/api/_lib/supabaseService.ts tests/api/analyticsContracts.test.ts tests/api/analyticsLean*.test.ts tests/fixtures/analytics*.ts tests/fixtures/*.mjs scripts/analytics/*.mjs
       - name: Lint changed application integration points
         run: npx eslint src/app/api/analytics/track/route.ts src/app/api/stylegame/checkout/route.ts src/app/api/stylegame/played/route.ts src/app/api/simulatorclubs/checkout/route.ts src/app/lp/stylegame/runtime-config.js/route.ts src/lib/shopify.ts src/lib/shopifyCheckout.ts src/lib/swingBoxCheckout.ts src/app/api/shopify/checkout/route.ts src/app/analytics-preferences/page.tsx src/app/text-mully/page.tsx src/app/policies/layout.tsx

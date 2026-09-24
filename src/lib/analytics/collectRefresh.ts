@@ -7,6 +7,9 @@ import { readShopifyAnalyticsOrder, shopifyId, shopifyShop, type ShopifyOrderDoc
 import { nyDate } from "./primitives";
 import { readHistoryInventoryPage, verifyHistoryAccess } from "./shopifyHistory";
 import { inventoryOrder, validateHistoryInventory, type HistoryInventory } from "./historyInventory";
+import { readShopifyAgreements } from "./shopifyAgreements";
+import { prepareOriginalPurchases, requireEmptyOriginalPurchaseEvidence, validateOriginalPurchaseCollection,
+  type OriginalPurchaseCollection, type OriginalPurchaseInput } from "./originalPurchasePreparation";
 
 export type CollectRefreshInput = {
   kind: "mully-collect-v1";
@@ -22,6 +25,7 @@ export type CollectRefreshInput = {
     entities: string[];
     checkout: boolean;
     draftJourney?: { from: string; until: string };
+    originalPurchases?: OriginalPurchaseCollection;
     maxOrders: number;
     maxLinePages: number;
     maxRequests: number;
@@ -47,11 +51,11 @@ export async function collectRefresh(input: CollectRefreshInput, env: Environmen
       c.projectRef !== env.LEAN_MULLY_SOURCE_PROJECT_REF || c.shop !== env.LEAN_SHOPIFY_SHOP_DOMAIN ||
       c.projectRef !== original.intake.scope.projectRef || c.shop !== original.intake.scope.shop ||
       !/^[a-z]{20}$/.test(c.projectRef)) throw new Error("refresh_collection_target");
-  if ("originalPurchases" in input || "originalPurchases" in c || "originalPurchases" in original)
+  if ("originalPurchases" in input || "originalPurchases" in original)
     throw new Error("collected_original_purchases_require_reviewed_replacement_packet");
   if (Object.keys(input).some(k => !["kind", "refresh", "collection"].includes(k)) ||
       Object.keys(c).some(k => !["approvalRef", "projectRef", "shop", "orderIds", "discover", "entities", "checkout",
-        "draftJourney", "maxOrders", "maxLinePages", "maxRequests", "maxBytes", "timeoutMs", "binding"].includes(k)))
+        "draftJourney", "originalPurchases", "maxOrders", "maxLinePages", "maxRequests", "maxBytes", "timeoutMs", "binding"].includes(k)))
     throw new Error("unsupported_collection_option");
   shopifyShop(c.shop);
   const readKey = env.LEAN_MULLY_SOURCE_READ_KEY, shopifyToken = env.LEAN_SHOPIFY_ANALYTICS_READ_TOKEN;
@@ -69,6 +73,14 @@ export async function collectRefresh(input: CollectRefreshInput, env: Environmen
       new Set(c.entities).size !== c.entities.length || typeof c.checkout !== "boolean")
     throw new Error("refresh_collection_budget");
   explicitIds.forEach(id => shopifyId(id, "Order"));
+  let agreementPlan: OriginalPurchaseCollection | undefined;
+  if (c.originalPurchases !== undefined) {
+    if (env.LEAN_SHOPIFY_AGREEMENTS_READ_APPROVED !== "true") throw new Error("agreement_read_disabled");
+    agreementPlan = validateOriginalPurchaseCollection(c.originalPurchases, c.maxOrders);
+    requireEmptyOriginalPurchaseEvidence(original);
+    if (!c.discover && agreementPlan.orders.some(o => !explicitIds.includes(o.orderGid)))
+      throw new Error("collection_original_purchase_target");
+  }
   let inventoryRequests = 0, reservedOrders = explicitIds.length;
   if (c.discover) {
     if (!Array.isArray(original.history) || !original.history.length || original.history.length > 5)
@@ -90,7 +102,8 @@ export async function collectRefresh(input: CollectRefreshInput, env: Environmen
   }
   // Reserve the worst-case request count, including each order revision recheck.
   if (inventoryRequests + reservedOrders * (c.maxLinePages + 1) + 1 + Number(c.checkout) +
-      (c.draftJourney ? 2 : 0) > c.maxRequests) throw new Error("refresh_collection_request_budget");
+      (c.draftJourney ? 2 : 0) + (agreementPlan ? agreementPlan.orders.length * agreementPlan.maxRequestsPerOrder : 0) >
+      c.maxRequests) throw new Error("refresh_collection_request_budget");
   if (c.checkout || c.draftJourney) {
     if ((env.LEAN_CHECKOUT_CONTEXT_SECRET?.length ?? 0) < 32 ||
         original.policy.project !== env.LEAN_POSTHOG_PROJECT_ID)
@@ -194,6 +207,7 @@ export async function collectRefresh(input: CollectRefreshInput, env: Environmen
     orderIds = inventory.orders.map(o => o.id);
   }
   const orders: ShopifyOrderDocument[] = [];
+  if (agreementPlan?.orders.some(o => !orderIds.includes(o.orderGid))) throw new Error("collection_original_purchase_target");
   for (const id of orderIds) orders.push(await readShopifyAnalyticsOrder({
     shop: c.shop, accessToken: shopifyToken, fetcher: bounded, maxLinePages: c.maxLinePages,
   }, id));
@@ -201,6 +215,15 @@ export async function collectRefresh(input: CollectRefreshInput, env: Environmen
     .sort((a, b) => a.id.localeCompare(b.id))) !== evidenceDigest(inventory.orders))
     throw new Error("inventory_hydration_changed");
   if (inventory) refresh.commercePolicy.sourceInventory = inventory;
+  const originalPurchases: OriginalPurchaseInput[] = [];
+  for (const item of agreementPlan?.orders ?? []) {
+    const order = orders.find(o => o.order.id === item.orderGid)!;
+    const document = await readShopifyAgreements({ shop: c.shop, accessToken: shopifyToken,
+      orderGid: item.orderGid, sourceUpdatedAt: String(order.order.updatedAt),
+      maxRequests: agreementPlan!.maxRequestsPerOrder, fetcher: bounded, now: () => new Date(clock()) });
+    originalPurchases.push({ orderGid: item.orderGid, document, policy: { ...item.policy,
+      sourceEvidenceRef: `collected-agreements:sha256:${evidenceDigest({ order, document })}` } });
+  }
   const common = { projectRef: c.projectRef, shop: c.shop, capturedAt: startedAt };
   const snapshot = await readMullyCustomers({ ...common, entities: c.entities,
     customerIds: orderCustomerIds(orders) }, readKey, bounded);
@@ -211,14 +234,17 @@ export async function collectRefresh(input: CollectRefreshInput, env: Environmen
     readKey, shopifyToken, bounded) : undefined;
   const finishedAt = clock(); nyDate(finishedAt);
   if (deadline.aborted || Date.parse(finishedAt) < Date.parse(startedAt) ||
-      Date.parse(finishedAt) - Date.parse(startedAt) > c.timeoutMs)
+      Date.parse(finishedAt) - Date.parse(startedAt) > c.timeoutMs ||
+      originalPurchases.some(o => Date.parse(o.document.capturedAt) < Date.parse(startedAt) ||
+        Date.parse(o.document.capturedAt) > Date.parse(finishedAt)))
     throw new Error("refresh_collection_timeout");
   refresh.intake.asOf = finishedAt;
   refresh.policy.asOf = finishedAt;
   refresh.readyAt = new Date(Math.max(Date.parse(original.readyAt), Date.parse(finishedAt))).toISOString();
   // Keep the reviewed absolute expiry. Never extend the evidence validity window.
   const facts = mapMullySource({ snapshot, orders, mappingVersion: refresh.policy.mappingVersion, permissions: [] });
-  const sourceDigest = evidenceDigest({ orders, snapshot, journey: journey ?? null, draftJourney: draftJourney ?? null });
+  const sourceDigest = evidenceDigest({ orders, snapshot, journey: journey ?? null, draftJourney: draftJourney ?? null,
+    ...(agreementPlan ? { originalPurchases } : {}) });
   const packets: EvidencePacket[] = [];
   const add = (section: typeof replaced[number], payload: EvidencePacket["payload"]) => packets.push({
     section, payload, sourceId: b.sourceId, schemaVersion: b.schemaVersion, scope: refresh.intake.scope,
@@ -227,6 +253,12 @@ export async function collectRefresh(input: CollectRefreshInput, env: Environmen
   // Only the explicit order-to-customer links are used. The customer reader does
   // not replace identity, permission/removal or history with inferred authority.
   add("orderIdentities", facts.orderIdentities);
+  if (agreementPlan) {
+    const mapped = prepareOriginalPurchases(refresh, orders, originalPurchases,
+      { sourceId: b.sourceId, schemaVersion: b.schemaVersion });
+    refresh.commercePolicy.deferredOrders = mapped.deferredOrders;
+    packets.push(mapped.packet);
+  }
   if (journey || draftJourney) {
     const config = { projectRef: c.projectRef, shop: c.shop, posthogProject: refresh.policy.project,
       sessionVersion: refresh.policy.sessionVersion, asOf: finishedAt };
@@ -243,7 +275,11 @@ export async function collectRefresh(input: CollectRefreshInput, env: Environmen
     { ...b, approvalRef: c.approvalRef, sections: packets.map(p => p.section), independentControlSource: false },
   ];
   const bundle = prepareRefresh(refresh);
-  return { bundle, refresh, sources: { orders, snapshot, journey, draftJourney, inventory },
+  const preparedAt = clock(); nyDate(preparedAt);
+  if (deadline.aborted || Date.parse(preparedAt) < Date.parse(finishedAt) ||
+      Date.parse(preparedAt) - Date.parse(startedAt) > c.timeoutMs)
+    throw new Error("refresh_collection_timeout");
+  return { bundle, refresh, sources: { orders, snapshot, journey, draftJourney, inventory, originalPurchases },
     audit: { version: 1, approvalRef: c.approvalRef, startedAt, finishedAt, sourceDigest,
       projectRef: c.projectRef, shop: c.shop, calls, bytes, orderIds,
       inventoryDigest: inventory?.digest ?? null,
