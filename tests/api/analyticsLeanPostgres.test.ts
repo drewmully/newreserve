@@ -18,6 +18,7 @@ import { inventoryFixture } from "../fixtures/analyticsDiscovery";
 import { partitionInput, partitionEnv } from "../fixtures/analyticsPartition";
 import { partitionTransport } from "../fixtures/partition-collection-source.mjs";
 import { offerTransport } from "../fixtures/offer-collection-source.mjs";
+import { permissionTransport, collectedGrants } from "../fixtures/journey-permission-collection-source.mjs";
 import { collectPartitionRefresh, preparePartitionRefresh } from "@/lib/analytics/partitionRefresh";
 import { registerPartitionRefresh } from "@/lib/analytics/partitionRegistration";
 import { runRefreshPipeline } from "@/lib/analytics/refreshPipeline";
@@ -189,6 +190,41 @@ describe.skipIf(!connectionString)("real PostgreSQL concurrent analytics workers
     expect((await admin.query(`select count(*)::int n,sum(purchase_net_usd)::text net
       from lean_private.order_items where publication_id like 'full:%'`)).rows).toEqual([{ n: 101, net: "1818.000000" }]);
     expect((await admin.query("select count(*)::int n from lean_private.publications")).rows).toEqual([{ n: 2 }]);
+    expect((await admin.query("select count(*)::int n from lean_analytics.store_daily")).rows).toEqual([{ n: 0 }]);
+  }, 30000);
+  it.each([false, true])("persists anonymous permission separately from retained customer identity (revoked=%s)", async revoked => {
+    const input = partitionInput();
+    delete input.collection.partitions[0].originalPurchases;
+    input.collection.offers = {};
+    const packet = input.refresh.intake.packets.find(p => p.section === "identity")!;
+    const binding = input.refresh.intake.bindings.find(b => b.sourceId === packet.sourceId)!;
+    input.collection.journeyPermissions = { retainedIdentityDigest: evidenceDigest({ packet, binding }),
+      binding: { sourceId: "fixture:collected-grants", schemaVersion: "fixture-grants-v1",
+        approvalRef: "fixture:composite", maxAgeSeconds: 3600 } };
+    let grantReads = 0;
+    const transport = permissionTransport(collectedGrants(revoked));
+    const fixture = await collectPartitionRefresh(input, { ...partitionEnv, LEAN_POSTHOG_PROJECT_ID: "353503" },
+      async (url, init) => {
+        if (String(url).endsWith("/lean_journey_permissions_read")) grantReads++;
+        return transport(url, init);
+      });
+    expect(grantReads).toBe(1);
+    await registerPartitionRefresh({ ...partitionOptions, client: partitionClient(admin),
+      bundle: fixture.bundle, pages: fixture.sources.pages });
+    await activatePartition(fixture.bundle.runId, fixture.bundle.base.runId);
+    expect(await partitionStep()).toMatchObject({ state: "partial" });
+    expect(await partitionStep()).toMatchObject({ state: "complete" });
+    expect((await admin.query(`select customer_id,consent_status,removal_status from lean_private.identity_map
+      where publication_id like 'full:%' and source_namespace='lean_subject'`)).rows)
+      .toEqual([{ customer_id: null, consent_status: revoked ? "denied" : "permitted",
+        removal_status: revoked ? "removed" : "active" }]);
+    expect((await admin.query(`select count(*)::int n from lean_private.identity_map
+      where publication_id like 'full:%' and source_namespace='shopify_customer' and source_identifier='7'`)).rows)
+      .toEqual([{ n: 1 }]);
+    expect((await admin.query("select count(*)::int n from lean_private.customers where publication_id like 'full:%'")).rows)
+      .toEqual([{ n: 1 }]);
+    expect((await admin.query("select count(*)::int n from lean_private.order_item_offers where publication_id like 'full:%'")).rows)
+      .toEqual([{ n: 101 }]);
     expect((await admin.query("select count(*)::int n from lean_analytics.store_daily")).rows).toEqual([{ n: 0 }]);
   }, 30000);
   it("serializes disabled page CAS on separate PostgreSQL connections without enabling any job", async () => {
