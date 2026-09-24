@@ -52,15 +52,27 @@ it.each(["pages", "orders", "bytes"] as const)("rejects exhausted global/child %
 it("propagates one active deadline through later PilotSource reads, with no late success or fallback", async () => {
   const f = partitionInput(); f.collection.timeoutMs = 200;
   const transport = partitionTransport();
+  // Control expiry, not runner speed: CI may spend >200ms collecting the first
+  // child. Abort the real parent signal only once the later reader is active.
+  const timers: AbortController[] = [];
+  const timeout = vi.spyOn(AbortSignal, "timeout").mockImplementation(() => {
+    const controller = new AbortController(); timers.push(controller);
+    return controller.signal;
+  });
   const request = vi.fn<typeof fetch>(async (url, init) => {
     if (String(init?.body).includes("AnalyticsFinancial")) return new Promise<Response>((_resolve, reject) => {
       if (init?.signal?.aborted) reject(new Error("aborted"));
       else init?.signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+      timers[0].abort(new DOMException("Fixture deadline elapsed", "TimeoutError"));
     });
     return transport(url, init);
   });
-  await expect(collectPartitionRefresh(f, partitionEnv, request)).rejects.toThrow();
-  expect(request.mock.calls.some(([, init]) => String(init?.body).includes("AnalyticsFinancial"))).toBe(true);
+  try {
+    await expect(collectPartitionRefresh(f, partitionEnv, request)).rejects.toThrow();
+    expect(timeout.mock.calls[0]).toEqual([200]);
+    expect(request.mock.calls.some(([, init]) => String(init?.body).includes("AnalyticsFinancial"))).toBe(true);
+    expect(timers[0].signal.aborted).toBe(true);
+  } finally { timeout.mockRestore(); }
   const late = partitionInput(), now = Date.parse(late.refresh.intake.asOf);
   const clock = vi.fn(() => new Date(now).toISOString());
   const lateRequest: typeof fetch = async (url, init) => {
