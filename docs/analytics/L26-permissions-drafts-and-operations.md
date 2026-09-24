@@ -124,6 +124,11 @@ call sites, not the producer implementation. The visible `mully-ops` repository
 is empty and the connected identity has read access only. This is not proof that
 the service has no repository; its location/access is unresolved.
 
+Follow-up: [L27](L27-sms-metadata-source.md) implements metadata acquisition
+through the existing database, so locating another repository is not a
+prerequisite for that read path. This does not by itself establish the missing
+SMS-to-journey link, analytics permission, original event time or coverage.
+
 The workbook describes the data contracts, but does not supply the missing
 historical records, independently maintained controls, retention policy or SMS
 producer source. Those cannot be recovered by inventing rows or changing a
