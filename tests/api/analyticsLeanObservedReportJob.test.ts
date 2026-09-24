@@ -109,6 +109,22 @@ it("rejects policy drift and stops instead of omitting unsupported orders", asyn
   await expect(runObservedReportJob(options())).rejects.toThrow("original_purchase_snapshot");
   expect((await db.query("select * from lean_private.publications")).rows).toHaveLength(0);
 });
+it("allows only an explicit original-purchase handoff and withholds partial commerce totals", async () => {
+  const edited = source(); edited.commerce.order.edited = true;
+  await db.exec("delete from lean_private.report_builds");
+  await db.query(`insert into lean_private.report_builds
+    (run_id,project_ref,shop,history_runs,spend_runs,from_date,through_date,policy,approval_ref,actor_ref,enabled)
+    values('report',$1,$2,array['history'],array['spend'],'2026-01-01','2026-01-02',$3,'fixture:approval','fixture:actor',true)`,
+  [project, shop, JSON.stringify({ ...policy, deferredOrders: [{
+    orderGid: edited.commerce.order.id, sourceUpdatedAt: edited.commerce.order.updatedAt, evidenceRef: "fixture:original",
+  }] })]);
+  await retain(edited); await runObservedReportJob(options());
+  expect((await db.query("select * from lean_private.orders")).rows).toEqual([]);
+  expect((await db.query("select * from lean_private.report_store_daily order by report_date")).rows[0]).toMatchObject({
+    eligible_orders: null, net_merchandise_sales_usd: null, spend_usd: "1.234567",
+    readiness: expect.objectContaining({ eligible_orders: "withheld", net_merchandise_sales_usd: "withheld" }),
+  });
+});
 it("does not convert foreign currency observations into USD", async () => {
   await db.query("update lean_private.spend_jobs set base=$1::jsonb",
     [JSON.stringify({ ...base(), sourceCurrency: "CAD" })]);
