@@ -131,6 +131,13 @@ expiry/kill checks run inside the transaction. Invalid output rolls back the ful
 and facts together. The global base is a private prerequisite, not a selected report.
 Existing certification/selection gates remain untouched.
 
+After the delegated batch writes succeed, both wrappers check the captured queue
+lease and absolute expiry again; full completion also checks its original worker
+lease. Crossing a deadline during the inserts raises and rolls back the entire
+RPC, including provisional facts and completion status. Equal already-completed
+replay remains a no-op. This is the RPC transaction boundary, not a guarantee
+about an owner deliberately holding an outer transaction open after the RPC.
+
 Equal completed result replay is an immutable no-op, not a new publication or expiry
 extension. Changed result replay is rejected. Expired registration/staging or a not-yet-
 completed expired parent cannot publish; the existing 90-second new-claim guard remains.
@@ -145,13 +152,15 @@ on a reusable synthetic 101-order fixture. It includes cross-child customer dedu
 original-sale/refund facts, conflicts, missing/extra pages, forged revisions, unchanged-head
 tamper, replay, expiry, kill, fact overflow, rollback and least-privilege checks.
 
-The combined local analytics suite passed **857 tests across 56 files, zero skipped**.
-This includes 42 partition-specific collection/database tests and **24 real PostgreSQL
-tests**, ten newly added for this parent path. The real PostgreSQL checks use separate
+The combined local analytics suite passed **862 tests across 56 files, zero skipped**.
+This includes 42 partition-specific collection/database tests and **29 real PostgreSQL
+tests**, fifteen newly added for this parent path. The real PostgreSQL checks use separate
 connections and a disposable loopback database: 101 orders/one customer/refunds/replay,
 disabled page CAS with a measured lock timeout, final-commit locks on pages/parent/stop
 controls, stop-before-commit and both lease expirations, missing-page/evidence rejection,
 fact overflow and late-domain transaction rollback. Other SQL tests use PGlite.
+Five delayed-insert cases force queue/worker leases or absolute expiry to pass
+during SQL writes; they verify rollback rather than merely a failed queue acknowledgment.
 TypeScript, full analytics lint, generated SQL parity and whitespace checks passed.
 
 These checks establish synthetic/local database behavior, not concurrent production

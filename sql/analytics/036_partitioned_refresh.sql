@@ -349,7 +349,7 @@ revoke all on function public.lean_report_finish_ordinary(text,text,text,jsonb,j
   from public,anon,authenticated,service_role,lean_posthog_reader;
 create function public.lean_report_finish(p_run text,p_project_ref text,p_input_hash text,p_facts jsonb,p_reports jsonb)
 returns boolean language plpgsql security definer set search_path=pg_catalog as $$
-declare b lean_private.report_builds; q lean_private.refresh_queue;
+declare b lean_private.report_builds; q lean_private.refresh_queue; finished boolean;
 begin
   select * into b from lean_private.report_builds where run_id=p_run and project_ref=p_project_ref for update;
   if b.policy ? 'partitionInventory' then
@@ -362,7 +362,15 @@ begin
     if exists(select 1 from jsonb_each(p_facts) x where jsonb_typeof(x.value)<>'array' or jsonb_array_length(x.value)>10000)
       then raise exception 'partition fact budget'; end if;
   end if;
-  return public.lean_report_finish_ordinary(p_run,p_project_ref,p_input_hash,p_facts,p_reports);
+  finished:=public.lean_report_finish_ordinary(p_run,p_project_ref,p_input_hash,p_facts,p_reports);
+  -- Locks preserve rows, not wall-clock validity. A slow batch can cross its
+  -- deadline after the entry fence. Raise (never return false) so every
+  -- provisional insert and completed_at update rolls back in this same RPC.
+  if finished and b.policy ? 'partitionInventory' and b.completed_at is null and
+    (q.expires_at<=clock_timestamp() or q.lease_until<=clock_timestamp()) then
+    raise exception 'partition report deadline crossed during write';
+  end if;
+  return finished;
 end $$;
 revoke all on function public.lean_report_finish(text,text,text,jsonb,jsonb) from public,anon,authenticated,service_role,lean_posthog_reader;
 grant execute on function public.lean_report_finish(text,text,text,jsonb,jsonb) to service_role;
@@ -414,7 +422,7 @@ revoke all on function public.lean_full_finish_ordinary(text,text,uuid,text,json
 create function public.lean_full_finish(p_run text,p_project_ref text,p_token uuid,p_input_hash text,
   p_facts jsonb,p_reports jsonb,p_manifest jsonb) returns boolean
 language plpgsql security definer set search_path=pg_catalog as $$
-declare f lean_private.full_builds; b lean_private.report_builds; q lean_private.refresh_queue;
+declare f lean_private.full_builds; b lean_private.report_builds; q lean_private.refresh_queue; finished boolean;
 begin
   select * into f from lean_private.full_builds where run_id=p_run and project_ref=p_project_ref for update;
   select * into b from lean_private.report_builds where run_id=f.base_run for share;
@@ -432,7 +440,15 @@ begin
       exists(select 1 from jsonb_each(p_facts) x where jsonb_typeof(x.value)<>'array' or jsonb_array_length(x.value)>10000)
       then raise exception 'partition full fence or fact budget'; end if;
   end if;
-  return public.lean_full_finish_ordinary(p_run,p_project_ref,p_token,p_input_hash,p_facts,p_reports,p_manifest);
+  finished:=public.lean_full_finish_ordinary(p_run,p_project_ref,p_token,p_input_hash,p_facts,p_reports,p_manifest);
+  -- Use the original worker lease: ordinary completion clears its stored
+  -- lease fields. Completed replay returned above and remains an immutable no-op.
+  if finished and b.policy ? 'partitionInventory' and
+    (q.expires_at<=clock_timestamp() or q.lease_until<=clock_timestamp() or
+     f.lease_until<=clock_timestamp()) then
+    raise exception 'partition full deadline crossed during write';
+  end if;
+  return finished;
 end $$;
 revoke all on function public.lean_full_finish(text,text,uuid,text,jsonb,jsonb,jsonb)
   from public,anon,authenticated,service_role,lean_posthog_reader;

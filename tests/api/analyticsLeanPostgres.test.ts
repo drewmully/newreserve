@@ -4,7 +4,7 @@
 import { Client } from "pg";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { beforeAll, afterAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, afterAll, beforeEach, afterEach, describe, expect, it } from "vitest";
 import { mapPilotSource, type PilotPolicy } from "@/lib/analytics/shopifyPilotMapping";
 import type { PilotSource } from "@/lib/analytics/shopifyPilotSource";
 import { runObservedReportJob } from "@/lib/analytics/observedReportJob";
@@ -17,9 +17,10 @@ import { evidenceDigest } from "@/lib/analytics/evidenceIntake";
 import { inventoryFixture } from "../fixtures/analyticsDiscovery";
 import { partitionInput, partitionEnv } from "../fixtures/analyticsPartition";
 import { partitionTransport } from "../fixtures/partition-collection-source.mjs";
-import { collectPartitionRefresh } from "@/lib/analytics/partitionRefresh";
+import { collectPartitionRefresh, preparePartitionRefresh } from "@/lib/analytics/partitionRefresh";
 import { registerPartitionRefresh } from "@/lib/analytics/partitionRegistration";
 import { runRefreshPipeline } from "@/lib/analytics/refreshPipeline";
+import { runFullPipeline } from "@/lib/analytics/fullPipeline";
 
 const connectionString = process.env.LOCAL_POSTGRES_TEST_URL;
 const shop = "concurrency-fixture.myshopify.com", project = "aaaaaaaaaaaaaaaaaaaa";
@@ -89,6 +90,13 @@ describe.skipIf(!connectionString)("real PostgreSQL concurrent analytics workers
     await admin.query(`truncate lean_private.refresh_queue; truncate lean_private.refresh_limits;
       truncate lean_private.full_builds cascade; truncate lean_private.receipts cascade; truncate lean_private.publications cascade;
       truncate lean_private.history_jobs cascade; truncate lean_private.spend_jobs; truncate lean_private.report_builds cascade`);
+  });
+  afterEach(async () => {
+    await a.query("rollback"); await b.query("rollback");
+    await a.query("set statement_timeout='5s'");
+    await admin.query(`drop trigger if exists fixture_partition_delay on lean_private.report_acquisition_daily;
+      drop trigger if exists fixture_partition_delay on lean_private.report_funnel_daily;
+      drop function if exists lean_private.fixture_partition_delay();`);
   });
   const partitionOptions = {
     projectRef: partitionEnv.LEAN_MULLY_SOURCE_PROJECT_REF,
@@ -227,6 +235,60 @@ describe.skipIf(!connectionString)("real PostgreSQL concurrent analytics workers
     await noPartitionFull();
     expect((await admin.query("select completed_at from lean_private.full_builds")).rows).toEqual([{ completed_at: null }]);
   }, 30000);
+  it.each(["base-queue", "full-queue", "full-worker"] as const)(
+    "rolls back when %s lease expires during PostgreSQL inserts, not just before them", async scenario => {
+      await partitionFixture();
+      if (scenario !== "base-queue") expect(await partitionStep()).toMatchObject({ state: "partial" });
+      const table = scenario === "base-queue" ? "report_acquisition_daily" : "report_funnel_daily";
+      await admin.query(`create function lean_private.fixture_partition_delay() returns trigger language plpgsql as
+        $$ begin perform pg_sleep(1.2); return null; end $$;
+        create trigger fixture_partition_delay before insert on lean_private.${table}
+        for each statement execute function lean_private.fixture_partition_delay();`);
+      const delayed: AnalyticsRpcClient = { async rpc(name, args) {
+        if (name === (scenario === "base-queue" ? "lean_report_finish" : "lean_full_finish"))
+          await admin.query(`update lean_private.${scenario === "full-worker" ? "full_builds" : "refresh_queue"}
+            set lease_until=clock_timestamp()+interval '1 second'`);
+        return partitionClient(a).rpc(name, args);
+      } };
+      await expect(partitionStep(delayed)).rejects.toThrow("refresh_step_ambiguous");
+      await noPartitionFull();
+      if (scenario === "base-queue")
+        expect((await admin.query("select count(*)::int n from lean_private.publications")).rows).toEqual([{ n: 0 }]);
+      expect((await admin.query("select completed_at from lean_private.full_builds")).rows).toEqual([{ completed_at: null }]);
+    }, 30000);
+  it.each(["base", "full"] as const)(
+    "rolls back absolute parent expiry crossed inside the %s PostgreSQL write", async stage => {
+      const fixture = await collectPartitionRefresh(partitionInput(), partitionEnv, partitionTransport());
+      fixture.refresh.refresh.expiresAt = fixture.refresh.manifest.expiresAt = new Date(Date.now() + 6000).toISOString();
+      const { digest: previousDigest, ...body } = fixture.refresh.manifest;
+      expect(previousDigest).toMatch(/^[a-f0-9]{64}$/);
+      fixture.refresh.manifest.digest = evidenceDigest(body);
+      fixture.bundle = preparePartitionRefresh(fixture.refresh);
+      await registerPartitionRefresh({ ...partitionOptions, client: partitionClient(admin),
+        bundle: fixture.bundle, pages: fixture.sources.pages });
+      await activatePartition(fixture.bundle.runId, fixture.bundle.base.runId);
+      // A previously claimed run may enter its last seconds. Bypass only the
+      // new-claim 90s guard in the fixture, never change the production guard.
+      await admin.query(`update lean_private.refresh_queue set lease_token=$1,
+        lease_until=clock_timestamp()+interval '120 seconds'`, [randomUUID()]);
+      const opts = { ...partitionOptions, client: partitionClient(a), runId: fixture.bundle.runId,
+        now: new Date().toISOString() };
+      if (stage === "full") expect(await runFullPipeline(opts)).toMatchObject({ state: "partial" });
+      await a.query("set statement_timeout='10s'");
+      const table = stage === "base" ? "report_acquisition_daily" : "report_funnel_daily";
+      await admin.query(`create function lean_private.fixture_partition_delay() returns trigger language plpgsql as
+        $$ declare expires timestamptz; begin
+          select expires_at into expires from lean_private.refresh_queue;
+          perform pg_sleep(greatest(0,extract(epoch from expires-clock_timestamp()))+0.05);
+          return null; end $$;
+        create trigger fixture_partition_delay before insert on lean_private.${table}
+        for each statement execute function lean_private.fixture_partition_delay();`);
+      await expect(runFullPipeline(opts)).rejects.toThrow();
+      await noPartitionFull();
+      if (stage === "base")
+        expect((await admin.query("select count(*)::int n from lean_private.publications")).rows).toEqual([{ n: 0 }]);
+      expect((await admin.query("select completed_at from lean_private.full_builds")).rows).toEqual([{ completed_at: null }]);
+    }, 30000);
   it("blocks missing pages and rejects changed evidence before any real PostgreSQL candidate", async () => {
     const fixture = await collectPartitionRefresh(partitionInput(), partitionEnv, partitionTransport());
     const changed = structuredClone(fixture.bundle);
