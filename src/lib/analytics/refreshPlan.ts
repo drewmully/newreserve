@@ -9,7 +9,8 @@ export type RefreshInput = {
   intake: Parameters<typeof assembleEvidence>[0];
   policy: FullBuildPolicy; behavior: BehaviorSource;
   commercePolicy: PipelinePolicy & { deferredOrders?: unknown[] };
-  history: { from: string; until: string; pageSize: number; maxPages: number }[];
+  history: { from: string; until: string; pageSize: number; maxPages: number;
+    scanBasis?: "created_at" | "updated_at" }[];
   accounts: { accountId: string; loginCustomerId: string | null; maxPages: number }[];
   approvalRef: string; actorRef: string; revision: string;
   readyAt: string; expiresAt: string; maxSteps: number;
@@ -46,6 +47,7 @@ export function prepareRefresh(input: RefreshInput) {
   const windows = input.history.map(h => {
     nyDate(h.from); nyDate(h.until);
     if (Date.parse(h.until) <= Date.parse(h.from) || Date.parse(h.until) > Date.parse(input.intake.asOf) ||
+        h.scanBasis !== undefined && !["created_at", "updated_at"].includes(h.scanBasis) ||
         !Number.isSafeInteger(h.pageSize) || h.pageSize < 1 || h.pageSize > 5 ||
         !Number.isSafeInteger(h.maxPages) || h.maxPages < 1)
       throw new Error("invalid_refresh_history");
@@ -53,7 +55,12 @@ export function prepareRefresh(input: RefreshInput) {
     return { ...h };
   }).sort((a, b) => a.from.localeCompare(b.from));
   if (pages > 25 || rows > 100) throw new Error("refresh_history_budget");
-  if (windows.some((w, i) => i > 0 && Date.parse(w.from) < Date.parse(windows[i - 1].until)))
+  // Creation backfills and update scans may overlap; duplicate orders are
+  // revision-deduplicated downstream. Within one basis, overlapping jobs are
+  // wasteful and risk exhausting the approved read budget.
+  if (windows.some((w, i) => windows.slice(0, i).some(prior =>
+    (w.scanBasis ?? "created_at") === (prior.scanBasis ?? "created_at") &&
+    Date.parse(w.from) < Date.parse(prior.until))))
     throw new Error("overlapping_refresh_history");
   const accounts = new Set<string>();
   for (const a of input.accounts) {

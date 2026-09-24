@@ -15,7 +15,8 @@ const rows = [{ id: "123", firebase_uid: "uid_fixture", entity: "mully",
   created_at: "2025-01-01T00:00:00+00:00", updated_at: "2026-01-01T00:00:00+00:00" }];
 const scope = { projectRef, shop, customerIds: ["123"], capturedAt, entities: ["mully", "shopify"] };
 const orders: ShopifyOrderDocument[] = [{ shop, apiVersion: "2026-07",
-  order: { id: "gid://shopify/Order/1", customer: { id: "gid://shopify/Customer/123" } } }];
+  order: { id: "gid://shopify/Order/1", customer: { id: "gid://shopify/Customer/123" },
+    lineItems: { nodes: [], pageInfo: { hasNextPage: false } } } }];
 const permission: MullyPermission = { customerId: "123", from: "2025-02-01T00:00:00Z", to: null,
   permitted: true, removed: false, evidenceRef: "fixture:analytics-authority" };
 const response = (value: unknown = rows, range = "0-0/1") =>

@@ -3,7 +3,7 @@ import { prepareRefresh, type RefreshInput } from "./refreshPlan";
 import { mapMullySource, mullySourcePackets } from "./mymullySource";
 import { mapApprovedShopifyCash, type ShopifyCashPolicy } from "./shopifyCash";
 import { mapJourneyCheckout, type JourneySnapshot } from "./journeySource";
-import { mapShopifyOffers, type OfferRegistry } from "./shopifyOffers";
+import { mapShopifyOffers, mapShopifyLineDiscounts, type OfferRegistry } from "./shopifyOffers";
 import { mullyCustomerId } from "./mymullySource";
 import { mapJourneyPermissions, type JourneyPermissions } from "./journeyPermissions";
 import type { FullBuildEvidence } from "./fullReportBuild";
@@ -78,10 +78,11 @@ export function prepareMullyRefresh(input: MullyRefreshInput, secrets: { checkou
       scope: refresh.intake.scope, capturedAt: input.journey.capturedAt,
       sha256: evidenceDigest(payload), payload });
   }
-  if (input.offers) {
-    const payload = mapShopifyOffers(input.source.orders, input.offers);
+  {
+    const payload = [...mapShopifyLineDiscounts(input.source.orders, refresh.intake.scope.shop),
+      ...(input.offers ? mapShopifyOffers(input.source.orders, input.offers) : [])];
     packets.push({ section: "offers", sourceId: b.sourceId, schemaVersion: b.schemaVersion,
-      sourceRecordRef: `offer-registry:sha256:${evidenceDigest(input.offers)}`,
+      sourceRecordRef: `shopify-offers:sha256:${evidenceDigest({ orders: input.source.orders, registry: input.offers ?? null })}`,
       scope: refresh.intake.scope, capturedAt: input.source.snapshot.capturedAt,
       sha256: evidenceDigest(payload), payload });
   }

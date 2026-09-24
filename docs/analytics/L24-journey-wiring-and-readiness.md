@@ -110,6 +110,8 @@ The `mully-source-v1` preparation envelope now optionally accepts:
 - `offers`: an approved `OfferRegistry` with exact line-attribute key, value-to-
   offer mappings, mapping version and evidence references. Unknown configured
   values, conflicting attributes and incomplete line pages fail closed.
+  This is optional extra taxonomy; native Shopify line-discount membership is
+  now mapped automatically, as documented in L25.
 - `retainReviewed`: source IDs for separately approved `identity` and/or
   `customerHistory` packets. Original hashes, capture times, scopes and expiry
   are checked and retained; this does not refresh stale evidence.
@@ -154,10 +156,10 @@ Funnel definitions and coverage must match this actual instrumentation.
 | Text Mully outcomes | Connect actual inbound activation and purchase/checkout source, with stable IDs and permission evidence | An outbound SMS click is only intent |
 | Draft-order checkout | Integrate the existing REST draft-order flow with its own corroborated order/session evidence | It need not have a Storefront cart token |
 | Customer/identity history | Obtain and integrate verified historical ownership, complete purchase/migration coverage and source inventory | Current customer rows cannot prove historical ownership or first-ever purchase |
-| Campaign and offer meaning | Connect authoritative first-party campaign receipts and supply the actual approved offer registry | UTMs/product names are not automatically authoritative offer or identity joins |
-| Cash and original purchases | Approve the cash clock/gateways or wire actual settlement feeds; obtain originals for unsupported edited/cancelled/non-USD/gift-card/tax-inclusive orders | Processed time is not automatically bank settlement; current values need not be original values |
+| Campaign and custom offer meaning | Connect authoritative first-party campaign receipts; supply a custom offer registry only if business taxonomy beyond native discounts is required | Native line discounts now establish membership without that registry; UTMs/product names do not establish campaign or identity authority |
+| Cash and original purchases | Map the workbook's customer-cash clock and complete gateway lifecycle, including unsupported chargebacks; obtain originals for unsupported edited/cancelled/non-USD/gift-card/tax-inclusive orders | Customer cash is not bank deposits or fee-net payouts; current values need not be original purchase values |
 | Independent controls | Wire independently extracted totals/keys for the approved source windows | Computing expected totals from the output would make the test circular |
-| Ongoing full-volume operation | Implement source-driven fresh-evidence collection, production-volume partition/backfill and late-update handling, retention cleanup, monitoring and alerting | The existing queue processes bounded, reviewed snapshots; it is not an unattended unlimited pipeline |
+| Ongoing full-volume operation | Implement source-driven fresh-evidence collection, production-volume partition/backfill, scheduling/watermarks, retention cleanup and alert delivery | L25 adds bounded update-time scans and read-only health checks; these do not make reviewed snapshots an unattended unlimited pipeline |
 | Hosted installation and validation | Approved migrations/secrets, isolated real-source test, report release, least-privileged PostHog source/view setup and synchronization/deletion checks | These are not authorized by a local-code request |
 
 The ten core fact transformations and five report builders exist. That is
@@ -168,7 +170,8 @@ definitions or prove deployment.
 
 ## Verification
 
-The final local regression passed **520 tests across 41 files, zero skipped**,
+The journey-wiring revision passed **520 tests across 41 files, zero skipped**;
+the subsequent L25 revision passed **547 tests across 42 files, zero skipped**,
 including ten real PostgreSQL integration/concurrency tests against a disposable
 loopback database. Analytics TypeScript, analytics and changed-application-file
 ESLint, generated SQL parity, and whitespace checks passed.
