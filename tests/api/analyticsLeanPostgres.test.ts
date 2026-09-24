@@ -4,7 +4,7 @@
 import { Client } from "pg";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { beforeAll, afterAll, beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, afterAll, beforeEach, afterEach, describe, expect, it } from "vitest";
 import { mapPilotSource, type PilotPolicy } from "@/lib/analytics/shopifyPilotMapping";
 import type { PilotSource } from "@/lib/analytics/shopifyPilotSource";
 import { runObservedReportJob } from "@/lib/analytics/observedReportJob";
@@ -15,6 +15,12 @@ import { refreshFixture } from "../fixtures/analyticsRefresh";
 import { prepareRefresh } from "@/lib/analytics/refreshPlan";
 import { evidenceDigest } from "@/lib/analytics/evidenceIntake";
 import { inventoryFixture } from "../fixtures/analyticsDiscovery";
+import { partitionInput, partitionEnv } from "../fixtures/analyticsPartition";
+import { partitionTransport } from "../fixtures/partition-collection-source.mjs";
+import { collectPartitionRefresh, preparePartitionRefresh } from "@/lib/analytics/partitionRefresh";
+import { registerPartitionRefresh } from "@/lib/analytics/partitionRegistration";
+import { runRefreshPipeline } from "@/lib/analytics/refreshPipeline";
+import { runFullPipeline } from "@/lib/analytics/fullPipeline";
 
 const connectionString = process.env.LOCAL_POSTGRES_TEST_URL;
 const shop = "concurrency-fixture.myshopify.com", project = "aaaaaaaaaaaaaaaaaaaa";
@@ -70,7 +76,7 @@ describe.skipIf(!connectionString)("real PostgreSQL concurrent analytics workers
       "021_full_report_jobs", "022_full_release", "023_posthog_export", "024_full_orchestration", "025_refresh_queue",
       "026_journey_authority", "027_history_update_scans", "028_refresh_health",
       "029_journey_decisions", "030_scoped_release", "031_draft_receipts", "032_history_feeds", "033_scoped_health",
-      "034_commerce_only_refresh", "035_discovery_inventory_fence"])
+      "034_commerce_only_refresh", "035_discovery_inventory_fence", "036_partitioned_refresh"])
       await admin.query(readFileSync(`sql/analytics/${name}.sql`, "utf8"));
     await admin.query(`insert into lean_private.pipeline_scope(shop,project_ref,enabled,from_time,until_time,policy,approval_ref,actor_ref)
       values($1,$2,true,'2026-01-01','2026-02-01',$3,'fixture:scope','fixture:operator')`,
@@ -80,10 +86,223 @@ describe.skipIf(!connectionString)("real PostgreSQL concurrent analytics workers
   afterAll(async () => { await a?.end(); await b?.end(); await admin?.end(); });
   beforeEach(async () => {
     await a.query("rollback"); await b.query("rollback");
+    await b.query("set lock_timeout='0'");
     await admin.query(`truncate lean_private.refresh_queue; truncate lean_private.refresh_limits;
       truncate lean_private.full_builds cascade; truncate lean_private.receipts cascade; truncate lean_private.publications cascade;
       truncate lean_private.history_jobs cascade; truncate lean_private.spend_jobs; truncate lean_private.report_builds cascade`);
   });
+  afterEach(async () => {
+    await a.query("rollback"); await b.query("rollback");
+    await a.query("set statement_timeout='5s'");
+    await admin.query(`drop trigger if exists fixture_partition_delay on lean_private.report_acquisition_daily;
+      drop trigger if exists fixture_partition_delay on lean_private.report_funnel_daily;
+      drop function if exists lean_private.fixture_partition_delay();`);
+  });
+  const partitionOptions = {
+    projectRef: partitionEnv.LEAN_MULLY_SOURCE_PROJECT_REF,
+    databaseUrl: `https://${partitionEnv.LEAN_MULLY_SOURCE_PROJECT_REF}.supabase.co`,
+    shop: partitionEnv.LEAN_SHOPIFY_SHOP_DOMAIN, shopifyToken: "", posthogKey: "",
+    googleClientId: "", googleClientSecret: "", googleRefreshToken: "",
+    request: async () => { throw new Error("external_network_forbidden"); },
+  };
+  async function partitionRpc(pg: Client, name: string, args: Record<string, unknown>) {
+    if (!/^lean_(refresh|report|full|partition)_/.test(name)) throw new Error("unexpected_rpc");
+    const entries = Object.entries(args);
+    return (await pg.query(`select public.${name}(${entries.map(([key], i) => `${key}=>$${i + 1}`).join(",")}) result`,
+      entries.map(([, value]) => typeof value === "object" ? JSON.stringify(value) : value))).rows[0].result;
+  }
+  const partitionClient = (pg: Client): AnalyticsRpcClient => ({ async rpc(name, args) {
+    try { return { data: await partitionRpc(pg, name, args), error: null }; }
+    catch (error) { return { data: null, error }; }
+  } });
+  const partitionStep = (client = partitionClient(a)) =>
+    runRefreshPipeline({ ...partitionOptions, client, now: new Date().toISOString() });
+  async function partitionFixture(activate = true) {
+    const fixture = await collectPartitionRefresh(partitionInput(), partitionEnv, partitionTransport());
+    await registerPartitionRefresh({ ...partitionOptions, client: partitionClient(admin),
+      bundle: fixture.bundle, pages: fixture.sources.pages });
+    if (activate) await activatePartition(fixture.bundle.runId, fixture.bundle.base.runId);
+    return fixture;
+  }
+  async function activatePartition(runId: string, baseRunId: string) {
+    await admin.query(`insert into lean_private.refresh_limits(project_ref,enabled,max_daily_steps,approval_ref,actor_ref)
+      values($1,true,5,'fixture:approval','fixture:owner')`, [partitionOptions.projectRef]);
+    await admin.query("update lean_private.refresh_queue set enabled=true where run_id=$1", [runId]);
+    await admin.query("update lean_private.full_builds set enabled=true where run_id=$1", [runId]);
+    await admin.query("update lean_private.report_builds set enabled=true where run_id=$1", [baseRunId]);
+  }
+  async function capturePartitionFinish() {
+    const fixture = await partitionFixture();
+    expect(await partitionStep()).toMatchObject({ state: "partial" });
+    let finishArgs: Record<string, unknown> | undefined;
+    const interceptor: AnalyticsRpcClient = { async rpc(name, args) {
+      if (name === "lean_full_finish") { finishArgs = structuredClone(args); throw new Error("fixture_hold_finish"); }
+      return partitionClient(a).rpc(name, args);
+    } };
+    await expect(partitionStep(interceptor)).rejects.toThrow("refresh_step_ambiguous");
+    expect(finishArgs).toBeDefined();
+    return { fixture, finishArgs: finishArgs! };
+  }
+  async function noPartitionFull() {
+    for (const table of ["publications", "orders", "customers", "report_store_daily"])
+      expect((await admin.query(`select count(*)::int n from lean_private.${table} where publication_id like 'full:%'`)).rows)
+        .toEqual([{ n: 0 }]);
+    expect((await admin.query("select count(*)::int n from lean_analytics.store_daily")).rows).toEqual([{ n: 0 }]);
+  }
+  it("runs 101 pinned orders through one real PostgreSQL global full report and immutable replay", async () => {
+    await partitionFixture();
+    const recorded: Record<string, unknown>[] = [];
+    const recorder: AnalyticsRpcClient = { async rpc(name, args) {
+      if (name === "lean_full_finish") recorded.push(structuredClone(args));
+      return partitionClient(a).rpc(name, args);
+    } };
+    expect(await partitionStep(recorder)).toMatchObject({ state: "partial" });
+    expect(await partitionStep(recorder)).toMatchObject({ state: "complete" });
+    expect((await admin.query("select count(*)::int n,count(distinct customer_id)::int customers from lean_private.orders where publication_id like 'full:%'")).rows)
+      .toEqual([{ n: 101, customers: 1 }]);
+    expect((await admin.query("select count(*)::int n from lean_private.customers where publication_id like 'full:%'")).rows).toEqual([{ n: 1 }]);
+    expect((await admin.query("select source_amount::text from lean_private.sales_ledger where publication_id like 'full:%' and movement_kind='refund'")).rows)
+      .toEqual(expect.arrayContaining([{ source_amount: "-9.000000" }, { source_amount: "-1.000000" }]));
+    expect((await admin.query("select count(*)::int n from lean_private.history_jobs")).rows).toEqual([{ n: 0 }]);
+    expect((await admin.query("select count(*)::int n from lean_private.publications")).rows).toEqual([{ n: 2 }]);
+    expect((await admin.query("select count(*)::int n from lean_analytics.store_daily")).rows).toEqual([{ n: 0 }]);
+    expect(await partitionRpc(b, "lean_full_finish", recorded[0])).toBe(true);
+    const changed = structuredClone(recorded[0]); (changed.p_facts as { orders: unknown[] }).orders = [];
+    await expect(partitionRpc(b, "lean_full_finish", changed)).rejects.toThrow("immutable");
+  }, 30000);
+  it("serializes disabled page CAS on separate PostgreSQL connections without enabling any job", async () => {
+    const fixture = await collectPartitionRefresh(partitionInput(), partitionEnv, partitionTransport());
+    await partitionRpc(admin, "lean_refresh_register", { p_bundle: fixture.bundle });
+    const page = fixture.sources.pages[0], args = { p_run: fixture.bundle.base.runId,
+      p_project_ref: partitionOptions.projectRef, p_child: page.child, p_number: page.number, p_payload: page.payload };
+    await a.query("begin"); expect(await partitionRpc(a, "lean_partition_stage_page", args)).toBe(true);
+    await b.query("set lock_timeout='100ms'");
+    await expect(partitionRpc(b, "lean_partition_stage_page", args)).rejects.toMatchObject({ code: "55P03" });
+    expect((await admin.query("select count(*)::int n from lean_private.partition_pages")).rows).toEqual([{ n: 0 }]);
+    await a.query("commit");
+    expect(await partitionRpc(b, "lean_partition_stage_page", args)).toBe(true);
+    expect((await admin.query("select count(*)::int n from lean_private.partition_pages")).rows).toEqual([{ n: 1 }]);
+    expect((await admin.query(`select enabled from lean_private.report_builds union all
+      select enabled from lean_private.full_builds union all select enabled from lean_private.refresh_queue`)).rows)
+      .toEqual([{ enabled: false }, { enabled: false }, { enabled: false }]);
+    await expect(partitionRpc(b, "lean_partition_stage_page", { ...args, p_number: 19 })).rejects.toThrow("digest");
+    await expect(partitionRpc(b, "lean_partition_stage_page", { ...args, p_payload: page.payload + " " })).rejects.toThrow("digest");
+    await noPartitionFull();
+  }, 30000);
+  it("locks the final parent, pages and stop controls until the global PostgreSQL commit", async () => {
+    const { finishArgs } = await capturePartitionFinish();
+    await a.query("begin"); expect(await partitionRpc(a, "lean_full_finish", finishArgs)).toBe(true);
+    await noPartitionFull();
+    await b.query("set lock_timeout='100ms'");
+    for (const statement of [
+      "update lean_private.refresh_limits set enabled=false",
+      "update lean_private.refresh_queue set enabled=false",
+      "update lean_private.partition_pages set payload='[]'",
+      "delete from lean_private.partition_pages",
+      "update lean_private.report_builds set policy='{}'",
+      "update lean_private.full_builds set evidence='{}'",
+      "update lean_private.refresh_queue set expires_at=expires_at+interval '1 hour'",
+    ]) await expect(b.query(statement)).rejects.toMatchObject({ code: "55P03" });
+    await a.query("commit");
+    for (const statement of [
+      "update lean_private.partition_pages set payload='[]'",
+      "delete from lean_private.partition_pages",
+      "update lean_private.report_builds set policy='{}'",
+      "update lean_private.full_builds set evidence='{}'",
+      "update lean_private.refresh_queue set expires_at=expires_at+interval '1 hour'",
+    ]) await expect(b.query(statement)).rejects.toThrow("immutable");
+    await b.query("update lean_private.refresh_limits set enabled=false");
+    expect((await admin.query("select count(*)::int n from lean_private.orders where publication_id like 'full:%'")).rows).toEqual([{ n: 101 }]);
+  }, 30000);
+  it.each(["project", "queue", "queue-lease", "full-lease"] as const)(
+    "rejects a global PostgreSQL finish when %s stops it first", async stop => {
+      const { finishArgs } = await capturePartitionFinish();
+      await b.query(stop === "project" ? "update lean_private.refresh_limits set enabled=false" :
+        stop === "queue" ? "update lean_private.refresh_queue set enabled=false" :
+        stop === "queue-lease" ? "update lean_private.refresh_queue set lease_until=clock_timestamp()-interval '1 second'" :
+        "update lean_private.full_builds set lease_until=clock_timestamp()-interval '1 second'");
+      if (stop === "full-lease") expect(await partitionRpc(a, "lean_full_finish", finishArgs)).toBe(false);
+      else await expect(partitionRpc(a, "lean_full_finish", finishArgs)).rejects.toThrow("partition full fence");
+      await noPartitionFull();
+      expect((await admin.query("select completed_at from lean_private.full_builds")).rows).toEqual([{ completed_at: null }]);
+    }, 30000);
+  it.each(["overflow", "late-domain"] as const)("rolls back %s in the real global full transaction", async failure => {
+    const { finishArgs } = await capturePartitionFinish();
+    if (failure === "overflow") {
+      const facts = finishArgs.p_facts as { orders: unknown[] }; facts.orders = Array(10001).fill(facts.orders[0]);
+    } else (finishArgs.p_reports as { store_daily: { shop_id: string }[] }).store_daily[0].shop_id = "wrong.myshopify.com";
+    await expect(partitionRpc(a, "lean_full_finish", finishArgs)).rejects.toThrow();
+    await noPartitionFull();
+    expect((await admin.query("select completed_at from lean_private.full_builds")).rows).toEqual([{ completed_at: null }]);
+  }, 30000);
+  it.each(["base-queue", "full-queue", "full-worker"] as const)(
+    "rolls back when %s lease expires during PostgreSQL inserts, not just before them", async scenario => {
+      await partitionFixture();
+      if (scenario !== "base-queue") expect(await partitionStep()).toMatchObject({ state: "partial" });
+      const table = scenario === "base-queue" ? "report_acquisition_daily" : "report_funnel_daily";
+      await admin.query(`create function lean_private.fixture_partition_delay() returns trigger language plpgsql as
+        $$ begin perform pg_sleep(1.2); return null; end $$;
+        create trigger fixture_partition_delay before insert on lean_private.${table}
+        for each statement execute function lean_private.fixture_partition_delay();`);
+      const delayed: AnalyticsRpcClient = { async rpc(name, args) {
+        if (name === (scenario === "base-queue" ? "lean_report_finish" : "lean_full_finish"))
+          await admin.query(`update lean_private.${scenario === "full-worker" ? "full_builds" : "refresh_queue"}
+            set lease_until=clock_timestamp()+interval '1 second'`);
+        return partitionClient(a).rpc(name, args);
+      } };
+      await expect(partitionStep(delayed)).rejects.toThrow("refresh_step_ambiguous");
+      await noPartitionFull();
+      if (scenario === "base-queue")
+        expect((await admin.query("select count(*)::int n from lean_private.publications")).rows).toEqual([{ n: 0 }]);
+      expect((await admin.query("select completed_at from lean_private.full_builds")).rows).toEqual([{ completed_at: null }]);
+    }, 30000);
+  it.each(["base", "full"] as const)(
+    "rolls back absolute parent expiry crossed inside the %s PostgreSQL write", async stage => {
+      const fixture = await collectPartitionRefresh(partitionInput(), partitionEnv, partitionTransport());
+      fixture.refresh.refresh.expiresAt = fixture.refresh.manifest.expiresAt = new Date(Date.now() + 6000).toISOString();
+      const { digest: previousDigest, ...body } = fixture.refresh.manifest;
+      expect(previousDigest).toMatch(/^[a-f0-9]{64}$/);
+      fixture.refresh.manifest.digest = evidenceDigest(body);
+      fixture.bundle = preparePartitionRefresh(fixture.refresh);
+      await registerPartitionRefresh({ ...partitionOptions, client: partitionClient(admin),
+        bundle: fixture.bundle, pages: fixture.sources.pages });
+      await activatePartition(fixture.bundle.runId, fixture.bundle.base.runId);
+      // A previously claimed run may enter its last seconds. Bypass only the
+      // new-claim 90s guard in the fixture, never change the production guard.
+      await admin.query(`update lean_private.refresh_queue set lease_token=$1,
+        lease_until=clock_timestamp()+interval '120 seconds'`, [randomUUID()]);
+      const opts = { ...partitionOptions, client: partitionClient(a), runId: fixture.bundle.runId,
+        now: new Date().toISOString() };
+      if (stage === "full") expect(await runFullPipeline(opts)).toMatchObject({ state: "partial" });
+      await a.query("set statement_timeout='10s'");
+      const table = stage === "base" ? "report_acquisition_daily" : "report_funnel_daily";
+      await admin.query(`create function lean_private.fixture_partition_delay() returns trigger language plpgsql as
+        $$ declare expires timestamptz; begin
+          select expires_at into expires from lean_private.refresh_queue;
+          perform pg_sleep(greatest(0,extract(epoch from expires-clock_timestamp()))+0.05);
+          return null; end $$;
+        create trigger fixture_partition_delay before insert on lean_private.${table}
+        for each statement execute function lean_private.fixture_partition_delay();`);
+      await expect(runFullPipeline(opts)).rejects.toThrow();
+      await noPartitionFull();
+      if (stage === "base")
+        expect((await admin.query("select count(*)::int n from lean_private.publications")).rows).toEqual([{ n: 0 }]);
+      expect((await admin.query("select completed_at from lean_private.full_builds")).rows).toEqual([{ completed_at: null }]);
+    }, 30000);
+  it("blocks missing pages and rejects changed evidence before any real PostgreSQL candidate", async () => {
+    const fixture = await collectPartitionRefresh(partitionInput(), partitionEnv, partitionTransport());
+    const changed = structuredClone(fixture.bundle);
+    changed.full.evidence.currentlyPermitted = [];
+    await expect(partitionRpc(admin, "lean_refresh_register", { p_bundle: changed })).rejects.toThrow("evidence");
+    await partitionRpc(admin, "lean_refresh_register", { p_bundle: fixture.bundle });
+    for (const page of fixture.sources.pages.slice(0, -1))
+      await partitionRpc(admin, "lean_partition_stage_page", { p_run: fixture.bundle.base.runId,
+        p_project_ref: partitionOptions.projectRef, p_child: page.child, p_number: page.number, p_payload: page.payload });
+    await activatePartition(fixture.bundle.runId, fixture.bundle.base.runId);
+    expect(await partitionStep()).toMatchObject({ state: "blocked" });
+    expect((await admin.query("select count(*)::int n from lean_private.publications")).rows).toEqual([{ n: 0 }]);
+    await noPartitionFull();
+  }, 30000);
   const receipt = () => admin.query(`select public.lean_accept_receipt('shopify',$1,$2,'orders/updated',$3,$4)`,
     [randomUUID(), JSON.stringify([shop, "gid://shopify/Order/1"]), "a".repeat(64), JSON.stringify({ admin_graphql_api_id: "gid://shopify/Order/1" })]);
   const claim = async (client: Client, token: string) =>
