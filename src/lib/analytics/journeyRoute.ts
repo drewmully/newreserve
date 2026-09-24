@@ -5,8 +5,9 @@ import { getClientIp } from "@/app/api/_lib/clientIp";
 export const journeyResponse = (status: number) =>
   new NextResponse(null, { status, headers: { "Cache-Control": "no-store" } });
 /** Shared fail-closed request boundary for auxiliary first-party endpoints. */
-export async function journeyRequest(req: NextRequest, fields: string[]) {
-  if (process.env.LEAN_ANALYTICS_JOURNEYS_ENABLED !== "true") return { response: journeyResponse(404) };
+export async function journeyRequest(req: NextRequest, fields: string[], permitWithdrawal = false) {
+  if (process.env.LEAN_ANALYTICS_JOURNEYS_ENABLED !== "true" && !permitWithdrawal)
+    return { response: journeyResponse(404) };
   const origin = process.env.LEAN_ANALYTICS_SITE_ORIGIN;
   if (!origin || !origin.startsWith("https://") || req.headers.get("origin") !== origin || req.nextUrl.origin !== origin)
     return { response: journeyResponse(403) };
@@ -22,9 +23,13 @@ export async function journeyRequest(req: NextRequest, fields: string[]) {
       chunks.push(part.value);
     }
   } finally { reader.releaseLock(); }
-  const body: unknown = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  let body: unknown;
+  try { body = JSON.parse(Buffer.concat(chunks).toString("utf8")); }
+  catch { return { response: journeyResponse(400) }; }
   if (!body || typeof body !== "object" || Array.isArray(body) || Object.keys(body).some(k => !fields.includes(k)))
     return { response: journeyResponse(400) };
+  if (process.env.LEAN_ANALYTICS_JOURNEYS_ENABLED !== "true" &&
+    (body as Record<string, unknown>).decision !== "withdraw") return { response: journeyResponse(404) };
   let uid: string | undefined;
   const bearer = req.headers.get("authorization");
   if (bearer) {
