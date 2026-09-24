@@ -8,12 +8,16 @@ import { mapShopifyOffers, mapShopifyLineDiscounts, type OfferRegistry } from ".
 import { mullyCustomerId } from "./mymullySource";
 import { mapJourneyPermissions, type JourneyPermissions } from "./journeyPermissions";
 import type { FullBuildEvidence } from "./fullReportBuild";
+import { mapShopifyAgreements, type AgreementDocument, type AgreementPolicy } from "./shopifyAgreements";
 
 export type MullyRefreshInput = {
   refresh: RefreshInput;
   source: Parameters<typeof mapMullySource>[0];
   binding: { sourceId: string; schemaVersion: string; approvalRef: string; maxAgeSeconds: number };
   cashPolicy?: ShopifyCashPolicy;
+  /** Source-bound original sales agreements for edited/refunded orders. The
+   * replacement is derived here; callers cannot inject arbitrary ledger rows. */
+  originalPurchases?: { orderGid: string; document: AgreementDocument; policy: AgreementPolicy }[];
   journey?: JourneySnapshot;
   draftJourney?: DraftJourneySnapshot;
   journeyPermissions?: JourneyPermissions;
@@ -86,8 +90,11 @@ export function prepareMullyRefresh(input: MullyRefreshInput, secrets: { checkou
       sha256: evidenceDigest(payload), payload });
   }
   {
-    const payload = [...mapShopifyLineDiscounts(input.source.orders, refresh.intake.scope.shop),
-      ...(input.offers ? mapShopifyOffers(input.source.orders, input.offers) : [])];
+    // Current edited-line discounts are not original-purchase offer evidence.
+    const replaced = new Set(input.originalPurchases?.map(v => v.orderGid) ?? []);
+    const offerOrders = input.source.orders.filter(o => !replaced.has(String(o.order.id)));
+    const payload = [...mapShopifyLineDiscounts(offerOrders, refresh.intake.scope.shop),
+      ...(input.offers ? mapShopifyOffers(offerOrders, input.offers) : [])];
     packets.push({ section: "offers", sourceId: b.sourceId, schemaVersion: b.schemaVersion,
       sourceRecordRef: `shopify-offers:sha256:${evidenceDigest({ orders: input.source.orders, registry: input.offers ?? null })}`,
       scope: refresh.intake.scope, capturedAt: input.source.snapshot.capturedAt,
@@ -99,6 +106,36 @@ export function prepareMullyRefresh(input: MullyRefreshInput, secrets: { checkou
     packets.push({ section: "settlements", sourceId: b.sourceId, schemaVersion: b.schemaVersion,
       sourceRecordRef: `shopify-transactions:sha256:${evidenceDigest(input.source.orders)}`,
       scope: refresh.intake.scope, capturedAt: input.source.snapshot.capturedAt,
+      sha256: evidenceDigest(payload), payload });
+  }
+  if (input.originalPurchases) {
+    if (!input.originalPurchases.length || input.originalPurchases.length > 100)
+      throw new Error("mully_original_purchase_budget");
+    // Do not silently discard a reviewed replacement packet, or rebind/re-date
+    // evidence from a different source. Mixed source sets need explicit review.
+    const prior = refresh.intake.packets.find(p => p.section === "replacements");
+    if (!prior || !Array.isArray(prior.payload) || prior.payload.length)
+      throw new Error("mully_existing_replacements_require_review");
+    const orders = new Map(input.source.orders.map(order => [String(order.order.id), order]));
+    const seen = new Set<string>(), payload: FullBuildEvidence["replacements"] = [];
+    for (const item of input.originalPurchases) {
+      if (seen.has(item.orderGid)) throw new Error("mully_duplicate_original_purchase");
+      seen.add(item.orderGid);
+      const order = orders.get(item.orderGid);
+      if (!order) throw new Error("mully_original_purchase_scope");
+      payload.push(mapShopifyAgreements(order, item.document, item.policy));
+    }
+    const deferred = input.originalPurchases.map(item => ({
+      orderGid: item.orderGid, sourceUpdatedAt: item.document.sourceUpdatedAt,
+      evidenceRef: item.policy.sourceEvidenceRef,
+    }));
+    if (refresh.commercePolicy.deferredOrders?.length)
+      throw new Error("mully_existing_deferred_orders_require_review");
+    refresh.commercePolicy.deferredOrders = deferred;
+    packets.push({ section: "replacements", sourceId: b.sourceId, schemaVersion: b.schemaVersion,
+      sourceRecordRef: `shopify-agreements:sha256:${evidenceDigest(input.originalPurchases.map(v => v.document))}`,
+      scope: refresh.intake.scope, capturedAt: new Date(Math.min(...input.originalPurchases
+        .map(v => Date.parse(v.document.capturedAt)))).toISOString(),
       sha256: evidenceDigest(payload), payload });
   }
   const sections = new Set(packets.map(p => p.section));
