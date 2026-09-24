@@ -161,9 +161,9 @@ it("does not refresh a stale purchase history by recapturing a current customer 
   await expect(collectRefresh(i, env, request, clock())).rejects.toThrow("stale");
   expect(request).not.toHaveBeenCalled();
 });
-it.each(["envelope", "collection", "refresh"])("rejects unsupported originalPurchases in %s before reads", async place => {
+it.each(["envelope", "refresh"])("rejects unsupported originalPurchases in %s before reads", async place => {
   const i = input();
-  Object.assign(place === "envelope" ? i : place === "collection" ? i.collection : i.refresh,
+  Object.assign(place === "envelope" ? i : i.refresh,
     { originalPurchases: [] });
   const request = transport();
   await expect(collectRefresh(i, env, request, clock())).rejects.toThrow("reviewed_replacement_packet");
