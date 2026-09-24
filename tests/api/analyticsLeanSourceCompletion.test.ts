@@ -9,6 +9,7 @@ import { refreshFixture } from "../fixtures/analyticsRefresh";
 import { fullFixture } from "../fixtures/analyticsFull";
 import { buildFullReports } from "@/lib/analytics/fullReportBuild";
 import { mapJourneyPermissions, readJourneyPermissions } from "@/lib/analytics/journeyPermissions";
+import { signCheckoutContext } from "@/lib/analytics/checkout-context";
 const shop = "fixture.myshopify.com", project = "a".repeat(20);
 const registry = { shop, attributeKey: "_offer_id", mappingVersion: "offer-v1", approvalRef: "fixture:approved",
   values: { "founding-box": { offerId: "offer_1", evidenceRef: "fixture:catalog" } } };
@@ -133,4 +134,39 @@ it("rejects cross-target receipt rows and overlarge responses, without accepting
     .rejects.toThrow("shape");
   await expect(readJourneyReceipts(config, "fixture", async () => new Response("x".repeat(500001))))
     .rejects.toThrow("budget");
+});
+it("assembles cart and draft receipt evidence together while preserving the oldest capture time", async () => {
+  const i = await input(), secret = "fixture-checkout-secret".repeat(3);
+  const capturedAt = "2026-01-01T11:00:00Z", purchaseAt = "2026-01-01T11:10:00Z";
+  const sourceAt = new Date(Date.parse(i.refresh.intake.asOf) - 1000).toISOString();
+  const sessionId = "11111111-1111-4111-8111-111111111111";
+  const receipt = (cartToken: string) => ({
+    cartToken, capturedAt, subjectId: "subject_fixture", sessionId,
+    posthogProject: i.refresh.policy.project, validFrom: "2026-01-01T10:00:00Z",
+    expiresAt: "2026-01-01T12:00:00Z", revokedAt: null, permissionEvidenceRef: "fixture:authority",
+    contextToken: signCheckoutContext({ project: i.refresh.policy.project, shop, checkoutId: cartToken,
+      sessionId, serverSubject: "subject_fixture", analyticsPermitted: true,
+      now: Date.parse(capturedAt) / 1000, ttlSeconds: 3600 }, secret)!,
+  });
+  i.source.orders = [
+    { ...order(), order: { ...order().order, cartToken: "cart_fixture", createdAt: purchaseAt } },
+    { ...order(), order: { ...order().order, id: "gid://shopify/Order/9", createdAt: purchaseAt } },
+  ];
+  const carts = { projectRef: project, shop, capturedAt: sourceAt,
+    requestedCarts: ["cart_fixture"], receipts: [receipt("cart_fixture")] };
+  const drafts = { projectRef: project, shop, capturedAt: i.refresh.intake.asOf,
+    from: "2026-01-01T00:00:00Z", until: "2026-01-02T00:00:00Z",
+    receipts: [{ ...receipt("draft_100"), draftId: "100" }],
+    links: [{ draftId: "100", orderId: "9", completedAt: purchaseAt }] };
+  i.journey = { ...carts, digest: evidenceDigest(carts) };
+  i.draftJourney = { ...drafts, digest: evidenceDigest(drafts) };
+  const out = prepareMullyRefresh(i, { checkoutSecret: secret });
+  expect(out.bundle.full.evidence.checkout.map(r => r.orderId)).toEqual([key(shop, "1"), key(shop, "9")]);
+  const packet = out.refresh.intake.packets.find(p => p.section === "checkout")!;
+  expect(packet.capturedAt).toBe(sourceAt);
+  expect(packet.sourceRecordRef).toMatch(/^journey-receipts:sha256:/);
+  expect(packet.sha256).toBe(evidenceDigest(packet.payload));
+  expect(out.bundle.full.evidence.proofs).toEqual(i.refresh.intake.packets.find(p => p.section === "proofs")!.payload);
+  const altered = structuredClone(i); altered.draftJourney!.links[0].orderId = "10";
+  expect(() => prepareMullyRefresh(altered, { checkoutSecret: secret })).toThrow("scope");
 });

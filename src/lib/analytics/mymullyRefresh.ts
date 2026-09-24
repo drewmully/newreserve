@@ -3,6 +3,7 @@ import { prepareRefresh, type RefreshInput } from "./refreshPlan";
 import { mapMullySource, mullySourcePackets } from "./mymullySource";
 import { mapApprovedShopifyCash, type ShopifyCashPolicy } from "./shopifyCash";
 import { mapJourneyCheckout, type JourneySnapshot } from "./journeySource";
+import { mapDraftJourney, type DraftJourneySnapshot } from "./draftJourneySource";
 import { mapShopifyOffers, mapShopifyLineDiscounts, type OfferRegistry } from "./shopifyOffers";
 import { mullyCustomerId } from "./mymullySource";
 import { mapJourneyPermissions, type JourneyPermissions } from "./journeyPermissions";
@@ -14,6 +15,7 @@ export type MullyRefreshInput = {
   binding: { sourceId: string; schemaVersion: string; approvalRef: string; maxAgeSeconds: number };
   cashPolicy?: ShopifyCashPolicy;
   journey?: JourneySnapshot;
+  draftJourney?: DraftJourneySnapshot;
   journeyPermissions?: JourneyPermissions;
   offers?: OfferRegistry;
   /** Explicitly retain independently reviewed historical evidence. Current
@@ -67,15 +69,20 @@ export function prepareMullyRefresh(input: MullyRefreshInput, secrets: { checkou
       scope: refresh.intake.scope, capturedAt: new Date(Math.min(Date.parse(original.capturedAt),
         Date.parse(input.journeyPermissions.capturedAt))).toISOString(), sha256: evidenceDigest(payload), payload });
   }
-  if (input.journey) {
-    const payload = mapJourneyCheckout(input.source.orders, input.journey, {
+  if (input.journey || input.draftJourney) {
+    const config = {
       projectRef: refresh.intake.scope.projectRef, shop: refresh.intake.scope.shop,
       posthogProject: refresh.policy.project, sessionVersion: refresh.policy.sessionVersion,
       asOf: refresh.intake.asOf,
-    }, secrets.checkoutSecret ?? "");
+    };
+    const payload = [
+      ...(input.journey ? mapJourneyCheckout(input.source.orders, input.journey, config, secrets.checkoutSecret ?? "") : []),
+      ...(input.draftJourney ? mapDraftJourney(input.source.orders, input.draftJourney, config, secrets.checkoutSecret ?? "") : []),
+    ];
     packets.push({ section: "checkout", sourceId: b.sourceId, schemaVersion: b.schemaVersion,
-      sourceRecordRef: `journey-receipts:sha256:${input.journey.digest}`,
-      scope: refresh.intake.scope, capturedAt: input.journey.capturedAt,
+      sourceRecordRef: `journey-receipts:sha256:${evidenceDigest([input.journey?.digest ?? null, input.draftJourney?.digest ?? null])}`,
+      scope: refresh.intake.scope, capturedAt: new Date(Math.min(...[input.journey, input.draftJourney]
+        .filter((s): s is JourneySnapshot | DraftJourneySnapshot => !!s).map(s => Date.parse(s.capturedAt)))).toISOString(),
       sha256: evidenceDigest(payload), payload });
   }
   {

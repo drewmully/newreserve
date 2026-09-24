@@ -2,7 +2,9 @@ import { PGlite } from "@electric-sql/pglite";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from "vitest";
-import { attachJourneyCart, captureJourney, journeyGrant, type JourneyRuntime } from "@/lib/analytics/journeyRuntime";
+import { attachJourneyCart, attachJourneyDraft, captureJourney, journeyGrant, type JourneyRuntime } from "@/lib/analytics/journeyRuntime";
+import { mapDraftJourney, readDraftJourney } from "@/lib/analytics/draftJourneySource";
+import { evidenceDigest } from "@/lib/analytics/evidenceIntake";
 import { mapJourneyCheckout, readJourneyReceipts } from "@/lib/analytics/journeySource";
 import { mapJourneyPermissions, readJourneyPermissions } from "@/lib/analytics/journeyPermissions";
 import { key } from "@/lib/analytics/primitives";
@@ -18,7 +20,7 @@ const req = (extra: Record<string, string> = {}) => new Request("https://fixture
 });
 const rpc: JourneyRuntime["rpc"] = async (name, args) => {
   if (!["lean_journey_grant", "lean_journey_action", "lean_checkout_receipt", "lean_checkout_receipts_read",
-    "lean_journey_permissions_read"].includes(name))
+    "lean_journey_permissions_read", "lean_draft_receipt", "lean_draft_receipts_read"].includes(name))
     throw new Error("unexpected_rpc");
   try {
     const pairs = Object.entries(args);
@@ -40,10 +42,11 @@ const runtime = (): JourneyRuntime => ({
 });
 beforeAll(async () => {
   db = new PGlite();
-  await db.exec(`create schema lean_private; create role anon; create role authenticated; create role service_role;
+  await db.exec(`create schema lean_private; create role anon; create role authenticated; create role service_role; create role lean_posthog_reader;
     alter default privileges in schema public grant execute on functions to anon,authenticated,service_role;
     alter default privileges in schema lean_private grant all on tables to anon,authenticated,service_role;`);
   await db.exec(readFileSync("sql/analytics/026_journey_authority.sql", "utf8"));
+  await db.exec(readFileSync("sql/analytics/031_draft_receipts.sql", "utf8"));
 }, 30000);
 beforeEach(async () => {
   now = Date.now();
@@ -62,6 +65,92 @@ it("looks up only an opaque authority token, with no client consent inference", 
   }), undefined, r)).toBeNull();
   expect(r.rpc).not.toHaveBeenCalled();
 });
+it("links draft checkouts only through the vendor's explicit completed order relation", async () => {
+  const r = runtime();
+  expect(await attachJourneyDraft(req(), "100", shop, "verified_uid", r)).toBe(true);
+  expect(r.request).not.toHaveBeenCalled();
+  const at = new Date(Date.now() + 1000).toISOString(), created = new Date(now + 500).toISOString();
+  // The DB uses real server time; use a past-bound read upper limit after capture.
+  const until = new Date().toISOString();
+  const transport: typeof fetch = vi.fn(async (url, init) => {
+    if (String(url).includes("supabase")) {
+      const result = await rpc("lean_draft_receipts_read", JSON.parse(String(init?.body)));
+      expect(result.error).toBeNull(); return Response.json(result.data);
+    }
+    const query = JSON.parse(String(init?.body));
+    expect(query.query).not.toContain("mutation");
+    expect(query.variables.ids).toEqual(["gid://shopify/DraftOrder/100"]);
+    return Response.json({ data: { nodes: [{ __typename: "DraftOrder", id: "gid://shopify/DraftOrder/100",
+      status: "COMPLETED", completedAt: created, order: { id: "gid://shopify/Order/1" } }] } },
+    { headers: { "X-Shopify-API-Version": "2026-07" } });
+  });
+  const snapshot = await readDraftJourney({ projectRef: project, shop, from: new Date(now - 10000).toISOString(),
+    until, capturedAt: at }, "fixture", "fixture", transport);
+  const orders = [{ shop, apiVersion: "2026-07" as const, order: {
+    id: "gid://shopify/Order/1", createdAt: created, cartToken: null,
+  } }];
+  const config = { projectRef: project, shop, posthogProject: "353503", sessionVersion: "v1", asOf: at };
+  expect(mapDraftJourney(orders, snapshot, config, secret)).toMatchObject([{
+    orderId: key(shop, "1"), sessionKey: key("353503", "v1", session),
+    evidenceRef: expect.stringMatching(/^draft-relation:sha256:/),
+  }]);
+  expect(mapDraftJourney([], snapshot, config, secret)).toEqual([]);
+  expect(() => mapDraftJourney(orders, snapshot, config, "wrong".repeat(10))).toThrow("invalid_context");
+  expect(() => mapDraftJourney(orders, { ...snapshot, shop: "wrong.myshopify.com" }, config, secret)).toThrow();
+  const { digest: _digest, ...revoked } = snapshot;
+  void _digest;
+  revoked.receipts = revoked.receipts.map(row => ({ ...row, revokedAt: at }));
+  expect(mapDraftJourney(orders, { ...revoked, digest: evidenceDigest(revoked) }, config, secret)).toEqual([]);
+});
+it("refuses guessed draft identities and permanently fences a draft reused across grants", async () => {
+  const r = runtime();
+  expect(await attachJourneyDraft(req(), "gid://shopify/DraftOrder/100", shop, "uid", r)).toBe(false);
+  expect(await attachJourneyDraft(req(), "100", "wrong.myshopify.com", "uid", r)).toBe(false);
+  expect(await attachJourneyDraft(req(), "100", shop, "", r)).toBe(false);
+  expect((await db.query("select * from lean_private.draft_receipts")).rows).toHaveLength(0);
+  expect(await attachJourneyDraft(req(), "100", shop, "uid", r)).toBe(true);
+  await db.query(`insert into lean_private.journey_grants select $1,project_ref,posthog_project,shop,
+    'different_subject',$2,firebase_uid,valid_from,expires_at,revoked_at,permission_evidence_ref,approval_ref
+    from lean_private.journey_grants`, ["f".repeat(64), action]);
+  expect((await rpc("lean_draft_receipt", { p_project: project, p_shop: shop, p_token_hash: "f".repeat(64),
+    p_draft: "100", p_context: "x".repeat(60) })).data).toBe(false);
+  expect(await attachJourneyDraft(req(), "100", shop, "uid", r)).toBe(false);
+  expect((await db.query<{ conflicted_at: string | null }>("select conflicted_at from lean_private.draft_receipts")).rows[0].conflicted_at).not.toBeNull();
+});
+it("rejects oversized draft receipt reads, requires scoped credentials and skips Shopify for an empty receipt set", async () => {
+  const config = { projectRef: project, shop, from: new Date(now - 10000).toISOString(),
+    until: new Date(now).toISOString(), capturedAt: new Date(now + 1000).toISOString() };
+  const overflow = vi.fn(async () => Response.json(Array(101).fill({})));
+  await expect(readDraftJourney(config, "fixture", "fixture", overflow)).rejects.toThrow("budget");
+  expect(overflow).toHaveBeenCalledTimes(1);
+  const noRead = vi.fn(async () => Response.json([]));
+  await expect(readDraftJourney(config, "fixture", "", noRead)).rejects.toThrow("credentials");
+  expect(noRead).not.toHaveBeenCalled();
+  const empty = await readDraftJourney(config, "fixture", "fixture", noRead);
+  expect(empty.links).toEqual([]); expect(noRead).toHaveBeenCalledTimes(1);
+});
+it.each(["wrong-version", "missing-node", "wrong-draft", "partial-response", "future-relation", "inconsistent-open"])(
+  "rejects an invalid Shopify draft relation without retrying: %s", async failure => {
+    const config = { projectRef: project, shop, from: new Date(now - 10000).toISOString(),
+      until: new Date(now).toISOString(), capturedAt: new Date(now + 1000).toISOString() };
+    const receipt = { draftId: "100", cartToken: "draft_100", contextToken: "x".repeat(60),
+      capturedAt: new Date(now - 1000).toISOString(), subjectId: "subject_fixture", sessionId: session,
+      posthogProject: "353503", validFrom: new Date(now - 10000).toISOString(),
+      expiresAt: new Date(now + 3600000).toISOString(), revokedAt: null, permissionEvidenceRef: "fixture:permission" };
+    const node = { __typename: "DraftOrder", id: "gid://shopify/DraftOrder/100", status: "COMPLETED",
+      completedAt: new Date(now).toISOString(), order: { id: "gid://shopify/Order/1" } };
+    if (failure === "wrong-draft") node.id = "gid://shopify/DraftOrder/999";
+    if (failure === "future-relation") node.completedAt = new Date(now + 5000).toISOString();
+    if (failure === "inconsistent-open") node.status = "OPEN";
+    const request = vi.fn(async (url: RequestInfo | URL) => String(url).includes("supabase")
+      ? Response.json([receipt])
+      : Response.json({ data: { nodes: failure === "partial-response" ? [] :
+        [failure === "missing-node" ? null : node] } }, {
+        headers: { "X-Shopify-API-Version": failure === "wrong-version" ? "2026-10" : "2026-07" },
+      }));
+    await expect(readDraftJourney(config, "fixture", "fixture", request)).rejects.toThrow();
+    expect(request).toHaveBeenCalledTimes(2);
+  });
 it("defaults off and respects privacy signals, duplicate cookies and cross-project scope", async () => {
   const r = runtime(); r.env.LEAN_ANALYTICS_JOURNEYS_ENABLED = "false"; r.rpc = vi.fn(r.rpc);
   expect(await captureJourney(req(), "quiz_started", action, undefined, r)).toBe(false);
