@@ -5,7 +5,7 @@ import { deriveSessions, finalizeSessionConversions, linkCheckoutOrders, normali
   type CheckoutEvidence, type ObservedEvent, type SessionCoverage } from "./sessions";
 import { acquisitionDaily, customerCohort, funnelDaily, productDaily, storeDaily,
   type Facts, type Gates, type ReportScope } from "./reporting";
-import { validateCandidateGraph, reconcileCandidate, externalJoinControls, type Candidate, type Reconciliation } from "./certification";
+import { validateCandidateGraph, reconcileCandidate, type Candidate, type Reconciliation } from "./certification";
 import { normalizeCommerce, type CommerceDecision, type ShopifySnapshot } from "./commerce";
 import { normalizeLedger, normalizePayment, uniqueLedger, type Movement, type PaymentEvidence } from "./financial";
 import { reportDates } from "./commerceCandidate";
@@ -36,7 +36,8 @@ export type FullBuildEvidence = {
   replacements: { snapshot: ShopifySnapshot; decision: CommerceDecision; movements: Movement[];
     payments: PaymentEvidence[]; evidenceRef: string }[];
   settlements: PaymentEvidence[];
-  offers: { orderItemId: string; offerId: string; evidenceRef: string; mappingVersion: string }[];
+  offers: { orderItemId: string; offerId: string; evidenceRef: string; mappingVersion: string;
+    membershipBasis?: "source_line_discount" | "source_evidence" | "approved_bundle_rule" }[];
   proofs: Reconciliation[];
   externalControls: Record<string, { passed: boolean; evidenceRef: string }>;
   dateCoverage: { date: string; gates: Gates; evidenceRef: string }[];
@@ -49,6 +50,17 @@ const gateTables: Record<keyof Gates, string[]> = {
   purchase: ["orders", "order_items"], customers: ["customers", "identity_map"],
   spend: ["marketing_spend_daily"], attribution: ["order_attribution"],
   behavior: ["sessions"], productAllocation: ["sales_ledger", "order_items"],
+};
+// Controls are dependencies, not a global switch. Missing browser identity
+// cannot erase independently reconciled commerce/cash. Certification and
+// release still require all controls for their explicitly selected scope.
+const gateControls: Record<keyof Gates, string[]> = {
+  ledger: [], cash: [], orders: [], purchase: [], productAllocation: [],
+  customers: ["temporal_identity_intervals"],
+  spend: ["compatible_spend_scope"],
+  behavior: ["event_customer_fk", "temporal_identity_intervals", "event_session_fk", "native_project_uuid_lineage"],
+  attribution: ["event_customer_fk", "temporal_identity_intervals", "event_session_fk",
+    "event_order_diagnostics", "native_project_uuid_lineage", "attribution_touch_event_fk"],
 };
 function unique<T>(rows: T[], id: (row: T) => string): Map<string, T> {
   const out = new Map<string, T>();
@@ -103,8 +115,11 @@ export function buildFullReports(input: {
   }
   for (const offer of e.offers) {
     if (!offer.evidenceRef || !offer.mappingVersion) throw new Error("offer_evidence_required");
+    if (offer.membershipBasis !== undefined &&
+        !["source_line_discount", "source_evidence", "approved_bundle_rule"].includes(offer.membershipBasis))
+      throw new Error("offer_membership_basis_invalid");
     facts.order_item_offers.push(checked("order_item_offers", {
-      order_item_id: offer.orderItemId, offer_id: offer.offerId, membership_basis: "source_evidence",
+      order_item_id: offer.orderItemId, offer_id: offer.offerId, membership_basis: offer.membershipBasis ?? "source_evidence",
       evidence_ref: offer.evidenceRef, offer_mapping_version: offer.mappingVersion, publication_id: pub,
     }));
   }
@@ -167,13 +182,13 @@ export function buildFullReports(input: {
     }])), campaigns: new Map([...campaigns].map(([id, row]) => [id, row.context])) });
   const issues = validateCandidateGraph(facts, pub, p.attribution.modelVersion);
   if (issues.length) throw new Error(`invalid_full_candidate:${issues.join(",")}`);
-  const controlsReady = externalJoinControls.every(k => e.externalControls[k]?.passed && e.externalControls[k].evidenceRef);
   const coverage = unique(e.dateCoverage, v => v.date);
   const verified = Object.fromEntries(Object.values(gateTables).flat().map(t => [t, proofReady(t)]));
   const scope = (date: string): ReportScope => {
     const claim = coverage.get(date);
     const gates = Object.fromEntries(Object.entries(gateTables).map(([gate, tables]) =>
-      [gate, controlsReady && !!claim?.evidenceRef && claim.gates[gate as keyof Gates] === true &&
+      [gate, gateControls[gate as keyof Gates].every(k => e.externalControls[k]?.passed && e.externalControls[k].evidenceRef) &&
+        !!claim?.evidenceRef && claim.gates[gate as keyof Gates] === true &&
         tables.every(t => verified[t])])) as Gates;
     // Independent key totals alone do not establish semantic completeness.
     gates.customers &&= facts.customers.every(c => c.analytics_permitted === true &&
