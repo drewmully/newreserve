@@ -25,6 +25,13 @@ it("maps approved customer receipts and refunds without counting authorizations 
   expect(rows.every(r => r.settlementEvidenceRef?.startsWith("shopify-success-policy:"))).toBe(true);
   expect(rows.map(r => normalizePayment(r, "fixture").cash_amount_usd)).toEqual(["20.000000", "-5.000000"]);
 });
+it("accepts an associated provider payment timestamp before order creation", () => {
+  const input = doc();
+  (input.order.transactions as Record<string, unknown>[])[1].processedAt = "2026-01-01T10:59:59Z";
+  expect(mapApprovedShopifyCash([input], policy)[0]).toMatchObject({
+    kind: "capture", settledAt: "2026-01-01T10:59:59Z",
+  });
+});
 it("requires an explicit approved clock and gateway policy", () => {
   expect(() => mapApprovedShopifyCash([doc()], { ...policy, approvalRef: "" })).toThrow("policy_required");
   expect(() => mapApprovedShopifyCash([doc()], { ...policy, gateways: ["other"] })).toThrow("unapproved_gateway");

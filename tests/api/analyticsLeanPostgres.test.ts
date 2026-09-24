@@ -78,7 +78,8 @@ describe.skipIf(!connectionString)("real PostgreSQL concurrent analytics workers
       "021_full_report_jobs", "022_full_release", "023_posthog_export", "024_full_orchestration", "025_refresh_queue",
       "026_journey_authority", "027_history_update_scans", "028_refresh_health",
       "029_journey_decisions", "030_scoped_release", "031_draft_receipts", "032_history_feeds", "033_scoped_health",
-      "034_commerce_only_refresh", "035_discovery_inventory_fence", "036_partitioned_refresh"])
+      "034_commerce_only_refresh", "035_discovery_inventory_fence", "036_partitioned_refresh",
+      "037_canonical_journey_timestamps"])
       await admin.query(readFileSync(`sql/analytics/${name}.sql`, "utf8"));
     await admin.query(`insert into lean_private.pipeline_scope(shop,project_ref,enabled,from_time,until_time,policy,approval_ref,actor_ref)
       values($1,$2,true,'2026-01-01','2026-02-01',$3,'fixture:scope','fixture:operator')`,

@@ -184,8 +184,8 @@ export function mapShopifyAgreements(commerce: ShopifyOrderDocument, document: A
     Date.parse(a.processedAt ?? "") - Date.parse(b.processedAt ?? ""));
   let captured = BigInt(0), paidAt: string | null = null;
   for (const t of captures) {
-    if (!t.processedAt || Date.parse(t.processedAt) < Date.parse(createdAt) ||
-        Date.parse(t.processedAt) > Date.parse(updatedAt)) throw new Error("agreement_paid_time_required");
+    if (!t.processedAt || Date.parse(t.processedAt) > Date.parse(updatedAt))
+      throw new Error("agreement_paid_time_required");
     if (!paidAt) {
       captured += micros(t.payment.signedAmount);
       if (captured > originalTotal) throw new Error("agreement_ambiguous_original_payment");
@@ -193,7 +193,6 @@ export function mapShopifyAgreements(commerce: ShopifyOrderDocument, document: A
     }
   }
   if (!paidAt) throw new Error("agreement_original_payment_required");
-  if (Date.parse(paidAt) < Date.parse(originalAt)) throw new Error("agreement_payment_before_purchase");
   // If order edits preceded original full payment, later captures cannot prove
   // what amount originally made this purchase eligible.
   if (agreements.some(a => a !== original && Date.parse(instant(a.happenedAt)) <= Date.parse(paidAt!)))
