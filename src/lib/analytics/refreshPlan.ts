@@ -21,6 +21,7 @@ export type RefreshInput = {
  * old all-passed fixture is not an acceptable refresh.
  */
 export function prepareRefresh(input: RefreshInput) {
+  if (input.commercePolicy.partitionInventory !== undefined) throw new Error("partition_preparation_required");
   const { scope } = input.intake;
   const assembled = assembleEvidence(input.intake);
   const mode = input.policy.behaviorMode ?? "required";
