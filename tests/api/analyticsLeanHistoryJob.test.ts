@@ -35,9 +35,12 @@ const options = () => ({ client, projectRef: project, databaseUrl: `https://${pr
   shop, runId: "fixture", accessToken: "fixture-not-real", now: "2026-09-23T00:00:00Z", signal: AbortSignal.timeout(20000) });
 beforeAll(async () => {
   db = new PGlite();
-  await db.exec(`create schema lean_private; create role service_role; create role anon; create role authenticated;
+  await db.exec(`create role service_role; create role anon; create role authenticated;
     alter default privileges in schema public grant execute on functions to anon,authenticated,service_role;`);
-  await db.exec(readFileSync("sql/analytics/018_history_jobs.sql", "utf8"));
+  for (const name of ["001_staging", "013_release", "014_reporting_views", "018_history_jobs", "019_spend_jobs",
+    "020_observed_report_jobs", "021_full_report_jobs", "022_full_release", "023_posthog_export",
+    "024_full_orchestration", "025_refresh_queue", "027_history_update_scans"])
+    await db.exec(readFileSync(`sql/analytics/${name}.sql`, "utf8"));
 }, 30000);
 beforeEach(async () => {
   vi.mocked(runShopifyHistory).mockReset(); port.client = client;
@@ -53,6 +56,31 @@ it("returns UTC scope accepted by the source reader, not database offset strings
   const result = await client.rpc("lean_history_read", args);
   expect(result.error).toBeNull();
   expect(nyDate((result.data as { fromTime: string }).fromTime)).toBe("2025-12-31");
+});
+it("persists update-time scope and accepts an older order only when its update is inside that scope", async () => {
+  await db.exec("truncate lean_private.history_jobs cascade");
+  await db.query(`insert into lean_private.history_jobs
+    (run_id,project_ref,shop,from_time,until_time,page_size,max_pages,approval_ref,actor_ref,enabled,scan_basis)
+    values('fixture',$1,$2,'2026-01-02','2026-01-03',2,2,'fixture','fixture',true,'updated_at')`, [project, shop]);
+  expect((await client.rpc("lean_history_read", args)).data).toMatchObject({ scanBasis: "updated_at" });
+  const old = row(); old.source.commerce.order.createdAt = "2025-01-01T00:00:00Z";
+  expect((await commit({ p_rows: [old] })).data).toBe(true);
+  await expect(db.exec("update lean_private.history_jobs set scan_basis='created_at'")).rejects.toThrow("immutable");
+  const wrong = row("2"); wrong.source.commerce.order.updatedAt = "2026-01-03T00:00:00Z";
+  expect((await commit({ p_rows: [wrong], p_expected_page: 1, p_expected_cursor: "next",
+    p_next_cursor: null, p_complete: true })).error).toBeTruthy();
+  expect((await client.rpc("lean_history_read", args)).data).toMatchObject({ pageCount: 1, cursor: "next" });
+});
+it("rejects backwards update-time pages without advancing the checkpoint", async () => {
+  await db.exec("truncate lean_private.history_jobs cascade");
+  await db.query(`insert into lean_private.history_jobs
+    (run_id,project_ref,shop,from_time,until_time,page_size,max_pages,approval_ref,actor_ref,enabled,scan_basis)
+    values('fixture',$1,$2,'2026-01-01','2026-02-01',2,2,'fixture','fixture',true,'updated_at')`, [project, shop]);
+  expect((await commit()).data).toBe(true);
+  const earlier = row("2"); earlier.source.commerce.order.updatedAt = "2026-01-02T00:00:00Z";
+  expect((await commit({ p_rows: [earlier], p_expected_page: 1, p_expected_cursor: "next",
+    p_next_cursor: null, p_complete: true })).error).toBeTruthy();
+  expect((await client.rpc("lean_history_read", args)).data).toMatchObject({ rowCount: 1, state: "ready" });
 });
 it("atomically stores rows with a cursor and rejects duplicate commits", async () => {
   expect((await commit()).data).toBe(true);
