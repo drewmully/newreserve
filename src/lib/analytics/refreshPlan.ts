@@ -4,6 +4,7 @@ import { validateBehaviorSource, type BehaviorSource } from "./posthogSource";
 import type { PipelinePolicy } from "./shopifyPipeline";
 import { reportDates } from "./commerceCandidate";
 import { nyDate } from "./primitives";
+import { validateHistoryInventory } from "./historyInventory";
 
 export type RefreshInput = {
   intake: Parameters<typeof assembleEvidence>[0];
@@ -58,6 +59,10 @@ export function prepareRefresh(input: RefreshInput) {
     return { ...h };
   }).sort((a, b) => a.from.localeCompare(b.from));
   if (pages > 25 || rows > 100) throw new Error("refresh_history_budget");
+  if (input.commercePolicy.sourceInventory !== undefined)
+    validateHistoryInventory(input.commercePolicy.sourceInventory, {
+      projectRef: scope.projectRef, shop: scope.shop, asOf: input.intake.asOf, history: input.history,
+    });
   // Creation backfills and update scans may overlap; duplicate orders are
   // revision-deduplicated downstream. Within one basis, overlapping jobs are
   // wasteful and risk exhausting the approved read budget.
