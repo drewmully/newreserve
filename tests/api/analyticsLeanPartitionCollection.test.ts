@@ -59,7 +59,15 @@ it("propagates one active deadline through later PilotSource reads, with no late
     const controller = new AbortController(); timers.push(controller);
     return controller.signal;
   });
+  const capturedClock = () => f.refresh.intake.asOf;
+  let firstRequest = true;
   const request = vi.fn<typeof fetch>(async (url, init) => {
+    if (firstRequest) {
+      firstRequest = false;
+      // Deliberately exceed 200ms of wall time. Both capture-clock checks and
+      // timeout signals must be controlled for this propagation-only test.
+      await new Promise(resolve => setTimeout(resolve, 250));
+    }
     if (String(init?.body).includes("AnalyticsFinancial")) return new Promise<Response>((_resolve, reject) => {
       if (init?.signal?.aborted) reject(new Error("aborted"));
       else init?.signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
@@ -68,7 +76,7 @@ it("propagates one active deadline through later PilotSource reads, with no late
     return transport(url, init);
   });
   try {
-    await expect(collectPartitionRefresh(f, partitionEnv, request)).rejects.toThrow();
+    await expect(collectPartitionRefresh(f, partitionEnv, request, capturedClock)).rejects.toThrow();
     expect(timeout.mock.calls[0]).toEqual([200]);
     expect(request.mock.calls.some(([, init]) => String(init?.body).includes("AnalyticsFinancial"))).toBe(true);
     expect(timers[0].signal.aborted).toBe(true);
