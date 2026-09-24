@@ -9,6 +9,9 @@ import { readHistoryInventoryPage, verifyHistoryAccess } from "./shopifyHistory"
 import { inventoryOrder, validateHistoryInventory, type HistoryInventory } from "./historyInventory";
 import { readShopifyAgreements } from "./shopifyAgreements";
 import { mapShopifyLineDiscounts, mapShopifyOffers, type OfferRegistry } from "./shopifyOffers";
+import { readJourneyPermissions } from "./journeyPermissions";
+import { planJourneyPermissionCollection, composeCollectedJourneyPermissions,
+  type JourneyPermissionCollection } from "./journeyPermissionCollection";
 import { prepareOriginalPurchases, requireEmptyOriginalPurchaseEvidence, validateOriginalPurchaseCollection,
   type OriginalPurchaseCollection, type OriginalPurchaseInput } from "./originalPurchasePreparation";
 
@@ -29,6 +32,7 @@ export type CollectRefreshInput = {
     originalPurchases?: OriginalPurchaseCollection;
     /** Explicit replacement of authentic empty offers evidence, unedited orders only. */
     offers?: { registry?: OfferRegistry };
+    journeyPermissions?: JourneyPermissionCollection;
     maxOrders: number;
     maxLinePages: number;
     maxRequests: number;
@@ -58,7 +62,8 @@ export async function collectRefresh(input: CollectRefreshInput, env: Environmen
     throw new Error("collected_original_purchases_require_reviewed_replacement_packet");
   if (Object.keys(input).some(k => !["kind", "refresh", "collection"].includes(k)) ||
       Object.keys(c).some(k => !["approvalRef", "projectRef", "shop", "orderIds", "discover", "entities", "checkout",
-        "draftJourney", "originalPurchases", "offers", "maxOrders", "maxLinePages", "maxRequests", "maxBytes", "timeoutMs", "binding"].includes(k)))
+        "draftJourney", "originalPurchases", "offers", "journeyPermissions",
+        "maxOrders", "maxLinePages", "maxRequests", "maxBytes", "timeoutMs", "binding"].includes(k)))
     throw new Error("unsupported_collection_option");
   shopifyShop(c.shop);
   const readKey = env.LEAN_MULLY_SOURCE_READ_KEY, shopifyToken = env.LEAN_SHOPIFY_ANALYTICS_READ_TOKEN;
@@ -119,7 +124,8 @@ export async function collectRefresh(input: CollectRefreshInput, env: Environmen
   }
   // Reserve the worst-case request count, including each order revision recheck.
   if (inventoryRequests + reservedOrders * (c.maxLinePages + 1) + 1 + Number(c.checkout) +
-      (c.draftJourney ? 2 : 0) + (agreementPlan ? agreementPlan.orders.length * agreementPlan.maxRequestsPerOrder : 0) >
+      (c.draftJourney ? 2 : 0) + Number(c.journeyPermissions !== undefined) +
+      (agreementPlan ? agreementPlan.orders.length * agreementPlan.maxRequestsPerOrder : 0) >
       c.maxRequests) throw new Error("refresh_collection_request_budget");
   if (c.checkout || c.draftJourney) {
     if ((env.LEAN_CHECKOUT_CONTEXT_SECRET?.length ?? 0) < 32 ||
@@ -157,6 +163,8 @@ export async function collectRefresh(input: CollectRefreshInput, env: Environmen
     if (Date.parse(refresh.expiresAt) - Date.parse(packet.capturedAt) > binding.maxAgeSeconds * 1000)
       throw new Error("refresh_outlives_evidence");
   }
+  const permissionPlan = c.journeyPermissions === undefined ? undefined :
+    planJourneyPermissionCollection(refresh, c.journeyPermissions, b.sourceId, env, startedAt);
   const deadline = AbortSignal.timeout(c.timeoutMs);
   let calls = 0, bytes = 0;
   const bounded: typeof fetch = async (url, init) => {
@@ -165,7 +173,8 @@ export async function collectRefresh(input: CollectRefreshInput, env: Environmen
     const target = new URL(String(url));
     const allowed = target.origin === `https://${c.projectRef}.supabase.co` &&
       (target.pathname === "/rest/v1/customers" && init?.method === "GET" ||
-       ["/rest/v1/rpc/lean_checkout_receipts_read", "/rest/v1/rpc/lean_draft_receipts_read"].includes(target.pathname) &&
+       ["/rest/v1/rpc/lean_checkout_receipts_read", "/rest/v1/rpc/lean_draft_receipts_read",
+         "/rest/v1/rpc/lean_journey_permissions_read"].includes(target.pathname) &&
        init?.method === "POST") ||
       target.origin === `https://${c.shop}` && target.pathname === "/admin/api/2026-07/graphql.json" &&
       init?.method === "POST";
@@ -251,11 +260,16 @@ export async function collectRefresh(input: CollectRefreshInput, env: Environmen
   const draftJourney = c.draftJourney ? await readDraftJourney({ ...common,
     from: c.draftJourney.from, until: c.draftJourney.until },
     readKey, shopifyToken, bounded) : undefined;
+  const journeyPermissions = permissionPlan ? await readJourneyPermissions({
+    ...permissionPlan.config, capturedAt: clock(),
+  }, readKey, bounded) : undefined;
   const finishedAt = clock(); nyDate(finishedAt);
   if (deadline.aborted || Date.parse(finishedAt) < Date.parse(startedAt) ||
       Date.parse(finishedAt) - Date.parse(startedAt) > c.timeoutMs ||
       originalPurchases.some(o => Date.parse(o.document.capturedAt) < Date.parse(startedAt) ||
-        Date.parse(o.document.capturedAt) > Date.parse(finishedAt)))
+        Date.parse(o.document.capturedAt) > Date.parse(finishedAt)) ||
+      journeyPermissions && (Date.parse(journeyPermissions.capturedAt) < Date.parse(startedAt) ||
+        Date.parse(journeyPermissions.capturedAt) > Date.parse(finishedAt)))
     throw new Error("refresh_collection_timeout");
   refresh.intake.asOf = finishedAt;
   refresh.policy.asOf = finishedAt;
@@ -263,7 +277,8 @@ export async function collectRefresh(input: CollectRefreshInput, env: Environmen
   // Keep the reviewed absolute expiry. Never extend the evidence validity window.
   const facts = mapMullySource({ snapshot, orders, mappingVersion: refresh.policy.mappingVersion, permissions: [] });
   const sourceDigest = evidenceDigest({ orders, snapshot, journey: journey ?? null, draftJourney: draftJourney ?? null,
-    ...(agreementPlan ? { originalPurchases } : {}), ...(c.offers ? { offers: c.offers } : {}) });
+    ...(agreementPlan ? { originalPurchases } : {}), ...(c.offers ? { offers: c.offers } : {}),
+    ...(journeyPermissions ? { journeyPermissions } : {}) });
   const packets: EvidencePacket[] = [];
   const add = (section: typeof replaced[number], payload: EvidencePacket["payload"]) => packets.push({
     section, payload, sourceId: b.sourceId, schemaVersion: b.schemaVersion, scope: refresh.intake.scope,
@@ -300,12 +315,17 @@ export async function collectRefresh(input: CollectRefreshInput, env: Environmen
       .filter(prior => prior.sections.length),
     { ...b, approvalRef: c.approvalRef, sections: packets.map(p => p.section), independentControlSource: false },
   ];
+  if (permissionPlan && journeyPermissions) {
+    composeCollectedJourneyPermissions(refresh, permissionPlan, journeyPermissions);
+    sections.add("identity");
+  }
   const bundle = prepareRefresh(refresh);
   const preparedAt = clock(); nyDate(preparedAt);
   if (deadline.aborted || Date.parse(preparedAt) < Date.parse(finishedAt) ||
       Date.parse(preparedAt) - Date.parse(startedAt) > c.timeoutMs)
     throw new Error("refresh_collection_timeout");
-  return { bundle, refresh, sources: { orders, snapshot, journey, draftJourney, inventory, originalPurchases },
+  return { bundle, refresh, sources: { orders, snapshot, journey, draftJourney, inventory, originalPurchases,
+    ...(journeyPermissions ? { journeyPermissions } : {}) },
     audit: { version: 1, approvalRef: c.approvalRef, startedAt, finishedAt, sourceDigest,
       projectRef: c.projectRef, shop: c.shop, calls, bytes, orderIds,
       inventoryDigest: inventory?.digest ?? null,
