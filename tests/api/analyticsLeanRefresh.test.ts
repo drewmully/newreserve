@@ -7,6 +7,7 @@ import { prepareRefresh } from "@/lib/analytics/refreshPlan";
 import { refreshFixture } from "../fixtures/analyticsRefresh";
 import { fullProject } from "../fixtures/analyticsFull";
 import { POST } from "@/app/api/analytics/ingest/refresh/route";
+import { GET as healthGET } from "@/app/api/analytics/ingest/health/route";
 import { runRefreshPipeline } from "@/lib/analytics/refreshPipeline";
 import type { AnalyticsRpcClient } from "@/lib/analytics/rpcStore";
 const mocks = vi.hoisted(() => ({ run: vi.fn(), client: null as AnalyticsRpcClient | null }));
@@ -14,7 +15,7 @@ vi.mock("@/lib/analytics/fullPipeline", () => ({ runFullPipeline: mocks.run }));
 vi.mock("@/lib/analytics/serverClient", () => ({ getAnalyticsSupabase: () => mocks.client }));
 let db: PGlite;
 const client: AnalyticsRpcClient = { async rpc(name, args) {
-  if (!["lean_refresh_claim", "lean_refresh_finish"].includes(name)) throw new Error("unknown_rpc");
+  if (!["lean_refresh_claim", "lean_refresh_finish", "lean_refresh_health"].includes(name)) throw new Error("unknown_rpc");
   const entries = Object.entries(args);
   try {
     const result = await db.query<{ result: unknown }>(`select public.${name}(${
@@ -35,14 +36,15 @@ beforeAll(async () => {
     alter default privileges in schema public grant execute on functions to anon,authenticated,service_role;`);
   for (const name of ["001_staging", "013_release", "014_reporting_views", "018_history_jobs", "019_spend_jobs",
     "020_observed_report_jobs", "021_full_report_jobs", "022_full_release", "023_posthog_export",
-    "024_full_orchestration", "025_refresh_queue"]) await db.exec(readFileSync(`sql/analytics/${name}.sql`, "utf8"));
+    "024_full_orchestration", "025_refresh_queue", "027_history_update_scans", "028_refresh_health"])
+    await db.exec(readFileSync(`sql/analytics/${name}.sql`, "utf8"));
 }, 30000);
 beforeEach(async () => {
   mocks.client = client; mocks.run.mockReset().mockResolvedValue({ state: "partial" });
   vi.stubGlobal("fetch", () => { throw new Error("external_network_forbidden"); });
   await db.exec(`truncate lean_private.refresh_queue; truncate lean_private.full_builds cascade;
     truncate lean_private.report_builds cascade; truncate lean_private.spend_jobs;
-    truncate lean_private.history_jobs cascade; truncate lean_private.refresh_limits;
+    truncate lean_private.history_jobs cascade; truncate lean_private.refresh_limits; truncate lean_private.refresh_monitor_targets;
     truncate lean_private.publications cascade`);
 });
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
@@ -66,6 +68,96 @@ it("prepares deterministic fresh-evidence revisions instead of mutating complete
   expect(prepareRefresh(input).runId).not.toBe(a.runId);
   expect(a.history).toHaveLength(1); expect(a.spend).toHaveLength(1);
   expect(a.full.evidence.ref).toContain(a.evidenceDigest);
+});
+it("reports unconfigured and missing expected work instead of treating no data as healthy", async () => {
+  const args = { p_project_ref: fullProject, p_shop: "fixture.myshopify.com" };
+  expect((await client.rpc("lean_refresh_health", args)).data).toMatchObject({ state: "unconfigured" });
+  await db.query(`insert into lean_private.refresh_monitor_targets
+    (project_ref,shop,enabled,max_candidate_age_seconds,max_export_age_seconds,approval_ref,actor_ref)
+    values($1,$2,true,3600,7200,'fixture','fixture')`, Object.values(args));
+  const result = (await client.rpc("lean_refresh_health", args)).data;
+  expect(result).toMatchObject({ state: "attention", posthogReadbackVerified: false,
+    issues: ["refresh_disabled", "no_completed_candidate", "full_selection_missing_or_mixed"] });
+  expect(JSON.stringify(result)).not.toMatch(/customer|uid|token|secret/i);
+});
+it("reports stuck leases and exhausted daily budgets without changing the queue", async () => {
+  const bundle = await register(); await activate(bundle.runId, 1);
+  await db.query(`insert into lean_private.refresh_monitor_targets
+    (project_ref,shop,enabled,max_candidate_age_seconds,max_export_age_seconds,require_export,approval_ref,actor_ref)
+    values($1,$2,true,3600,7200,false,'fixture','fixture')`, [fullProject, "fixture.myshopify.com"]);
+  await db.query("select public.lean_refresh_claim($1,$2)", [fullProject, randomUUID()]);
+  await db.exec("update lean_private.refresh_queue set lease_until=clock_timestamp()-interval '1 second'");
+  const before = (await db.query("select * from lean_private.refresh_queue")).rows;
+  const result = (await client.rpc("lean_refresh_health", { p_project_ref: fullProject, p_shop: "fixture.myshopify.com" })).data;
+  expect(result).toMatchObject({ state: "attention", counts: { ambiguous: 1 } });
+  expect((result as { issues: string[] }).issues).toContain("daily_budget_exhausted");
+  expect((await db.query("select * from lean_private.refresh_queue")).rows).toEqual(before);
+  expect((await db.query(`select r,has_function_privilege(r,'public.lean_refresh_health(text,text)','execute') allowed,
+    has_table_privilege(r,'lean_private.refresh_monitor_targets','update') configure
+    from unnest(array['anon','authenticated','service_role','lean_posthog_reader']) r`)).rows).toEqual([
+    { r: "anon", allowed: false, configure: false }, { r: "authenticated", allowed: false, configure: false },
+    { r: "service_role", allowed: true, configure: false }, { r: "lean_posthog_reader", allowed: false, configure: false },
+  ]);
+});
+it("protects the read-only health endpoint with a separate secret and fixed target", async () => {
+  const req = (query = "", auth = "x".repeat(32)) => new NextRequest(`https://fixture.invalid/api/analytics/ingest/health${query}`,
+    { headers: { authorization: `Bearer ${auth}` } });
+  expect((await healthGET(req())).status).toBe(404);
+  vi.stubEnv("LEAN_ANALYTICS_MONITOR_ENABLED", "true");
+  vi.stubEnv("LEAN_ANALYTICS_MONITOR_SECRET", "x".repeat(32));
+  vi.stubEnv("LEAN_ANALYTICS_PIPELINE_PROJECT_REF", fullProject);
+  vi.stubEnv("LEAN_ANALYTICS_SUPABASE_URL", `https://${fullProject}.supabase.co`);
+  vi.stubEnv("LEAN_SHOPIFY_SHOP_DOMAIN", "fixture.myshopify.com");
+  expect((await healthGET(req("", "wrong"))).status).toBe(401);
+  expect((await healthGET(req("?project=other"))).status).toBe(400);
+  const response = await healthGET(req());
+  expect(response.status).toBe(503);
+  expect(response.headers.get("cache-control")).toBe("no-store");
+  expect(await response.json()).toMatchObject({ state: "unconfigured" });
+});
+it.each([0, 172800])("checks source vintage rather than completion/export time (age %s)", async age => {
+  const bundle = await register(); await activate(bundle.runId);
+  await db.query(`insert into lean_private.refresh_monitor_targets
+    (project_ref,shop,enabled,max_candidate_age_seconds,max_export_age_seconds,approval_ref,actor_ref)
+    values($1,$2,true,3600,7200,'fixture','fixture')`, [fullProject, "fixture.myshopify.com"]);
+  // An owner-created synthetic record, not a production permission bypass.
+  await db.query(`insert into lean_private.full_builds
+    (run_id,project_ref,base_run,policy,evidence,behavior,approval_ref,actor_ref,enabled,completed_at,result_hash)
+    select 'fixture:old',project_ref,base_run,
+      jsonb_set(policy,'{asOf}',to_jsonb((clock_timestamp()-make_interval(secs=>$2))::text)),
+      evidence,behavior,approval_ref,actor_ref,true,clock_timestamp(),'fixture'
+    from lean_private.full_builds where run_id=$1`, [bundle.runId, age]);
+  await db.exec(`insert into lean_private.publications(publication_id,contract_version) values('full:fixture:old','fixture');
+    insert into lean_private.certifications(publication_id,domain,evidence_ref,source_reconciliation_ref,approved_by)
+      select 'full:fixture:old',d,'fixture','fixture','fixture' from unnest(array[
+        'store_daily','product_daily','acquisition_daily','customer_cohorts','funnel_daily']) d;
+    update lean_private.publications set state='certified',evidence_ref='fixture' where publication_id='full:fixture:old';
+    insert into lean_private.selected_publications(domain,publication_id)
+      select domain,publication_id from lean_private.certifications;
+    insert into lean_private.export_audit(publication_id,approval_ref,actor_ref,row_counts)
+      values('full:fixture:old','fixture','fixture','{}')`);
+  const result = (await client.rpc("lean_refresh_health",
+    { p_project_ref: fullProject, p_shop: "fixture.myshopify.com" })).data;
+  expect(result).toMatchObject(age
+    ? { state: "attention", issues: ["candidate_stale", "selected_candidate_stale"] }
+    : { state: "healthy", issues: [], posthogReadbackVerified: false });
+  if (!age) {
+    await db.exec("update lean_private.selected_publications set is_stale=true where domain='store_daily'");
+    const stale = (await client.rpc("lean_refresh_health",
+      { p_project_ref: fullProject, p_shop: "fixture.myshopify.com" })).data;
+    expect(stale).toMatchObject({ state: "attention", issues: ["selected_candidate_stale"] });
+  }
+});
+it("registers creation and late-update scans as separate immutable source jobs", async () => {
+  const input = refreshFixture();
+  input.history.push({ ...input.history[0], scanBasis: "updated_at" });
+  input.maxSteps = 128;
+  const bundle = prepareRefresh(input);
+  await db.query("select public.lean_refresh_register($1)", [JSON.stringify(bundle)]);
+  expect((await db.query("select scan_basis from lean_private.history_jobs order by scan_basis")).rows)
+    .toEqual([{ scan_basis: "created_at" }, { scan_basis: "updated_at" }]);
+  input.history.push({ ...input.history[1] });
+  expect(() => prepareRefresh(input)).toThrow("overlapping");
 });
 it("refuses stale evidence, overlapping windows, duplicate accounts and undersized budgets", () => {
   for (const mutate of [
