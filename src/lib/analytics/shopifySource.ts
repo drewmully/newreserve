@@ -29,6 +29,7 @@ export const SHOPIFY_ANALYTICS_ORDER_QUERY = `
 query AnalyticsOrder($id: ID!, $cursor: String) {
   order(id: $id) {
     id createdAt updatedAt currencyCode edited taxesIncluded test cancelledAt
+    customer { id }
     shippingAddress { countryCodeV2 provinceCode }
     originalTotalPriceSet { shopMoney { amount currencyCode } }
     subtotalPriceSet { shopMoney { amount currencyCode } }
