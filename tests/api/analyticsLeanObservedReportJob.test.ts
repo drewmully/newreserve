@@ -6,6 +6,7 @@ import type { AnalyticsRpcClient } from "@/lib/analytics/rpcStore";
 import type { PilotSource } from "@/lib/analytics/shopifyPilotSource";
 import { runObservedReportJob } from "@/lib/analytics/observedReportJob";
 import { POST } from "@/app/api/analytics/ingest/reports/route";
+import { inventoryFixture } from "../fixtures/analyticsDiscovery";
 
 const port = vi.hoisted(() => ({ client: null as AnalyticsRpcClient | null }));
 vi.mock("@/lib/analytics/serverClient", () => ({ getAnalyticsSupabase: () => port.client }));
@@ -53,9 +54,10 @@ async function retain(input = source()) {
 }
 beforeAll(async () => {
   db = new PGlite();
-  await db.exec(`create role service_role; create role anon; create role authenticated;
+  await db.exec(`create role service_role; create role anon; create role authenticated; create role lean_posthog_reader;
     alter default privileges in schema public grant execute on functions to anon,authenticated,service_role;`);
-  for (const name of ["001_staging", "013_release", "014_reporting_views", "018_history_jobs", "019_spend_jobs", "020_observed_report_jobs"])
+  for (const name of ["001_staging", "013_release", "014_reporting_views", "018_history_jobs", "019_spend_jobs",
+    "020_observed_report_jobs", "035_discovery_inventory_fence"])
     await db.exec(readFileSync(`sql/analytics/${name}.sql`, "utf8"));
 }, 30000);
 beforeEach(async () => {
@@ -90,6 +92,69 @@ it("builds retained Shopify and Google observations into atomic private reports 
   expect((await db.query("select * from lean_analytics.store_daily")).rows).toEqual([]);
   expect((await db.query("select * from lean_private.certifications")).rows).toEqual([]);
 });
+it.each(["missing", "new", "revised"] as const)(
+  "fences a sealed discovery inventory from %s sources before publication", async failure => {
+    const expected = source(), inventory = inventoryFixture([expected.commerce.order]);
+    await db.exec("delete from lean_private.report_builds");
+    await db.query(`insert into lean_private.report_builds
+      (run_id,project_ref,shop,history_runs,spend_runs,from_date,through_date,policy,approval_ref,actor_ref,enabled)
+      values('report',$1,$2,array['history'],array['spend'],'2026-01-01','2026-01-02',$3,
+        'fixture:approval','fixture:operator',true)`,
+    [project, shop, JSON.stringify({ ...policy, sourceInventory: inventory })]);
+    if (failure === "missing") {
+      await db.query("select public.lean_history_commit('history',$1,$2,0,null,null,true,'[]')", [project, shop]);
+      await db.query("update lean_private.spend_jobs set base=$1::jsonb", [JSON.stringify(base())]);
+    }
+    else if (failure === "new") {
+      await db.query("select public.lean_history_commit('history',$1,$2,0,null,null,true,$3::jsonb)",
+        [project, shop, JSON.stringify([{ source: expected }, { source: { ...expected,
+          commerce: { ...expected.commerce, order: { ...expected.commerce.order, id: "gid://shopify/Order/2" } } } }])]);
+      await db.query("update lean_private.spend_jobs set base=$1::jsonb", [JSON.stringify(base())]);
+    } else await retain({ ...expected, commerce: { ...expected.commerce,
+      order: { ...expected.commerce.order, updatedAt: "2026-01-03T12:00:00Z" } } });
+    await expect(runObservedReportJob(options())).rejects.toThrow("inventory_consumer");
+    expect((await db.query("select * from lean_private.publications")).rows).toEqual([]);
+  });
+it("accepts an equal sealed discovery inventory and commits through the database fence", async () => {
+  const expected = source(), inventory = inventoryFixture([expected.commerce.order]);
+  await db.exec("delete from lean_private.report_builds");
+  await db.query(`insert into lean_private.report_builds
+    (run_id,project_ref,shop,history_runs,spend_runs,from_date,through_date,policy,approval_ref,actor_ref,enabled)
+    values('report',$1,$2,array['history'],array['spend'],'2026-01-01','2026-01-02',$3,
+      'fixture:approval','fixture:operator',true)`,
+  [project, shop, JSON.stringify({ ...policy, sourceInventory: inventory })]);
+  await retain(expected);
+  expect(await runObservedReportJob(options())).toMatchObject({ state: "complete" });
+  expect(await runObservedReportJob(options())).toMatchObject({ state: "complete" });
+  expect((await db.query("select count(*)::int n from lean_private.orders")).rows).toEqual([{ n: 1 }]);
+});
+it.each(["missing", "new", "revised"] as const)(
+  "rolls back the entire database finish if a caller bypasses the %s inventory fence", async failure => {
+    const actual = source(), order = actual.commerce.order;
+    const expected = failure === "new" ? [] : failure === "missing"
+      ? [order, { ...order, id: "gid://shopify/Order/2" }]
+      : [{ ...order, updatedAt: "2026-01-03T12:00:00Z" }];
+    await db.exec("delete from lean_private.report_builds");
+    await db.query(`insert into lean_private.report_builds
+      (run_id,project_ref,shop,history_runs,spend_runs,from_date,through_date,policy,approval_ref,actor_ref,enabled)
+      values('report',$1,$2,array['history'],array['spend'],'2026-01-01','2026-01-02',$3,
+        'fixture:approval','fixture:operator',true)`,
+    [project, shop, JSON.stringify({ ...policy, sourceInventory: inventoryFixture(expected) })]);
+    await retain(actual);
+    const bypass: AnalyticsRpcClient = { async rpc(name, args) {
+      const result = await client.rpc(name, args);
+      if (name === "lean_report_inputs" && result.data) {
+        const input = result.data as { policy: { sourceInventory?: unknown } };
+        delete input.policy.sourceInventory; // malicious client: keep the original database inputHash
+      }
+      return result;
+    } };
+    await expect(runObservedReportJob({ ...options(), client: bypass })).rejects.toThrow("storage_unavailable");
+    expect((await db.query("select * from lean_private.publications")).rows).toEqual([]);
+    expect((await db.query("select * from lean_private.orders")).rows).toEqual([]);
+    expect((await db.query("select * from lean_private.report_store_daily")).rows).toEqual([]);
+    expect((await db.query("select completed_at from lean_private.report_builds")).rows).toEqual([{ completed_at: null }]);
+  });
 it("returns complete on retry without duplicating facts", async () => {
   await retain(); await runObservedReportJob(options());
   expect(await runObservedReportJob(options())).toEqual({ state: "complete" });

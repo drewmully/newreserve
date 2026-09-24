@@ -3,10 +3,12 @@ import type { AnalyticsRpcClient } from "./rpcStore";
 import { readPilotSource, type PilotSource } from "./shopifyPilotSource";
 import { mapPilotSource, type PilotPolicy } from "./shopifyPilotMapping";
 import { sourceObject, sourceArray, sourceString, shopifyId, shopifyShop } from "./shopifySource";
+import type { HistoryInventory } from "./historyInventory";
 
 export const PIPELINE_VERSION = "shopify-observed-v1";
 export type PipelinePolicy = Omit<PilotPolicy, "lineClasses"> & {
   productClasses: Record<string, "merchandise">;
+  sourceInventory?: HistoryInventory;
 };
 export function validatePipelineTarget(projectRef: string, url: string) {
   if (!/^[a-z]{20}$/.test(projectRef) || url !== `https://${projectRef}.supabase.co`)

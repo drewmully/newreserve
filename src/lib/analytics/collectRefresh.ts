@@ -5,6 +5,8 @@ import { mapJourneyCheckout, orderCartTokens, readJourneyReceipts } from "./jour
 import { mapDraftJourney, readDraftJourney } from "./draftJourneySource";
 import { readShopifyAnalyticsOrder, shopifyId, shopifyShop, type ShopifyOrderDocument } from "./shopifySource";
 import { nyDate } from "./primitives";
+import { readHistoryInventoryPage, verifyHistoryAccess } from "./shopifyHistory";
+import { inventoryOrder, validateHistoryInventory, type HistoryInventory } from "./historyInventory";
 
 export type CollectRefreshInput = {
   kind: "mully-collect-v1";
@@ -14,7 +16,9 @@ export type CollectRefreshInput = {
     projectRef: string;
     shop: string;
     /** Explicit inventory, not a claim of complete purchase history. */
-    orderIds: string[];
+    orderIds?: string[];
+    /** Discover only within refresh.history, never caller-defined queries. */
+    discover?: true;
     entities: string[];
     checkout: boolean;
     draftJourney?: { from: string; until: string };
@@ -46,23 +50,46 @@ export async function collectRefresh(input: CollectRefreshInput, env: Environmen
   if ("originalPurchases" in input || "originalPurchases" in c || "originalPurchases" in original)
     throw new Error("collected_original_purchases_require_reviewed_replacement_packet");
   if (Object.keys(input).some(k => !["kind", "refresh", "collection"].includes(k)) ||
-      Object.keys(c).some(k => !["approvalRef", "projectRef", "shop", "orderIds", "entities", "checkout",
+      Object.keys(c).some(k => !["approvalRef", "projectRef", "shop", "orderIds", "discover", "entities", "checkout",
         "draftJourney", "maxOrders", "maxLinePages", "maxRequests", "maxBytes", "timeoutMs", "binding"].includes(k)))
     throw new Error("unsupported_collection_option");
   shopifyShop(c.shop);
   const readKey = env.LEAN_MULLY_SOURCE_READ_KEY, shopifyToken = env.LEAN_SHOPIFY_ANALYTICS_READ_TOKEN;
   if (!readKey?.trim() || !shopifyToken?.trim()) throw new Error("refresh_collection_credentials");
+  if (c.discover !== undefined && c.discover !== true || c.discover && "orderIds" in c ||
+      original.commercePolicy.sourceInventory !== undefined) throw new Error("refresh_collection_inventory_mode");
+  const explicitIds = c.orderIds ?? [];
   if (!integer(c.maxOrders, 1, 100) || !integer(c.maxLinePages, 1, 20) ||
       !integer(c.maxRequests, 1, 500) || !integer(c.maxBytes, 1024, 8000000) ||
-      !integer(c.timeoutMs, 1, 120000) || !Array.isArray(c.orderIds) ||
-      !c.orderIds.length || c.orderIds.length > c.maxOrders || new Set(c.orderIds).size !== c.orderIds.length ||
+      !integer(c.timeoutMs, 1, 120000) || !Array.isArray(explicitIds) ||
+      (!c.discover && (!explicitIds.length || explicitIds.length > c.maxOrders ||
+        new Set(explicitIds).size !== explicitIds.length)) ||
       !Array.isArray(c.entities) || !c.entities.length || c.entities.length > 5 ||
       c.entities.some(e => !/^[a-z][a-z0-9_]{0,31}$/.test(e)) ||
       new Set(c.entities).size !== c.entities.length || typeof c.checkout !== "boolean")
     throw new Error("refresh_collection_budget");
-  c.orderIds.forEach(id => shopifyId(id, "Order"));
+  explicitIds.forEach(id => shopifyId(id, "Order"));
+  let inventoryRequests = 0, reservedOrders = explicitIds.length;
+  if (c.discover) {
+    if (!Array.isArray(original.history) || !original.history.length || original.history.length > 5)
+      throw new Error("refresh_discovery_window_budget");
+    let pages = 0, rows = 0;
+    for (const [index, w] of original.history.entries()) {
+      [w.from, w.until].forEach(nyDate);
+      if (Date.parse(w.from) >= Date.parse(w.until) || Date.parse(w.until) > Date.parse(startedAt) ||
+          !integer(w.pageSize, 1, 5) || !integer(w.maxPages, 1, 25) ||
+          !["created_at", "updated_at"].includes(w.scanBasis ?? "created_at") ||
+          original.history.slice(0, index).some(p => (p.scanBasis ?? "created_at") === (w.scanBasis ?? "created_at") &&
+            Date.parse(p.from) < Date.parse(w.until) && Date.parse(w.from) < Date.parse(p.until)))
+        throw new Error("refresh_discovery_window_scope");
+      pages += w.maxPages; rows += w.maxPages * w.pageSize;
+    }
+    if (pages > 25 || rows > 100) throw new Error("refresh_discovery_window_budget");
+    inventoryRequests = original.history.length + pages; // scope check per window + inventory pages
+    reservedOrders = Math.min(c.maxOrders, rows);
+  }
   // Reserve the worst-case request count, including each order revision recheck.
-  if (c.orderIds.length * (c.maxLinePages + 1) + 1 + Number(c.checkout) +
+  if (inventoryRequests + reservedOrders * (c.maxLinePages + 1) + 1 + Number(c.checkout) +
       (c.draftJourney ? 2 : 0) > c.maxRequests) throw new Error("refresh_collection_request_budget");
   if (c.checkout || c.draftJourney) {
     if ((env.LEAN_CHECKOUT_CONTEXT_SECRET?.length ?? 0) < 32 ||
@@ -131,10 +158,49 @@ export async function collectRefresh(input: CollectRefreshInput, env: Environmen
     } finally { reader.releaseLock(); }
     return new Response(Buffer.concat(chunks), { status: response.status, headers: response.headers });
   };
+  let inventory: HistoryInventory | undefined;
+  let orderIds = explicitIds;
+  if (c.discover) {
+    const windows: HistoryInventory["windows"] = [];
+    const selected = new Map<string, ReturnType<typeof inventoryOrder>>();
+    for (const w of original.history) {
+      const options = { shop: c.shop, accessToken: shopifyToken, fetcher: bounded, signal: deadline,
+        fromTime: w.from, untilTime: w.until, scanBasis: w.scanBasis, approvalRef: c.approvalRef,
+        pageSize: w.pageSize, now: startedAt };
+      await verifyHistoryAccess(options);
+      const pages: HistoryInventory["windows"][number]["pages"] = [], cursors = new Set<string>();
+      let cursor: string | null = null;
+      for (let n = 0; n < w.maxPages; n++) {
+        const page = await readHistoryInventoryPage(options, cursor);
+        pages.push({ cursor, nextCursor: page.nextCursor, orders: page.rows.map(inventoryOrder) });
+        for (const order of pages[pages.length - 1].orders) {
+          const prior = selected.get(order.id);
+          if (prior && evidenceDigest(prior) !== evidenceDigest(order)) throw new Error("inventory_revision_conflict");
+          selected.set(order.id, order);
+        }
+        if (selected.size > c.maxOrders) throw new Error("refresh_discovery_order_budget");
+        if (page.complete) break;
+        if (!page.nextCursor || cursors.has(page.nextCursor)) throw new Error("inventory_cursor_cycle");
+        cursors.add(page.nextCursor); cursor = page.nextCursor;
+        if (n + 1 === w.maxPages) throw new Error("refresh_discovery_page_budget");
+      }
+      windows.push({ ...w, pages });
+    }
+    const payload = { version: 1 as const, projectRef: c.projectRef, shop: c.shop,
+      approvalRef: c.approvalRef, capturedAt: startedAt, windows,
+      orders: [...selected.values()].sort((a, b) => a.id.localeCompare(b.id)) };
+    inventory = validateHistoryInventory({ ...payload, digest: evidenceDigest(payload) },
+      { projectRef: c.projectRef, shop: c.shop, asOf: startedAt, history: original.history });
+    orderIds = inventory.orders.map(o => o.id);
+  }
   const orders: ShopifyOrderDocument[] = [];
-  for (const id of c.orderIds) orders.push(await readShopifyAnalyticsOrder({
+  for (const id of orderIds) orders.push(await readShopifyAnalyticsOrder({
     shop: c.shop, accessToken: shopifyToken, fetcher: bounded, maxLinePages: c.maxLinePages,
   }, id));
+  if (inventory && evidenceDigest(orders.map(o => inventoryOrder(o.order))
+    .sort((a, b) => a.id.localeCompare(b.id))) !== evidenceDigest(inventory.orders))
+    throw new Error("inventory_hydration_changed");
+  if (inventory) refresh.commercePolicy.sourceInventory = inventory;
   const common = { projectRef: c.projectRef, shop: c.shop, capturedAt: startedAt };
   const snapshot = await readMullyCustomers({ ...common, entities: c.entities,
     customerIds: orderCustomerIds(orders) }, readKey, bounded);
@@ -177,9 +243,10 @@ export async function collectRefresh(input: CollectRefreshInput, env: Environmen
     { ...b, approvalRef: c.approvalRef, sections: packets.map(p => p.section), independentControlSource: false },
   ];
   const bundle = prepareRefresh(refresh);
-  return { bundle, refresh, sources: { orders, snapshot, journey, draftJourney },
+  return { bundle, refresh, sources: { orders, snapshot, journey, draftJourney, inventory },
     audit: { version: 1, approvalRef: c.approvalRef, startedAt, finishedAt, sourceDigest,
-      projectRef: c.projectRef, shop: c.shop, calls, bytes, orderIds: c.orderIds,
+      projectRef: c.projectRef, shop: c.shop, calls, bytes, orderIds,
+      inventoryDigest: inventory?.digest ?? null,
       collectedSections: [...sections], retainedSections: refresh.intake.packets
         .filter(p => !sections.has(p.section)).map(p => p.section),
       completePurchaseHistory: false, independentlyReconciled: false, registered: false, enabled: false } };
