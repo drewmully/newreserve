@@ -15,8 +15,15 @@ export const HISTORY_ORDERS_QUERY = `query AnalyticsHistory($cursor: String, $se
     pageInfo { hasNextPage endCursor }
   }
 }`;
+export const HISTORY_UPDATED_ORDERS_QUERY = `query AnalyticsUpdatedHistory($cursor: String, $search: String!, $first: Int!) {
+  orders(first: $first, after: $cursor, query: $search, sortKey: UPDATED_AT) {
+    nodes { id createdAt updatedAt }
+    pageInfo { hasNextPage endCursor }
+  }
+}`;
 export type HistoryScope = {
   shop: string; fromTime: string; untilTime: string; approvalRef: string;
+  scanBasis?: "created_at" | "updated_at";
 };
 export type HistoryRow = { source: PilotSource };
 export type HistoryOptions = HistoryScope & {
@@ -24,17 +31,19 @@ export type HistoryOptions = HistoryScope & {
   pageSize: number; now: string;
 };
 
-/** A creation-time inventory, not a financial-date report or proof of all history.
- * A refund in today's report may belong to an order created years ago.
+/** Creation inventory or update-time change scan, not a financial-date report
+ * or proof of all history. Updated scans can discover refunds on older orders.
  */
 export function validateHistoryScope(scope: HistoryScope) {
   shopifyShop(scope.shop); nyDate(scope.fromTime); nyDate(scope.untilTime);
-  if (!scope.approvalRef.trim() || Date.parse(scope.untilTime) <= Date.parse(scope.fromTime))
+  if (!scope.approvalRef.trim() || Date.parse(scope.untilTime) <= Date.parse(scope.fromTime) ||
+      scope.scanBasis !== undefined && !["created_at", "updated_at"].includes(scope.scanBasis))
     throw new Error("history_invalid_scope");
 }
 export function historySearch(scope: HistoryScope) {
   validateHistoryScope(scope);
-  return `created_at:>='${scope.fromTime}' created_at:<'${scope.untilTime}'`;
+  const field = scope.scanBasis ?? "created_at";
+  return `${field}:>='${scope.fromTime}' ${field}:<'${scope.untilTime}'`;
 }
 async function request(options: HistoryOptions, query: string, variables: Record<string, unknown>) {
   let response: Response;
@@ -69,16 +78,21 @@ export async function verifyHistoryAccess(options: HistoryOptions) {
     .map(value => sourceString(sourceObject(value).handle));
   if (!handles.includes("read_orders") && !handles.includes("write_orders"))
     throw new Error("history_missing_order_access");
-  if (Date.parse(options.fromTime) < Date.parse(options.now) - 60 * 86400000 &&
+  // Recent updates can belong to arbitrarily old purchases. Without all-order
+  // access a successful query could silently omit those orders.
+  if ((options.scanBasis === "updated_at" ||
+      Date.parse(options.fromTime) < Date.parse(options.now) - 60 * 86400000) &&
       !handles.includes("read_all_orders")) throw new Error("history_missing_full_history_access");
 }
 
-export async function readHistoryPage(options: HistoryOptions, cursor: string | null): Promise<BackfillPage<HistoryRow>> {
+export type HistoryOrder = { id: string; createdAt: string; updatedAt: string };
+/** Fixed metadata-only inventory. Caller must verify access before paging. */
+export async function readHistoryInventoryPage(options: HistoryOptions, cursor: string | null): Promise<BackfillPage<HistoryOrder>> {
   // Access verification is performed by runShopifyHistory before any page read.
   validateHistoryScope(options);
   if (!Number.isSafeInteger(options.pageSize) || options.pageSize < 1 || options.pageSize > 20 ||
       cursor !== null && (!cursor || cursor.length > 4096)) throw new Error("history_invalid_bounds");
-  const data = await request(options, HISTORY_ORDERS_QUERY, {
+  const data = await request(options, options.scanBasis === "updated_at" ? HISTORY_UPDATED_ORDERS_QUERY : HISTORY_ORDERS_QUERY, {
     cursor, search: historySearch(options), first: options.pageSize,
   });
   const connection = sourceObject(data.orders), page = sourceObject(connection.pageInfo);
@@ -88,22 +102,32 @@ export async function readHistoryPage(options: HistoryOptions, cursor: string | 
       page.hasNextPage && (!nodes.length || typeof page.endCursor !== "string" || !page.endCursor || page.endCursor === cursor))
     throw new Error("history_invalid_page");
   const ids = new Set<string>();
-  const rows: HistoryRow[] = [];
+  const rows: HistoryOrder[] = [];
   let previousTime = -Infinity;
   for (const node of nodes) {
     const id = sourceString(node.id); shopifyId(id, "Order");
     const created = sourceString(node.createdAt), updated = sourceString(node.updatedAt);
     nyDate(created); nyDate(updated);
-    const t = Date.parse(created);
+    const t = Date.parse(options.scanBasis === "updated_at" ? updated : created);
     if (ids.has(id) || t < Date.parse(options.fromTime) || t >= Date.parse(options.untilTime) ||
-        t < previousTime || Date.parse(updated) < t) throw new Error("history_source_scope_mismatch");
+        t < previousTime || Date.parse(updated) < Date.parse(created) ||
+        Date.parse(updated) > Date.parse(options.now)) throw new Error("history_source_scope_mismatch");
     ids.add(id); previousTime = t;
-    const source = await readPilotSource(options, id);
-    if (source.commerce.order.createdAt !== created || source.commerce.order.updatedAt !== updated)
+    rows.push({ id, createdAt: created, updatedAt: updated });
+  }
+  return { rows, complete: !page.hasNextPage, nextCursor: page.hasNextPage ? sourceString(page.endCursor) : null };
+}
+
+export async function readHistoryPage(options: HistoryOptions, cursor: string | null): Promise<BackfillPage<HistoryRow>> {
+  const page = await readHistoryInventoryPage(options, cursor);
+  const rows: HistoryRow[] = [];
+  for (const order of page.rows) {
+    const source = await readPilotSource(options, order.id);
+    if (source.commerce.order.createdAt !== order.createdAt || source.commerce.order.updatedAt !== order.updatedAt)
       throw new Error("history_order_changed_during_read");
     rows.push({ source });
   }
-  return { rows, complete: !page.hasNextPage, nextCursor: page.hasNextPage ? sourceString(page.endCursor) : null };
+  return { ...page, rows };
 }
 
 /** Durable state must be supplied by the registered run, never an HTTP caller.

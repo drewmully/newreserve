@@ -29,6 +29,8 @@ export const SHOPIFY_ANALYTICS_ORDER_QUERY = `
 query AnalyticsOrder($id: ID!, $cursor: String) {
   order(id: $id) {
     id createdAt updatedAt currencyCode edited taxesIncluded test cancelledAt
+    customer { id }
+    cartToken
     shippingAddress { countryCodeV2 provinceCode }
     originalTotalPriceSet { shopMoney { amount currencyCode } }
     subtotalPriceSet { shopMoney { amount currencyCode } }
@@ -41,9 +43,16 @@ query AnalyticsOrder($id: ID!, $cursor: String) {
     lineItems(first: 250, after: $cursor) {
       nodes {
         id sku quantity isGiftCard product { id }
+        customAttributes { key value }
         originalUnitPriceSet { shopMoney { amount currencyCode } }
         originalTotalSet { shopMoney { amount currencyCode } }
-        discountAllocations { allocatedAmountSet { shopMoney { amount currencyCode } } }
+        discountAllocations {
+          allocatedAmountSet { shopMoney { amount currencyCode } }
+          discountApplication {
+            __typename index targetType
+            ... on DiscountCodeApplication { code }
+          }
+        }
       }
       pageInfo { hasNextPage endCursor }
     }
