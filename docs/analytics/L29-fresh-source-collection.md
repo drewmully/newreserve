@@ -1,7 +1,8 @@
 # Bounded fresh-source preparation (not automatic full refresh)
 
 The existing `prepare-refresh.mjs` command now has an **explicit, default-off**
-collection mode. It reads a reviewed, bounded order inventory and assembles the
+collection mode. It reads explicit reviewed IDs or discovers a bounded inventory
+inside the approved `refresh.history` windows, then assembles the
 supported facts directly into the real disabled refresh bundle. It is not a
 scheduler, registration step, activation, reconciliation approval or publication.
 No source calls were used to test this change.
@@ -10,7 +11,7 @@ No source calls were used to test this change.
 
 | Read | Result | What it does not establish |
 |---|---|---|
-| Fixed Shopify order query, explicit order GIDs, bounded line pages, revision recheck | Fresh retained order documents; `orderIdentities` packet | Complete order inventory, historical purchase coverage or independent monetary controls |
+| Fixed Shopify order query, explicit or bounded-discovered order GIDs, bounded line pages, revision recheck | Fresh retained order documents; `orderIdentities` packet | Complete purchase history or independent monetary controls |
 | Fixed Supabase customer fields for the freshly read Shopify customer IDs | Current snapshot retained for audit and adapter validation | Historical Firebase ownership, analytics permission or purchase history |
 | Optional fixed checkout-receipt RPC for freshly read cart tokens | Signed/authority-validated `checkout` packet | Identity matching by email, phone, timing or guessed consent |
 | Optional bounded draft-receipt RPC plus Shopify `DraftOrder.order` query | Verified draft-to-order checkout facts | Invented joins for drafts without an explicit Shopify order relation |
@@ -46,6 +47,7 @@ evidence timestamps. Every retained packet must remain fresh through expiry.
     projectRef: exact approved Supabase project reference,
     shop: exact approved *.myshopify.com domain,
     orderIds: ["gid://shopify/Order/<actual-reviewed-id>", ...],
+    // OR discover: true, with orderIds omitted (never both)
     entities: ["mully", ...], // reviewed actual customer entity values
     checkout: true or false, // explicit; no default
     draftJourney?: { from: UTC timestamp, until: exclusive UTC timestamp },
@@ -66,11 +68,54 @@ evidence timestamps. Every retained packet must remain fresh through expiry.
 The worst-case request reservation is
 `orders × (maxLinePages + 1) + 1 + checkout?1:0 + draft?2:0`.
 The extra Shopify request checks order revision; the customer read can be
-skipped only for guest-only inventories. A nonempty unique inventory is required.
+skipped only for guest-only inventories. Explicit IDs must be nonempty and unique.
 The total streamed response-byte and elapsed-time limits apply across all
 requests, in addition to each existing adapter's own limits. No retries,
 redirects, generic URL/table/query input, production-key fallback, or partial
 fallback to an old source packet are allowed.
+
+## Optional bounded automatic discovery
+
+Replace `collection.orderIds` with `collection.discover: true` to use the existing
+approved `refresh.history` windows. No new URL, query, time range, cursor or
+history-feed registration is accepted. The command remains read-only and
+default-off; it does **not** invoke `historyFeed` or its mutating RPCs.
+
+- At most five windows, 25 reserved pages, and 100 reserved source rows across
+  all windows; page size remains 1–5. `maxOrders` can narrow the distinct-order
+  limit further. Overlap is allowed only between different scan bases.
+- The fixed creation/update query checks actual token scopes before each
+  window. Old creation windows and all update scans require `read_all_orders`.
+- Budget reservation adds one scope request per window plus all reserved
+  inventory pages, and uses `min(maxOrders, reserved rows)` for order hydration.
+  All actual bytes, requests and elapsed time share the collection limits.
+- A nonterminal cursor when the budget ends is an error, never a truncated
+  ready bundle. Duplicate/cyclic/out-of-order pages and inconsistent overlapping
+  revisions fail closed. A terminal empty scan records zero observations, not
+  independently verified zero sales.
+
+The sealed manifest records target, approval, original capture, page/cursor
+lineage, windows, normalized order IDs/timestamps and SHA-256 digest. Hydrated
+orders must match the listed revisions. It is retained in `collected-sources.json`
+and the immutable `commercePolicy.sourceInventory`; the digest is included in
+the audit. Offline replay validates the digest and approved history scope.
+
+**Later consumer enforcement:** the runtime still reads its own history jobs.
+Before mapping or publishing, `runObservedReportJob` requires the complete
+deduplicated ID/creation/revision inventory to equal the prepared manifest,
+including any deferred orders. Added, missing, conflicting or revised sources
+block the build and require fresh preparation; equal replay remains idempotent.
+No agreement mapping or financial eligibility policy is changed.
+
+Forward migration `035_discovery_inventory_fence.sql` adds a database completion
+trigger as defense in depth. A mismatched source inventory rolls back the entire
+`lean_report_finish` transaction, including any facts/reports inserted before
+the completion update. It creates no jobs, permissions, activation or selection.
+Its application requires separate approval; local tests do not deploy it.
+
+This fence applies to discovery manifests. The legacy explicit-ID mode remains
+unchanged and does not acquire an implied full-window inventory guarantee.
+Neither mode supplies source snapshot isolation or fresh independent controls.
 
 ## Gates and invocation — approval required, not executed here
 
@@ -114,8 +159,8 @@ review and retain it only in approved private storage; never commit it.
 
 ## Remaining engineering and source dependencies
 
-**Still required engineering:** automatic order inventory/partition planning
-beyond the explicit 100-order pilot; durable resumable multi-partition collection;
+**Still required engineering:** partition planning beyond the bounded 100-order
+pilot; durable resumable multi-partition collection and global atomic assembly;
 separate approved orchestration/scheduling; integration of additional supported
 readers into this mode. Shopify cash, original-sale agreements, offers, Google
 spend and PostHog behavior are not newly collected by this command. The existing
@@ -152,3 +197,16 @@ agreements passed 728 tests across 52 files with zero skips, including ten real
 disposable PostgreSQL integration/concurrency tests. Analytics TypeScript,
 ESLint, generated SQL parity and whitespace checks passed. No customer source
 calls were used.
+
+The subsequent discovery change adds 42 tests covering pagination/limits/replay,
+actual CLI subprocesses with a transport that cannot reach the network,
+immutable registration, later consumer mismatches and database rollback.
+The combined parent run passed **770 tests across 53 files, zero skipped**,
+including 14 real disposable PostgreSQL tests. Four of those PostgreSQL cases
+exercise equal inventory/idempotent replay and missing/new/revised inventories
+with the application check deliberately bypassed: the database rejects the
+entire publication, facts and reports without setting completion. The same
+rollback boundary is also covered with PGlite. Analytics TypeScript, full
+analytics ESLint, generated SQL parity and whitespace checks passed.
+All vendor responses were synthetic; no customer records or hosted database
+were used.

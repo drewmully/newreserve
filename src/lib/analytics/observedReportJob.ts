@@ -8,6 +8,7 @@ import { acquisitionDaily, type Facts, type ReportScope } from "./reporting";
 import { validateCandidateGraph } from "./certification";
 import { decimal, micros, type Row } from "./primitives";
 import { deferredOrders } from "./deferredCommerce";
+import { assertInventorySources } from "./historyInventory";
 
 /** Saved sources only: no vendor credentials, source discovery or live requests.
  * This joins selected observations, NOT independently certified store coverage.
@@ -30,6 +31,8 @@ export async function runObservedReportJob(options: {
   const matched = new Set<string>();
   const sources = sourceArray(input.history);
   if (sources.length > 100) throw new Error("report_order_budget");
+  if (rawPolicy.sourceInventory !== undefined)
+    assertInventorySources(rawPolicy.sourceInventory, sources, { projectRef: options.projectRef, shop });
   const skus = new Set<unknown>();
   const records: RetainedCommerce[] = sources.flatMap(value => {
     const item = sourceObject(value), source = sourceObject(item.source) as PilotSource;

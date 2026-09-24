@@ -13,6 +13,8 @@ import { runFullReportJob } from "@/lib/analytics/fullReportJob";
 import { fullFixture, fullProject, fullShop } from "../fixtures/analyticsFull";
 import { refreshFixture } from "../fixtures/analyticsRefresh";
 import { prepareRefresh } from "@/lib/analytics/refreshPlan";
+import { evidenceDigest } from "@/lib/analytics/evidenceIntake";
+import { inventoryFixture } from "../fixtures/analyticsDiscovery";
 
 const connectionString = process.env.LOCAL_POSTGRES_TEST_URL;
 const shop = "concurrency-fixture.myshopify.com", project = "aaaaaaaaaaaaaaaaaaaa";
@@ -68,7 +70,7 @@ describe.skipIf(!connectionString)("real PostgreSQL concurrent analytics workers
       "021_full_report_jobs", "022_full_release", "023_posthog_export", "024_full_orchestration", "025_refresh_queue",
       "026_journey_authority", "027_history_update_scans", "028_refresh_health",
       "029_journey_decisions", "030_scoped_release", "031_draft_receipts", "032_history_feeds", "033_scoped_health",
-      "034_commerce_only_refresh"])
+      "034_commerce_only_refresh", "035_discovery_inventory_fence"])
       await admin.query(readFileSync(`sql/analytics/${name}.sql`, "utf8"));
     await admin.query(`insert into lean_private.pipeline_scope(shop,project_ref,enabled,from_time,until_time,policy,approval_ref,actor_ref)
       values($1,$2,true,'2026-01-01','2026-02-01',$3,'fixture:scope','fixture:operator')`,
@@ -185,6 +187,52 @@ describe.skipIf(!connectionString)("real PostgreSQL concurrent analytics workers
     expect((await admin.query("select count(*)::int n from lean_private.report_store_daily")).rows[0]).toEqual({ n: 3 });
     expect((await admin.query("select * from lean_private.selected_publications")).rows).toHaveLength(0);
   });
+  it.each(["equal", "missing", "new", "revised"] as const)(
+    "enforces the %s discovery inventory at the real PostgreSQL publication boundary", async scenario => {
+      const actual = source("2026-01-02T00:00:00Z"), order = actual.commerce.order;
+      const expected = scenario === "new" ? [] : scenario === "missing"
+        ? [order, { ...order, id: "gid://shopify/Order/2" }]
+        : scenario === "revised" ? [{ ...order, updatedAt: "2026-01-03T00:00:00Z" }] : [order];
+      const inventory = inventoryFixture(expected);
+      inventory.shop = shop;
+      const { digest: previousDigest, ...payload } = inventory;
+      expect(previousDigest).toMatch(/^[a-f0-9]{64}$/);
+      inventory.digest = evidenceDigest(payload);
+      await admin.query(`insert into lean_private.history_jobs
+        (run_id,project_ref,shop,from_time,until_time,page_size,max_pages,approval_ref,actor_ref,enabled)
+        values('history',$1,$2,'2026-01-01','2026-02-01',2,2,'fixture:approval','fixture:actor',true)`, [project, shop]);
+      await admin.query("select public.lean_history_commit('history',$1,$2,0,null,null,true,$3::jsonb)",
+        [project, shop, JSON.stringify([{ source: actual }])]);
+      await admin.query(`insert into lean_private.report_builds
+        (run_id,project_ref,shop,history_runs,from_date,through_date,policy,approval_ref,actor_ref,enabled)
+        values('report',$1,$2,array['history'],'2025-12-31','2026-01-02',$3,'fixture:approval','fixture:actor',true)`,
+      [project, shop, JSON.stringify({ ...policy, productClasses: { "3": "merchandise" }, sourceInventory: inventory })]);
+      const adapter: AnalyticsRpcClient = { async rpc(name, input) {
+        if (!["lean_report_inputs", "lean_report_finish"].includes(name)) throw new Error("unexpected_rpc");
+        const pairs = Object.entries(input);
+        try {
+          const result = await a.query(`select public.${name}(${pairs.map(([k], i) => `${k}=>$${i + 1}`).join(",")}) result`,
+            pairs.map(([, value]) => typeof value === "object" ? JSON.stringify(value) : value));
+          const data = result.rows[0].result;
+          // Simulate an application-fence bypass, preserving the immutable database policy and input hash.
+          if (scenario !== "equal" && name === "lean_report_inputs") delete data.policy.sourceInventory;
+          return { data, error: null };
+        } catch (error) { return { data: null, error }; }
+      } };
+      const run = () => runObservedReportJob({ client: adapter, projectRef: project,
+        databaseUrl: `https://${project}.supabase.co`, runId: "report" });
+      if (scenario === "equal") {
+        expect(await run()).toMatchObject({ state: "complete" });
+        expect(await run()).toMatchObject({ state: "complete" });
+        expect((await admin.query("select count(*)::int n from lean_private.orders")).rows).toEqual([{ n: 1 }]);
+      } else {
+        await expect(run()).rejects.toThrow("storage_unavailable");
+        for (const table of ["publications", "orders", "report_store_daily"])
+          expect((await admin.query(`select * from lean_private.${table}`)).rows).toEqual([]);
+        expect((await admin.query("select completed_at from lean_private.report_builds")).rows)
+          .toEqual([{ completed_at: null }]);
+      }
+    });
   it("SKIP LOCKED gives two open transactions different receipts", async () => {
     await receipt(); await receipt(); await a.query("begin"); await b.query("begin");
     const first = await claim(a, randomUUID()), second = await claim(b, randomUUID());
