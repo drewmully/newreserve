@@ -7,6 +7,37 @@ import { prepareFile } from "../../scripts/analytics/prepare-refresh.mjs";
 import { dispatchRefresh, refreshDispatchConfig } from "../../scripts/analytics/dispatch-refresh.mjs";
 import { readSourceFile } from "../../scripts/analytics/read-mully-source.mjs";
 afterEach(() => vi.unstubAllGlobals());
+it("reads SMS metadata with a separate project/key and never enables activation", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "sms-cli-fixture-"));
+  const projectRef = "b".repeat(20), shop = "fixture.myshopify.com";
+  const env = { LEAN_MULLY_SOURCE_READ_APPROVED: "true",
+    LEAN_MULLY_SOURCE_PROJECT_REF: "a".repeat(20), LEAN_MULLY_SOURCE_READ_KEY: "wrong-project-key",
+    LEAN_SMS_SOURCE_PROJECT_REF: projectRef, LEAN_SHOPIFY_SHOP_DOMAIN: shop };
+  const request = vi.fn<typeof fetch>(async () => Response.json([], { headers: { "Content-Range": "*/0" } }));
+  try {
+    const input = join(dir, "input.json"), output = join(dir, "sms.json");
+    const config = { kind: "sms-metadata-v1", projectRef, shop, approvalRef: "fixture:read",
+      from: "2026-01-01T00:00:00Z", until: "2026-01-02T00:00:00Z", maxRows: 50 };
+    writeFileSync(input, JSON.stringify(config));
+    await expect(readSourceFile(input, output, env, request)).rejects.toThrow("read_key_required");
+    const allowed = { ...env, LEAN_SMS_SOURCE_READ_KEY: "sms-scoped-key" };
+    await expect(readSourceFile(input, output, { ...allowed, LEAN_MULLY_SOURCE_READ_APPROVED: "false" }, request))
+      .rejects.toThrow("disabled");
+    await expect(readSourceFile(input, output, { ...allowed, LEAN_SMS_SOURCE_PROJECT_REF: "c".repeat(20) }, request))
+      .rejects.toThrow("target_mismatch");
+    expect(request).not.toHaveBeenCalled();
+    expect(await readSourceFile(input, output, allowed, request)).toMatchObject({
+      state: "snapshot_only", messages: 0, activationVerified: false, enabled: false, registered: false,
+    });
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(new URL(String(request.mock.calls[0][0])).origin).toBe(`https://${projectRef}.supabase.co`);
+    expect(request.mock.calls[0][1]?.headers).toMatchObject({ apikey: "sms-scoped-key" });
+    expect(statSync(output).mode & 0o777).toBe(0o600);
+    expect(readFileSync(output, "utf8")).not.toMatch(/sms-scoped-key|wrong-project-key/);
+    await expect(readSourceFile(input, output, allowed, request)).rejects.toThrow("file_budget");
+    expect(request).toHaveBeenCalledTimes(1);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+}, 30000);
 it("prepares a private bundle and diagnostic view entirely offline", () => {
   vi.stubGlobal("fetch", () => { throw new Error("network_forbidden"); });
   const dir = mkdtempSync(join(tmpdir(), "refresh-fixture-"));

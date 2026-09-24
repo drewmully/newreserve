@@ -11,12 +11,14 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 export async function readSourceFile(inputPath, outputPath, env = process.env, request = fetch) {
   if (env.LEAN_MULLY_SOURCE_READ_APPROVED !== "true") throw new Error("mully_source_read_disabled");
-  if (!env.LEAN_MULLY_SOURCE_READ_KEY?.trim()) throw new Error("mully_source_read_key_required");
   if (statSync(inputPath).size > 8000000 || existsSync(outputPath)) throw new Error("mully_source_file_budget");
   const input = JSON.parse(readFileSync(inputPath, "utf8"));
-  if (input.kind !== undefined && !["journey-receipts-v1", "journey-permissions-v1", "draft-journey-v1"].includes(input.kind))
+  const sms = input.kind === "sms-metadata-v1";
+  const readKey = sms ? env.LEAN_SMS_SOURCE_READ_KEY : env.LEAN_MULLY_SOURCE_READ_KEY;
+  if (!readKey?.trim()) throw new Error("mully_source_read_key_required");
+  if (input.kind !== undefined && !["journey-receipts-v1", "journey-permissions-v1", "draft-journey-v1", "sms-metadata-v1"].includes(input.kind))
     throw new Error("mully_source_kind");
-  if (!input.approvalRef?.trim() || input.projectRef !== env.LEAN_MULLY_SOURCE_PROJECT_REF ||
+  if (!input.approvalRef?.trim() || input.projectRef !== (sms ? env.LEAN_SMS_SOURCE_PROJECT_REF : env.LEAN_MULLY_SOURCE_PROJECT_REF) ||
       input.shop !== env.LEAN_SHOPIFY_SHOP_DOMAIN) throw new Error("mully_source_target_mismatch");
   const scratch = mkdtempSync(join(tmpdir(), "mully-source-"));
   try {
@@ -27,15 +29,19 @@ export async function readSourceFile(inputPath, outputPath, env = process.env, r
     const journey = input.kind === "journey-receipts-v1";
     const permissions = input.kind === "journey-permissions-v1";
     const draft = input.kind === "draft-journey-v1";
-    const program = ts.createProgram([join(root, `src/lib/analytics/${draft ? "draftJourneySource" : permissions ? "journeyPermissions" : journey ? "journeySource" : "mymullySource"}.ts`)], options);
+    const program = ts.createProgram([join(root, `src/lib/analytics/${sms ? "smsSource" : draft ? "draftJourneySource" : permissions ? "journeyPermissions" : journey ? "journeySource" : "mymullySource"}.ts`)], options);
     if (ts.getPreEmitDiagnostics(program).some(d => d.category === ts.DiagnosticCategory.Error) ||
         program.emit().emitSkipped) throw new Error("mully_source_compile_failed");
     const require = createRequire(import.meta.url);
-    if (!permissions && !draft && (!Array.isArray(input.orders) || input.orders.some(doc => doc.shop !== input.shop)))
+    if (!sms && !permissions && !draft && (!Array.isArray(input.orders) || input.orders.some(doc => doc.shop !== input.shop)))
       throw new Error("mully_order_shop_mismatch");
     const common = { projectRef: input.projectRef, shop: input.shop, capturedAt: new Date().toISOString() };
     let snapshot;
-    if (draft) {
+    if (sms) {
+      const { readSmsMetadata } = require(join(scratch, "lib/analytics/smsSource.js"));
+      snapshot = await readSmsMetadata({ ...common, from: input.from, until: input.until,
+        maxRows: input.maxRows }, readKey, request);
+    } else if (draft) {
       const { readDraftJourney } = require(join(scratch, "lib/analytics/draftJourneySource.js"));
       snapshot = await readDraftJourney({ ...common, from: input.from, until: input.until },
         env.LEAN_MULLY_SOURCE_READ_KEY, env.LEAN_SHOPIFY_ANALYTICS_READ_TOKEN ?? "", request);
@@ -55,7 +61,8 @@ export async function readSourceFile(inputPath, outputPath, env = process.env, r
       }, env.LEAN_MULLY_SOURCE_READ_KEY, request);
     }
     writeFileSync(outputPath, JSON.stringify(snapshot, null, 2) + "\n", { flag: "wx", mode: 0o600 });
-    return { state: "snapshot_only", ...(permissions ? { grants: snapshot.grants.length } :
+    return { state: "snapshot_only", ...(sms ? { messages: snapshot.messages.length, activationVerified: false } :
+      permissions ? { grants: snapshot.grants.length } :
       journey || draft ? { receipts: snapshot.receipts.length } : { customers: snapshot.customers.length }), digest: snapshot.digest,
       registered: false, enabled: false };
   } finally { rmSync(scratch, { recursive: true, force: true }); }
