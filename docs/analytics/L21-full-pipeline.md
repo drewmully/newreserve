@@ -201,9 +201,9 @@ No warehouse source, saved view, dashboard or report was created in the live UI.
 
 ## Test and rollback checklist
 
-The final local regression on September 22, 2026 (Pacific) passed 419 tests
-across 30 files with zero skipped, including seven real PostgreSQL concurrency
-tests. Analytics TypeScript, ESLint, generated-SQL parity and diff checks passed.
+The latest local regression passed 452 tests across 34 files with zero skipped,
+including ten real PostgreSQL integration/concurrency tests. Analytics
+TypeScript, ESLint, generated-SQL parity and diff checks passed.
 This is not a claim that unrelated whole-application tests are green.
 
 - Run `npm test -- --project api tests/api/analyticsContracts.test.ts tests/api/analyticsLean`.
@@ -229,9 +229,11 @@ This is not a claim that unrelated whole-application tests are green.
 
 ## Remaining live integration work
 
-Code can be reviewed and merged while disabled. Customer authority adapters
-for the evidence list above, missing journey instrumentation/consent collection,
-the queryable event diagnostic view, real secret provisioning, isolated
+Code can be reviewed and merged while disabled. L22 adds offline evidence
+intake, immutable fresh-run registration, bounded refresh dispatch and a
+generated event diagnostic query; see `L22-refresh-intake.md`.
+Customer authority adapters for the evidence list above, missing journey
+instrumentation/consent collection, live query installation, real secret provisioning, isolated
 deployment, source reconciliation and PostHog sync validation are not proven
 complete by these synthetic tests. Treat those as explicit remaining work,
 not as a reason to fill missing evidence with guessed values.
