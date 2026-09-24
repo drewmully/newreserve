@@ -46,7 +46,13 @@ query AnalyticsOrder($id: ID!, $cursor: String) {
         customAttributes { key value }
         originalUnitPriceSet { shopMoney { amount currencyCode } }
         originalTotalSet { shopMoney { amount currencyCode } }
-        discountAllocations { allocatedAmountSet { shopMoney { amount currencyCode } } }
+        discountAllocations {
+          allocatedAmountSet { shopMoney { amount currencyCode } }
+          discountApplication {
+            __typename index targetType
+            ... on DiscountCodeApplication { code }
+          }
+        }
       }
       pageInfo { hasNextPage endCursor }
     }

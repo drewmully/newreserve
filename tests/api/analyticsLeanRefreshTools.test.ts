@@ -90,7 +90,8 @@ it("extracts an explicitly approved source snapshot and prepares its bundle with
   const dir = mkdtempSync(join(tmpdir(), "mully-source-fixture-"));
   const projectRef = "a".repeat(20), shop = "fixture.myshopify.com";
   const orders = [{ shop, apiVersion: "2026-07",
-    order: { id: "gid://shopify/Order/1", customer: { id: "gid://shopify/Customer/123" } } }];
+    order: { id: "gid://shopify/Order/1", customer: { id: "gid://shopify/Customer/123" },
+      lineItems: { nodes: [], pageInfo: { hasNextPage: false } } } }];
   const request = vi.fn(async () => Response.json([{ id: "123", entity: "shopify", firebase_uid: null,
     created_at: "2025-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z" }],
   { headers: { "Content-Range": "0-0/1" } }));

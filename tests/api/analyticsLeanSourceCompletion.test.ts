@@ -12,10 +12,10 @@ import { mapJourneyPermissions, readJourneyPermissions } from "@/lib/analytics/j
 const shop = "fixture.myshopify.com", project = "a".repeat(20);
 const registry = { shop, attributeKey: "_offer_id", mappingVersion: "offer-v1", approvalRef: "fixture:approved",
   values: { "founding-box": { offerId: "offer_1", evidenceRef: "fixture:catalog" } } };
-const order = () => ({ shop, apiVersion: "2026-07" as const, order: { id: "gid://shopify/Order/1", cartToken: null,
+const order = () => ({ shop, apiVersion: "2026-07" as const, order: { id: "gid://shopify/Order/1", cartToken: null, currencyCode: "USD",
   customer: { id: "gid://shopify/Customer/123" },
   lineItems: { nodes: [{ id: "gid://shopify/LineItem/2", sku: "NO_INFERRED_OFFER",
-    customAttributes: [{ key: "_offer_id", value: "founding-box" }] }], pageInfo: { hasNextPage: false } } } });
+    discountAllocations: [], customAttributes: [{ key: "_offer_id", value: "founding-box" }] }], pageInfo: { hasNextPage: false } } } });
 it("maps only approved line-level offer values and preserves the exact item key", () => {
   expect(mapShopifyOffers([order()], registry)).toEqual([{ orderItemId: key(shop, "1", "2"), offerId: "offer_1",
     evidenceRef: "fixture:catalog", mappingVersion: "offer-v1" }]);
