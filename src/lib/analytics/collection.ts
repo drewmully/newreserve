@@ -7,19 +7,20 @@ const steps: Record<Journey, ReadonlySet<string>> = {
 export type CollectionEvent = {
   event: string; properties: {
     $insert_id: string; $session_id: string; journey: Journey; step: string; collection_version: "lean-v1";
+    analytics_permitted: true;
   };
 };
 /** Browser-safe allowlist. Deliberately has no email, phone, messages, URLs or profile fields. */
 export function collectionEvent(input: {
   journey: Journey; step: string; eventId: string; sessionId: string; analyticsPermitted: boolean;
 }): CollectionEvent | null {
-  if (!input.analyticsPermitted) return null;
+  if (input.analyticsPermitted !== true) return null;
   if (!steps[input.journey]?.has(input.step) ||
       !/^[a-f0-9-]{32,64}$/i.test(input.eventId) || !/^[a-f0-9-]{32,64}$/i.test(input.sessionId)) throw new Error("invalid_collection_context");
   return {
     event: `lean_${input.journey}_${input.step}`,
     properties: { $insert_id: input.eventId, $session_id: input.sessionId,
-      journey: input.journey, step: input.step, collection_version: "lean-v1" },
+      journey: input.journey, step: input.step, collection_version: "lean-v1", analytics_permitted: true },
   };
 }
 /** Tracking is auxiliary: no exception or timeout is allowed to abort checkout/SMS. */
