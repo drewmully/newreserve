@@ -16,7 +16,8 @@ function fixtureOrder(): SourceObject {
   return {
     id: gid("Order", "9007199254740993"), createdAt: "2026-03-08T04:00:00Z",
     updatedAt: "2026-03-09T12:00:00Z", currencyCode: "USD", edited: false, taxesIncluded: false,
-    test: false, cancelledAt: null, shippingAddress: { countryCodeV2: "US", provinceCode: "NY" },
+    test: false, cancelledAt: null, cartToken: "cart_fixture",
+    shippingAddress: { countryCodeV2: "US", provinceCode: "NY" },
     originalTotalPriceSet: bag("27"), subtotalPriceSet: bag("22"),
     // Deliberately different current totals. These must NEVER substitute for original values.
     currentTotalPriceSet: bag("22"), currentSubtotalPriceSet: bag("17"), processedAt: "2026-03-08T04:05:00Z",
@@ -118,7 +119,12 @@ describe("actual Shopify Admin GraphQL shape mapping", () => {
     order.transactionsCount = { count: 3, precision: "EXACT" };
     expect(map(order).orders[0].paid_at).toBe("2026-03-08T05:01:00Z");
     txs(order)[1].processedAt = "2026-01-01T00:00:00Z";
-    expect(() => map(order)).toThrow("shopify_invalid_paid_timestamp");
+    expect(map(order).orders[0].paid_at).toBe("2026-03-08T05:01:00Z");
+  });
+  it("accepts an associated provider payment timestamp before order creation", () => {
+    const order = fixtureOrder();
+    txs(order)[0].processedAt = "2026-03-08T03:59:59Z";
+    expect(map(order).orders[0].paid_at).toBe("2026-03-08T03:59:59Z");
   });
   it.each(["PENDING", "AWAITING_RESPONSE", "FAILURE", "ERROR"])("does not treat %s as paid", status => {
     const order = fixtureOrder(); txs(order)[0].status = status;
@@ -189,6 +195,16 @@ const readWith = (fetcher: typeof fetch, maxLinePages = 20) => readShopifyAnalyt
   shop, accessToken: "synthetic-not-a-token", fetcher, maxLinePages,
 }, gid("Order", "9007199254740993"));
 describe("read-only Shopify order reader", () => {
+  it("pins cartToken to the exact Admin API version that introduced it", async () => {
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => response(fixtureOrder()));
+    const result = await readWith(fetcher);
+    expect(result.order.cartToken).toBe("cart_fixture");
+    for (const [url, init] of fetcher.mock.calls) {
+      const body = JSON.parse(String(init?.body));
+      expect(url).toContain("/admin/api/2026-07/graphql.json");
+      expect(body.query).toMatch(/\bcartToken\b/);
+    }
+  });
   it("collects nested pages, verifies the revision, and feeds the actual mapper", async () => {
     const order = fixtureOrder(), first = structuredClone(order), second = structuredClone(order);
     first.lineItems = { nodes: [lines(order)[0]], pageInfo: { hasNextPage: true, endCursor: "next" } };

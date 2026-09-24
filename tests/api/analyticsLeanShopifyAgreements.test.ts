@@ -79,6 +79,13 @@ it("does not shift original paid time to a later edit collection", () => {
   f.commerce.order.transactionsCount = { count: 2, precision: "EXACT" };
   expect(map(f).snapshot.paidAt).toBe(paid);
 });
+it("accepts an associated provider payment timestamp before order creation and agreement time", () => {
+  const f = fixture();
+  (f.commerce.order.transactions as SourceObject[])[0].processedAt = "2026-01-01T11:59:59Z";
+  const result = map(f);
+  expect(result.snapshot.paidAt).toBe("2026-01-01T11:59:59Z");
+  expect(result.movements[0].effectiveAt).toBe("2026-01-01T11:59:59Z");
+});
 it("keeps new post-purchase lines out of the original basket and marks allocation unresolved", () => {
   const f = fixture();
   f.document.agreements[1] = { id: gid("OrderEditAgreement", "12"), __typename: "OrderEditAgreement",
@@ -130,7 +137,6 @@ const bad: [string, (f: ReturnType<typeof fixture>) => void, string][] = [
   ["mismatched original total", f => { f.commerce.order.originalTotalPriceSet = bag("30"); }, "agreement_original_total_mismatch"],
   ["missing processed time", f => { (f.commerce.order.transactions as SourceObject[])[0].processedAt = null; }, "agreement_paid_time_required"],
   ["partial paid", f => { (f.commerce.order.transactions as SourceObject[])[0].amountSet = bag("10"); }, "agreement_original_payment_required"],
-  ["payment before purchase", f => { f.document.agreements[0].happenedAt = "2026-01-01T12:02:00Z"; }, "agreement_payment_before_purchase"],
   ["ambiguous payment", f => { (f.commerce.order.transactions as SourceObject[])[0].amountSet = bag("21"); }, "agreement_ambiguous_original_payment"],
   ["edit before paid", f => { f.document.agreements[1].happenedAt = created; }, "agreement_change_before_original_payment"],
   ["unknown agreement", f => { f.document.agreements[1].__typename = "UnknownAgreement"; }, "agreement_type_or_time"],
