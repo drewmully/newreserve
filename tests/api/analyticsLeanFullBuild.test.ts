@@ -43,6 +43,17 @@ it("does not let missing browser controls suppress independently reconciled comm
   expect(result.reports.funnel_daily[0].measured_sessions).toBeNull();
   expect(result.reports.acquisition_daily.every(r => r.first_party_roas === null)).toBe(true);
 });
+it("rejects unknown behavior modes and events supplied to an explicitly excluded source", () => {
+  const f = fullFixture();
+  Object.assign(f.policy, { behaviorMode: "fallback_on_error" });
+  expect(() => buildFullReports(f)).toThrow("invalid_behavior_mode");
+  f.policy.behaviorMode = "excluded";
+  expect(() => buildFullReports(f)).toThrow("excluded_behavior_events");
+  f.events = [];
+  const result = buildFullReports(f);
+  expect(result.manifest.gates[0].gates).toMatchObject({ attribution: false, behavior: false, orders: true });
+  expect(f.evidence.sessionCoverage.behaviorComplete).toBe(true);
+});
 it("isolates spend and event-session failures to their dependent metrics", () => {
   const f = fullFixture(); f.evidence.externalControls.compatible_spend_scope.passed = false;
   let result = buildFullReports(f);
