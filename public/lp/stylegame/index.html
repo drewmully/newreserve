@@ -986,7 +986,20 @@ function depositUrl(R){ const q=new URLSearchParams({deposit:5,profile:R.key,nam
     return base;
   }
 
+  var leanStartAction = null;
   function capture(name, props) {
+    // Separate permission-checked first-party lane. No quiz/profile/UTM data
+    // enters this request, and no additional advertising dispatch is performed.
+    if (config.leanJourneysEnabled === true && name === 'sg_begin') {
+      try {
+        if (!leanStartAction) leanStartAction = crypto.randomUUID();
+        fetch('/api/analytics/journey/event', {
+          method: 'POST', credentials: 'same-origin', keepalive: true,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ eventName: 'sg_begin', actionId: leanStartAction })
+        }).catch(function () {});
+      } catch (_) {}
+    }
     var payload = eventProps(props);
     try {
       if (window.posthog && typeof window.posthog.capture === 'function') {

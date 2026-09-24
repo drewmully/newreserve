@@ -23,6 +23,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { captureStylegameEvent } from "@/lib/stylegame/analytics";
+import { attachJourneyCart, captureJourney, stableJourneyAction } from "@/lib/analytics/journeyRuntime";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -139,7 +140,7 @@ export async function GET(req: NextRequest) {
               lines: $lines
               attributes: $attributes
             }) {
-              cart { checkoutUrl }
+              cart { id checkoutUrl }
               userErrors { field message code }
             }
           }
@@ -172,6 +173,9 @@ export async function GET(req: NextRequest) {
     const gqlErrors = json?.errors ?? [];
 
     if (checkoutUrl) {
+      await attachJourneyCart(req, json?.data?.cartCreate?.cart?.id);
+      if (typeof json?.data?.cartCreate?.cart?.id === "string")
+        await captureJourney(req, "sg_checkout_start", stableJourneyAction(json.data.cartCreate.cart.id));
       // Fire PostHog server-side event for the funnel. Client-side
       // sg_cta_click already fires from the game HTML; this is the
       // authoritative "server accepted the checkout intent" event and

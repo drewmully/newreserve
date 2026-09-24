@@ -10,6 +10,7 @@ import {
 } from "@/app/api/_lib/kpiReporting";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { checkRateLimit } from "@/lib/rateLimit";
+import { captureJourney } from "@/lib/analytics/journeyRuntime";
 
 const VALID_EVENTS = new Set([
   "page_view",
@@ -330,6 +331,7 @@ export async function POST(request: NextRequest) {
   const eventId = randomUUID();
 
   await Promise.allSettled([
+    captureJourney(request, eventName, properties.event_id, uid),
     dispatchAnalyticsEvent(event),
     persistAnalyticsEvent(eventId, { ...event, uid }),
     aggregateKpiDaily({ ...event, uid }),
