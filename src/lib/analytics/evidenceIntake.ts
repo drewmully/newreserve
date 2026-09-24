@@ -108,9 +108,24 @@ function validatePayload(section: EvidenceSection, payload: unknown) {
     }
   }
 }
-export function assembleEvidence(input: {
+type EvidenceIntake = {
   scope: EvidenceScope; asOf: string; bindings: EvidenceBinding[]; packets: EvidencePacket[];
-}): { evidence: FullBuildEvidence; lineage: Omit<EvidencePacket, "payload">[]; digest: string } {
+};
+/** Preflight only: validate every retained section before spending a source-read
+ * budget. The collector may replace facts it actually reads, never controls,
+ * identity, permission or history. This does not produce buildable evidence. */
+export function validateRetainedEvidence(input: EvidenceIntake, replaced: ("orderIdentities" | "checkout")[]) {
+  if (replaced.some(s => !["orderIdentities", "checkout"].includes(s)))
+    throw new Error("unsupported_collected_section");
+  inspectEvidence({ ...input, packets: input.packets.filter(p => !replaced.includes(p.section as typeof replaced[number])) },
+    evidenceSections.filter(s => !replaced.includes(s as typeof replaced[number])));
+}
+export function assembleEvidence(input: EvidenceIntake): {
+  evidence: FullBuildEvidence; lineage: Omit<EvidencePacket, "payload">[]; digest: string;
+} {
+  return inspectEvidence(input, evidenceSections);
+}
+function inspectEvidence(input: EvidenceIntake, required: readonly EvidenceSection[]) {
   shopifyShop(input.scope.shop); nyDate(input.asOf);
   if (!/^[a-z]{20}$/.test(input.scope.projectRef) ||
       !/^\d{4}-\d{2}-\d{2}$/.test(input.scope.fromDate) ||
@@ -148,7 +163,7 @@ export function assembleEvidence(input: {
     const { payload: _payload, ...entry } = packet; void _payload;
     lineage.push(entry); seen.add(packet.section);
   }
-  if (seen.size !== evidenceSections.length) throw new Error("missing_evidence_section");
+  if (required.some(section => !seen.has(section))) throw new Error("missing_evidence_section");
   // Current permission cannot override a deletion in the same snapshot.
   if (values.currentlyPermitted!.some(id => values.removedCustomers!.includes(id)))
     throw new Error("permission_removal_conflict");
