@@ -17,6 +17,7 @@ import { evidenceDigest } from "@/lib/analytics/evidenceIntake";
 import { inventoryFixture } from "../fixtures/analyticsDiscovery";
 import { partitionInput, partitionEnv } from "../fixtures/analyticsPartition";
 import { partitionTransport } from "../fixtures/partition-collection-source.mjs";
+import { offerTransport } from "../fixtures/offer-collection-source.mjs";
 import { collectPartitionRefresh, preparePartitionRefresh } from "@/lib/analytics/partitionRefresh";
 import { registerPartitionRefresh } from "@/lib/analytics/partitionRegistration";
 import { runRefreshPipeline } from "@/lib/analytics/refreshPipeline";
@@ -169,6 +170,26 @@ describe.skipIf(!connectionString)("real PostgreSQL concurrent analytics workers
     expect(await partitionRpc(b, "lean_full_finish", recorded[0])).toBe(true);
     const changed = structuredClone(recorded[0]); (changed.p_facts as { orders: unknown[] }).orders = [];
     await expect(partitionRpc(b, "lean_full_finish", changed)).rejects.toThrow("immutable");
+  }, 30000);
+  it("persists 101 collected offer memberships without multiplying financial facts or releasing reports", async () => {
+    const input = partitionInput();
+    delete input.collection.partitions[0].originalPurchases;
+    input.collection.offers = {};
+    const fixture = await collectPartitionRefresh(input, partitionEnv, offerTransport());
+    await registerPartitionRefresh({ ...partitionOptions, client: partitionClient(admin),
+      bundle: fixture.bundle, pages: fixture.sources.pages });
+    await activatePartition(fixture.bundle.runId, fixture.bundle.base.runId);
+    expect(await partitionStep()).toMatchObject({ state: "partial" });
+    expect(await partitionStep()).toMatchObject({ state: "complete" });
+    expect((await admin.query(`select count(*)::int n,count(distinct order_item_id)::int lines,
+      count(distinct offer_id)::int offers from lean_private.order_item_offers where publication_id like 'full:%'`)).rows)
+      .toEqual([{ n: 101, lines: 101, offers: 1 }]);
+    expect((await admin.query(`select count(*)::int n,sum(purchase_merchandise_net_usd)::text net
+      from lean_private.orders where publication_id like 'full:%'`)).rows).toEqual([{ n: 101, net: "1818.000000" }]);
+    expect((await admin.query(`select count(*)::int n,sum(purchase_net_usd)::text net
+      from lean_private.order_items where publication_id like 'full:%'`)).rows).toEqual([{ n: 101, net: "1818.000000" }]);
+    expect((await admin.query("select count(*)::int n from lean_private.publications")).rows).toEqual([{ n: 2 }]);
+    expect((await admin.query("select count(*)::int n from lean_analytics.store_daily")).rows).toEqual([{ n: 0 }]);
   }, 30000);
   it("serializes disabled page CAS on separate PostgreSQL connections without enabling any job", async () => {
     const fixture = await collectPartitionRefresh(partitionInput(), partitionEnv, partitionTransport());

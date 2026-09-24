@@ -8,6 +8,7 @@ import { nyDate } from "./primitives";
 import { readHistoryInventoryPage, verifyHistoryAccess } from "./shopifyHistory";
 import { inventoryOrder, validateHistoryInventory, type HistoryInventory } from "./historyInventory";
 import { readShopifyAgreements } from "./shopifyAgreements";
+import { mapShopifyLineDiscounts, mapShopifyOffers, type OfferRegistry } from "./shopifyOffers";
 import { prepareOriginalPurchases, requireEmptyOriginalPurchaseEvidence, validateOriginalPurchaseCollection,
   type OriginalPurchaseCollection, type OriginalPurchaseInput } from "./originalPurchasePreparation";
 
@@ -26,6 +27,8 @@ export type CollectRefreshInput = {
     checkout: boolean;
     draftJourney?: { from: string; until: string };
     originalPurchases?: OriginalPurchaseCollection;
+    /** Explicit replacement of authentic empty offers evidence, unedited orders only. */
+    offers?: { registry?: OfferRegistry };
     maxOrders: number;
     maxLinePages: number;
     maxRequests: number;
@@ -55,7 +58,7 @@ export async function collectRefresh(input: CollectRefreshInput, env: Environmen
     throw new Error("collected_original_purchases_require_reviewed_replacement_packet");
   if (Object.keys(input).some(k => !["kind", "refresh", "collection"].includes(k)) ||
       Object.keys(c).some(k => !["approvalRef", "projectRef", "shop", "orderIds", "discover", "entities", "checkout",
-        "draftJourney", "originalPurchases", "maxOrders", "maxLinePages", "maxRequests", "maxBytes", "timeoutMs", "binding"].includes(k)))
+        "draftJourney", "originalPurchases", "offers", "maxOrders", "maxLinePages", "maxRequests", "maxBytes", "timeoutMs", "binding"].includes(k)))
     throw new Error("unsupported_collection_option");
   shopifyShop(c.shop);
   const readKey = env.LEAN_MULLY_SOURCE_READ_KEY, shopifyToken = env.LEAN_SHOPIFY_ANALYTICS_READ_TOKEN;
@@ -73,6 +76,20 @@ export async function collectRefresh(input: CollectRefreshInput, env: Environmen
       new Set(c.entities).size !== c.entities.length || typeof c.checkout !== "boolean")
     throw new Error("refresh_collection_budget");
   explicitIds.forEach(id => shopifyId(id, "Order"));
+  if (c.offers !== undefined) {
+    if (!c.offers || typeof c.offers !== "object" || Array.isArray(c.offers) ||
+        Object.keys(c.offers).some(k => k !== "registry")) throw new Error("collection_offers_option");
+    if (c.offers.registry !== undefined) {
+      if (!c.offers.registry || c.offers.registry.shop !== c.shop) throw new Error("offer_shop_mismatch");
+      // Reuse the existing reviewed taxonomy validator before any source call.
+      mapShopifyOffers([], c.offers.registry);
+    }
+    const prior = original.intake.packets.filter(p => p.section === "offers");
+    if (prior.length !== 1 || !Array.isArray(prior[0].payload) || prior[0].payload.length)
+      throw new Error("collection_offers_require_empty_reviewed_packet");
+    // This packet still goes through retained-evidence hash/binding/freshness
+    // validation below. Missing/stale evidence is never an authentic empty.
+  }
   let agreementPlan: OriginalPurchaseCollection | undefined;
   if (c.originalPurchases !== undefined) {
     if (env.LEAN_SHOPIFY_AGREEMENTS_READ_APPROVED !== "true") throw new Error("agreement_read_disabled");
@@ -211,6 +228,8 @@ export async function collectRefresh(input: CollectRefreshInput, env: Environmen
   for (const id of orderIds) orders.push(await readShopifyAnalyticsOrder({
     shop: c.shop, accessToken: shopifyToken, fetcher: bounded, maxLinePages: c.maxLinePages,
   }, id));
+  if (c.offers && orders.some(o => o.order.edited !== false))
+    throw new Error("collection_offers_require_unedited_orders");
   if (inventory && evidenceDigest(orders.map(o => inventoryOrder(o.order))
     .sort((a, b) => a.id.localeCompare(b.id))) !== evidenceDigest(inventory.orders))
     throw new Error("inventory_hydration_changed");
@@ -244,7 +263,7 @@ export async function collectRefresh(input: CollectRefreshInput, env: Environmen
   // Keep the reviewed absolute expiry. Never extend the evidence validity window.
   const facts = mapMullySource({ snapshot, orders, mappingVersion: refresh.policy.mappingVersion, permissions: [] });
   const sourceDigest = evidenceDigest({ orders, snapshot, journey: journey ?? null, draftJourney: draftJourney ?? null,
-    ...(agreementPlan ? { originalPurchases } : {}) });
+    ...(agreementPlan ? { originalPurchases } : {}), ...(c.offers ? { offers: c.offers } : {}) });
   const packets: EvidencePacket[] = [];
   const add = (section: typeof replaced[number], payload: EvidencePacket["payload"]) => packets.push({
     section, payload, sourceId: b.sourceId, schemaVersion: b.schemaVersion, scope: refresh.intake.scope,
@@ -253,6 +272,13 @@ export async function collectRefresh(input: CollectRefreshInput, env: Environmen
   // Only the explicit order-to-customer links are used. The customer reader does
   // not replace identity, permission/removal or history with inferred authority.
   add("orderIdentities", facts.orderIdentities);
+  if (c.offers) {
+    const payload = [...mapShopifyLineDiscounts(orders, c.shop),
+      ...(c.offers.registry ? mapShopifyOffers(orders, c.offers.registry) : [])];
+    packets.push({ section: "offers", payload, sourceId: b.sourceId, schemaVersion: b.schemaVersion,
+      scope: refresh.intake.scope, capturedAt: startedAt, sha256: evidenceDigest(payload),
+      sourceRecordRef: `collected-offers:sha256:${evidenceDigest({ orders, registry: c.offers.registry ?? null })}` });
+  }
   if (agreementPlan) {
     const mapped = prepareOriginalPurchases(refresh, orders, originalPurchases,
       { sourceId: b.sourceId, schemaVersion: b.schemaVersion });
