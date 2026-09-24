@@ -36,7 +36,7 @@ beforeAll(async () => {
     alter default privileges in schema public grant execute on functions to anon,authenticated,service_role;`);
   for (const name of ["001_staging", "013_release", "014_reporting_views", "018_history_jobs", "019_spend_jobs",
     "020_observed_report_jobs", "021_full_report_jobs", "022_full_release", "023_posthog_export",
-    "024_full_orchestration", "025_refresh_queue", "027_history_update_scans", "028_refresh_health"])
+    "024_full_orchestration", "025_refresh_queue", "027_history_update_scans", "028_refresh_health", "034_commerce_only_refresh"])
     await db.exec(readFileSync(`sql/analytics/${name}.sql`, "utf8"));
 }, 30000);
 beforeEach(async () => {
@@ -182,6 +182,32 @@ it("registers the whole dependency graph disabled, idempotently and without sour
   expect(await runRefreshPipeline(options())).toEqual({ state: "disabled" });
   expect(mocks.run).not.toHaveBeenCalled();
 });
+it("registers explicit commerce-only scope without any behavior configuration", async () => {
+  const input = refreshFixture(); input.policy.behaviorMode = "excluded";
+  input.behavior = {} as typeof input.behavior;
+  const bundle = prepareRefresh(input);
+  expect(bundle.full.behavior).toEqual({});
+  await db.query("select public.lean_refresh_register($1)", [JSON.stringify(bundle)]);
+  await db.query("select public.lean_refresh_register($1)", [JSON.stringify(bundle)]);
+  expect((await db.query("select enabled,behavior,policy->>'behaviorMode' mode from lean_private.full_builds")).rows)
+    .toEqual([{ enabled: false, behavior: {}, mode: "excluded" }]);
+  bundle.full.policy.behaviorMode = "required";
+  await expect(db.query("select public.lean_refresh_register($1)", [JSON.stringify(bundle)]))
+    .rejects.toThrow("conflict");
+});
+it.each(["unknown", "implicit-exclusion", "unexpected-source"])(
+  "rejects invalid behavior scope at registration without saving dependencies: %s", async failure => {
+    const input = refreshFixture(); input.policy.behaviorMode = "excluded";
+    const bundle = prepareRefresh(input);
+    if (failure === "unknown") bundle.full.policy.behaviorMode = "fallback" as "excluded";
+    if (failure === "implicit-exclusion") delete bundle.full.policy.behaviorMode;
+    if (failure === "unexpected-source") bundle.full.behavior = input.behavior;
+    await expect(db.query("select public.lean_refresh_register($1)", [JSON.stringify(bundle)]))
+      .rejects.toThrow(/behavior mode|dependencies/);
+    expect((await db.query("select * from lean_private.history_jobs")).rows).toEqual([]);
+    expect((await db.query("select * from lean_private.refresh_queue")).rows).toEqual([]);
+  },
+);
 it("rejects conflicting registrations and rolls back a bad dependency", async () => {
   const bundle = await register();
   bundle.approvalRef = "fixture:changed";

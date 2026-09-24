@@ -132,16 +132,14 @@ windows, missing full-history permission, out-of-order page rollback, immutable
 scan scope, monitor permissions/auth, stale source vintage despite re-export,
 and configured healthy/unconfigured/stale states.
 
-## Still unfinished
+## Continued in L26
 
-The permission-decision authority's issuance/cookie/revocation/erasure lifecycle;
-actual Text Mully activation/checkout and REST draft-order linkage; verified
-historical identity/purchases/migrations; authoritative campaign receipts;
-unsupported original purchases and complete cash lifecycle; independent
-source-total extraction; unattended fresh-evidence collection, volume
-partitioning, watermark scheduling, retention cleanup and alert delivery
-remain engineering/integration work. These are not erased by passing local
-tests or by existing account connections.
+The later L26 revision implements explicit permission/cookie withdrawal,
+REST draft-order linkage, scoped release, standing history watermarks and safe
+alert dispatch. See `L26-permissions-drafts-and-operations.md` for the current
+boundary and remaining engineering. Source integrations, independent controls,
+retention/erasure and unattended evidence assembly are not finished merely
+because their input contracts exist.
 
 Hosted migrations, secrets, isolated real-source reconciliation, release,
 PostHog view/source installation and synchronization/deletion verification

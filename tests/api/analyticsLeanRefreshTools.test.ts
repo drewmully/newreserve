@@ -42,6 +42,42 @@ it("extracts only scoped checkout receipts through the real source command", asy
     expect(readFileSync(output, "utf8")).not.toContain("fixture-key");
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }, 30000);
+it("prepares commerce-only jobs without a PostHog configuration or diagnostic query", () => {
+  vi.stubGlobal("fetch", () => { throw new Error("network_forbidden"); });
+  const dir = mkdtempSync(join(tmpdir(), "commerce-cli-fixture-"));
+  try {
+    const fixture = refreshFixture(); fixture.policy.behaviorMode = "excluded";
+    fixture.behavior = {} as typeof fixture.behavior;
+    const input = join(dir, "input.json"), output = join(dir, "output");
+    writeFileSync(input, JSON.stringify(fixture));
+    expect(prepareFile(input, output)).toMatchObject({ state: "prepared_only", enabled: false });
+    expect(JSON.parse(readFileSync(join(output, "refresh-bundle.json"), "utf8")).full.behavior).toEqual({});
+    expect(JSON.parse(readFileSync(join(output, "analytics-events-view.json"), "utf8"))).toMatchObject({
+      state: "excluded", query: null, materialize: false,
+    });
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+}, 30000);
+it("uses only the dedicated read credential for the draft relation source command", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "draft-cli-fixture-"));
+  const projectRef = "a".repeat(20), shop = "fixture.myshopify.com";
+  const env = { LEAN_MULLY_SOURCE_READ_APPROVED: "true", LEAN_MULLY_SOURCE_READ_KEY: "fixture-key",
+    LEAN_MULLY_SOURCE_PROJECT_REF: projectRef, LEAN_SHOPIFY_SHOP_DOMAIN: shop,
+    SHOPIFY_ADMIN_ACCESS_TOKEN: "must-not-inherit" };
+  const request = vi.fn<typeof fetch>(async () => Response.json([]));
+  try {
+    const input = join(dir, "input.json"), output = join(dir, "drafts.json");
+    writeFileSync(input, JSON.stringify({ kind: "draft-journey-v1", projectRef, shop,
+      approvalRef: "fixture:read", from: "2026-01-01T00:00:00Z", until: "2026-01-02T00:00:00Z" }));
+    await expect(readSourceFile(input, output, env, request)).rejects.toThrow("credentials");
+    expect(request).not.toHaveBeenCalled();
+    expect(await readSourceFile(input, output, { ...env, LEAN_SHOPIFY_ANALYTICS_READ_TOKEN: "read-only" }, request))
+      .toMatchObject({ state: "snapshot_only", receipts: 0, enabled: false, registered: false });
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(String(request.mock.calls[0][0])).toBe(`https://${projectRef}.supabase.co/rest/v1/rpc/lean_draft_receipts_read`);
+    expect(statSync(output).mode & 0o777).toBe(0o600);
+    expect(readFileSync(output, "utf8")).not.toMatch(/fixture-key|must-not-inherit|read-only/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+}, 30000);
 it("extracts the exact permission window and refuses a different PostHog project before any read", async () => {
   const dir = mkdtempSync(join(tmpdir(), "permission-cli-fixture-"));
   const projectRef = "a".repeat(20), shop = "fixture.myshopify.com";

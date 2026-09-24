@@ -22,11 +22,14 @@ export type RefreshInput = {
 export function prepareRefresh(input: RefreshInput) {
   const { scope } = input.intake;
   const assembled = assembleEvidence(input.intake);
-  validateBehaviorSource(input.behavior);
+  const mode = input.policy.behaviorMode ?? "required";
+  if (!["required", "excluded"].includes(mode)) throw new Error("invalid_behavior_mode");
+  if (mode === "required") validateBehaviorSource(input.behavior);
   const dates = reportDates(scope.fromDate, scope.throughDate);
   if (dates.length > 31 || !input.approvalRef?.trim() || !input.actorRef?.trim() ||
       !/^[a-zA-Z0-9_.:-]{1,128}$/.test(input.revision)) throw new Error("invalid_refresh_approval");
-  if (input.policy.asOf !== input.intake.asOf || input.policy.project !== input.behavior.project ||
+  if (input.policy.asOf !== input.intake.asOf ||
+      mode === "required" && input.policy.project !== input.behavior.project ||
       !input.policy.approvalRef?.trim() || !input.commercePolicy.decision?.approvalRef?.trim() ||
       !input.commercePolicy.financialApprovalRef?.trim()) throw new Error("refresh_policy_mismatch");
   nyDate(input.readyAt); nyDate(input.expiresAt);
@@ -87,7 +90,7 @@ export function prepareRefresh(input: RefreshInput) {
       throughDate: scope.throughDate, historyRuns: history.map(h => h.runId), spendRuns: spend.map(s => s.runId),
       policy: input.commercePolicy },
     full: { ...common, runId, baseRun: `${runId}:base`, policy: input.policy,
-      behavior: input.behavior, evidence: assembled.evidence },
+      behavior: mode === "excluded" ? {} : input.behavior, evidence: assembled.evidence },
     queue: { readyAt: input.readyAt, expiresAt: input.expiresAt, maxSteps: input.maxSteps },
   };
 }

@@ -10,11 +10,14 @@ import { normalizeCommerce, type CommerceDecision, type ShopifySnapshot } from "
 import { normalizeLedger, normalizePayment, uniqueLedger, type Movement, type PaymentEvidence } from "./financial";
 import { reportDates } from "./commerceCandidate";
 import { checked, key, nyDate, type Row } from "./primitives";
+import { observedCampaigns } from "./campaignSource";
 
 export type FullBuildPolicy = {
   definition: string; mappingVersion: string; sessionVersion: string; funnelVersion: string;
   normalizationVersion: string; project: string; asOf: string; approvalRef: string;
   stages: Record<string, string>; attribution: AttributionPolicy;
+  /** Immutable operator scope. Excluded behavior is unavailable, never zero. */
+  behaviorMode?: "required" | "excluded";
   cohorts: { month: string; horizonDays: number; graceSeconds: number; acquisitionDefinition: string }[];
 };
 /** Owner-supplied evidence, never arbitrary "all gates true" from an HTTP caller.
@@ -73,7 +76,13 @@ export function buildFullReports(input: {
   base: Candidate; publication: string; shop: string; fromDate: string; throughDate: string;
   policy: FullBuildPolicy; evidence: FullBuildEvidence; events: ObservedEvent[];
 }) {
-  const { policy: p, evidence: e, publication: pub, shop } = input;
+  const { policy: p, publication: pub, shop } = input;
+  const mode = p.behaviorMode ?? "required";
+  if (!["required", "excluded"].includes(mode)) throw new Error("invalid_behavior_mode");
+  if (mode === "excluded" && input.events.length) throw new Error("excluded_behavior_events");
+  // Apply the exclusion at the transform boundary too: callers cannot retain
+  // all-passed browser controls or turn an absent source into a measured zero.
+  const e = mode === "excluded" ? withoutBehaviorEvidence(input.evidence) : input.evidence;
   if (![p.definition, p.mappingVersion, p.sessionVersion, p.funnelVersion, p.normalizationVersion,
     p.project, p.approvalRef, e.ref].every(v => typeof v === "string" && v.trim())) throw new Error("full_build_policy_required");
   nyDate(p.asOf);
@@ -172,14 +181,18 @@ export function buildFullReports(input: {
     !!e.externalControls.event_order_diagnostics?.passed && !!e.externalControls.event_order_diagnostics.evidenceRef;
   facts.sessions = finalizeSessionConversions(facts.sessions, facts.orders, commerceComplete);
   const attribution = unique(e.attributionCoverage, v => v.orderId);
-  const campaigns = unique(e.campaigns, v => v.sessionKey);
+  const campaigns = observedCampaigns(observations, p.project, p.sessionVersion, e.campaigns);
+  facts.sessions = facts.sessions.map(row => ({ ...row,
+    traffic_source: campaigns.get(String(row.session_key))?.channel ?? null,
+    campaign_id: campaigns.get(String(row.session_key))?.campaignKey ?? null,
+  }));
   facts.order_attribution = attributeOrders({ orders: facts.orders, sessions: facts.sessions, events: logical,
     publication: pub, policy: p.attribution,
     coverage: new Map([...attribution].map(([id, row]) => [id, {
       lookbackComplete: !!row.evidenceRef && nativeReady && row.coverage.lookbackComplete,
       identityComplete: !!row.evidenceRef && proofReady("identity_map") && row.coverage.identityComplete,
       graceComplete: !!row.evidenceRef && row.coverage.graceComplete,
-    }])), campaigns: new Map([...campaigns].map(([id, row]) => [id, row.context])) });
+    }])), campaigns });
   const issues = validateCandidateGraph(facts, pub, p.attribution.modelVersion);
   if (issues.length) throw new Error(`invalid_full_candidate:${issues.join(",")}`);
   const coverage = unique(e.dateCoverage, v => v.date);
@@ -230,4 +243,18 @@ export function buildFullReports(input: {
   if (Object.values(reports).some(rows => rows.length > 20000) ||
       Buffer.byteLength(JSON.stringify({ facts, reports, manifest })) > 16000000) throw new Error("full_output_budget");
   return { facts, reports, manifest };
+}
+
+export function withoutBehaviorEvidence(evidence: FullBuildEvidence): FullBuildEvidence {
+  const e = structuredClone(evidence);
+  e.checkout = [];
+  e.campaigns = [];
+  e.sessionCoverage.behaviorComplete = false;
+  e.attributionCoverage = e.attributionCoverage.map(row => ({ ...row, coverage: {
+    lookbackComplete: false, identityComplete: false, graceComplete: false,
+  } }));
+  e.dateCoverage = e.dateCoverage.map(row => ({ ...row, gates: {
+    ...row.gates, behavior: false, attribution: false,
+  } }));
+  return e;
 }
