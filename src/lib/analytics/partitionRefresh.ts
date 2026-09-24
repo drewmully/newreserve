@@ -7,6 +7,8 @@ import { assemblePartitionPages, makePartitionPages, validatePartitionInventory,
   type PartitionInventory, type PartitionPage, type PartitionRow } from "./partitionInventory";
 import type { ShopifyOrderDocument } from "./shopifySource";
 import { key } from "./primitives";
+import { readJourneyPermissions } from "./journeyPermissions";
+import { planJourneyPermissionCollection, composeCollectedJourneyPermissions } from "./journeyPermissionCollection";
 
 type Collection = CollectRefreshInput["collection"];
 export type PartitionCollectInput = {
@@ -59,7 +61,7 @@ export async function collectPartitionRefresh(input: PartitionCollectInput, env:
       !Number.isSafeInteger(c.timeoutMs) || c.timeoutMs < 1 || c.timeoutMs > 120000)
     throw new Error("partition_collection_budget");
   const ids = new Set<string>(), originals = new Set<string>();
-  let reserved = 0;
+  let reserved = Number(c.journeyPermissions !== undefined);
   for (const child of c.partitions) {
     if (!child || Object.keys(child).some(k => !["id", "history", "originalPurchases"].includes(k)) ||
         !/^[a-zA-Z0-9_-]{1,32}$/.test(child.id) || ids.has(child.id) || !Array.isArray(child.history))
@@ -82,6 +84,8 @@ export async function collectPartitionRefresh(input: PartitionCollectInput, env:
     throw new Error("partition_request_reservation");
   const startedAt = clock(), deadline = AbortSignal.timeout(c.timeoutMs);
   if (!Number.isFinite(Date.parse(startedAt))) throw new Error("partition_capture_clock");
+  const permissionPlan = c.journeyPermissions === undefined ? undefined :
+    planJourneyPermissionCollection(input.refresh, c.journeyPermissions, c.binding.sourceId, env, startedAt);
   let calls = 0, bytes = 0;
   const bounded: typeof fetch = async (url, init) => {
     if (deadline.aborted || ++calls > c.maxRequests) throw new Error("partition_read_budget");
@@ -104,7 +108,8 @@ export async function collectPartitionRefresh(input: PartitionCollectInput, env:
   const refresh = structuredClone(input.refresh), pages: PartitionPage[] = [],
     children: PartitionInventory["children"] = [], originalsRead: OriginalPurchaseInput[] = [],
     orders: ShopifyOrderDocument[] = [], collected = new Map<string, EvidencePacket[]>(), audits: unknown[] = [];
-  const { partitions: ignored, ...shared } = c; void ignored;
+  const { partitions: ignored, journeyPermissions: parentPermissions, ...shared } = c;
+  void ignored; void parentPermissions;
   for (const child of c.partitions) {
     const part = await collectRefresh({ kind: "mully-collect-v1",
       refresh: { ...structuredClone(input.refresh), history: child.history },
@@ -131,9 +136,14 @@ export async function collectPartitionRefresh(input: PartitionCollectInput, env:
       collected.set(section, [...(collected.get(section) ?? []), packet]);
     }
   }
+  const journeyPermissions = permissionPlan ? await readJourneyPermissions({
+    ...permissionPlan.config, capturedAt: clock(),
+  }, env.LEAN_MULLY_SOURCE_READ_KEY!, bounded) : undefined;
   const finishedAt = clock();
   if (deadline.aborted || !Number.isFinite(Date.parse(finishedAt)) || Date.parse(finishedAt) < Date.parse(startedAt) ||
-      Date.parse(finishedAt) - Date.parse(startedAt) > c.timeoutMs) throw new Error("partition_read_budget");
+      Date.parse(finishedAt) - Date.parse(startedAt) > c.timeoutMs ||
+      journeyPermissions && (Date.parse(journeyPermissions.capturedAt) < Date.parse(startedAt) ||
+        Date.parse(journeyPermissions.capturedAt) > Date.parse(finishedAt))) throw new Error("partition_read_budget");
   const owners: Record<string, string> = {};
   for (const child of children) for (const order of child.inventory.orders) owners[order.id] ??= child.id;
   const body = { version: 1 as const, projectRef: c.projectRef, shop: c.shop, approvalRef: c.approvalRef,
@@ -168,6 +178,8 @@ export async function collectPartitionRefresh(input: PartitionCollectInput, env:
   refresh.intake.bindings = [...refresh.intake.bindings.map(b => ({ ...b, sections: b.sections.filter(s => !sections.has(s)) }))
     .filter(b => b.sections.length), { ...c.binding, approvalRef: c.approvalRef,
     independentControlSource: false, sections: [...sections] }];
+  if (permissionPlan && journeyPermissions)
+    composeCollectedJourneyPermissions(refresh, permissionPlan, journeyPermissions);
   body.evidenceDigest = assembleEvidence(refresh.intake).digest;
   manifest = validatePartitionInventory({ ...body, digest: evidenceDigest(body) }, body);
   const prepared: PartitionPreparedInput = { kind: "mully-partition-prepared-v1", refresh, manifest };
@@ -175,7 +187,8 @@ export async function collectPartitionRefresh(input: PartitionCollectInput, env:
   const committedAt = Date.parse(clock());
   if (deadline.aborted || !Number.isFinite(committedAt) || committedAt < Date.parse(finishedAt) ||
       committedAt - Date.parse(startedAt) > c.timeoutMs) throw new Error("partition_read_budget");
-  return { bundle, refresh: prepared, sources: { pages, originalPurchases: originalsRead },
+  return { bundle, refresh: prepared, sources: { pages, originalPurchases: originalsRead,
+    ...(journeyPermissions ? { journeyPermissions } : {}) },
     audit: { startedAt, finishedAt, calls, bytes, children: audits, inventoryDigest: manifest.digest,
       completePurchaseHistory: false, independentlyReconciled: false, enabled: false, registered: false } };
 }
