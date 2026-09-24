@@ -39,7 +39,7 @@ beforeAll(async () => {
   for (const name of ["001_staging", "013_release", "014_reporting_views", "018_history_jobs", "019_spend_jobs",
     "020_observed_report_jobs", "021_full_report_jobs", "022_full_release", "023_posthog_export",
     "024_full_orchestration", "025_refresh_queue", "027_history_update_scans", "028_refresh_health",
-    "034_commerce_only_refresh", "035_discovery_inventory_fence"])
+    "034_commerce_only_refresh", "035_discovery_inventory_fence", "036_partitioned_refresh"])
     await db.exec(readFileSync(`sql/analytics/${name}.sql`, "utf8"));
 }, 30000);
 beforeEach(async () => {
