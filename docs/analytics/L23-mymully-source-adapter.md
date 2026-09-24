@@ -62,7 +62,11 @@ against customer data by this change.
      binding: {
        sourceId, schemaVersion, approvalRef, maxAgeSeconds
      },
-     cashPolicy?: ShopifyCashPolicy
+     cashPolicy?: ShopifyCashPolicy,
+     journey?: JourneySnapshot,
+     journeyPermissions?: JourneyPermissions,
+     offers?: OfferRegistry,
+     retainReviewed?: { identity?: reviewedSourceId, customerHistory?: reviewedSourceId }
    }
    ```
 
@@ -77,7 +81,9 @@ against customer data by this change.
    ```
 
 The source path replaces the five customer/identity/history packets using the
-source snapshot. Customer history is intentionally marked incomplete; complete
+source snapshot unless historical identity/history packets are explicitly
+retained with their original verified source IDs, hashes, scope and freshness.
+Otherwise customer history is intentionally marked incomplete; complete
 purchase/migration evidence is not derived from a current customer row. Other
 packets are retained and must match the resulting canonical IDs and scopes.
 If `cashPolicy` is present, its exact approved clock must be
@@ -88,8 +94,10 @@ but never creates independent reconciliation controls.
 
 The output is still a disabled immutable bundle. Follow L22 for reviewed
 registration, activation and separate publication/export. The source command
-performs at most one bounded Supabase GET, writes owner-readable output, makes
-no retries, and cannot write to a database. The preparation command is offline.
+performs at most one bounded Supabase request, writes owner-readable output,
+makes no retries, and cannot write to a database. The customer mode uses GET;
+the new receipt and permission modes use read-only RPCs. The preparation command
+is offline. See L24 for the exact inputs, signing-secret boundary and event wiring.
 
 ## Remaining implementation versus live configuration
 
@@ -99,19 +107,21 @@ ready, and connected accounts alone do not settle field meaning.
 
 - Historical Firebase/anonymous identity, analytics permission and removal
   evidence still need authoritative wiring. This adapter refuses to infer them.
-- Journey producers and signed checkout/campaign handoff are not connected by
-  this change. The existing collection/context helpers are not automatically
-  called by application checkout routes.
+- L24 wires Reserve/Style Game/Text Mully start producers and actual Storefront
+  checkout paths to permission-checked capture and signed cart receipts.
+  Permission issuance/cookie delivery, Text Mully activation/checkout,
+  REST draft-order checkout and campaign authority remain unintegrated.
 - Complete history/migration coverage, original-purchase handling for deferred
-  commerce, actual offer membership, independent control extraction and
-  production-volume partitioning remain separate work.
+  commerce, the actual offer registry, independent control extraction and
+  production-volume partitioning remain separate work. The new offer adapter
+  consumes approved line-level attributes without guessing membership.
 - Supabase/PostHog deployment secrets, warehouse source setup, source validation,
   publication and hosted tests remain approval-gated. No customer source read,
   paid hosted test, migration, source creation or deployment was performed here.
 
 ## Local verification
 
-The complete local analytics suite passed 482 tests across 36 files, including
+The complete local analytics suite passed 520 tests across 41 files, including
 10 real PostgreSQL integration/concurrency tests against a disposable local
 database. TypeScript, analytics ESLint, generated-SQL parity and diff checks
 also passed. These are not live vendor or hosted results.

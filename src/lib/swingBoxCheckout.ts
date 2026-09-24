@@ -9,6 +9,8 @@
  * to the returned `checkoutUrl`.
  */
 
+import { recordJourneyCart } from "./analytics/journeyClient";
+
 // Product: Swing Box (Founding 100)
 // Variant + Selling Plan (monthly membership, required)
 const SWINGBOX_VARIANT_GID = "gid://shopify/ProductVariant/48885734637760";
@@ -42,7 +44,7 @@ export async function startSwingBoxCheckout(): Promise<void> {
               lines: $lines
               attributes: $attributes
             }) {
-              cart { checkoutUrl }
+              cart { id checkoutUrl }
               userErrors { field message code }
             }
           }
@@ -68,6 +70,7 @@ export async function startSwingBoxCheckout(): Promise<void> {
       json?.data?.cartCreate?.cart?.checkoutUrl;
 
     if (checkoutUrl) {
+      await recordJourneyCart(json?.data?.cartCreate?.cart?.id);
       window.location.href = checkoutUrl;
       return;
     }

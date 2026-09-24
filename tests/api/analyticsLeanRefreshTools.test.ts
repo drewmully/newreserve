@@ -19,6 +19,53 @@ it("prepares a private bundle and diagnostic view entirely offline", () => {
     expect(() => prepareFile(input, out)).toThrow();
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }, 30000);
+it("extracts only scoped checkout receipts through the real source command", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "journey-cli-fixture-"));
+  const projectRef = "a".repeat(20), shop = "fixture.myshopify.com";
+  const env = { LEAN_MULLY_SOURCE_READ_APPROVED: "true", LEAN_MULLY_SOURCE_READ_KEY: "fixture-key",
+    LEAN_MULLY_SOURCE_PROJECT_REF: projectRef, LEAN_SHOPIFY_SHOP_DOMAIN: shop };
+  const request = vi.fn<typeof fetch>(async () => Response.json([]));
+  try {
+    const input = join(dir, "input.json"), output = join(dir, "receipts.json");
+    writeFileSync(input, JSON.stringify({ kind: "journey-receipts-v1", projectRef, shop,
+      approvalRef: "fixture:read", orders: [{ shop, apiVersion: "2026-07",
+        order: { id: "gid://shopify/Order/1", cartToken: "fixture_cart" } }] }));
+    expect(await readSourceFile(input, output, env, request)).toMatchObject({
+      state: "snapshot_only", receipts: 0, registered: false, enabled: false,
+    });
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(request.mock.calls[0][0]).toBe(`https://${projectRef}.supabase.co/rest/v1/rpc/lean_checkout_receipts_read`);
+    expect(JSON.parse(String(request.mock.calls[0][1]?.body))).toEqual({
+      p_project: projectRef, p_shop: shop, p_carts: ["fixture_cart"],
+    });
+    expect(statSync(output).mode & 0o777).toBe(0o600);
+    expect(readFileSync(output, "utf8")).not.toContain("fixture-key");
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+}, 30000);
+it("extracts the exact permission window and refuses a different PostHog project before any read", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "permission-cli-fixture-"));
+  const projectRef = "a".repeat(20), shop = "fixture.myshopify.com";
+  const env = { LEAN_MULLY_SOURCE_READ_APPROVED: "true", LEAN_MULLY_SOURCE_READ_KEY: "fixture-key",
+    LEAN_MULLY_SOURCE_PROJECT_REF: projectRef, LEAN_SHOPIFY_SHOP_DOMAIN: shop, LEAN_POSTHOG_PROJECT_ID: "353503" };
+  const request = vi.fn<typeof fetch>(async () => Response.json([]));
+  try {
+    const input = join(dir, "input.json"), output = join(dir, "permissions.json");
+    const scope = { kind: "journey-permissions-v1", projectRef, shop, approvalRef: "fixture:read",
+      posthogProject: "353503", from: "2026-01-01T00:00:00Z", until: "2026-01-02T00:00:00Z" };
+    writeFileSync(input, JSON.stringify({ ...scope, posthogProject: "999" }));
+    await expect(readSourceFile(input, output, env, request)).rejects.toThrow("permission_project");
+    expect(request).not.toHaveBeenCalled();
+    writeFileSync(input, JSON.stringify(scope));
+    expect(await readSourceFile(input, output, env, request)).toMatchObject({
+      state: "snapshot_only", grants: 0, registered: false, enabled: false,
+    });
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(String(request.mock.calls[0][1]?.body))).toEqual({
+      p_project: projectRef, p_shop: shop, p_posthog: "353503", p_from: scope.from, p_until: scope.until,
+    });
+    expect(statSync(output).mode & 0o777).toBe(0o600);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+}, 30000);
 it("keeps dispatch disabled and rejects invalid origins and call budgets", () => {
   expect(() => refreshDispatchConfig({})).toThrow("disabled");
   const env = { LEAN_ANALYTICS_REFRESH_DISPATCH_ENABLED: "true",
