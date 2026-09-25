@@ -5,6 +5,8 @@ import { resolve,relative,join,isAbsolute } from "node:path";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 const root=process.cwd(),out=process.argv[2];
+const inventory=process.argv[3]==="inventory";
+if(process.argv[3]!==undefined&&!inventory)throw new Error("unknown_package_mode");
 if(!out||!isAbsolute(out)||existsSync(out))throw new Error("new_absolute_package_directory_required");
 const rootDir=join(root,"src"),virtual=join(root,".history-virtual");
 const options={target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,esModuleInterop:true,
@@ -38,15 +40,25 @@ if(require.main===module){(async()=>{
 `;
 mkdirSync(out,{recursive:true});
 writeFileSync(join(out,"operator.cjs"),bundle);
-writeFileSync(join(out,"operator-config.json"),JSON.stringify({enabled:false,runId:"REPLACE_REVIEWED_RUN",maxSteps:1,maxProviderRequests:8},null,2));
+writeFileSync(join(out,"operator-config.json"),JSON.stringify({enabled:false,runId:"REPLACE_REVIEWED_RUN",
+  ...(inventory?{mode:"inventory"}:{}),maxSteps:1,maxProviderRequests:inventory?0:8},null,2));
 writeFileSync(join(out,"package.json"),JSON.stringify({private:true,engines:{node:"24.x"}}));
 writeFileSync(join(out,"vercel.json"),JSON.stringify({framework:null,installCommand:"",buildCommand:"node operator.cjs"}));
 copyFileSync(join(root,"sql/analytics/041_history_report_bridge.sql"),join(out,"041_history_report_bridge.sql"));
 copyFileSync(join(root,"docs/analytics/HISTORY_REPORT_BRIDGE.md"),join(out,"OPERATOR.md"));
+if(inventory){
+  copyFileSync(join(root,"sql/analytics/042_history_inventory_normalization.sql"),join(out,"042_history_inventory_normalization.sql"));
+  copyFileSync(join(root,"docs/analytics/HISTORY_INVENTORY_NORMALIZATION.md"),join(out,"INVENTORY.md"));
+  copyFileSync(join(root,"scripts/analytics/history-inventory-scope.json"),join(out,"scope-template.json"));
+}
 const digest=x=>createHash("sha256").update(x).digest("hex");
 const manifest={sourceCommit:execFileSync("git",["rev-parse","HEAD"],{cwd:root,encoding:"utf8"}).trim(),
-  runtime:"build-only-node24",enabled:false,providerCallsPerOrder:{minimum:4,maximum:8},
-  whole61821OrderEstimate:{minimum:247284,maximum:494568},rawDataInPublicOutput:false,
-  bundleSha256:digest(bundle),sqlSha256:digest(readFileSync(join(out,"041_history_report_bridge.sql")))};
+  runtime:"build-only-node24",enabled:false,mode:inventory?"inventory":"advance",
+  providerCallsPerOrder:inventory?{minimum:0,maximum:0}:{minimum:4,maximum:8},
+  whole61821OrderEstimate:inventory?{minimum:0,maximum:0}:{minimum:247284,maximum:494568},rawDataInPublicOutput:false,
+  bundleSha256:digest(bundle),sqlSha256:digest(readFileSync(join(out,"041_history_report_bridge.sql"))),
+  ...(inventory?{inventorySqlSha256:digest(readFileSync(join(out,"042_history_inventory_normalization.sql"))),
+    whole61821OrderDatabaseEstimate:1238,providerTokenUsed:false}:{}),
+};
 writeFileSync(join(out,"manifest.json"),JSON.stringify(manifest,null,2)+"\n");
 console.log(JSON.stringify({package:resolve(out),...manifest}));

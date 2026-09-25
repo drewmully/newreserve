@@ -75,6 +75,43 @@ function pending(input: Input): Candidate {
   ]) row[name] = null;
   return { ...empty(), ...result };
 }
+/** Genuine inventory projection, not a failed/fabricated source reader result.
+ * Edited, zero-quantity and oversized lines remain in 040 with explicit counts. */
+export function normalizePendingInventory(input: Record<string, unknown>, order: Record<string, unknown>) {
+  if (input.sourceMode !== "inventory_only") throw new Error("inventory_source_mode");
+  const original=sourceObject(order.original),lines=sourceArray(order.lines).map(sourceObject);
+  const lineCount=Number(order.lineCount),expected=Number(order.canonicalExpectedCount);
+  if (!Number.isSafeInteger(lineCount) || lineCount<0 || !Number.isSafeInteger(expected) || expected<0 ||
+    expected>lineCount || lines.length>500 || typeof original.edited!=="boolean" ||
+    (original.edited || lineCount>500) && lines.length!==0 ||
+    !original.edited && lineCount<=500 && lines.length!==lineCount)
+    throw new Error("inventory_line_coverage");
+  const facts=pending({original,lines,lineCount,shop:sourceString(input.shop),
+    publication:sourceString(input.publication),policy:null,evidenceRef:"inventory-only:no-financial-assertion"});
+  if(facts.order_items.length!==expected || validateCandidateGraph(facts,String(input.publication),"commerce-only",false).length)
+    throw new Error("inventory_fact_counts");
+  return {sourceMode:"inventory_only",outcome:"inventory_pending",sourceOrderId:original.id,
+    sourceOrderHash:order.sourceOrderHash,sourceLineCount:lineCount,canonicalLineCount:facts.order_items.length,
+    withheldLineCount:lineCount-facts.order_items.length,withheldReasons:order.withheldReasons,facts};
+}
+export async function runHistoryInventoryBatch(options: {
+  client: AnalyticsRpcClient; projectRef: string; databaseUrl: string; runId: string;
+}) {
+  validatePipelineTarget(options.projectRef,options.databaseUrl);
+  const args={p_run:options.runId,p_project:options.projectRef,p_token:randomUUID()};
+  const input=sourceObject(await pipelineRpc(options.client,"lean_history_inventory_claim",args));
+  if(["disabled","expired","busy","inventory_complete"].includes(String(input.state)))return {state:String(input.state)};
+  if(input.state!=="inventory" || input.sourceMode!=="inventory_only")throw new Error("inventory_claim");
+  const orders=sourceArray(input.orders).map(sourceObject);
+  if(!orders.length || orders.length>100 || orders.reduce((n,o)=>n+sourceArray(o.lines).length,0)>1000)
+    throw new Error("inventory_batch_budget");
+  const results=orders.map(o=>normalizePendingInventory(input,o));
+  const done=await pipelineRpc(options.client,"lean_history_inventory_finish",{
+    ...args,p_batch:input.batch,p_input_hash:input.inputHash,p_results:results,
+  });
+  return {state:done===true?"inventory_written":"changed",orders:results.length,
+    sourceLines:results.reduce((n,o)=>n+o.sourceLineCount,0),canonicalLines:results.reduce((n,o)=>n+o.canonicalLineCount,0)};
+}
 export function normalizeHistoricalOrder(input: Input, source: PilotSource | null, unavailable?: string) {
   let facts = pending(input), outcome = unavailable ?? "pending_policy";
   const ref = input.evidenceRef;

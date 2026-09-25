@@ -4,7 +4,7 @@ import { Client } from "pg";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { beforeAll, afterAll, beforeEach, describe, expect, it } from "vitest";
-import { runHistoryReportStep, normalizeHistoricalOrder } from "@/lib/analytics/historyReportBridge";
+import { runHistoryReportStep, normalizeHistoricalOrder, normalizePendingInventory } from "@/lib/analytics/historyReportBridge";
 import { runHistoryReportOperator } from "@/lib/analytics/historyReportOperator";
 import { SHOPIFY_FINANCIAL_CUSTOMER_QUERY, SHOPIFY_FINANCIAL_ORDER_QUERY } from "@/lib/analytics/shopifySource";
 import type { PilotSource } from "@/lib/analytics/shopifyPilotSource";
@@ -40,7 +40,7 @@ describe.skipIf(!url)("040 source to real private canonical/report consumer", ()
   let control: Client, admin: Client, runtime: Client, peer: Client, calls: number, customer: boolean;
   let source: PilotSource, errors: string[], functions: unknown;
   const rpc = async (client: Client, name: string, args: Record<string, unknown>) => {
-    if (!/^lean_history_(report|progress)_[a-z]+$/.test(name) && !/^lean_spend_(claim|finish)$/.test(name))
+    if (!/^lean_history_(report|progress|inventory)_[a-z]+$/.test(name) && !/^lean_spend_(claim|finish)$/.test(name))
       throw new Error("unexpected RPC");
     return (await client.query(`select public.${name}(${Object.keys(args).map((k,i) => `${k}=>$${i+1}`).join(",")}) result`,
       Object.values(args).map(v => v && typeof v === "object" ? JSON.stringify(v) : v))).rows[0].result;
@@ -74,6 +74,9 @@ describe.skipIf(!url)("040 source to real private canonical/report consumer", ()
       await admin.query(readFileSync(`sql/analytics/${file}.sql`, "utf8"));
     functions = (await admin.query("select oid::regprocedure::text n,pg_get_functiondef(oid) d from pg_proc where proname like 'lean_spend_%' order by 1")).rows;
     await admin.query(readFileSync("sql/analytics/041_history_report_bridge.sql", "utf8"));
+    const priorFunctions=(await admin.query("select oid::regprocedure::text n,pg_get_functiondef(oid) d from pg_proc where proname like 'lean_history_%' order by 1")).rows;
+    await admin.query(readFileSync("sql/analytics/042_history_inventory_normalization.sql", "utf8"));
+    for(const row of priorFunctions)expect((await admin.query("select pg_get_functiondef($1::regprocedure) d",[row.n])).rows[0].d).toBe(row.d);
     await runtime.query("set role service_role;set statement_timeout='5s'"); await peer.query("set statement_timeout='5s'");
   }, 30000);
   afterAll(async () => {
@@ -104,10 +107,10 @@ describe.skipIf(!url)("040 source to real private canonical/report consumer", ()
     await admin.query("insert into lean_private.history_import_lines values('fixture-completed',$1,$2,$3)",
       [gid("LineItem", id), o.id, JSON.stringify(line)]);
   }
-  async function register(overrides = {}, enabled = true) {
+  async function register(overrides:Record<string,unknown> = {}, enabled = true) {
     const sourceHash = (await admin.query("select encode(sha256(convert_to(completion::text,'UTF8')),'hex') h from lean_private.history_import_jobs")).rows[0].h;
     const scope = { ...baseScope, sourceHash, expiresAt: new Date(Date.now()+3600000).toISOString(), ...overrides };
-    await rpc(admin, "lean_history_report_register", { p_scope: scope });
+    await rpc(admin, overrides.sourceMode ? "lean_history_inventory_register" : "lean_history_report_register", { p_scope: scope });
     if (enabled) await admin.query("update lean_private.history_report_jobs set enabled=true");
     return scope;
   }
@@ -271,5 +274,113 @@ describe.skipIf(!url)("040 source to real private canonical/report consumer", ()
     await expect(rpc(runtime,"lean_history_report_order",{...c,p_order:gid("Order","1"),p_facts:output.facts,p_outcome:output.outcome})).rejects.toThrow("fence");
     expect((await admin.query("select count(*) n from lean_private.orders")).rows[0].n).toBe("0");
     expect((await admin.query("select processed from lean_private.history_report_jobs")).rows[0].processed).toBe(0);
+  });
+  const inventoryConfig={enabled:true,runId:run,mode:"inventory" as const,maxSteps:1,maxProviderRequests:0};
+  const inventoryEnv={VERCEL_ENV:"preview",VERCEL_GIT_COMMIT_REF:"review/analytics-initial-validation",
+    LEAN_ANALYTICS_PIPELINE_PROJECT_REF:project,LEAN_SHOPIFY_SHOP_DOMAIN:shop,
+    LEAN_ANALYTICS_SUPABASE_URL:`https://${project}.supabase.co`,
+    LEAN_ANALYTICS_SUPABASE_SERVICE_ROLE_KEY:"synthetic-fixture",
+    get LEAN_SHOPIFY_ANALYTICS_READ_TOKEN():string{throw new Error("inventory must not read source credential");}};
+  const inventoryTransport:typeof fetch=async(url,init)=>{
+    expect(String(url)).toMatch(new RegExp(`^https://${project}\\.supabase\\.co/rest/v1/rpc/lean_history_inventory_(claim|finish)$`));
+    return Response.json(await rpc(runtime,String(url).split("/").pop()!,JSON.parse(String(init?.body))));
+  };
+  const inventoryStep=()=>runHistoryReportOperator(inventoryEnv,inventoryConfig,inventoryTransport);
+  const inventoryResults=(input:Record<string,unknown>)=>(input.orders as Record<string,unknown>[]).map(o=>normalizePendingInventory(input,o));
+  async function setCounts() {
+    await admin.query(`update lean_private.history_import_jobs set orders=(select count(*) from lean_private.history_import_orders),
+      lines=(select count(*) from lean_private.history_import_lines)`);
+  }
+  it("inventory-only writes genuine pending headers with explicit edited zero and oversized line coverage without a token",async()=>{
+    await addOrder("2");await addOrder("3");await addOrder("4");
+    await admin.query("update lean_private.history_import_orders set source=jsonb_set(source,'{edited}','true') where id=$1",[gid("Order","2")]);
+    await admin.query("update lean_private.history_import_lines set source=jsonb_set(source,'{quantity}','0') where parent_id=$1",[gid("Order","3")]);
+    await admin.query(`insert into lean_private.history_import_lines
+      select job_id,'gid://shopify/LineItem/'||n,parent_id,jsonb_set(source,'{id}',to_jsonb('gid://shopify/LineItem/'||n))
+      from lean_private.history_import_lines cross join generate_series(1000,1499) n where parent_id=$1`,[gid("Order","4")]);
+    await setCounts();await register({sourceMode:"inventory_only"},false);
+    expect((await inventoryStep()).lastState).toBe("disabled");
+    await expect(runtime.query("select * from lean_private.history_inventory_runs")).rejects.toThrow("permission denied");
+    await expect(rpc(runtime,"lean_history_inventory_register",{p_scope:{}})).rejects.toThrow("permission denied");
+    await admin.query("update lean_private.history_report_jobs set enabled=true");
+    await expect(step()).rejects.toThrow("pipeline_storage_unavailable");
+    expect(errors.some(e=>e.includes("inventory-only job cannot hydrate"))).toBe(true);
+    const result=await inventoryStep();expect("databaseRequests" in result && result.databaseRequests).toBe(2);expect(result.providerRequests).toBe(0);
+    expect(calls).toBe(0);
+    const orders=(await admin.query("select * from lean_private.orders")).rows;expect(orders).toHaveLength(4);
+    for(const o of orders){expect(o.eligibility_status).toBe("pending");expect(o.customer_id).toBeNull();
+      expect(o.paid_at).toBeNull();expect(o.purchase_merchandise_net_usd).toBeNull();expect(o.acquisition_eligible).toBe(false);}
+    const stats=(await admin.query("select complete,source_lines,canonical_lines from lean_private.history_inventory_runs")).rows[0];
+    expect(stats).toEqual({complete:true,source_lines:"504",canonical_lines:"1"});
+    const counts=(await admin.query("select counts from lean_private.history_inventory_batches")).rows[0].counts;
+    expect(counts.ordersCoverage.map((o:{withheldReasons:unknown})=>o.withheldReasons))
+      .toEqual([[],["edited_source"],["zero_quantity"],["source_line_bound"]]);
+    expect((await inventoryStep()).status).toBe("inventory_complete_pending");
+    expect((await admin.query("select count(*) n from lean_private.payments")).rows[0].n).toBe("0");
+    expect((await admin.query("select source,outcome from lean_private.history_report_sources")).rows
+      .every(s=>s.source===null&&s.outcome==="inventory_pending")).toBe(true);
+    expect((await admin.query("select count(*) n from lean_private.report_store_daily")).rows[0].n).toBe("0");
+  });
+  it("inventory-only caps 100 orders and resumes exact cursor with stable batch replay",async()=>{
+    await admin.query(`insert into lean_private.history_import_orders select job_id,'gid://shopify/Order/'||n,
+      jsonb_set(source,'{id}',to_jsonb('gid://shopify/Order/'||n)) from lean_private.history_import_orders cross join generate_series(2,101) n`);
+    await setCounts();await register({sourceMode:"inventory_only"});
+    const c=common(),input=await rpc(runtime,"lean_history_inventory_claim",c);
+    expect(input.orders).toHaveLength(100);const results=inventoryResults(input);
+    const finish={...c,p_batch:input.batch,p_input_hash:input.inputHash,p_results:results};
+    expect(await rpc(runtime,"lean_history_inventory_finish",finish)).toBe(true);
+    expect(await rpc(runtime,"lean_history_inventory_finish",finish)).toBe(true);
+    expect((await admin.query("select processed from lean_private.history_report_jobs")).rows[0].processed).toBe(100);
+    await inventoryStep();expect((await inventoryStep()).status).toBe("inventory_complete_pending");
+    expect((await admin.query("select count(*) n from lean_private.orders")).rows[0].n).toBe("101");
+    expect((await admin.query("select count(*) n from lean_private.orders where purchase_merchandise_net_usd is not null")).rows[0].n).toBe("0");
+    expect(calls).toBe(0);
+  });
+  it("inventory-only fences exact inputs outputs source kill lease and postwrite expiry",async()=>{
+    await register({sourceMode:"inventory_only"});const c=common(),input=await rpc(runtime,"lean_history_inventory_claim",c);
+    const results=inventoryResults(input),finish={...c,p_batch:input.batch,p_input_hash:input.inputHash,p_results:results};
+    expect((await rpc(runtime,"lean_history_inventory_claim",common())).state).toBe("busy");
+    await expect(rpc(runtime,"lean_history_inventory_finish",{...finish,p_input_hash:"wrong"})).rejects.toThrow("fence");
+    const wrong=structuredClone(results);wrong[0].facts.orders[0].purchase_merchandise_net_usd="0.000000";
+    await expect(rpc(runtime,"lean_history_inventory_finish",{...finish,p_results:wrong})).rejects.toThrow("must be unknown");
+    const falseLink=structuredClone(results);falseLink[0].facts.orders[0].checkout_link_status="resolved";
+    await expect(rpc(runtime,"lean_history_inventory_finish",{...finish,p_results:falseLink})).rejects.toThrow("unproven inventory order");
+    await admin.query("update lean_private.history_report_jobs set enabled=false");
+    await expect(rpc(runtime,"lean_history_inventory_finish",finish)).rejects.toThrow("fence");
+    await admin.query("update lean_private.history_report_jobs set enabled=true");
+    await admin.query("update lean_private.history_import_jobs set enabled=false");
+    await expect(rpc(runtime,"lean_history_inventory_finish",finish)).rejects.toThrow("history source changed");
+    await admin.query("update lean_private.history_import_jobs set enabled=true");
+    await admin.query("update lean_private.history_import_orders set source=jsonb_set(source,'{test}','true')");
+    await expect(rpc(runtime,"lean_history_inventory_finish",finish)).rejects.toThrow("inventory source changed");
+    await admin.query("update lean_private.history_import_orders set source=jsonb_set(source,'{test}','false')");
+    await admin.query("update lean_private.history_inventory_batches set lease_until=clock_timestamp()+interval '100 milliseconds'");
+    await admin.query(`create function pg_temp.inventory_delay() returns trigger language plpgsql as $$begin perform pg_sleep(0.2);return new;end$$;
+      create trigger bridge_delay before insert on lean_private.orders for each row execute function pg_temp.inventory_delay()`);
+    await expect(rpc(runtime,"lean_history_inventory_finish",finish)).rejects.toThrow("postwrite fence");
+    expect((await admin.query("select count(*) n from lean_private.orders")).rows[0].n).toBe("0");
+    expect((await admin.query("select processed from lean_private.history_report_jobs")).rows[0].processed).toBe(0);
+    const next=await rpc(runtime,"lean_history_inventory_claim",common());expect(next.inputHash).toBe(input.inputHash);
+    await expect(rpc(runtime,"lean_history_inventory_finish",finish)).rejects.toThrow("fence");
+  });
+  it("inventory-only caps projected lines at 1000 and rejects production transport",async()=>{
+    await addOrder("2");await addOrder("3");
+    await admin.query(`insert into lean_private.history_import_lines
+      select l.job_id,'gid://shopify/LineItem/'||(n+case when l.parent_id=$1 then 10000 else 20000 end),
+      l.parent_id,jsonb_set(l.source,'{id}',to_jsonb('gid://shopify/LineItem/'||(n+case when l.parent_id=$1 then 10000 else 20000 end)))
+      from lean_private.history_import_lines l cross join generate_series(1,499) n where l.parent_id in($1,$2)`,[gid("Order","1"),gid("Order","2")]);
+    await setCounts();await register({sourceMode:"inventory_only"});
+    const input=await rpc(runtime,"lean_history_inventory_claim",common());
+    expect(input.orders).toHaveLength(2);expect(input.orders.reduce((n:number,o:{lines:unknown[]})=>n+o.lines.length,0)).toBe(1000);
+    await expect(runHistoryReportOperator({VERCEL_ENV:"production"},inventoryConfig,inventoryTransport)).rejects.toThrow("inventory_operator_scope");
+  });
+  it("inventory-only expiry rejects the pending batch without any canonical write",async()=>{
+    await register({sourceMode:"inventory_only",expiresAt:new Date(Date.now()+500).toISOString()});
+    const c=common(),input=await rpc(runtime,"lean_history_inventory_claim",c);
+    await admin.query("select pg_sleep(0.55)");
+    await expect(rpc(runtime,"lean_history_inventory_finish",{...c,p_batch:input.batch,p_input_hash:input.inputHash,
+      p_results:inventoryResults(input)})).rejects.toThrow("fence");
+    expect((await rpc(runtime,"lean_history_inventory_claim",common())).state).toBe("expired");
+    expect((await admin.query("select count(*) n from lean_private.orders")).rows[0].n).toBe("0");
   });
 });
