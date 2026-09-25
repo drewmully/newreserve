@@ -1,6 +1,7 @@
 {
   "git": {
     "deploymentEnabled": {
+      "review/workbook-history-combined-041": false,
       "review/workbook-refresh-025": false,
       "review/workbook-sources-026-037": false,
       "review/workbook-collection-035-036": false,
