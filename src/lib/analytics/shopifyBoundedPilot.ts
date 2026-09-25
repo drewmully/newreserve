@@ -28,7 +28,8 @@ export async function acceptBoundedShopifyReceipt(
     const envelope = {
       admin_graphql_api_id: refund ? sourceId(p.admin_graphql_api_id ?? p.id, "Refund") : receiptOrderGid(receipt.topic, p),
       ...(refund ? { order_id: receiptOrderGid(receipt.topic, p) } : {}),
-      created_at: eventTimestamp(p.created_at), updated_at: eventTimestamp(p.updated_at ?? p.created_at),
+      created_at: eventTimestamp(p.created_at),
+      updated_at: eventTimestamp(refund ? (p.updated_at ?? p.created_at) : p.updated_at),
       // A missing/deleted product remains explicitly unapproved, never dropped.
       product_ids: refund || !Array.isArray(p.line_items) ? [] : [...new Set(sourceArray(p.line_items).map(line => {
         try { return sourceId(sourceObject(line).product_id, "Product"); } catch { return null; }
