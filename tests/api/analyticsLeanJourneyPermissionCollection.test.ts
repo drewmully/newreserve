@@ -214,10 +214,10 @@ async function consume(bundle: Awaited<ReturnType<typeof collectRefresh>>["bundl
   const behaviorRequest = vi.fn<typeof fetch>(async (url, init) => {
     expect(String(url)).toBe("https://us.posthog.com/api/projects/353503/query/");
     expect(init?.method).toBe("POST");
-    return new Response(JSON.stringify({ columns: ["uuid", "event", "timestamp", "distinct_id", "event_id", "insert_id",
-      "session_id", "ph_session_id", "anonymous_id", "analytics_permitted", "analytics_consent", "mully_anon_id"],
+    return new Response(JSON.stringify({ columns: ["uuid", "event", "timestamp", "event_id",
+      "session_id", "analytics_permitted", "mully_anon_id"],
     results: [["aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa", "lean_reserve_started", "2026-01-01T11:00:00Z",
-      null, "event1", null, "session1", null, null, true, null, "fixture-subject"]] }));
+      "event1", "session1", true, "fixture-subject"]] }));
   });
   const run = async () => {
     const rpc = vi.fn(async (name: string, p?: Record<string, unknown>) => {
