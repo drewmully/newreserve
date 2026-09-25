@@ -18,8 +18,11 @@ function keys(value: Record<string, unknown>, names: string[]) {
 function row(value: unknown, acquisition: boolean) {
   const metrics = acquisition ? acquisitionMetrics : storeMetrics;
   if (!object(value) || !keys(value, ["report_date","definition_version","is_stale","readiness",...metrics,
+    "report_scope","certified","all_account_spend_coverage_complete",
     ...(acquisition ? ["channel","campaign_bucket","model_version"] : [])]) ||
     value.definition_version !== "history-bridge-v1" || value.is_stale !== true ||
+    value.report_scope !== "selected_google_account_saved_snapshots" ||
+    value.certified !== false || value.all_account_spend_coverage_complete !== false ||
     typeof value.report_date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value.report_date) ||
     !object(value.readiness) || !keys(value.readiness, metrics) ||
     typeof value.spend_usd !== "string" || !/^\d{1,14}\.\d{6}$/.test(value.spend_usd)) return false;

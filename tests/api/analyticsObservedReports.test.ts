@@ -29,7 +29,10 @@ function reports() {
 }
 function payload() {
   const {store,acquisition}=reports();
-  for(const r of [store,...acquisition]){delete r.shop_id;delete r.publication_id;}
+  for(const r of [store,...acquisition]){
+    delete r.shop_id;delete r.publication_id;
+    Object.assign(r,{report_scope:"selected_google_account_saved_snapshots",certified:false,all_account_spend_coverage_complete:false});
+  }
   return {store_daily:[store],acquisition_daily:acquisition,coverage:{
     status:"observed_unverified",scope:"selected_google_account_saved_snapshots",financial_coverage_complete:false,
     all_account_spend_coverage_complete:false,certified:false,snapshots:[{report_date:date,completed_at:"2026-09-25T15:54:36+00:00"}],
@@ -137,6 +140,8 @@ describe.skipIf(!url)("043 real PostgreSQL delivery gate",()=>{
       has_function_privilege('authenticated','public.lean_observed_reports_read(text,text)','execute') b`)).rows[0];
     expect(grants).toEqual({a:false,b:false});await enable();
     const first=await read();expect(first.store_daily[0].spend_usd).toBe("12.345678");
+    for(const r of [...first.store_daily,...first.acquisition_daily])expect(r).toMatchObject({
+      report_scope:"selected_google_account_saved_snapshots",certified:false,all_account_spend_coverage_complete:false});
     expect(first.store_daily[0].total_sales_usd).toBeNull();expect(await read()).toEqual(first);
     await runtime.query("set timezone='America/Los_Angeles'");expect(await read()).toEqual(first);
     expect((await admin.query("select enabled from lean_private.history_report_jobs")).rows).toEqual([{enabled:false}]);

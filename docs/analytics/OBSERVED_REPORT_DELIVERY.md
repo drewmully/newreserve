@@ -62,6 +62,9 @@ No Postgres login or Supabase key is provided to PostHog. Do not enable a schedu
 or claim live freshness from these historic observations. Preserve the readiness
 and stale columns in downstream use; do not cast nulls to zero. The coverage
 object identifies unavailable domains but is not itself a report row.
+Each imported row also carries `report_scope=selected_google_account_saved_snapshots`,
+`certified=false`, and `all_account_spend_coverage_complete=false`; importing only
+the two arrays therefore does not discard their selected-account limitation.
 
 The new registry has RLS and no table access for PUBLIC/anon/authenticated/
 service_role. Only service_role can execute the fixed read RPC. Owner-only

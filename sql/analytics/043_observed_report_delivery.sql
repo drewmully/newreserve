@@ -72,6 +72,9 @@ begin
           item->>'model_version' is distinct from 'commerce-only')
           then raise exception 'observed dimension boundary'; end if;
         select jsonb_object_agg(k,item->k) into projected from unnest(common) k;
+        -- Custom REST imports the arrays, so scope warnings must travel per row.
+        projected:=projected||jsonb_build_object('report_scope','selected_google_account_saved_snapshots',
+          'certified',false,'all_account_spend_coverage_complete',false);
         foreach metric in array metrics loop
           if metric<>'spend_usd' and (item->metric is distinct from 'null'::jsonb or
             item#>>array['readiness',metric] is distinct from 'withheld')
