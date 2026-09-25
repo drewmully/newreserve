@@ -1,0 +1,28 @@
+{
+  "pilotId": "",
+  "shop": "mullybox-store.myshopify.com",
+  "projectRef": "xeqlgxvrhgwwudyqtnun",
+  "fromTime": "",
+  "untilTime": "",
+  "expiresAt": "",
+  "approvalRef": "",
+  "actorRef": "",
+  "maxReceipts": 1000,
+  "maxAttempts": 100,
+  "maxDailyAttempts": 20,
+  "policy": {
+    "decision": {
+      "eligibility": "eligible",
+      "commerceSource": "other",
+      "acquisitionEligible": false,
+      "approvalRef": ""
+    },
+    "productClasses": {
+      "8652818940096": "merchandise",
+      "8592710435008": "merchandise"
+    },
+    "saleClock": "paid_at",
+    "refundClock": "refund_created_at",
+    "financialApprovalRef": ""
+  }
+}
