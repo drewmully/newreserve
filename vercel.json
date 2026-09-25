@@ -2,6 +2,7 @@
   "git": {
     "deploymentEnabled": {
       "review/analytics-configured-event-fields": false,
+      "review/analytics-sales-window": false,
       "review/analytics-release-acl-045": false,
       "review/analytics-selected-order-044": false,
       "review/analytics-observed-report-delivery": false,

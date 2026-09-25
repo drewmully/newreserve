@@ -24,9 +24,10 @@ const client: AnalyticsRpcClient = { async rpc(name, input) {
     return { data: result.rows[0].result, error: null };
   } catch (error) { return { data: null, error }; }
 } };
-const row = (id = "1") => ({ source: { commerce: { shop, apiVersion: "2026-07", order: {
+// Metadata-only source fixture for the mocked reader and registry tests.
+const row = (id = "1") => ({ source: { commerce: { shop, apiVersion: "2026-07" as const, order: {
   id: `gid://shopify/Order/${id}`, createdAt: "2026-01-01T12:00:00Z", updatedAt: "2026-01-02T12:00:00Z",
-} } } });
+} }, financial: {}, refunds: [] } });
 const commit = (overrides: Record<string, unknown> = {}) => client.rpc("lean_history_commit", {
   ...args, p_expected_page: 0, p_expected_cursor: null, p_next_cursor: "next", p_complete: false,
   p_rows: [row()], ...overrides,
@@ -138,6 +139,20 @@ it("dispatches one page from saved state and commits through the atomic RPC", as
   expect(await runHistoryJob(options())).toEqual({ state: "complete", written: 0 });
   expect(await runHistoryJob(options())).toEqual({ state: "complete" });
   expect(runShopifyHistory).toHaveBeenCalledTimes(1);
+});
+it("forwards a fixed private projection through both durable page invocations", async () => {
+  const config = Object.freeze({ ...options(), projection: "financial_no_geo" as const });
+  vi.mocked(runShopifyHistory).mockImplementation(async input => {
+    expect(input.projection).toBe("financial_no_geo");
+    const first = input.cursor === null;
+    const page = { rows: [row(first ? "1" : "2")], nextCursor: first ? "next" : null, complete: !first };
+    expect(await input.store.commitPage(input.cursor, page)).toBe(true);
+    return { cursor: page.nextCursor, written: 1, complete: page.complete };
+  });
+  expect(await runHistoryJob(config)).toEqual({ state: "partial", written: 1 });
+  expect(await runHistoryJob(config)).toEqual({ state: "complete", written: 1 });
+  expect(await runHistoryJob(config)).toEqual({ state: "complete" });
+  expect(runShopifyHistory).toHaveBeenCalledTimes(2);
 });
 it("does not replay ambiguous storage failures", async () => {
   const rpc = vi.fn().mockRejectedValue(new Error("response lost"));
