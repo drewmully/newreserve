@@ -126,7 +126,14 @@ export function buildFullReports(input: {
     if (Date.parse(event.occurredAt) > Date.parse(p.asOf)) throw new Error("future_behavior_event");
     const resolution = event.distinctId ? resolve(event.identityNamespace, event.distinctId, event.occurredAt) : null;
     const restricted = resolution && ["removed", "not_permitted", "conflicting"].includes(resolution.status);
-    const allowed = event.analyticsPermitted && !restricted;
+    // First-party lean collection must have a current authority snapshot even
+    // when anonymous. An old event's boolean is not current permission.
+    const journeyAuthority = !event.family.startsWith("lean_") || event.identityNamespace === "lean_subject" &&
+      e.identity.some(row => row.namespace === "lean_subject" && row.identifier === event.distinctId &&
+        row.mappingVersion === p.mappingVersion && row.consent === "permitted" && row.removal === "active" &&
+        Date.parse(row.from) <= Date.parse(event.occurredAt) &&
+        (row.to === null || Date.parse(event.occurredAt) < Date.parse(row.to)));
+    const allowed = event.analyticsPermitted && !restricted && journeyAuthority;
     return { ...event, analyticsPermitted: !!allowed, customerId: allowed ? resolution?.customerId ?? null : null,
       distinctId: allowed ? event.distinctId : null, sourceSessionId: allowed ? event.sourceSessionId : null };
   });

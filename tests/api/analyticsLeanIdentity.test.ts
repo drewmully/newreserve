@@ -30,6 +30,11 @@ describe("evidence-only temporal identity", () => {
     expect(resolveTemporalIdentity({ ...input(), removedCustomers: new Set(["customer_opaque"]) }).status).toBe("removed");
     expect(resolveTemporalIdentity({ ...input(), currentlyPermitted: new Set() }).status).toBe("not_permitted");
   });
+  it.each(["denied", "unknown"] as const)("does not bypass anonymous %s permission", consent => {
+    const x = input();
+    x.mappings = [normalizeIdentity({ ...evidence, customerId: null, resolution: "unresolved", consent }, "p")];
+    expect(resolveTemporalIdentity(x)).toEqual({ customerId: null, status: "not_permitted" });
+  });
   it("does not treat a disabled source account as a removal without evidence", () => {
     expect(normalizeIdentity(evidence, "p").removal_status).toBe("active");
   });

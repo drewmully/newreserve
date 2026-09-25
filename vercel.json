@@ -1,6 +1,7 @@
 {
   "git": {
     "deploymentEnabled": {
+      "review/analytics-initial-validation": false,
       "feat/analytics-spend-source": false,
       "feat/analytics-full-report-build": false,
       "feat/analytics-commerce-reports": false,

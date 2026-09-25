@@ -45,7 +45,8 @@ beforeEach(async () => {
   await db.exec("truncate lean_private.history_jobs cascade");
   await db.query(`insert into lean_private.history_jobs
     (run_id,project_ref,shop,from_time,until_time,page_size,max_pages,approval_ref,actor_ref,enabled)
-    values('fixture',$1,$2,'2026-01-01','2026-02-01',2,2,'fixture:approval','fixture:operator',true)`, [project, shop]);
+    values('fixture',$1,$2,'2026-01-01T00:00:00Z','2026-02-01T00:00:00Z',2,2,
+      'fixture:approval','fixture:operator',true)`, [project, shop]);
 });
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
 afterAll(async () => { await db?.close(); });

@@ -50,6 +50,32 @@ it("does not turn unresolved eligible buyers into a certified zero new-customer 
   expect(result.reports.store_daily[0].new_customers).toBeNull();
   expect(result.reports.store_daily[0].ncac_usd).toBeNull();
 });
+it.each(["missing", "wrong-namespace", "expired", "denied", "removed"] as const)(
+  "requires authoritative permission for lean events: %s", failure => {
+    const input = fullFixture();
+    input.policy.stages = { view: "lean_quiz_started" };
+    input.events[0] = { ...input.events[0], family: "lean_quiz_started", identityNamespace: "lean_subject" };
+    input.evidence.identity = [{ ...input.evidence.identity[0], namespace: "lean_subject",
+      customerId: null, resolution: "unresolved" }];
+    if (failure === "missing") input.evidence.identity = [];
+    if (failure === "wrong-namespace") input.events[0].identityNamespace = "firebase";
+    if (failure === "expired") input.evidence.identity[0].to = input.events[0].occurredAt;
+    if (failure === "denied") input.evidence.identity[0].consent = "denied";
+    if (failure === "removed") input.evidence.identity[0].removal = "removed";
+    expect(buildFullReports(input).facts.sessions).toEqual([]);
+  });
+it("retains a permitted anonymous lean session without manufacturing a customer", () => {
+  const input = fullFixture();
+  input.policy.stages = { view: "lean_quiz_started" };
+  input.events[0] = { ...input.events[0], family: "lean_quiz_started", identityNamespace: "lean_subject" };
+  input.evidence.identity = [{ ...input.evidence.identity[0], namespace: "lean_subject",
+    customerId: null, resolution: "unresolved" }];
+  const result = buildFullReports(input);
+  expect(result.facts.sessions).toHaveLength(1);
+  expect(result.facts.sessions[0].customer_id).toBeNull();
+  input.evidence.identity[0].consent = "denied";
+  expect(buildFullReports(input).facts.sessions).toEqual([]);
+});
 it("requires exact reconciliation keys and independent controls", () => {
   const input = fullFixture(); input.evidence.proofs.find(p => p.table === "orders")!.expectedKeys = [];
   expect(buildFullReports(input).reports.store_daily[0].eligible_orders).toBeNull();
