@@ -116,7 +116,9 @@ begin
         (item->'readiness')-metrics<>'{}' or
         (select count(*) from jsonb_object_keys(item->'readiness'))<>cardinality(metrics) or
         (domain='product_daily' and (jsonb_typeof(item->'sku_bucket') is distinct from 'string' or
-          length(item->>'sku_bucket') not between 1 and 200))
+          length(item->>'sku_bucket') not between 1 and 200 or
+          not exists(select 1 from jsonb_array_elements(p_input#>'{facts,order_items}') i
+            where coalesce(i->>'sku','unknown')=item->>'sku_bucket')))
         then raise exception 'selected row boundary'; end if;
       foreach metric in array metrics loop
         if metric=any(array['collected_cash_usd','new_customers','spend_usd','ncac_usd','mer']) then
@@ -130,6 +132,11 @@ begin
             (item->>metric)!~'^-?[0-9]{1,14}\.[0-9]{6}$'))
           then raise exception 'selected metric boundary'; end if;
       end loop;
+      if domain='store_daily' and not exists(
+        select 1 from jsonb_array_elements(p_input->'savedStore') s
+        where s->>'report_date'=item->>'report_date' and not exists(
+          select 1 from jsonb_each(s) v where item->v.key is distinct from v.value
+        )) then raise exception 'selected saved store mismatch'; end if;
     end loop;
     select jsonb_agg(d order by d) into actual_dates from
       (select distinct x->>'report_date' d from jsonb_array_elements(p_payload->domain) x) q;

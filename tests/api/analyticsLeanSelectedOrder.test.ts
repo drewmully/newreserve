@@ -1,7 +1,10 @@
 /** Synthetic local 016 -> existing formulas -> 044 -> actual HTTP contract. No providers. */
 import { Client } from "pg";
 import { PGlite } from "@electric-sql/pglite";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { execFileSync } from "node:child_process";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { mapPilotSource, type PilotPolicy } from "@/lib/analytics/shopifyPilotMapping";
 import type { PilotSource } from "@/lib/analytics/shopifyPilotSource";
@@ -155,6 +158,14 @@ describe(`044 actual ${url?"PostgreSQL":"PGlite"} saved-pilot roundtrip`,()=>{
     const response=await selectedOrderGet(req(),env,async()=>Response.json(await read()));
     expect(response.status).toBe(200);expect(await response.json()).toEqual(payload);
     await exec("reset role");expect((await query("select state from lean_private.publications")).rows).toEqual([{state:"candidate"}]);
+    const temp=mkdtempSync(join(tmpdir(),"selected-verify-"));
+    try {
+      writeFileSync(join(temp,"input.json"),JSON.stringify(i));writeFileSync(join(temp,"get.json"),JSON.stringify(payload));
+      const result=JSON.parse(execFileSync(process.execPath,["scripts/analytics/selected-order-project.mjs",
+        join(temp,"input.json"),join(temp,"output.json"),join(temp,"get.json")],{encoding:"utf8"}));
+      expect(result).toMatchObject({savedStoreMatches:true,getMatches:true,storeRows:1,productRows:1});
+      expect(JSON.parse(readFileSync(join(temp,"output.json"),"utf8"))).toEqual(payload);
+    }finally{rmSync(temp,{recursive:true,force:true});}
   });
   it("hash binds raw source/policy/full canonical facts and saved store; all drift fails",async()=>{
     const i=await extract();await register(i);await enable();

@@ -54,12 +54,16 @@ policy, not authority to generalize eligibility to other orders.
    set enabled=true where scope_id=$scope`. Disabling is the only allowed
    registry update. Runtime cannot extract private facts, register, change
    expiry, write a report, approve policy or certify anything.
-5. Package separately (043 spend package stays unchanged):
+5. Build a combined package (043 spend function stays byte-identical):
 
    ```sh
    node scripts/analytics/package-selected-order.mjs /absolute/new-package
    ```
 
+   The command invokes the unchanged 043 packager then adds only the new
+   selected-order function and route. Both existing `/observed` and new
+   `/selected-order` URLs remain; the manifest retains the original 043
+   hashes. It does not change 043 environment variables or enablement.
    Parent deploys only in isolated Preview with
    `VERCEL_GIT_COMMIT_REF=review/analytics-initial-validation`,
    `LEAN_SELECTED_ORDER_ENABLED=true`, a fresh dedicated
