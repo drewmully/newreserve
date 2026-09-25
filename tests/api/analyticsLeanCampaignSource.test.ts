@@ -25,13 +25,13 @@ it("wires the native property through session and order attribution without a ma
   expect(init[1].body).not.toMatch(/current_url|SELECT \*/);
 });
 it.each([null, "", "unregistered", "someone@example.com"])("does not turn an unrecognized campaign into direct traffic: %s", async value => {
-  const f = fixture(); f.wire.results[0][11] = value;
+  const f = fixture(); f.wire.results[0][f.wire.columns.indexOf("campaign_token")] = value;
   const events = await readPosthogBehavior(f.behavior, "fixture", async () => Response.json(f.wire));
   expect(events[0].campaignContext).toBeUndefined();
   expect(JSON.stringify(events)).not.toContain("someone@example.com");
 });
 it("strips campaign information with denied collection permission", async () => {
-  const f = fixture(); f.wire.results[0][9] = false;
+  const f = fixture(); f.wire.results[0][f.wire.columns.indexOf("analytics_permitted")] = false;
   const events = await readPosthogBehavior(f.behavior, "fixture", async () => Response.json(f.wire));
   expect(events[0].campaignContext).toBeUndefined();
 });

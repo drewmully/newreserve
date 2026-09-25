@@ -90,10 +90,11 @@ export function fullFixture() {
     families: { page_view: { producer: "web", schemaVersion: "legacy-v1", identityNamespace: "firebase",
       actionProperty: "event_id", sessionProperty: "session_id", identityProperty: "distinct_id",
       consentProperty: "analytics_permitted" } } };
-  const wire = { columns: ["uuid", "event", "timestamp", "distinct_id", "event_id", "insert_id",
-    "session_id", "ph_session_id", "anonymous_id", "analytics_permitted", "analytics_consent"],
+  const wire: { columns: string[]; results: (string | boolean | null)[][] } = {
+    columns: ["uuid", "event", "timestamp", "distinct_id", "event_id",
+    "session_id", "analytics_permitted"],
   results: [[events[0].nativeUuid, "page_view", events[0].occurredAt, "uid-fixture",
-    "event-1", null, "session-fixture", null, null, true, null]] };
+    "event-1", "session-fixture", true]] };
   return { base, policy, evidence, events, behavior, wire, snapshot,
     publication: "full:fixture", shop: fullShop, fromDate: "2026-01-01", throughDate: "2026-01-01" };
 }

@@ -147,11 +147,13 @@ describe("actual PostHog identifier fields", () => {
     "reads %s only when explicitly configured", async field => {
       const f = fullFixture();
       f.behavior.families.page_view.identityProperty = field;
-      const wire = { columns: [...f.wire.columns, field], results: [[...f.wire.results[0], "actual-id"]] };
+      const wire = { columns: [...f.wire.columns.filter(c => c !== "distinct_id"), field],
+        results: [[...f.wire.results[0].filter((_, i) => f.wire.columns[i] !== "distinct_id"), "actual-id"]] };
       const request = vi.fn<typeof fetch>(async () => Response.json(wire));
       const [event] = await readPosthogBehavior(f.behavior, "fixture", request);
       expect(event.distinctId).toBe("actual-id");
       expect(JSON.parse(String(request.mock.calls[0][1]?.body)).query.query).toContain(`properties.${field} AS ${field}`);
+      expect(JSON.parse(String(request.mock.calls[0][1]?.body)).query.query).not.toContain("distinct_id");
       expect(behaviorDiagnosticView(f.behavior).query).toContain(`toString(properties.${field})`);
     });
 });

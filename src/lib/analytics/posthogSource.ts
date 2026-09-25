@@ -19,8 +19,18 @@ export type BehaviorSource = {
     consentProperty: "analytics_permitted" | "analytics_consent";
   }>;
 };
-const columns = ["uuid", "event", "timestamp", "distinct_id", "event_id", "insert_id",
-  "session_id", "ph_session_id", "anonymous_id", "analytics_permitted", "analytics_consent"];
+// Fixed expressions and order make the reviewed family union deterministic.
+// Native distinct_id is email-capable in the legacy producer; read it only
+// when explicitly selected, not alongside an unrelated configured identity.
+const fields: Record<string, string> = {
+  distinct_id: "distinct_id", event_id: "properties.event_id", insert_id: "properties.$insert_id",
+  session_id: "properties.session_id", ph_session_id: "properties.$session_id",
+  anonymous_id: "properties.anonymous_id", analytics_permitted: "properties.analytics_permitted",
+  analytics_consent: "properties.analytics_consent", mully_anon_id: "properties.mully_anon_id",
+  reserve_user_id: "properties.reserve_user_id", shopify_customer_id: "properties.shopify_customer_id",
+};
+const actionColumn = (property: "event_id" | "$insert_id") => property === "$insert_id" ? "insert_id" : "event_id";
+const sessionColumn = (property: "session_id" | "$session_id") => property === "$session_id" ? "ph_session_id" : "session_id";
 const token = (s: string) => /^[a-zA-Z0-9_$:.-]{1,128}$/.test(s);
 export function validateBehaviorSource(c: BehaviorSource) {
   if (!["https://us.posthog.com", "https://eu.posthog.com"].includes(c.host) ||
@@ -54,7 +64,9 @@ export function validateBehaviorSource(c: BehaviorSource) {
   }
 }
 /** Bounded, synchronous, read-only query. LIMIT+1 fails closed rather than silently
- * truncating. No person profiles, URLs, IPs, email, or unbounded properties blobs.
+ * truncating. No person profiles, explicit email/URL/IP columns or full properties
+ * blobs. Identity values require a reviewed configured namespace; an explicitly
+ * selected native distinct_id can itself contain an email in the legacy source.
  * Pagination completeness alone NEVER certifies behavioral coverage or consent.
  * API contract: https://posthog.com/docs/api/query
  */
@@ -63,16 +75,14 @@ export async function readPosthogBehavior(c: BehaviorSource, apiKey: string,
   validateBehaviorSource(c);
   if (!apiKey.trim()) throw new Error("missing_behavior_credential");
   const families = Object.keys(c.families).sort().map(f => `'${f}'`).join(",");
-  // Select only explicitly configured identifiers. Existing configurations retain
-  // their exact wire contract; never select the whole properties/PII object.
-  const additional = [...new Set(Object.values(c.families).map(f => f.identityProperty))]
-    .filter(name => !columns.includes(name)).sort();
-  const selectedColumns = [...columns, ...additional, ...(c.campaignMapping ? ["campaign_token"] : [])];
-  const query = `SELECT uuid AS uuid, event AS event, timestamp AS timestamp, distinct_id AS distinct_id,
-    properties.event_id AS event_id, properties.$insert_id AS insert_id,
-    properties.session_id AS session_id, properties.$session_id AS ph_session_id,
-    properties.anonymous_id AS anonymous_id, properties.analytics_permitted AS analytics_permitted,
-    properties.analytics_consent AS analytics_consent${additional.map(name => `,\n    properties.${name} AS ${name}`).join("")}${
+  // Read only fields required by at least one reviewed family. Do not fetch
+  // unused identifiers or require unrelated optional source properties.
+  const required = new Set(Object.values(c.families).flatMap(f =>
+    [actionColumn(f.actionProperty), sessionColumn(f.sessionProperty), f.identityProperty, f.consentProperty]));
+  const selected = Object.keys(fields).filter(name => required.has(name));
+  const selectedColumns = ["uuid", "event", "timestamp", ...selected, ...(c.campaignMapping ? ["campaign_token"] : [])];
+  const query = `SELECT uuid AS uuid, event AS event, timestamp AS timestamp${selected.map(name =>
+    `,\n    ${fields[name]} AS ${name}`).join("")}${
       c.campaignMapping ? `,\n    properties.${c.campaignMapping.property} AS campaign_token` : ""}
     FROM events WHERE timestamp >= toDateTime('${c.from}') AND timestamp < toDateTime('${c.until}')
     AND event IN (${families}) ORDER BY timestamp, uuid LIMIT ${c.maxEvents + 1}`;
@@ -121,11 +131,11 @@ export async function readPosthogBehavior(c: BehaviorSource, apiKey: string,
     if (Date.parse(occurredAt) < Date.parse(c.from) || Date.parse(occurredAt) >= Date.parse(c.until))
       throw new Error("behavior_event_outside_scope");
     const optional = (v: unknown) => v === null || v === "" ? null : sourceString(v);
-    const action = optional(r[f.actionProperty === "$insert_id" ? "insert_id" : "event_id"]);
+    const action = optional(r[actionColumn(f.actionProperty)]);
     if (!action || action.length > 200) throw new Error("behavior_missing_dedup_key");
     // No implicit permission based on login or presence in the native event store.
     const permitted = r[f.consentProperty] === true;
-    const session = optional(r[f.sessionProperty === "$session_id" ? "ph_session_id" : "session_id"]);
+    const session = optional(r[sessionColumn(f.sessionProperty)]);
     const distinct = optional(r[f.identityProperty]);
     if ([session, distinct].some(s => s !== null && s.length > 200)) throw new Error("behavior_identifier_budget");
     const mapping = c.campaignMapping;

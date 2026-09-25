@@ -154,7 +154,7 @@ it("queries only fixed allowlisted event fields and normalizes the real response
   expect(request.body).not.toMatch(/email|raw_ip|current_url|SELECT \*/i);
 });
 it("does not infer consent from string truthiness, identity, or presence of an event", async () => {
-  const f = fullFixture(); f.wire.results[0][9] = "true";
+  const f = fullFixture(); f.wire.results[0][f.wire.columns.indexOf("analytics_permitted")] = "true";
   const events = await readPosthogBehavior(f.behavior, "fixture", async () => Response.json(f.wire));
   expect(events[0]).toMatchObject({ analyticsPermitted: false, distinctId: null, sourceSessionId: null });
 });
