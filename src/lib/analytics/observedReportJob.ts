@@ -8,6 +8,8 @@ import { acquisitionDaily, type Facts, type ReportScope } from "./reporting";
 import { validateCandidateGraph } from "./certification";
 import { decimal, micros, type Row } from "./primitives";
 import { deferredOrders } from "./deferredCommerce";
+import { assertInventorySources } from "./historyInventory";
+import { assemblePartitionPages, validatePartitionInventory, type PartitionPage } from "./partitionInventory";
 
 /** Saved sources only: no vendor credentials, source discovery or live requests.
  * This joins selected observations, NOT independently certified store coverage.
@@ -28,8 +30,27 @@ export async function runObservedReportJob(options: {
   const rawPolicy = sourceObject(input.policy), policy = rawPolicy as PipelinePolicy;
   const deferred = deferredOrders(rawPolicy.deferredOrders);
   const matched = new Set<string>();
-  const sources = sourceArray(input.history);
-  if (sources.length > 100) throw new Error("report_order_budget");
+  let sources = sourceArray(input.history);
+  if (rawPolicy.partitionInventory !== undefined) {
+    if (sources.length) throw new Error("partition_inline_source_rejected");
+    const manifest = validatePartitionInventory(rawPolicy.partitionInventory, {
+      projectRef: options.projectRef, shop,
+    }), pages: PartitionPage[] = [];
+    let bytes = 0;
+    for (const child of manifest.children) for (const page of child.pages) {
+      const value = sourceObject(await pipelineRpc(options.client, "lean_partition_page", {
+        ...args, p_child: child.id, p_number: page.number, p_input_hash: sourceString(input.inputHash),
+      }));
+      const payload = sourceString(value.payload); bytes += Buffer.byteLength(payload);
+      if (value.child !== child.id || value.number !== page.number ||
+          value.inputHash !== input.inputHash || bytes > manifest.maxBytes)
+        throw new Error("partition_page_changed");
+      pages.push({ child: child.id, number: page.number, payload });
+    }
+    sources = assemblePartitionPages(manifest, pages);
+  } else if (sources.length > 100) throw new Error("report_order_budget");
+  if (rawPolicy.sourceInventory !== undefined)
+    assertInventorySources(rawPolicy.sourceInventory, sources, { projectRef: options.projectRef, shop });
   const skus = new Set<unknown>();
   const records: RetainedCommerce[] = sources.flatMap(value => {
     const item = sourceObject(value), source = sourceObject(item.source) as PilotSource;
@@ -88,6 +109,8 @@ export async function runObservedReportJob(options: {
     }
   }
   const payload = { facts: result.facts, reports };
+  if (rawPolicy.partitionInventory !== undefined && Object.values(payload.facts).some(rows => rows.length > 10000))
+    throw new Error("report_fact_budget");
   if (Buffer.byteLength(JSON.stringify(payload)) > 16000000) throw new Error("report_payload_budget");
   // Never catch and replay: the write may have committed before a lost response.
   const committed = await pipelineRpc(options.client, "lean_report_finish", {

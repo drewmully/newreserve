@@ -158,3 +158,11 @@ success-time cash. These remaining integrations cannot be substituted with fixtu
 
 The local tests prove machinery and safeguards on synthetic inputs. They do
 not prove these customer contracts, source truth, hosted permissions or cost.
+
+## Optional bounded source collection
+
+Preparation remains offline by default. The explicit `--collect-sources` mode
+reads a reviewed Shopify inventory and existing customer/checkout sources before
+building the same disabled bundle. It does not refresh independent controls,
+consent or history. See [L29](L29-fresh-source-collection.md) for its approval
+gates, request/byte/time budgets, exact supported sections and remaining gaps.

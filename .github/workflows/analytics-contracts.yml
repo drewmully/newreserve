@@ -7,9 +7,24 @@ on:
       - "src/app/api/_lib/supabaseService.ts"
       - "src/app/api/_lib/googleAuth.ts"
       - "src/app/api/analytics/ingest/**"
+      - "src/app/api/analytics/journey/**"
+      - "src/app/api/analytics/track/route.ts"
+      - "src/app/api/shopify/checkout/route.ts"
+      - "src/app/api/stylegame/**"
+      - "src/app/api/simulatorclubs/checkout/route.ts"
+      - "src/app/lp/stylegame/runtime-config.js/route.ts"
+      - "src/app/analytics-preferences/**"
+      - "src/app/text-mully/page.tsx"
+      - "src/app/policies/layout.tsx"
+      - "src/lib/shopify.ts"
+      - "src/lib/shopifyCheckout.ts"
+      - "src/lib/swingBoxCheckout.ts"
+      - "public/lp/stylegame/index.html"
       - "tests/api/analytics*.test.ts"
       - "tests/fixtures/analyticsFull.ts"
       - "tests/fixtures/analyticsSpendPilot.ts"
+      - "tests/fixtures/analytics*.ts"
+      - "tests/fixtures/*.mjs"
       - "sql/analytics/**"
       - "scripts/analytics/**"
       - "docs/analytics/**"
@@ -29,9 +44,24 @@ on:
       - "src/app/api/_lib/supabaseService.ts"
       - "src/app/api/_lib/googleAuth.ts"
       - "src/app/api/analytics/ingest/**"
+      - "src/app/api/analytics/journey/**"
+      - "src/app/api/analytics/track/route.ts"
+      - "src/app/api/shopify/checkout/route.ts"
+      - "src/app/api/stylegame/**"
+      - "src/app/api/simulatorclubs/checkout/route.ts"
+      - "src/app/lp/stylegame/runtime-config.js/route.ts"
+      - "src/app/analytics-preferences/**"
+      - "src/app/text-mully/page.tsx"
+      - "src/app/policies/layout.tsx"
+      - "src/lib/shopify.ts"
+      - "src/lib/shopifyCheckout.ts"
+      - "src/lib/swingBoxCheckout.ts"
+      - "public/lp/stylegame/index.html"
       - "tests/api/analytics*.test.ts"
       - "tests/fixtures/analyticsFull.ts"
       - "tests/fixtures/analyticsSpendPilot.ts"
+      - "tests/fixtures/analytics*.ts"
+      - "tests/fixtures/*.mjs"
       - "sql/analytics/**"
       - "scripts/analytics/**"
       - "docs/analytics/**"
@@ -87,4 +117,10 @@ jobs:
               tests/api/analyticsContracts.test.ts tests/api/analyticsLean*.test.ts tests/api/analyticsTrack.route.test.ts
           done
       - run: npx tsc --project tsconfig.analytics.json
+      - name: Verify late-install compatibility on disposable PostgreSQL without concurrent role resets
+        env:
+          LEAN_LATE_INSTALL_POSTGRES: "true"
+        run: npm test -- --project api --maxWorkers 1 tests/api/analyticsLeanLateInstall.test.ts
       - run: npx eslint src/lib/analytics src/app/api/analytics/ingest src/app/api/_lib/supabaseService.ts src/app/api/_lib/googleAuth.ts tests/api/analyticsContracts.test.ts tests/api/analyticsLean*.test.ts tests/fixtures/analyticsFull.ts tests/fixtures/analyticsSpendPilot.ts scripts/analytics/*.mjs
+      - name: Lint integrated source fixtures and guarded application hooks
+        run: npx eslint src/app/api/analytics/journey tests/fixtures/analytics*.ts tests/fixtures/*.mjs src/app/api/analytics/track/route.ts src/app/api/stylegame/checkout/route.ts src/app/api/stylegame/played/route.ts src/app/api/simulatorclubs/checkout/route.ts src/app/lp/stylegame/runtime-config.js/route.ts src/lib/shopify.ts src/lib/shopifyCheckout.ts src/lib/swingBoxCheckout.ts src/app/api/shopify/checkout/route.ts src/app/analytics-preferences/page.tsx src/app/text-mully/page.tsx src/app/policies/layout.tsx

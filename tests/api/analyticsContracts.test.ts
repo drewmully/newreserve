@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import contracts from "@/lib/analytics/lean-contracts.json";
+import reporting from "@/lib/analytics/reporting-contracts.json";
 import {
   getTableContract,
   validateBatchShape,
@@ -58,6 +59,23 @@ describe("pinned workbook contracts", () => {
     ]);
     expect(getTableContract("order_attribution").primaryKey).toEqual([
       "order_id", "model_version", "publication_id",
+    ]);
+  });
+});
+
+describe("finite workbook reporting scope", () => {
+  it("pins the five reporting views and separates 18 required metrics from three optional primitives", () => {
+    expect(reporting.views.map((view) => view.name)).toEqual([
+      "store_daily", "acquisition_daily", "product_daily", "customer_cohorts", "funnel_daily",
+    ]);
+    const optional = reporting.metrics.filter((metric) =>
+      metric.contract["Contract state"].startsWith("Optional metric proposal"));
+    expect(optional.map((metric) => metric.id)).toEqual(["ctr", "cpc", "cpm"]);
+    expect(reporting.metrics.filter((metric) => !optional.includes(metric)).map((metric) => metric.id)).toEqual([
+      "gross_merchandise_sales", "discounts", "refunds", "net_merchandise_sales", "total_sales",
+      "spend", "collected_cash", "eligible_orders", "new_customers", "ncac", "mer",
+      "first_party_roas", "aov", "units", "measured_sessions", "session_conversion",
+      "repeat_purchase", "revenue_ltv",
     ]);
   });
 });

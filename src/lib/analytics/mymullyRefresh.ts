@@ -8,12 +8,16 @@ import { mapShopifyOffers, mapShopifyLineDiscounts, type OfferRegistry } from ".
 import { mullyCustomerId } from "./mymullySource";
 import { mapJourneyPermissions, type JourneyPermissions } from "./journeyPermissions";
 import type { FullBuildEvidence } from "./fullReportBuild";
+import { prepareOriginalPurchases, type OriginalPurchaseInput } from "./originalPurchasePreparation";
 
 export type MullyRefreshInput = {
   refresh: RefreshInput;
   source: Parameters<typeof mapMullySource>[0];
   binding: { sourceId: string; schemaVersion: string; approvalRef: string; maxAgeSeconds: number };
   cashPolicy?: ShopifyCashPolicy;
+  /** Source-bound original sales agreements for edited/refunded orders. The
+   * replacement is derived here; callers cannot inject arbitrary ledger rows. */
+  originalPurchases?: OriginalPurchaseInput[];
   journey?: JourneySnapshot;
   draftJourney?: DraftJourneySnapshot;
   journeyPermissions?: JourneyPermissions;
@@ -86,8 +90,11 @@ export function prepareMullyRefresh(input: MullyRefreshInput, secrets: { checkou
       sha256: evidenceDigest(payload), payload });
   }
   {
-    const payload = [...mapShopifyLineDiscounts(input.source.orders, refresh.intake.scope.shop),
-      ...(input.offers ? mapShopifyOffers(input.source.orders, input.offers) : [])];
+    // Current edited-line discounts are not original-purchase offer evidence.
+    const replaced = new Set(input.originalPurchases?.map(v => v.orderGid) ?? []);
+    const offerOrders = input.source.orders.filter(o => !replaced.has(String(o.order.id)));
+    const payload = [...mapShopifyLineDiscounts(offerOrders, refresh.intake.scope.shop),
+      ...(input.offers ? mapShopifyOffers(offerOrders, input.offers) : [])];
     packets.push({ section: "offers", sourceId: b.sourceId, schemaVersion: b.schemaVersion,
       sourceRecordRef: `shopify-offers:sha256:${evidenceDigest({ orders: input.source.orders, registry: input.offers ?? null })}`,
       scope: refresh.intake.scope, capturedAt: input.source.snapshot.capturedAt,
@@ -100,6 +107,12 @@ export function prepareMullyRefresh(input: MullyRefreshInput, secrets: { checkou
       sourceRecordRef: `shopify-transactions:sha256:${evidenceDigest(input.source.orders)}`,
       scope: refresh.intake.scope, capturedAt: input.source.snapshot.capturedAt,
       sha256: evidenceDigest(payload), payload });
+  }
+  if (input.originalPurchases) {
+    const original = prepareOriginalPurchases(refresh, input.source.orders, input.originalPurchases,
+      { sourceId: b.sourceId, schemaVersion: b.schemaVersion });
+    refresh.commercePolicy.deferredOrders = original.deferredOrders;
+    packets.push(original.packet);
   }
   const sections = new Set(packets.map(p => p.section));
   if (refresh.intake.bindings.some(prior => prior.sourceId === b.sourceId))

@@ -40,8 +40,8 @@ export function mapApprovedShopifyCash(documents: ShopifyOrderDocument[], policy
       ["sale", "capture", "refund"].includes(t.payment.kind)).map(t => {
       // A new/unknown gateway must not silently disappear from collected cash.
       if (!policy.gateways.includes(t.payment.gateway)) throw new Error("cash_unapproved_gateway");
-      if (!t.processedAt || Date.parse(t.processedAt) < Date.parse(createdAt) ||
-          Date.parse(t.processedAt) > Date.parse(updatedAt)) throw new Error("cash_processed_time_required");
+      if (!t.processedAt || Date.parse(t.processedAt) > Date.parse(updatedAt))
+        throw new Error("cash_processed_time_required");
       const result = { ...t.payment, settledAt: t.processedAt,
         settlementEvidenceRef: `shopify-success-policy:sha256:${policyHash}:source:${sourceHash}` };
       normalizePayment(result, "source-validation");
