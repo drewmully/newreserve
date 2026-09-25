@@ -74,6 +74,20 @@ returns void language sql security definer set search_path=pg_catalog as $$
 $$;
 revoke all on function public.lean_select_publication(text,text,text,text) from public;
 revoke all on function public.lean_mark_publication_stale(text) from public;
+-- Per-role Supabase defaults survive a PUBLIC revoke. Close them even when
+-- this schema-only installation does not include the later 017 pipeline.
+revoke all on function public.lean_select_publication(text,text,text,text) from service_role;
+revoke all on function public.lean_mark_publication_stale(text) from service_role;
+do $$
+declare role_name text;
+begin
+  foreach role_name in array array['anon','authenticated'] loop
+    if exists(select 1 from pg_roles where rolname=role_name) then
+      execute format('revoke all on function public.lean_select_publication(text,text,text,text) from %I',role_name);
+      execute format('revoke all on function public.lean_mark_publication_stale(text) from %I',role_name);
+    end if;
+  end loop;
+end $$;
 -- No runtime grant for certifying/selecting publications. Explicit approved operator only.
 grant execute on function public.lean_mark_publication_stale(text) to service_role;
 commit;
