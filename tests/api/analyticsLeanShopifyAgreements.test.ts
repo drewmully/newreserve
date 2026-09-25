@@ -247,7 +247,7 @@ it("carries original agreements through the actual full report builder without g
 it("runs the real gated extraction command with scoped credentials and private no-overwrite output", async () => {
   const dir = mkdtempSync(join(tmpdir(), "agreement-cli-fixture-")), f = fixture();
   const input = join(dir, "input.json"), output = join(dir, "snapshot.json");
-  const env = { LEAN_SHOPIFY_AGREEMENTS_READ_APPROVED: "true", LEAN_SHOPIFY_SHOP_DOMAIN: shop,
+  const env = { NODE_ENV: "test" as const, LEAN_SHOPIFY_AGREEMENTS_READ_APPROVED: "true", LEAN_SHOPIFY_SHOP_DOMAIN: shop,
     SHOPIFY_ADMIN_ACCESS_TOKEN: "must-not-use" };
   const fetcher = vi.fn<typeof fetch>()
     .mockResolvedValueOnce(response(reply(f.document.agreements[0])))

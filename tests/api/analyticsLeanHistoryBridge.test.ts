@@ -53,6 +53,15 @@ describe.skipIf(!url)("040 source to real private canonical/report consumer", ()
       !["/postgres","/analytics_test_pipeline"].includes(u.pathname)) throw new Error("loopback fixture only");
     control = new Client({ connectionString: u.href }); await control.connect();
     await control.query("drop database if exists analytics_test_history_bridge");
+    // Dedicated CI runs after the ordinary and late-install suites. Clean only
+    // their fixed reader-role grants in the allowlisted disposable control DB;
+    // DROP ROLE fails closed if an unrelated database still depends on a role.
+    for (const role of ["lean_pilot_reader", "lean_observed_reader", "lean_posthog_reader"]) {
+      if ((await control.query("select 1 from pg_roles where rolname=$1", [role])).rowCount) {
+        await control.query(`drop owned by ${role}`);
+        await control.query(`drop role ${role}`);
+      }
+    }
     await control.query("create database analytics_test_history_bridge"); u.pathname = "/analytics_test_history_bridge";
     admin = new Client({ connectionString: u.href }); runtime = new Client({ connectionString: u.href }); peer = new Client({ connectionString: u.href });
     await admin.connect(); await runtime.connect(); await peer.connect();

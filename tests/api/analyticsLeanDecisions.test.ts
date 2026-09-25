@@ -12,6 +12,7 @@ const req = (token?: string, extra: Record<string, string> = {}) => new Request(
 });
 function runtime(): JourneyRuntime {
   return { env: {
+    NODE_ENV: "test",
     LEAN_ANALYTICS_JOURNEYS_ENABLED: "true", LEAN_ANALYTICS_PIPELINE_PROJECT_REF: project,
     LEAN_ANALYTICS_SUPABASE_URL: `https://${project}.supabase.co`, LEAN_SHOPIFY_SHOP_DOMAIN: shop,
     LEAN_POSTHOG_PROJECT_ID: "123", LEAN_ANALYTICS_PERMISSION_POLICY: "fixture:v1",

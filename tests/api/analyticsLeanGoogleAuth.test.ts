@@ -142,8 +142,8 @@ it("runs the actual command module against synthetic transport and stays disable
   const dir = mkdtempSync(join(tmpdir(), "google-check-test-")), file = join(dir, "scope.json");
   try {
     writeFileSync(file, JSON.stringify(scope));
-    await expect(readGoogleCheck(file, {}, wire())).rejects.toThrow("disabled");
-    const result = await readGoogleCheck(file, { LEAN_ANALYTICS_GOOGLE_CHECK_ENABLED: "true",
+    await expect(readGoogleCheck(file, { NODE_ENV: "test" }, wire())).rejects.toThrow("disabled");
+    const result = await readGoogleCheck(file, { NODE_ENV: "test", LEAN_ANALYTICS_GOOGLE_CHECK_ENABLED: "true",
       LEAN_GOOGLE_ADS_AUTH_MODE: "service_account", LEAN_GOOGLE_ADS_SERVICE_ACCOUNT_JSON_BASE64: json,
       LEAN_GOOGLE_ADS_IMPERSONATE_EMAIL: auth.subject, LEAN_GOOGLE_ADS_DEVELOPER_TOKEN: "fixture:developer" }, wire());
     expect(result.state).toBe("sample_amounts_match");
@@ -162,7 +162,7 @@ it("emits a single-file Node-only bundle with code identity and an actual disabl
       LEAN_GOOGLE_ADS_IMPERSONATE_EMAIL: auth.subject, LEAN_GOOGLE_ADS_DEVELOPER_TOKEN: "fixture:developer" }, wire());
     expect(result.code.sourceSha256).toBe(manifest.sourceSha256);
     expect(result.state).toBe("sample_amounts_match");
-    const child = spawnSync(process.execPath, [file, input], { encoding: "utf8", env: {} });
+    const child = spawnSync(process.execPath, [file, input], { encoding: "utf8", env: { NODE_ENV: "test" } });
     expect(child.status).toBe(1);
     expect(child.stdout).toBe("");
     expect(child.stderr.trim()).toBe("google_check_failed");

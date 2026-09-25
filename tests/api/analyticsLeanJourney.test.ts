@@ -31,7 +31,7 @@ const rpc: JourneyRuntime["rpc"] = async (name, args) => {
   } catch (error) { return { data: null, error }; }
 };
 const runtime = (): JourneyRuntime => ({
-  env: { LEAN_ANALYTICS_JOURNEYS_ENABLED: "true", LEAN_ANALYTICS_PIPELINE_PROJECT_REF: project,
+  env: { NODE_ENV: "test", LEAN_ANALYTICS_JOURNEYS_ENABLED: "true", LEAN_ANALYTICS_PIPELINE_PROJECT_REF: project,
     LEAN_ANALYTICS_SUPABASE_URL: `https://${project}.supabase.co`,
     LEAN_SHOPIFY_SHOP_DOMAIN: shop, LEAN_POSTHOG_PROJECT_ID: "353503",
     LEAN_POSTHOG_CAPTURE_ORIGIN: "https://us.i.posthog.com", LEAN_POSTHOG_CAPTURE_KEY: "fixture",
