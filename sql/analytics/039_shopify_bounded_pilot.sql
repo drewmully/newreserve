@@ -1,4 +1,4 @@
--- UNVERIFIED DRAFT: review/smoke before activation. Registers/enables nothing.
+-- REVIEW ONLY: isolated synthetic installation checks are not activation approval.
 -- Independent supplement to 017; does not alter Google 019/038.
 begin;
 create table lean_private.shopify_pilots (
@@ -90,7 +90,8 @@ create function lean_private.shopify_pilot_ready(p lean_private.shopify_pilots) 
 language sql volatile set search_path=pg_catalog as $$
   select p.enabled and not p.blocked and p.expires_at>clock_timestamp() and exists(
     select 1 from lean_private.pipeline_scope c where c.shop=p.shop and c.project_ref=p.project_ref
-      and c.enabled and c.policy=p.policy and c.from_time=p.from_time and c.until_time=p.until_time)
+      and c.enabled and c.policy=p.policy and c.from_time=p.from_time and c.until_time=p.until_time
+    for share)
 $$;
 create function public.lean_shopify_pilot_status(p_pilot text,p_project_ref text,p_shop text) returns jsonb
 language plpgsql security definer set search_path=pg_catalog as $$

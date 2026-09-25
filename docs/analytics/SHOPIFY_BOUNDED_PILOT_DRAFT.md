@@ -1,8 +1,11 @@
-# Bounded Shopify pilot — UNVERIFIED implementation draft
+# Bounded Shopify pilot — local installation checked; activation unapproved
 
-**Do not activate based on compilation/lint. No tests or SQL execution were run
-for this supplement, at the parent's explicit instruction.** The Google
-seven-day pilot, its runtime and scheduler are separate and unchanged.
+**Do not activate without approved scope/policy and a genuine-delivery smoke.**
+The later authorized focused installation check passed 24 synthetic/local cases
+on disposable PostgreSQL 18.6 and the actual two-route HTTP package. It applied
+001/003/004/013–024 plus038 and039, with an enabled synthetic Google pilot preserved.
+No hosted/source calls, broad regression suite or timezone reruns were performed.
+The existing Google seven-day pilot, its runtime and scheduler remain separate.
 
 ## Scope and missing approval
 
@@ -58,6 +61,8 @@ unpaid and unsupported financial cases are withheld, not reconstructed.
   mapping, shortened to absolute expiry; SQL lease is at most 60 seconds.
 - Accept/claim/retain/finish lock and check scope, expiry and kill state. Retain
   and finish recheck captured expiry/lease **after writes**, raising to rollback.
+  Readiness holds a share lock on `pipeline_scope` through the transaction, after
+  locking the pilot, so a concurrent scope kill cannot slip between check and write.
   Killing scope fences future retention/commit, not packets already in flight.
   Long owner-held outer transactions are not equivalent to runtime RPC commits.
 
@@ -166,7 +171,24 @@ Shopify deployment only. Install only approved correct-app subscriptions.
 A finite existing dispatcher can invoke process; this supplement creates no
 scheduler. Do not reset attempts, dead work or blocked counters to evade caps.
 
-## Required narrow smoke and rollback — not executed here
+## Installation check and remaining activation smoke
+
+`tests/runtime/shopifyBoundedInstallation.test.cjs` exercises the packaged
+handlers, synthetic fixed Shopify transport and actual service-role PostgreSQL
+RPCs. Its 24 cases cover the installation, default-off/auth/target, minimal receipt
+and replay/collision, supported purchase/refund, missing order update time,
+catalog/cancellation/edited staleness, membership, bypass grants, caps, kill and
+newer-event fences, transaction locks and post-write lease/absolute expiry rollback.
+The ordinary unregistered pipeline path also passes. This is not a full suite.
+
+A separate-connection check first reproduced a missing scope-row lock during
+accept/retain; adding `FOR SHARE` in readiness made it pass. Both parent and scope
+kills now block until that transaction releases its locks. Google function
+definitions and enabled synthetic pilot rows were asserted unchanged.
+
+Before activation, review the following checklist against the approved concrete
+scope; steps1–6 have focused local synthetic coverage, not hosted proof. Step7
+and actual scope/policy approval remain outstanding:
 
 1. Apply039 to a disposable/local clone of017 first. Check all functions compile,
    column/view parity and runtime/anon grants, including renamed bypass denial.
