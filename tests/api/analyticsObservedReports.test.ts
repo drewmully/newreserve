@@ -112,16 +112,17 @@ describe.skipIf(!url)("043 real PostgreSQL delivery gate",()=>{
       insert into lean_private.history_report_jobs(run_id,scope,source_job,source_hash,expires_at,report_date)
       values('fixture','{}','source','fixture',now()-interval '1 day','2026-09-21')`);
     const input={shop,publication:pub,coverage:{financialCoverageComplete:false,allAccountSpendCoverageComplete:false}};
+    const inputHash=(await admin.query("select encode(sha256(convert_to($1::jsonb::text,'UTF8')),'hex') h",[JSON.stringify(input)])).rows[0].h;
     await admin.query(`insert into lean_private.history_report_progress(run_id,snapshot_id,report_date,input,input_hash,token,lease_until,completed_at,result_hash)
       values('fixture','snapshot',$1,$2,$3,gen_random_uuid(),now()-interval '1 day',now(),$4)`,
-      [date,JSON.stringify(input),"a".repeat(64),"b".repeat(64)]);
+      [date,JSON.stringify({...input,inputHash}),inputHash,"b".repeat(64)]);
     await admin.query("insert into lean_private.publications(publication_id,contract_version) values($1,'lean-v1-draft.1')",[pub]);
     const r=reports();
     for(const [table,rows] of [["report_store_daily",[r.store]],["report_acquisition_daily",r.acquisition]] as const)
       await admin.query(`insert into lean_private.${table} select * from jsonb_populate_recordset(null::lean_private.${table},$1)`,[JSON.stringify(rows)]);
     scope={scopeId:"fixture",projectRef:project,shop,expiresAt:new Date(Date.now()+3600000).toISOString(),
       approvalRef:"fixture:observed-only",actorRef:"fixture:owner",snapshots:[{runId:"fixture",snapshotId:"snapshot",date,
-        inputHash:"a".repeat(64),resultHash:"b".repeat(64)}]};
+        inputHash,resultHash:"b".repeat(64)}]};
   });
   const register=()=>admin.query("select public.lean_observed_reports_register($1)",[JSON.stringify(scope)]);
   const read=async()=> (await runtime.query("select public.lean_observed_reports_read('fixture',$1) r",[project])).rows[0].r;
@@ -156,6 +157,9 @@ describe.skipIf(!url)("043 real PostgreSQL delivery gate",()=>{
     await enable();await admin.query("update lean_private.history_report_progress set result_hash='changed'");
     await expect(read()).rejects.toThrow("snapshot changed");
     await admin.query("update lean_private.history_report_progress set result_hash=$1",["b".repeat(64)]);
+    await admin.query("update lean_private.history_report_progress set input=input||'{\"mutated\":true}'::jsonb");
+    await expect(read()).rejects.toThrow("snapshot changed");
+    await admin.query("update lean_private.history_report_progress set input=input-'mutated'");
     await admin.query("update lean_private.observed_report_delivery set expires_at=now()-interval '1 second'");
     await expect(read()).rejects.toThrow("unavailable");
   });

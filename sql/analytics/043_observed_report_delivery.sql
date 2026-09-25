@@ -32,6 +32,8 @@ begin
       where run_id=s->>'runId' and snapshot_id=s->>'snapshotId';
     if not found or progress.completed_at is null or progress.report_date is distinct from (s->>'date')::date or
       progress.input_hash is distinct from s->>'inputHash' or progress.result_hash is distinct from s->>'resultHash' or
+      progress.input->>'inputHash' is distinct from s->>'inputHash' or
+      encode(sha256(convert_to((progress.input-'inputHash')::text,'UTF8')),'hex') is distinct from s->>'inputHash' or
       progress.input->>'shop' is distinct from p_scope->>'shop' or
       progress.input#>'{coverage,financialCoverageComplete}' is distinct from 'false'::jsonb or
       progress.input#>'{coverage,allAccountSpendCoverageComplete}' is distinct from 'false'::jsonb
