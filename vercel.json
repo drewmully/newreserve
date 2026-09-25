@@ -1,6 +1,7 @@
 {
   "git": {
     "deploymentEnabled": {
+      "review/analytics-041-history-report": false,
       "review/analytics-038-google-pilot": false,
       "review/analytics-039-shopify-pilot": false,
       "review/analytics-040-history-import": false,

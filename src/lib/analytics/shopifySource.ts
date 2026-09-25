@@ -49,13 +49,44 @@ query AnalyticsOrder($id: ID!, $cursor: String) {
     }
   }
 }`;
+/** Historical financial enrichment deliberately excludes every address field.
+ * Customer IDs are an explicit separate projection, never inferred from absence. */
+export const SHOPIFY_FINANCIAL_ORDER_QUERY = `
+query AnalyticsOrder($id: ID!, $cursor: String) {
+  order(id: $id) {
+    id createdAt updatedAt currencyCode edited taxesIncluded test cancelledAt
+    originalTotalPriceSet { shopMoney { amount currencyCode } }
+    subtotalPriceSet { shopMoney { amount currencyCode } }
+    transactionsCount { count precision }
+    transactions(first: 250) {
+      id kind status gateway test createdAt processedAt
+      amountSet { shopMoney { amount currencyCode } }
+      parentTransaction { id gateway }
+    }
+    lineItems(first: 250, after: $cursor) {
+      nodes {
+        id sku quantity isGiftCard product { id }
+        originalUnitPriceSet { shopMoney { amount currencyCode } }
+        originalTotalSet { shopMoney { amount currencyCode } }
+        discountAllocations { allocatedAmountSet { shopMoney { amount currencyCode } } }
+      }
+      pageInfo { hasNextPage endCursor }
+    }
+  }
+}`;
+export const SHOPIFY_FINANCIAL_CUSTOMER_QUERY = SHOPIFY_FINANCIAL_ORDER_QUERY.replace(
+  "id createdAt updatedAt currencyCode", "customer { id }\n    id createdAt updatedAt currencyCode",
+);
+export type ShopifyProjection = "financial_no_geo" | "financial_customer_id";
 
 export type ShopifyOrderDocument = {
   shop: string;
   apiVersion: typeof SHOPIFY_ANALYTICS_API_VERSION;
   order: SourceObject;
+  projection?: ShopifyProjection;
 };
-type ReaderOptions = { shop: string; accessToken: string; fetcher?: typeof fetch; maxLinePages?: number; signal?: AbortSignal };
+type ReaderOptions = { shop: string; accessToken: string; fetcher?: typeof fetch; maxLinePages?: number;
+  signal?: AbortSignal; projection?: ShopifyProjection };
 
 /** One order at a time, bounded nested pagination, no writes or automatic retries.
  * The caller must persist this source document before invoking the mapper.
@@ -64,6 +95,10 @@ export async function readShopifyAnalyticsOrder(options: ReaderOptions, orderGid
   const shop = shopifyShop(options.shop);
   shopifyId(orderGid, "Order");
   if (!options.accessToken.trim()) throw new Error("missing_shopify_access_token");
+  if (options.projection !== undefined && !["financial_no_geo", "financial_customer_id"].includes(options.projection))
+    throw new Error("shopify_invalid_projection");
+  const query = options.projection === "financial_customer_id" ? SHOPIFY_FINANCIAL_CUSTOMER_QUERY :
+    options.projection === "financial_no_geo" ? SHOPIFY_FINANCIAL_ORDER_QUERY : SHOPIFY_ANALYTICS_ORDER_QUERY;
   const fetcher = options.fetcher ?? fetch;
   async function request(cursor: string | null): Promise<SourceObject> {
     let response: Response;
@@ -71,7 +106,7 @@ export async function readShopifyAnalyticsOrder(options: ReaderOptions, orderGid
       response = await fetcher(`https://${shop}/admin/api/${SHOPIFY_ANALYTICS_API_VERSION}/graphql.json`, {
         method: "POST", redirect: "error", signal: AbortSignal.any([AbortSignal.timeout(15000), ...(options.signal ? [options.signal] : [])]),
         headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": options.accessToken },
-        body: JSON.stringify({ query: SHOPIFY_ANALYTICS_ORDER_QUERY, variables: { id: orderGid, cursor } }),
+        body: JSON.stringify({ query, variables: { id: orderGid, cursor } }),
       });
     } catch { throw new Error("shopify_transport_failed"); }
     if (!response.ok) throw new Error("shopify_http_failed");
@@ -106,7 +141,8 @@ export async function readShopifyAnalyticsOrder(options: ReaderOptions, orderGid
   if (metadata(await request(null)) !== revision) throw new Error("shopify_order_changed_during_read");
   const ids = lines.map(line => shopifyId(sourceObject(line).id, "LineItem"));
   if (new Set(ids).size !== ids.length) throw new Error("shopify_duplicate_line");
-  return { shop, apiVersion: SHOPIFY_ANALYTICS_API_VERSION, order: {
+  return { shop, apiVersion: SHOPIFY_ANALYTICS_API_VERSION,
+    ...(options.projection ? { projection: options.projection } : {}), order: {
     ...initial, lineItems: { nodes: lines, pageInfo: { hasNextPage: false, endCursor: null } },
   } };
 }
