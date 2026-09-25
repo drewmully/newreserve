@@ -1,6 +1,7 @@
 {
   "git": {
     "deploymentEnabled": {
+      "review/analytics-selected-order-044": false,
       "review/analytics-observed-report-delivery": false,
       "review/analytics-collected-cash-043": false,
       "review/analytics-042-inventory-only": false,
