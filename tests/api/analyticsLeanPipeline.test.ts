@@ -63,8 +63,12 @@ function shopify(source = fixture()) {
     let data;
     if (query === SHOPIFY_ANALYTICS_ORDER_QUERY) data = { order: source.commerce.order };
     else if (query === PILOT_FINANCIAL_QUERY) data = { order: source.financial };
-    else { expect(query).toBe(PILOT_REFUND_QUERY); data = { refund: source.refunds[0] }; }
-    expect(variables.id).toBe(query === PILOT_REFUND_QUERY ? gid("Refund", "7") : source.commerce.order.id);
+    else {
+      expect(query).toBe(PILOT_REFUND_QUERY);
+      expect(source.refunds.some(row => row.id === variables.id)).toBe(true);
+      data = { refund: source.refunds.find(row => row.id === variables.id) };
+    }
+    if (query !== PILOT_REFUND_QUERY) expect(variables.id).toBe(source.commerce.order.id);
     return new Response(JSON.stringify({ data }), { headers: { "X-Shopify-API-Version": "2026-07" } });
   });
 }
@@ -178,6 +182,45 @@ describe("automatic verified receipt -> Shopify hydration -> durable candidate -
     await receipt(); await run(shopify(fixture(undefined, "2026-01-03T00:00:00Z", true)));
     await receipt(); expect(await run()).toEqual({ state: "done" });
     expect(await query("select sum(total_sales_usd)::text sales from lean_analytics.observed_order_daily")).toEqual([{ sales: "21.000000" }]);
+  });
+  it("keeps two partial refunds on a revised order distinct and equal replay does not double them", async () => {
+    await receipt(); await run();
+    const source = fixture(undefined, "2026-01-04T00:00:00Z", true);
+    const second = structuredClone(source.refunds[0]);
+    second.id = gid("Refund", "9"); second.createdAt = "2026-01-03T12:00:00Z"; second.updatedAt = "2026-01-03T12:02:00Z";
+    sourceObject((sourceObject(second.refundLineItems).nodes as unknown[])[0]).id = gid("RefundLineItem", "10");
+    const tx = structuredClone((source.commerce.order.transactions as Record<string, unknown>[])[1]);
+    tx.id = gid("OrderTransaction", "11"); tx.createdAt = "2026-01-03T11:59:56Z"; tx.processedAt = tx.createdAt;
+    (source.commerce.order.transactions as unknown[]).push(tx);
+    source.commerce.order.transactionsCount = { count: 3, precision: "EXACT" };
+    const refundTx = sourceObject((sourceObject(second.transactions).nodes as unknown[])[0]);
+    refundTx.id = tx.id; refundTx.processedAt = tx.processedAt;
+    source.refunds.push(second);
+    (source.financial.refunds as unknown[]).push({ id: second.id, updatedAt: second.updatedAt });
+    await receipt();
+    expect(await run(shopify(source))).toEqual({ state: "done" });
+    await receipt(); expect(await run(shopify(source))).toEqual({ state: "done" });
+    expect(await query("select sum(total_sales_usd)::text sales,sum(refunds_usd)::text refunds from lean_analytics.observed_order_daily"))
+      .toEqual([{ sales: "15.000000", refunds: "10.000000" }]);
+    expect(await query("select count(*)::int n from lean_private.pipeline_heads")).toEqual([{ n: 1 }]);
+    expect(await query("select * from lean_private.selected_publications")).toEqual([]);
+  });
+  it.each(["cancelled", "edited"])("retains a rejected %s partial-refund update without replacing the last-good head", async kind => {
+    await receipt(); await run();
+    const head = await query("select work_id from lean_private.pipeline_heads");
+    const source = fixture(undefined, "2026-01-03T00:00:00Z", true);
+    if (kind === "cancelled") source.commerce.order.cancelledAt = "2026-01-02T13:00:00Z";
+    else source.commerce.order.edited = true;
+    await receipt(undefined, undefined, kind === "cancelled" ? "orders/cancelled" : "orders/updated");
+    const fetcher = shopify(source);
+    expect(await run(fetcher)).toEqual({ state: "failed" });
+    expect(await query("select work_id from lean_private.pipeline_heads")).toEqual(head);
+    expect(await query("select total_sales_usd::text sales,pipeline_stale from lean_analytics.observed_order_daily"))
+      .toEqual([{ sales: "27.000000", pipeline_stale: true }]);
+    expect(await query("select count(*)::int n from lean_private.pipeline_snapshots where source is not null")).toEqual([{ n: 2 }]);
+    await db.exec("update lean_private.work set available_at=now()-interval '1 second' where state='pending'");
+    expect(await run(fetcher)).toEqual({ state: "failed" });
+    expect(fetcher).toHaveBeenCalledTimes(5);
   });
   it("does not advance the head or duplicate current rows for identical revisions", async () => {
     await receipt(); await run(); const head = await query("select work_id from lean_private.pipeline_heads");

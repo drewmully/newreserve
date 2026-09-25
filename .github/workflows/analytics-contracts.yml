@@ -5,8 +5,10 @@ on:
     paths:
       - "src/lib/analytics/**"
       - "src/app/api/_lib/supabaseService.ts"
+      - "src/app/api/_lib/googleAuth.ts"
       - "src/app/api/analytics/ingest/**"
       - "tests/api/analytics*.test.ts"
+      - "tests/fixtures/analyticsFull.ts"
       - "sql/analytics/**"
       - "scripts/analytics/**"
       - "docs/analytics/**"
@@ -16,6 +18,7 @@ on:
       - "tsconfig.json"
       - "tsconfig.analytics.json"
       - "eslint.config.mjs"
+      - "vercel.json"
       - "tests/setup/api.setup.ts"
       - ".github/workflows/analytics-contracts.yml"
   push:
@@ -23,8 +26,10 @@ on:
     paths:
       - "src/lib/analytics/**"
       - "src/app/api/_lib/supabaseService.ts"
+      - "src/app/api/_lib/googleAuth.ts"
       - "src/app/api/analytics/ingest/**"
       - "tests/api/analytics*.test.ts"
+      - "tests/fixtures/analyticsFull.ts"
       - "sql/analytics/**"
       - "scripts/analytics/**"
       - "docs/analytics/**"
@@ -34,6 +39,7 @@ on:
       - "tsconfig.json"
       - "tsconfig.analytics.json"
       - "eslint.config.mjs"
+      - "vercel.json"
       - "tests/setup/api.setup.ts"
       - ".github/workflows/analytics-contracts.yml"
 
@@ -72,6 +78,11 @@ jobs:
           node scripts/analytics/generate-staging.mjs
           node scripts/analytics/generate-reporting-sql.mjs
           git diff --exit-code -- sql/analytics/001_staging.sql sql/analytics/014_reporting_views.sql
-      - run: npm test -- --project api tests/api/analyticsContracts.test.ts tests/api/analyticsLean
+      - name: Run analytics and real PostgreSQL contracts in both timezones
+        run: |
+          for zone in UTC America/Los_Angeles; do
+            TZ="$zone" npm test -- --project api --maxWorkers 2 \
+              tests/api/analyticsContracts.test.ts tests/api/analyticsLean*.test.ts tests/api/analyticsTrack.route.test.ts
+          done
       - run: npx tsc --project tsconfig.analytics.json
-      - run: npx eslint src/lib/analytics src/app/api/analytics/ingest src/app/api/_lib/supabaseService.ts tests/api/analyticsContracts.test.ts tests/api/analyticsLean*.test.ts scripts/analytics/*.mjs
+      - run: npx eslint src/lib/analytics src/app/api/analytics/ingest src/app/api/_lib/supabaseService.ts src/app/api/_lib/googleAuth.ts tests/api/analyticsContracts.test.ts tests/api/analyticsLean*.test.ts tests/fixtures/analyticsFull.ts scripts/analytics/*.mjs

@@ -19,6 +19,29 @@ export interface GoogleTokenOptions {
   serviceAccountEnvVar?: string;
 }
 
+/** Shared signing only: explicit credentials, no environment or network access. */
+export async function createGoogleServiceAccountAssertion(input: {
+  serviceAccountJsonBase64: string; scope: string; sub?: string; nowSeconds?: number;
+}): Promise<string> {
+  const sa = JSON.parse(Buffer.from(input.serviceAccountJsonBase64, "base64").toString("utf-8")) as {
+    client_email: string; private_key: string;
+  };
+  if (!sa.client_email?.trim() || !sa.private_key?.trim() || !input.scope.trim())
+    throw new Error("google_service_account_invalid");
+  const { createSign } = await import("node:crypto");
+  const now = input.nowSeconds ?? Math.floor(Date.now() / 1000);
+  const header = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT" })).toString("base64url");
+  const claims: Record<string, unknown> = {
+    iss: sa.client_email, scope: input.scope, aud: "https://oauth2.googleapis.com/token",
+    iat: now, exp: now + 3600,
+  };
+  if (input.sub) claims.sub = input.sub;
+  const payload = `${header}.${Buffer.from(JSON.stringify(claims)).toString("base64url")}`;
+  const signer = createSign("RSA-SHA256");
+  signer.update(payload);
+  return `${payload}.${signer.sign(sa.private_key).toString("base64url")}`;
+}
+
 export async function mintGoogleAccessToken(
   opts: GoogleTokenOptions
 ): Promise<string | null> {
@@ -29,28 +52,9 @@ export async function mintGoogleAccessToken(
       process.env.GOOGLE_SERVICE_ACCOUNT_JSON_BASE64;
   if (!b64) return null;
 
-  const sa = JSON.parse(Buffer.from(b64, "base64").toString("utf-8")) as {
-    client_email: string;
-    private_key: string;
-  };
-  const { createSign } = await import("node:crypto");
-  const now = Math.floor(Date.now() / 1000);
-  const header = Buffer.from(
-    JSON.stringify({ alg: "RS256", typ: "JWT" })
-  ).toString("base64url");
-  const claims: Record<string, unknown> = {
-    iss: sa.client_email,
-    scope: opts.scope,
-    aud: "https://oauth2.googleapis.com/token",
-    iat: now,
-    exp: now + 3600,
-  };
-  if (opts.sub) claims.sub = opts.sub;
-  const claimsB64 = Buffer.from(JSON.stringify(claims)).toString("base64url");
-  const signer = createSign("RSA-SHA256");
-  signer.update(`${header}.${claimsB64}`);
-  const sig = signer.sign(sa.private_key).toString("base64url");
-  const jwt = `${header}.${claimsB64}.${sig}`;
+  const jwt = await createGoogleServiceAccountAssertion({
+    serviceAccountJsonBase64: b64, scope: opts.scope, sub: opts.sub,
+  });
   const r = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },

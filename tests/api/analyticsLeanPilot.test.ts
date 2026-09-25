@@ -118,6 +118,44 @@ const run = (fetcher = mockedShopify(), rpcClient = client) => runShopifyPilot({
 const map = (source = fixture()) => mapPilotSource(source, policy, publication, "fixture:retained-source");
 
 describe("wired Shopify -> retained source -> actual SQL facts -> sample report", () => {
+  it("accepts a matched refund payment processed before the refund record was created", () => {
+    const source = fixture();
+    const at = "2026-01-02T11:59:58Z";
+    (source.commerce.order.transactions as Record<string, unknown>[])[1].processedAt = at;
+    sourceObject((sourceObject(source.refunds[0].transactions).nodes as unknown[])[0]).processedAt = at;
+    const mapped = map(source);
+    expect(mapped.facts.sales_ledger.filter(r => r.movement_kind === "refund").length).toBeGreaterThan(0);
+  });
+  it("keeps the approved refund reporting date when processing crosses New York midnight", () => {
+    const source = fixture();
+    source.refunds[0].createdAt = "2026-01-02T05:00:01Z";
+    const at = "2026-01-02T04:59:59Z";
+    (source.commerce.order.transactions as Record<string, unknown>[])[1].processedAt = at;
+    sourceObject((sourceObject(source.refunds[0].transactions).nodes as unknown[])[0]).processedAt = at;
+    const mapped = map(source);
+    const refunds = mapped.facts.sales_ledger.filter(r => r.movement_kind === "refund");
+    expect(refunds.length).toBeGreaterThan(0);
+    expect(refunds.every(r => r.report_date === "2026-01-02")).toBe(true);
+  });
+  it("still rejects a refund payment beyond the retained order revision", () => {
+    const source = fixture();
+    const at = "2026-01-03T00:00:00Z";
+    (source.commerce.order.transactions as Record<string, unknown>[])[1].processedAt = at;
+    sourceObject((sourceObject(source.refunds[0].transactions).nodes as unknown[])[0]).processedAt = at;
+    expect(() => map(source)).toThrow();
+  });
+  it("persists and replays an early processed refund without releasing certified reports", async () => {
+    const source = fixture();
+    const at = "2026-01-02T11:59:58Z";
+    (source.commerce.order.transactions as Record<string, unknown>[])[1].processedAt = at;
+    sourceObject((sourceObject(source.refunds[0].transactions).nodes as unknown[])[0]).processedAt = at;
+    const fetcher = mockedShopify(source);
+    expect(await run(fetcher)).toEqual({ state: "done" });
+    expect(await run(fetcher)).toEqual({ state: "done" });
+    expect(fetcher).toHaveBeenCalledTimes(5);
+    expect((await db.query("select count(*)::int n from lean_private.sales_ledger")).rows).toEqual([{ n: 7 }]);
+    expect((await db.query("select * from lean_analytics.store_daily")).rows).toEqual([]);
+  });
   it("runs the actual reader, mapper, durable runner and report export with an independent numeric oracle", async () => {
     const fetcher = mockedShopify();
     expect(await run(fetcher)).toEqual({ state: "done" }); expect(fetcher).toHaveBeenCalledTimes(5);

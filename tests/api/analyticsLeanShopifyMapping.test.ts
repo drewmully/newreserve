@@ -118,7 +118,12 @@ describe("actual Shopify Admin GraphQL shape mapping", () => {
     order.transactionsCount = { count: 3, precision: "EXACT" };
     expect(map(order).orders[0].paid_at).toBe("2026-03-08T05:01:00Z");
     txs(order)[1].processedAt = "2026-01-01T00:00:00Z";
-    expect(() => map(order)).toThrow("shopify_invalid_paid_timestamp");
+    expect(map(order).orders[0].paid_at).toBe("2026-03-08T05:01:00Z");
+  });
+  it("accepts an associated provider payment timestamp before order creation", () => {
+    const order = fixtureOrder();
+    txs(order)[0].processedAt = "2026-03-08T03:59:59Z";
+    expect(map(order).orders[0].paid_at).toBe("2026-03-08T03:59:59Z");
   });
   it.each(["PENDING", "AWAITING_RESPONSE", "FAILURE", "ERROR"])("does not treat %s as paid", status => {
     const order = fixtureOrder(); txs(order)[0].status = status;

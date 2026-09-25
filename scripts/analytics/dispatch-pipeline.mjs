@@ -11,9 +11,14 @@ export function dispatchConfig(env) {
     throw new Error("invalid_runner_origin");
   const secret = env.LEAN_ANALYTICS_PIPELINE_SECRET ?? "";
   const interval = Number(env.LEAN_ANALYTICS_DISPATCH_INTERVAL_SECONDS ?? "60");
+  const maxCalls = Number(env.LEAN_ANALYTICS_DISPATCH_MAX_CALLS ?? "2");
+  const deadlineSeconds = Number(env.LEAN_ANALYTICS_DISPATCH_DEADLINE_SECONDS ?? "300");
   if (secret.length < 32 || !Number.isInteger(interval) || interval < 60 || interval > 3600)
     throw new Error("invalid_dispatch_configuration");
-  return { url: new URL("/api/analytics/ingest/process", url).href, secret, interval };
+  if (!Number.isInteger(maxCalls) || maxCalls < 2 || maxCalls > 120 || maxCalls % 2 ||
+      !Number.isInteger(deadlineSeconds) || deadlineSeconds < 1 || deadlineSeconds > 3600)
+    throw new Error("invalid_dispatch_budget");
+  return { url: new URL("/api/analytics/ingest/process", url).href, secret, interval, maxCalls, deadlineSeconds };
 }
 export async function dispatchOnce(config, fetcher = fetch, signal = undefined) {
   const headers = { authorization: `Bearer ${config.secret}` };
@@ -31,23 +36,55 @@ export async function dispatchOnce(config, fetcher = fetch, signal = undefined) 
   return { healthy: data.dead === 0 && data.expiredLeases === 0 && data.oldestPendingSeconds < 900,
     pending: data.pending, dead: data.dead, oldestPendingSeconds: data.oldestPendingSeconds };
 }
+/** Finite invocation. Every cycle reserves POST + health GET from one budget.
+ * No schedule, new source inventory, retries or configuration writes are created.
+ * @param {ReturnType<typeof dispatchConfig>} config
+ * @param {{fetcher?: typeof fetch, signal?: AbortSignal,
+ * pause?: (ms: number, value: undefined, options: {signal: AbortSignal}) => Promise<unknown>,
+ * now?: () => number, onResult?: (result: Awaited<ReturnType<typeof dispatchOnce>>) => void}} options
+ */
+export async function runDispatch(config, {
+  fetcher = fetch, signal, pause = sleep, now = Date.now, onResult = () => {},
+} = {}) {
+  const started = now(), expires = started + config.deadlineSeconds * 1000;
+  const deadline = AbortSignal.timeout(config.deadlineSeconds * 1000);
+  const active = AbortSignal.any([deadline, ...(signal ? [signal] : [])]);
+  let calls = 0;
+  const stopped = () => signal?.aborted ? "cancelled" :
+    deadline.aborted || now() >= expires ? "deadline" : null;
+  const boundedFetch = async (...args) => {
+    if (stopped()) throw new Error("dispatch_stopped");
+    calls++;
+    const result = await fetcher(...args);
+    if (stopped()) throw new Error("dispatch_stopped");
+    return result;
+  };
+  while (calls + 2 <= config.maxCalls) {
+    if (stopped()) return { state: stopped(), calls };
+    try {
+      const result = await dispatchOnce(config, boundedFetch, active);
+      if (stopped()) return { state: stopped(), calls };
+      onResult(result);
+      if (!result.healthy) return { state: "unhealthy", calls };
+    } catch { return { state: stopped() ?? "failed", calls }; }
+    if (calls + 2 > config.maxCalls) break;
+    // Do not wait if there is no remaining time for another approved interval.
+    if (now() + config.interval * 1000 >= expires) return { state: "deadline", calls };
+    try { await pause(config.interval * 1000, undefined, { signal: active }); }
+    catch { return { state: stopped() ?? "failed", calls }; }
+  }
+  return { state: "complete", calls };
+}
 async function main() {
   const config = dispatchConfig(process.env);
+  if (process.argv.includes("--once")) config.maxCalls = 2;
   const stop = new AbortController();
   process.once("SIGTERM", () => stop.abort());
   process.once("SIGINT", () => stop.abort());
-  do {
-    try {
-      const result = await dispatchOnce(config, fetch, stop.signal);
-      console.log(JSON.stringify({ event: "analytics_queue_health", ...result }));
-      if (process.argv.includes("--once") && !result.healthy) process.exitCode = 1;
-    } catch {
-      if (!stop.signal.aborted) console.error(JSON.stringify({ event: "analytics_dispatch_unhealthy" }));
-      if (process.argv.includes("--once")) process.exitCode = 1;
-    }
-    if (process.argv.includes("--once") || stop.signal.aborted) break;
-    try { await sleep(config.interval * 1000, undefined, { signal: stop.signal }); } catch { break; }
-  } while (!stop.signal.aborted);
+  const result = await runDispatch(config, { signal: stop.signal,
+    onResult: health => console.log(JSON.stringify({ event: "analytics_queue_health", ...health })) });
+  console.log(JSON.stringify({ event: "analytics_dispatch_stopped", ...result }));
+  if (!["complete", "cancelled"].includes(result.state)) process.exitCode = 1;
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)
   main().catch(() => { console.error("analytics_dispatch_configuration_failed"); process.exitCode = 1; });

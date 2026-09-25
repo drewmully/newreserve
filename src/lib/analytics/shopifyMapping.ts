@@ -145,14 +145,17 @@ export function mapShopifyAnalyticsOrder(document: ShopifyOrderDocument, policy:
   const txs = transactions(order, shop, id, currency, test);
   const captures = txs.filter(t => t.payment.status === "succeeded" && ["capture", "sale"].includes(t.payment.kind));
   for (const capture of captures) {
-    if (capture.processedAt && (Date.parse(capture.processedAt) < Date.parse(createdAt) ||
-        Date.parse(capture.processedAt) > Date.parse(updatedAt))) throw new Error("shopify_invalid_paid_timestamp");
+    // Shopify transaction clocks can precede Order.createdAt. The associated
+    // order and its retained revision provide the scope; createdAt is not a
+    // documented lower bound for the provider's processing timestamp.
+    if (capture.processedAt && Date.parse(capture.processedAt) > Date.parse(updatedAt))
+      throw new Error("shopify_invalid_paid_timestamp");
   }
   const captured = captures.reduce((sum, t) => sum + micros(t.payment.signedAmount), BigInt(0));
   if (captured > originalTotal) throw new Error("shopify_overpayment_requires_review");
   const paid = !test && originalTotal > BigInt(0) && captured === originalTotal && captures.every(t => t.processedAt !== null);
   const paidAt = paid ? captures.map(t => t.processedAt!).sort((a, b) => Date.parse(a) - Date.parse(b)).at(-1)! : null;
-  if (paidAt && (Date.parse(paidAt) < Date.parse(createdAt) || Date.parse(paidAt) > Date.parse(updatedAt)))
+  if (paidAt && Date.parse(paidAt) > Date.parse(updatedAt))
     throw new Error("shopify_invalid_paid_timestamp");
   const shipping = order.shippingAddress === null ? null : sourceObject(order.shippingAddress);
   const snapshot: ShopifySnapshot = {
