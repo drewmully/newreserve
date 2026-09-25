@@ -1,6 +1,6 @@
 import {
   readShopifyAnalyticsOrder, SHOPIFY_ANALYTICS_API_VERSION, shopifyId, shopifyShop,
-  sourceArray, sourceObject, type ShopifyOrderDocument, type SourceObject,
+  sourceArray, sourceObject, type ShopifyOrderDocument, type SourceObject, type ShopifyProjection,
 } from "./shopifySource";
 
 const money = "{ shopMoney { amount currencyCode } }";
@@ -44,6 +44,7 @@ export type PilotSource = {
  */
 export async function readPilotSource(options: {
   shop: string; accessToken: string; fetcher?: typeof fetch; signal: AbortSignal;
+  projection?: ShopifyProjection;
 }, orderGid: string): Promise<PilotSource> {
   const shop = shopifyShop(options.shop);
   shopifyId(orderGid, "Order");
