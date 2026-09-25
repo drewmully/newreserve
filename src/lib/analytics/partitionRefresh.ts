@@ -13,7 +13,7 @@ import { planJourneyPermissionCollection, composeCollectedJourneyPermissions } f
 type Collection = CollectRefreshInput["collection"];
 export type PartitionCollectInput = {
   kind: "mully-partition-collect-v1"; refresh: RefreshInput;
-  collection: Omit<Collection, "discover" | "orderIds" | "originalPurchases"> & {
+  collection: Omit<Collection, "discover" | "orderIds" | "originalPurchases" | "cash"> & {
     partitions: { id: string; history: RefreshInput["history"]; originalPurchases?: OriginalPurchaseCollection }[];
   };
 };
@@ -51,6 +51,9 @@ export async function collectPartitionRefresh(input: PartitionCollectInput, env:
   request: typeof fetch = fetch, clock = () => new Date().toISOString()) {
   if (env.LEAN_PARTITION_COLLECTION_APPROVED !== "true") throw new Error("partition_collection_disabled");
   const c = input.collection;
+  // Cash composition is bounded to one <=100-order read. Do not duplicate a
+  // retained settlement packet into every child and silently change its authority.
+  if (c && "cash" in c) throw new Error("partition_cash_collection_not_supported");
   if (input.kind !== "mully-partition-collect-v1" || !c ||
       Object.keys(input).some(k => !["kind", "refresh", "collection"].includes(k)) ||
       ["discover", "orderIds", "originalPurchases"].some(k => k in c) ||

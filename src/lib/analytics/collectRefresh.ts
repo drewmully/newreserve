@@ -5,6 +5,7 @@ import { mapJourneyCheckout, orderCartTokens, readJourneyReceipts } from "./jour
 import { mapDraftJourney, readDraftJourney } from "./draftJourneySource";
 import { readShopifyAnalyticsOrder, shopifyId, shopifyShop, type ShopifyOrderDocument } from "./shopifySource";
 import { nyDate } from "./primitives";
+import { planCollectedShopifyCash, composeCollectedShopifyCash, type ShopifyCashCollection } from "./shopifyCashCollection";
 import { readHistoryInventoryPage, verifyHistoryAccess } from "./shopifyHistory";
 import { inventoryOrder, validateHistoryInventory, type HistoryInventory } from "./historyInventory";
 import { readShopifyAgreements } from "./shopifyAgreements";
@@ -32,6 +33,8 @@ export type CollectRefreshInput = {
     originalPurchases?: OriginalPurchaseCollection;
     /** Explicit replacement of authentic empty offers evidence, unedited orders only. */
     offers?: { registry?: OfferRegistry };
+    /** Reuse read transactions only under an explicit customer-payment cash clock. */
+    cash?: ShopifyCashCollection;
     journeyPermissions?: JourneyPermissionCollection;
     maxOrders: number;
     maxLinePages: number;
@@ -62,7 +65,7 @@ export async function collectRefresh(input: CollectRefreshInput, env: Environmen
     throw new Error("collected_original_purchases_require_reviewed_replacement_packet");
   if (Object.keys(input).some(k => !["kind", "refresh", "collection"].includes(k)) ||
       Object.keys(c).some(k => !["approvalRef", "projectRef", "shop", "orderIds", "discover", "entities", "checkout",
-        "draftJourney", "originalPurchases", "offers", "journeyPermissions",
+        "draftJourney", "originalPurchases", "offers", "journeyPermissions", "cash",
         "maxOrders", "maxLinePages", "maxRequests", "maxBytes", "timeoutMs", "binding"].includes(k)))
     throw new Error("unsupported_collection_option");
   shopifyShop(c.shop);
@@ -165,6 +168,8 @@ export async function collectRefresh(input: CollectRefreshInput, env: Environmen
   }
   const permissionPlan = c.journeyPermissions === undefined ? undefined :
     planJourneyPermissionCollection(refresh, c.journeyPermissions, b.sourceId, env, startedAt);
+  const cashPlan = c.cash === undefined ? undefined :
+    planCollectedShopifyCash(refresh, c.cash, b.maxAgeSeconds, startedAt);
   const deadline = AbortSignal.timeout(c.timeoutMs);
   let calls = 0, bytes = 0;
   const bounded: typeof fetch = async (url, init) => {
@@ -278,6 +283,7 @@ export async function collectRefresh(input: CollectRefreshInput, env: Environmen
   const facts = mapMullySource({ snapshot, orders, mappingVersion: refresh.policy.mappingVersion, permissions: [] });
   const sourceDigest = evidenceDigest({ orders, snapshot, journey: journey ?? null, draftJourney: draftJourney ?? null,
     ...(agreementPlan ? { originalPurchases } : {}), ...(c.offers ? { offers: c.offers } : {}),
+    ...(cashPlan ? { cashPolicy: cashPlan.policy } : {}),
     ...(journeyPermissions ? { journeyPermissions } : {}) });
   const packets: EvidencePacket[] = [];
   const add = (section: typeof replaced[number], payload: EvidencePacket["payload"]) => packets.push({
@@ -287,6 +293,9 @@ export async function collectRefresh(input: CollectRefreshInput, env: Environmen
   // Only the explicit order-to-customer links are used. The customer reader does
   // not replace identity, permission/removal or history with inferred authority.
   add("orderIdentities", facts.orderIdentities);
+  const cash = cashPlan ? composeCollectedShopifyCash(refresh, cashPlan, orders,
+    { ...b, capturedAt: startedAt }) : undefined;
+  if (cash) packets.push(cash.packet);
   if (c.offers) {
     const payload = [...mapShopifyLineDiscounts(orders, c.shop),
       ...(c.offers.registry ? mapShopifyOffers(orders, c.offers.registry) : [])];
@@ -325,6 +334,7 @@ export async function collectRefresh(input: CollectRefreshInput, env: Environmen
       Date.parse(preparedAt) - Date.parse(startedAt) > c.timeoutMs)
     throw new Error("refresh_collection_timeout");
   return { bundle, refresh, sources: { orders, snapshot, journey, draftJourney, inventory, originalPurchases,
+    ...(cash ? { cash: cash.source } : {}),
     ...(journeyPermissions ? { journeyPermissions } : {}) },
     audit: { version: 1, approvalRef: c.approvalRef, startedAt, finishedAt, sourceDigest,
       projectRef: c.projectRef, shop: c.shop, calls, bytes, orderIds,
