@@ -1,0 +1,31 @@
+{
+  "scopeId": "mymully-observed-spend-delivery-20260925",
+  "projectRef": "xeqlgxvrhgwwudyqtnun",
+  "shop": "mullybox-store.myshopify.com",
+  "expiresAt": "2026-09-26T08:00:00Z",
+  "approvalRef": "",
+  "actorRef": "",
+  "snapshots": [
+    {
+      "runId": "mymully-private-spend-snapshots-20260925",
+      "snapshotId": "spend-2026-09-21-v1",
+      "date": "2026-09-21",
+      "inputHash": "875363878907c1d230b8be40616dc8e98d833c7d5a5c810ee18cac40568a6138",
+      "resultHash": "2348812aa07e92834ff0dae5e8adad4c9afb8ba348f1cba9f4cacf5924894faf"
+    },
+    {
+      "runId": "mymully-private-spend-snapshots-20260925",
+      "snapshotId": "spend-2026-09-22-v1",
+      "date": "2026-09-22",
+      "inputHash": "0c81ec165d2021f3523b162dd252c397e79e32eaa1fc75817692373582ad9038",
+      "resultHash": "ea01b459d83b777797a273f18e4854ed21601593c99b26b012effe8b73cce829"
+    },
+    {
+      "runId": "mymully-private-spend-snapshots-20260925",
+      "snapshotId": "spend-2026-09-23-v1",
+      "date": "2026-09-23",
+      "inputHash": "7e853535bca391abf20266edcc6b52f13fd9fcfb2d130633c9f09661f4863da8",
+      "resultHash": "81dc295957aca3be6996881b56e71afb9b82b91c0e8ade4592c146f01c162a90"
+    }
+  ]
+}
