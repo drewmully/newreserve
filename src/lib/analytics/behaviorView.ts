@@ -24,7 +24,7 @@ export function behaviorDiagnosticView(source: BehaviorSource) {
       count() AS transport_arrivals,
       uniqExact(timestamp) AS timestamp_versions,
       uniqExact(coalesce(toString(properties.${f.sessionProperty}), '')) AS session_versions,
-      uniqExact(coalesce(toString(${f.identityProperty === "distinct_id" ? "distinct_id" : "properties.anonymous_id"}), '')) AS identity_versions,
+      uniqExact(coalesce(toString(${f.identityProperty === "distinct_id" ? "distinct_id" : `properties.${f.identityProperty}`}), '')) AS identity_versions,
       uniqExact(coalesce(toString(properties.${f.consentProperty}), '')) AS permission_versions,
       'diagnostic_only' AS readiness
     FROM events

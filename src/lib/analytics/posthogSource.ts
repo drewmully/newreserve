@@ -9,7 +9,7 @@ export type BehaviorSource = {
     producer: string; schemaVersion: string; identityNamespace: string;
     actionProperty: "event_id" | "$insert_id";
     sessionProperty: "session_id" | "$session_id";
-    identityProperty: "anonymous_id" | "distinct_id";
+    identityProperty: "anonymous_id" | "distinct_id" | "reserve_user_id" | "shopify_customer_id" | "mully_anon_id";
     consentProperty: "analytics_permitted" | "analytics_consent";
   }>;
 };
@@ -30,7 +30,7 @@ export function validateBehaviorSource(c: BehaviorSource) {
     if (![family, f.producer, f.schemaVersion, f.identityNamespace].every(token) ||
         !["event_id", "$insert_id"].includes(f.actionProperty) ||
         !["session_id", "$session_id"].includes(f.sessionProperty) ||
-        !["anonymous_id", "distinct_id"].includes(f.identityProperty) ||
+        !["anonymous_id", "distinct_id", "reserve_user_id", "shopify_customer_id", "mully_anon_id"].includes(f.identityProperty) ||
         !["analytics_permitted", "analytics_consent"].includes(f.consentProperty))
       throw new Error("invalid_behavior_mapping");
   }
@@ -45,11 +45,16 @@ export async function readPosthogBehavior(c: BehaviorSource, apiKey: string,
   validateBehaviorSource(c);
   if (!apiKey.trim()) throw new Error("missing_behavior_credential");
   const families = Object.keys(c.families).sort().map(f => `'${f}'`).join(",");
+  // Select only explicitly configured identifiers. Existing configurations retain
+  // their exact wire contract; never select the whole properties/PII object.
+  const additional = [...new Set(Object.values(c.families).map(f => f.identityProperty))]
+    .filter(name => !columns.includes(name)).sort();
+  const selectedColumns = [...columns, ...additional];
   const query = `SELECT uuid AS uuid, event AS event, timestamp AS timestamp, distinct_id AS distinct_id,
     properties.event_id AS event_id, properties.$insert_id AS insert_id,
     properties.session_id AS session_id, properties.$session_id AS ph_session_id,
     properties.anonymous_id AS anonymous_id, properties.analytics_permitted AS analytics_permitted,
-    properties.analytics_consent AS analytics_consent
+    properties.analytics_consent AS analytics_consent${additional.map(name => `,\n    properties.${name} AS ${name}`).join("")}
     FROM events WHERE timestamp >= toDateTime('${c.from}') AND timestamp < toDateTime('${c.until}')
     AND event IN (${families}) ORDER BY timestamp, uuid LIMIT ${c.maxEvents + 1}`;
   let response: Response;
@@ -78,14 +83,14 @@ export async function readPosthogBehavior(c: BehaviorSource, apiKey: string,
   if (result.error || (status && (typeof status !== "object" ||
       (status as Record<string, unknown>).complete !== true ||
       (status as Record<string, unknown>).error)) || result.hasMore === true ||
-      JSON.stringify(result.columns) !== JSON.stringify(columns)) throw new Error("behavior_response_shape");
+      JSON.stringify(result.columns) !== JSON.stringify(selectedColumns)) throw new Error("behavior_response_shape");
   const rows = sourceArray(result.results);
   if (rows.length > c.maxEvents) throw new Error("behavior_event_budget");
   const uuids = new Set<string>();
   return rows.map(value => {
     const row = sourceArray(value);
-    if (row.length !== columns.length) throw new Error("behavior_row_shape");
-    const r = Object.fromEntries(columns.map((name, i) => [name, row[i]]));
+    if (row.length !== selectedColumns.length) throw new Error("behavior_row_shape");
+    const r = Object.fromEntries(selectedColumns.map((name, i) => [name, row[i]]));
     const nativeUuid = sourceString(r.uuid), family = sourceString(r.event);
     if (!/^[a-f0-9-]{36}$/i.test(nativeUuid) || uuids.has(nativeUuid) || !Object.hasOwn(c.families, family))
       throw new Error("behavior_native_lineage");
