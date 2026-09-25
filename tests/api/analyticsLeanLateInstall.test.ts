@@ -12,6 +12,7 @@ const initial = [
   "019_spend_jobs", "020_observed_report_jobs", "021_full_report_jobs", "022_full_release",
   "023_posthog_export", "024_full_orchestration",
   "038_google_spend_pilot", "039_shopify_bounded_pilot", "040_shopify_history_import",
+  "041_history_report_bridge",
 ];
 const later = [
   "025_refresh_queue", "026_journey_authority", "027_history_update_scans", "028_refresh_health",
@@ -22,12 +23,14 @@ const later = [
 const protectedMigrations = [
   "003_receipts", "004_worker", "017_shopify_pipeline", "019_spend_jobs",
   "038_google_spend_pilot", "039_shopify_bounded_pilot", "040_shopify_history_import",
+  "041_history_report_bridge",
 ];
 const sql = (name: string) => readFileSync(`sql/analytics/${name}.sql`, "utf8");
 const protectedTables = [
   "pipeline_scope", "receipts", "work", "spend_jobs", "spend_pilots", "spend_pilot_days",
   "shopify_pilots", "shopify_pilot_members", "shopify_pilot_receipts", "shopify_pilot_days",
   "history_import_jobs", "history_import_orders", "history_import_lines",
+  "history_report_jobs", "history_report_sources", "history_report_progress",
 ];
 
 // Run the real-server variant in a dedicated CI step after the ordinary PG
@@ -35,7 +38,7 @@ const protectedTables = [
 const connectionString = process.env.LEAN_LATE_INSTALL_POSTGRES === "true"
   ? process.env.LOCAL_POSTGRES_TEST_URL : undefined;
 it.each(connectionString ? ["postgres"] : ["pglite"])(
-  "installs 025–037 AFTER 038–040 without changing active pilot functions, ACLs, triggers or rows (%s)", async engine => {
+  "installs 025–037 AFTER 038–041 without changing active pilot functions, ACLs, triggers or rows (%s)", async engine => {
   let control: Client | undefined, pg: Client | undefined, embedded: PGlite | undefined;
   if (engine === "postgres") {
     const url = new URL(connectionString!);

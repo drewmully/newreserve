@@ -10,7 +10,7 @@ afterEach(() => vi.unstubAllGlobals());
 it("reads SMS metadata with a separate project/key and never enables activation", async () => {
   const dir = mkdtempSync(join(tmpdir(), "sms-cli-fixture-"));
   const projectRef = "b".repeat(20), shop = "fixture.myshopify.com";
-  const env = { LEAN_MULLY_SOURCE_READ_APPROVED: "true",
+  const env = { NODE_ENV: "test" as const, LEAN_MULLY_SOURCE_READ_APPROVED: "true",
     LEAN_MULLY_SOURCE_PROJECT_REF: "a".repeat(20), LEAN_MULLY_SOURCE_READ_KEY: "wrong-project-key",
     LEAN_SMS_SOURCE_PROJECT_REF: projectRef, LEAN_SHOPIFY_SHOP_DOMAIN: shop };
   const request = vi.fn<typeof fetch>(async () => Response.json([], { headers: { "Content-Range": "*/0" } }));
@@ -53,7 +53,7 @@ it("prepares a private bundle and diagnostic view entirely offline", () => {
 it("extracts only scoped checkout receipts through the real source command", async () => {
   const dir = mkdtempSync(join(tmpdir(), "journey-cli-fixture-"));
   const projectRef = "a".repeat(20), shop = "fixture.myshopify.com";
-  const env = { LEAN_MULLY_SOURCE_READ_APPROVED: "true", LEAN_MULLY_SOURCE_READ_KEY: "fixture-key",
+  const env = { NODE_ENV: "test" as const, LEAN_MULLY_SOURCE_READ_APPROVED: "true", LEAN_MULLY_SOURCE_READ_KEY: "fixture-key",
     LEAN_MULLY_SOURCE_PROJECT_REF: projectRef, LEAN_SHOPIFY_SHOP_DOMAIN: shop };
   const request = vi.fn<typeof fetch>(async () => Response.json([]));
   try {
@@ -91,7 +91,7 @@ it("prepares commerce-only jobs without a PostHog configuration or diagnostic qu
 it("uses only the dedicated read credential for the draft relation source command", async () => {
   const dir = mkdtempSync(join(tmpdir(), "draft-cli-fixture-"));
   const projectRef = "a".repeat(20), shop = "fixture.myshopify.com";
-  const env = { LEAN_MULLY_SOURCE_READ_APPROVED: "true", LEAN_MULLY_SOURCE_READ_KEY: "fixture-key",
+  const env = { NODE_ENV: "test" as const, LEAN_MULLY_SOURCE_READ_APPROVED: "true", LEAN_MULLY_SOURCE_READ_KEY: "fixture-key",
     LEAN_MULLY_SOURCE_PROJECT_REF: projectRef, LEAN_SHOPIFY_SHOP_DOMAIN: shop,
     SHOPIFY_ADMIN_ACCESS_TOKEN: "must-not-inherit" };
   const request = vi.fn<typeof fetch>(async () => Response.json([]));
@@ -112,7 +112,7 @@ it("uses only the dedicated read credential for the draft relation source comman
 it("extracts the exact permission window and refuses a different PostHog project before any read", async () => {
   const dir = mkdtempSync(join(tmpdir(), "permission-cli-fixture-"));
   const projectRef = "a".repeat(20), shop = "fixture.myshopify.com";
-  const env = { LEAN_MULLY_SOURCE_READ_APPROVED: "true", LEAN_MULLY_SOURCE_READ_KEY: "fixture-key",
+  const env = { NODE_ENV: "test" as const, LEAN_MULLY_SOURCE_READ_APPROVED: "true", LEAN_MULLY_SOURCE_READ_KEY: "fixture-key",
     LEAN_MULLY_SOURCE_PROJECT_REF: projectRef, LEAN_SHOPIFY_SHOP_DOMAIN: shop, LEAN_POSTHOG_PROJECT_ID: "353503" };
   const request = vi.fn<typeof fetch>(async () => Response.json([]));
   try {
@@ -165,9 +165,9 @@ it("extracts an explicitly approved source snapshot and prepares its bundle with
   try {
     const input = join(dir, "input.json"), output = join(dir, "snapshot.json");
     writeFileSync(input, JSON.stringify({ projectRef, shop, orders, entities: ["shopify"], approvalRef: "fixture:read" }));
-    await expect(readSourceFile(input, output, {}, request)).rejects.toThrow("disabled");
+    await expect(readSourceFile(input, output, { NODE_ENV: "test" }, request)).rejects.toThrow("disabled");
     expect(request).not.toHaveBeenCalled();
-    const env = { LEAN_MULLY_SOURCE_READ_APPROVED: "true", LEAN_MULLY_SOURCE_READ_KEY: "fixture-key",
+    const env = { NODE_ENV: "test" as const, LEAN_MULLY_SOURCE_READ_APPROVED: "true", LEAN_MULLY_SOURCE_READ_KEY: "fixture-key",
       LEAN_MULLY_SOURCE_PROJECT_REF: projectRef, LEAN_SHOPIFY_SHOP_DOMAIN: shop };
     expect(await readSourceFile(input, output, env, request)).toMatchObject({ state: "snapshot_only", enabled: false, customers: 1 });
     expect(statSync(output).mode & 0o777).toBe(0o600);

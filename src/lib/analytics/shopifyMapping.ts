@@ -157,7 +157,12 @@ export function mapShopifyAnalyticsOrder(document: ShopifyOrderDocument, policy:
   const paidAt = paid ? captures.map(t => t.processedAt!).sort((a, b) => Date.parse(a) - Date.parse(b)).at(-1)! : null;
   if (paidAt && Date.parse(paidAt) > Date.parse(updatedAt))
     throw new Error("shopify_invalid_paid_timestamp");
-  const shipping = order.shippingAddress === null ? null : sourceObject(order.shippingAddress);
+  const privateProjection = document.projection === "financial_no_geo" || document.projection === "financial_customer_id";
+  if (document.projection !== undefined && !privateProjection ||
+      privateProjection && order.shippingAddress !== undefined)
+    throw new Error("shopify_projection_mismatch");
+  // Not selected means unknown geography, not evidence of no shipping address.
+  const shipping = privateProjection || order.shippingAddress === null ? null : sourceObject(order.shippingAddress);
   const snapshot: ShopifySnapshot = {
     shop, id, currency, createdAt, updatedAt, lines, linesComplete: true, checkoutId: null,
     paidAt, paidEvidenceRef: paid ? policy.sourceEvidenceRef : null,
