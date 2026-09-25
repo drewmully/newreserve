@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getAnalyticsSupabase } from "@/lib/analytics/serverClient";
 import { runGoogleSpendJob } from "@/lib/analytics/googleSpendJob";
+import { googleSpendAuthFromEnv } from "@/lib/analytics/googleSpendSource";
 export const runtime = "nodejs";
 export const maxDuration = 90;
 export async function POST(req: NextRequest) {
@@ -17,9 +18,8 @@ export async function POST(req: NextRequest) {
       client: getAnalyticsSupabase(), projectRef: process.env.LEAN_ANALYTICS_PIPELINE_PROJECT_REF ?? "",
       databaseUrl: process.env.LEAN_ANALYTICS_SUPABASE_URL ?? "",
       runId: process.env.LEAN_ANALYTICS_SPEND_RUN_ID ?? "",
-      clientId: process.env.LEAN_GOOGLE_ADS_OAUTH_CLIENT_ID ?? "",
-      clientSecret: process.env.LEAN_GOOGLE_ADS_OAUTH_CLIENT_SECRET ?? "",
-      refreshToken: process.env.LEAN_GOOGLE_ADS_REFRESH_TOKEN ?? "",
+      auth: googleSpendAuthFromEnv(process.env),
+      developerToken: process.env.LEAN_GOOGLE_ADS_DEVELOPER_TOKEN,
       now: new Date().toISOString(), signal: AbortSignal.timeout(65000),
     });
     return NextResponse.json(result, { status: result.state === "failed" ? 422 : 200,

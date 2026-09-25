@@ -11,6 +11,9 @@ import { runObservedReportJob } from "@/lib/analytics/observedReportJob";
 import type { AnalyticsRpcClient } from "@/lib/analytics/rpcStore";
 import { runFullReportJob } from "@/lib/analytics/fullReportJob";
 import { fullFixture, fullProject, fullShop } from "../fixtures/analyticsFull";
+import { runShopifyPipeline } from "@/lib/analytics/shopifyPipeline";
+import { SHOPIFY_ANALYTICS_ORDER_QUERY } from "@/lib/analytics/shopifySource";
+import { PILOT_FINANCIAL_QUERY, PILOT_REFUND_QUERY } from "@/lib/analytics/shopifyPilotSource";
 
 const connectionString = process.env.LOCAL_POSTGRES_TEST_URL;
 const shop = "concurrency-fixture.myshopify.com", project = "aaaaaaaaaaaaaaaaaaaa";
@@ -152,6 +155,66 @@ describe.skipIf(!connectionString)("real PostgreSQL concurrent analytics workers
     const finishing = finish(b, ready);
     await a.query("commit");
     expect(await finishing).toBe(true);
+  });
+  function partialRefund(cancelled = false): PilotSource {
+    const src = source("2026-01-03T00:00:00Z");
+    const m = (amount: string) => ({ shopMoney: { amount, currencyCode: "USD" } });
+    const conn = (nodes: unknown[]) => ({ nodes, pageInfo: { hasNextPage: false, endCursor: null } });
+    const id = "gid://shopify/Refund/7", tx = "gid://shopify/OrderTransaction/5";
+    const processedAt = "2026-01-02T11:59:56Z"; // Provider clock before refund record; unchanged daecde9 semantics.
+    (src.commerce.order.transactions as unknown[]).push({ id: tx, kind: "REFUND", status: "SUCCESS",
+      gateway: "fixture", test: false, createdAt: processedAt, processedAt, amountSet: m("4"),
+      parentTransaction: { id: "gid://shopify/OrderTransaction/4", gateway: "fixture" } });
+    src.commerce.order.transactionsCount = { count: 2, precision: "EXACT" };
+    if (cancelled) src.commerce.order.cancelledAt = "2026-01-02T13:00:00Z";
+    src.financial.refunds = [{ id, updatedAt: "2026-01-02T12:02:00Z" }];
+    src.refunds = [{ id, createdAt: "2026-01-02T12:00:00Z", updatedAt: "2026-01-02T12:02:00Z",
+      order: { id: src.commerce.order.id }, totalRefundedSet: m("4"), duties: [], orderAdjustments: conn([]),
+      refundLineItems: conn([{ id: "gid://shopify/RefundLineItem/8", quantity: 1,
+        lineItem: { id: "gid://shopify/LineItem/2" }, subtotalSet: m("4"), totalTaxSet: m("0") }]),
+      refundShippingLines: conn([]),
+      transactions: conn([{ id: tx, kind: "REFUND", status: "SUCCESS", processedAt, amountSet: m("4") }]) }];
+    return src;
+  }
+  async function consume(src: PilotSource) {
+    const client: AnalyticsRpcClient = { async rpc(name, args) {
+      if (!["lean_pipeline_claim", "lean_pipeline_retain", "lean_pipeline_finish", "lean_pipeline_fail"].includes(name))
+        throw new Error("unexpected_rpc");
+      const entries = Object.entries(args);
+      try {
+        const result = await admin.query(`select public.${name}(${entries.map(([k], i) => `${k}=>$${i + 1}`).join(",")}) result`,
+          entries.map(([, value]) => typeof value === "object" ? JSON.stringify(value) : value));
+        return { data: result.rows[0].result, error: null };
+      } catch (error) { return { data: null, error }; }
+    } };
+    return runShopifyPipeline({ client, projectRef: project, databaseUrl: `https://${project}.supabase.co`,
+      shop, accessToken: "fixture-only", fetcher: async (_url, init) => {
+        const { query } = JSON.parse(String(init?.body));
+        expect([SHOPIFY_ANALYTICS_ORDER_QUERY, PILOT_FINANCIAL_QUERY, PILOT_REFUND_QUERY]).toContain(query);
+        const data = query === SHOPIFY_ANALYTICS_ORDER_QUERY ? { order: src.commerce.order } :
+          query === PILOT_FINANCIAL_QUERY ? { order: src.financial } : { refund: src.refunds[0] };
+        return Response.json({ data }, { headers: { "X-Shopify-API-Version": "2026-07" } });
+      } });
+  }
+  it("persists an actual-reader partial refund, keeps distinct clocks and replays the current revision once", async () => {
+    await receipt(); expect(await consume(source("2026-01-02T00:00:00Z"))).toEqual({ state: "done" });
+    await receipt(); expect(await consume(partialRefund())).toEqual({ state: "done" });
+    await receipt(); expect(await consume(partialRefund())).toEqual({ state: "done" });
+    expect((await admin.query("select sum(total_sales_usd)::text total from lean_analytics.observed_order_daily")).rows)
+      .toEqual([{ total: "6.000000" }]);
+    expect((await admin.query("select count(*)::int n from lean_private.pipeline_heads")).rows).toEqual([{ n: 1 }]);
+    expect((await admin.query("select * from lean_private.selected_publications")).rows).toEqual([]);
+  });
+  it.each(["cancelled", "edited"])("keeps rejected %s partial refunds retained and the last-good output visibly stale", async kind => {
+    await receipt(); await consume(source("2026-01-02T00:00:00Z"));
+    const src = partialRefund(kind === "cancelled");
+    if (kind === "edited") src.commerce.order.edited = true;
+    await receipt(); expect(await consume(src)).toEqual({ state: "failed" });
+    expect((await admin.query("select total_sales_usd::text total,pipeline_stale from lean_analytics.observed_order_daily")).rows)
+      .toEqual([{ total: "10.000000", pipeline_stale: true }]);
+    expect((await admin.query("select count(*)::int n from lean_private.pipeline_snapshots where source is not null")).rows)
+      .toEqual([{ n: 2 }]);
+    expect((await admin.query("select * from lean_private.certifications")).rows).toEqual([]);
   });
   it("history checkpoints serialize two real connections without duplicate pages", async () => {
     await admin.query(`insert into lean_private.history_jobs

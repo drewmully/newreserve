@@ -1,6 +1,6 @@
 import { PGlite } from "@electric-sql/pglite";
 import { readFileSync } from "node:fs";
-import { randomUUID } from "node:crypto";
+import { randomUUID, generateKeyPairSync } from "node:crypto";
 import { beforeAll, beforeEach, afterAll, afterEach, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import type { AnalyticsRpcClient } from "@/lib/analytics/rpcStore";
@@ -96,6 +96,38 @@ it("does not retry or fail a finish whose commit response was lost", async () =>
   const fetcher = vi.fn<typeof fetch>(async () => new Response(JSON.stringify(responses.shift())));
   await expect(runGoogleSpendJob({ ...options(), client: { rpc }, fetcher })).rejects.toThrow("storage_unavailable");
   expect(rpc.mock.calls.map(c => c[0])).toEqual(["lean_spend_claim", "lean_spend_finish"]);
+});
+it("runs the real HTTP service-account path into immutable SQL spend input and replays without another token", async () => {
+  const key = generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey.export({ type: "pkcs8", format: "pem" });
+  const sa = Buffer.from(JSON.stringify({ client_email: "fixture@fixture.iam.gserviceaccount.com", private_key: key })).toString("base64");
+  for (const [name, value] of Object.entries({
+    LEAN_ANALYTICS_SPEND_ENABLED: "true", LEAN_ANALYTICS_SPEND_SECRET: "x".repeat(32),
+    LEAN_ANALYTICS_PIPELINE_PROJECT_REF: project, LEAN_ANALYTICS_SUPABASE_URL: `https://${project}.supabase.co`,
+    LEAN_ANALYTICS_SPEND_RUN_ID: "fixture", LEAN_GOOGLE_ADS_AUTH_MODE: "service_account",
+    LEAN_GOOGLE_ADS_SERVICE_ACCOUNT_JSON_BASE64: sa, LEAN_GOOGLE_ADS_IMPERSONATE_EMAIL: "fixture@example.invalid",
+    LEAN_GOOGLE_ADS_DEVELOPER_TOKEN: "fixture:developer",
+  })) vi.stubEnv(name, value);
+  const fetcher = vi.fn<typeof fetch>(async (url, init) => {
+    if (url === "https://oauth2.googleapis.com/token") {
+      expect(new URLSearchParams(String(init?.body)).get("grant_type")).toBe("urn:ietf:params:oauth:grant-type:jwt-bearer");
+      return Response.json({ access_token: "fixture", token_type: "Bearer" });
+    }
+    expect(init?.headers).toMatchObject({ "developer-token": "fixture:developer" });
+    const query = JSON.parse(String(init?.body)).query;
+    return Response.json(query.includes("FROM customer")
+      ? { results: [{ customer: { id: "1234567890", currencyCode: "USD", timeZone: "America/New_York" } }] }
+      : { fieldMask: "campaign.id,segments.date,metrics.costMicros,metrics.clicks,metrics.impressions",
+        results: [{ campaign: { id: "8" }, segments: { date: "2026-09-01" }, metrics: { costMicros: "1234567" } }] });
+  });
+  vi.stubGlobal("fetch", fetcher);
+  const request = () => new NextRequest("https://fixture.invalid/api/analytics/ingest/spend", {
+    method: "POST", headers: { authorization: `Bearer ${"x".repeat(32)}` },
+  });
+  expect(await (await POST(request())).json()).toEqual({ state: "complete", rows: 1 });
+  expect(await (await POST(request())).json()).toEqual({ state: "complete" });
+  expect(fetcher).toHaveBeenCalledTimes(3);
+  expect((await db.query<{ base: unknown }>("select base from lean_private.spend_jobs")).rows[0].base)
+    .toMatchObject({ accountId: "1234567890", rows: [{ campaignId: "8", costMicros: "1234567" }] });
 });
 it("revokes hosted defaults and keeps the route disabled and request scope fixed", async () => {
   const grants = await db.query<{ allowed: boolean }>(`select has_function_privilege('anon',

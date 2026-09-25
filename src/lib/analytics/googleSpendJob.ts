@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { AnalyticsRpcClient } from "./rpcStore";
 import { pipelineRpc, validatePipelineTarget } from "./shopifyPipeline";
 import { sourceObject, sourceString } from "./shopifySource";
-import { readGoogleSpend, refreshGoogleSpendToken } from "./googleSpendSource";
+import { readGoogleSpend, authorizeGoogleSpend, type GoogleSpendAuth } from "./googleSpendSource";
 import type { SpendBase } from "./spend";
 
 /** A saved account/day, three maximum attempts, one fenced immutable base.
@@ -10,7 +10,8 @@ import type { SpendBase } from "./spend";
  */
 export async function runGoogleSpendJob(input: {
   client: AnalyticsRpcClient; projectRef: string; databaseUrl: string; runId: string;
-  clientId: string; clientSecret: string; refreshToken: string;
+  clientId?: string; clientSecret?: string; refreshToken?: string;
+  auth?: GoogleSpendAuth; developerToken?: string;
   fetcher?: typeof fetch; now: string; signal: AbortSignal;
 }) {
   validatePipelineTarget(input.projectRef, input.databaseUrl);
@@ -23,7 +24,9 @@ export async function runGoogleSpendJob(input: {
   let base: SpendBase;
   try {
     if (!Number.isSafeInteger(claim.maxPages)) throw new Error("spend_invalid_claim");
-    const accessToken = await refreshGoogleSpendToken(input);
+    const auth = input.auth ?? { mode: "oauth_refresh", clientId: input.clientId ?? "",
+      clientSecret: input.clientSecret ?? "", refreshToken: input.refreshToken ?? "" };
+    const accessToken = await authorizeGoogleSpend({ ...input, auth });
     base = await readGoogleSpend({ ...input, accessToken, accountId: sourceString(claim.accountId),
       loginCustomerId: claim.loginCustomerId === null ? null : sourceString(claim.loginCustomerId),
       date: sourceString(claim.date), maxPages: Number(claim.maxPages), approvalRef: sourceString(claim.approvalRef),

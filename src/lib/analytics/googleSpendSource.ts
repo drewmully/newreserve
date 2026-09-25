@@ -2,6 +2,7 @@ import { nyDate } from "./primitives";
 import { reportDates } from "./commerceCandidate";
 import { sourceObject, sourceString } from "./shopifySource";
 import { googleSpendBase, normalizeSpendBase, type GoogleCampaignRow, type SpendBase } from "./spend";
+import { createGoogleServiceAccountAssertion } from "../../app/api/_lib/googleAuth";
 
 export const GOOGLE_ADS_VERSION = "v25";
 export const GOOGLE_ACCOUNT_QUERY = "SELECT customer.id, customer.currency_code, customer.time_zone FROM customer";
@@ -10,15 +11,31 @@ export type GoogleSpendScope = {
   accountId: string; loginCustomerId: string | null; date: string; maxPages: number; approvalRef: string;
 };
 type Transport = { fetcher?: typeof fetch; signal: AbortSignal };
+export type GoogleSpendAuth =
+  | { mode: "oauth_refresh"; clientId: string; clientSecret: string; refreshToken: string }
+  | { mode: "service_account"; serviceAccountJsonBase64: string; subject?: string };
+
+/** Dedicated analytics variables only. Unset mode preserves the OAuth path. */
+export function googleSpendAuthFromEnv(env: Record<string, string | undefined>): GoogleSpendAuth {
+  const mode = env.LEAN_GOOGLE_ADS_AUTH_MODE ?? "oauth_refresh";
+  if (mode === "oauth_refresh") return { mode, clientId: env.LEAN_GOOGLE_ADS_OAUTH_CLIENT_ID ?? "",
+    clientSecret: env.LEAN_GOOGLE_ADS_OAUTH_CLIENT_SECRET ?? "", refreshToken: env.LEAN_GOOGLE_ADS_REFRESH_TOKEN ?? "" };
+  if (mode !== "service_account") throw new Error("google_spend_invalid_auth_mode");
+  return { mode, serviceAccountJsonBase64: env.LEAN_GOOGLE_ADS_SERVICE_ACCOUNT_JSON_BASE64 ?? "",
+    subject: env.LEAN_GOOGLE_ADS_IMPERSONATE_EMAIL };
+}
 async function postJson(url: string, init: RequestInit, transport: Transport): Promise<Record<string, unknown>> {
   let response: Response;
   try {
+    transport.signal.throwIfAborted();
     response = await (transport.fetcher ?? fetch)(url, { ...init, redirect: "error",
       signal: AbortSignal.any([transport.signal, AbortSignal.timeout(20000)]) });
+    transport.signal.throwIfAborted();
   } catch { throw new Error("google_spend_transport_failed"); }
   if (!response.ok) throw new Error("google_spend_auth_or_http_failed");
   let body: Record<string, unknown>;
   try { body = sourceObject(await response.json()); } catch { throw new Error("google_spend_invalid_response"); }
+  if (transport.signal.aborted) throw new Error("google_spend_transport_failed");
   if (body.error !== undefined) throw new Error("google_spend_source_error");
   return body;
 }
@@ -33,11 +50,32 @@ export async function refreshGoogleSpendToken(input: Transport & { clientId: str
     throw new Error("google_spend_invalid_token_response");
   return body.access_token;
 }
+export async function authorizeGoogleSpend(input: Transport & { auth: GoogleSpendAuth; developerToken?: string }) {
+  if (input.auth.mode === "oauth_refresh") return refreshGoogleSpendToken({ ...input, ...input.auth });
+  if (input.auth.mode !== "service_account" || !input.developerToken?.trim() ||
+      !input.auth.serviceAccountJsonBase64.trim() || input.auth.serviceAccountJsonBase64.length > 32768 ||
+      input.auth.subject !== undefined && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.auth.subject))
+    throw new Error("google_spend_invalid_service_account");
+  let assertion: string;
+  try {
+    assertion = await createGoogleServiceAccountAssertion({
+      serviceAccountJsonBase64: input.auth.serviceAccountJsonBase64,
+      scope: "https://www.googleapis.com/auth/adwords", sub: input.auth.subject,
+    });
+  } catch { throw new Error("google_spend_invalid_service_account"); }
+  const body = await postJson("https://oauth2.googleapis.com/token", {
+    method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion }),
+  }, input);
+  if (typeof body.access_token !== "string" || !body.access_token || body.token_type !== "Bearer")
+    throw new Error("google_spend_invalid_token_response");
+  return body.access_token;
+}
 /** Only fixed read-only GAQL. Source account currency/timezone is read, not supplied.
  * No ad_spend_daily event mirror and no customer operational table writes.
  */
 export async function readGoogleSpend(input: GoogleSpendScope & Transport & {
-  accessToken: string; now: string; evidenceRef: string; baseReportId: string;
+  accessToken: string; developerToken?: string; now: string; evidenceRef: string; baseReportId: string;
 }): Promise<SpendBase> {
   reportDates(input.date, input.date); nyDate(input.now);
   if (!/^\d{10}$/.test(input.accountId) ||
@@ -49,6 +87,7 @@ export async function readGoogleSpend(input: GoogleSpendScope & Transport & {
   const request = (query: string, pageToken?: string) => postJson(
     `https://googleads.googleapis.com/${GOOGLE_ADS_VERSION}/customers/${input.accountId}/googleAds:search`, {
       method: "POST", headers: { Authorization: `Bearer ${input.accessToken}`, "Content-Type": "application/json",
+        ...(input.developerToken ? { "developer-token": input.developerToken } : {}),
         ...(input.loginCustomerId ? { "login-customer-id": input.loginCustomerId } : {}) },
       body: JSON.stringify({ query, ...(pageToken ? { pageToken } : {}) }),
     }, input);

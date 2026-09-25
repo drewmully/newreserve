@@ -5,6 +5,7 @@ import { runHistoryJob } from "./historyJob";
 import { runGoogleSpendJob } from "./googleSpendJob";
 import { runObservedReportJob } from "./observedReportJob";
 import { runFullReportJob } from "./fullReportJob";
+import type { GoogleSpendAuth } from "./googleSpendSource";
 
 /** One bounded step, selected only from the owner-saved dependency inventory.
  * No recursion, catch-and-retry, dynamic account discovery, or release.
@@ -13,6 +14,7 @@ export async function runFullPipeline(input: {
   client: AnalyticsRpcClient; projectRef: string; databaseUrl: string; runId: string;
   shop: string; shopifyToken: string; posthogKey: string;
   googleClientId: string; googleClientSecret: string; googleRefreshToken: string;
+  googleAuth?: GoogleSpendAuth; googleDeveloperToken?: string;
   request?: typeof fetch; now: string;
 }) {
   validatePipelineTarget(input.projectRef, input.databaseUrl);
@@ -33,6 +35,7 @@ export async function runFullPipeline(input: {
     case "spend":
       result = await runGoogleSpendJob({ ...common, clientId: input.googleClientId,
         clientSecret: input.googleClientSecret, refreshToken: input.googleRefreshToken,
+        auth: input.googleAuth, developerToken: input.googleDeveloperToken,
         fetcher: input.request, signal: AbortSignal.timeout(65000), now: input.now });
       break;
     case "reports": result = await runObservedReportJob(common); break;

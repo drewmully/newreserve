@@ -5,6 +5,7 @@ on:
     paths:
       - "src/lib/analytics/**"
       - "src/app/api/_lib/supabaseService.ts"
+      - "src/app/api/_lib/googleAuth.ts"
       - "src/app/api/analytics/ingest/**"
       - "tests/api/analytics*.test.ts"
       - "tests/fixtures/analyticsFull.ts"
@@ -25,6 +26,7 @@ on:
     paths:
       - "src/lib/analytics/**"
       - "src/app/api/_lib/supabaseService.ts"
+      - "src/app/api/_lib/googleAuth.ts"
       - "src/app/api/analytics/ingest/**"
       - "tests/api/analytics*.test.ts"
       - "tests/fixtures/analyticsFull.ts"
@@ -83,4 +85,4 @@ jobs:
               tests/api/analyticsContracts.test.ts tests/api/analyticsLean*.test.ts tests/api/analyticsTrack.route.test.ts
           done
       - run: npx tsc --project tsconfig.analytics.json
-      - run: npx eslint src/lib/analytics src/app/api/analytics/ingest src/app/api/_lib/supabaseService.ts tests/api/analyticsContracts.test.ts tests/api/analyticsLean*.test.ts tests/fixtures/analyticsFull.ts scripts/analytics/*.mjs
+      - run: npx eslint src/lib/analytics src/app/api/analytics/ingest src/app/api/_lib/supabaseService.ts src/app/api/_lib/googleAuth.ts tests/api/analyticsContracts.test.ts tests/api/analyticsLean*.test.ts tests/fixtures/analyticsFull.ts scripts/analytics/*.mjs

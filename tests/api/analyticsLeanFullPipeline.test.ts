@@ -42,6 +42,14 @@ it("stops before any source read when disabled, blocked, completed, or scoped to
     .rejects.toThrow("pipeline_shop_mismatch");
   for (const fn of Object.values(jobs)) expect(fn).not.toHaveBeenCalled();
 });
+it("passes explicit service-account configuration only to the selected saved spend dependency", async () => {
+  const googleAuth = { mode: "service_account" as const, serviceAccountJsonBase64: "fixture:not-a-key",
+    subject: "fixture@example.invalid" };
+  await runFullPipeline({ ...options({ state: "ready", stage: "spend", runId: "s" }),
+    googleAuth, googleDeveloperToken: "fixture:developer" });
+  expect(jobs.spend.mock.calls[0][0]).toMatchObject({ auth: googleAuth, developerToken: "fixture:developer", runId: "s" });
+  for (const fn of [jobs.history, jobs.reports, jobs.full]) expect(fn).not.toHaveBeenCalled();
+});
 it("does not retry failed or busy source jobs and rejects unknown stages", async () => {
   jobs.spend.mockResolvedValue({ state: "failed" });
   expect(await runFullPipeline(options({ state: "ready", stage: "spend", runId: "s" })))

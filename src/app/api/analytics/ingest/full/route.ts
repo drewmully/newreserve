@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getAnalyticsSupabase } from "@/lib/analytics/serverClient";
 import { runFullPipeline } from "@/lib/analytics/fullPipeline";
+import { googleSpendAuthFromEnv } from "@/lib/analytics/googleSpendSource";
 export const runtime = "nodejs";
 export const maxDuration = 90;
 export async function POST(req: NextRequest) {
@@ -23,6 +24,8 @@ export async function POST(req: NextRequest) {
       googleClientId: process.env.LEAN_GOOGLE_ADS_OAUTH_CLIENT_ID ?? "",
       googleClientSecret: process.env.LEAN_GOOGLE_ADS_OAUTH_CLIENT_SECRET ?? "",
       googleRefreshToken: process.env.LEAN_GOOGLE_ADS_REFRESH_TOKEN ?? "",
+      googleAuth: googleSpendAuthFromEnv(process.env),
+      googleDeveloperToken: process.env.LEAN_GOOGLE_ADS_DEVELOPER_TOKEN,
       now: new Date().toISOString(),
     });
     return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });
