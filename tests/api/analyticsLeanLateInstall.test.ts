@@ -44,6 +44,15 @@ it.each(connectionString ? ["postgres"] : ["pglite"])(
       throw new Error("local_disposable_postgres_only");
     control = new Client({ connectionString }); await control.connect();
     await control.query("drop database if exists analytics_test_late_install");
+    // The preceding ordinary suite leaves cluster-wide reader roles and their
+    // grants in this allowlisted disposable DB. Remove only those fixture grants;
+    // DROP ROLE still fails closed if any other database depends on the role.
+    for (const role of ["lean_pilot_reader", "lean_observed_reader", "lean_posthog_reader"]) {
+      if ((await control.query("select 1 from pg_roles where rolname=$1", [role])).rowCount) {
+        await control.query(`drop owned by ${role}`);
+        await control.query(`drop role ${role}`);
+      }
+    }
     await control.query("create database analytics_test_late_install");
     url.pathname = "/analytics_test_late_install";
     pg = new Client({ connectionString: url.toString() }); await pg.connect();
