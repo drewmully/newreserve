@@ -3,7 +3,7 @@ import { nyDate } from "./primitives";
 import { readPilotSource, type PilotSource } from "./shopifyPilotSource";
 import {
   SHOPIFY_ANALYTICS_API_VERSION, shopifyId, shopifyShop,
-  sourceArray, sourceObject, sourceString,
+  sourceArray, sourceObject, sourceString, type ShopifyProjection,
 } from "./shopifySource";
 
 export const HISTORY_ACCESS_QUERY = `query AnalyticsHistoryAccess {
@@ -29,6 +29,8 @@ export type HistoryRow = { source: PilotSource };
 export type HistoryOptions = HistoryScope & {
   accessToken: string; fetcher?: typeof fetch; signal: AbortSignal;
   pageSize: number; now: string;
+  /** Operator-selected projection; keep the same value on every resumed page. */
+  projection?: ShopifyProjection;
 };
 
 /** Creation inventory or update-time change scan, not a financial-date report
