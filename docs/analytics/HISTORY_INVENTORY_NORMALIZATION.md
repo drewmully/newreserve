@@ -25,6 +25,9 @@ Supported positive-quantity lines retain IDs, product IDs and quantities only;
 class remains unknown. SKU, geo, customer, checkout, paid date, purchase evidence,
 cost and every purchase/financial amount remain null. No ledger, payment,
 customer, identity, session or attribution facts are inferred.
+`commerce_source:"other"` is only a neutral internal pending placeholder here,
+not source/channel authority or a storefront/subscription-renewal classification.
+The mandatory pending status and acquisition-false boundary remain unchanged.
 
 Edited-order lines, zero quantities and >500-line orders are explicit withheld
 item outcomes. Oversized/edited orders still get a pending header, but no partial

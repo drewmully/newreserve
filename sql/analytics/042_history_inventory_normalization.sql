@@ -167,6 +167,8 @@ begin
       (item->>'created_at')::timestamptz is distinct from (o#>>'{original,createdAt}')::timestamptz or
       (item->>'source_updated_at')::timestamptz is distinct from (o#>>'{original,updatedAt}')::timestamptz or
       item->>'eligibility_status' is distinct from 'pending' or item->>'commerce_source' is distinct from 'other' or
+      item->>'checkout_link_status' is distinct from 'pending' or item->>'checkout_link_method' is distinct from 'none' or
+      item->>'link_version' is distinct from 'unlinked-v1' or
       item->'acquisition_eligible' is distinct from 'false'::jsonb
       then raise exception 'unproven inventory order'; end if;
     foreach t in array array['customer_id','checkout_id','paid_at','purchase_date','shipping_country','shipping_region',

@@ -343,6 +343,8 @@ describe.skipIf(!url)("040 source to real private canonical/report consumer", ()
     await expect(rpc(runtime,"lean_history_inventory_finish",{...finish,p_input_hash:"wrong"})).rejects.toThrow("fence");
     const wrong=structuredClone(results);wrong[0].facts.orders[0].purchase_merchandise_net_usd="0.000000";
     await expect(rpc(runtime,"lean_history_inventory_finish",{...finish,p_results:wrong})).rejects.toThrow("must be unknown");
+    const falseLink=structuredClone(results);falseLink[0].facts.orders[0].checkout_link_status="resolved";
+    await expect(rpc(runtime,"lean_history_inventory_finish",{...finish,p_results:falseLink})).rejects.toThrow("unproven inventory order");
     await admin.query("update lean_private.history_report_jobs set enabled=false");
     await expect(rpc(runtime,"lean_history_inventory_finish",finish)).rejects.toThrow("fence");
     await admin.query("update lean_private.history_report_jobs set enabled=true");
