@@ -120,6 +120,10 @@ jobs:
               --exclude tests/api/analyticsLeanHistoryBridge.test.ts
           done
       - run: npx tsc --project tsconfig.analytics.json
+      - name: Verify schema-only release ACLs without concurrent database resets
+        env:
+          LEAN_RELEASE_ACL_POSTGRES: "true"
+        run: npm test -- --project api --maxWorkers 1 tests/api/analyticsLeanReleaseAcl.test.ts
       - name: Verify late-install compatibility on disposable PostgreSQL without concurrent role resets
         env:
           LEAN_LATE_INSTALL_POSTGRES: "true"
