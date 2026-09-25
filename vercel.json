@@ -1,6 +1,9 @@
 {
   "git": {
     "deploymentEnabled": {
+      "review/analytics-038-google-pilot": false,
+      "review/analytics-039-shopify-pilot": false,
+      "review/analytics-040-history-import": false,
       "review/analytics-initial-validation": false,
       "feat/analytics-spend-source": false,
       "feat/analytics-full-report-build": false,
