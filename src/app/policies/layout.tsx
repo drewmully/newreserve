@@ -31,6 +31,8 @@ export default function PoliciesLayout({ children }: { children: React.ReactNode
             <div className="flex flex-wrap gap-3">
               <PolicyNavLink href="/policies/refund">Refund</PolicyNavLink>
               <PolicyNavLink href="/policies/privacy">Privacy</PolicyNavLink>
+              {process.env.NEXT_PUBLIC_LEAN_ANALYTICS_JOURNEYS_ENABLED === "true" &&
+                <PolicyNavLink href="/analytics-preferences">Analytics preferences</PolicyNavLink>}
               <PolicyNavLink href="/policies/shipping">Shipping</PolicyNavLink>
               <PolicyNavLink href="/policies/terms">Terms</PolicyNavLink>
             </div>

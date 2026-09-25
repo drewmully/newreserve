@@ -9,7 +9,8 @@ export type RefreshInput = {
   intake: Parameters<typeof assembleEvidence>[0];
   policy: FullBuildPolicy; behavior: BehaviorSource;
   commercePolicy: PipelinePolicy & { deferredOrders?: unknown[] };
-  history: { from: string; until: string; pageSize: number; maxPages: number }[];
+  history: { from: string; until: string; pageSize: number; maxPages: number;
+    scanBasis?: "created_at" | "updated_at" }[];
   accounts: { accountId: string; loginCustomerId: string | null; maxPages: number }[];
   approvalRef: string; actorRef: string; revision: string;
   readyAt: string; expiresAt: string; maxSteps: number;
@@ -21,11 +22,14 @@ export type RefreshInput = {
 export function prepareRefresh(input: RefreshInput) {
   const { scope } = input.intake;
   const assembled = assembleEvidence(input.intake);
-  validateBehaviorSource(input.behavior);
+  const mode = input.policy.behaviorMode ?? "required";
+  if (!["required", "excluded"].includes(mode)) throw new Error("invalid_behavior_mode");
+  if (mode === "required") validateBehaviorSource(input.behavior);
   const dates = reportDates(scope.fromDate, scope.throughDate);
   if (dates.length > 31 || !input.approvalRef?.trim() || !input.actorRef?.trim() ||
       !/^[a-zA-Z0-9_.:-]{1,128}$/.test(input.revision)) throw new Error("invalid_refresh_approval");
-  if (input.policy.asOf !== input.intake.asOf || input.policy.project !== input.behavior.project ||
+  if (input.policy.asOf !== input.intake.asOf ||
+      mode === "required" && input.policy.project !== input.behavior.project ||
       !input.policy.approvalRef?.trim() || !input.commercePolicy.decision?.approvalRef?.trim() ||
       !input.commercePolicy.financialApprovalRef?.trim()) throw new Error("refresh_policy_mismatch");
   nyDate(input.readyAt); nyDate(input.expiresAt);
@@ -46,6 +50,7 @@ export function prepareRefresh(input: RefreshInput) {
   const windows = input.history.map(h => {
     nyDate(h.from); nyDate(h.until);
     if (Date.parse(h.until) <= Date.parse(h.from) || Date.parse(h.until) > Date.parse(input.intake.asOf) ||
+        h.scanBasis !== undefined && !["created_at", "updated_at"].includes(h.scanBasis) ||
         !Number.isSafeInteger(h.pageSize) || h.pageSize < 1 || h.pageSize > 5 ||
         !Number.isSafeInteger(h.maxPages) || h.maxPages < 1)
       throw new Error("invalid_refresh_history");
@@ -53,7 +58,12 @@ export function prepareRefresh(input: RefreshInput) {
     return { ...h };
   }).sort((a, b) => a.from.localeCompare(b.from));
   if (pages > 25 || rows > 100) throw new Error("refresh_history_budget");
-  if (windows.some((w, i) => i > 0 && Date.parse(w.from) < Date.parse(windows[i - 1].until)))
+  // Creation backfills and update scans may overlap; duplicate orders are
+  // revision-deduplicated downstream. Within one basis, overlapping jobs are
+  // wasteful and risk exhausting the approved read budget.
+  if (windows.some((w, i) => windows.slice(0, i).some(prior =>
+    (w.scanBasis ?? "created_at") === (prior.scanBasis ?? "created_at") &&
+    Date.parse(w.from) < Date.parse(prior.until))))
     throw new Error("overlapping_refresh_history");
   const accounts = new Set<string>();
   for (const a of input.accounts) {
@@ -80,7 +90,7 @@ export function prepareRefresh(input: RefreshInput) {
       throughDate: scope.throughDate, historyRuns: history.map(h => h.runId), spendRuns: spend.map(s => s.runId),
       policy: input.commercePolicy },
     full: { ...common, runId, baseRun: `${runId}:base`, policy: input.policy,
-      behavior: input.behavior, evidence: assembled.evidence },
+      behavior: mode === "excluded" ? {} : input.behavior, evidence: assembled.evidence },
     queue: { readyAt: input.readyAt, expiresAt: input.expiresAt, maxSteps: input.maxSteps },
   };
 }

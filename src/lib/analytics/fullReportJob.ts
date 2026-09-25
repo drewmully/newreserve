@@ -53,10 +53,12 @@ export async function runFullReportJob(options: {
   const evidence = sourceObject(input.evidence) as FullBuildEvidence;
   const behavior = sourceObject(input.behavior) as BehaviorSource;
   verifyDeferredReplacements(deferredOrders(input.deferredOrders), evidence, sourceString(input.shop));
-  validateBehaviorSource(behavior);
-  if (behavior.project !== policy.project || Date.parse(behavior.until) > Date.parse(policy.asOf) ||
+  const mode = policy.behaviorMode ?? "required";
+  if (!["required", "excluded"].includes(mode)) throw new Error("invalid_behavior_mode");
+  if (mode === "required") validateBehaviorSource(behavior);
+  if (mode === "required" && (behavior.project !== policy.project || Date.parse(behavior.until) > Date.parse(policy.asOf) ||
       Object.values(policy.stages).some(f => !Object.hasOwn(behavior.families, f)) ||
-      Object.keys(behavior.families).some(f => !Object.values(policy.stages).includes(f)))
+      Object.keys(behavior.families).some(f => !Object.values(policy.stages).includes(f))))
     throw new Error("full_behavior_policy_mismatch");
   const lease = { ...args, p_token: randomUUID() };
   const claimed = await pipelineRpc(options.client, "lean_full_claim", lease);
@@ -64,12 +66,14 @@ export async function runFullReportJob(options: {
   if (claimed !== true) throw new Error("invalid_full_claim");
   let result: ReturnType<typeof buildFullReports>;
   try {
-    const events = await readPosthogBehavior(behavior, options.posthogKey, options.request);
+    const events = mode === "excluded" ? [] :
+      await readPosthogBehavior(behavior, options.posthogKey, options.request);
     const base = sourceObject(input.facts) as Candidate;
     result = buildFullReports({ base,
       publication: sourceString(input.publication), shop: sourceString(input.shop),
       fromDate: sourceString(input.fromDate), throughDate: sourceString(input.throughDate),
-      policy, evidence: boundBehaviorEvidence(evidence, behavior, policy, base), events });
+      policy, evidence: mode === "excluded" ? evidence :
+        boundBehaviorEvidence(evidence, behavior, policy, base), events });
   } catch {
     await pipelineRpc(options.client, "lean_full_fail", lease);
     throw new Error("full_transform_unavailable");

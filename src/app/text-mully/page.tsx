@@ -63,10 +63,12 @@ export default function TextMullyPage() {
   const bodiesJson = JSON.stringify(BODIES);
   const numberE164Json = JSON.stringify(NUMBER_E164);
   const defaultSrcJson = JSON.stringify(DEFAULT_SRC);
+  const leanJourneysJson = JSON.stringify(process.env.NEXT_PUBLIC_LEAN_ANALYTICS_JOURNEYS_ENABLED === "true");
 
   const bootstrap = `
     (function(){
       try {
+        var leanJourneysEnabled = ${leanJourneysJson};
         var params = new URLSearchParams(window.location.search);
         var src = (params.get("src") || ${defaultSrcJson}).toLowerCase();
         var bodies = ${bodiesJson};
@@ -100,7 +102,7 @@ export default function TextMullyPage() {
         try {
           var viewPayload = JSON.stringify({
             event_name: "lp_text_mully_view",
-            properties: { src: src },
+            properties: leanJourneysEnabled ? { src: src, event_id: uuid() } : { src: src },
             page_url: window.location.href,
           });
           if (navigator.sendBeacon) {
@@ -132,13 +134,25 @@ export default function TextMullyPage() {
           if (window.crypto && window.crypto.randomUUID) {
             try { return window.crypto.randomUUID(); } catch (_e) {}
           }
-          return (
+          if (!leanJourneysEnabled) return (
             Date.now().toString(36) +
             "-" +
             Math.random().toString(36).slice(2, 10) +
             "-" +
             Math.random().toString(36).slice(2, 10)
           );
+          // Older secure-context browsers may expose getRandomValues without
+          // randomUUID. Do not use a non-UUID fallback: the journey endpoint
+          // deliberately rejects malformed action IDs.
+          if (!window.crypto || !window.crypto.getRandomValues) return null;
+          var bytes = window.crypto.getRandomValues(new Uint8Array(16));
+          bytes[6] = (bytes[6] & 15) | 64;
+          bytes[8] = (bytes[8] & 63) | 128;
+          var hex = Array.prototype.map.call(bytes, function(b) {
+            return b.toString(16).padStart(2, "0");
+          }).join("");
+          return hex.slice(0, 8) + "-" + hex.slice(8, 12) + "-" +
+            hex.slice(12, 16) + "-" + hex.slice(16, 20) + "-" + hex.slice(20);
         }
 
         function fireSmsClick() {
@@ -208,14 +222,15 @@ export default function TextMullyPage() {
           }
         }
 
-        // Attach to every SMS anchor. Use mousedown/touchstart AND click
-        // so the event fires before the sms: navigation begins tearing
-        // down the page — critical because Safari kills pending network
-        // requests on sms: navigation.
+        // Attach once per SMS anchor. Beacon/keepalive delivery is auxiliary;
+        // never prevent the SMS navigation when tracking is unavailable.
         function attachTracker(el) {
           if (!el || el.__smsClickBound) return;
           el.__smsClickBound = true;
-          el.addEventListener("pointerdown", fireSmsClick, { once: false, passive: true });
+          // Preserve the existing advertising lane while journey tracking is off.
+          if (!leanJourneysEnabled) el.addEventListener("pointerdown", fireSmsClick, { once: false, passive: true });
+          // A pointer activation also emits click; using both double-counts it.
+          // Click covers keyboard activation as well as pointer/touch.
           el.addEventListener("click", fireSmsClick, { once: false, passive: true });
         }
         var smsAnchors = document.querySelectorAll("[data-sms-link]");

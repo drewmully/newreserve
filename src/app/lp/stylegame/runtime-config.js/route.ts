@@ -12,6 +12,7 @@ export function GET() {
     depositUrl: process.env.NEXT_PUBLIC_STYLEGAME_DEPOSIT_URL ?? "/api/stylegame/checkout",
     xHandle: process.env.NEXT_PUBLIC_STYLEGAME_X_HANDLE ?? "@mymully",
     igHandle: process.env.NEXT_PUBLIC_STYLEGAME_IG_HANDLE ?? "@mullyreserve",
+    leanJourneysEnabled: process.env.NEXT_PUBLIC_LEAN_ANALYTICS_JOURNEYS_ENABLED === "true",
   };
 
   return new Response(

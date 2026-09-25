@@ -24,6 +24,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { insertPlayedLead, QuizResult, StylegamePick } from "@/lib/stylegame/lead";
 import { captureStylegameEvent } from "@/lib/stylegame/analytics";
+import { captureJourney, stableJourneyAction } from "@/lib/analytics/journeyRuntime";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -87,6 +88,9 @@ export async function POST(req: NextRequest) {
     // Fire PostHog server-side capture only when a NEW row was created.
     // Duplicate posts within the 5-minute idempotency window should not
     // fan out to PostHog again.
+    // The new lane has retained timestamps and stable retry IDs. If the first
+    // auxiliary capture failed, a business retry can safely try the same action.
+    await captureJourney(req, "sg_played", stableJourneyAction(`stylegame-played:${id}`));
     if (created) {
       await captureStylegameEvent("sg_played", anon, {
         lead_id: id,
