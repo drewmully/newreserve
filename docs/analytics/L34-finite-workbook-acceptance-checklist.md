@@ -111,7 +111,7 @@ or duplicate an implemented boundary.
 
 - [ ] Approve the exact isolated environment, data window, source accounts and
   maximum paid scope; separately approve any hosted migration or source read.
-- [ ] Apply migrations through 036 in the isolated environment with all runtime,
+- [ ] Apply migrations through 037 in the isolated environment with all runtime,
   queue, export and schedule controls still disabled.
 - [ ] Install least-privilege readers for the explicitly approved sources and
   review the existing Supabase security advisor before changing RLS.
