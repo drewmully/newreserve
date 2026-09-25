@@ -85,7 +85,9 @@ export async function verifyHistoryAccess(options: HistoryOptions) {
       !handles.includes("read_all_orders")) throw new Error("history_missing_full_history_access");
 }
 
-export async function readHistoryPage(options: HistoryOptions, cursor: string | null): Promise<BackfillPage<HistoryRow>> {
+export type HistoryOrder = { id: string; createdAt: string; updatedAt: string };
+/** Fixed metadata-only inventory. Caller must verify access before paging. */
+export async function readHistoryInventoryPage(options: HistoryOptions, cursor: string | null): Promise<BackfillPage<HistoryOrder>> {
   // Access verification is performed by runShopifyHistory before any page read.
   validateHistoryScope(options);
   if (!Number.isSafeInteger(options.pageSize) || options.pageSize < 1 || options.pageSize > 20 ||
@@ -100,7 +102,7 @@ export async function readHistoryPage(options: HistoryOptions, cursor: string | 
       page.hasNextPage && (!nodes.length || typeof page.endCursor !== "string" || !page.endCursor || page.endCursor === cursor))
     throw new Error("history_invalid_page");
   const ids = new Set<string>();
-  const rows: HistoryRow[] = [];
+  const rows: HistoryOrder[] = [];
   let previousTime = -Infinity;
   for (const node of nodes) {
     const id = sourceString(node.id); shopifyId(id, "Order");
@@ -111,12 +113,21 @@ export async function readHistoryPage(options: HistoryOptions, cursor: string | 
         t < previousTime || Date.parse(updated) < Date.parse(created) ||
         Date.parse(updated) > Date.parse(options.now)) throw new Error("history_source_scope_mismatch");
     ids.add(id); previousTime = t;
-    const source = await readPilotSource(options, id);
-    if (source.commerce.order.createdAt !== created || source.commerce.order.updatedAt !== updated)
+    rows.push({ id, createdAt: created, updatedAt: updated });
+  }
+  return { rows, complete: !page.hasNextPage, nextCursor: page.hasNextPage ? sourceString(page.endCursor) : null };
+}
+
+export async function readHistoryPage(options: HistoryOptions, cursor: string | null): Promise<BackfillPage<HistoryRow>> {
+  const page = await readHistoryInventoryPage(options, cursor);
+  const rows: HistoryRow[] = [];
+  for (const order of page.rows) {
+    const source = await readPilotSource(options, order.id);
+    if (source.commerce.order.createdAt !== order.createdAt || source.commerce.order.updatedAt !== order.updatedAt)
       throw new Error("history_order_changed_during_read");
     rows.push({ source });
   }
-  return { rows, complete: !page.hasNextPage, nextCursor: page.hasNextPage ? sourceString(page.endCursor) : null };
+  return { ...page, rows };
 }
 
 /** Durable state must be supplied by the registered run, never an HTTP caller.

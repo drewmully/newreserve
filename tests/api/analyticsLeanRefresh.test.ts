@@ -4,7 +4,9 @@ import { randomUUID } from "node:crypto";
 import { beforeAll, beforeEach, afterAll, afterEach, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { prepareRefresh } from "@/lib/analytics/refreshPlan";
+import { evidenceDigest } from "@/lib/analytics/evidenceIntake";
 import { refreshFixture } from "../fixtures/analyticsRefresh";
+import { inventoryFixture } from "../fixtures/analyticsDiscovery";
 import { fullProject } from "../fixtures/analyticsFull";
 import { POST } from "@/app/api/analytics/ingest/refresh/route";
 import { GET as healthGET } from "@/app/api/analytics/ingest/health/route";
@@ -36,7 +38,8 @@ beforeAll(async () => {
     alter default privileges in schema public grant execute on functions to anon,authenticated,service_role;`);
   for (const name of ["001_staging", "013_release", "014_reporting_views", "018_history_jobs", "019_spend_jobs",
     "020_observed_report_jobs", "021_full_report_jobs", "022_full_release", "023_posthog_export",
-    "024_full_orchestration", "025_refresh_queue", "027_history_update_scans", "028_refresh_health", "034_commerce_only_refresh"])
+    "024_full_orchestration", "025_refresh_queue", "027_history_update_scans", "028_refresh_health",
+    "034_commerce_only_refresh", "035_discovery_inventory_fence", "036_partitioned_refresh"])
     await db.exec(readFileSync(`sql/analytics/${name}.sql`, "utf8"));
 }, 30000);
 beforeEach(async () => {
@@ -68,6 +71,23 @@ it("prepares deterministic fresh-evidence revisions instead of mutating complete
   expect(prepareRefresh(input).runId).not.toBe(a.runId);
   expect(a.history).toHaveLength(1); expect(a.spend).toHaveLength(1);
   expect(a.full.evidence.ref).toContain(a.evidenceDigest);
+});
+it("registers and replays the sealed inventory as immutable hashed base policy", async () => {
+  const input = refreshFixture(), inventory = inventoryFixture();
+  input.commercePolicy.sourceInventory = inventory;
+  input.history = inventory.windows.map(({ from, until, pageSize, maxPages }) => ({ from, until, pageSize, maxPages }));
+  // Fixture capture is independent of wall-clock test execution.
+  inventory.capturedAt = input.intake.asOf;
+  const { digest: ignored, ...payload } = inventory;
+  expect(ignored).toMatch(/^[a-f0-9]{64}$/);
+  inventory.digest = evidenceDigest(payload);
+  const bundle = prepareRefresh(input);
+  await db.query("select public.lean_refresh_register($1)", [JSON.stringify(bundle)]);
+  await db.query("select public.lean_refresh_register($1)", [JSON.stringify(bundle)]);
+  expect((await db.query("select policy->'sourceInventory' inventory,enabled from lean_private.report_builds")).rows)
+    .toEqual([{ inventory, enabled: false }]);
+  await expect(db.exec("update lean_private.report_builds set policy=policy-'sourceInventory'"))
+    .rejects.toThrow("immutable");
 });
 it("reports unconfigured and missing expected work instead of treating no data as healthy", async () => {
   const args = { p_project_ref: fullProject, p_shop: "fixture.myshopify.com" };

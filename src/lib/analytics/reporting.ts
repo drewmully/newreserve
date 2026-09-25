@@ -83,6 +83,12 @@ export function productDaily(f: Facts, s: ReportScope): Row[] {
   const items = new Map(f.order_items.map(i => [i.order_item_id, i]));
   const orders = new Map(f.orders.map(o => [o.order_id, o]));
   const skus = new Set(f.order_items.map(i => i.sku ?? "unknown"));
+  // A reconciled store total does not prove a complete product allocation.
+  // Never silently omit unresolved merchandise (e.g. an added post-purchase
+  // line absent from the original basket) even if an external gate says true.
+  const allocated = f.sales_ledger.filter(l => l.sales_eligible === true && l.report_date === s.date &&
+    merchandise.has(l.component as string)).every(l => l.product_allocation_status === "allocated" &&
+      l.order_item_id !== null && items.has(l.order_item_id));
   return [...skus].map(sku => {
     const purchaseItems = [...items.values()].filter(i => (i.sku ?? "unknown") === sku && i.item_class === "merchandise" &&
       orders.get(i.order_id)?.eligibility_status === "eligible" && orders.get(i.order_id)?.purchase_date === s.date);
@@ -91,7 +97,7 @@ export function productDaily(f: Facts, s: ReportScope): Row[] {
       (items.get(l.order_item_id)?.sku ?? "unknown") === sku);
     return output(s, { sku_bucket: sku }, {
       units: sum(purchaseItems, "quantity", s.gates.orders),
-      ...ledgerMetrics(ledger, s.gates.ledger && s.gates.productAllocation),
+      ...ledgerMetrics(ledger, s.gates.ledger && s.gates.productAllocation && allocated),
     });
   });
 }
