@@ -20,7 +20,8 @@ language plpgsql stable security definer set search_path=pg_catalog set timezone
 declare r lean_private.pilot_runs; facts jsonb; binding jsonb; orders jsonb; items jsonb; ledger jsonb;
 begin
   select * into r from lean_private.pilot_runs where run_id=p_run;
-  if not found or r.state<>'done' or r.completed_at is null or
+  if not found or not exists(select 1 from lean_private.pilot_environment
+      where project_ref='xeqlgxvrhgwwudyqtnun') or r.state<>'done' or r.completed_at is null or
     r.shop<>'mullybox-store.myshopify.com' or r.source is null or
     r.source_fingerprint is distinct from md5(r.source::text) or
     r.source#>>'{commerce,order,id}' is distinct from r.order_gid or
@@ -176,6 +177,7 @@ begin
     encode(sha256(convert_to(r.payload::text,'UTF8')),'hex') is distinct from r.payload_hash
     then raise exception 'selected snapshot changed'; end if;
   perform lean_private.selected_order_validate(r.payload,input);
+  if r.expires_at<=clock_timestamp() then raise exception 'selected expired during read'; end if;
   return r.payload;
 end $$;
 
