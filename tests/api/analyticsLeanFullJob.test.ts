@@ -68,6 +68,29 @@ it("runs the source reader through real SQL inserts for all five reports, withou
   expect((await db.query<{ manifest: unknown }>("select manifest from lean_private.full_builds")).rows[0].manifest)
     .toMatchObject({ nativeEvents: 1, logicalEvents: 1 });
 });
+it("persists a custom conversion window in immutable policy without extending the event manifest", async () => {
+  const f = fullFixture(), policy = { ...f.policy, conversionWindowDays: 2,
+    definition: "fixture-two-day-v2", funnelVersion: "fixture-two-day-funnel-v2", asOf: "2026-01-04T11:00:00Z" };
+  const behavior = { ...f.behavior, until: policy.asOf };
+  await db.query(`insert into lean_private.full_builds
+    (run_id,project_ref,base_run,policy,evidence,behavior,approval_ref,actor_ref,enabled)
+    values('custom-window',$1,'base',$2,$3,$4,'fixture:approval','fixture:actor',true)`,
+  [fullProject, JSON.stringify(policy), JSON.stringify(f.evidence), JSON.stringify(behavior)]);
+  expect(await runFullReportJob({ ...options(), runId: "custom-window" })).toMatchObject({ state: "complete" });
+  const saved = (await db.query<{ policy: unknown; manifest: object }>(
+    "select policy,manifest from lean_private.full_builds where run_id='custom-window'")).rows[0];
+  expect(saved.policy).toEqual(policy);
+  expect(Object.keys(saved.manifest).sort()).toEqual(["digest", "evidenceRef", "gates", "logicalEvents", "nativeEvents"]);
+  expect((await db.query(`select funnel_version,conversion_window_complete,converted_session
+    from lean_private.sessions where publication_id='full:custom-window'`)).rows).toEqual([{
+    funnel_version: "fixture-two-day-funnel-v2", conversion_window_complete: true, converted_session: true,
+  }]);
+  expect((await db.query(`select definition_version from lean_private.report_funnel_daily
+    where publication_id='full:custom-window' and stage_id='all_sessions'`)).rows)
+    .toEqual([{ definition_version: "fixture-two-day-v2" }]);
+  await expect(db.query(`update lean_private.full_builds set policy=$1 where run_id='custom-window'`,
+    [JSON.stringify({ ...policy, conversionWindowDays: 3 })])).rejects.toThrow("immutable");
+});
 it("persists real-schema customer mappings through the full job without inventing complete customer history", async () => {
   const f = fullFixture();
   const snapshot = await readMullyCustomers({ projectRef: fullProject, shop: fullShop,

@@ -11,11 +11,14 @@ import { normalizeLedger, normalizePayment, uniqueLedger, type Movement, type Pa
 import { reportDates } from "./commerceCandidate";
 import { checked, key, nyDate, type Row } from "./primitives";
 import { observedCampaigns } from "./campaignSource";
+import { sessionConversionWindowDays } from "./calculationPolicy";
 
 export type FullBuildPolicy = {
   definition: string; mappingVersion: string; sessionVersion: string; funnelVersion: string;
   normalizationVersion: string; project: string; asOf: string; approvalRef: string;
   stages: Record<string, string>; attribution: AttributionPolicy;
+  /** Defaults to 7 days; version changed rules with definition/funnelVersion. */
+  conversionWindowDays?: number;
   /** Immutable operator scope. Excluded behavior is unavailable, never zero. */
   behaviorMode?: "required" | "excluded";
   cohorts: { month: string; horizonDays: number; graceSeconds: number; acquisitionDefinition: string }[];
@@ -77,6 +80,7 @@ export function buildFullReports(input: {
   policy: FullBuildPolicy; evidence: FullBuildEvidence; events: ObservedEvent[];
 }) {
   const { policy: p, publication: pub, shop } = input;
+  const conversionWindowDays = sessionConversionWindowDays(p.conversionWindowDays);
   const mode = p.behaviorMode ?? "required";
   if (!["required", "excluded"].includes(mode)) throw new Error("invalid_behavior_mode");
   if (mode === "excluded" && input.events.length) throw new Error("excluded_behavior_events");
@@ -167,6 +171,7 @@ export function buildFullReports(input: {
   const nativeControls = ["native_project_uuid_lineage", "temporal_identity_intervals", "event_customer_fk"];
   const nativeReady = nativeControls.every(k => e.externalControls[k]?.passed && e.externalControls[k].evidenceRef);
   facts.sessions = deriveSessions(logical, { project: p.project, sessionVersion: p.sessionVersion,
+    conversionWindowDays,
     funnelVersion: p.funnelVersion, publication: pub, now: p.asOf, stages: new Map(Object.entries(p.stages)),
     sourceSessionIds: new Map(observations.filter(v => v.sourceSessionId).map(v =>
       [key(p.project, p.sessionVersion, v.sourceSessionId!), v.sourceSessionId!])),
@@ -179,7 +184,7 @@ export function buildFullReports(input: {
   const proofReady = (table: string) => reconcileCandidate(facts, e.proofs, [table]).length === 0;
   const commerceComplete = proofReady("orders") && proofReady("order_items") &&
     !!e.externalControls.event_order_diagnostics?.passed && !!e.externalControls.event_order_diagnostics.evidenceRef;
-  facts.sessions = finalizeSessionConversions(facts.sessions, facts.orders, commerceComplete);
+  facts.sessions = finalizeSessionConversions(facts.sessions, facts.orders, commerceComplete, conversionWindowDays);
   const attribution = unique(e.attributionCoverage, v => v.orderId);
   const campaigns = observedCampaigns(observations, p.project, p.sessionVersion, e.campaigns);
   facts.sessions = facts.sessions.map(row => ({ ...row,

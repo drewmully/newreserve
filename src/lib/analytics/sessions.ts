@@ -1,5 +1,6 @@
 import { checked, key, nyDate, type Row } from "./primitives";
 import type { CampaignContext } from "./attribution";
+import { sessionConversionWindowDays } from "./calculationPolicy";
 export type ObservedEvent = {
   project: string; producer: string; actionId: string; nativeUuid: string; family: string; schemaVersion: string;
   occurredAt: string; receivedAt: string | null; sourceSessionId: string | null;
@@ -49,7 +50,9 @@ export function deriveSessions(events: Row[], config: {
   project: string; sessionVersion: string; funnelVersion: string; publication: string;
   sourceSessionIds: ReadonlyMap<string, string>; stages: ReadonlyMap<string, string>;
   now: string; coverage: SessionCoverage;
+  conversionWindowDays?: number;
 }): Row[] {
+  const windowDays = sessionConversionWindowDays(config.conversionWindowDays);
   if (!config.coverage.approvalRef || !Number.isSafeInteger(config.coverage.graceSeconds) || config.coverage.graceSeconds < 0) throw new Error("missing_session_policy");
   nyDate(config.now); nyDate(config.coverage.completeThrough);
   const grouped = new Map<string, Row[]>();
@@ -67,7 +70,7 @@ export function deriveSessions(events: Row[], config: {
     const eligible = rows.filter(e => e.analytics_eligible === true);
     const customers = new Set(eligible.map(e => e.customer_id).filter(Boolean));
     const behavior = config.coverage.behaviorComplete;
-    const windowEnd = Date.parse(first.occurred_at as string) + 7 * 86400000;
+    const windowEnd = Date.parse(first.occurred_at as string) + windowDays * 86400000;
     const mature = behavior && Date.parse(config.now) >= windowEnd + config.coverage.graceSeconds * 1000 &&
       Date.parse(config.coverage.completeThrough) >= windowEnd;
     const flags: Record<string, boolean | null> = {};
@@ -102,13 +105,15 @@ export function linkCheckoutOrders(orders: Row[], sessions: Row[], evidence: Che
       checkout_link_method: match?.method ?? "none", evidence_ref: match?.evidenceRef ?? null, link_version: "evidence-only-v1" };
   });
 }
-export function finalizeSessionConversions(sessions: Row[], orders: Row[], commerceComplete: boolean): Row[] {
+export function finalizeSessionConversions(sessions: Row[], orders: Row[], commerceComplete: boolean,
+  conversionWindowDays?: number): Row[] {
+  const windowDays = sessionConversionWindowDays(conversionWindowDays);
   return sessions.map(s => {
     const ready = commerceComplete && s.conversion_window_complete === true && s.analytics_eligible === true;
     const start = Date.parse(s.started_at as string);
     const converted = ready ? orders.some(o => o.publication_id === s.publication_id && o.checkout_link_status === "matched" &&
       o.checkout_session_key === s.session_key && o.eligibility_status === "eligible" && typeof o.paid_at === "string" &&
-      Date.parse(o.paid_at) >= start && Date.parse(o.paid_at) < start + 7 * 86400000) : null;
+      Date.parse(o.paid_at) >= start && Date.parse(o.paid_at) < start + windowDays * 86400000) : null;
     return { ...s, converted_session: converted };
   });
 }
