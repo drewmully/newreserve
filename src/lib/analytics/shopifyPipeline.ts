@@ -46,7 +46,7 @@ export async function pipelineRpc(client: AnalyticsRpcClient, name: string, args
   if (result.error) throw new Error("pipeline_storage_unavailable");
   return result.data;
 }
-function mappingPolicy(source: PilotSource, policy: PipelinePolicy): PilotPolicy {
+export function mappingPolicy(source: PilotSource, policy: PipelinePolicy): PilotPolicy {
   const classes = sourceObject(policy.productClasses);
   const lineClasses: PilotPolicy["lineClasses"] = Object.fromEntries(
     sourceArray(sourceObject(source.commerce.order.lineItems).nodes).map(value => {

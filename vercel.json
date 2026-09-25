@@ -1,6 +1,10 @@
 {
   "git": {
     "deploymentEnabled": {
+      "feat/analytics-spend-source": false,
+      "feat/analytics-full-report-build": false,
+      "feat/analytics-commerce-reports": false,
+      "feat/analytics-commerce-publication": false,
       "feat/analytics-l06-finance": false,
       "feat/analytics-l07-identity": false,
       "feat/analytics-l08-context": false,
