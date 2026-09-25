@@ -66,7 +66,7 @@ export function mappingPolicy(source: PilotSource, policy: PipelinePolicy): Pilo
  */
 export async function runShopifyPipeline(options: {
   client: AnalyticsRpcClient; projectRef: string; databaseUrl: string;
-  shop: string; accessToken: string; fetcher?: typeof fetch;
+  shop: string; accessToken: string; fetcher?: typeof fetch; signal?: AbortSignal;
 }) {
   validatePipelineTarget(options.projectRef, options.databaseUrl);
   shopifyShop(options.shop);
@@ -87,7 +87,7 @@ export async function runShopifyPipeline(options: {
     phase = "source_unavailable";
     if (claim.source === null) {
       source = await readPilotSource({ shop: options.shop, accessToken: options.accessToken,
-        fetcher: options.fetcher, signal: AbortSignal.timeout(60000) }, orderGid);
+        fetcher: options.fetcher, signal: options.signal ?? AbortSignal.timeout(60000) }, orderGid);
       verifyHydration(sourceString(claim.topic), claim.payload, source);
       storageInFlight = true;
       if (await pipelineRpc(options.client, "lean_pipeline_retain", { ...args, p_source: source }) !== true)
