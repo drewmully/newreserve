@@ -1,6 +1,7 @@
 {
   "git": {
     "deploymentEnabled": {
+      "review/analytics-provisional-session-window": false,
       "review/analytics-configured-event-fields": false,
       "review/analytics-sales-window": false,
       "review/analytics-release-acl-045": false,

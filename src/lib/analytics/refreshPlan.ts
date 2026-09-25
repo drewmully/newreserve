@@ -5,6 +5,7 @@ import type { PipelinePolicy } from "./shopifyPipeline";
 import { reportDates } from "./commerceCandidate";
 import { nyDate } from "./primitives";
 import { validateHistoryInventory } from "./historyInventory";
+import { sessionConversionWindowDays } from "./calculationPolicy";
 
 export type RefreshInput = {
   intake: Parameters<typeof assembleEvidence>[0];
@@ -21,6 +22,7 @@ export type RefreshInput = {
  * old all-passed fixture is not an acceptable refresh.
  */
 export function prepareRefresh(input: RefreshInput) {
+  sessionConversionWindowDays(input.policy.conversionWindowDays);
   if (input.commercePolicy.partitionInventory !== undefined) throw new Error("partition_preparation_required");
   const { scope } = input.intake;
   const assembled = assembleEvidence(input.intake);

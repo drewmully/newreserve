@@ -6,6 +6,7 @@ import type { AnalyticsRpcClient } from "./rpcStore";
 import type { Candidate } from "./certification";
 import { randomUUID } from "node:crypto";
 import { deferredOrders, verifyDeferredReplacements } from "./deferredCommerce";
+import { sessionConversionWindowDays } from "./calculationPolicy";
 
 /** Evidence can narrow observed coverage; it cannot extend a source read.
  * This is deliberately conservative at the NY calendar-day edges.
@@ -50,6 +51,7 @@ export async function runFullReportJob(options: {
   if (["disabled", "blocked", "complete"].includes(String(input.state))) return { state: String(input.state) };
   if (input.state !== "ready") throw new Error("invalid_full_input");
   const policy = sourceObject(input.policy) as FullBuildPolicy;
+  sessionConversionWindowDays(policy.conversionWindowDays);
   const evidence = sourceObject(input.evidence) as FullBuildEvidence;
   const behavior = sourceObject(input.behavior) as BehaviorSource;
   verifyDeferredReplacements(deferredOrders(input.deferredOrders), evidence, sourceString(input.shop));

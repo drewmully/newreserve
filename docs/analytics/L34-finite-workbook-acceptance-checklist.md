@@ -20,6 +20,38 @@ Status meanings:
   named real authority, field or business decision is absent.
 - **Live acceptance pending**: code is not certified by synthetic vendor rows.
 
+## Provisional calculation implementation update: 2026-09-25
+
+The configurable session-window change is implemented for local review, not
+live acceptance. `FullBuildPolicy.conversionWindowDays` accepts a safe integer
+from 1 through 365; omission preserves the provisional seven-day calculation.
+The same value controls maturity and the half-open checkout-linked conversion
+interval. Invalid saved configuration is rejected before a claim or event read.
+Changed rules require new operator-chosen `definition` and `funnelVersion`
+identifiers and an immutable publication, as documented in
+[provisional calculation defaults](provisional-calculation-defaults.md).
+
+Focused fixtures cover custom/default windows, boundary and invalid-value
+cases, persisted policy immutability, and permitted anonymous sessions without
+inventing a customer. Missing permission, incomplete behavior/commerce coverage,
+immature conversion and unsupported customer history remain unavailable, not
+zero. These synthetic/local database checks do not certify any live metric or
+resolve ID-1, ID-2, CTRL-1, CTRL-2 or SMS-1. The reader's existing 93-day budget
+is unchanged even when a longer calculation window is configured.
+
+The exported 7-day conversion, 30-day attribution, no direct fallback,
+`orders.paid_at`, 48-hour grace and 30-day cohort choices are explicitly
+**provisional**, not customer-approved policy or source authority. Only omission
+of the session window automatically uses its default; the other choices require
+explicit configuration. No existing registered settings are overwritten.
+
+Delivery scope is a draft PR only. The exact
+`review/analytics-provisional-session-window` branch has automatic Vercel
+deployment disabled. This update makes no migration, production data or
+permission change, job/capture activation, new PostHog feed, merge or deployment.
+The original session capability finding below is historical, not a new access
+assessment; this implementation performs no new hosted source investigation.
+
 ## Mandatory fact and event outcomes
 
 | Workbook outcome | Implemented code | Remaining code | Required source facts or policy | Acceptance test |
