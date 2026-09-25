@@ -1,11 +1,13 @@
 import type { AnalyticsRpcClient } from "./rpcStore";
 import { pipelineRpc, validatePipelineTarget } from "./shopifyPipeline";
-import { sourceObject, sourceString, shopifyShop } from "./shopifySource";
+import { sourceObject, sourceString, shopifyShop, type ShopifyProjection } from "./shopifySource";
 import { runShopifyHistory } from "./shopifyHistory";
 
 export type HistoryJobOptions = {
   client: AnalyticsRpcClient; projectRef: string; databaseUrl: string; shop: string;
   runId: string; accessToken: string; fetcher?: typeof fetch; signal: AbortSignal; now: string;
+  /** Fixed in the private operator configuration, never supplied by an HTTP caller. */
+  projection?: ShopifyProjection;
 };
 /** One source page per invocation. Scope, budget and cursor come only from the
  * operator-owned registry. Competing invocations cannot both commit a page.

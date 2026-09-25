@@ -6,6 +6,7 @@ import {
 } from "@/lib/analytics/shopifyHistory";
 import { readPilotSource, type PilotSource } from "@/lib/analytics/shopifyPilotSource";
 import { type PilotPolicy } from "@/lib/analytics/shopifyPilotMapping";
+import { SHOPIFY_FINANCIAL_ORDER_QUERY } from "@/lib/analytics/shopifySource";
 
 vi.mock("@/lib/analytics/shopifyPilotSource", () => ({ readPilotSource: vi.fn() }));
 const shop = "fixture.myshopify.com";
@@ -110,6 +111,60 @@ describe("bounded Shopify history ingestion", () => {
     const result = await runShopifyHistory({ ...options(), fetcher, cursor: null, maxPages: 1, store: { commitPage } });
     expect(result).toEqual({ cursor: null, written: 1, complete: true });
     expect(commitPage).toHaveBeenCalledWith(null, { rows: [{ source: fixture() }], complete: true, nextCursor: null });
+  });
+  it("preserves the operator's no-geo projection on every resumed source page", async () => {
+    const second = fixture("2");
+    vi.mocked(readPilotSource).mockResolvedValueOnce(fixture()).mockResolvedValueOnce(second);
+    const fetcher = network([
+      { nodes: [node()], pageInfo: { hasNextPage: true, endCursor: "next" } },
+      connection([{ ...node(), id: second.commerce.order.id }]),
+    ]);
+    const config = Object.freeze({ ...options(), projection: "financial_no_geo" as const, fetcher });
+    const commitPage = vi.fn().mockResolvedValue(true);
+    const first = await runShopifyHistory({ ...config, cursor: null, maxPages: 1, store: { commitPage } });
+    expect(first).toEqual({ cursor: "next", written: 1, complete: false });
+    expect(await runShopifyHistory({ ...config, cursor: first.cursor, maxPages: 1, store: { commitPage } }))
+      .toEqual({ cursor: null, written: 1, complete: true });
+    expect(readPilotSource).toHaveBeenCalledTimes(2);
+    for (const [input] of vi.mocked(readPilotSource).mock.calls)
+      expect(input.projection).toBe("financial_no_geo");
+    expect(commitPage).toHaveBeenCalledTimes(2);
+  });
+  it("leaves the existing source projection unchanged when the operator omits it", async () => {
+    await runShopifyHistory({ ...options(), fetcher: network([connection([node()])]),
+      cursor: null, maxPages: 1, store: { commitPage: vi.fn().mockResolvedValue(true) } });
+    expect(vi.mocked(readPilotSource).mock.calls[0][0]).not.toHaveProperty("projection");
+  });
+  it("uses the actual private reader and existing formulas without requesting customer or address fields", async () => {
+    const actual = await vi.importActual<typeof import("@/lib/analytics/shopifyPilotSource")>(
+      "@/lib/analytics/shopifyPilotSource");
+    vi.mocked(readPilotSource).mockImplementation(actual.readPilotSource);
+    const source = fixture();
+    delete source.commerce.order.shippingAddress;
+    const fetcher = vi.fn<typeof fetch>(async (_, init) => {
+      const { query } = JSON.parse(String(init?.body));
+      expect(query).not.toMatch(/\b(customer|shippingAddress|email|phone|customAttributes|cartToken)\b/);
+      let data;
+      if (query === HISTORY_ACCESS_QUERY)
+        data = { currentAppInstallation: { accessScopes: ["read_orders", "read_all_orders"].map(handle => ({ handle })) } };
+      else if (query === HISTORY_ORDERS_QUERY) data = { orders: connection([node()]) };
+      else if (query === SHOPIFY_FINANCIAL_ORDER_QUERY) data = { order: source.commerce.order };
+      else {
+        expect(query).toBe(actual.PILOT_FINANCIAL_QUERY);
+        data = { order: source.financial };
+      }
+      return Response.json({ data }, { headers: { "X-Shopify-API-Version": "2026-07" } });
+    });
+    const commitPage = vi.fn().mockResolvedValue(true);
+    await runShopifyHistory({ ...options(), projection: "financial_no_geo", fetcher,
+      cursor: null, maxPages: 1, store: { commitPage } });
+    expect(fetcher).toHaveBeenCalledTimes(6);
+    const retained = commitPage.mock.calls[0][1].rows[0].source as PilotSource;
+    expect(retained.commerce.projection).toBe("financial_no_geo");
+    expect(retained.commerce.order).not.toHaveProperty("shippingAddress");
+    const report = buildCommerceCandidate([record(retained)], scope).reports.store_daily[0];
+    expect(report).toMatchObject({ total_sales_usd: "20.000000", eligible_orders: 1,
+      aov_usd: "20.000000", new_customers: null, is_stale: true });
   });
   it("does not advance a cursor if hydration fails", async () => {
     vi.mocked(readPilotSource).mockRejectedValue(new Error("fixture:incomplete_refunds"));
