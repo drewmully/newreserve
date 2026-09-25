@@ -19,9 +19,18 @@ create table lean_private.history_report_sources (
   outcome text, result_hash text, primary key(run_id,order_id),
   check((source is null)=(captured_at is null) and (source is null)=(source_hash is null))
 );
+create table lean_private.history_report_progress (
+  run_id text not null references lean_private.history_report_jobs,
+  snapshot_id text not null check(snapshot_id ~ '^[a-zA-Z0-9_-]{1,40}$'),
+  report_date date not null, input jsonb not null, input_hash text not null,
+  token uuid not null, lease_until timestamptz not null, completed_at timestamptz,
+  result_hash text, primary key(run_id,snapshot_id)
+);
 alter table lean_private.history_report_jobs enable row level security;
 alter table lean_private.history_report_sources enable row level security;
-revoke all on lean_private.history_report_jobs,lean_private.history_report_sources from public,anon,authenticated,service_role;
+alter table lean_private.history_report_progress enable row level security;
+revoke all on lean_private.history_report_jobs,lean_private.history_report_sources,
+  lean_private.history_report_progress from public,anon,authenticated,service_role;
 create function lean_private.history_report_immutable() returns trigger
 language plpgsql set search_path=pg_catalog as $$
 begin
@@ -95,13 +104,13 @@ begin
   if not r.enabled or r.expires_at<=clock_timestamp() or r.token is distinct from p_token or p_token is null or
     r.lease_until is null or r.lease_until<=clock_timestamp() then raise exception 'history report fence expired'; end if;
 end $$;
-create function lean_private.history_report_day_input(r lean_private.history_report_jobs)
+create function lean_private.history_report_day_input(r lean_private.history_report_jobs,p_progress boolean default false)
 returns jsonb language plpgsql set search_path=pg_catalog as $$
 declare f jsonb:='{}'; t text; rows jsonb; input jsonb; spend jsonb:='[]'; s lean_private.spend_jobs; id text;
   numeric_fields text[];
   pub text:='history:'||r.run_id; ids text[];
 begin
-  select array_agg(o.order_id order by o.order_id) into ids from lean_private.orders o where o.publication_id=pub and
+  select array_agg(o.order_id order by o.order_id) into ids from lean_private.orders o where not p_progress and o.publication_id=pub and
     (o.purchase_date=r.report_date or (o.created_at at time zone 'America/New_York')::date=r.report_date or
       exists(select 1 from lean_private.sales_ledger l where l.publication_id=pub and
         l.order_id=o.order_id and l.report_date=r.report_date));
@@ -127,9 +136,103 @@ begin
     if s.report_date=r.report_date then spend:=spend||jsonb_build_array(s.base); end if;
   end loop;
   input:=jsonb_build_object('state','report','shop',r.scope->>'shop','publication',pub,'date',r.report_date,
-    'financialComplete',r.unresolved=0,'facts',f,'spend',spend);
+    'financialComplete',not p_progress and r.unresolved=0,'facts',f,'spend',spend);
   if octet_length(input::text)>16000000 then raise exception 'history report input budget'; end if;
   return input||jsonb_build_object('inputHash',encode(sha256(convert_to(input::text,'UTF8')),'hex'));
+end $$;
+-- Private, immutable observed-progress snapshots do not traverse Shopify orders,
+-- advance the normalization cursor, select a report or certify any metric.
+create function public.lean_history_progress_inputs(p_run text,p_project text,p_snapshot text,p_date date,p_token uuid)
+returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
+declare r lean_private.history_report_jobs; s lean_private.history_report_progress; input jsonb; n integer;
+begin
+  r:=lean_private.history_report_lock(p_run,p_project);
+  if not r.enabled then return jsonb_build_object('state','disabled'); end if;
+  if r.expires_at<=clock_timestamp() then return jsonb_build_object('state','expired'); end if;
+  if p_snapshot is null or p_snapshot !~ '^[a-zA-Z0-9_-]{1,40}$' or p_token is null or p_date is null or
+    p_date not between (r.scope->>'fromDate')::date and (r.scope->>'throughDate')::date
+    then raise exception 'invalid history progress scope'; end if;
+  select * into s from lean_private.history_report_progress where run_id=p_run and snapshot_id=p_snapshot;
+  if found then
+    if s.report_date<>p_date then raise exception 'immutable history progress date'; end if;
+    if s.completed_at is not null then return jsonb_build_object('state','complete'); end if;
+    if s.lease_until>clock_timestamp() then return jsonb_build_object('state','busy'); end if;
+    update lean_private.history_report_progress set token=p_token,
+      lease_until=least(r.expires_at,clock_timestamp()+interval '90 seconds')
+      where run_id=p_run and snapshot_id=p_snapshot;
+    return s.input;
+  end if;
+  if (select count(*) from lean_private.history_report_progress where run_id=p_run)>=20
+    then raise exception 'history progress snapshot budget'; end if;
+  r.report_date:=p_date;
+  input:=lean_private.history_report_day_input(r,true)-'inputHash';
+  select orders into n from lean_private.history_import_jobs where job_id=r.source_job;
+  input:=input||jsonb_build_object('state','snapshot','publication','history-progress:'||p_run||':'||p_snapshot,
+    'coverage',jsonb_build_object('sourceInventoryComplete',true,'sourceOrders',n,'processedOrders',r.processed,
+      'remainingOrders',n-r.processed,'cursor',r.cursor_id,'normalizationComplete',r.state<>'orders',
+      'financialCoverageComplete',false,'selectedSpendRuns',r.scope->'spendRuns',
+      'allAccountSpendCoverageComplete',false,'capturedAt',clock_timestamp()));
+  input:=input||jsonb_build_object('inputHash',encode(sha256(convert_to(input::text,'UTF8')),'hex'));
+  insert into lean_private.history_report_progress values(p_run,p_snapshot,p_date,input,input->>'inputHash',
+    p_token,least(r.expires_at,clock_timestamp()+interval '90 seconds'),null,null);
+  return input;
+end $$;
+create function public.lean_history_progress_finish(p_run text,p_project text,p_snapshot text,p_date date,p_token uuid,
+  p_input_hash text,p_reports jsonb,p_spend jsonb) returns boolean
+language plpgsql security definer set search_path=pg_catalog as $$
+declare r lean_private.history_report_jobs; s lean_private.history_report_progress; current_input jsonb;
+  t text; item jsonb; pub text:='history-progress:'||p_run||':'||p_snapshot; h text;
+begin
+  r:=lean_private.history_report_lock(p_run,p_project);
+  select * into s from lean_private.history_report_progress where run_id=p_run and snapshot_id=p_snapshot;
+  if not found or not r.enabled or r.expires_at<=clock_timestamp() or s.report_date is distinct from p_date or
+    s.input_hash is distinct from p_input_hash or p_token is null or s.token is distinct from p_token
+    then raise exception 'history progress fence'; end if;
+  h:=encode(sha256(convert_to(p_reports::text||p_spend::text,'UTF8')),'hex');
+  if s.completed_at is not null then return s.result_hash=h; end if;
+  if s.lease_until<=clock_timestamp() then raise exception 'history progress lease'; end if;
+  r.report_date:=p_date;
+  current_input:=lean_private.history_report_day_input(r,true);
+  if current_input->'spend' is distinct from s.input->'spend' then return false; end if;
+  if jsonb_typeof(p_reports) is distinct from 'object' or
+    p_reports-array['store_daily','product_daily','acquisition_daily']<>'{}'::jsonb or
+    p_reports->'product_daily' is distinct from '[]'::jsonb or
+    jsonb_typeof(p_spend) is distinct from 'array' or jsonb_array_length(p_spend)>10000 or
+    octet_length(p_reports::text)+octet_length(p_spend::text)>16000000
+    then raise exception 'invalid history progress output'; end if;
+  insert into lean_private.publications(publication_id,contract_version) values(pub,'lean-v1-draft.1');
+  for item in select value from jsonb_array_elements(p_spend) loop
+    if item->>'publication_id' is distinct from pub or (item->>'report_date')::date is distinct from p_date
+      then raise exception 'invalid history progress spend'; end if;
+  end loop;
+  insert into lean_private.marketing_spend_daily
+    select * from jsonb_populate_recordset(null::lean_private.marketing_spend_daily,p_spend);
+  foreach t in array array['store_daily','product_daily','acquisition_daily'] loop
+    if jsonb_typeof(p_reports->t) is distinct from 'array' or jsonb_array_length(p_reports->t)>20000 or
+      t='store_daily' and jsonb_array_length(p_reports->t)<>1 then raise exception 'history progress rows'; end if;
+    for item in select value from jsonb_array_elements(p_reports->t) loop
+      if item->>'publication_id' is distinct from pub or item->>'shop_id' is distinct from r.scope->>'shop' or
+        item->>'definition_version' is distinct from 'history-bridge-v1' or item->'is_stale' is distinct from 'true'::jsonb or
+        (item->>'report_date')::date is distinct from p_date or jsonb_typeof(item->'readiness') is distinct from 'object' or
+        exists(select 1 from jsonb_each_text(item->'readiness') v where v.value not in ('withheld','observed_unverified')) or
+        exists(select 1 from jsonb_each(item->'readiness') v where v.key<>'spend_usd' and
+          (v.value<>'"withheld"'::jsonb or item->v.key is distinct from 'null'::jsonb)) or
+        exists(select 1 from information_schema.columns c where c.table_schema='lean_private' and
+          c.table_name='report_'||t and c.data_type in ('numeric','integer','bigint') and c.column_name<>'spend_usd'
+          and item->c.column_name is distinct from 'null'::jsonb)
+        then raise exception 'unproven history progress metric'; end if;
+      if t='store_daily' and (item->'collected_cash_usd' is distinct from 'null'::jsonb or
+        item->'new_customers' is distinct from 'null'::jsonb or item->'ncac_usd' is distinct from 'null'::jsonb or
+        item->'mer' is distinct from 'null'::jsonb) then raise exception 'unproven history progress comparison'; end if;
+    end loop;
+    execute format('insert into lean_private.%I select * from jsonb_populate_recordset(null::lean_private.%I,$1)',
+      'report_'||t,'report_'||t) using p_reports->t;
+  end loop;
+  update lean_private.history_report_progress set completed_at=clock_timestamp(),result_hash=h
+    where run_id=p_run and snapshot_id=p_snapshot;
+  if s.lease_until<=clock_timestamp() or r.expires_at<=clock_timestamp()
+    then raise exception 'history progress postwrite fence'; end if;
+  return true;
 end $$;
 create function public.lean_history_report_claim(p_run text,p_project text,p_token uuid)
 returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
@@ -308,13 +411,17 @@ begin
 end $$;
 revoke all on function lean_private.history_report_immutable(),lean_private.history_report_lock(text,text),
   lean_private.history_report_live(lean_private.history_report_jobs,uuid),
-  lean_private.history_report_day_input(lean_private.history_report_jobs) from public,anon,authenticated,service_role;
+  lean_private.history_report_day_input(lean_private.history_report_jobs,boolean) from public,anon,authenticated,service_role;
 revoke all on function public.lean_history_report_claim(text,text,uuid),
   public.lean_history_report_retain(text,text,uuid,text,jsonb,timestamptz),
   public.lean_history_report_order(text,text,uuid,text,jsonb,text),
-  public.lean_history_report_day(text,text,uuid,date,text,jsonb,jsonb) from public,anon,authenticated,service_role;
+  public.lean_history_report_day(text,text,uuid,date,text,jsonb,jsonb),
+  public.lean_history_progress_inputs(text,text,text,date,uuid),
+  public.lean_history_progress_finish(text,text,text,date,uuid,text,jsonb,jsonb) from public,anon,authenticated,service_role;
 grant execute on function public.lean_history_report_claim(text,text,uuid),
   public.lean_history_report_retain(text,text,uuid,text,jsonb,timestamptz),
   public.lean_history_report_order(text,text,uuid,text,jsonb,text),
-  public.lean_history_report_day(text,text,uuid,date,text,jsonb,jsonb) to service_role;
+  public.lean_history_report_day(text,text,uuid,date,text,jsonb,jsonb),
+  public.lean_history_progress_inputs(text,text,text,date,uuid),
+  public.lean_history_progress_finish(text,text,text,date,uuid,text,jsonb,jsonb) to service_role;
 commit;

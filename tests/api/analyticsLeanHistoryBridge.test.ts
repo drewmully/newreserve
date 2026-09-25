@@ -40,7 +40,8 @@ describe.skipIf(!url)("040 source to real private canonical/report consumer", ()
   let control: Client, admin: Client, runtime: Client, peer: Client, calls: number, customer: boolean;
   let source: PilotSource, errors: string[], functions: unknown;
   const rpc = async (client: Client, name: string, args: Record<string, unknown>) => {
-    if (!/^lean_history_report_[a-z]+$/.test(name)) throw new Error("unexpected RPC");
+    if (!/^lean_history_(report|progress)_[a-z]+$/.test(name) && !/^lean_spend_(claim|finish)$/.test(name))
+      throw new Error("unexpected RPC");
     return (await client.query(`select public.${name}(${Object.keys(args).map((k,i) => `${k}=>$${i+1}`).join(",")}) result`,
       Object.values(args).map(v => v && typeof v === "object" ? JSON.stringify(v) : v))).rows[0].result;
   };
@@ -73,7 +74,7 @@ describe.skipIf(!url)("040 source to real private canonical/report consumer", ()
     if (control) { await control.query("drop database if exists analytics_test_history_bridge"); await control.end(); }
   });
   beforeEach(async () => {
-    await admin.query("truncate lean_private.history_import_jobs,lean_private.publications cascade");
+    await admin.query("truncate lean_private.history_import_jobs,lean_private.publications,lean_private.spend_jobs cascade");
     await admin.query("drop trigger if exists bridge_delay on lean_private.orders");
     source = packet(); calls = 0; customer = false; errors = [];
     await admin.query(`insert into lean_private.history_import_jobs(job_id,scope,expires_at,enabled,state,orders,lines,completion)
@@ -176,6 +177,52 @@ describe.skipIf(!url)("040 source to real private canonical/report consumer", ()
     expect(await runHistoryReportOperator({},config,noFetch)).toEqual({status:"disabled"});
     await expect(runHistoryReportOperator({VERCEL_ENV:"production"},{...config,enabled:true},noFetch)).rejects.toThrow("history_operator_scope");
     expect(reads).toBe(0);
+  });
+  it("private progress consumes saved019 spend before any Shopify reads and frozen replay stays stable", async () => {
+    await admin.query(`insert into lean_private.spend_jobs(run_id,project_ref,account_id,report_date,max_pages,
+      approval_ref,actor_ref,enabled) values('fixture-spend',$1,'4335795219','2026-09-21',5,'fixture','fixture',true)`,[project]);
+    const token=randomUUID(),spendArgs={p_run:"fixture-spend",p_project_ref:project,p_token:token};
+    expect((await rpc(runtime,"lean_spend_claim",spendArgs)).state).toBe("claimed");
+    expect(await rpc(runtime,"lean_spend_finish",{...spendArgs,p_base:{
+      provider:"google_ads",accountId:"4335795219",date:"2026-09-21",baseReportId:"fixture-spend",
+      sourceTimezone:"America/New_York",sourceCurrency:"USD",completedAt:"2026-09-22T12:00:00Z",
+      paginationComplete:true,verifiedEmpty:false,evidenceRef:"synthetic-fixture-not-provider-proof",
+      rows:[{campaignId:"99",costMicros:"5000000"}],
+    }})).toBe(true);
+    await register({spendRuns:["fixture-spend"]});
+    const config={enabled:true,runId:run,maxSteps:1,maxProviderRequests:8,
+      mode:"progress" as const,snapshotId:"spend-first",date:"2026-09-21"};
+    // Deliberately no Shopify access token. Every request must be a private RPC.
+    const env={VERCEL_ENV:"preview",VERCEL_GIT_COMMIT_REF:"review/analytics-initial-validation",
+      LEAN_ANALYTICS_PIPELINE_PROJECT_REF:project,LEAN_SHOPIFY_SHOP_DOMAIN:shop,
+      LEAN_ANALYTICS_SUPABASE_URL:`https://${project}.supabase.co`,
+      LEAN_ANALYTICS_SUPABASE_SERVICE_ROLE_KEY:"synthetic-fixture"};
+    const dbTransport:typeof fetch=async(url,init)=>{
+      expect(String(url)).toMatch(new RegExp(`^https://${project}\\.supabase\\.co/rest/v1/rpc/lean_history_progress_`));
+      const name=String(url).split("/").pop()!;
+      return Response.json(await rpc(runtime,name,JSON.parse(String(init?.body))));
+    };
+    expect(await runHistoryReportOperator(env,config,dbTransport))
+      .toEqual({status:"progress_written",providerRequests:0,certified:false});
+    const before=(await admin.query("select * from lean_private.report_store_daily")).rows;
+    expect(before).toHaveLength(1);expect(before[0].spend_usd).toBe("5.000000");
+    for(const [metric,readiness] of Object.entries(before[0].readiness)){
+      expect(readiness).toBe(metric==="spend_usd"?"observed_unverified":"withheld");
+      if(metric!=="spend_usd")expect(before[0][metric]).toBeNull();
+    }
+    const frozen=(await admin.query("select input from lean_private.history_report_progress")).rows[0].input;
+    expect(frozen.coverage).toMatchObject({sourceOrders:1,processedOrders:0,remainingOrders:1,cursor:"",
+      normalizationComplete:false,financialCoverageComplete:false,allAccountSpendCoverageComplete:false});
+    expect((await admin.query("select count(*) n from lean_private.history_report_sources")).rows[0].n).toBe("0");
+    expect(calls).toBe(0);
+    await expect(runtime.query("select * from lean_private.history_report_progress")).rejects.toThrow("permission denied");
+    // A later normalization step cannot rewrite a named, completed snapshot.
+    await step(); expect(calls).toBe(4);
+    expect(await runHistoryReportOperator(env,config,dbTransport))
+      .toEqual({status:"complete",providerRequests:0,certified:false});
+    expect((await admin.query("select * from lean_private.report_store_daily")).rows).toEqual(before);
+    expect((await admin.query("select input from lean_private.history_report_progress")).rows[0].input).toEqual(frozen);
+    expect((await admin.query("select count(*) n from lean_private.marketing_spend_daily")).rows[0].n).toBe("1");
   });
   it("retained source resumes without another provider call after a lost worker", async () => {
     await register(); const c=common(); const input=await rpc(runtime,"lean_history_report_claim",c);

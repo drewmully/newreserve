@@ -60,6 +60,9 @@ function pending(input: Input): Candidate {
     shop: input.shop, id: shopifyId(o.id, "Order"), createdAt: sourceString(o.createdAt),
     updatedAt: sourceString(o.updatedAt), currency: sourceString(o.currencyCode),
     paidAt: null, paidEvidenceRef: null, checkoutId: null, shippingCountry: null, shippingRegion: null,
+    // The existing normalizer requires a closed supplied array. This fallback
+    // is NOT a complete original line inventory: >500 and zero-quantity lines
+    // stay in 040 staging, with source/canonical counts and unresolved outcome.
     linesComplete: true, lines: input.lines.filter(l => Number.isSafeInteger(l.quantity) && Number(l.quantity) > 0)
       .map(l => ({ id: shopifyId(l.id, "LineItem"), sku: null,
         productId: l.product === null ? null : shopifyId(sourceObject(l.product).id, "Product"),
@@ -109,6 +112,52 @@ export function normalizeHistoricalOrder(input: Input, source: PilotSource | nul
   return { facts, outcome, sourceLineCount: input.lineCount, canonicalLineCount: facts.order_items.length };
 }
 
+function dailyReports(input: Record<string, unknown>) {
+  const facts = sourceObject(input.facts) as Facts;
+  const bases = sourceArray(input.spend) as SpendBase[];
+  const seen = new Set<string>();
+  for (const base of bases) {
+    const key = `${base.provider}:${base.accountId}:${base.date}`;
+    if (base.provider !== "google_ads" || base.date !== input.date || seen.has(key))
+      throw new Error("history_bridge_spend_scope");
+    seen.add(key); facts.marketing_spend_daily.push(...normalizeSpendBase(base, String(input.publication)));
+  }
+  const financial = input.financialComplete === true && input.state !== "snapshot";
+  const scope: ReportScope = { shop: String(input.shop), publication: String(input.publication),
+    definition: "history-bridge-v1", model: "commerce-only", date: String(input.date), stale: true,
+    gates: { ledger: financial, orders: financial, purchase: financial, productAllocation: financial,
+      cash: false, customers: false, spend: bases.length > 0, attribution: false, behavior: false } };
+  const comparisons = new Set(facts.marketing_spend_daily.map(r =>
+    JSON.stringify([r.channel, r.source_campaign_id === null ? "spend_unallocated" : r.campaign_key])));
+  const reports = { store_daily: [storeDaily(facts, scope)], product_daily: productDaily(facts, scope),
+    acquisition_daily: acquisitionDaily(facts, scope, comparisons) };
+  // No account-completeness/comparability evidence is created by this bridge.
+  reports.store_daily[0].mer = null;
+  (reports.store_daily[0].readiness as Record<string, string>).mer = "withheld";
+  for (const rows of Object.values(reports)) for (const row of rows)
+    row.readiness = Object.fromEntries(Object.entries(row.readiness as Record<string, string>)
+      .map(([k, v]) => [k, v === "ready" ? "observed_unverified" : v]));
+  return { reports, spend: facts.marketing_spend_daily };
+}
+/** Snapshot the registered retained Google bases independently of Shopify
+ * processing. No token/provider/source API is used; no invented core inputs. */
+export async function runHistoryProgressSnapshot(options: {
+  client: AnalyticsRpcClient; projectRef: string; databaseUrl: string; runId: string;
+  snapshotId: string; date: string;
+}) {
+  validatePipelineTarget(options.projectRef, options.databaseUrl);
+  const args = { p_run: options.runId, p_project: options.projectRef, p_snapshot: options.snapshotId,
+    p_date: options.date, p_token: randomUUID() };
+  const input = sourceObject(await pipelineRpc(options.client, "lean_history_progress_inputs", args));
+  if (["complete","disabled","busy","expired"].includes(String(input.state))) return { state: String(input.state) };
+  if (input.state !== "snapshot") throw new Error("history_progress_invalid_input");
+  const output = dailyReports(input);
+  const done = await pipelineRpc(options.client, "lean_history_progress_finish", {
+    ...args, p_input_hash: input.inputHash, p_reports: output.reports, p_spend: output.spend,
+  });
+  return { state: done === true ? "progress_written" : "changed" };
+}
+
 /** One durable order or one report date per step; caller may run a bounded
  * loop. Progress belongs to the database, not build memory or local files. */
 export async function runHistoryReportStep(options: {
@@ -122,33 +171,10 @@ export async function runHistoryReportStep(options: {
   if (["disabled", "busy", "complete", "expired"].includes(String(input.state)))
     return { state: String(input.state) };
   if (input.state === "report") {
-    const facts = sourceObject(input.facts) as Facts;
-    const bases = sourceArray(input.spend) as SpendBase[];
-    const seen = new Set<string>();
-    for (const base of bases) {
-      const key = `${base.provider}:${base.accountId}:${base.date}`;
-      if (base.provider !== "google_ads" || base.date !== input.date || seen.has(key))
-        throw new Error("history_bridge_spend_scope");
-      seen.add(key); facts.marketing_spend_daily.push(...normalizeSpendBase(base, String(input.publication)));
-    }
-    const financial = input.financialComplete === true;
-    const scope: ReportScope = { shop: String(input.shop), publication: String(input.publication),
-      definition: "history-bridge-v1", model: "commerce-only", date: String(input.date), stale: true,
-      gates: { ledger: financial, orders: financial, purchase: financial, productAllocation: financial,
-        cash: false, customers: false, spend: bases.length > 0, attribution: false, behavior: false } };
-    const comparisons = new Set(facts.marketing_spend_daily.map(r =>
-      JSON.stringify([r.channel, r.source_campaign_id === null ? "spend_unallocated" : r.campaign_key])));
-    const reports = { store_daily: [storeDaily(facts, scope)], product_daily: productDaily(facts, scope),
-      acquisition_daily: acquisitionDaily(facts, scope, comparisons) };
-    // No account-completeness/comparability evidence is created by this bridge.
-    reports.store_daily[0].mer = null;
-    (reports.store_daily[0].readiness as Record<string, string>).mer = "withheld";
-    for (const rows of Object.values(reports)) for (const row of rows)
-      row.readiness = Object.fromEntries(Object.entries(row.readiness as Record<string, string>)
-        .map(([k, v]) => [k, v === "ready" ? "observed_unverified" : v]));
+    const output = dailyReports(input);
     const done = await pipelineRpc(options.client, "lean_history_report_day", {
-      ...common, p_date: input.date, p_input_hash: input.inputHash, p_reports: reports,
-      p_spend: facts.marketing_spend_daily,
+      ...common, p_date: input.date, p_input_hash: input.inputHash, p_reports: output.reports,
+      p_spend: output.spend,
     });
     return { state: done === true ? "report_written" : "changed", date: String(input.date) };
   }

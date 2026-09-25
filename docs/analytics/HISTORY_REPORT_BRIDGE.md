@@ -32,11 +32,26 @@ partial selected totals. Actual saved Google spend may remain observed by date;
 missing spend stays null, and MER/ROAS/NCAC remain withheld. No selected pointers
 or reader permissions are changed.
 
-**Report phase starts after all source IDs have been traversed.** Selecting real
-019 Google bases for September 21–23 requires no fabricated packets, but this
-job does not expose a spend-only report before its order phase finishes. An
-immediate independent spend-only publication is a separate small missing
-consumer path, not a capability claimed by this bridge.
+**The ordinary report phase starts after all source IDs have been traversed.**
+An independent private `mode:"progress"` action can consume the selected real
+019 Google bases **before or during** that traversal, without a Shopify token or
+any provider read. It freezes one date's selected bases and progress/cursor in
+`history_report_progress`, uses the same spend normalizer/report formulas, and
+writes `history-progress:<runId>:<snapshotId>` as a private candidate.
+Only spend can be observed; merchandise, eligible orders, customer, cash,
+MER/ROAS/NCAC remain null. No partial sales are relabeled as zero.
+The selected account/date's retained pagination is not an all-account complete
+day or independent certification. `coverage` explicitly records that distinction.
+Each snapshot ID is immutable and replayable, even after order progress changes.
+At most 20 snapshots per job; each has a 90-second lease and the same run/source
+kill/deadline locks. There is no publication selection, endpoint or schedule.
+
+The fallback's internal `linesComplete:true` is required by the reused normalizer
+for its supplied array; it **does not mean the canonical inventory is complete**.
+040 retains all source lines. The fallback caps canonical lines at 500 and omits
+zero-quantity lines rather than inventing positive original purchases.
+`source_line_bound` and source/canonical counts distinguish this incomplete
+fallback. All financial sums stay null; the job remains unresolved.
 
 ## Cost and limits: not an approved whole-history activation
 
@@ -103,9 +118,10 @@ Execution requires separate owner `enabled=true`; kill via `enabled=false`.
 The completed source's execution deadline does not expire durable staging reads,
 but source kill/purge/hash changes block this consumer.
 
-Only service_role gets the four new execution RPCs:
+Only service_role gets the six new execution RPCs:
 `lean_history_report_claim`, `lean_history_report_retain`,
-`lean_history_report_order`, `lean_history_report_day`.
+`lean_history_report_order`, `lean_history_report_day`,
+`lean_history_progress_inputs`, `lean_history_progress_finish`.
 Registration and direct table reads/writes remain owner-only. Scope/source locks
 span writes, and original lease/deadline is rechecked after writes for rollback.
 
@@ -118,6 +134,19 @@ and finite budgets. Static `/history-report.json` contains aggregate progress,
 not IDs, raw rows, customer links, secrets or financial totals; a READY build is
 not proof the job is complete. Require its reported state and private DB readback.
 
+For an immediate spend-only observed snapshot, register `spendRuns` with the
+actual saved 019 run IDs, then use:
+
+```json
+{"enabled":true,"runId":"REPLACE_REVIEWED_RUN","mode":"progress",
+ "snapshotId":"spend-sep21-v1","date":"2026-09-21","maxSteps":1,"maxProviderRequests":8}
+```
+
+The snapshot makes zero provider requests; these budgets do not authorize new
+source reads. `progress_written` or replay `complete` means only that named
+snapshot was stored, not that history normalization finished. The `advance`
+mode remains the default for ordinary order/date steps.
+
 Environment reuses dedicated branch credentials, no new global switches:
 
 - `VERCEL_ENV=preview`
@@ -126,7 +155,8 @@ Environment reuses dedicated branch credentials, no new global switches:
 - `LEAN_ANALYTICS_SUPABASE_URL=https://xeqlgxvrhgwwudyqtnun.supabase.co`
 - `LEAN_ANALYTICS_SUPABASE_SERVICE_ROLE_KEY` (existing dedicated isolated key)
 - `LEAN_SHOPIFY_SHOP_DOMAIN=mullybox-store.myshopify.com`
-- `LEAN_SHOPIFY_ANALYTICS_READ_TOKEN` (dedicated correct-app read token)
+- `LEAN_SHOPIFY_ANALYTICS_READ_TOKEN` (dedicated correct-app read token; not
+  required/used by `mode:"progress"`)
 
 No website/runtime route/scheduler or Google secret changes are required.
 Use one controlled step first; inspect private outcome/source hash/core counts.
