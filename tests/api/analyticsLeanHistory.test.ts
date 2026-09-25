@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { buildCommerceCandidate, reportDates } from "@/lib/analytics/commerceCandidate";
 import {
-  HISTORY_ACCESS_QUERY, HISTORY_ORDERS_QUERY, historySearch, runShopifyHistory,
+  HISTORY_ACCESS_QUERY, HISTORY_ORDERS_QUERY, HISTORY_UPDATED_ORDERS_QUERY, historySearch, runShopifyHistory,
   type HistoryOptions,
 } from "@/lib/analytics/shopifyHistory";
 import { readPilotSource, type PilotSource } from "@/lib/analytics/shopifyPilotSource";
@@ -73,6 +73,38 @@ beforeEach(() => {
 afterEach(() => { expect(forbiddenNetwork).not.toHaveBeenCalled(); vi.unstubAllGlobals(); });
 
 describe("bounded Shopify history ingestion", () => {
+  it("hydrates an older purchase found by its update clock and commits only after complete source reads", async () => {
+    const source = fixture(); source.commerce.order.createdAt = "2025-01-01T12:00:00Z";
+    vi.mocked(readPilotSource).mockResolvedValue(source);
+    const config = { ...options(), scanBasis: "updated_at" as const };
+    const fetcher = vi.fn<typeof fetch>(async (_, init) => {
+      const { query, variables } = JSON.parse(String(init?.body));
+      if (query !== HISTORY_ACCESS_QUERY) {
+        expect(query).toBe(HISTORY_UPDATED_ORDERS_QUERY);
+        expect(variables.search).toBe("updated_at:>='2026-01-01T00:00:00Z' updated_at:<'2026-01-03T00:00:00Z'");
+      }
+      return Response.json({ data: query === HISTORY_ACCESS_QUERY
+        ? { currentAppInstallation: { accessScopes: ["read_orders", "read_all_orders"].map(handle => ({ handle })) } }
+        : { orders: connection([{ ...node(), createdAt: source.commerce.order.createdAt }]) } },
+      { headers: { "X-Shopify-API-Version": "2026-07" } });
+    });
+    const commitPage = vi.fn().mockResolvedValue(true);
+    expect(await runShopifyHistory({ ...config, fetcher, cursor: null, maxPages: 1, store: { commitPage } }))
+      .toEqual({ cursor: null, written: 1, complete: true });
+    expect(commitPage.mock.calls[0][1].rows[0].source).toEqual(source);
+  });
+  it("requires all-order access even for a recent update window", async () => {
+    const config = { ...options(), scanBasis: "updated_at" as const,
+      fromTime: "2026-09-21T00:00:00Z", untilTime: "2026-09-22T00:00:00Z" };
+    const fetcher = network([], ["read_orders"]), commitPage = vi.fn();
+    await expect(runShopifyHistory({ ...config, fetcher, cursor: null, maxPages: 1, store: { commitPage } }))
+      .rejects.toThrow("full_history_access");
+    expect(fetcher).toHaveBeenCalledTimes(1); expect(commitPage).not.toHaveBeenCalled();
+  });
+  it("rejects an invalid scan basis before any source call", async () => {
+    await expect(runShopifyHistory({ ...options(), scanBasis: "arbitrary" as "updated_at",
+      cursor: null, maxPages: 1, store: { commitPage: vi.fn() } })).rejects.toThrow("invalid_scope");
+  });
   it("retains all sources and advances the checkpoint only after page completion", async () => {
     const fetcher = network([connection([node()])]), commitPage = vi.fn().mockResolvedValue(true);
     const result = await runShopifyHistory({ ...options(), fetcher, cursor: null, maxPages: 1, store: { commitPage } });

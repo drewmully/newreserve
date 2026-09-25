@@ -26,6 +26,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { attachJourneyDraft } from "@/lib/analytics/journeyRuntime";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { MEMBER_DISCOUNT_RATE } from "@/lib/shopify";
 
@@ -124,7 +125,7 @@ async function fetchDraft(
 async function updateDraft(
   draftId: number,
   body: Record<string, unknown>
-): Promise<string | null> {
+): Promise<{ id: number; invoiceUrl: string } | null> {
   const { token, domain, apiVersion } = getShopifyConfig();
   const res = await fetch(
     `https://${domain}/admin/api/${apiVersion}/draft_orders/${draftId}.json`,
@@ -142,7 +143,7 @@ async function updateDraft(
     return null;
   }
   const json = (await res.json()) as DraftOrderResponse;
-  return json.draft_order.invoice_url;
+  return { id: json.draft_order.id === draftId ? draftId : NaN, invoiceUrl: json.draft_order.invoice_url };
 }
 
 async function createDraft(
@@ -173,7 +174,7 @@ async function getOrCreateMemberDraftOrder(
   uid: string,
   cartItems: CartItemInput[],
   email: string | undefined
-): Promise<string> {
+): Promise<{ id: number; invoiceUrl: string }> {
   const body = buildDraftOrderBody(cartItems, uid, email);
   const userRef = adminDb.collection("users").doc(uid);
   const userDoc = await userRef.get();
@@ -188,15 +189,15 @@ async function getOrCreateMemberDraftOrder(
   if (cachedDraftId) {
     const existing = await fetchDraft(cachedDraftId);
     if (existing && existing.status === "open") {
-      const invoiceUrl = await updateDraft(cachedDraftId, body);
-      if (invoiceUrl) {
+      const updated = await updateDraft(cachedDraftId, body);
+      if (updated?.invoiceUrl) {
         console.log(
           "[checkout] reused draft",
           cachedDraftId,
           "for uid",
           uid
         );
-        return invoiceUrl;
+        return { id: existing.id === cachedDraftId ? updated.id : NaN, invoiceUrl: updated.invoiceUrl };
       }
     }
     // Cached draft is gone or no longer open — clear the cache
@@ -213,7 +214,7 @@ async function getOrCreateMemberDraftOrder(
     { merge: true }
   );
   console.log("[checkout] created new draft", created.id, "for uid", uid);
-  return created.invoiceUrl;
+  return created;
 }
 
 export async function POST(request: NextRequest) {
@@ -262,7 +263,12 @@ export async function POST(request: NextRequest) {
     console.log("[checkout] uid:", uid, "tier:", tier, "cartItems:", cartItems.length);
 
     if (tier && tier !== "free" && cartItems.length > 0) {
-      const invoiceUrl = await getOrCreateMemberDraftOrder(uid, cartItems, email);
+      const draft = await getOrCreateMemberDraftOrder(uid, cartItems, email);
+      const invoiceUrl = draft.invoiceUrl;
+      // Legacy REST uses numeric IDs. Never turn an already-rounded value into
+      // analytics identity; tracking failure must not change the checkout.
+      if (Number.isSafeInteger(draft.id) && draft.id > 0)
+        await attachJourneyDraft(request, String(draft.id), getShopifyConfig().domain, uid);
       console.log("[checkout] draft order invoice_url:", invoiceUrl);
       return NextResponse.json({ checkoutUrl: invoiceUrl });
     }

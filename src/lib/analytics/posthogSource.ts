@@ -1,10 +1,16 @@
 import { nyDate } from "./primitives";
 import type { ObservedEvent } from "./sessions";
 import { sourceArray, sourceObject, sourceString } from "./shopifySource";
+import type { CampaignContext } from "./attribution";
 
 export type BehaviorSource = {
   host: "https://us.posthog.com" | "https://eu.posthog.com"; project: string;
   from: string; until: string; maxEvents: number; approvalRef: string;
+  /** Exact reviewed token-to-campaign registry. Missing tokens are not direct. */
+  campaignMapping?: {
+    property: "campaign_id" | "utm_id" | "utm_campaign"; approvalRef: string;
+    entries: Record<string, Omit<CampaignContext, "evidenceRef">>;
+  };
   families: Record<string, {
     producer: string; schemaVersion: string; identityNamespace: string;
     actionProperty: "event_id" | "$insert_id";
@@ -34,6 +40,18 @@ export function validateBehaviorSource(c: BehaviorSource) {
         !["analytics_permitted", "analytics_consent"].includes(f.consentProperty))
       throw new Error("invalid_behavior_mapping");
   }
+  if (c.campaignMapping) {
+    const m = c.campaignMapping, entries = Object.entries(m.entries);
+    if (!["campaign_id", "utm_id", "utm_campaign"].includes(m.property) ||
+        !m.approvalRef?.trim() || entries.length < 1 || entries.length > 1000 ||
+        entries.some(([source, value]) => !/^[a-zA-Z0-9_-]{1,128}$/.test(source) ||
+          !token(value.channel) || typeof value.direct !== "boolean" ||
+          value.campaignKey !== null && (typeof value.campaignKey !== "string" ||
+            value.campaignKey.length > 300 || !value.campaignKey.trim()) ||
+          value.direct && (value.channel !== "direct" || value.campaignKey !== null) ||
+          !value.direct && value.channel === "direct"))
+      throw new Error("invalid_campaign_mapping");
+  }
 }
 /** Bounded, synchronous, read-only query. LIMIT+1 fails closed rather than silently
  * truncating. No person profiles, URLs, IPs, email, or unbounded properties blobs.
@@ -49,12 +67,13 @@ export async function readPosthogBehavior(c: BehaviorSource, apiKey: string,
   // their exact wire contract; never select the whole properties/PII object.
   const additional = [...new Set(Object.values(c.families).map(f => f.identityProperty))]
     .filter(name => !columns.includes(name)).sort();
-  const selectedColumns = [...columns, ...additional];
+  const selectedColumns = [...columns, ...additional, ...(c.campaignMapping ? ["campaign_token"] : [])];
   const query = `SELECT uuid AS uuid, event AS event, timestamp AS timestamp, distinct_id AS distinct_id,
     properties.event_id AS event_id, properties.$insert_id AS insert_id,
     properties.session_id AS session_id, properties.$session_id AS ph_session_id,
     properties.anonymous_id AS anonymous_id, properties.analytics_permitted AS analytics_permitted,
-    properties.analytics_consent AS analytics_consent${additional.map(name => `,\n    properties.${name} AS ${name}`).join("")}
+    properties.analytics_consent AS analytics_consent${additional.map(name => `,\n    properties.${name} AS ${name}`).join("")}${
+      c.campaignMapping ? `,\n    properties.${c.campaignMapping.property} AS campaign_token` : ""}
     FROM events WHERE timestamp >= toDateTime('${c.from}') AND timestamp < toDateTime('${c.until}')
     AND event IN (${families}) ORDER BY timestamp, uuid LIMIT ${c.maxEvents + 1}`;
   let response: Response;
@@ -109,9 +128,14 @@ export async function readPosthogBehavior(c: BehaviorSource, apiKey: string,
     const session = optional(r[f.sessionProperty === "$session_id" ? "ph_session_id" : "session_id"]);
     const distinct = optional(r[f.identityProperty]);
     if ([session, distinct].some(s => s !== null && s.length > 200)) throw new Error("behavior_identifier_budget");
+    const mapping = c.campaignMapping;
+    const campaign = permitted && mapping && typeof r.campaign_token === "string" &&
+      Object.hasOwn(mapping.entries, r.campaign_token) ? mapping.entries[r.campaign_token] : undefined;
     return { project: c.project, producer: f.producer, actionId: action, nativeUuid, family,
       schemaVersion: f.schemaVersion, occurredAt, receivedAt: null,
       sourceSessionId: permitted ? session : null, distinctId: permitted ? distinct : null,
-      identityNamespace: f.identityNamespace, customerId: null, analyticsPermitted: permitted };
+      identityNamespace: f.identityNamespace, customerId: null, analyticsPermitted: permitted,
+      ...(campaign ? { campaignContext: { ...campaign,
+        evidenceRef: `posthog:${c.project}:${nativeUuid}:${mapping!.approvalRef}` } } : {}) };
   });
 }

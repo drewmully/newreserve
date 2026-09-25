@@ -5,16 +5,19 @@ import { deriveSessions, finalizeSessionConversions, linkCheckoutOrders, normali
   type CheckoutEvidence, type ObservedEvent, type SessionCoverage } from "./sessions";
 import { acquisitionDaily, customerCohort, funnelDaily, productDaily, storeDaily,
   type Facts, type Gates, type ReportScope } from "./reporting";
-import { validateCandidateGraph, reconcileCandidate, externalJoinControls, type Candidate, type Reconciliation } from "./certification";
+import { validateCandidateGraph, reconcileCandidate, type Candidate, type Reconciliation } from "./certification";
 import { normalizeCommerce, type CommerceDecision, type ShopifySnapshot } from "./commerce";
 import { normalizeLedger, normalizePayment, uniqueLedger, type Movement, type PaymentEvidence } from "./financial";
 import { reportDates } from "./commerceCandidate";
 import { checked, key, nyDate, type Row } from "./primitives";
+import { observedCampaigns } from "./campaignSource";
 
 export type FullBuildPolicy = {
   definition: string; mappingVersion: string; sessionVersion: string; funnelVersion: string;
   normalizationVersion: string; project: string; asOf: string; approvalRef: string;
   stages: Record<string, string>; attribution: AttributionPolicy;
+  /** Immutable operator scope. Excluded behavior is unavailable, never zero. */
+  behaviorMode?: "required" | "excluded";
   cohorts: { month: string; horizonDays: number; graceSeconds: number; acquisitionDefinition: string }[];
 };
 /** Owner-supplied evidence, never arbitrary "all gates true" from an HTTP caller.
@@ -36,7 +39,8 @@ export type FullBuildEvidence = {
   replacements: { snapshot: ShopifySnapshot; decision: CommerceDecision; movements: Movement[];
     payments: PaymentEvidence[]; evidenceRef: string }[];
   settlements: PaymentEvidence[];
-  offers: { orderItemId: string; offerId: string; evidenceRef: string; mappingVersion: string }[];
+  offers: { orderItemId: string; offerId: string; evidenceRef: string; mappingVersion: string;
+    membershipBasis?: "source_line_discount" | "source_evidence" | "approved_bundle_rule" }[];
   proofs: Reconciliation[];
   externalControls: Record<string, { passed: boolean; evidenceRef: string }>;
   dateCoverage: { date: string; gates: Gates; evidenceRef: string }[];
@@ -50,6 +54,17 @@ const gateTables: Record<keyof Gates, string[]> = {
   spend: ["marketing_spend_daily"], attribution: ["order_attribution"],
   behavior: ["sessions"], productAllocation: ["sales_ledger", "order_items"],
 };
+// Controls are dependencies, not a global switch. Missing browser identity
+// cannot erase independently reconciled commerce/cash. Certification and
+// release still require all controls for their explicitly selected scope.
+const gateControls: Record<keyof Gates, string[]> = {
+  ledger: [], cash: [], orders: [], purchase: [], productAllocation: [],
+  customers: ["temporal_identity_intervals"],
+  spend: ["compatible_spend_scope"],
+  behavior: ["event_customer_fk", "temporal_identity_intervals", "event_session_fk", "native_project_uuid_lineage"],
+  attribution: ["event_customer_fk", "temporal_identity_intervals", "event_session_fk",
+    "event_order_diagnostics", "native_project_uuid_lineage", "attribution_touch_event_fk"],
+};
 function unique<T>(rows: T[], id: (row: T) => string): Map<string, T> {
   const out = new Map<string, T>();
   for (const row of rows) {
@@ -61,7 +76,13 @@ export function buildFullReports(input: {
   base: Candidate; publication: string; shop: string; fromDate: string; throughDate: string;
   policy: FullBuildPolicy; evidence: FullBuildEvidence; events: ObservedEvent[];
 }) {
-  const { policy: p, evidence: e, publication: pub, shop } = input;
+  const { policy: p, publication: pub, shop } = input;
+  const mode = p.behaviorMode ?? "required";
+  if (!["required", "excluded"].includes(mode)) throw new Error("invalid_behavior_mode");
+  if (mode === "excluded" && input.events.length) throw new Error("excluded_behavior_events");
+  // Apply the exclusion at the transform boundary too: callers cannot retain
+  // all-passed browser controls or turn an absent source into a measured zero.
+  const e = mode === "excluded" ? withoutBehaviorEvidence(input.evidence) : input.evidence;
   if (![p.definition, p.mappingVersion, p.sessionVersion, p.funnelVersion, p.normalizationVersion,
     p.project, p.approvalRef, e.ref].every(v => typeof v === "string" && v.trim())) throw new Error("full_build_policy_required");
   nyDate(p.asOf);
@@ -103,8 +124,11 @@ export function buildFullReports(input: {
   }
   for (const offer of e.offers) {
     if (!offer.evidenceRef || !offer.mappingVersion) throw new Error("offer_evidence_required");
+    if (offer.membershipBasis !== undefined &&
+        !["source_line_discount", "source_evidence", "approved_bundle_rule"].includes(offer.membershipBasis))
+      throw new Error("offer_membership_basis_invalid");
     facts.order_item_offers.push(checked("order_item_offers", {
-      order_item_id: offer.orderItemId, offer_id: offer.offerId, membership_basis: "source_evidence",
+      order_item_id: offer.orderItemId, offer_id: offer.offerId, membership_basis: offer.membershipBasis ?? "source_evidence",
       evidence_ref: offer.evidenceRef, offer_mapping_version: offer.mappingVersion, publication_id: pub,
     }));
   }
@@ -157,23 +181,27 @@ export function buildFullReports(input: {
     !!e.externalControls.event_order_diagnostics?.passed && !!e.externalControls.event_order_diagnostics.evidenceRef;
   facts.sessions = finalizeSessionConversions(facts.sessions, facts.orders, commerceComplete);
   const attribution = unique(e.attributionCoverage, v => v.orderId);
-  const campaigns = unique(e.campaigns, v => v.sessionKey);
+  const campaigns = observedCampaigns(observations, p.project, p.sessionVersion, e.campaigns);
+  facts.sessions = facts.sessions.map(row => ({ ...row,
+    traffic_source: campaigns.get(String(row.session_key))?.channel ?? null,
+    campaign_id: campaigns.get(String(row.session_key))?.campaignKey ?? null,
+  }));
   facts.order_attribution = attributeOrders({ orders: facts.orders, sessions: facts.sessions, events: logical,
     publication: pub, policy: p.attribution,
     coverage: new Map([...attribution].map(([id, row]) => [id, {
       lookbackComplete: !!row.evidenceRef && nativeReady && row.coverage.lookbackComplete,
       identityComplete: !!row.evidenceRef && proofReady("identity_map") && row.coverage.identityComplete,
       graceComplete: !!row.evidenceRef && row.coverage.graceComplete,
-    }])), campaigns: new Map([...campaigns].map(([id, row]) => [id, row.context])) });
+    }])), campaigns });
   const issues = validateCandidateGraph(facts, pub, p.attribution.modelVersion);
   if (issues.length) throw new Error(`invalid_full_candidate:${issues.join(",")}`);
-  const controlsReady = externalJoinControls.every(k => e.externalControls[k]?.passed && e.externalControls[k].evidenceRef);
   const coverage = unique(e.dateCoverage, v => v.date);
   const verified = Object.fromEntries(Object.values(gateTables).flat().map(t => [t, proofReady(t)]));
   const scope = (date: string): ReportScope => {
     const claim = coverage.get(date);
     const gates = Object.fromEntries(Object.entries(gateTables).map(([gate, tables]) =>
-      [gate, controlsReady && !!claim?.evidenceRef && claim.gates[gate as keyof Gates] === true &&
+      [gate, gateControls[gate as keyof Gates].every(k => e.externalControls[k]?.passed && e.externalControls[k].evidenceRef) &&
+        !!claim?.evidenceRef && claim.gates[gate as keyof Gates] === true &&
         tables.every(t => verified[t])])) as Gates;
     // Independent key totals alone do not establish semantic completeness.
     gates.customers &&= facts.customers.every(c => c.analytics_permitted === true &&
@@ -215,4 +243,18 @@ export function buildFullReports(input: {
   if (Object.values(reports).some(rows => rows.length > 20000) ||
       Buffer.byteLength(JSON.stringify({ facts, reports, manifest })) > 16000000) throw new Error("full_output_budget");
   return { facts, reports, manifest };
+}
+
+export function withoutBehaviorEvidence(evidence: FullBuildEvidence): FullBuildEvidence {
+  const e = structuredClone(evidence);
+  e.checkout = [];
+  e.campaigns = [];
+  e.sessionCoverage.behaviorComplete = false;
+  e.attributionCoverage = e.attributionCoverage.map(row => ({ ...row, coverage: {
+    lookbackComplete: false, identityComplete: false, graceComplete: false,
+  } }));
+  e.dateCoverage = e.dateCoverage.map(row => ({ ...row, gates: {
+    ...row.gates, behavior: false, attribution: false,
+  } }));
+  return e;
 }

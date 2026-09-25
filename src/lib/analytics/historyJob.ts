@@ -21,9 +21,11 @@ export async function runHistoryJob(options: HistoryJobOptions) {
   if (state.state !== "ready" || state.shop !== options.shop ||
       !Number.isSafeInteger(state.pageCount) || Number(state.pageCount) < 0 ||
       !Number.isSafeInteger(state.pageSize) || Number(state.pageSize) < 1 || Number(state.pageSize) > 5 ||
+      state.scanBasis !== undefined && !["created_at", "updated_at"].includes(String(state.scanBasis)) ||
       (state.cursor !== null && typeof state.cursor !== "string")) throw new Error("history_invalid_registry");
   const result = await runShopifyHistory({
     ...options, fromTime: sourceString(state.fromTime), untilTime: sourceString(state.untilTime),
+    scanBasis: (state.scanBasis ?? "created_at") as "created_at" | "updated_at",
     approvalRef: sourceString(state.approvalRef), pageSize: Number(state.pageSize),
     cursor: state.cursor as string | null, maxPages: 1,
     store: { async commitPage(expected, page) {

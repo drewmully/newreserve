@@ -1,9 +1,11 @@
 import { checked, key, nyDate, type Row } from "./primitives";
+import type { CampaignContext } from "./attribution";
 export type ObservedEvent = {
   project: string; producer: string; actionId: string; nativeUuid: string; family: string; schemaVersion: string;
   occurredAt: string; receivedAt: string | null; sourceSessionId: string | null;
   distinctId: string | null; identityNamespace: string; customerId: string | null;
   analyticsPermitted: boolean;
+  campaignContext?: CampaignContext;
 };
 /** An in-memory logical-view transform. It never persists a clone of native events. */
 export function normalizeEvents(events: ObservedEvent[], config: {
@@ -23,7 +25,9 @@ export function normalizeEvents(events: ObservedEvent[], config: {
       received_at: event.receivedAt, distinct_id: event.analyticsPermitted ? event.distinctId : null,
       identity_namespace: event.identityNamespace, customer_id: event.analyticsPermitted ? event.customerId : null,
       session_key: event.analyticsPermitted && event.sourceSessionId ? key(event.project, config.sessionVersion, event.sourceSessionId) : null,
-      order_id: null, checkout_id: null, page_path: null, referrer: null, campaign_id: null, sku: null, offer_id: null,
+      order_id: null, checkout_id: null, page_path: null, referrer: null,
+      campaign_id: event.analyticsPermitted ? event.campaignContext?.campaignKey ?? null : null,
+      sku: null, offer_id: null,
       identity_status: !event.analyticsPermitted ? "restricted" : event.customerId ? "resolved" : "anonymous",
       session_link_status: event.analyticsPermitted && event.sourceSessionId ? "pending" : "missing", order_link_status: "missing",
       analytics_eligible: event.analyticsPermitted, normalization_version: config.normalizationVersion,
@@ -31,7 +35,7 @@ export function normalizeEvents(events: ObservedEvent[], config: {
     };
     const prior = selected.get(eventKey);
     if (prior) {
-      for (const field of ["occurred_at", "session_key", "customer_id", "analytics_eligible", "distinct_id", "identity_namespace", "schema_version"]) {
+      for (const field of ["occurred_at", "session_key", "customer_id", "analytics_eligible", "distinct_id", "identity_namespace", "schema_version", "campaign_id"]) {
         if (prior[field] !== row[field]) throw new Error("conflicting_event_retry");
       }
       if (String(prior.source_event_uuid) <= event.nativeUuid) continue;

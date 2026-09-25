@@ -10,6 +10,8 @@
  *   private-releases   — exclusive member drops
  */
 
+import { recordJourneyCart } from "./analytics/journeyClient";
+
 export const PRO_SHOP_COLLECTION_HANDLE =
   process.env.NEXT_PUBLIC_SHOPIFY_PRO_SHOP_COLLECTION_HANDLE ??
   "reserve-pro-shop";
@@ -549,6 +551,7 @@ export async function cartCreate(
     );
   }
 
+  await recordJourneyCart(data.cartCreate.cart.id);
   return mapCart(data.cartCreate.cart);
 }
 
