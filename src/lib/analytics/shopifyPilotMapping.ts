@@ -112,8 +112,11 @@ export function mapPilotSource(source: PilotSource, policy: PilotPolicy, publica
           original.processedAt !== tx.processedAt || allRefundTransactions.has(tid))
         throw new Error("pilot_refund_payment_unproven");
       nyDate(sourceString(tx.processedAt));
-      if (Date.parse(tx.processedAt as string) < Date.parse(effectiveAt) ||
-          Date.parse(tx.processedAt as string) > Date.parse(raw.updatedAt as string)) throw new Error("pilot_refund_clock_invalid");
+      // Provider processing can precede creation of the Shopify refund record.
+      // Keep the matched transaction's clock distinct from the approved ledger
+      // clock; neither a tolerance nor a rewritten timestamp is appropriate.
+      if (Date.parse(tx.processedAt as string) > Date.parse(raw.updatedAt as string))
+        throw new Error("pilot_refund_clock_invalid");
       allRefundTransactions.add(tid); processed += amount(tx.amountSet);
     }
     if (!transactions.length || processed !== expected || expected <= BigInt(0))
