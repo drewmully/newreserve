@@ -22,6 +22,7 @@
  */
 
 import { useCallback, useState } from "react";
+import { readOutfitGuide, outfitLineAttributes } from "@/lib/shopOutfit";
 import { createMembershipCheckout } from "@/lib/shopifyCheckout";
 import { trackEvent } from "@/lib/tracking";
 import type { StyleBucket } from "@/lib/styleProfiles/types";
@@ -152,6 +153,9 @@ export function ReserveCheckoutCTA({
       key: "First Box Edition",
       value: tierMeta.label,
     });
+
+    const outfitGuide = readOutfitGuide();
+    if (outfitGuide) lineProps.push(...outfitLineAttributes(outfitGuide));
 
     try {
       await createMembershipCheckout("member", {

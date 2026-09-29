@@ -195,6 +195,7 @@ export interface CartAttributeInput {
 export interface ShopifyCartLine {
   id: string;
   variantId: string;
+  variantTitle?: string;
   productSlug: string;
   productName: string;
   brand: string;
@@ -211,6 +212,7 @@ export interface ShopifyCart {
   lines: ShopifyCartLine[];
   totalAmount: number;
   currency: string;
+  discountCodes?: Array<{ code: string; applicable: boolean }>;
 }
 
 interface CollectionProductsGroup {
@@ -261,8 +263,10 @@ interface RawProduct {
 interface RawCartLine {
   id: string;
   quantity: number;
+  cost?: { totalAmount: { amount: string } };
   merchandise: {
     id: string;
+    title?: string;
     price: { amount: string; currencyCode: string };
     product: {
       handle: string;
@@ -278,6 +282,7 @@ interface RawCart {
   checkoutUrl: string;
   cost: { totalAmount: { amount: string; currencyCode: string } };
   lines: { nodes: RawCartLine[] };
+  discountCodes?: Array<{ code: string; applicable: boolean }>;
 }
 
 // ─── Mappers ──────────────────────────────────────────────────────────────────
@@ -351,15 +356,17 @@ function mapCart(raw: RawCart): ShopifyCart {
     checkoutUrl: raw.checkoutUrl,
     totalAmount: parseFloat(raw.cost.totalAmount.amount),
     currency: raw.cost.totalAmount.currencyCode,
+    discountCodes: raw.discountCodes,
     lines: raw.lines.nodes.map((line) => {
       const retailPrice = parseFloat(line.merchandise.price.amount);
       return {
         id: line.id,
         variantId: line.merchandise.id,
+        variantTitle: line.merchandise.title,
         productSlug: line.merchandise.product.handle,
         productName: line.merchandise.product.title,
         brand: line.merchandise.product.vendor,
-        price: retailPrice,
+        price: line.cost && line.quantity > 0 ? parseFloat(line.cost.totalAmount.amount) / line.quantity : retailPrice,
         retailPrice,
         image: line.merchandise.product.images.nodes[0]?.url,
         quantity: line.quantity,
@@ -425,9 +432,11 @@ const PRODUCT_FIELDS = `
 const CART_LINE_FIELDS = `
   id
   quantity
+  cost { totalAmount { amount } }
   merchandise {
     ... on ProductVariant {
       id
+      title
       price { amount currencyCode }
       product {
         handle
@@ -442,6 +451,7 @@ const CART_LINE_FIELDS = `
 const CART_FIELDS = `
   id
   checkoutUrl
+  discountCodes { code applicable }
   cost { totalAmount { amount currencyCode } }
   lines(first: 100) {
     nodes { ${CART_LINE_FIELDS} }

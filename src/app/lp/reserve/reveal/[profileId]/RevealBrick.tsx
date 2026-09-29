@@ -30,6 +30,8 @@
 
 import Image from "next/image";
 import { useCallback, useEffect, useState } from "react";
+import { readOutfitGuide } from "@/lib/shopOutfit";
+import { ShopOutfitGuide } from "@/app/lp/_shared/ShopOutfitGuide";
 import type { StyleBucket } from "@/lib/styleProfiles/types";
 import {
   ReserveCheckoutCTA,
@@ -115,6 +117,11 @@ export function RevealBrick({
   alreadyConverted,
 }: RevealBrickProps) {
   const [selectedTier, setSelectedTier] = useState<ReserveTier>(DEFAULT_TIER);
+  useEffect(() => {
+    // Restore the visitor's explicit shop choice after browser-storage hydration.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (readOutfitGuide()) setSelectedTier("reserve");
+  }, []);
 
   // Chips always mirror the currently selected tier so the numbers next to
   // the CTA match the tier the visitor is about to check out with. On first
@@ -140,6 +147,7 @@ export function RevealBrick({
 
   return (
     <main className="min-h-screen bg-bone text-charcoal">
+      <div className="px-4 pt-6"><ShopOutfitGuide /></div>
       <RevealPageView profileId={profileId} bucket={bucket} variant="v3_tier_picker" />
 
       <section className="mx-auto flex min-h-screen max-w-xl flex-col px-5 py-8 sm:px-6 sm:py-12">

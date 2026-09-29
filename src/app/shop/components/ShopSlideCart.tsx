@@ -20,6 +20,7 @@ export function ShopSlideCart({ accent }: { accent: string }) {
     cartTotal,
     cartCheckoutUrl,
     cartLoading,
+    cartOfferNotice,
   } = useMembership();
 
   const [checkoutPending, setCheckoutPending] = useState(false);
@@ -139,7 +140,7 @@ export function ShopSlideCart({ accent }: { accent: string }) {
             <div className="flex-1 overflow-y-auto px-6 py-5">
               <ul className="divide-y divide-charcoal/10">
                 {cart.map((item) => (
-                  <li key={item.slug} className="flex gap-4 py-5">
+                  <li key={item.lineId ?? item.variantId ?? item.slug} className="flex gap-4 py-5">
                     <div className="relative h-24 w-20 flex-shrink-0 overflow-hidden bg-cream">
                       {item.image ? (
                         <Image
@@ -159,6 +160,7 @@ export function ShopSlideCart({ accent }: { accent: string }) {
                         <div className="mt-1 text-sm font-medium text-charcoal">
                           {item.name}
                         </div>
+                        {item.variantTitle && item.variantTitle !== "Default Title" && <p className="mt-1 text-xs text-charcoal/60">{item.variantTitle}</p>}
                       </div>
                       <div className="mt-2 flex items-center justify-between">
                         <div className="flex items-center border border-charcoal/15">
@@ -192,7 +194,7 @@ export function ShopSlideCart({ accent }: { accent: string }) {
                         </div>
                       </div>
                       <button
-                        onClick={() => removeFromCart(item.slug)}
+                        onClick={() => removeFromCart(item.lineId ?? item.slug)}
                         disabled={cartLoading}
                         className="mt-2 self-start text-[10px] font-mono uppercase tracking-[0.24em] text-charcoal/50 underline underline-offset-4 transition-colors hover:text-charcoal disabled:opacity-30"
                       >
@@ -206,6 +208,8 @@ export function ShopSlideCart({ accent }: { accent: string }) {
 
             {/* Footer */}
             <footer className="border-t border-charcoal/10 px-6 py-5">
+              {cartOfferNotice && <p role="status" className="pb-3 text-xs text-charcoal/70">{cartOfferNotice}</p>}
+              {cart.some(item => (item.retailPrice ?? item.price) > item.price) && <p className="pb-3 text-xs text-forest">Shopify savings applied: ${(cart.reduce((sum,item) => sum + ((item.retailPrice ?? item.price)-item.price)*item.quantity,0)).toFixed(2)}</p>}
               <div className="flex items-center justify-between pb-4">
                 <span className="text-[11px] font-mono uppercase tracking-[0.24em] text-charcoal/60">
                   Subtotal

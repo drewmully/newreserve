@@ -36,6 +36,7 @@ import {
   StickyRevealSentinel,
 } from "@/app/lp/_shared/StickyRevealOnScroll";
 import { ConsultLPBody } from "./ConsultLPBody";
+import { ShopOutfitGuide } from "@/app/lp/_shared/ShopOutfitGuide";
 
 export default function ConsultQuizFirstClient() {
   useEffect(() => {
@@ -65,6 +66,7 @@ export default function ConsultQuizFirstClient() {
         className="pt-24 sm:pt-28 lg:pt-32 pb-8 sm:pb-12 scroll-mt-20"
       >
         <div className="max-w-3xl mx-auto px-4 sm:px-6">
+          <ShopOutfitGuide />
           <div className="text-center mb-8 sm:mb-10">
             <div className="text-[10px] tracking-[0.28em] uppercase text-forest/60 mb-4">
               Mully Reserve
