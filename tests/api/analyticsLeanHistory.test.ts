@@ -34,6 +34,36 @@ function fixture(id = "1"): PilotSource {
     refunds: [],
   };
 }
+/** Synthetic later revision, never a downloaded order or replay of the live sample. */
+function refundedFixture(): PilotSource {
+  const source = fixture(), order = source.commerce.order;
+  source.commerce.projection = "financial_no_geo";
+  delete order.shippingAddress;
+  order.updatedAt = source.financial.updatedAt = "2026-01-03T15:00:00Z";
+  const transactions = order.transactions as Record<string, unknown>[];
+  for (const [index, date] of ["2026-01-02", "2026-01-03"].entries()) {
+    const refundId = gid("Refund", `7${index + 1}`);
+    const transactionId = gid("OrderTransaction", `1${index + 5}`);
+    const createdAt = `${date}T05:00:01Z`, processedAt = `${date}T04:59:59Z`;
+    const updatedAt = `${date}T05:01:00Z`;
+    transactions.push({
+      id: transactionId, kind: "REFUND", status: "SUCCESS", gateway: "fixture", test: false,
+      createdAt: processedAt, processedAt, amountSet: money("10"),
+      parentTransaction: { id: gid("OrderTransaction", "14"), gateway: "fixture" },
+    });
+    source.refunds.push({
+      id: refundId, createdAt, updatedAt, order: { id: order.id }, totalRefundedSet: money("10"),
+      duties: [], orderAdjustments: connection([]), refundShippingLines: connection([]),
+      refundLineItems: connection([{ id: gid("RefundLineItem", `8${index + 1}`), quantity: 1,
+        lineItem: { id: gid("LineItem", "2") }, subtotalSet: money("10"), totalTaxSet: money("0") }]),
+      transactions: connection([{ id: transactionId, kind: "REFUND", status: "SUCCESS",
+        processedAt, amountSet: money("10") }]),
+    });
+  }
+  order.transactionsCount = { count: transactions.length, precision: "EXACT" };
+  source.financial.refunds = source.refunds.map(({ id, updatedAt }) => ({ id, updatedAt }));
+  return source;
+}
 const policy: PilotPolicy = {
   decision: { eligibility: "eligible", commerceSource: "storefront", acquisitionEligible: false, approvalRef: "fixture:eligibility" },
   lineClasses: { "2": "merchandise" }, financialApprovalRef: "fixture:finance", saleClock: "paid_at", refundClock: "refund_created_at",
@@ -220,6 +250,72 @@ describe("bounded Shopify history ingestion", () => {
   });
 });
 describe("combined commerce candidate reports", () => {
+  it("keeps later refunds on their own dates without changing purchased units, orders or AOV", () => {
+    const latest = refundedFixture(), originals = [fixture(), fixture("2")];
+    const inputsBefore = JSON.stringify([latest, ...originals]);
+    const result = buildCommerceCandidate([
+      record(latest), record(originals[1]), record(originals[0]), record(latest),
+    ], scope);
+    expect(result.selectedOrders).toBe(2);
+    expect(result.facts.orders).toHaveLength(2);
+    expect(result.facts.order_items).toHaveLength(2);
+    expect(result.facts.payments).toHaveLength(4);
+    expect(result.reports.store_daily.map(row => ({
+      date: row.report_date, sales: row.total_sales_usd, refunds: row.refunds_usd,
+      orders: row.eligible_orders, aov: row.aov_usd,
+    }))).toEqual([
+      { date: "2026-01-01", sales: "40.000000", refunds: "0.000000", orders: 2, aov: "20.000000" },
+      { date: "2026-01-02", sales: "-10.000000", refunds: "10.000000", orders: 0, aov: null },
+      { date: "2026-01-03", sales: "-10.000000", refunds: "10.000000", orders: 0, aov: null },
+    ]);
+    expect(result.reports.product_daily.map(row => ({
+      date: row.report_date, sku: row.sku_bucket, units: row.units, net: row.net_merchandise_sales_usd,
+    }))).toEqual([
+      { date: "2026-01-01", sku: "SKU", units: "4.000000", net: "40.000000" },
+      { date: "2026-01-02", sku: "SKU", units: "0.000000", net: "-10.000000" },
+      { date: "2026-01-03", sku: "SKU", units: "0.000000", net: "-10.000000" },
+    ]);
+    for (const row of result.reports.store_daily) {
+      expect(row).toMatchObject({ collected_cash_usd: null, new_customers: null, spend_usd: null, is_stale: true });
+      expect(row.readiness).toMatchObject({ total_sales_usd: "observed_unverified" });
+    }
+    expect(buildCommerceCandidate([
+      record(originals[0]), record(latest), record(originals[1]),
+    ], scope)).toEqual(result);
+    expect(JSON.stringify([latest, ...originals])).toBe(inputsBefore);
+  });
+  it("does not collapse a missing-SKU purchase into the other order's product bucket", () => {
+    const unknown = fixture("2");
+    (unknown.commerce.order.lineItems as { nodes: Record<string, unknown>[] }).nodes[0].sku = null;
+    const result = buildCommerceCandidate([record(refundedFixture()), record(unknown)], scope);
+    expect(result.reports.product_daily.filter(row => row.report_date === "2026-01-01"))
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({ sku_bucket: "SKU", units: "2.000000", net_merchandise_sales_usd: "20.000000" }),
+        expect.objectContaining({ sku_bucket: "unknown", units: "2.000000", net_merchandise_sales_usd: "20.000000" }),
+      ]));
+    expect(result.reports.product_daily.find(row => row.report_date === "2026-01-02" && row.sku_bucket === "unknown"))
+      .toMatchObject({ units: "0.000000", refunds_usd: "0.000000" });
+  });
+  it.each(["quantity", "amount"] as const)("rejects a cumulative refund %s exceeding the original purchase", field => {
+    const source = refundedFixture();
+    const second = source.refunds[1];
+    const line = (second.refundLineItems as { nodes: Record<string, unknown>[] }).nodes[0];
+    if (field === "quantity") line.quantity = 2;
+    else {
+      line.subtotalSet = money("11");
+      second.totalRefundedSet = money("11");
+      (second.transactions as { nodes: Record<string, unknown>[] }).nodes[0].amountSet = money("11");
+      (source.commerce.order.transactions as Record<string, unknown>[])[2].amountSet = money("11");
+    }
+    expect(() => buildCommerceCandidate([record(source), record(fixture("2"))], scope))
+      .toThrow("pilot_refund_exceeds_purchase");
+  });
+  it("rejects a missing later refund and conflicting retained revisions instead of dropping the refund", () => {
+    const latest = refundedFixture(), missing = structuredClone(latest);
+    missing.refunds.pop();
+    expect(() => buildCommerceCandidate([record(missing)], scope)).toThrow("pilot_refund_set_mismatch");
+    expect(() => buildCommerceCandidate([record(latest), record(missing)], scope)).toThrow("revision_conflict");
+  });
   it("aggregates orders and product units without summing per-order AOV", () => {
     const result = buildCommerceCandidate([record(), record(fixture("2"))], scope);
     expect(result.reports.store_daily[0]).toMatchObject({

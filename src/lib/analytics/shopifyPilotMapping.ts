@@ -5,6 +5,7 @@ import { shopifyId, sourceArray, sourceObject, sourceString, type SourceObject }
 import type { PilotSource } from "./shopifyPilotSource";
 import { storeDaily, type Facts } from "./reporting";
 import { validateCandidateGraph, type Candidate } from "./certification";
+import type { OrderSizeSidecarOption } from "./shopifyOrderSize";
 
 function amount(value: unknown): bigint {
   const m = sourceObject(sourceObject(value).shopMoney);
@@ -29,7 +30,10 @@ export type PilotPolicy = Omit<ShopifyMappingPolicy, "sourceEvidenceRef"> & {
   saleClock: "paid_at";
   refundClock: "refund_created_at";
 };
-export function mapPilotSource(source: PilotSource, policy: PilotPolicy, publication: string, evidenceRef: string) {
+export function mapPilotSource(source: PilotSource, policy: PilotPolicy, publication: string, evidenceRef: string,
+  options?: OrderSizeSidecarOption) {
+  if (policy.orderSize && options?.orderSizeSidecar !== true)
+    throw new Error("size_sidecar_sink_required");
   if (!policy.financialApprovalRef.trim() || policy.saleClock !== "paid_at" || policy.refundClock !== "refund_created_at")
     throw new Error("pilot_financial_policy_required");
   const mapped = mapShopifyAnalyticsOrder(source.commerce, { ...policy, sourceEvidenceRef: evidenceRef }, publication);
@@ -146,5 +150,6 @@ export function mapPilotSource(source: PilotSource, policy: PilotPolicy, publica
       spend: false, attribution: false, behavior: false, productAllocation: true },
   }));
   return { facts, reports, sourceTotals: movements.map(m => ({ id: m.id, total: m.sourceTotal })),
+    ...(mapped.order_item_sizes ? { order_item_sizes: mapped.order_item_sizes } : {}),
     certification: "unverified" as const, sampleScope: "single_order" as const };
 }
