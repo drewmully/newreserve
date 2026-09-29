@@ -5,6 +5,7 @@ import { type PilotSource } from "./shopifyPilotSource";
 import { productDaily, storeDaily, type Facts, type ReportScope } from "./reporting";
 import { nyDate, type Row } from "./primitives";
 import { shopifyId, shopifyShop, sourceString } from "./shopifySource";
+import type { OrderItemSizeRow, OrderSizeSidecarOption } from "./shopifyOrderSize";
 
 export type RetainedCommerce = { source: PilotSource; evidenceRef: string; policy: PilotPolicy };
 export type CommerceCandidateScope = {
@@ -29,7 +30,10 @@ function stable(value: unknown): string {
  * Rows remain observed/unverified; complete pagination is NOT financial coverage.
  * Externally certified publication is a separate operator-controlled transaction.
  */
-export function buildCommerceCandidate(records: RetainedCommerce[], scope: CommerceCandidateScope) {
+export function buildCommerceCandidate(records: RetainedCommerce[], scope: CommerceCandidateScope,
+  options?: OrderSizeSidecarOption) {
+  if (records.some(record => record.policy.orderSize) && options?.orderSizeSidecar !== true)
+    throw new Error("size_sidecar_sink_required");
   shopifyShop(scope.shop);
   if (!scope.publication.trim() || !scope.definition.trim() || records.length > 10000)
     throw new Error("invalid_commerce_candidate_scope");
@@ -49,9 +53,12 @@ export function buildCommerceCandidate(records: RetainedCommerce[], scope: Comme
         stable(record.source) !== stable(prior.source)) throw new Error("commerce_candidate_revision_conflict");
   }
   const facts: Candidate = Object.fromEntries(contracts.tables.map(t => [t.name, []]));
+  const sizes: OrderItemSizeRow[] = [];
+  let hasSizes = false;
   for (const [, record] of [...selected].sort(([a], [b]) => a.localeCompare(b))) {
-    const mapped = mapPilotSource(record.source, record.policy, scope.publication, record.evidenceRef);
+    const mapped = mapPilotSource(record.source, record.policy, scope.publication, record.evidenceRef, options);
     for (const table of contracts.tables) facts[table.name].push(...mapped.facts[table.name]);
+    if (mapped.order_item_sizes) { hasSizes = true; sizes.push(...mapped.order_item_sizes); }
   }
   if (validateCandidateGraph(facts, scope.publication, "commerce-only", false).length)
     throw new Error("commerce_candidate_invalid_graph");
@@ -73,6 +80,7 @@ export function buildCommerceCandidate(records: RetainedCommerce[], scope: Comme
   }
   return {
     facts, reports: { store_daily: store, product_daily: product },
+    ...(hasSizes ? { order_item_sizes: sizes } : {}),
     certification: "unverified" as const, selectedOrders: selected.size,
     scope: { ...scope, kind: "observed_created_order_inventory" as const },
   };

@@ -1,6 +1,7 @@
 import { normalizeCommerce, type CommerceDecision, type PurchaseLine, type ShopifySnapshot } from "./commerce";
 import { normalizePayment, type PaymentEvidence } from "./financial";
 import { decimal, micros, nyDate } from "./primitives";
+import { mapOrderItemSizes, type OrderSizePolicy } from "./shopifyOrderSize";
 import {
   SHOPIFY_ANALYTICS_API_VERSION, shopifyId, shopifyShop, sourceArray, sourceObject, sourceString,
   type ShopifyOrderDocument, type SourceObject,
@@ -12,6 +13,7 @@ export type ShopifyMappingPolicy = {
   sourceEvidenceRef: string;
   /** Approved catalog classification keyed by numeric source line ID. No tag/SKU guessing. */
   lineClasses: Readonly<Record<string, PurchaseLine["itemClass"]>>;
+  orderSize?: OrderSizePolicy;
 };
 function nullableString(value: unknown): string | null {
   return value === null || value === "" ? null : sourceString(value);
@@ -157,7 +159,8 @@ export function mapShopifyAnalyticsOrder(document: ShopifyOrderDocument, policy:
   const paidAt = paid ? captures.map(t => t.processedAt!).sort((a, b) => Date.parse(a) - Date.parse(b)).at(-1)! : null;
   if (paidAt && Date.parse(paidAt) > Date.parse(updatedAt))
     throw new Error("shopify_invalid_paid_timestamp");
-  const privateProjection = document.projection === "financial_no_geo" || document.projection === "financial_customer_id";
+  const privateProjection = document.projection === "financial_no_geo" || document.projection === "financial_customer_id" ||
+    document.projection === "financial_no_geo_order_size";
   if (document.projection !== undefined && !privateProjection ||
       privateProjection && order.shippingAddress !== undefined)
     throw new Error("shopify_projection_mismatch");
@@ -169,8 +172,16 @@ export function mapShopifyAnalyticsOrder(document: ShopifyOrderDocument, policy:
     shippingCountry: shipping ? nullableString(shipping.countryCodeV2) : null,
     shippingRegion: shipping ? nullableString(shipping.provinceCode) : null,
   };
+  const commerce = normalizeCommerce(snapshot, policy.decision, publication);
+  if (document.projection === "financial_no_geo_order_size" && !policy.orderSize)
+    throw new Error("shopify_size_policy_required");
   return {
-    ...normalizeCommerce(snapshot, policy.decision, publication),
+    ...commerce,
+    ...(policy.orderSize ? { order_item_sizes: mapOrderItemSizes({
+      lines: sourceArray(connection.nodes).map(sourceObject), items: commerce.order_items, shop, publication,
+      projected: document.projection === "financial_no_geo_order_size", policy: policy.orderSize,
+      evidenceRef: policy.sourceEvidenceRef,
+    }) } : {}),
     payments: test ? [] : txs.map(t => normalizePayment(t.payment, publication)),
     publishable: false as const,
     source: { apiVersion: document.apiVersion, evidenceRef: policy.sourceEvidenceRef, updatedAt },
