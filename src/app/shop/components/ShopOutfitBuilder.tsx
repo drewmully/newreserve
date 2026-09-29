@@ -494,14 +494,6 @@ export function ShopOutfitBuilder({
             </p>
           </aside>
           <div className="outfit__mobile-footer">
-            {full && (
-              <button className="outfit__compare" onClick={reviewOutfit}>
-                <span>
-                  <strong>Mully Reserve · $250 / quarter</strong>
-                </span>
-                <span>Compare →</span>
-              </button>
-            )}
             <button
               className="btn btn--accent btn--block"
               onClick={() => {
