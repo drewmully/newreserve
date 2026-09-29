@@ -38,6 +38,7 @@ on:
       - "vercel.json"
       - "tests/setup/api.setup.ts"
       - ".github/workflows/analytics-contracts.yml"
+      - ".github/workflows/analytics-production-dispatch.yml"
   push:
     branches: [main]
     paths:
@@ -76,6 +77,7 @@ on:
       - "vercel.json"
       - "tests/setup/api.setup.ts"
       - ".github/workflows/analytics-contracts.yml"
+      - ".github/workflows/analytics-production-dispatch.yml"
 
 permissions:
   contents: read

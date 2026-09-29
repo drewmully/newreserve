@@ -9,6 +9,9 @@ import type { PartitionInventory } from "./partitionInventory";
 export const PIPELINE_VERSION = "shopify-observed-v1";
 export type PipelinePolicy = Omit<PilotPolicy, "lineClasses"> & {
   productClasses: Record<string, "merchandise">;
+  /** Operator-owned, persisted in each claimed snapshot policy. Omission keeps
+   * the legacy query; this does not minimize the separately stored webhook. */
+  sourceProjection?: "financial_no_geo";
   sourceInventory?: HistoryInventory;
   partitionInventory?: PartitionInventory;
 };
@@ -86,12 +89,16 @@ export async function runShopifyPipeline(options: {
   let storageInFlight = false;
   let phase = "invalid_receipt";
   try {
+    const policy = sourceObject(claim.policy) as PipelinePolicy;
+    if (policy.sourceProjection !== undefined && policy.sourceProjection !== "financial_no_geo")
+      throw new Error("pipeline_invalid_source_projection");
     const orderGid = receiptOrderGid(sourceString(claim.topic), claim.payload);
     let source: PilotSource;
     phase = "source_unavailable";
     if (claim.source === null) {
       source = await readPilotSource({ shop: options.shop, accessToken: options.accessToken,
-        fetcher: options.fetcher, signal: options.signal ?? AbortSignal.timeout(60000) }, orderGid);
+        fetcher: options.fetcher, signal: options.signal ?? AbortSignal.timeout(60000),
+        ...(policy.sourceProjection ? { projection: policy.sourceProjection } : {}) }, orderGid);
       verifyHydration(sourceString(claim.topic), claim.payload, source);
       storageInFlight = true;
       if (await pipelineRpc(options.client, "lean_pipeline_retain", { ...args, p_source: source }) !== true)
@@ -99,13 +106,15 @@ export async function runShopifyPipeline(options: {
       storageInFlight = false;
     } else source = sourceObject(claim.source) as PilotSource;
     phase = "mapping_rejected";
+    if (policy.sourceProjection && source.commerce.projection !== policy.sourceProjection)
+      throw new Error("pipeline_retained_projection_mismatch");
     if (source.commerce.shop !== options.shop || source.commerce.order.id !== orderGid)
       throw new Error("pipeline_scope_mismatch");
     const created = Date.parse(sourceString(source.commerce.order.createdAt));
     if (!Number.isFinite(created) || created < Date.parse(sourceString(claim.fromTime)) ||
         created >= Date.parse(sourceString(claim.untilTime))) throw new Error("pipeline_outside_approved_window");
     verifyHydration(sourceString(claim.topic), claim.payload, source);
-    output = mapPilotSource(source, mappingPolicy(source, sourceObject(claim.policy) as PipelinePolicy),
+    output = mapPilotSource(source, mappingPolicy(source, policy),
       sourceString(claim.publication), `lean_private.pipeline_snapshots/${claim.workId}`);
     output.reports = output.reports.map(row => ({ ...row, definition_version: PIPELINE_VERSION }));
   } catch {

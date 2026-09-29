@@ -1,0 +1,44 @@
+name: Bounded production analytics dispatch
+
+# Review-ready only. Merging installs these trigger definitions, so merge itself
+# requires schedule approval. Jobs remain off unless BOTH repository variables
+# below are explicitly true. No pull-request event can access the runner secret.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/5 * * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mymully-production-analytics-dispatch
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    if: >-
+      github.repository == 'drewmully/newreserve' &&
+      github.ref == 'refs/heads/main' &&
+      vars.LEAN_ANALYTICS_SCHEDULE_ENABLED == 'true' &&
+      vars.LEAN_ANALYTICS_DISPATCH_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.20.1"
+      - name: Advance one saved receipt and check counts-only health
+        env:
+          LEAN_ANALYTICS_SCHEDULE_ENABLED: ${{ vars.LEAN_ANALYTICS_SCHEDULE_ENABLED }}
+          LEAN_ANALYTICS_DISPATCH_ENABLED: ${{ vars.LEAN_ANALYTICS_DISPATCH_ENABLED }}
+          LEAN_ANALYTICS_SCHEDULE_START_AT: ${{ vars.LEAN_ANALYTICS_SCHEDULE_START_AT }}
+          LEAN_ANALYTICS_SCHEDULE_STOP_AT: ${{ vars.LEAN_ANALYTICS_SCHEDULE_STOP_AT }}
+          LEAN_ANALYTICS_RUNNER_ORIGIN: https://www.mymully.com
+          LEAN_ANALYTICS_PIPELINE_PROJECT_REF: xnfjdbpjuaezxjgargto
+          LEAN_ANALYTICS_SUPABASE_URL: https://xnfjdbpjuaezxjgargto.supabase.co
+          LEAN_ANALYTICS_PIPELINE_SECRET: ${{ secrets.LEAN_ANALYTICS_PIPELINE_SECRET }}
+        run: node scripts/analytics/scheduled-pipeline.mjs
