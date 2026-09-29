@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import type { ShopifyProduct } from "@/lib/shopify";
+import { shopProductPhoto } from "@/lib/shopProductPhotos";
 import { useMembership } from "@/app/context/MembershipContext";
 import { money, OUTFIT_SLOTS, variantLabel } from "@/lib/shopOutfit";
 import { SHOP_CATEGORIES, GIFT_TIERS } from "../shopCollections";
@@ -14,6 +15,7 @@ import { ShopPasswordGate } from "./ShopPasswordGate";
 import { ShopOutfitBuilder } from "./ShopOutfitBuilder";
 import "./shop-redesign.css";
 import "./shop-redesign-native.css";
+import "./shop-outfit.css";
 
 const asset = (path: string) => `/shop-redesign/${path}`;
 const LATEST = [
@@ -217,7 +219,7 @@ export function ShopLanding({
                     href={`/shop/collection/${c.handle}`}
                   >
                     {p && (
-                      <img src={p.images[0]} alt={c.label} loading="lazy" />
+                      <img src={shopProductPhoto(p)} alt={c.label} loading="lazy" />
                     )}
                     <span className="tile__go">↗</span>
                     <div className="tile__txt">
@@ -249,7 +251,7 @@ export function ShopLanding({
                 <article className="card" key={p.slug}>
                   <div className="card__media">
                     <a href={`/shop/${p.slug}`}>
-                      <img src={p.images[0]} alt={p.name} loading="lazy" />
+                      <img src={shopProductPhoto(p)} alt={p.name} loading="lazy" />
                     </a>
                     <div className="card__badges">
                       <span className="pill pill--accent">
@@ -359,7 +361,7 @@ export function ShopLanding({
                     <div className="gift__items">
                       {picks.map((p) => (
                         <a key={p.slug} href={`/shop/${p.slug}`} title={p.name}>
-                          <img src={p.images[0]} alt={p.name} loading="lazy" />
+                          <img src={shopProductPhoto(p)} alt={p.name} loading="lazy" />
                           <span>{money(p.price)}</span>
                         </a>
                       ))}
