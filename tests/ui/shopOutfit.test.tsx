@@ -46,6 +46,14 @@ beforeEach(() => {
   mocks.add.mockClear();
 });
 describe("shop outfit offer and handoff", () => {
+  it("keeps the Reserve price in the purchase summary, not the mobile selection footer", () => {
+    const { container } = render(<ShopOutfitBuilder products={products} byCategory={byCategory} />);
+    const footer = container.querySelector(".outfit__mobile-footer")!;
+    expect(footer).not.toHaveTextContent(/Reserve|250|Compare/);
+    expect(container.querySelector(".outfit__summary")).toHaveTextContent("Mully Reserve");
+    expect(container.querySelector(".outfit__summary")).toHaveTextContent("$250");
+    expect(within(footer as HTMLElement).getByRole("button", { name: /Choose top size/ })).toBeInTheDocument();
+  });
   it("discounts exactly one lowest-priced item, with cent rounding", () => {
     expect(outfitEstimate([114, 138, 128])).toEqual({
       subtotal: 380,
@@ -138,14 +146,14 @@ describe("shop outfit offer and handoff", () => {
       ),
     );
     const choices = screen.getByRole("tabpanel");
-    fireEvent.click(within(choices).getByRole("button", { name: /Top 2/ }));
+    fireEvent.click(within(choices).getByRole("button", { name: "Choose Top 2" }));
     expect(
       within(screen.getByRole("group", { name: "Top size" })).getByRole(
         "button",
         { name: "M" },
       ),
     ).toHaveAttribute("aria-pressed", "false");
-    fireEvent.click(within(choices).getByRole("button", { name: /Top 1/ }));
+    fireEvent.click(within(choices).getByRole("button", { name: "Choose Top 1" }));
     expect(
       within(screen.getByRole("group", { name: "Top size" })).getByRole(
         "button",

@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import type { ShopifyProduct } from "@/lib/shopify";
 import { useMembership } from "@/app/context/MembershipContext";
 import { getSizeGuide } from "@/lib/sizeCharts";
+import { shopProductPhoto, shopProductLabel } from "@/lib/shopProductPhotos";
 import {
   OUTFIT_SLOTS,
   OUTFIT_STORAGE_KEY,
@@ -12,7 +13,6 @@ import {
   outfitEstimate,
   outfitOptions,
   variantLabel,
-  outfitProductName,
 } from "@/lib/shopOutfit";
 import { trackEvent } from "@/lib/tracking";
 
@@ -39,6 +39,8 @@ export function ShopOutfitBuilder({
   const [error, setError] = useState("");
   const [fit, setFit] = useState<ShopifyProduct | null>(null);
   const fitRef = useRef<HTMLDialogElement>(null);
+  const [zoom, setZoom] = useState<ShopifyProduct | null>(null);
+  const zoomRef = useRef<HTMLDialogElement>(null);
   const root = useRef<HTMLElement>(null);
   const { addItemsToCart } = useMembership();
   const selected = options.map((list, i) =>
@@ -166,12 +168,9 @@ export function ShopOutfitBuilder({
           <div>
             <h2 className="h2" id="outfitTitle">
               Build your outfit.
-              <br />
-              <em>Make it yours.</em>
             </h2>
             <p className="lede">
-              Choose a top, a bottom, and a layer. Or make it the starting point
-              for Mully Reserve, {money(RESERVE_OUTFIT_PRICE)} per quarter.
+              Pick your pieces. Choose your sizes. Make it yours.
             </p>
           </div>
           <button
@@ -216,11 +215,11 @@ export function ShopOutfitBuilder({
                     }
                   }}
                 >
-                  <span className="outfit-tab__number">{i + 1}</span>
+                  <span className="outfit-tab__number">{selectedVariants[i] ? "✓" : i + 1}</span>
                   {selected[i]?.images[0] && (
                     <img
                       className="outfit-tab__thumb"
-                      src={selected[i]!.images[0]}
+                      src={shopProductPhoto(selected[i]!)}
                       alt=""
                     />
                   )}
@@ -237,13 +236,6 @@ export function ShopOutfitBuilder({
                 </button>
               ))}
             </div>
-            <div className="outfit__workspace-head">
-              <div>
-                <h3>Choose your {OUTFIT_SLOTS[active].label.toLowerCase()}.</h3>
-                <p>Tap a piece, then choose your size.</p>
-              </div>
-              <span id="outfitStepCount">0{active + 1} / 03</span>
-            </div>
             <div
               id="outfitCards"
               role="tabpanel"
@@ -253,6 +245,7 @@ export function ShopOutfitBuilder({
                 <article className="outfit-choice" key={p.slug}>
                   <button
                     className="outfit-choice__pick"
+                    aria-label={`Choose ${p.name}`}
                     aria-pressed={indices[active] === i}
                     onClick={() => {
                       setIndices((xs) =>
@@ -262,15 +255,15 @@ export function ShopOutfitBuilder({
                     }}
                   >
                     <span className="outfit-choice__image">
-                      {p.images[0] && <img src={p.images[0]} alt={p.name} />}
+                      {p.images[0] && <img src={shopProductPhoto(p)} alt={p.name} />}
                       <span className="outfit-choice__check" aria-hidden>
                         {indices[active] === i ? "✓" : "+"}
                       </span>
                     </span>
                     <span className="outfit-choice__meta">
                       <span className="outfit-choice__brand">{p.brand}</span>
-                      <span className="outfit-choice__name">
-                        {outfitProductName(p)}
+                      <span className="outfit-choice__name" title={p.name}>
+                        {shopProductLabel(p)}
                       </span>
                       <span className="outfit-choice__foot">
                         <span>{money(p.price)}</span>
@@ -281,10 +274,14 @@ export function ShopOutfitBuilder({
                     </span>
                   </button>
                   <button
-                    className="outfit-choice__details"
-                    onClick={() => showFit(p)}
+                    className="outfit-choice__zoom"
+                    aria-label={`Enlarge ${p.name} photo`}
+                    onClick={() => {
+                      setZoom(p);
+                      zoomRef.current?.showModal();
+                    }}
                   >
-                    Details &amp; fit ↗
+                    ⤢
                   </button>
                 </article>
               ))}
@@ -333,7 +330,7 @@ export function ShopOutfitBuilder({
                       </button>
                     ))}
                   </div>
-                  {current.variants.every(v => !v.availableForSale) && <p className="outfit__stock-note">Unavailable to buy now. Sizes can still guide Reserve.</p>}
+                  {current.variants.every(v => !v.availableForSale) && <p className="outfit__stock-note">Sold out · Select a size for your Reserve style guide.</p>}
                 </>
               ) : (
                 <p>Select a piece to see its sizes.</p>
@@ -341,7 +338,7 @@ export function ShopOutfitBuilder({
             </div>
             <div className="outfit__next">
               <span>
-                Just want one piece? Remove the others from your outfit.
+                Tap a photo to switch. Your sizes stay saved.
               </span>
               <button
                 onClick={() => (active < 2 ? tab(active + 1) : reviewOutfit())}
@@ -370,7 +367,7 @@ export function ShopOutfitBuilder({
                 >
                   <span className="outfit__board-label">{s.label} ↗</span>
                   {selected[i]?.images[0] ? (
-                    <img src={selected[i]!.images[0]} alt={selected[i]!.name} />
+                    <img src={shopProductPhoto(selected[i]!)} alt={selected[i]!.name} />
                   ) : (
                     <span className="outfit__placeholder">+</span>
                   )}
@@ -382,7 +379,7 @@ export function ShopOutfitBuilder({
                 <li key={s.label}>
                   <button className="outfit__line-name" onClick={() => tab(i)}>
                     {selected[i]
-                      ? outfitProductName(selected[i]!)
+                      ? shopProductLabel(selected[i]!)
                       : `+ Choose a ${s.label.toLowerCase()}`}
                     <span className="outfit__line-size">
                       {selectedVariants[i]
@@ -461,20 +458,16 @@ export function ShopOutfitBuilder({
                 </span>
               </label>
             </fieldset>
-            <p className="outfit__terms">
+            <p className="outfit__terms" aria-live="polite">
               {mode === "reserve"
                 ? "Reserve checkout: $250/quarter. Cancel after your first quarter, before renewal. Exact styles depend on availability."
-                : "15% off one lowest-priced item with 2+. Shopify confirms eligibility and your final total in the bag."}
+                : unavailable
+                  ? "Selected sizes are sold out. Edit your pieces, or use them as a Reserve style guide."
+                  : "15% off one lowest-priced item with 2+. Shopify confirms eligibility and your final total in the bag."}
             </p>
             {error && (
               <p className="outfit-error" role="alert">
                 {error}
-              </p>
-            )}
-            {unavailable && mode === "once" && (
-              <p className="outfit-error" role="status">
-                Selected option unavailable. Change the size or view product
-                details.
               </p>
             )}
             <button
@@ -492,22 +485,15 @@ export function ShopOutfitBuilder({
                   ? "Choose remaining sizes →"
                   : mode === "reserve"
                     ? "Continue with Mully Reserve →"
-                    : `Add ${chosen.length === 1 ? "piece" : "outfit"} to bag`}
+                    : unavailable
+                      ? "Selected sizes sold out"
+                      : `Add ${chosen.length === 1 ? "piece" : "outfit"} to bag`}
             </button>
             <p className="outfit__fine">
               No subscription unless you enroll in Reserve.
             </p>
           </aside>
           <div className="outfit__mobile-footer">
-            {full && (
-              <button className="outfit__compare" onClick={reviewOutfit}>
-                <span>
-                  <strong>Or Mully Reserve, $250</strong>
-                  <small>Quarterly curation, inspired by your picks</small>
-                </span>
-                <span>Compare →</span>
-              </button>
-            )}
             <button
               className="btn btn--accent btn--block"
               onClick={() => {
@@ -529,6 +515,16 @@ export function ShopOutfitBuilder({
           Shopify.
         </p>
       </div>
+      <dialog className="outfit-fit outfit-photo" ref={zoomRef} aria-labelledby="outfitPhotoTitle">
+        <div className="outfit-fit__head">
+          <h2 id="outfitPhotoTitle">{zoom ? shopProductLabel(zoom) : "Product photo"}</h2>
+          <button onClick={() => zoomRef.current?.close()} aria-label="Close enlarged photo">×</button>
+        </div>
+        {zoom && <>
+          <img src={shopProductPhoto(zoom)} alt={zoom.name} />
+          <button className="outfit-photo__fit" onClick={() => { zoomRef.current?.close(); showFit(zoom); }}>Size &amp; fit ↗</button>
+        </>}
+      </dialog>
       <dialog
         className="outfit-fit"
         ref={fitRef}
