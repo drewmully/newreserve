@@ -1,17 +1,24 @@
 import { randomUUID } from "node:crypto";
+import { isDeepStrictEqual } from "node:util";
 import type { AnalyticsRpcClient } from "./rpcStore";
 import { readPilotSource, type PilotSource } from "./shopifyPilotSource";
 import { mapPilotSource, type PilotPolicy } from "./shopifyPilotMapping";
 import { sourceObject, sourceArray, sourceString, shopifyId, shopifyShop } from "./shopifySource";
 import type { HistoryInventory } from "./historyInventory";
 import type { PartitionInventory } from "./partitionInventory";
+import { FINANCIAL_RETENTION, projectPilotRetention } from "./shopifyRetention";
+import { composeRetainedOrderReports } from "./shopifyRetainedOrder";
 
 export const PIPELINE_VERSION = "shopify-observed-v1";
 export type PipelinePolicy = Omit<PilotPolicy, "lineClasses"> & {
   productClasses: Record<string, "merchandise">;
   /** Operator-owned, persisted in each claimed snapshot policy. Omission keeps
    * the legacy query; this does not minimize the separately stored webhook. */
-  sourceProjection?: "financial_no_geo";
+  sourceProjection?: "financial_no_geo" | "financial_no_geo_order_size";
+  /** Explicit immutable retention policy; never silently sanitize old snapshots. */
+  sourceRetention?: typeof FINANCIAL_RETENTION;
+  /** Separate explicit sink: omission preserves the existing 017 finish RPC. */
+  retainedReports?: "product-v1";
   sourceInventory?: HistoryInventory;
   partitionInventory?: PartitionInventory;
 };
@@ -86,12 +93,31 @@ export async function runShopifyPipeline(options: {
     throw new Error("pipeline_invalid_claim");
   const args = { p_work_id: claim.workId, p_token: token };
   let output: ReturnType<typeof mapPilotSource>;
+  let productReports: ReturnType<typeof composeRetainedOrderReports>["productReports"] | undefined;
   let storageInFlight = false;
   let phase = "invalid_receipt";
   try {
     const policy = sourceObject(claim.policy) as PipelinePolicy;
-    if (policy.sourceProjection !== undefined && policy.sourceProjection !== "financial_no_geo")
+    if (policy.retainedReports !== undefined && policy.retainedReports !== "product-v1")
+      throw new Error("pipeline_invalid_report_sink");
+    if (policy.sourceProjection !== undefined &&
+        !["financial_no_geo", "financial_no_geo_order_size"].includes(policy.sourceProjection))
       throw new Error("pipeline_invalid_source_projection");
+    if (policy.sourceRetention !== undefined && (policy.sourceRetention !== FINANCIAL_RETENTION ||
+        !["financial_no_geo", "financial_no_geo_order_size"].includes(policy.sourceProjection ?? "")))
+      throw new Error("pipeline_invalid_source_retention");
+    if (policy.orderSize !== undefined && (!policy.orderSize || policy.retainedReports !== "product-v1" ||
+        policy.sourceProjection !== "financial_no_geo_order_size"))
+      throw new Error("pipeline_invalid_size_sink");
+    if (policy.sourceProjection === "financial_no_geo_order_size" && !policy.orderSize)
+      throw new Error("pipeline_size_policy_required");
+    if (policy.orderSize) {
+      const size = sourceObject(policy.orderSize), semantics = sourceObject(size.productSemantics);
+      if (typeof size.policyRef !== "string" || !size.policyRef.trim() || !Object.keys(semantics).length ||
+          Object.entries(semantics).some(([id, value]) => !/^[1-9]\d*$/.test(id) ||
+            typeof value !== "string" || !["requested_box_top_size", "purchased_shirt_variant"].includes(value)))
+        throw new Error("pipeline_invalid_size_policy");
+    }
     const orderGid = receiptOrderGid(sourceString(claim.topic), claim.payload);
     let source: PilotSource;
     phase = "source_unavailable";
@@ -100,12 +126,15 @@ export async function runShopifyPipeline(options: {
         fetcher: options.fetcher, signal: options.signal ?? AbortSignal.timeout(60000),
         ...(policy.sourceProjection ? { projection: policy.sourceProjection } : {}) }, orderGid);
       verifyHydration(sourceString(claim.topic), claim.payload, source);
+      if (policy.sourceRetention) source = projectPilotRetention(source);
       storageInFlight = true;
       if (await pipelineRpc(options.client, "lean_pipeline_retain", { ...args, p_source: source }) !== true)
         return { state: "lost_lease" };
       storageInFlight = false;
     } else source = sourceObject(claim.source) as PilotSource;
     phase = "mapping_rejected";
+    if (policy.sourceRetention && !isDeepStrictEqual(source, projectPilotRetention(source)))
+      throw new Error("pipeline_retained_shape_mismatch");
     if (policy.sourceProjection && source.commerce.projection !== policy.sourceProjection)
       throw new Error("pipeline_retained_projection_mismatch");
     if (source.commerce.shop !== options.shop || source.commerce.order.id !== orderGid)
@@ -114,17 +143,26 @@ export async function runShopifyPipeline(options: {
     if (!Number.isFinite(created) || created < Date.parse(sourceString(claim.fromTime)) ||
         created >= Date.parse(sourceString(claim.untilTime))) throw new Error("pipeline_outside_approved_window");
     verifyHydration(sourceString(claim.topic), claim.payload, source);
-    output = mapPilotSource(source, mappingPolicy(source, policy),
-      sourceString(claim.publication), `lean_private.pipeline_snapshots/${claim.workId}`);
-    output.reports = output.reports.map(row => ({ ...row, definition_version: PIPELINE_VERSION }));
+    const mappedPolicy = mappingPolicy(source, policy);
+    const publication = sourceString(claim.publication), evidence = `lean_private.pipeline_snapshots/${claim.workId}`;
+    if (policy.retainedReports === "product-v1") {
+      const composed = composeRetainedOrderReports(source, mappedPolicy, publication, evidence, PIPELINE_VERSION,
+        policy.orderSize ? { orderSizeSidecar: true } : undefined);
+      output = composed;
+      productReports = composed.productReports;
+    } else {
+      output = mapPilotSource(source, mappedPolicy, publication, evidence);
+      output.reports = output.reports.map(row => ({ ...row, definition_version: PIPELINE_VERSION }));
+    }
   } catch {
     if (storageInFlight) throw new Error("pipeline_storage_ambiguous");
     const failed = await pipelineRpc(options.client, "lean_pipeline_fail", { ...args, p_code: phase });
     return { state: failed === true ? "failed" : "lost_lease" };
   }
   // No catch-and-fail around finish: its response may be lost AFTER commit.
-  const finished = await pipelineRpc(options.client, "lean_pipeline_finish", {
+  const finished = await pipelineRpc(options.client, productReports ? "lean_pipeline_finish_extended" : "lean_pipeline_finish", {
     ...args, p_facts: output.facts, p_reports: output.reports,
+    ...(productReports ? { p_product_reports: productReports, p_order_item_sizes: output.order_item_sizes ?? null } : {}),
   });
   if (typeof finished !== "boolean") throw new Error("pipeline_invalid_finish");
   return { state: finished ? "done" : "lost_lease" };
