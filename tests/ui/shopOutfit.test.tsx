@@ -138,14 +138,14 @@ describe("shop outfit offer and handoff", () => {
       ),
     );
     const choices = screen.getByRole("tabpanel");
-    fireEvent.click(within(choices).getByRole("button", { name: /Top 2/ }));
+    fireEvent.click(within(choices).getByRole("button", { name: "Choose Top 2" }));
     expect(
       within(screen.getByRole("group", { name: "Top size" })).getByRole(
         "button",
         { name: "M" },
       ),
     ).toHaveAttribute("aria-pressed", "false");
-    fireEvent.click(within(choices).getByRole("button", { name: /Top 1/ }));
+    fireEvent.click(within(choices).getByRole("button", { name: "Choose Top 1" }));
     expect(
       within(screen.getByRole("group", { name: "Top size" })).getByRole(
         "button",
