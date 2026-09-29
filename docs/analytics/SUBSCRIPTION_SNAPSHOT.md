@@ -98,3 +98,52 @@ external gates. A current snapshot must not be backdated into a trend.
 Local check: `npx vitest run tests/api/analyticsLeanSubscriptions.test.ts --project api`.
 Use `TZ=UTC` and `TZ=America/Los_Angeles`; analytics typecheck and focused ESLint
 use the repository's existing tools.
+
+## Separate default-off collection mechanics increment
+
+`subscriptionCollection.ts` adds an injected-transport, read-only adapter to the
+snapshot builder. It does **not** wire a route, credential, environment variable
+or automatic import. `enabled` must be exactly true, and there is no default
+transport. No customer endpoint was called during implementation.
+
+Public official documentation read on 2026-09-29 establishes the current
+[2026-04 list endpoint](https://developer.loopwork.co/reference/read-all-subscriptions):
+`GET /admin/2026-04/subscription`, optional ACTIVE/PAUSED/CANCELLED/EXPIRED
+status filter, pageSize maximum 100, descending ID order, and rate limit
+2 requests/3 seconds. The [pagination specification](https://developer.loopwork.co/reference/pagination)
+uses `afterCursor` and `pageInfo.nextCursor` / `hasNextPage`, **not legacy
+pageNo**. The page's embedded public OpenAPI schema confirms customer.shopifyId,
+updatedAt, currencyCode, nextBillingDateEpoch, billingPolicy, isPrepaid and
+string lines[].price plus integer quantity. It also documents extensive PII and
+discount/prepaid fields: display price still does not prove a complete recurring
+amount. The legacy version URLs could not be fetched; this increment explicitly
+implements the documented 2026-04 contract, not a silent upgrade of loopRocks.
+
+The adapter supports an unfiltered read or one explicit documented status.
+A filter cannot be narrower than the count policy. It spaces reads by 1.6 seconds,
+uses a 30-second whole-operation deadline, and caps pages (20), response bytes
+(4 MB), rows (1,000) and requested pageSize (100, reduced to the remaining row
+budget before each read). Transport receives only a
+fixed-version relative GET path, `redirect="error"` and an AbortSignal; later
+authenticated transport must independently bind the approved host/shop and
+honor cancellation. No token, header, URL base or raw error is accepted/returned.
+Per-call spacing is not a shared domain limiter: future live transport must
+coordinate concurrent callers. Target binding remains explicitly unverified.
+
+Raw provider responses—including addresses, email, payment metadata and opaque
+cursors—are **transiently exposed in process memory**. Streamed bytes are bounded,
+only allowlisted nested fields enter the existing strict normalizer, and errors
+are redacted. No raw payload, customer ID or cursor is returned, logged or stored.
+Outputs contain private pseudonymous rows plus local operation timestamps,
+page counts/byte totals, projected
+page digests, request-cursor digests and exact observed revision timestamps.
+Those are finite reconciliation evidence, not a circular proof of completeness.
+
+Termination reports `pagination_ended`, `page_limit` or `row_limit`, never import completion.
+Even the final false marker leaves `scopeComplete=false` and all aggregate
+values withheld: public docs provide no atomic snapshot/consistent-cut guarantee.
+Conflicting duplicated revisions and cursor cycles fail closed. No recurring
+amount evidence is inferred; collection requires `recurringValue=null`.
+Source authorization, production token/version compatibility, capture-consistency
+reconciliation, nested completeness and business-policy approval remain gates.
+Any later release of numeric metrics must review that evidence separately.
