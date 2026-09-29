@@ -8,7 +8,7 @@ import { acceptShopifyReceipt } from "@/lib/analytics/receipts";
 import { createReceiptStore, type AnalyticsRpcClient } from "@/lib/analytics/rpcStore";
 import { mapPilotSource } from "@/lib/analytics/shopifyPilotMapping";
 import { type PilotSource, PILOT_FINANCIAL_QUERY, PILOT_REFUND_QUERY } from "@/lib/analytics/shopifyPilotSource";
-import { SHOPIFY_ANALYTICS_ORDER_QUERY, sourceObject } from "@/lib/analytics/shopifySource";
+import { SHOPIFY_ANALYTICS_ORDER_QUERY, SHOPIFY_FINANCIAL_ORDER_QUERY, sourceObject } from "@/lib/analytics/shopifySource";
 import { POST, GET } from "@/app/api/analytics/ingest/process/route";
 import { dispatchConfig, dispatchOnce } from "../../scripts/analytics/dispatch-pipeline.mjs";
 
@@ -54,14 +54,15 @@ function fixture(id = "9007199254740993", revision = "2026-01-02T15:00:00Z", ref
         processedAt: "2026-01-02T12:01:00Z", amountSet: money("6") }]) }] : [],
   };
 }
-function shopify(source = fixture()) {
+function shopify(source = fixture(), projection?: "financial_no_geo") {
   return vi.fn<typeof fetch>(async (url, init) => {
     expect(url).toBe(`https://${shop}/admin/api/2026-07/graphql.json`);
     const { query, variables } = JSON.parse(String(init?.body));
     expect(query.trim().startsWith("query ")).toBe(true);
     expect(init?.redirect).toBe("error");
     let data;
-    if (query === SHOPIFY_ANALYTICS_ORDER_QUERY) data = { order: source.commerce.order };
+    if (query === (projection ? SHOPIFY_FINANCIAL_ORDER_QUERY : SHOPIFY_ANALYTICS_ORDER_QUERY))
+      data = { order: source.commerce.order };
     else if (query === PILOT_FINANCIAL_QUERY) data = { order: source.financial };
     else {
       expect(query).toBe(PILOT_REFUND_QUERY);
@@ -123,6 +124,51 @@ async function finishArgs(source = fixture(), token = randomUUID()) {
   return { ...args, p_facts: mapped.facts, p_reports: mapped.reports.map(r => ({ ...r, definition_version: PIPELINE_VERSION })) };
 }
 describe("automatic verified receipt -> Shopify hydration -> durable candidate -> latest observed report", () => {
+  it("uses an explicitly saved financial-only projection through the existing reader and SQL completion", async () => {
+    await db.exec(`update lean_private.pipeline_scope set
+      policy=jsonb_set(policy,'{sourceProjection}','"financial_no_geo"'),approval_ref='fixture:minimized'`);
+    await receipt();
+    const source = fixture();
+    delete source.commerce.order.shippingAddress;
+    const fetcher = shopify(source, "financial_no_geo");
+    expect(await run(fetcher)).toEqual({ state: "done" });
+    const queries = fetcher.mock.calls.map(([, init]) => JSON.parse(String(init?.body)).query);
+    expect(queries).toContain(SHOPIFY_FINANCIAL_ORDER_QUERY);
+    expect(queries).not.toContain(SHOPIFY_ANALYTICS_ORDER_QUERY);
+    expect(SHOPIFY_FINANCIAL_ORDER_QUERY).not.toMatch(/\b(customer|shippingAddress|cartToken|customAttributes)\b/);
+    expect(await query(`select policy->>'sourceProjection' policy_projection,
+      source#>>'{commerce,projection}' retained_projection from lean_private.pipeline_snapshots`))
+      .toEqual([{ policy_projection: "financial_no_geo", retained_projection: "financial_no_geo" }]);
+    expect(await query("select total_sales_usd::text sales,collected_cash_usd from lean_analytics.observed_order_daily"))
+      .toEqual([{ sales: "27.000000", collected_cash_usd: null }]);
+  });
+
+  it("rejects an invalid saved projection before reading or retaining any source", async () => {
+    await db.exec(`update lean_private.pipeline_scope set
+      policy=jsonb_set(policy,'{sourceProjection}','"unknown"'),approval_ref='fixture:invalid-projection'`);
+    await receipt();
+    const fetcher = vi.fn<typeof fetch>();
+    expect(await run(fetcher)).toEqual({ state: "failed" });
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(await query("select source from lean_private.pipeline_snapshots")).toEqual([{ source: null }]);
+    expect(await query("select * from lean_analytics.observed_order_daily")).toEqual([]);
+  });
+
+  it("rejects a retained broader source without refetching or silently changing its projection", async () => {
+    await db.exec(`update lean_private.pipeline_scope set
+      policy=jsonb_set(policy,'{sourceProjection}','"financial_no_geo"'),approval_ref='fixture:minimized'`);
+    await receipt();
+    const token = randomUUID();
+    const saved = sourceObject((await claim(token)).data);
+    expect((await client.rpc("lean_pipeline_retain",
+      { p_work_id: saved.workId, p_token: token, p_source: fixture() })).data).toBe(true);
+    await db.exec("update lean_private.work set lease_until=clock_timestamp()-interval '1 second'");
+    const fetcher = vi.fn<typeof fetch>();
+    expect(await run(fetcher)).toEqual({ state: "failed" });
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(await query("select * from lean_analytics.observed_order_daily")).toEqual([]);
+  });
+
   it("automatically processes two orders with independent totals and no per-order registration", async () => {
     await receipt(); expect(await run()).toEqual({ state: "done" });
     await receipt(undefined, "99"); expect(await run(shopify(fixture("99")))).toEqual({ state: "done" });
