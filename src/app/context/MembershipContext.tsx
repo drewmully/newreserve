@@ -23,6 +23,7 @@ import {
   cartLinesAdd,
   cartLinesRemove,
   cartLinesUpdate,
+  cartDiscountCodesUpdate,
   updateCartBuyerIdentity,
   getCart,
   type ShopifyCart,
@@ -84,6 +85,7 @@ export interface CartItem {
   quantity: number;
   /** Shopify variant GID — required for Storefront cart mutations */
   variantId?: string;
+  variantTitle?: string;
   /** Shopify cart line ID — required for update / remove */
   lineId?: string;
   /** Product thumbnail URL */
@@ -186,9 +188,11 @@ interface MembershipContextValue {
   cartId: string | null;
   cartCheckoutUrl: string | null;
   cartLoading: boolean;
+  cartOfferNotice: string;
   cartOpen: boolean;
   setCartOpen: (open: boolean) => void;
   addToCart: (item: Omit<CartItem, "quantity">) => Promise<void>;
+  addItemsToCart: (items: Omit<CartItem, "quantity">[], discountCode?: string) => Promise<void>;
   removeFromCart: (slug: string) => Promise<void>;
   updateCartItem: (lineId: string, quantity: number) => Promise<void>;
   cartCount: number;
@@ -342,7 +346,9 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
   const [cartId, setCartId] = useState<string | null>(null);
   const [cartCheckoutUrl, setCartCheckoutUrl] = useState<string | null>(null);
   const [cartLoading, setCartLoading] = useState(false);
+  const [cartOfferNotice, setCartOfferNotice] = useState("");
   const [cartOpen, setCartOpen] = useState(false);
+  const batchInFlight = useRef(false);
 
   // Refs keep the latest values accessible inside async callbacks without
   // stale-closure issues (no need to list them in useCallback deps).
@@ -418,6 +424,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
         retailPrice: line.retailPrice,
         quantity: line.quantity,
         variantId: line.variantId,
+        variantTitle: line.variantTitle,
         lineId: line.id,
         image: line.image,
       }))
@@ -802,18 +809,70 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
 
   /* ── Cart actions ── */
 
+  // Batch real variants in one mutation. Never show a simulated successful bag.
+  const addItemsToCart = useCallback(async (
+    items: Omit<CartItem, "quantity">[], discountCode?: string
+  ) => {
+    if (batchInFlight.current) throw new Error("Your bag is still updating.");
+    if (!items.length || items.some(item => !/^gid:\/\/shopify\/ProductVariant\/\d+$/.test(item.variantId || ""))) {
+      throw new Error("Choose an available size for every piece.");
+    }
+    batchInFlight.current = true;
+    setCartLoading(true);
+    try {
+      const lines = items.map(item => ({ merchandiseId: item.variantId!, quantity: 1 }));
+      const before = cartIdRef.current ? await getCart(cartIdRef.current) : null;
+      let result = before
+        ? await cartLinesAdd(before.id, lines)
+        : await cartCreate(lines, undefined, getProjectCartAttributes());
+      syncFromShopifyCart(result);
+      persistCartIdLocally(user?.uid ?? null, result.id);
+      if (user?.uid) void persistCartId(user.uid, result.id);
+      // Keep existing codes; Shopify decides eligibility and the actual savings.
+      if (discountCode) {
+        try {
+          result = await cartDiscountCodesUpdate(result.id, Array.from(new Set([
+            ...(result.discountCodes ?? []).map(code => code.code), discountCode,
+          ])));
+          syncFromShopifyCart(result);
+          setCartOfferNotice(result.discountCodes?.some(code => code.code.toLowerCase() === discountCode.toLowerCase() && code.applicable)
+            ? "" : `${discountCode} has not been applied. This bag shows Shopify's current price; confirm the offer before checking out.`);
+        } catch (error) {
+          console.error("[Cart] discount refresh failed; bag remains valid", error);
+          setCartOfferNotice("We couldn't verify the offer. This bag shows Shopify's current price.");
+        }
+      }
+      if (user?.email) void bindCartBuyerIdentity(result.id, user.email);
+      setCartOpen(true);
+      for (const item of items) void trackEvent("add_to_cart", {
+        product_id: item.slug, variant_id: item.variantId, name: item.name,
+        brand: item.brand, value: item.price, quantity: 1, user_id: user?.uid,
+      });
+      // Stock can change between browsing and mutation; show the actual bag.
+      const complete = lines.every(line => {
+        const oldQty = before?.lines.filter(x => x.variantId === line.merchandiseId).reduce((n,x) => n+x.quantity,0) ?? 0;
+        const newQty = result.lines.filter(x => x.variantId === line.merchandiseId).reduce((n,x) => n+x.quantity,0);
+        return newQty >= oldQty + lines.filter(x => x.merchandiseId === line.merchandiseId).length;
+      });
+      if (!complete) throw new Error("Some sizes changed availability. Review your bag before trying again.");
+    } finally {
+      batchInFlight.current = false;
+      setCartLoading(false);
+    }
+  }, [user, syncFromShopifyCart, persistCartId, persistCartIdLocally, bindCartBuyerIdentity]);
+
   const addToCart = useCallback(
     async (item: Omit<CartItem, "quantity">) => {
       // Capture pre-update snapshot via ref (avoids stale closure on cart state)
       const current = cartRef.current;
-      const existing = current.find((c) => c.slug === item.slug);
+      const existing = current.find((c) => item.variantId ? c.variantId === item.variantId : c.slug === item.slug);
       const newQty = existing ? existing.quantity + 1 : 1;
 
       // Optimistic local update
       if (existing) {
         setCart((prev) =>
           prev.map((c) =>
-            c.slug === item.slug ? { ...c, quantity: c.quantity + 1 } : c
+            c === existing ? { ...c, quantity: c.quantity + 1 } : c
           )
         );
       } else {
@@ -887,11 +946,11 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
 
   const removeFromCart = useCallback(
     async (slug: string) => {
-      const item = cartRef.current.find((c) => c.slug === slug);
+      const item = cartRef.current.find((c) => c.lineId === slug) ?? cartRef.current.find((c) => c.slug === slug);
       if (!item) return;
 
       // Optimistic removal
-      setCart((prev) => prev.filter((c) => c.slug !== slug));
+      setCart((prev) => prev.filter((c) => item.lineId ? c.lineId !== item.lineId : c !== item));
 
       if (!cartIdRef.current || !item.lineId) return;
 
@@ -911,7 +970,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
     async (lineId: string, quantity: number) => {
       if (quantity <= 0) {
         const item = cartRef.current.find((c) => c.lineId === lineId);
-        if (item) await removeFromCart(item.slug);
+        if (item) await removeFromCart(item.lineId ?? item.slug);
         return;
       }
 
@@ -1154,9 +1213,11 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
         cartId,
         cartCheckoutUrl,
         cartLoading,
+        cartOfferNotice,
         cartOpen,
         setCartOpen,
         addToCart,
+        addItemsToCart,
         removeFromCart,
         updateCartItem,
         cartCount,

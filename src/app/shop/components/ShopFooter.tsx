@@ -7,7 +7,7 @@ import { MullyWordmark } from "./MullyWordmark";
  */
 export function ShopFooter({ accent }: { accent: string }) {
   return (
-    <footer className="border-t border-charcoal/10 bg-white">
+    <footer id="shop-site-footer" className="border-t border-charcoal/10 bg-white">
       <div className="mx-auto max-w-7xl px-6 py-14 md:px-12 md:py-20">
         <div className="grid gap-10 md:grid-cols-[2fr,1fr,1fr]">
           {/* Wordmark + tagline */}
