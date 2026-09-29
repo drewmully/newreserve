@@ -1,4 +1,5 @@
 import { collectPages } from "./primitives";
+import { projectOrderSizeOrder } from "./shopifyOrderSize";
 
 export const SHOPIFY_ANALYTICS_API_VERSION = "2026-07";
 export type SourceObject = Record<string, unknown>;
@@ -86,7 +87,12 @@ query AnalyticsOrder($id: ID!, $cursor: String) {
 export const SHOPIFY_FINANCIAL_CUSTOMER_QUERY = SHOPIFY_FINANCIAL_ORDER_QUERY.replace(
   "id createdAt updatedAt currencyCode", "customer { id }\n    id createdAt updatedAt currencyCode",
 );
-export type ShopifyProjection = "financial_no_geo" | "financial_customer_id";
+/** Separate opt-in; never change financial_no_geo's query or retained shape. */
+export const SHOPIFY_FINANCIAL_ORDER_SIZE_QUERY = SHOPIFY_FINANCIAL_ORDER_QUERY.replace(
+  "id sku quantity isGiftCard product { id }",
+  "id sku quantity isGiftCard product { id }\n        variantTitle customAttributes { key value }",
+);
+export type ShopifyProjection = "financial_no_geo" | "financial_customer_id" | "financial_no_geo_order_size";
 
 export type ShopifyOrderDocument = {
   shop: string;
@@ -104,9 +110,10 @@ export async function readShopifyAnalyticsOrder(options: ReaderOptions, orderGid
   const shop = shopifyShop(options.shop);
   shopifyId(orderGid, "Order");
   if (!options.accessToken.trim()) throw new Error("missing_shopify_access_token");
-  if (options.projection !== undefined && !["financial_no_geo", "financial_customer_id"].includes(options.projection))
+  if (options.projection !== undefined && !["financial_no_geo", "financial_customer_id", "financial_no_geo_order_size"].includes(options.projection))
     throw new Error("shopify_invalid_projection");
-  const query = options.projection === "financial_customer_id" ? SHOPIFY_FINANCIAL_CUSTOMER_QUERY :
+  const query = options.projection === "financial_no_geo_order_size" ? SHOPIFY_FINANCIAL_ORDER_SIZE_QUERY :
+    options.projection === "financial_customer_id" ? SHOPIFY_FINANCIAL_CUSTOMER_QUERY :
     options.projection === "financial_no_geo" ? SHOPIFY_FINANCIAL_ORDER_QUERY : SHOPIFY_ANALYTICS_ORDER_QUERY;
   const fetcher = options.fetcher ?? fetch;
   async function request(cursor: string | null): Promise<SourceObject> {
@@ -127,7 +134,9 @@ export async function readShopifyAnalyticsOrder(options: ReaderOptions, orderGid
     // Reject partial GraphQL data as well as errors-only responses; never log raw errors.
     if (body.errors !== undefined && (!Array.isArray(body.errors) || body.errors.length))
       throw new Error("shopify_graphql_failed");
-    const order = sourceObject(sourceObject(body.data).order);
+    const rawOrder = sourceObject(sourceObject(body.data).order);
+    // Sanitize every page (including revision rechecks) before retaining it.
+    const order = options.projection === "financial_no_geo_order_size" ? projectOrderSizeOrder(rawOrder) : rawOrder;
     if (order.id !== orderGid) throw new Error("shopify_wrong_order");
     return order;
   }
