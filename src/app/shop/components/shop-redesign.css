@@ -338,9 +338,10 @@
 .shop-redesign .toast.is-on{opacity:1;transform:translate(-50%,0)}
 
 /* reveals */
-.shop-redesign .reveal{opacity:0;transform:translateY(22px);transition:opacity .7s var(--ease),transform .7s var(--ease)}
+.shop-redesign .reveal{opacity:1;transform:none;transition:opacity .7s var(--ease),transform .7s var(--ease)}
 .shop-redesign .reveal.in{opacity:1;transform:none}
-.shop-redesign .grid .card,.shop-redesign .tiles .tile{opacity:0;transform:translateY(18px);transition:opacity .6s var(--ease),transform .6s var(--ease)}
+/* Merchandise is visible without an animation observer or hydration. */
+.shop-redesign .grid .card,.shop-redesign .tiles .tile{opacity:1;transform:none;transition:opacity .6s var(--ease),transform .6s var(--ease)}
 .shop-redesign .grid.in .card,.shop-redesign .tiles.in .tile{opacity:1;transform:none}
 .shop-redesign .grid.in .card:hover{transform:translateY(-4px)}
 @media(prefers-reduced-motion:reduce){.shop-redesign .reveal,.shop-redesign .grid .card,.shop-redesign .tiles .tile{opacity:1;transform:none;transition:none}}

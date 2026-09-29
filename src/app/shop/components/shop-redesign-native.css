@@ -20,6 +20,7 @@
 .shop-redesign .quick-select select{display:block;width:100%;font-size:16px;padding:12px;margin-top:8px;border:1px solid var(--line);background:white}
 .shop-redesign .outfit-fit .btn:disabled{opacity:.5;cursor:not-allowed}
 .shop-redesign .dock{z-index:40}
+.shop-redesign .dock__copy span{display:block}
 .shop-redesign .signup{align-items:center}
 @media(min-width:961px) and (min-height:560px){
  .shop-redesign .outfit.sec{min-height:0;height:calc(100dvh - 96px)}
@@ -33,6 +34,14 @@
  .shop-redesign .outfit__line-name{font-size:10px}
  .shop-redesign .outfit__terms{font-size:10px}
  .shop-redesign .outfit__preview{font-size:9px}
+}
+@media(max-width:820px){
+ /* Keep mobile quick-add below the photo, not over the merchandise. */
+ .shop-redesign .card__media{height:auto;padding-bottom:0;overflow:visible}
+ .shop-redesign .card__media>a{position:relative;height:auto;aspect-ratio:4/5}
+ .shop-redesign .card__quick{display:block;position:static;width:100%;min-height:44px;margin:8px 0 0;padding:10px 6px;font-size:10px;letter-spacing:.06em;transform:none}
+ .shop-redesign .card__badges{display:none}
+ .shop-redesign .dock__copy span{display:none}
 }
 @media(max-width:360px) and (max-height:600px){
  .shop-redesign .outfit.is-review .outfit__summary{min-height:0;padding:8px}
