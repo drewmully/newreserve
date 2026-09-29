@@ -1,4 +1,5 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { FINANCIAL_RETENTION, projectReceiptRetention } from "./shopifyRetention";
 export type Receipt = {
   source: "shopify"; deliveryId: string; businessKey: string;
   topic: string; payloadHash: string; payload: Record<string, unknown>;
@@ -9,6 +10,7 @@ const topics = new Set(["orders/paid", "orders/updated", "orders/cancelled", "re
 export async function acceptShopifyReceipt(input: {
   body: Buffer; signature: string; secret: string; deliveryId: string;
   topic: string; shop: string; allowedShop: string;
+  retention?: typeof FINANCIAL_RETENTION;
 }, store: ReceiptStore): Promise<string> {
   if (!input.secret || !input.allowedShop || input.shop !== input.allowedShop ||
       input.body.length > 1024 * 1024 || !topics.has(input.topic) ||
@@ -17,6 +19,8 @@ export async function acceptShopifyReceipt(input: {
   if (!/^[A-Za-z0-9+/]{43}=$/.test(input.signature)) throw new Error("invalid_signature");
   const actual = Buffer.from(input.signature, "base64");
   if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) throw new Error("invalid_signature");
+  if (input.retention !== undefined && input.retention !== FINANCIAL_RETENTION)
+    throw new Error("invalid_receipt_retention");
   const payload: unknown = JSON.parse(input.body.toString("utf8"));
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new Error("invalid_payload");
   const p = payload as Record<string, unknown>;
@@ -26,6 +30,7 @@ export async function acceptShopifyReceipt(input: {
       !(typeof id === "number" && Number.isSafeInteger(id) && id > 0)) throw new Error("invalid_source_id");
   return store({
     source: "shopify", deliveryId: input.deliveryId, businessKey: JSON.stringify([input.shop, String(id)]),
-    topic: input.topic, payloadHash: createHash("sha256").update(input.body).digest("hex"), payload: p,
+    topic: input.topic, payloadHash: createHash("sha256").update(input.body).digest("hex"),
+    payload: input.retention ? projectReceiptRetention(input.topic, p) : p,
   });
 }

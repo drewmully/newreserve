@@ -3,6 +3,7 @@ import { getAnalyticsSupabase } from "@/lib/analytics/serverClient";
 import { createReceiptStore } from "@/lib/analytics/rpcStore";
 import { acceptShopifyReceipt } from "@/lib/analytics/receipts";
 import { acceptBoundedShopifyReceipt } from "@/lib/analytics/shopifyBoundedPilot";
+import { FINANCIAL_RETENTION } from "@/lib/analytics/shopifyRetention";
 export const runtime = "nodejs";
 /** New subscription is opt-in. Existing checkout/webhook routes are untouched. */
 export async function POST(req: NextRequest) {
@@ -12,6 +13,11 @@ export async function POST(req: NextRequest) {
   const secret = process.env.LEAN_SHOPIFY_WEBHOOK_SECRET ?? "";
   const allowedShop = process.env.LEAN_SHOPIFY_SHOP_DOMAIN ?? "";
   if (!secret || !allowedShop) return new NextResponse(null, { status: 503 });
+  const retention = process.env.LEAN_ANALYTICS_RECEIPT_RETENTION;
+  // Explicit opt-in only; do not silently change the historical bounded pilot.
+  if (retention && (retention !== FINANCIAL_RETENTION ||
+      process.env.LEAN_ANALYTICS_SHOPIFY_PILOT_ENABLED === "true"))
+    return new NextResponse(null, { status: 503 });
   // Enforce streamed bytes, not the untrusted Content-Length header.
   const reader = req.body?.getReader();
   if (!reader) return new NextResponse(null, { status: 400 });
@@ -29,6 +35,7 @@ export async function POST(req: NextRequest) {
       body: Buffer.concat(chunks), signature: req.headers.get("x-shopify-hmac-sha256") ?? "",
       secret, allowedShop, shop: req.headers.get("x-shopify-shop-domain") ?? "",
       topic: req.headers.get("x-shopify-topic") ?? "", deliveryId: req.headers.get("x-shopify-webhook-id") ?? "",
+      ...(retention === FINANCIAL_RETENTION ? { retention } : {}),
     };
     if (process.env.LEAN_ANALYTICS_SHOPIFY_PILOT_ENABLED === "true") {
       const result = await acceptBoundedShopifyReceipt(input, {
