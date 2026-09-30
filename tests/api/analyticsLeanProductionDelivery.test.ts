@@ -36,6 +36,13 @@ async function read() {
 async function enable() {
   await db.exec("update lean_private.production_report_delivery set enabled=true,approval_ref='fixture:export'");
 }
+it("pins both aggregate streams to a single stable database snapshot", async () => {
+  const row = (await db.query<{provolatile: string}>(
+    "select provolatile from pg_proc where oid='public.lean_production_reports_read()'::regprocedure")).rows[0];
+  expect(row.provolatile).toBe("s");
+  await enable();
+  expect(await read()).toEqual({ store_daily: [], product_daily: [] });
+});
 async function materialize(orderId = "1", double = false, revision = "2026-01-02T12:00:00Z") {
   const source = runtimeSource();
   source.commerce.shop = shop;

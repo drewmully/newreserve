@@ -40,4 +40,10 @@ The new tests cover continuous opt-ins, trial-date rejection, idle/no-source beh
 
 ## Explicitly outside this increment
 
+Final bounded review added two safeguards: one admission-time abort signal covers
+the preflight and processing requests together, and the read-only aggregate RPC
+is `STABLE` so store and product reads share the invoking statement's snapshot.
+Focused tests exercise a slow preflight followed by an in-flight deadline abort
+and assert the installed RPC's actual stability property.
+
 It does not infer a complete catalog or whole-store coverage, certify historical periods, activate size capture, acquire Loop credentials, implement advertising account/day scheduling, establish customer identity/permission history, or certify subscription/session/attribution metrics. Those workstreams must state their own implemented code, missing data and activation requirements without blocking the supported sales/product path.

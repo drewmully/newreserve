@@ -99,4 +99,36 @@ describe("explicit continuous production operation", () => {
       .toEqual({ state: "cancelled", calls: 0 });
     expect(fetcher).not.toHaveBeenCalled();
   });
+  it("aborts an in-flight POST at the original deadline after a slow preflight", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    // Node's native AbortSignal.timeout uses internal timers; bridge it to the
+    // fake clock so this exercises the real shared-signal wiring without sleep.
+    const timeout = vi.spyOn(AbortSignal, "timeout").mockImplementation(ms => {
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(), ms);
+      return controller.signal;
+    });
+    try {
+      let postSignal: AbortSignal | undefined;
+      const fetcher = vi.fn<typeof fetch>(async (_url, options) => {
+        if (options?.method === "GET") {
+          await new Promise(resolve => setTimeout(resolve, 90000));
+          return Response.json({ ...health, pending: 1 });
+        }
+        postSignal = options?.signal ?? undefined;
+        return new Promise<Response>((_resolve, reject) => {
+          postSignal!.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+        });
+      });
+      const pending = runScheduledPipeline(env, { fetcher });
+      await vi.advanceTimersByTimeAsync(179999);
+      expect(fetcher).toHaveBeenCalledTimes(2);
+      expect(postSignal?.aborted).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(postSignal?.aborted).toBe(true);
+      expect(await pending).toMatchObject({ state: "deadline", calls: 2 });
+      expect(Date.now()).toBe(180000);
+    } finally { timeout.mockRestore(); vi.clearAllTimers(); vi.useRealTimers(); }
+  });
 });

@@ -58,6 +58,10 @@ export async function runScheduledPipeline(env, { fetcher = fetch, now = Date.no
   const admittedAt = now();
   const prepared = scheduledPipelineConfig(env, admittedAt);
   if (prepared.state !== "ready") return { state: prepared.state, calls: 0 };
+  // One admission-time abort deadline covers preflight, POST and final health.
+  // Passing the admission clock alone cannot abort an already in-flight fetch.
+  const deadline = AbortSignal.timeout(prepared.config.deadlineSeconds * 1000);
+  const active = AbortSignal.any([deadline, ...(signal ? [signal] : [])]);
   let health;
   let preflightCalls = 0;
   if (prepared.mode === "continuous") {
@@ -67,7 +71,7 @@ export async function runScheduledPipeline(env, { fetcher = fetch, now = Date.no
       const response = await fetcher(prepared.config.url, {
         method: "GET", redirect: "error",
         headers: { authorization: `Bearer ${prepared.config.secret}` },
-        signal: AbortSignal.any([AbortSignal.timeout(95000), ...(signal ? [signal] : [])]),
+        signal: AbortSignal.any([AbortSignal.timeout(95000), active]),
       });
       if (!response.ok) throw new Error("health_unavailable");
       const data = await response.json();
@@ -86,7 +90,7 @@ export async function runScheduledPipeline(env, { fetcher = fetch, now = Date.no
       // unrelated eligible work. Existing SQL owns capped retry/expired-lease
       // recovery; this invocation still advances at most one saved receipt.
     } catch {
-      return { state: signal?.aborted ? "cancelled" : "health_unavailable", calls: preflightCalls };
+      return { state: signal?.aborted ? "cancelled" : deadline.aborted ? "deadline" : "health_unavailable", calls: preflightCalls };
     }
   }
   let firstClockRead = true;
@@ -97,11 +101,12 @@ export async function runScheduledPipeline(env, { fetcher = fetch, now = Date.no
     return now();
   };
   const result = await runDispatch(prepared.config, {
-    fetcher, now: dispatchClock, signal, onResult: value => { health = value; },
+    fetcher, now: dispatchClock, signal: active, onResult: value => { health = value; },
   });
   // "complete" means only that this bounded invocation ended successfully.
   // It is not proof of a new source event, complete coverage or published reports.
-  return { ...result, calls: result.calls + preflightCalls, ...(health ? { health } : {}) };
+  return { ...result, ...(deadline.aborted && !signal?.aborted ? { state: "deadline" } : {}),
+    calls: result.calls + preflightCalls, ...(health ? { health } : {}) };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

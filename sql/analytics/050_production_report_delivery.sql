@@ -11,7 +11,7 @@ insert into lean_private.production_report_delivery(singleton) values(true);
 revoke all on lean_private.production_report_delivery from public,anon,authenticated,service_role;
 
 create function public.lean_production_reports_read() returns jsonb
-language plpgsql security definer set search_path=pg_catalog as $$
+language plpgsql stable security definer set search_path=pg_catalog as $$
 declare stores jsonb; products jsonb; result jsonb;
 begin
   if not exists(select 1 from lean_private.production_report_delivery where enabled)
@@ -19,6 +19,7 @@ begin
   if not exists(select 1 from lean_private.pipeline_scope
     where shop='mullybox-store.myshopify.com' and project_ref='xnfjdbpjuaezxjgargto')
     then raise exception 'production report target missing'; end if;
+  -- STABLE pins all reads in this RPC to one invoking-statement snapshot.
   -- Latest heads only: never the historical selected-order sample or old revisions.
   with sums as (
     select report_date,definition_version,bool_or(is_stale or pipeline_stale) is_stale,
