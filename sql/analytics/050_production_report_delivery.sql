@@ -46,7 +46,7 @@ begin
       other_sales_adjustments_usd::numeric(20,6)::text other_sales_adjustments_usd,
       total_sales_usd::numeric(20,6)::text total_sales_usd,eligible_orders::text eligible_orders,
       purchase_merchandise_net_usd::numeric(20,6)::text purchase_merchandise_net_usd,
-      (purchase_merchandise_net_usd/nullif(eligible_orders,0))::numeric(20,6)::text aov_usd,
+      trunc(purchase_merchandise_net_usd/nullif(eligible_orders,0),6)::numeric(20,6)::text aov_usd,
       null::text collected_cash_usd,null::text new_customers,null::text spend_usd,
       null::text ncac_usd,null::text mer
     from sums
