@@ -97,7 +97,7 @@ export function ShopLanding({ products, productsByCategory, theme, journalPosts 
         slug: quick.slug, name: quick.name, brand: quick.brand,
         price: v.price, retailPrice: v.price, variantId: v.id,
         variantTitle: variantLabel(v), image: v.image || shopProductPhoto(quick),
-      }], "BOGO15");
+      }]); // Shopify applies the automatic one-item offer; avoid a duplicate code.
       dialog.current?.close();
     } catch {
       setError("Could not add this option. Check availability and try again.");

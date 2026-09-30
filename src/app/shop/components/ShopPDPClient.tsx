@@ -156,7 +156,7 @@ export function ShopPDPClient({
       variantId: variant?.id ?? product.variantId,
       image: orderedImages?.[0],
       variantTitle: variantLabel(variant),
-    }], "BOGO15");
+    }]); // The automatic shop offer is calculated by Shopify.
     setAdded(true);
     setTimeout(() => setAdded(false), 2000);
     } catch {

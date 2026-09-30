@@ -87,7 +87,7 @@ describe("hero product purchase modal", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Add to bag" }));
     await waitFor(() => expect(cart.add).toHaveBeenCalledWith([expect.objectContaining({
       slug: products[0].slug, variantId: "variant-0-m", price: 114,
-    })], "BOGO15"));
+    })]));
     await waitFor(() => expect(dialog).not.toHaveAttribute("open"));
     expect(trigger).toHaveFocus();
   });

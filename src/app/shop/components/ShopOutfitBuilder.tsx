@@ -129,7 +129,6 @@ export function ShopOutfitBuilder({
             variantTitle: variantLabel(v),
           };
         }),
-        "BOGO15",
       );
     } catch {
       setError(

@@ -24,7 +24,7 @@ describe("PDP preorders",()=>{
   expect(mocks.add).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button",{name:"L"}));
   fireEvent.click(screen.getByRole("button",{name:/Preorder.*Ships in about 2 weeks/}));
-  await waitFor(()=>expect(mocks.add).toHaveBeenCalledWith([expect.objectContaining({variantId:"gid://shopify/ProductVariant/2",variantTitle:"Stone / L"})],"BOGO15"));
+  await waitFor(()=>expect(mocks.add).toHaveBeenCalledWith([expect.objectContaining({variantId:"gid://shopify/ProductVariant/2",variantTitle:"Stone / L"})]));
  });
  it("shows a failed Shopify add instead of claiming the preorder succeeded",async()=>{
   mocks.add.mockRejectedValueOnce(new Error("Stock changed"));
