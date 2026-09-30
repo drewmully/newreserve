@@ -1,6 +1,8 @@
 {
   "git": {
     "deploymentEnabled": {
+      "review/analytics-order-size-live": false,
+      "review/analytics-order-size-reporting": false,
       "review/analytics-metric-readiness": false,
       "review/analytics-reporting-closeout": false,
       "review/analytics-subscription-runtime": false,
