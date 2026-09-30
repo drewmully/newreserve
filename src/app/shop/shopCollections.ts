@@ -15,7 +15,7 @@ export const SHOP_CATEGORY_HANDLES = {
   tops: "shop-tops",
   bottoms: "shop-bottoms",
   outerwear: "shop-outerwear",
-  tech: "shop-tech",
+  gear: "shop-gear",
   bags: "shop-bags",
   accessories: "shop-accessories",
 } as const;
@@ -26,7 +26,7 @@ export const SHOP_CATEGORY_ORDER: ShopCategoryKey[] = [
   "tops",
   "bottoms",
   "outerwear",
-  "tech",
+  "gear",
   "bags",
   "accessories",
 ];
@@ -62,11 +62,11 @@ export const SHOP_CATEGORIES: ShopCategoryMeta[] = [
     detail: "The 6 a.m. tee time in October.",
   },
   {
-    key: "tech",
-    label: "Tech",
-    handle: SHOP_CATEGORY_HANDLES.tech,
-    eyebrow: "Rangefinders & wearables",
-    detail: "The number, the swing speed, the round.",
+    key: "gear",
+    label: "Gear",
+    handle: SHOP_CATEGORY_HANDLES.gear,
+    eyebrow: "Towels, belts & carry",
+    detail: "The finishing pieces for your round and your weekend.",
   },
   {
     key: "bags",

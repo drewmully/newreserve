@@ -4,18 +4,18 @@ export const OUTFIT_SLOTS = [
   {
     label: "Top",
     category: "shop-tops",
-    slugs: ["quiet-golf-remy-polo-active-pique", "rhone-delta-pique-polo"],
+    slugs: ["quiet-golf-remy-polo-active-pique", "olydoe-og-supima-hollow-polo"],
   },
   {
     label: "Bottom",
     category: "shop-bottoms",
-    slugs: ["rhone-commuter-pant", "rhone-commuter-short-7"],
+    slugs: ["duckhead-classic-fit-gold-school-chino-khaki", "duckhead-long-drive-performance-five-pocket"],
   },
   {
     label: "Layer",
     category: "shop-outerwear",
     slugs: [
-      "rhone-commuter-1-4-zip",
+      "olydoe-merino-ponte-quarter-zip",
       "duckhead-fremont-sport-performance-quilted-vest-brandy-brown",
     ],
   },

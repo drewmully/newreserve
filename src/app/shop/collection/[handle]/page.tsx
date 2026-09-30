@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { getCollectionProducts } from "@/lib/shopify";
 import { ShopPageShell } from "../../components/ShopPageShell";
 import { ShopProductCard } from "../../components/ShopProductCard";
@@ -21,11 +21,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 export default async function ShopCollectionPage({ params }: Props) {
   const { handle } = await params;
+  if (handle === "shop-tech") permanentRedirect("/shop/collection/shop-gear");
   const cat = categories.find(c => c.handle === handle);
   if (!cat) notFound();
   let products: Awaited<ReturnType<typeof getCollectionProducts>> = [];
   let failed = false;
-  try { products = await getCollectionProducts(handle); }
+  try {
+    products = handle === "shop-gear"
+      ? (await getCollectionProducts("shop-all")).filter(p => p.tags?.includes("shop-gear"))
+      : await getCollectionProducts(handle);
+  }
   catch (err) { failed = true; console.error("[shop collection] Catalog unavailable", err); }
   return <ShopPageShell>
     <ScrollToTop /><ShopPasswordGate accent="#4A3528" />

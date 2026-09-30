@@ -91,24 +91,9 @@ export default async function ProductPage({ params, searchParams }: Props) {
   // Related products for the "More from Brand" and "You may also like" rails.
   let related: Awaited<ReturnType<typeof getCollectionProducts>> = [];
   try {
-    const [proShop, privateReleases] = await Promise.allSettled([
-      getCollectionProducts(PRO_SHOP_COLLECTION_HANDLE),
-      getCollectionProducts(PRIVATE_RELEASES_COLLECTION_HANDLE),
-    ]);
-    const groups: Array<{
-      handle: string;
-      products: Awaited<ReturnType<typeof getCollectionProducts>>;
-    }> = [];
-    if (proShop.status === "fulfilled") {
-      groups.push({ handle: PRO_SHOP_COLLECTION_HANDLE, products: proShop.value });
-    }
-    if (privateReleases.status === "fulfilled") {
-      groups.push({
-        handle: PRIVATE_RELEASES_COLLECTION_HANDLE,
-        products: privateReleases.value,
-      });
-    }
-    related = mergeCollectionProductsBySlug(groups);
+    // Keep recommendations inside the current shop assortment. Unrelated
+    // Reserve/private-release inventory remains untouched in Shopify.
+    related = await getCollectionProducts("shop-all");
   } catch (err) {
     console.error("[ProductPage] related fetch failed:", err);
   }

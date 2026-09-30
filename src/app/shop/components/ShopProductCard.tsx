@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { ShopifyProduct } from "@/lib/shopify";
 import { useMembership } from "../../context/MembershipContext";
 import { shopProductPhoto, shopProductLabel } from "@/lib/shopProductPhotos";
+import { money } from "@/lib/shopOutfit";
 
 /**
  * V1-style product card: brand chip top-right, white background,
@@ -50,16 +51,17 @@ export function ShopProductCard({
         <div className="shop-product-card__price">
           {isMember && product.price !== product.reservePrice && (
             <span className="text-[11px] font-mono text-charcoal/40 line-through">
-              ${product.price.toFixed(0)}
+              {money(product.price)}
             </span>
           )}
           <span
             className="text-sm font-semibold"
             style={{ color: accent ?? "var(--color-charcoal)" }}
           >
-            ${displayPrice.toFixed(0)}
+            {money(displayPrice)}
           </span>
         </div>
+        {product.variants.some(v => v.currentlyNotInStock) && <p className="mt-1 text-xs text-charcoal/60">Preorder · About {product.preOrderEtaWeeks || 2} weeks</p>}
       </div>
     </Link>
   );

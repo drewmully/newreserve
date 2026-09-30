@@ -175,7 +175,6 @@ describe("shop outfit offer and handoff", () => {
           variantTitle: "M",
         }),
       ],
-      "BOGO15",
     );
   });
   it("does not reuse sizes between products and disables Reserve after removing a piece", () => {

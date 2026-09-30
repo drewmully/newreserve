@@ -1,6 +1,7 @@
 import type { AnchorHTMLAttributes, ReactNode } from "react";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+vi.mock("@/lib/tracking", () => ({ trackEvent: vi.fn().mockResolvedValue(undefined) }));
 
 vi.mock("next/link", () => ({
   default: ({

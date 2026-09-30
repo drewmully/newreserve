@@ -165,6 +165,8 @@ export interface ShopifyProductVariant {
   price: number;
   reservePrice: number;
   availableForSale: boolean;
+  /** Shopify allows checkout but has no physical stock for this option. */
+  currentlyNotInStock?: boolean;
   image?: string;
   imageAltText?: string | null;
   selectedOptions: ShopifySelectedOption[];
@@ -228,6 +230,7 @@ interface RawVariant {
   price: { amount: string; currencyCode: string };
   compareAtPrice: { amount: string; currencyCode: string } | null;
   availableForSale: boolean;
+  currentlyNotInStock?: boolean;
   image: { url: string; altText?: string | null } | null;
   selectedOptions: Array<{ name: string; value: string }>;
 }
@@ -300,6 +303,7 @@ function mapVariant(raw: RawVariant): ShopifyProductVariant {
     price,
     reservePrice,
     availableForSale: raw.availableForSale,
+    currentlyNotInStock: raw.currentlyNotInStock ?? false,
     image: raw.image?.url,
     imageAltText: raw.image?.altText ?? null,
     selectedOptions: raw.selectedOptions,
@@ -388,13 +392,14 @@ const PRODUCT_FIELDS = `
     name
     values
   }
-  variants(first: 50) {
+  variants(first: 250) {
     nodes {
       id
       title
       price { amount currencyCode }
       compareAtPrice { amount currencyCode }
       availableForSale
+      currentlyNotInStock
       image {
         url
         altText
@@ -463,9 +468,9 @@ const CART_FIELDS = `
 export async function getCollectionProducts(
   collectionHandle: string
 ): Promise<ShopifyProduct[]> {
-  // cache-bust: v4 — drop001 alt-text + 30 images 2026-05-15
+  // Refresh the curated assortment and keep preorder availability current.
   const query = `
-    query CollectionProductsV4($handle: String!) {
+    query CollectionProductsV5($handle: String!) {
       collection(handle: $handle) {
         products(first: 50) {
           nodes { ${PRODUCT_FIELDS} }
@@ -476,7 +481,7 @@ export async function getCollectionProducts(
 
   const data = await storefrontFetch<{
     collection: { products: { nodes: RawProduct[] } } | null;
-  }>(query, { handle: collectionHandle }, 3600);
+  }>(query, { handle: collectionHandle }, 60);
 
   return (data.collection?.products.nodes ?? []).map(mapProduct);
 }
@@ -484,9 +489,9 @@ export async function getCollectionProducts(
 export async function getProductByHandle(
   handle: string
 ): Promise<ShopifyProduct | null> {
-  // cache-bust: v4 — drop001 alt-text + 30 images 2026-05-15
+  // Match the collection cache generation after the assortment migration.
   const query = `
-    query ProductByHandleV4($handle: String!) {
+    query ProductByHandleV5($handle: String!) {
       product(handle: $handle) { ${PRODUCT_FIELDS} }
     }
   `;
@@ -494,7 +499,7 @@ export async function getProductByHandle(
   const data = await storefrontFetch<{ product: RawProduct | null }>(
     query,
     { handle },
-    3600
+    60
   );
 
   return data.product ? mapProduct(data.product) : null;
