@@ -125,7 +125,7 @@ describe("bounded production schedule", () => {
 
   it("keeps scheduled execution main-only, non-overlapping and independently opt-in", () => {
     const workflow = readFileSync(".github/workflows/analytics-production-dispatch.yml", "utf8");
-    expect(workflow).toContain('cron: "*/5 * * * *"');
+    expect(workflow).toContain('cron: "2-59/5 * * * *"');
     expect(workflow).toContain("github.ref == 'refs/heads/main'");
     expect(workflow).toContain("vars.LEAN_ANALYTICS_SCHEDULE_ENABLED == 'true'");
     expect(workflow).toContain("vars.LEAN_ANALYTICS_DISPATCH_ENABLED == 'true'");

@@ -165,6 +165,17 @@ bindings to approve, not external resources created by this PR.
 
 ### Failure recovery and stop
 
+- With SQL052 installed, a retained, identity/clock/freshness-validated order
+  created **before its frozen snapshot's `from_time`** can terminate as
+  `state: excluded`, reason `excluded_before_window`. Catalog does not affect
+  that date-only exclusion. No facts, reports or latest head are written;
+  receipt/source provenance remains private and unchanged. The database queue
+  uses `done` with that explicit `last_error_code`; health `done` counts all
+  terminal work and new `excluded` counts this subset. Neither `done` nor
+  `done - excluded` proves successful financial materialization.
+  Exact-from, after-until, malformed clocks, lineage/projection conflicts and
+  stale hydration are not terminal exclusions. Missing052 or an ambiguous
+  exclusion response fails safely without a catch-and-fail queue mutation.
 - On a storage `503`, assume the write could have committed. Inspect health and
   retry after the lease expires; do not create a replacement receipt.
 - Investigate `invalid_receipt`, `source_unavailable`, `mapping_rejected`,

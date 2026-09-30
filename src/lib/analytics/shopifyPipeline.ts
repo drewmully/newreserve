@@ -8,6 +8,7 @@ import type { HistoryInventory } from "./historyInventory";
 import type { PartitionInventory } from "./partitionInventory";
 import { FINANCIAL_RETENTION, projectPilotRetention } from "./shopifyRetention";
 import { composeRetainedOrderReports } from "./shopifyRetainedOrder";
+import { nyDate } from "./primitives";
 
 export const PIPELINE_VERSION = "shopify-observed-v1";
 export type PipelinePolicy = Omit<PilotPolicy, "lineClasses"> & {
@@ -92,8 +93,9 @@ export async function runShopifyPipeline(options: {
   if (claim.state !== "claimed" || !/^[1-9]\d*$/.test(sourceString(claim.workId)))
     throw new Error("pipeline_invalid_claim");
   const args = { p_work_id: claim.workId, p_token: token };
-  let output: ReturnType<typeof mapPilotSource>;
+  let output: ReturnType<typeof mapPilotSource> | undefined;
   let productReports: ReturnType<typeof composeRetainedOrderReports>["productReports"] | undefined;
+  let beforeWindow = false;
   let storageInFlight = false;
   let phase = "invalid_receipt";
   try {
@@ -139,26 +141,44 @@ export async function runShopifyPipeline(options: {
       throw new Error("pipeline_retained_projection_mismatch");
     if (source.commerce.shop !== options.shop || source.commerce.order.id !== orderGid)
       throw new Error("pipeline_scope_mismatch");
-    const created = Date.parse(sourceString(source.commerce.order.createdAt));
-    if (!Number.isFinite(created) || created < Date.parse(sourceString(claim.fromTime)) ||
-        created >= Date.parse(sourceString(claim.untilTime))) throw new Error("pipeline_outside_approved_window");
+    const createdAt = sourceString(source.commerce.order.createdAt);
+    const updatedAt = sourceString(source.commerce.order.updatedAt);
+    nyDate(createdAt); nyDate(updatedAt); // Reject malformed/calendar-overflow clocks before exclusion.
+    const created = Date.parse(createdAt), updated = Date.parse(updatedAt);
+    const from = Date.parse(sourceString(claim.fromTime)), until = Date.parse(sourceString(claim.untilTime));
+    if (!Number.isFinite(from) || !Number.isFinite(until) || from >= until || updated < created ||
+        source.commerce.apiVersion !== "2026-07" || source.financial.id !== orderGid ||
+        source.financial.updatedAt !== updatedAt) throw new Error("pipeline_invalid_retained_clock_or_scope");
     verifyHydration(sourceString(claim.topic), claim.payload, source);
-    const mappedPolicy = mappingPolicy(source, policy);
-    const publication = sourceString(claim.publication), evidence = `lean_private.pipeline_snapshots/${claim.workId}`;
-    if (policy.retainedReports === "product-v1") {
-      const composed = composeRetainedOrderReports(source, mappedPolicy, publication, evidence, PIPELINE_VERSION,
-        policy.orderSize ? { orderSizeSidecar: true } : undefined);
-      output = composed;
-      productReports = composed.productReports;
-    } else {
-      output = mapPilotSource(source, mappedPolicy, publication, evidence);
-      output.reports = output.reports.map(row => ({ ...row, definition_version: PIPELINE_VERSION }));
+    beforeWindow = created < from;
+    if (!beforeWindow && created >= until) throw new Error("pipeline_outside_approved_window");
+    // A proven old creation date rules out facts independently of catalog.
+    // Financial/catalog mapping remains mandatory only for the in-window path.
+    if (!beforeWindow) {
+      const mappedPolicy = mappingPolicy(source, policy);
+      const publication = sourceString(claim.publication), evidence = `lean_private.pipeline_snapshots/${claim.workId}`;
+      if (policy.retainedReports === "product-v1") {
+        const composed = composeRetainedOrderReports(source, mappedPolicy, publication, evidence, PIPELINE_VERSION,
+          policy.orderSize ? { orderSizeSidecar: true } : undefined);
+        output = composed;
+        productReports = composed.productReports;
+      } else {
+        output = mapPilotSource(source, mappedPolicy, publication, evidence);
+        output.reports = output.reports.map(row => ({ ...row, definition_version: PIPELINE_VERSION }));
+      }
     }
   } catch {
     if (storageInFlight) throw new Error("pipeline_storage_ambiguous");
     const failed = await pipelineRpc(options.client, "lean_pipeline_fail", { ...args, p_code: phase });
     return { state: failed === true ? "failed" : "lost_lease" };
   }
+  // Like finish, never catch-and-fail a response that may be lost AFTER commit.
+  if (beforeWindow) {
+    const excluded = await pipelineRpc(options.client, "lean_pipeline_exclude_before_window", args);
+    if (typeof excluded !== "boolean") throw new Error("pipeline_invalid_exclusion");
+    return excluded ? { state: "excluded", reason: "excluded_before_window" } : { state: "lost_lease" };
+  }
+  if (!output) throw new Error("pipeline_missing_output");
   // No catch-and-fail around finish: its response may be lost AFTER commit.
   const finished = await pipelineRpc(options.client, productReports ? "lean_pipeline_finish_extended" : "lean_pipeline_finish", {
     ...args, p_facts: output.facts, p_reports: output.reports,
