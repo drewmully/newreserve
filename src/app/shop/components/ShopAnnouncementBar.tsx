@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * The dark strip that lives above the header on every shop page. Three key
+ * The muted fall-olive strip above the header on every shop page. Three key
  * shopping proofs separated by faint dividers, matching the pattern
  * Huckberry (and every serious editorial commerce site) runs.
  *
@@ -15,8 +15,8 @@ export function ShopAnnouncementBar() {
   ];
 
   return (
-    <div className="fixed left-0 right-0 top-0 z-50 bg-charcoal text-white">
-      <div className="mx-auto flex h-8 max-w-7xl items-center justify-center gap-3 whitespace-nowrap px-3 text-[10px] font-mono uppercase tracking-[0.14em] sm:gap-6 sm:text-[11px] sm:tracking-[0.18em] md:gap-10">
+    <div data-testid="shop-announcement" className="fixed left-0 right-0 top-0 z-50 bg-[#5B613F] text-[#FAF9F6]">
+      <div className="mx-auto flex h-8 max-w-7xl items-center justify-center gap-3 whitespace-nowrap px-3 font-sans text-[10px] font-medium tracking-[0.01em] sm:gap-6 sm:text-[11px] md:gap-10">
         {items.map((item, i) => (
           <div key={i} className="flex items-center gap-1.5 sm:gap-2">
             <item.icon />
