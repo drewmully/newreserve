@@ -1,5 +1,9 @@
 # Mully Reserve clarity and preference-first signup
 
+## Public launch approval
+
+Drew approved deployment without a password on September 30, 2026 at 4:09 PM EDT. The former client-side shop curtain is removed from the landing, product, collection, and gift pages. Login/account authentication and subscription entry-point access behavior are unchanged.
+
 ## Subscription and checkout
 
 - The outfit summary says “Subscribe & save”, “$250 / season”, “4 shipments a year”, and explains that Mully uses the $250 seasonal budget to curate new styles.

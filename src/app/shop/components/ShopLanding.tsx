@@ -11,7 +11,6 @@ import { money, variantLabel } from "@/lib/shopOutfit";
 import { GIFT_TIERS } from "../shopCollections";
 import type { SeasonalTheme } from "../seasonalTheme";
 import { ScrollToTop } from "./ScrollToTop";
-import { ShopPasswordGate } from "./ShopPasswordGate";
 import { ShopOutfitBuilder } from "./ShopOutfitBuilder";
 import { ShopNewsletter } from "./ShopNewsletter";
 import { ShopEditRail } from "./ShopEditRail";
@@ -109,7 +108,6 @@ export function ShopLanding({ products, productsByCategory, theme, journalPosts 
   return (
     <>
       <ScrollToTop />
-      <ShopPasswordGate accent={theme.accent} />
       <div className="shop-redesign shop-first" style={{ "--accent": theme.accent, "--accent-d": theme.accentDark } as CSSProperties}>
         <section className="shop-hero" id="hero" aria-labelledby="shopHeroTitle">
           <picture>

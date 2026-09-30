@@ -7,7 +7,6 @@ import { getSeasonalTheme } from "@/app/shop/seasonalTheme";
 const cart = vi.hoisted(() => ({ add: vi.fn() }));
 vi.mock("@/app/context/MembershipContext", () => ({ useMembership: () => ({ addItemsToCart: cart.add }) }));
 vi.mock("@/app/shop/components/ScrollToTop", () => ({ ScrollToTop: () => null }));
-vi.mock("@/app/shop/components/ShopPasswordGate", () => ({ ShopPasswordGate: () => null }));
 vi.mock("@/app/shop/components/ShopOutfitBuilder", () => ({ ShopOutfitBuilder: () => <section id="outfit" /> }));
 vi.mock("@/app/shop/components/ShopNewsletter", () => ({ ShopNewsletter: () => null }));
 import { ShopLanding } from "@/app/shop/components/ShopLanding";

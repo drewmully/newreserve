@@ -5,7 +5,6 @@ import { getCollectionProducts, type ShopifyProduct } from "@/lib/shopify";
 import { ShopPageShell } from "../../components/ShopPageShell";
 import { ShopProductCard } from "../../components/ShopProductCard";
 import { ScrollToTop } from "../../components/ScrollToTop";
-import { ShopPasswordGate } from "../../components/ShopPasswordGate";
 import { GIFT_TIERS, SHOP_CATEGORIES } from "../../shopCollections";
 import { getSeasonalTheme } from "../../seasonalTheme";
 
@@ -62,7 +61,6 @@ export default async function ShopGiftTierPage({ params }: Props) {
   return (
     <ShopPageShell>
       <ScrollToTop />
-      <ShopPasswordGate accent={theme.accent} />
 
       <main className="shop-page-main">
         <header className="shop-page-heading">
