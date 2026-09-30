@@ -5,7 +5,6 @@ import { getCollectionProducts } from "@/lib/shopify";
 import { ShopPageShell } from "../../components/ShopPageShell";
 import { ShopProductCard } from "../../components/ShopProductCard";
 import { ScrollToTop } from "../../components/ScrollToTop";
-import { ShopPasswordGate } from "../../components/ShopPasswordGate";
 import { SHOP_CATEGORIES, SHOP_CATEGORY_HANDLES } from "../../shopCollections";
 
 export const revalidate = 3600;
@@ -33,7 +32,7 @@ export default async function ShopCollectionPage({ params }: Props) {
   }
   catch (err) { failed = true; console.error("[shop collection] Catalog unavailable", err); }
   return <ShopPageShell>
-    <ScrollToTop /><ShopPasswordGate accent="#4A3528" />
+    <ScrollToTop />
     <main className="shop-page-main">
       <header className="shop-page-heading">
         <Link href="/shop" className="shop-text-link shop-page-kicker">← The shop</Link>

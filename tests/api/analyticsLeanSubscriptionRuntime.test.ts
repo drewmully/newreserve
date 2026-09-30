@@ -6,9 +6,10 @@ import { NextRequest } from "next/server";
 import type { AnalyticsRpcClient } from "@/lib/analytics/rpcStore";
 import { runSubscriptionRuntime } from "@/lib/analytics/subscriptionRuntime";
 import { POST } from "@/app/api/analytics/subscriptions/process/route";
+import { subscriptionReportGet, validSubscriptionReportPayload } from "@/lib/analytics/subscriptionReportDelivery";
 const port = vi.hoisted(() => ({ client: null as AnalyticsRpcClient | null }));
 vi.mock("@/lib/analytics/serverClient", () => ({ getAnalyticsSupabase: () => port.client }));
-const project = "a".repeat(20), shop = "mullybox-store.myshopify.com";
+const project = "xnfjdbpjuaezxjgargto", shop = "mullybox-store.myshopify.com";
 const token = "fixture-only-read-token-not-real", secret = "s".repeat(32);
 const hash = createHash("sha256").update(token).digest("hex");
 const policy = { definitionRef: "fixture:policy", countedStatuses: ["ACTIVE"], excludedStatuses: ["PAUSED","CANCELLED","EXPIRED"],
@@ -71,8 +72,10 @@ beforeAll(async () => {
 beforeEach(async () => {
   calls = []; port.client = client;
   // Disposable local fixture only. No production connection exists in this suite.
-  await db.exec(`truncate lean_private.subscription_scan_plans,lean_private.subscription_gate,lean_private.subscription_runs;
-    insert into lean_private.subscription_gate(singleton,enabled) values(true,true);`);
+  await db.exec(`truncate lean_private.subscription_report_delivery,lean_private.subscription_scan_plans,
+    lean_private.subscription_gate,lean_private.subscription_runs;
+    insert into lean_private.subscription_gate(singleton,enabled) values(true,true);
+    insert into lean_private.subscription_report_delivery(singleton) values(true);`);
   await register();
   vi.stubGlobal("fetch", vi.fn(async () => source()));
   vi.stubEnv("LEAN_ANALYTICS_SUBSCRIPTIONS_ENABLED", "true");
@@ -256,13 +259,13 @@ it("exposes only authenticated, default-off, empty-body dispatch; no caller-supp
 });
 
 // Reuses the same disposable DB/RPC/source fixture. No second runtime harness.
-async function plan(maxCycles = 2, maxPages = 3, maxRows = 10, maxBytes = 100000) {
+async function plan(maxCycles = 2, maxPages = 3, maxRows = 10, maxBytes = 100000, countPolicy = policy, cadence = 300) {
   await db.query(`insert into lean_private.subscription_scan_plans
     (plan_id,project_ref,shop,token_sha256,binding_ref,approval_ref,traffic_approval_ref,retention_ref,actor_ref,policy,
       from_time,until_time,retain_until,cadence_seconds,max_cycles,max_pages,max_rows,max_bytes,page_size,enabled)
     values('scan-fixture',$1,$2,$3,'fixture:binding','fixture:approval','fixture:traffic','fixture:retention','fixture:actor',
       $4,clock_timestamp()-interval '1 second',clock_timestamp()+interval '1 day',clock_timestamp()+interval '2 days',
-      300,$5,$6,$7,$8,2,true)`, [project, shop, hash, JSON.stringify(policy), maxCycles, maxPages, maxRows, maxBytes]);
+      $9,$5,$6,$7,$8,2,true)`, [project, shop, hash, JSON.stringify(countPolicy), maxCycles, maxPages, maxRows, maxBytes, cadence]);
   vi.stubEnv("LEAN_ANALYTICS_SUBSCRIPTIONS_RUN_ID", "");
   vi.stubEnv("LEAN_ANALYTICS_SUBSCRIPTIONS_PLAN_ID", "scan-fixture");
 }
@@ -426,4 +429,159 @@ it("refuses simultaneous legacy and plan selection before DB or source access", 
   const fetcher = vi.fn();
   await expect(run(fetcher)).rejects.toThrow("configuration");
   expect(calls).toHaveLength(0); expect(fetcher).not.toHaveBeenCalled();
+});
+
+// Report-only change: same injected source -> actual runtime/RPC -> owner report.
+const captured = async () => (await scanReport()).cycles as {
+  scanTraversal: string; paginationEnded: boolean; snapshotConsistency: string;
+  capturedPageMetrics: Record<string, { value: unknown; readiness: string; reasons: string[] }>;
+}[];
+function metricPage(rows: Record<string, unknown>[], more = false) {
+  return new Response(JSON.stringify({ success: true, code: "SUCCESS", data: rows,
+    pageInfo: { hasNextPage: more, nextCursor: more ? "metric-next" : null } }),
+  { headers: { "content-type": "application/json" } });
+}
+function contract(id: string, overrides: Record<string, unknown> = {}) {
+  return { id, status: "ACTIVE", customer: { shopifyId: "777777777" },
+    nextBillingDateEpoch: Math.floor(Date.now() / 1000) + 86400, updatedAt: "2026-09-30T00:00:00Z", ...overrides };
+}
+it("reports deduped captured active contracts/subscribers/renewals without exposing keys or promoting globals", async () => {
+  await plan(1);
+  const same = contract("101"), another = contract("102");
+  await run(async () => metricPage([same, another], true)); await cooldown();
+  await run(async () => metricPage([same, contract("103", { status: "PAUSED" })]));
+  const out = await scanReport(), cycle = (await captured())[0];
+  expect(cycle).toMatchObject({ scanTraversal: "all_returned_pages_traversed", paginationEnded: true,
+    snapshotConsistency: "unverified", capturedPageMetrics: {
+      observedActiveContractsInCapturedPages: { value: 2, readiness: "observed_unverified", reasons: [] },
+      observedDistinctSubscribersInCapturedPages: { value: 1, readiness: "observed_unverified", reasons: [] },
+      observedRenewingContractsInWindowInCapturedPages: { value: 2, reasons: [] },
+    } });
+  expect(Date.parse(String(cycle.capturedPageMetrics.observedNextRenewalAtInCapturedPages.value)))
+    .toBe(same.nextBillingDateEpoch * 1000);
+  for (const metric of Object.values(out.metrics as Record<string, unknown>))
+    expect(metric).toMatchObject({ value: null, readiness: "withheld" });
+  for (const forbidden of ["777777777", "contractKey", "subscriberKey", "nextCursor", "metric-next"])
+    expect(JSON.stringify(out)).not.toContain(forbidden);
+});
+it.each(["missing-customer", "missing-renewal", "past-renewal", "revision-conflict"] as const)(
+  "withholds only affected captured metrics for %s", async issue => {
+    await plan(1);
+    const row = contract("101", issue === "missing-customer" ? { customer: null } :
+      issue === "missing-renewal" ? { nextBillingDateEpoch: null } :
+        issue === "past-renewal" ? { nextBillingDateEpoch: 1700000000 } : {});
+    await run(async () => metricPage([row], issue === "revision-conflict"));
+    if (issue === "revision-conflict") {
+      await cooldown(); await run(async () => metricPage([{ ...row, status: "PAUSED" }]));
+    }
+    const metrics = (await captured())[0].capturedPageMetrics;
+    if (issue === "revision-conflict") {
+      for (const metric of Object.values(metrics))
+        expect(metric).toMatchObject({ value: null, readiness: "withheld", reasons: ["conflicting_contract_revisions"] });
+    } else {
+      expect(metrics.observedActiveContractsInCapturedPages.value).toBe(1);
+      expect(metrics.observedDistinctSubscribersInCapturedPages.value).toBe(issue === "missing-customer" ? null : 1);
+      expect(metrics.observedNextRenewalAtInCapturedPages.readiness).toBe(issue === "missing-customer" ? "observed_unverified" : "withheld");
+      expect(metrics.observedRenewingContractsInWindowInCapturedPages.value).toBe(issue === "missing-customer" ? 1 : null);
+    }
+  });
+it.each([false, true])("labels budget vs fully traversed empty result without confusing absence and zero (more=%s)", async more => {
+  await plan(1, 1);
+  expect(await captured()).toEqual([]); // Not collected is not a zero.
+  await run(async () => metricPage(more ? [contract("101")] : [], more));
+  const cycle = (await captured())[0];
+  expect(cycle.scanTraversal).toBe(more ? "budget_limited" : "all_returned_pages_traversed");
+  expect(cycle.paginationEnded).toBe(!more);
+  expect(cycle.snapshotConsistency).toBe("unverified");
+  expect(cycle.capturedPageMetrics.observedActiveContractsInCapturedPages.value).toBe(more ? 1 : 0);
+  expect(cycle.capturedPageMetrics.observedNextRenewalAtInCapturedPages.readiness).toBe("observed_unverified");
+  if (!more) expect(cycle.capturedPageMetrics.observedNextRenewalAtInCapturedPages.value).toBeNull();
+});
+it("does not label a different counted-status policy as observed active contracts", async () => {
+  await plan(1, 3, 10, 100000, { ...policy, countedStatuses: ["PAUSED"], excludedStatuses: ["ACTIVE", "CANCELLED", "EXPIRED"] });
+  await run(async () => metricPage([contract("101")]));
+  for (const metric of Object.values((await captured())[0].capturedPageMetrics))
+    expect(metric).toMatchObject({ value: null, readiness: "withheld", reasons: ["active_count_policy_unverified"] });
+});
+
+const deliveryEnv = { LEAN_SUBSCRIPTION_REPORTS_ENABLED: "true", LEAN_SUBSCRIPTION_REPORTS_SECRET: secret,
+  VERCEL_ENV: "production", VERCEL_GIT_COMMIT_REF: "main", LEAN_ANALYTICS_PIPELINE_PROJECT_REF: project,
+  LEAN_ANALYTICS_SUPABASE_URL: `https://${project}.supabase.co`, LEAN_ANALYTICS_SUPABASE_SERVICE_ROLE_KEY: "fixture-only" };
+const deliveryRequest = (suffix = "", bearer = secret) => new Request(`https://fixture.invalid/api/analytics/reports/subscriptions${suffix}`,
+  { headers: { authorization: `Bearer ${bearer}` } });
+async function deliveryRead() {
+  await db.exec("set role service_role");
+  try { return (await db.query<{ result: unknown }>("select public.lean_subscription_reports_read() result")).rows[0].result; }
+  finally { await db.exec("reset role"); }
+}
+async function enableDelivery() {
+  await db.exec(`update lean_private.subscription_report_delivery
+    set enabled=true,plan_id='scan-fixture',approval_ref='fixture:aggregate-delivery'`);
+}
+it("delivers actual captured-page aggregates through fixed HTTP with only one new service read EXECUTE", async () => {
+  expect(await deliveryRead()).toBeNull();
+  await plan(1, 3, 10, 100000, policy, 86400); await enableDelivery();
+  expect(await deliveryRead()).toEqual({ subscription_observations: [] });
+  await run(async () => metricPage([contract("101")]));
+  const data = await deliveryRead();
+  expect(validSubscriptionReportPayload(data)).toBe(true);
+  const transport = vi.fn(async (url, init) => {
+    expect(url).toBe(`https://${project}.supabase.co/rest/v1/rpc/lean_subscription_reports_read`);
+    expect(init).toMatchObject({ method: "POST", redirect: "error", body: "{}" });
+    return new Response(JSON.stringify(await deliveryRead()));
+  });
+  const response = await subscriptionReportGet(deliveryRequest(), deliveryEnv, transport);
+  expect(response.status).toBe(200); expect(response.headers.get("cache-control")).toBe("no-store");
+  expect(await response.json()).toMatchObject({ subscription_observations: [{
+    cycle: 1, observed_active_contracts: 1, observed_distinct_subscribers: 1,
+    observed_renewing_contracts_in_window: 1, report_scope: "captured_pages_only",
+    scan_traversal: "all_returned_pages_traversed", scope_complete: false, certified: false,
+  }] });
+  expect(transport).toHaveBeenCalledTimes(1);
+  for (const forbidden of ['"101"', '"777777777"', "contractKey", "subscriberKey", "planId", "cursor", "approval", "Mrr", "Arr"])
+    expect(JSON.stringify(data)).not.toContain(forbidden);
+  for (const role of ["anon", "authenticated", "service_role", "lean_posthog_reader"]) {
+    expect((await db.query(`select has_table_privilege($1,'lean_private.subscription_report_delivery','SELECT,INSERT,UPDATE,DELETE') t,
+      has_function_privilege($1,'public.lean_subscription_reports_read()','EXECUTE') r`, [role])).rows[0])
+      .toEqual({ t: false, r: role === "service_role" });
+  }
+  expect((await db.query<{ provolatile: string }>("select provolatile from pg_proc where oid='public.lean_subscription_reports_read()'::regprocedure")).rows[0].provolatile).toBe("s");
+});
+it("rejects delivery outside the explicit daily/seven-cycle plan and rejects expired retention", async () => {
+  await plan(1); await enableDelivery(); await expect(deliveryRead()).rejects.toThrow("delivery scope");
+  await db.exec("truncate lean_private.subscription_report_delivery,lean_private.subscription_scan_plans; insert into lean_private.subscription_report_delivery(singleton) values(true)");
+  await plan(1, 3, 10, 100000, policy, 86400); await enableDelivery();
+  // Fixture-only owner mutation with trigger disabled tests the expiry check, not registration.
+  await db.exec(`alter table lean_private.subscription_scan_plans disable trigger subscription_scan_immutable;
+    update lean_private.subscription_scan_plans set from_time=now()-interval '3 days',
+      until_time=now()-interval '2 days',retain_until=now()-interval '1 day'`);
+  await expect(deliveryRead()).rejects.toThrow("retention expired");
+});
+it("subscription delivery defaults off, rejects Preview/wrong bearer/queries/target before DB, and never falls back to sales flags", async () => {
+  const transport = vi.fn();
+  for (const env of [{}, { ...deliveryEnv, LEAN_SUBSCRIPTION_REPORTS_ENABLED: "false" },
+    { ...deliveryEnv, VERCEL_ENV: "preview" }, { ...deliveryEnv, VERCEL_GIT_COMMIT_REF: "other" }])
+    expect((await subscriptionReportGet(deliveryRequest(), env, transport)).status).toBe(404);
+  expect((await subscriptionReportGet(deliveryRequest("", "wrong"), deliveryEnv, transport)).status).toBe(401);
+  expect((await subscriptionReportGet(deliveryRequest("?plan=other"), deliveryEnv, transport)).status).toBe(400);
+  expect((await subscriptionReportGet(deliveryRequest(), { ...deliveryEnv, LEAN_ANALYTICS_PIPELINE_PROJECT_REF: "b".repeat(20) }, transport)).status).toBe(503);
+  expect(transport).not.toHaveBeenCalled();
+});
+it("fails closed on aggregate PII/unknown fields, false completeness, missing amounts, oversize and database error bodies", async () => {
+  await plan(1, 3, 10, 100000, policy, 86400); await enableDelivery();
+  await run(async () => metricPage([contract("101", { customer: null })]));
+  const data = await deliveryRead() as { subscription_observations: Record<string, unknown>[] };
+  expect(data.subscription_observations[0].observed_distinct_subscribers).toBeNull();
+  expect(validSubscriptionReportPayload(data)).toBe(true);
+  for (const alteration of [{ contractKey: "private" }, { scope_complete: true }, { observed_active_contracts: undefined },
+    { proposed_mrr: "10.00" }, { observed_next_renewal_at: "private-email" },
+    { observed_active_contracts: null, observed_distinct_subscribers: 0, readiness: {
+      observed_active_contracts: "withheld", observed_distinct_subscribers: "observed_unverified",
+      observed_next_renewal_at: "observed_unverified", observed_renewing_contracts_in_window: "observed_unverified" } }]) {
+    const changed = { subscription_observations: [{ ...data.subscription_observations[0], ...alteration }] };
+    expect((await subscriptionReportGet(deliveryRequest(), deliveryEnv, async () => new Response(JSON.stringify(changed)))).status).toBe(503);
+  }
+  expect((await subscriptionReportGet(deliveryRequest(), deliveryEnv, async () => new Response("x".repeat(65537)))).status).toBe(503);
+  const failed = await subscriptionReportGet(deliveryRequest(), deliveryEnv, async () => new Response("private-error", { status: 403 }));
+  expect(failed.status).toBe(503); expect(await failed.text()).toBe("");
 });

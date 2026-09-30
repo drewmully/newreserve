@@ -3,6 +3,10 @@
 This document describes the original048 RUN_ID mode. Optional additive049
 [finite recurring scan plans](SUBSCRIPTION_SCANS.md) reuse it for bounded
 multi-page progress and cadence, without changing048 or certifying global metrics.
+Revised uninstalled049 also adds separately gated aggregate HTTP delivery. Its
+live-post050 installer and observed-only report contract are documented in
+[SUBSCRIPTION_SCANS.md](SUBSCRIPTION_SCANS.md); the old post047 disabled-scope
+installer must not be used against ongoing sales.
 
 This adds a real authenticated transport, single-run orchestration, private persistence
 and owner-only SQL reporting to the existing offline collector/snapshot modules.

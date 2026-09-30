@@ -1,5 +1,5 @@
 import { SHOPIFY_MEMBERSHIP_PLANS } from "./membershipConfig";
-import { firstBoxAttributes, assertFirstBoxCart, type FirstBoxItem } from "./shopFirstBoxCheckout";
+import { firstBoxAttributes, firstBoxDisplayAttributes, assertFirstBoxCart, type FirstBoxItem } from "./shopFirstBoxCheckout";
 import { buildCheckoutOriginAttributes } from "./shopifyCheckoutOrigin";
 import { recordJourneyCart } from "./analytics/journeyClient";
 import {
@@ -166,7 +166,9 @@ export async function createMembershipCheckout(
   // Sanitize line attributes — Shopify caps keys at 100 chars + values at
   // 32k; we keep a tighter cap so a malformed payload can never blow up
   // the cart. Empty values are dropped.
-  const subscriptionLineAttrs = (options.firstBoxItems ? [] : options.subscriptionLineAttributes ?? [])
+  const subscriptionLineAttrs = (options.firstBoxItems
+    ? firstBoxDisplayAttributes(options.firstBoxItems, merchandiseId)
+    : options.subscriptionLineAttributes ?? [])
     .filter((a) => a && a.key && a.value !== undefined && a.value !== null)
     .map((a) => ({
       key: String(a.key).slice(0, 100),

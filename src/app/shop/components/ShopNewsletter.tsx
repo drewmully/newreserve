@@ -30,6 +30,7 @@ export function ShopNewsletter() {
         <div>
           <h2 className="h2">The next edit, in your inbox.</h2>
           <p className="lede">New arrivals and good finds. Nothing extra.</p>
+          <button className="shop-newsletter__personalize" type="button" onClick={() => window.dispatchEvent(new Event("mully:open-signup"))}>Make it more personal ↗</button>
         </div>
         {status === "done" ? (
           <div className="shop-newsletter__success" role="status">

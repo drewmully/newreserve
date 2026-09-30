@@ -13,8 +13,9 @@ export type FirstBoxCart = {
   lines: { nodes: VerifiedLine[]; pageInfo: { hasNextPage: boolean } };
 };
 
-/** The box is the only purchased product. Keep its first-box packing list at
- * order level, not on the subscription line/contract, so it is not recurring. */
+/** The subscription is the only purchased product. Order-level attributes are
+ * the fulfillment authority; display-only line properties may be retained by
+ * the subscription provider and must never drive renewal packing. */
 export function firstBoxAttributes(items: FirstBoxItem[], subscriptionVariant: string) {
   if (items.length !== 3 || new Set(items.map(i => i.variantId)).size !== 3 ||
       new Set(items.map(i => i.slot)).size !== 3 ||
@@ -30,6 +31,19 @@ export function firstBoxAttributes(items: FirstBoxItem[], subscriptionVariant: s
       {key:`First box ${item.slot}`,value:`${item.name.trim()} / ${item.size.trim()} (qty 1)`.slice(0,500)},
       {key:`_first_box_${item.slot.toLowerCase()}_variant`,value:item.variantId},
     ]),
+  ];
+}
+
+/** Visible checkout properties, explicitly scoped to the first shipment.
+ * These are NOT separately purchased or inventory-reserving apparel lines. */
+export function firstBoxDisplayAttributes(items: FirstBoxItem[], subscriptionVariant: string) {
+  firstBoxAttributes(items, subscriptionVariant);
+  return [
+    ...items.map(item => ({
+      key: `First shipment only · ${item.slot}`,
+      value: `${item.name.trim()} / ${item.size.trim()}`.slice(0, 500),
+    })),
+    { key: "Future shipments", value: "New styles curated for you. $250 every 3 months (4x/year)." },
   ];
 }
 

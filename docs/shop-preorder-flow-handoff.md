@@ -36,7 +36,9 @@ The Flow must inspect these **order-level custom attributes**, not just the subs
 
 These instructions do **not** reserve or decrement the three garment variants. Before release, your team must allocate those units in its fulfillment/inventory process; checking whether each variant merely has a positive quantity is not enough when multiple held orders compete for the same units.
 
-The attributes are deliberately not placed on the recurring subscription line. Verify the actual subscription provider's renewal order with a test before assuming that no order metadata is copied forward; no paid order or renewal was placed during this work.
+The order-level packing attributes remain the fulfillment authority. The shopper-approved clarity update also adds **display-only line properties**, labeled `First shipment only · Top`, `First shipment only · Bottom`, and `First shipment only · Layer`, so selections are visible in checkout. A `Future shipments` property explains that new styles are curated every three months.
+
+Subscription software may retain these display properties on the recurring contract or renewal orders. Do not use them to pack renewals. Verify the actual provider's renewal behavior before assuming any metadata disappears automatically; no paid order or renewal was placed during this work.
 
 ## Release rules and acceptance checks
 

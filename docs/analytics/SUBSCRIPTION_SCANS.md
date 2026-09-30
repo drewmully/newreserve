@@ -8,13 +8,16 @@ scan. The scheduler does not register plans or receive private reporting access.
 
 ## Execution contract
 
-1. Install/verify the separately approved047 → revised guarded048 package first.
-   The revised048 guard permits only the exact retained **disabled** sales scope
-   (`ea42194207c574df8b4a3872efffe0f365de67526855f7699267ae9da70003f9`);
-   the other seven sales runtime tables must be empty. Do not install046.
+1. Use the separately approved live-post050 guarded048/049 proposal, not the old
+   post047 installer that required disabled sales and empty runtime tables.
+   Production sales can remain enabled: the new proposal captures and compares
+   actual old state within one repeatable-read transaction, not fixed runtime
+   counts. It must match the corrected050 catalog and preserve sales/report gates.
+   Do not install046 or reinstall050. Installation still needs separate approval.
 2. Review/approve049 separately. It creates one private plan table, one private
-   immutability/kill-switch trigger function, four service write-control RPCs and
-   one owner-only report function. It creates **no plan or schedule**. Raw048 is
+   immutability/kill-switch trigger function, four service write-control RPCs,
+   one owner-only report function, and the separately gated aggregate delivery
+   described below. It creates **no plan or schedule**. Raw048 is
    unchanged. The current-run FK adds referential-integrity dependencies on048;
    purge a plan's references before deleting its child runs.
 3. Owner records the approved finite plan with the fields below, leaving `enabled`
@@ -132,12 +135,131 @@ customer count certification or historical trend is introduced. End-of-paginatio
 is labelled `pagination_ended_unverified`; budget stops are `budget_reached`.
 Per-page details remain available only through048's owner-only report.
 
+### Captured-page metrics
+
+The owner scan report also returns `cycles[].capturedPageMetrics`, separately
+from the six unchanged global metrics:
+
+| Metric | Meaning |
+|---|---|
+| `observedActiveContractsInCapturedPages` | Distinct committed `ACTIVE` contracts, for an explicit ACTIVE-only counted-status policy. |
+| `observedDistinctSubscribersInCapturedPages` | Distinct pseudonymous Shopify customer keys on those contracts, not store-wide customers or people. |
+| `observedNextRenewalAtInCapturedPages` | Earliest recorded next-billing timestamp on those contracts; not a payment-success forecast. |
+| `observedRenewingContractsInWindowInCapturedPages` | Active contracts with a next-billing timestamp from the final captured page's collection-finish timestamp, inclusive, to that timestamp plus the policy's 1–90 fixed 24-hour days, exclusive. |
+
+Each metric has its own value/readiness/reasons. Identical cross-page rows are
+deduplicated. Conflicting revisions withhold all four metrics; missing customer
+keys withhold only distinct subscribers; missing or already-past renewal dates
+withhold renewal metrics without suppressing valid captured contract counts.
+A different counted-status policy is not silently called ACTIVE. An uncollected
+cycle is absent, not zero; a captured empty result can report observed zero counts
+and an observed null next renewal. No contract/customer keys appear in this
+aggregate report.
+
+`scanTraversal=all_returned_pages_traversed` means the provider ended pagination,
+not that a consistent complete-store snapshot was obtained.
+`budget_limited` and `partial` distinguish cutoff and unfinished/failed scans.
+`paginationEnded` records traversal evidence only. In every case,
+`coverage=captured_pages_only`, `snapshotConsistency=unverified`,
+`scopeComplete=false`, and `certified=false`. The page-time range remains visible;
+these are interval observations, never silently certified as-of totals or trends.
+
+### What is still missing for MRR/ARR
+
+The documented2026-04 list shape provides price/cadence/discount/prepaid fields,
+but it does not establish an approved complete recurring billing-cycle amount.
+The existing offline transform can consume independent amount evidence; the live
+collector/runtime intentionally has no such evidence input and requires
+`recurringValue=null`. Neither the first line nor `price × quantity` is authority.
+Before any money integration, the owner must approve:
+
+- An exact recurring-revenue definition, counted statuses, currency/FX policy,
+  taxes/shipping/one-time items/discounts and dunning/cancellation treatment.
+- Source-backed, contract-bound, timestamp-aligned **complete discounted billing
+  cycle amounts**, including evidence that all recurring lines are represented.
+- Known currency and cadence/count, plus explicit prepaid allocation semantics.
+  The existing proposed normalizer supports MONTH/YEAR cadence, not invented
+  day/week equivalents; ARR is proposed MRR×12, not recognized/accounting revenue.
+- Consistent-scope evidence and monetary retention/permission authority. Ending
+  pagination does not supply either.
+
+No new revenue field is collected or stored in this increment. The official
+[list schema](https://developer.loopwork.co/reference/read-all-subscriptions)
+and [store-wide rate limits](https://developer.loopwork.co/reference/rate-limits)
+support the existing bounded collection mechanics, not these business definitions.
+Evidence is documentation/code-only; no live response or token was examined.
+
+## Separately gated aggregate delivery
+
+Revised **uninstalled049** adds `lean_private.subscription_report_delivery`
+(singleton disabled row, nullable owner-selected `plan_id`/`approval_ref`) and
+`public.lean_subscription_reports_read()` (zero arguments, STABLE SECURITY DEFINER).
+Only this new aggregate RPC receives one additional service EXECUTE grant.
+No private-table read, owner-report EXECUTE, plan registration, gate editing,
+PostHog-reader grant or new role is given to the service.
+
+`GET /api/analytics/reports/subscriptions` follows the fixed authenticated sales
+report pattern, but has its own `LEAN_SUBSCRIPTION_REPORTS_ENABLED` and
+`LEAN_SUBSCRIPTION_REPORTS_SECRET`. Both default off/unconfigured. It requires
+Production/main, the fixed approved Supabase project, independent bearer,
+no query/body, fixed zero-argument RPC, no redirect and a 15-second fetch limit.
+It serves at most seven aggregate cycle rows/64KiB, with strict field/value
+allowlists; storage/provider failures never forward private response text.
+There is no Loop request on this route and no change to SQL050 or sales payload.
+
+Rows contain captured active-contract/subscriber/renewal-window counts, earliest
+next-billing timestamp, count readiness, capture interval, renewal-window end,
+traversal/page/raw-row counts and conflict/coverage flags. They contain **no**
+raw or pseudonymous IDs, names, email, customer rows, per-contract renewals,
+cursor, token, approval reference, MRR or ARR. Null means withheld/unavailable,
+not zero. With no captured cycles the result is an empty resource, not fake data.
+
+The proposed collection/delivery approval is deliberately finite:
+
+- One registered plan, one scan per **86400 seconds after the preceding scan
+  completes**, up to **7 cycles in a 7-day outer window**. This is not guaranteed
+  wall-clock midnight execution or permission to replace expired plans.
+- Per scan: **20 pages, 1000 raw rows, 4,000,000 bytes, 100 rows per page** maximum.
+  The independent existing five-minute polling job admits one GET per tick,
+  with fail-stop/no ambiguous replay. At most140 GETs are authorized by that plan;
+  stricter row/byte/time caps can stop earlier.
+- Exact target/shop and reviewed explicit `ACTIVE` counted-status policy;
+  fixed2026-04 transport. Existing operational `LOOP_ADMIN_API_VERSION` is not
+  inherited or changed. The token's UI/session association is not API identity
+  proof: approve an explicit owner-attested token-to-shop/read-scope binding.
+- Approved retention reference, accountable deletion owner and exact
+  `retain_until` still must be supplied. Retention expiry prevents delivery;
+  delivery expiry is not automatic deletion of private or imported data.
+
+The delivery RPC additionally refuses a selected plan over7 cycles or with
+cadence other than86400s. The existing collector limits and finite plan enforce
+the remaining maxima. Enabling delivery does not enable collection, and enabling
+collection does not enable delivery.
+
+After explicit collection/export approval, the owner may bind the exact plan to
+the new gate, independently configure the report bearer and review the
+[single-resource manifest](subscription-posthog-manifest.json). The intended
+destination is existing private PostHog project353503 with a **new distinct**
+subscription schema/source, never the sales or sample schemas. Use full refresh,
+not append/incremental history: cycle numbers are scoped to the selected finite
+plan. Imported historical trends/complete-store totals must not be implied.
+Choose and approve actual sync cadence/retention in the provider; the manifest
+does not enable sync, contain a secret, or prove import. Empty discovery must not
+be filled with synthetic rows.
+
+Rollback disables the subscription schedule opt-ins, collection plan/gate/flag,
+and separate delivery gate/flag/schema sync only. Preserve sales gates, source
+webhooks, report endpoint and existing data. Reconcile an in-flight lease and
+follow approved retention; do not drop tables/reset attempts/replay a source page.
+
 Disable the plan to stop further permits and disable its current child run;
 disable the existing environment flag/global gate as the broader kill switch.
 An in-flight GET cannot be un-sent. Plans/runs/ciphertexts must be purged by the
 approved owner after leases settle and according to the recorded retention
 deadline. 049's report refuses expired retention, but048 data remains at rest until
 owner deletion; this is not an automatic purge system.
+Before purging a plan, the owner must disable and clear its aggregate-delivery
+gate reference; clear the plan's current-run reference before purging child runs.
 
 ## Validation / live gates
 

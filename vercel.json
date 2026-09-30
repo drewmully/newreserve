@@ -1,7 +1,9 @@
 {
   "git": {
     "deploymentEnabled": {
-      "review/analytics-destination-acceptance": false,
+      "review/analytics-subscription-live": false,
+      "review/analytics-order-size-live": false,
+      "review/analytics-order-size-reporting": false,
       "review/analytics-metric-readiness": false,
       "review/analytics-reporting-closeout": false,
       "review/analytics-subscription-runtime": false,
@@ -28,6 +30,7 @@
       "review/analytics-039-shopify-pilot": false,
       "review/analytics-040-history-import": false,
       "review/analytics-initial-validation": false,
+      "review/analytics-destination-acceptance": false,
       "feat/analytics-spend-source": false,
       "feat/analytics-full-report-build": false,
       "feat/analytics-commerce-reports": false,

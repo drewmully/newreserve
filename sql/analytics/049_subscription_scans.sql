@@ -160,17 +160,63 @@ begin
   if now()>=p.retain_until then raise exception 'subscription retention expired; owner purge required'; end if;
   with pages as (select (h->>'cycle')::integer cycle,h,r.payload
     from jsonb_array_elements(p.history) h join lean_private.subscription_runs r on r.run_id=h->>'runId'),
-  rows as (select cycle,x from pages cross join lateral jsonb_array_elements(payload->'rows') x),
+  rows as (select distinct cycle,x from pages cross join lateral jsonb_array_elements(payload->'rows') x),
   cohorts as (select cycle,count(distinct x->>'contractKey') n,
-    count(distinct x)>count(distinct x->>'contractKey') conflict from rows group by cycle)
+    count(*)>count(distinct x->>'contractKey') conflict from rows group by cycle),
+  captures as (select cycle,count(*) pages,max(h->>'terminal') terminal,
+    jsonb_agg(h->>'runId' order by (h->>'page')::integer) runs,
+    sum((payload#>>'{evidence,rawRows}')::integer) raw_rows,
+    min((payload->>'asOf')::timestamptz) first_as_of,max((payload->>'asOf')::timestamptz) last_as_of,
+    min((payload#>>'{evidence,startedAt}')::timestamptz) capture_start,
+    max((payload#>>'{evidence,finishedAt}')::timestamptz) capture_end
+    from pages group by cycle),
+  measures as (select c.*,coalesce(cohorts.n,0) n,coalesce(cohorts.conflict,false) conflict,
+    (select count(*) from rows r where r.cycle=c.cycle and x->>'status'='ACTIVE') active,
+    (select count(distinct x->>'subscriberKey') from rows r where r.cycle=c.cycle and x->>'status'='ACTIVE') subscribers,
+    (select min((x->>'nextBillingAt')::timestamptz) from rows r where r.cycle=c.cycle and x->>'status'='ACTIVE') renewal,
+    exists(select 1 from rows r where r.cycle=c.cycle and x->>'status'='ACTIVE' and x->>'subscriberKey' is null) missing_subscriber,
+    exists(select 1 from rows r where r.cycle=c.cycle and x->>'status'='ACTIVE' and x->>'nextBillingAt' is null) missing_renewal,
+    exists(select 1 from rows r where r.cycle=c.cycle and x->>'status'='ACTIVE'
+      and (x->>'nextBillingAt')::timestamptz<c.capture_end) past_renewal
+    from captures c left join cohorts using(cycle)),
+  assessed as (select m.*,
+    array_remove(array[
+      case when conflict then 'conflicting_contract_revisions' end,
+      case when p.policy->'countedStatuses' is distinct from '["ACTIVE"]'::jsonb
+        or p.policy->>'deduplication' is distinct from 'identical_normalized_contract'
+        then 'active_count_policy_unverified' end],null) base_reasons,
+    case when p.policy->>'renewalDays' ~ '^[1-9][0-9]?$'
+      and (p.policy->>'renewalDays')::integer<=90 then (p.policy->>'renewalDays')::integer end renewal_days
+    from measures m)
   select jsonb_agg(jsonb_build_object('cycle',c.cycle,'completedPages',c.pages,'terminal',c.terminal,'pageRuns',c.runs,
     'rawRowsCaptured',c.raw_rows,'firstPageAsOf',c.first_as_of,'lastPageAsOf',c.last_as_of,
-    'observedUniqueContractsInCapturedPages',coalesce(cohorts.n,0),'revisionConflict',coalesce(cohorts.conflict,false),
-    'coverage','captured_pages_only','readiness','observed_unverified') order by c.cycle) into cycles
-  from (select cycle,count(*) pages,max(h->>'terminal') terminal,
-    jsonb_agg(h->>'runId' order by (h->>'page')::integer) runs,
-    sum((payload#>>'{evidence,rawRows}')::integer) raw_rows,min(payload->>'asOf') first_as_of,max(payload->>'asOf') last_as_of
-    from pages group by cycle) c left join cohorts using(cycle);
+    'observedUniqueContractsInCapturedPages',c.n,'revisionConflict',c.conflict,
+    'coverage','captured_pages_only','readiness','observed_unverified',
+    'paginationEnded',coalesce(c.terminal='pagination_ended_unverified',false),
+    'scanTraversal',case when c.terminal='pagination_ended_unverified' then 'all_returned_pages_traversed'
+      when c.terminal='budget_reached' then 'budget_limited' else 'partial' end,
+    'snapshotConsistency','unverified','captureStartedAt',c.capture_start,'captureFinishedAt',c.capture_end,
+    'renewalReferenceAt',c.capture_end,'renewalUntilExclusive',c.capture_end+c.renewal_days*interval '24 hours',
+    'capturedPageMetrics',(select jsonb_object_agg(name,jsonb_build_object(
+      'value',case when cardinality(reasons)=0 then value else 'null'::jsonb end,
+      'readiness',case when cardinality(reasons)=0 then 'observed_unverified' else 'withheld' end,
+      'reasons',to_jsonb(reasons))) from (values
+        ('observedActiveContractsInCapturedPages',to_jsonb(c.active),c.base_reasons),
+        ('observedDistinctSubscribersInCapturedPages',to_jsonb(c.subscribers),
+          c.base_reasons||array_remove(array[case when c.missing_subscriber then 'missing_subscriber_id' end,
+            case when p.policy->>'subscriberBasis' is distinct from 'shopify_customer_id' then 'subscriber_basis_unverified' end],null)),
+        ('observedNextRenewalAtInCapturedPages',to_jsonb(c.renewal),
+          c.base_reasons||array_remove(array[case when c.missing_renewal then 'missing_next_billing_date' end,
+            case when c.past_renewal then 'past_next_billing_date' end],null)),
+        ('observedRenewingContractsInWindowInCapturedPages',
+          to_jsonb((select count(*) from rows r where r.cycle=c.cycle and x->>'status'='ACTIVE'
+            and (x->>'nextBillingAt')::timestamptz>=c.capture_end
+            and (x->>'nextBillingAt')::timestamptz<c.capture_end+c.renewal_days*interval '24 hours')),
+          c.base_reasons||array_remove(array[case when c.missing_renewal then 'missing_next_billing_date' end,
+            case when c.past_renewal then 'past_next_billing_date' end,
+            case when c.renewal_days is null then 'renewal_window_unverified' end],null))
+      ) metric(name,value,reasons))
+    ) order by c.cycle) into cycles from assessed c;
   select jsonb_object_agg(name,jsonb_build_object('value',null,'readiness','withheld',
     'reasons',case when name in ('proposedMrr','proposedArr')
       then jsonb_build_array('scope_consistency_unverified','recurring_amount_authority_unverified')
@@ -184,30 +230,79 @@ begin
     'binding','owner_attested_not_provider_verified','scopeComplete',false,'certified',false,
     'definitionStatus','proposed','historicalTrendsSupported',false,'metrics',globals,'cycles',coalesce(cycles,'[]'));
 end $$;
+-- Independent aggregate delivery. No gate/plan selection or raw report access for service.
+create table lean_private.subscription_report_delivery (
+  singleton boolean primary key default true check(singleton),
+  enabled boolean not null default false,
+  plan_id text references lean_private.subscription_scan_plans,
+  approval_ref text,
+  check(not enabled or (plan_id is not null and length(trim(approval_ref))>0 and approval_ref is not null))
+);
+insert into lean_private.subscription_report_delivery(singleton) values(true);
+alter table lean_private.subscription_report_delivery enable row level security;
+revoke all on lean_private.subscription_report_delivery from public,anon,authenticated,service_role;
+create function public.lean_subscription_reports_read() returns jsonb
+language plpgsql stable security definer set search_path=pg_catalog as $$
+declare g lean_private.subscription_report_delivery; p lean_private.subscription_scan_plans; report jsonb; result jsonb;
+begin
+  select * into strict g from lean_private.subscription_report_delivery where singleton;
+  if not g.enabled then return null; end if;
+  select * into strict p from lean_private.subscription_scan_plans where plan_id=g.plan_id;
+  if p.project_ref<>'xnfjdbpjuaezxjgargto' or p.shop<>'mullybox-store.myshopify.com'
+    or p.max_cycles>7 or p.cadence_seconds<>86400 then raise exception 'subscription delivery scope'; end if;
+  report:=public.lean_subscription_scan_report(p.plan_id); -- Includes retention-expiry refusal.
+  select jsonb_build_object('subscription_observations',coalesce(jsonb_agg(jsonb_build_object(
+    'cycle',(c->>'cycle')::integer,'capture_started_at',c->'captureStartedAt','capture_finished_at',c->'captureFinishedAt',
+    'renewal_until_exclusive',c->'renewalUntilExclusive',
+    'scan_traversal',c->'scanTraversal','pagination_ended',c->'paginationEnded',
+    'completed_pages',(c->>'completedPages')::integer,'raw_rows_captured',(c->>'rawRowsCaptured')::integer,
+    'observed_unique_contracts',(c->>'observedUniqueContractsInCapturedPages')::integer,
+    'revision_conflict',c->'revisionConflict','report_scope','captured_pages_only',
+    'scope_complete',false,'snapshot_consistency','unverified','certified',false,
+    'observed_active_contracts',c#>'{capturedPageMetrics,observedActiveContractsInCapturedPages,value}',
+    'observed_distinct_subscribers',c#>'{capturedPageMetrics,observedDistinctSubscribersInCapturedPages,value}',
+    'observed_next_renewal_at',c#>'{capturedPageMetrics,observedNextRenewalAtInCapturedPages,value}',
+    'observed_renewing_contracts_in_window',c#>'{capturedPageMetrics,observedRenewingContractsInWindowInCapturedPages,value}',
+    'readiness',jsonb_build_object(
+      'observed_active_contracts',c#>'{capturedPageMetrics,observedActiveContractsInCapturedPages,readiness}',
+      'observed_distinct_subscribers',c#>'{capturedPageMetrics,observedDistinctSubscribersInCapturedPages,readiness}',
+      'observed_next_renewal_at',c#>'{capturedPageMetrics,observedNextRenewalAtInCapturedPages,readiness}',
+      'observed_renewing_contracts_in_window',c#>'{capturedPageMetrics,observedRenewingContractsInWindowInCapturedPages,readiness}')
+    ) order by (c->>'cycle')::integer),'[]'::jsonb)) into result
+    from jsonb_array_elements(report->'cycles') c;
+  if jsonb_array_length(result->'subscription_observations')>7 or octet_length(result::text)>65536
+    then raise exception 'subscription delivery budget'; end if;
+  return result;
+end $$;
 revoke all on function lean_private.subscription_scan_immutable(),
   public.lean_subscription_scan_claim(text,text,uuid),public.lean_subscription_scan_permit(text,text,text,uuid),
   public.lean_subscription_scan_finish(text,text,text,uuid,jsonb,boolean,text,text),
-  public.lean_subscription_scan_fail(text,text,text,uuid),public.lean_subscription_scan_report(text)
+  public.lean_subscription_scan_fail(text,text,text,uuid),public.lean_subscription_scan_report(text),
+  public.lean_subscription_reports_read()
   from public,anon,authenticated,service_role;
 grant execute on function public.lean_subscription_scan_claim(text,text,uuid),
   public.lean_subscription_scan_permit(text,text,text,uuid),
   public.lean_subscription_scan_finish(text,text,text,uuid,jsonb,boolean,text,text),
-  public.lean_subscription_scan_fail(text,text,text,uuid) to service_role;
+  public.lean_subscription_scan_fail(text,text,text,uuid),public.lean_subscription_reports_read() to service_role;
 do $$ begin
   if exists(select 1 from pg_roles where rolname='lean_posthog_reader') then
-    revoke all on lean_private.subscription_scan_plans from lean_posthog_reader;
+    revoke all on lean_private.subscription_scan_plans,lean_private.subscription_report_delivery from lean_posthog_reader;
     revoke all on function lean_private.subscription_scan_immutable(),public.lean_subscription_scan_claim(text,text,uuid),
       public.lean_subscription_scan_permit(text,text,text,uuid),public.lean_subscription_scan_finish(text,text,text,uuid,jsonb,boolean,text,text),
-      public.lean_subscription_scan_fail(text,text,text,uuid),public.lean_subscription_scan_report(text) from lean_posthog_reader;
+      public.lean_subscription_scan_fail(text,text,text,uuid),public.lean_subscription_scan_report(text),
+      public.lean_subscription_reports_read() from lean_posthog_reader;
   end if;
   if exists(select 1 from pg_class c cross join lateral aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) a
-    where c.oid='lean_private.subscription_scan_plans'::regclass and a.grantee<>c.relowner) or
+    where c.oid in ('lean_private.subscription_scan_plans'::regclass,'lean_private.subscription_report_delivery'::regclass)
+      and a.grantee<>c.relowner) or
     exists(select 1 from pg_proc p cross join lateral aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) a
       where ((p.pronamespace='public'::regnamespace and p.proname=any(array['lean_subscription_scan_claim',
-        'lean_subscription_scan_permit','lean_subscription_scan_finish','lean_subscription_scan_fail','lean_subscription_scan_report']))
+        'lean_subscription_scan_permit','lean_subscription_scan_finish','lean_subscription_scan_fail','lean_subscription_scan_report',
+        'lean_subscription_reports_read']))
         or (p.pronamespace='lean_private'::regnamespace and p.proname='subscription_scan_immutable'))
       and a.grantee<>p.proowner and not(p.pronamespace='public'::regnamespace and p.proname=any(array[
-        'lean_subscription_scan_claim','lean_subscription_scan_permit','lean_subscription_scan_finish','lean_subscription_scan_fail'])
+        'lean_subscription_scan_claim','lean_subscription_scan_permit','lean_subscription_scan_finish','lean_subscription_scan_fail',
+        'lean_subscription_reports_read'])
         and a.grantee='service_role'::regrole and a.privilege_type='EXECUTE' and not a.is_grantable))
     then raise exception 'unexpected subscription scan ACL'; end if;
 end $$;
