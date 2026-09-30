@@ -1,6 +1,7 @@
 {
   "git": {
     "deploymentEnabled": {
+      "review/analytics-metric-readiness": false,
       "review/analytics-reporting-closeout": false,
       "review/analytics-subscription-runtime": false,
       "review/analytics-production-completion": false,

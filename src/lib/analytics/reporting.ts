@@ -175,6 +175,12 @@ export function customerCohort(f: Facts, s: ReportScope, policy: {
       const original = policy.originalLedgerIds.has(l.ledger_entry_id as string);
       const occurred = Date.parse(l.effective_at as string);
       const parent = orders.find(o => o.order_id === l.order_id)!;
+      // Original components may predate payment, but must precede the H-day
+      // endpoint. An impossible original clock withholds revenue, not a zero.
+      if (typeof l.effective_at !== "string" || !Number.isFinite(occurred) || original && occurred >= end) {
+        valuesComplete = false;
+        continue;
+      }
       if (original || occurred >= Date.parse(parent.paid_at as string) && occurred < end) {
         if (l.amount_usd === null) valuesComplete = false;
         else total += micros(l.amount_usd as string);

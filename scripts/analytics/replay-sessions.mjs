@@ -12,6 +12,24 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const fields = ["report_date", "stage_id", "measured_sessions", "mature_sessions",
   "converted_sessions", "session_conversion_rate"];
+const acquisitionFields = ["report_date", "channel", "campaign_bucket", "model_version",
+  "attributed_purchase_merchandise_net_usd", "credited_orders", "spend_usd", "first_party_roas"];
+const attributionFields = ["order_id", "model_version", "acquisition_session_key", "touch_event_key",
+  "channel", "campaign_id", "attribution_status", "lookback_days", "conversion_time_basis",
+  "credit_weight", "conversion_date", "attribution_complete"];
+const exactRows = (rows, columns) => Array.isArray(rows) && rows.length <= 20000 &&
+  rows.every(row => row && typeof row === "object" &&
+    Object.keys(row).sort().join() === [...columns].sort().join());
+const requiredRef = value => typeof value === "string" && !!value.trim();
+function canonicalRows(rows, columns, keys) {
+  const seen = new Set();
+  return rows.map(row => {
+    const key = JSON.stringify(keys.map(name => row[name]));
+    if (seen.has(key)) throw new Error("replay_duplicate_expected_or_actual_key");
+    seen.add(key);
+    return { key, row: Object.fromEntries(columns.map(name => [name, row[name]])) };
+  }).sort((a, b) => a.key < b.key ? -1 : a.key > b.key ? 1 : 0).map(value => value.row);
+}
 const project = row => Object.fromEntries(fields.map(key => [key, row[key]]));
 const sort = rows => rows.sort((a, b) =>
   JSON.stringify([a.report_date, a.stage_id]).localeCompare(JSON.stringify([b.report_date, b.stage_id])));
@@ -26,6 +44,18 @@ export async function replaySessions(input, modules) {
       input.expected.funnel.length > 20000 ||
       input.expected.funnel.some(row => !row || Object.keys(row).sort().join() !== [...fields].sort().join()))
     throw new Error("replay_expected_evidence_required");
+  // Optional acquisition validation is additional to the unchanged funnel
+  // invocation. Require exact independent order-credit AND aggregate controls;
+  // a ratio-only check cannot establish which touch/campaign received credit.
+  const acquisition = input.expected.acquisition;
+  if (acquisition !== undefined && (!acquisition ||
+      Object.keys(acquisition).sort().join() !== "daily,evidenceRef,independentlyExtracted,orders" ||
+      acquisition.independentlyExtracted !== true || !requiredRef(acquisition.evidenceRef) ||
+      !exactRows(acquisition.orders, attributionFields) || !exactRows(acquisition.daily, acquisitionFields)))
+    throw new Error("replay_acquisition_evidence_required");
+  const expectedOrders = acquisition && canonicalRows(acquisition.orders, attributionFields, ["order_id", "model_version"]);
+  const acquisitionKeys = ["report_date", "channel", "campaign_bucket", "model_version"];
+  const expectedAcquisition = acquisition && canonicalRows(acquisition.daily, acquisitionFields, acquisitionKeys);
   const bundle = prepareRefresh(input.refresh);
   const { policy, behavior, evidence } = bundle.full;
   if (!Array.isArray(input.deferredOrders)) throw new Error("replay_deferred_inventory_required");
@@ -51,6 +81,20 @@ export async function replaySessions(input, modules) {
   const actual = sort(result.reports.funnel_daily.map(project));
   const expected = sort(input.expected.funnel.map(project));
   if (evidenceDigest(actual) !== evidenceDigest(expected)) throw new Error("replay_funnel_mismatch");
+  let acquisitionReceipt;
+  if (acquisition) {
+    const orders = canonicalRows(result.facts.order_attribution, attributionFields, ["order_id", "model_version"]);
+    const daily = canonicalRows(result.reports.acquisition_daily, acquisitionFields, acquisitionKeys);
+    if (evidenceDigest(orders) !== evidenceDigest(expectedOrders)) throw new Error("replay_attribution_mismatch");
+    if (evidenceDigest(daily) !== evidenceDigest(expectedAcquisition)) throw new Error("replay_acquisition_mismatch");
+    acquisitionReceipt = {
+      comparedOrders: orders.length, attributionDigest: evidenceDigest(orders),
+      expectedDigest: evidenceDigest(acquisition),
+      numericRoasRows: daily.filter(row => row.first_party_roas !== null).length,
+      nullRoasRows: daily.filter(row => row.first_party_roas === null).length,
+      daily,
+    };
+  }
   // Never write facts, event/identity/order/session IDs, or source payloads.
   return {
     state: "offline_expected_match", certified: false, registered: false, enabled: false,
@@ -60,6 +104,8 @@ export async function replaySessions(input, modules) {
     conversionWindowDays: policy.conversionWindowDays ?? 7, asOf: policy.asOf,
     caveat: "Saved-input comparison only; permission, coverage and expected-result authority require source review.",
     funnel: actual,
+    // Exact private order/session/event linkage is compared above, not emitted.
+    ...(acquisitionReceipt ? { acquisition: acquisitionReceipt } : {}),
   };
 }
 
