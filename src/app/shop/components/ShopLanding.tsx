@@ -16,6 +16,7 @@ import { ShopOutfitBuilder } from "./ShopOutfitBuilder";
 import { ShopNewsletter } from "./ShopNewsletter";
 import { ShopEditRail } from "./ShopEditRail";
 import { ShopHeroHotspots } from "./ShopHeroHotspots";
+import { CompactVariantPicker } from "./CompactVariantPicker";
 import "./shop-redesign.css";
 import "./shop-redesign-native.css";
 import "./shop-outfit.css";
@@ -34,6 +35,7 @@ function ProductCard({ product: p, onQuick }: { product: ShopifyProduct; onQuick
       <p className="card__brand">{p.brand}</p>
       <a className="card__name" href={`/shop/${p.slug}`} title={p.name}>{shopProductLabel(p)}</a>
       <div className="card__row"><span className="card__price">{money(p.price)}</span>{!available && <span className="shop-stock">Unavailable</span>}</div>
+      {p.variants.some(v => v.currentlyNotInStock) && <p className="shop-stock">Preorder · About {p.preOrderEtaWeeks || 2} weeks</p>}
     </div>
   </article>;
 }
@@ -55,7 +57,7 @@ export function ShopLanding({ products, productsByCategory, theme, journalPosts 
   const heroImage = useRef<HTMLImageElement>(null);
   const quickTrigger = useRef<HTMLElement | null>(null);
   const edit = useMemo(() => selectShopEdit(products, products.length), [products]);
-  const gear = ["voice-caddie-laser-fit", "blue-tees-player-gps-speaker", "garmin-approach-s70", "bushnell-tour-v7-shift"]
+  const gear = ["winston-golf-tour-towel", "technically-golf-tiger-stripe-needlepoint-belt", "duckhead-stretch-belt", "leon-weekender-duffel"]
     .map(slug => products.find(p => p.slug === slug)).filter((p): p is ShopifyProduct => !!p);
   useEffect(() => {
     function update() {
@@ -139,7 +141,7 @@ export function ShopLanding({ products, productsByCategory, theme, journalPosts 
           <div className="wrap">
             <div className="sechead">
               <h2 className="h2">Gear worth bringing</h2>
-              <a className="ulink" href="/shop/collection/shop-tech">Shop gear</a>
+              <a className="ulink" href="/shop/collection/shop-gear">Shop gear</a>
             </div>
             <div className="grid shop-edit-grid">
               {gear.map(p => <ProductCard key={p.slug} product={p} onQuick={openQuick} />)}
@@ -173,14 +175,14 @@ export function ShopLanding({ products, productsByCategory, theme, journalPosts 
             <div className="faq">
               <details><summary>Do I need a subscription to shop?<i /></summary><div><p>No. Shop individual products whenever you like. Mully Reserve is an optional quarterly service.</p></div></details>
               <details><summary>How do I choose my size?<i /></summary><div><p>Use the brand-specific size chart on each product page or the builder’s Size &amp; fit guide. Choose a size for each piece before adding it to your bag.</p></div></details>
-              <details><summary>When will my order ship?<i /></summary><div><p>Check the availability and delivery details for each product. Shipping options, costs, and taxes are confirmed at checkout.</p></div></details>
+              <details><summary>When will my order ship?<i /></summary><div><p>Preorder pieces ship in about 2 weeks. Check each product for current availability. Shipping options, costs, and taxes are confirmed at checkout.</p></div></details>
               <details><summary>What if the fit is wrong?<i /></summary><div><p>See our <a href="/policies/refund">return policy</a> for the 30-day return window and conditions, or <a href="/returns">start a return</a>.</p></div></details>
               <details><summary>How does the shop offer work?<i /></summary><div><p>Buy two or more eligible one-time pieces for 15% off one lowest-priced item. Review your bag for the applied discount and final total. This offer does not stack with Reserve.</p></div></details>
             </div>
           </div>
         </section>
         <dialog ref={dialog} id="shop-quick-dialog" className="outfit-fit shop-quick" aria-labelledby="quick-title"
-          onClose={() => { setQuickIsOpen(false); quickTrigger.current?.focus({ preventScroll: true }); }}
+          onClose={() => { setQuickIsOpen(false); setQuick(null); quickTrigger.current?.focus({ preventScroll: true }); }}
           onClick={e => {
             if (e.target !== e.currentTarget) return;
             const r = e.currentTarget.getBoundingClientRect();
@@ -195,13 +197,14 @@ export function ShopLanding({ products, productsByCategory, theme, journalPosts 
                 <p className="shop-quick__brand">{quick.brand}</p>
                 <p className="shop-quick__price">{money(activeVariant?.price ?? quick.price)}</p>
                 {!quick.variants.some(v => v.availableForSale) && <p className="shop-quick__stock" role="status">Currently unavailable</p>}
+                {activeVariant?.currentlyNotInStock && <p className="shop-quick__stock">Preorder · Ships in about {quick.preOrderEtaWeeks || 2} weeks</p>}
                 {styledLook && <p className="shop-quick__note">Styled illustration. Product photos show the actual item; fit may differ.</p>}
               </div>
             </div>
-            <label className="quick-select">Choose your option<select value={variant} onChange={e => setVariant(e.target.value)}>
+            {quick.variants[0]?.selectedOptions.length > 1 ? <CompactVariantPicker key={quick.slug} product={quick} value={variant} onChange={setVariant} /> : <label className="quick-select">Choose your option<select value={variant} onChange={e => setVariant(e.target.value)}>
               <option value="">Select a size / option</option>
               {quick.variants.map(v => <option key={v.id} value={v.id} disabled={!v.availableForSale}>{variantLabel(v)}{!v.availableForSale ? " · Unavailable" : ""}</option>)}
-            </select></label>
+            </select></label>}
             {error && <p role="alert">{error}</p>}
             <button className="btn btn--accent btn--block" disabled={!activeVariant?.availableForSale || busy} onClick={addQuick}>{busy ? "Adding…" : !quick.variants.some(v => v.availableForSale) ? "Currently unavailable" : "Add to bag"}</button>
             <a href={`/shop/${quick.slug}`}>Full details, sizing &amp; availability ↗</a>

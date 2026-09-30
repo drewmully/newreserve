@@ -15,6 +15,7 @@ import {
 } from "@/lib/shopOutfit";
 import { trackEvent } from "@/lib/tracking";
 import { createMembershipCheckout } from "@/lib/shopifyCheckout";
+import { CompactVariantPicker } from "./CompactVariantPicker";
 
 export function ShopOutfitBuilder({
   products,
@@ -203,7 +204,7 @@ export function ShopOutfitBuilder({
                   {selected[i]?.images[0] && (
                     <img
                       className="outfit-tab__thumb"
-                      src={shopProductPhoto(selected[i]!)}
+                      src={selectedVariants[i]?.image || shopProductPhoto(selected[i]!)}
                       alt=""
                     />
                   )}
@@ -239,7 +240,7 @@ export function ShopOutfitBuilder({
                     }}
                   >
                     <span className="outfit-choice__image">
-                      {p.images[0] && <img src={shopProductPhoto(p)} alt={p.name} />}
+                      {p.images[0] && <img src={p.variants.find(v => v.id === variants[p.slug])?.image || shopProductPhoto(p)} alt={p.name} />}
                       <span className="outfit-choice__check" aria-hidden>
                         {indices[active] === i ? "✓" : "+"}
                       </span>
@@ -287,33 +288,11 @@ export function ShopOutfitBuilder({
                       Size &amp; fit ↗
                     </button>
                   </div>
-                  <div
-                    className="outfit__sizes"
-                    role="group"
-                    aria-labelledby="outfitSizeLabel"
-                  >
-                    {current.variants.map((v) => (
-                      <button
-                        key={v.id}
-                        data-size={v.id}
-                        data-unavailable={!v.availableForSale || undefined}
-                        aria-pressed={variants[current.slug] === v.id}
-                        title={
-                          v.availableForSale
-                            ? variantLabel(v)
-                            : `${variantLabel(v)}: unavailable`
-                        }
-                        onClick={() =>
-                          setVariants((x) => ({ ...x, [current.slug]: v.id }))
-                        }
-                      >
-                        {variantLabel(v)}
-                        {!v.availableForSale && (
-                          <span className="sr"> · Unavailable</span>
-                        )}
-                      </button>
-                    ))}
+                  <div role="group" aria-labelledby="outfitSizeLabel">
+                    <CompactVariantPicker key={current.slug} product={current} value={variants[current.slug] || ""}
+                      allowUnavailable onChange={id => setVariants(x => ({...x, [current.slug]: id}))} />
                   </div>
+                  {selectedVariants[active]?.currentlyNotInStock && <p className="outfit__stock-note">Preorder · Ships in about {current.preOrderEtaWeeks || 2} weeks</p>}
                   {current.variants.every(v => !v.availableForSale) && <p className="outfit__stock-note">Sold out individually · Available to select for your Reserve first box.</p>}
                 </>
               ) : (
@@ -351,7 +330,7 @@ export function ShopOutfitBuilder({
                 >
                   <span className="outfit__board-label">{s.label} ↗</span>
                   {selected[i]?.images[0] ? (
-                    <img src={shopProductPhoto(selected[i]!)} alt={selected[i]!.name} />
+                    <img src={selectedVariants[i]?.image || shopProductPhoto(selected[i]!)} alt={selected[i]!.name} />
                   ) : (
                     <span className="outfit__placeholder">+</span>
                   )}
@@ -474,7 +453,7 @@ export function ShopOutfitBuilder({
                       : `Add ${chosen.length === 1 ? "piece" : "outfit"} to bag`}
             </button>
             <p className="outfit__fine">
-              No subscription unless you enroll in Reserve.
+              {selectedVariants.some(v => v?.currentlyNotInStock) ? "Preorder. First shipment ships in about 2 weeks." : "No subscription unless you enroll in Reserve."}
             </p>
           </aside>
           <div className="outfit__mobile-footer">

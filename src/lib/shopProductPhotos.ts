@@ -26,5 +26,5 @@ const names: Record<string, string> = {
 };
 
 export function shopProductLabel(p: Pick<ShopifyProduct, "slug" | "name">): string {
-  return names[p.slug] || p.name;
+  return names[p.slug] || p.name.replace(/^(Olydoe|Rhone|Quiet Golf|Technically Golf|Primo|Duck Head|Winston|Leon) /, "");
 }

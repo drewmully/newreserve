@@ -14,7 +14,7 @@ const apparel = [
   ["Outerwear", "/shop/collection/shop-outerwear"],
 ];
 const gear = [
-  ["Tech", "/shop/collection/shop-tech"],
+  ["All gear", "/shop/collection/shop-gear"],
   ["Bags", "/shop/collection/shop-bags"],
   ["Accessories", "/shop/collection/shop-accessories"],
 ];
@@ -76,7 +76,7 @@ export function ShopSeasonalHeader({ accent }: { accent: string }) {
           </div>
           <nav aria-label="Shop navigation" className="hidden items-center gap-4 text-[11px] uppercase tracking-[.1em] lg:flex xl:gap-6">
             <Link href="/shop#edit" className="inline-flex min-h-11 items-center">The Edit</Link>
-            {([["Apparel", apparel], ["Gear & Tech", gear]] as const).map(([label, links]) => (
+            {([["Apparel", apparel], ["Gear", gear]] as const).map(([label, links]) => (
               <details className="relative" key={label} onBlur={e => {
                 if (!e.currentTarget.contains(e.relatedTarget as Node | null)) e.currentTarget.open = false;
               }} onKeyDown={e => { if (e.key === "Escape") { e.currentTarget.open = false; e.currentTarget.querySelector("summary")?.focus(); } }}>

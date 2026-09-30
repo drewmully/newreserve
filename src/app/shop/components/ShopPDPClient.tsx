@@ -16,6 +16,7 @@ import {
 } from "@/lib/productVariants";
 import { orderProductImagesBySelection } from "@/lib/shopDisplay";
 import { shopProductPhoto } from "@/lib/shopProductPhotos";
+import { money, variantLabel } from "@/lib/shopOutfit";
 import { ProductImageGallery } from "./ShopClient";
 import { ShopProductCard } from "./ShopProductCard";
 import { getSizeGuide } from "@/lib/sizeCharts";
@@ -63,15 +64,20 @@ export function ShopPDPClient({
   accent,
   relatedProducts = [],
 }: ShopPDPClientProps) {
-  const { addToCart } = useMembership();
+  const { addItemsToCart } = useMembership();
   const [selection, setSelection] = useState<ProductVariantSelection>(() =>
     getInitialVariantSelection(product, initialSelection)
   );
   const [added, setAdded] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState("");
   const [sizeChartOpen, setSizeChartOpen] = useState(false);
 
   const selectedVariant = useMemo(
-    () => resolveVariantBySelection(product, selection),
+    () => {
+      const candidate = resolveVariantBySelection(product, selection);
+      return candidate?.selectedOptions.every(o => selection[o.name] === o.value) ? candidate : null;
+    },
     [product, selection]
   );
 
@@ -107,7 +113,7 @@ export function ShopPDPClient({
   const allVariantsSoldOut =
     getProductVariants(product).every((v) => v.availableForSale === false);
   const currentVariantUnavailable = displayVariant?.availableForSale === false;
-  const unavailable = allVariantsSoldOut || currentVariantUnavailable;
+  const unavailable = !selectedVariant || allVariantsSoldOut || currentVariantUnavailable;
   const sizeKey = Object.keys(selection).find((k) => /^size$/i.test(k));
   const sizeSelected = sizeKey ? selection[sizeKey] : undefined;
 
@@ -136,9 +142,12 @@ export function ShopPDPClient({
     });
   }, [product]);
 
-  const handleAdd = () => {
-    const variant = displayVariant;
-    void addToCart({
+  const handleAdd = async () => {
+    const variant = selectedVariant;
+    if (!variant?.availableForSale || adding) return;
+    setAdding(true); setAddError("");
+    try {
+    await addItemsToCart([{
       slug: product.slug,
       name: product.name,
       brand: product.brand,
@@ -146,9 +155,13 @@ export function ShopPDPClient({
       retailPrice: variant?.reservePrice ?? product.reservePrice,
       variantId: variant?.id ?? product.variantId,
       image: orderedImages?.[0],
-    });
+      variantTitle: variantLabel(variant),
+    }], "BOGO15");
     setAdded(true);
     setTimeout(() => setAdded(false), 2000);
+    } catch {
+      setAddError("Could not add this option. Please try again.");
+    } finally { setAdding(false); }
   };
 
   // Merge current product into the catalog used by Ways to Wear so its own
@@ -200,7 +213,7 @@ export function ShopPDPClient({
                 </span>
               )}
               <span className="font-serif text-2xl text-charcoal">
-                ${price.toFixed(0)}
+                {money(price)}
               </span>
             </div>
           </div>
@@ -297,6 +310,8 @@ export function ShopPDPClient({
             onAddToCart={handleAdd}
             added={added}
             isUnavailable={unavailable}
+            isPreorder={selectedVariant?.currentlyNotInStock}
+            busy={adding}
             preOrderEtaWeeks={product.preOrderEtaWeeks}
             accent={accent}
             productSlug={product.slug}
@@ -304,11 +319,13 @@ export function ShopPDPClient({
             variantId={displayVariant?.id}
             selectedSize={sizeSelected}
           />
+          {addError && <p role="alert" className="mt-3 text-sm text-charcoal">{addError}</p>}
+          {!sizeGuide && product.sizing && <p className="mt-4 text-sm text-charcoal/70">{product.sizing}</p>}
 
           {/* Trust strip */}
           <div className="mt-6 grid grid-cols-3 gap-0 border border-charcoal/10 bg-cream/50 text-center">
             {[
-              { k: "Free US Shipping", v: "Orders $75+" },
+              { k: "Free US Shipping", v: "Orders $95+" },
               { k: "Free Returns", v: "Within 30 days" },
               { k: "Real Support", v: "Real people" },
             ].map((item, i) => (

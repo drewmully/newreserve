@@ -8,6 +8,8 @@ interface Props {
   added: boolean;
   /** True when the currently-selected variant (or the whole product) is unavailable. */
   isUnavailable: boolean;
+  isPreorder?: boolean;
+  busy?: boolean;
   /** Ship estimate in weeks used in the pre-order label. Defaults to 2. */
   preOrderEtaWeeks?: number;
   accent: string;
@@ -22,18 +24,19 @@ interface Props {
  * PDP primary CTA.
  *
  * Available → "Add to cart" (solid accent button).
- * Unavailable → "Pre-order · ships in ~N weeks" (still lets the shopper commit),
- *   with a small "or, notify me" chip underneath that reveals NotifyMeInline.
+ * Available with currentlyNotInStock → enabled preorder with shipping estimate.
+ * Unavailable (DENY or invalid combination) → disabled, never a fake preorder.
  *
  * The "Add to cart" ↔ "Pre-order" swap runs client-side based on the current
  * variant selection. Pre-order orders flow through normal Shopify checkout —
- * the fulfillment team currently handles ship-when-restocked as an out-of-band
- * process, so nothing else changes about the cart path.
+ * fulfillment holds are managed separately through the merchant's Shopify Flow.
  */
 export function BuyBoxAction({
   onAddToCart,
   added,
   isUnavailable,
+  isPreorder = false,
+  busy = false,
   preOrderEtaWeeks,
   accent,
   productSlug,
@@ -44,19 +47,20 @@ export function BuyBoxAction({
   const [notifyOpen, setNotifyOpen] = useState(false);
   const weeks = preOrderEtaWeeks && preOrderEtaWeeks > 0 ? preOrderEtaWeeks : 2;
 
-  if (isUnavailable) {
+  if (isUnavailable || isPreorder) {
     return (
       <div>
         <button
           onClick={onAddToCart}
+          disabled={isUnavailable || busy}
           className="flex w-full flex-col items-center justify-center py-4 text-white transition-opacity duration-200 hover:opacity-90"
           style={{ backgroundColor: accent }}
         >
           <span className="text-[11px] font-mono uppercase tracking-[0.28em]">
-            {added ? "Pre-order added" : "Pre-order"}
+            {busy ? "Adding…" : isUnavailable ? "Unavailable" : added ? "Preorder added" : "Preorder"}
           </span>
           <span className="mt-1 text-[10px] font-mono uppercase tracking-[0.2em] opacity-80">
-            Out of stock, ships in ~{weeks} weeks
+            {isUnavailable ? "Choose another available option" : `Ships in about ${weeks} weeks`}
           </span>
         </button>
         {!notifyOpen ? (
@@ -87,10 +91,11 @@ export function BuyBoxAction({
   return (
     <button
       onClick={onAddToCart}
+      disabled={busy}
       className="flex w-full items-center justify-center py-4 text-[11px] font-mono uppercase tracking-[0.28em] text-white transition-opacity duration-200 hover:opacity-90"
       style={{ backgroundColor: accent }}
     >
-      {added ? "Added to cart" : "Add to cart"}
+      {busy ? "Adding…" : added ? "Added to cart" : "Add to cart"}
     </button>
   );
 }

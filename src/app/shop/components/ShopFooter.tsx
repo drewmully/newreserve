@@ -43,8 +43,8 @@ export function ShopFooter({ accent }: { accent: string }) {
                 </Link>
               </li>
               <li>
-                <Link href="/shop/collection/shop-tech" className="hover:text-charcoal">
-                  Tech
+                <Link href="/shop/collection/shop-gear" className="hover:text-charcoal">
+                  Gear
                 </Link>
               </li>
               <li>

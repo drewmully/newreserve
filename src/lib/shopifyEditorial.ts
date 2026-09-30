@@ -66,7 +66,7 @@ const PRODUCT_FIELDS = `
   description
   publishedAt
   options { name values }
-  variants(first: 25) {
+    variants(first: 250) {
     nodes {
       id
       title

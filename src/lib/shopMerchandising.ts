@@ -3,7 +3,7 @@ import type { ShopifyProduct } from "./shopify";
 const EDIT = [
   "olydoe-og-supima-hollow-polo", "duckhead-classic-fit-gold-school-chino-khaki",
   "duckhead-fremont-sport-performance-quilted-vest-brandy-brown",
-  "winston-solid-tradition-leather-headcover",
+  "leon-weekender-duffel",
 ];
 export function selectShopEdit(products: ShopifyProduct[], limit = 4): ShopifyProduct[] {
   const rank = (p: ShopifyProduct) => {
@@ -22,9 +22,9 @@ export function shopSelectionNote(p: ShopifyProduct): string {
   return first.length <= 180 ? first : "";
 }
 const GIFTS = [
-  "winston-solid-tradition-leather-headcover", "bluegrass-fairways-handmade-leather-golf-yardage-book-cover-scorecard-holder-vintage-bourbon",
-  "blue-tees-player-gps-speaker", "technically-golf-performance-polo",
-  "voice-caddie-laser-fit", "garmin-approach-s70", "rapsodo-mlm2pro-mobile-launch-monitor",
+  "winston-golf-tour-towel", "duckhead-stretch-belt",
+  "technically-golf-tiger-stripe-needlepoint-belt", "technically-golf-performance-polo",
+  "leon-weekender-duffel",
 ];
 export function shopGiftPicks(products: ShopifyProduct[], tag: string): ShopifyProduct[] {
   return products.filter(p => p.tags?.includes(tag)).sort((a,b) => {
