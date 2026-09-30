@@ -8,6 +8,7 @@ import { auth, isSignInWithEmailLink, confirmOTPSignIn, signInWithGoogle } from 
 import { PENDING_SIGN_IN_EMAIL_KEY } from "@/lib/pendingSignInEmail";
 import { createMembershipCheckout } from "@/lib/shopifyCheckout";
 import { shopReturnFromLogin } from "@/lib/shopLogin";
+import { ShopPageShell } from "../shop/components/ShopPageShell";
 
 const PENDING_ONBOARDING_DATA_KEY = "pending_onboarding_data";
 const POST_CHECKOUT_KEY = "mully_post_checkout";
@@ -274,11 +275,7 @@ export default function LoginPage() {
   /* ── Shared UI pieces ── */
 
   const logoBox = (
-    <div className="w-12 h-12 rounded-2xl bg-forest/8 flex items-center justify-center mx-auto mb-4">
-      <svg viewBox="0 0 1002 540" fill="currentColor" className="h-5 w-auto text-forest" aria-hidden="true">
-        <path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" />
-      </svg>
-    </div>
+    <div className="shop-page-kicker">Your Mully account</div>
   );
 
   const spinner = (
@@ -307,21 +304,9 @@ export default function LoginPage() {
   );
 
   return (
-    <div className="min-h-screen bg-bone flex flex-col">
-      {/* ─── HEADER ─── */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-bone/90 backdrop-blur-md border-b border-taupe/15">
-        <div className="max-w-7xl mx-auto px-5 md:px-12 flex items-center justify-between h-14">
-          <Link href="/" className="flex items-center gap-2 text-forest">
-            <svg viewBox="0 0 1002 540" fill="currentColor" className="h-4 w-auto" aria-hidden="true">
-              <path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" />
-            </svg>
-            <span className="font-serif text-xl font-bold tracking-wide">mully.</span>
-          </Link>
-        </div>
-      </header>
-
+    <ShopPageShell>
       {/* ─── MAIN ─── */}
-      <main className="flex-1 flex items-center justify-center pt-14 px-5 py-12">
+      <main className="shop-auth-main">
         <div className="w-full max-w-sm">
 
           {/* ══ STEP 1 — Email input ══ */}
@@ -501,6 +486,6 @@ export default function LoginPage() {
 
         </div>
       </main>
-    </div>
+    </ShopPageShell>
   );
 }

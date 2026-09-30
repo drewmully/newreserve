@@ -1,4 +1,5 @@
 import { SHOPIFY_MEMBERSHIP_PLANS } from "./membershipConfig";
+import { firstBoxLines, assertFirstBoxCart, type FirstBoxItem } from "./shopFirstBoxCheckout";
 import { buildCheckoutOriginAttributes } from "./shopifyCheckoutOrigin";
 import { recordJourneyCart } from "./analytics/journeyClient";
 import {
@@ -86,6 +87,8 @@ export interface CreateMembershipCheckoutOptions {
    * property hidden on the storefront but still visible in admin/order data.
    */
   subscriptionLineAttributes?: Array<{ key: string; value: string }>;
+  /** Shop builder only. Shopify must confirm first-box pricing before redirect. */
+  firstBoxItems?: FirstBoxItem[];
 }
 
 export async function createMembershipCheckout(
@@ -105,7 +108,11 @@ export async function createMembershipCheckout(
   const { merchandiseId, sellingPlanId } = PLANS[tier];
   const domain = process.env.NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN;
   const token = process.env.NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN;
-  if (!domain || !token) return;
+  if (!domain || !token) {
+    if (options.firstBoxItems) throw new Error("Checkout is temporarily unavailable. Please try again later.");
+    return;
+  }
+  if (options.firstBoxItems && tier !== "member") throw new Error("First-box outfits require quarterly Reserve.");
 
   // Founding 100 gift: if the offer is active and slots remain, attach the
   // rangefinder as a second cart line and mark the order with a cart
@@ -159,7 +166,7 @@ export async function createMembershipCheckout(
   // Sanitize line attributes — Shopify caps keys at 100 chars + values at
   // 32k; we keep a tighter cap so a malformed payload can never blow up
   // the cart. Empty values are dropped.
-  const subscriptionLineAttrs = (options.subscriptionLineAttributes ?? [])
+  const subscriptionLineAttrs = (options.firstBoxItems ? [] : options.subscriptionLineAttributes ?? [])
     .filter((a) => a && a.key && a.value !== undefined && a.value !== null)
     .map((a) => ({
       key: String(a.key).slice(0, 100),
@@ -185,12 +192,15 @@ export async function createMembershipCheckout(
   if (foundingGift.attach && foundingGift.variantGid) {
     lines.push({ merchandiseId: foundingGift.variantGid, quantity: 1 });
   }
+  if (options.firstBoxItems) {
+    lines.push(...firstBoxLines(options.firstBoxItems, merchandiseId));
+  }
 
   // Auto-apply the Founding 100 rangefinder discount when the gift line is
   // attached. The Shopify discount is configured to apply only to the
   // rangefinder variant, so even if a buyer removes the rangefinder in
   // checkout the code applies nothing. The code is never shown in the UI.
-  const combinedDiscountCodes = [
+  const combinedDiscountCodes = options.firstBoxItems ? [] : [
     ...(options.discountCodes ?? []),
     ...(foundingGift.attach ? [FOUNDING_100_DISCOUNT_CODE] : []),
   ];
@@ -224,7 +234,17 @@ export async function createMembershipCheckout(
           discountCodes: $discountCodes,
           buyerIdentity: $buyerIdentity
         }) {
-          cart { id checkoutUrl }
+          cart {
+            id checkoutUrl
+            ${options.firstBoxItems ? `cost { subtotalAmount { amount currencyCode } }
+            lines(first: 10) {
+              pageInfo { hasNextPage }
+              nodes { quantity merchandise { ... on ProductVariant { id availableForSale } }
+                sellingPlanAllocation { sellingPlan { id } }
+                cost { totalAmount { amount currencyCode } }
+              }
+            }` : ""}
+          }
           userErrors { field message code }
         }
       }`,
@@ -267,6 +287,12 @@ export async function createMembershipCheckout(
     throw new Error(`[shopifyCheckout] ${firstMessage}`);
   }
 
+  if (options.firstBoxItems) {
+    if (json?.data?.cartCreate?.userErrors?.length) {
+      throw new Error("Some selected pieces could not be added. Please review your outfit and try again.");
+    }
+    assertFirstBoxCart(json?.data?.cartCreate?.cart, options.firstBoxItems, merchandiseId, sellingPlanId);
+  }
   await recordJourneyCart(json?.data?.cartCreate?.cart?.id);
   // Append `?return_url=` (and email pre-fill) the same way UpgradeModal does.
   // Shopify honors `return_url` query param and bounces the buyer back to

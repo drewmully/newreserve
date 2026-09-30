@@ -8,10 +8,9 @@ import {
   PRO_SHOP_COLLECTION_HANDLE,
 } from "@/lib/shopify";
 import { ShopPDPClient } from "../components/ShopPDPClient";
-import { ShopSeasonalHeader } from "../components/ShopSeasonalHeader";
+import { ShopPageShell } from "../components/ShopPageShell";
 import { ScrollToTop } from "../components/ScrollToTop";
 import { ShopPasswordGate } from "../components/ShopPasswordGate";
-import { ShopFooter } from "../components/ShopFooter";
 import { getSeasonalTheme } from "../seasonalTheme";
 import { getVariantById, getVariantSelection } from "@/lib/productVariants";
 
@@ -115,8 +114,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-white">
-      <ShopSeasonalHeader accent={theme.accent} />
+    <ShopPageShell className="shop-pdp">
       <ScrollToTop />
       <ShopPasswordGate accent={theme.accent} />
 
@@ -134,7 +132,6 @@ export default async function ProductPage({ params, searchParams }: Props) {
         </section>
       </main>
 
-      <ShopFooter accent={theme.accent} />
-    </div>
+    </ShopPageShell>
   );
 }

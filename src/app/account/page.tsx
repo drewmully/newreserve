@@ -35,9 +35,8 @@ interface LoopSubscriptionRecord extends Record<string, unknown> {
   price?: number;
   nextBillingDateEpoch?: number;
 }
-import { SlideCart } from "../components/SlideCart";
 import { UpgradeModal, PillButton, FIT_SHIRT_SIZES, FIT_GLOVE_HANDS, FIT_GLOVE_SIZES, FIT_WAIST_SIZES, FIT_SHOE_SIZES, FIT_PANTS_INSEAMS, FIT_SHORTS_INSEAMS } from "../components/UpgradeModal";
-import { ClubhouseNav, ClubhouseBottomNav } from "../components/ClubhouseNav";
+import { ShopPageShell } from "../shop/components/ShopPageShell";
 
 /* ═══════════════════════════════════════════
    ACCOUNT PAGE — Redesigned
@@ -132,10 +131,8 @@ export default function AccountPage() {
   const isPaid = tier === "access" || tier === "member" || tier === "black";
 
   return (
-    <div className="min-h-screen bg-bone">
-      <ClubhouseNav />
-
-      <main className="pt-48 pb-20 px-5 md:px-12">
+    <ShopPageShell>
+      <main className="shop-account-main">
         <div className="max-w-xl mx-auto">
           {/* ── Back link ── */}
           <Link
@@ -201,29 +198,13 @@ export default function AccountPage() {
         </div>
       </main>
 
-      {/* ─── FOOTER ─── */}
-      <footer className="py-8 px-6 bg-forest">
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          <span className="flex items-center gap-2 text-bone">
-            <svg viewBox="0 0 1002 540" fill="currentColor" className="h-3.5 w-auto" aria-hidden="true"><path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" /></svg>
-            <span className="font-serif text-lg font-bold tracking-wide">mully.</span>
-          </span>
-          <p className="text-xs text-bone/35">
-            &copy; {new Date().getFullYear()} Mully Group, Inc. All rights reserved.
-          </p>
-        </div>
-      </footer>
-
-      <ClubhouseBottomNav />
-
       <UpgradeModal
         open={upgradeOpen}
         onClose={() => setUpgradeOpen(false)}
         currentTier={tier}
         onSelectPlan={(t) => setTier(t)}
       />
-      <SlideCart />
-    </div>
+    </ShopPageShell>
   );
 }
 

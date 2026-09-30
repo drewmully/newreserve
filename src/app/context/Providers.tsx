@@ -20,10 +20,8 @@ const EmailLinkHandler = dynamic(
 
 const MEMBERSHIP_EXEMPT_PREFIXES = [
   "/",
-  "/faq",
   "/handoff",
   "/mulligan",
-  "/policies",
   "/reservecard",
   // Standalone pitch / preview pages that don't need Firebase auth
   // or the Back9 welcome overlay.

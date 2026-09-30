@@ -10,7 +10,8 @@ import {
 import type { ShopifyProduct } from "@/lib/shopify";
 import { ShopOutfitBuilder } from "@/app/shop/components/ShopOutfitBuilder";
 
-const mocks = vi.hoisted(() => ({ add: vi.fn().mockResolvedValue(undefined) }));
+const mocks = vi.hoisted(() => ({ add: vi.fn().mockResolvedValue(undefined), checkout: vi.fn().mockResolvedValue(undefined) }));
+vi.mock("@/lib/shopifyCheckout", () => ({ createMembershipCheckout: mocks.checkout }));
 vi.mock("@/app/context/MembershipContext", () => ({
   useMembership: () => ({ addItemsToCart: mocks.add }),
 }));
@@ -44,8 +45,47 @@ const byCategory = Object.fromEntries(
 beforeEach(() => {
   sessionStorage.clear();
   mocks.add.mockClear();
+  mocks.checkout.mockReset().mockResolvedValue(undefined);
 });
 describe("shop outfit offer and handoff", () => {
+  function chooseSizes() {
+    for (const slot of OUTFIT_SLOTS) {
+      fireEvent.click(screen.getByRole("tab", {name: new RegExp(slot.label)}));
+      fireEvent.click(within(screen.getByRole("group", {name:`${slot.label} size`})).getByRole("button", {name:/^M(?:·|$)/}));
+    }
+  }
+  it("goes directly to subscription checkout with three first-box lines, no quiz or recurring product properties", () => {
+    render(<ShopOutfitBuilder products={products} byCategory={byCategory} />);
+    chooseSizes();
+    fireEvent.click(screen.getByRole("radio", {name:/Mully Reserve/}));
+    fireEvent.click(screen.getByRole("button", {name:"Checkout with Reserve →"}));
+    expect(mocks.checkout).toHaveBeenCalledWith("member", {
+      firstBoxItems: [
+        {slot:"Top",variantId:products[0].variants[0].id},
+        {slot:"Bottom",variantId:products[2].variants[0].id},
+        {slot:"Layer",variantId:products[4].variants[0].id},
+      ],
+      attributes: expect.arrayContaining([expect.objectContaining({key:"_mully_shop_first_box",value:"v1"})]),
+    });
+    expect(mocks.add).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem(OUTFIT_STORAGE_KEY)).toBeNull();
+  });
+  it("shows checkout pricing errors without a fallback enrollment", async () => {
+    mocks.checkout.mockRejectedValueOnce(new Error("Could not confirm the first-box price."));
+    render(<ShopOutfitBuilder products={products} byCategory={byCategory} />);
+    chooseSizes();
+    fireEvent.click(screen.getByRole("radio", {name:/Mully Reserve/}));
+    fireEvent.click(screen.getByRole("button", {name:"Checkout with Reserve →"}));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not confirm");
+  });
+  it("cannot buy sold-out pieces through the subscription option", () => {
+    const sold = products.map(p => ({...p,variants:p.variants.map(v => ({...v,availableForSale:false}))}));
+    render(<ShopOutfitBuilder products={sold} byCategory={{}} />);
+    chooseSizes();
+    fireEvent.click(screen.getByRole("radio", {name:/Mully Reserve/}));
+    expect(screen.getByRole("button", {name:"Selected sizes sold out"})).toBeDisabled();
+    expect(mocks.checkout).not.toHaveBeenCalled();
+  });
   it("keeps the Reserve price in the purchase summary, not the mobile selection footer", () => {
     const { container } = render(<ShopOutfitBuilder products={products} byCategory={byCategory} />);
     const footer = container.querySelector(".outfit__mobile-footer")!;

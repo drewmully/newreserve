@@ -17,7 +17,17 @@ export function ScrollToTop() {
   const pathname = usePathname();
 
   useEffect(() => {
-    window.scrollTo({ top: 0, left: 0, behavior: "instant" as ScrollBehavior });
+    // Respect collection/support → shop section links instead of resetting
+    // their anchor scroll to the top during client-side navigation.
+    const frame = requestAnimationFrame(() => {
+      const target = document.getElementById(window.location.hash.slice(1));
+      window.scrollTo({
+        top: target ? window.scrollY + target.getBoundingClientRect().top - 96 : 0,
+        left: 0,
+        behavior: "instant",
+      });
+    });
+    return () => cancelAnimationFrame(frame);
   }, [pathname]);
 
   return null;

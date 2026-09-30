@@ -32,6 +32,19 @@ export function ShopSeasonalHeader({ accent }: { accent: string }) {
     const destination = safeShopReturn(window.location.pathname + window.location.search + window.location.hash) || "/shop";
     window.location.assign(`/login?returnTo=${encodeURIComponent(destination)}`);
   }
+  function outfitClick(e: React.MouseEvent<HTMLAnchorElement>) {
+    if (pathname !== "/shop" || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    const target = document.getElementById("outfit");
+    if (!target) return;
+    e.preventDefault();
+    window.history.replaceState(window.history.state, "", "/shop#outfit");
+    requestAnimationFrame(() => {
+      window.scrollTo({
+        top: window.scrollY + target.getBoundingClientRect().top - 96,
+        behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
+      });
+    });
+  }
   const utility = "inline-flex min-h-11 items-center gap-2 text-[11px] uppercase tracking-[.1em] text-charcoal";
   return (
     <>
@@ -45,6 +58,12 @@ export function ShopSeasonalHeader({ accent }: { accent: string }) {
         .shop-nav-summary::after{content:"+";font-size:13px}
         details[open]>.shop-nav-summary::after{content:"−"}
         .shop-nav a:focus-visible,.shop-nav button:focus-visible,.shop-nav summary:focus-visible{outline:2px solid ${accent};outline-offset:3px}
+        .shop-nav nav>a,.shop-nav-summary,.shop-nav-menu a{background-image:linear-gradient(currentColor,currentColor);background-size:0 1px;background-repeat:no-repeat;background-position:0 calc(100% - 8px);transition:background-size 180ms ease,color 180ms ease}
+        .shop-nav nav>a:hover,.shop-nav-summary:hover,.shop-nav-menu a:hover,.shop-nav nav>a:focus-visible,.shop-nav-summary:focus-visible{background-size:100% 1px}
+        .shop-nav .shop-build-link,.shop-nav-menu .shop-build-link{padding:0 12px;background-color:#e8ebd6;color:#333721;font-weight:600;white-space:nowrap;transition:background-color 180ms ease,background-size 180ms ease}
+        .shop-nav .shop-build-link:hover,.shop-nav-menu .shop-build-link:hover{background-color:#dce2bf}
+        .shop-nav-menu .shop-build-link{margin:8px 0}
+        @media(prefers-reduced-motion:reduce){.shop-nav *,.shop-nav-menu *{transition:none!important}}
       `}</style>
       <ShopAnnouncementBar />
       <header className="shop-nav fixed left-0 right-0 top-8 z-40 border-b border-charcoal/10 bg-white/95 backdrop-blur-md">
@@ -68,7 +87,7 @@ export function ShopSeasonalHeader({ accent }: { accent: string }) {
               </details>
             ))}
             <Link href="/shop#gift-tiers" className="inline-flex min-h-11 items-center">Gifts</Link>
-            <Link href="/shop#outfit" className="inline-flex min-h-11 items-center">Build an outfit</Link>
+            <Link href="/shop#outfit" onClick={outfitClick} className="shop-build-link inline-flex min-h-11 items-center">Build an outfit</Link>
             <Link href="/shop/collection/shop-all" className="inline-flex min-h-11 items-center">Shop all</Link>
           </nav>
           <div className="flex items-center gap-3 sm:gap-5">
@@ -83,14 +102,14 @@ export function ShopSeasonalHeader({ accent }: { accent: string }) {
           </div>
         </div>
       </header>
-      <dialog ref={menu} className="shop-nav-menu" aria-labelledby="shopMenuTitle" onClose={() => menuButton.current?.focus()}>
+      <dialog ref={menu} className="shop-nav-menu" aria-labelledby="shopMenuTitle" onClose={() => menuButton.current?.focus({ preventScroll: true })}>
         <div className="flex items-center justify-between border-b border-charcoal/15 pb-4">
           <h2 id="shopMenuTitle" className="font-serif text-2xl">Shop Mully</h2>
           <button className="h-11 w-11 text-3xl" onClick={() => menu.current?.close()} aria-label="Close shop menu">×</button>
         </div>
         <nav aria-label="Mobile shop navigation" className="mt-4" onClick={e => { if ((e.target as HTMLElement).closest("a")) menu.current?.close(); }}>
           <Link href="/shop#edit" className="font-serif text-xl">The Mully Edit</Link>
-          <Link href="/shop#outfit" className="text-sm">Build an outfit</Link>
+          <Link href="/shop#outfit" onClick={outfitClick} className="shop-build-link text-sm">Build an outfit</Link>
           {[...apparel, ...gear, ["Gifts", "/shop#gift-tiers"], ["Shop all", "/shop/collection/shop-all"]].map(([name, href]) => <Link key={href} href={href} className="text-sm">{name}</Link>)}
           <div className="mt-4 border-t border-charcoal/15 pt-3 text-sm">
             <Link href="/blog">From the Journal</Link>
