@@ -59,12 +59,12 @@ export interface SeasonalTheme {
 
 const FALL_THEME: SeasonalTheme = {
   season: "fall",
-  eyebrow: "Fall 2026 · The Layering Edit",
-  headline: ["The layering edit.", "For a great fall season."],
-  heroImage: "/shop/hero-fall-2026.jpg",
-  // Burgundy pulled slightly warmer than the source guide (source #6E1E2B → #8A2432).
-  accent: "#8A2432",
-  accentDark: "#6E1E2B",
+  eyebrow: "The fall edit",
+  headline: ["Golf apparel and gear.", "Selected by Mully."],
+  heroImage: "/shop-redesign/hero-rhone.jpg",
+  // Espresso is the shop's persistent brand accent.
+  accent: "#4A3528",
+  accentDark: "#34251C",
   // Camel deepened toward tobacco (source #C19A6B → #B08558).
   secondary: "#B08558",
   heroOverlay: "#1A2438", // navy, deepened from source #1F2A44
@@ -72,7 +72,7 @@ const FALL_THEME: SeasonalTheme = {
     { name: "Cream", hex: "#EDE6D6", role: "base" },
     { name: "Camel", hex: "#B08558", role: "mid" },
     { name: "Olive", hex: "#5F6431", role: "mid" },
-    { name: "Burgundy", hex: "#8A2432", role: "mid" },
+    { name: "Taupe", hex: "#9B8B7A", role: "mid" },
     { name: "Espresso", hex: "#4A2A17", role: "outer" },
   ],
   outfits: [
@@ -167,8 +167,10 @@ const SUMMER_THEME: SeasonalTheme = {
  */
 export function getSeasonalTheme(now: Date = new Date()): SeasonalTheme {
   const month = now.getMonth(); // 0..11
-  if (month >= 8 && month <= 10) return FALL_THEME; // Sep, Oct, Nov
-  if (month === 11 || month <= 1) return WINTER_THEME; // Dec, Jan, Feb
-  if (month >= 2 && month <= 4) return SPRING_THEME; // Mar, Apr, May
-  return SUMMER_THEME; // Jun, Jul, Aug
+  const seasonal = month >= 8 && month <= 10 ? FALL_THEME
+    : month === 11 || month <= 1 ? WINTER_THEME
+    : month >= 2 && month <= 4 ? SPRING_THEME : SUMMER_THEME;
+  // Shop identity stays espresso; seasonal copy and merchandise can change.
+  return { ...seasonal, accent: "#4A3528", accentDark: "#34251C",
+    headline: FALL_THEME.headline, heroImage: FALL_THEME.heroImage };
 }

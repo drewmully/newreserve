@@ -77,10 +77,15 @@ export async function POST(req: Request) {
     stage?: "email" | "stylist";
     stylistOptIn?: boolean;
     phone?: string;
+    source?: string;
+    consent?: boolean;
   };
   try {
     body = await req.json();
   } catch {
+    return NextResponse.json({ error: "invalid_json" }, { status: 400 });
+  }
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
     return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
 
@@ -90,8 +95,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, skipped: true });
   }
 
-  const email = body.email?.trim().toLowerCase();
-  if (!email || !EMAIL_RE.test(email)) {
+  const shopSignup = body.source === "shop-newsletter";
+  if (shopSignup && body.consent !== true) {
+    return NextResponse.json({ error: "consent_required" }, { status: 400 });
+  }
+  const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+  if (!email || email.length > 254 || !EMAIL_RE.test(email)) {
     return NextResponse.json({ error: "invalid_email" }, { status: 400 });
   }
 
@@ -171,7 +180,13 @@ export async function POST(req: Request) {
       .set(
         {
           email,
-          source: "editorial-drop-bar",
+          source: shopSignup ? "shop-newsletter" : "editorial-drop-bar",
+          ...(shopSignup ? {
+            emailMarketingConsent: true,
+            emailMarketingConsentAt: FieldValue.serverTimestamp(),
+            emailMarketingConsentVersion: "shop-newsletter-2026-09",
+            emailMarketingConsentText: "I’d like emails from Mully. Unsubscribe anytime.",
+          } : {}),
           variant: variant ?? null,
           ip,
           userAgent,
@@ -188,7 +203,9 @@ export async function POST(req: Request) {
   }
 
   // Fire PostHog after the write so a failed event doesn't lose the email.
-  await firePostHog(email, variant, distinctId);
+  await firePostHog(email, variant, distinctId, {
+    extraProps: { source: shopSignup ? "shop-newsletter" : "editorial-drop-bar" },
+  });
 
   return NextResponse.json({ ok: true, stage: "email" });
 }

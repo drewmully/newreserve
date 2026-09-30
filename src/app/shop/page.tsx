@@ -8,11 +8,12 @@ import { ShopLanding } from "./components/ShopLanding";
 import { ShopFooter } from "./components/ShopFooter";
 import { SHOP_CATEGORIES } from "./shopCollections";
 import { getSeasonalTheme } from "./seasonalTheme";
+import { getAllPublishedPosts } from "@/app/blog/posts";
 
 export const metadata: Metadata = {
   title: "Shop | mully.",
   description:
-    "Fall 2026 · The Layering Edit. Golf apparel and equipment curated by Mully.",
+    "Golf apparel and gear, selected by Mully. Shop individual pieces, build an outfit, and discover the stories behind our picks.",
 };
 
 // ISR one hour — collection contents, product tags, and seasonal
@@ -50,6 +51,14 @@ export default async function ShopPage() {
       }
     }
   });
+  const articleOrder = ["golf-quarter-zip-vs-hoodie", "best-golf-polos-2026-quiet-golf-rhone", "best-golf-belt-2026-braided-leather-stretch"];
+  const journalPosts = (await getAllPublishedPosts().catch(() => []))
+    .filter(p => ["Gear", "Travel", "Guides"].includes(p.category))
+    .sort((a, b) => {
+      const rank = (slug: string) => articleOrder.includes(slug) ? articleOrder.indexOf(slug) : 100;
+      return rank(a.slug) - rank(b.slug);
+    }).slice(0, 3)
+    .map(({slug, title, excerpt, image, imageAlt}) => ({slug, title, excerpt, image, imageAlt}));
 
   return (
     <div className="min-h-screen bg-white">
@@ -59,6 +68,7 @@ export default async function ShopPage() {
           products={merged}
           productsByCategory={productsByCategory}
           theme={theme}
+          journalPosts={journalPosts}
         />
       </main>
 

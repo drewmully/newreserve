@@ -14,8 +14,8 @@ export function ShopFooter({ accent }: { accent: string }) {
           <div>
             <MullyWordmark accent={accent} className="text-2xl" />
             <p className="mt-4 max-w-xs text-sm text-charcoal/60">
-              Golf apparel, gear, and travel picked by players. Curated in Detroit,
-              shipped weekly.
+              Golf apparel and gear, selected by Mully. Shop individual pieces,
+              or let our team guide your next outfit.
             </p>
           </div>
 
@@ -25,6 +25,9 @@ export function ShopFooter({ accent }: { accent: string }) {
               Shop
             </h4>
             <ul className="mt-4 space-y-2 text-sm text-charcoal/70">
+              <li><Link href="/login?returnTo=%2Fshop" className="hover:text-charcoal">Log in / Account</Link></li>
+              <li><Link href="/blog" className="hover:text-charcoal">From the Journal</Link></li>
+              <li><Link href="/lp/subscription" className="hover:text-charcoal">Explore Mully Reserve</Link></li>
               <li>
                 <Link href="/shop/collection/shop-tops" className="hover:text-charcoal">
                   Tops

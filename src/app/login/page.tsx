@@ -7,6 +7,7 @@ import { useMembership } from "../context/MembershipContext";
 import { auth, isSignInWithEmailLink, confirmOTPSignIn, signInWithGoogle } from "@/lib/firebase";
 import { PENDING_SIGN_IN_EMAIL_KEY } from "@/lib/pendingSignInEmail";
 import { createMembershipCheckout } from "@/lib/shopifyCheckout";
+import { shopReturnFromLogin } from "@/lib/shopLogin";
 
 const PENDING_ONBOARDING_DATA_KEY = "pending_onboarding_data";
 const POST_CHECKOUT_KEY = "mully_post_checkout";
@@ -119,6 +120,13 @@ export default function LoginPage() {
   useEffect(() => {
     if (authLoading || !isSignedIn) return;
     if (pendingOnboardingHandled.current) return;
+    // Explicit shop sign-in does not enroll or resume an abandoned membership.
+    // The return path is carried in the email link, including on another device.
+    const shopReturn = shopReturnFromLogin(window.location.search);
+    if (shopReturn) {
+      router.replace(shopReturn);
+      return;
+    }
 
     const raw = (() => {
       try { return localStorage.getItem(PENDING_ONBOARDING_DATA_KEY); } catch { return null; }
