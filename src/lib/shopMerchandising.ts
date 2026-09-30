@@ -1,11 +1,11 @@
 import type { ShopifyProduct } from "./shopify";
 
 const EDIT = [
-  "technically-golf-performance-polo", "duckhead-classic-fit-gold-school-chino-khaki",
-  "voice-caddie-laser-fit", "olydoe-og-supima-hollow-polo",
-  "blue-tees-player-gps-speaker", "winston-solid-tradition-leather-headcover",
+  "olydoe-og-supima-hollow-polo", "duckhead-classic-fit-gold-school-chino-khaki",
+  "duckhead-fremont-sport-performance-quilted-vest-brandy-brown",
+  "winston-solid-tradition-leather-headcover",
 ];
-export function selectShopEdit(products: ShopifyProduct[], limit = 6): ShopifyProduct[] {
+export function selectShopEdit(products: ShopifyProduct[], limit = 4): ShopifyProduct[] {
   const rank = (p: ShopifyProduct) => {
     const i = EDIT.indexOf(p.slug);
     return (p.variants.some(v => v.availableForSale) ? 0 : 10000)

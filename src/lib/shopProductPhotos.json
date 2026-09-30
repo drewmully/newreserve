@@ -34,5 +34,83 @@
     "source": "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/duckhead-2026-fall-0165-transparent-lowres.png?v=1789572913",
     "catalogPrimary": "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/D51034-251-OM-04-1x1.jpg?v=1789572913",
     "prepared": "/shop-redesign/products/white/duckhead-fremont-sport-performance-quilted-vest-brandy-brown.webp"
+  },
+  {
+    "slug": "olydoe-og-supima-hollow-polo",
+    "source": "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/BMC06939-Edit.jpg?v=1789572927",
+    "catalogPrimary": "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/SHBrown_84bb98c7-7ecf-4f96-af4e-536e64ca9fd4.jpg?v=1789572928",
+    "prepared": "/shop-redesign/products/white/olydoe-og-supima-hollow-polo.webp"
+  },
+  {
+    "slug": "duckhead-classic-fit-gold-school-chino-khaki",
+    "source": "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/D9-1005-034-Low-1.png?v=1789572817",
+    "catalogPrimary": "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/D91005-034-OM-15-1x1.jpg?v=1789572816",
+    "prepared": "/shop-redesign/products/white/duckhead-classic-fit-gold-school-chino-khaki.webp"
+  },
+  {
+    "slug": "duckhead-6-harbor-performance-short-khaki",
+    "source": "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/D61018-034-Low-1.png?v=1789572829",
+    "catalogPrimary": "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/D61018-034-OM-02-1x1.jpg?v=1789572829",
+    "prepared": "/shop-redesign/products/white/duckhead-6-harbor-performance-short-khaki.webp"
+  },
+  {
+    "slug": "voice-caddie-laser-fit",
+    "source": "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/01_laser_fit_main.jpg?v=1789582049",
+    "catalogPrimary": "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/01_laser_fit_main.jpg?v=1789582049",
+    "prepared": "/shop-redesign/products/white/voice-caddie-laser-fit.webp"
+  },
+  {
+    "slug": "the-stack-system",
+    "source": "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/TheStack_Main_Image.png?v=1789582049",
+    "catalogPrimary": "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/TheStack_Main_Image.png?v=1789582049",
+    "prepared": "/shop-redesign/products/white/the-stack-system.webp"
+  },
+  {
+    "slug": "garmin-approach-s70",
+    "source": "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/cf-lg.jpg?v=1789582018",
+    "catalogPrimary": "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/cf-lg.jpg?v=1789582018",
+    "prepared": "/shop-redesign/products/white/garmin-approach-s70.webp"
+  },
+  {
+    "slug": "bushnell-tour-v7-shift",
+    "source": "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/TOUR_V7_Carousel_Image_1__03665.1773382564.386.513_fa921b3e-6d9e-4449-9297-a97d5faa0802.png?v=1789582018",
+    "catalogPrimary": "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/TOUR_V7_Carousel_Image_1__03665.1773382564.386.513_fa921b3e-6d9e-4449-9297-a97d5faa0802.png?v=1789582018",
+    "prepared": "/shop-redesign/products/white/bushnell-tour-v7-shift.webp"
+  },
+  {
+    "slug": "blue-tees-player-gps-speaker",
+    "source": "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/PlayerPro_PDP_1_957b8240-6231-46d7-9099-b16a97d79aac.png?v=1789582018",
+    "catalogPrimary": "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/PlayerPro_PDP_1_957b8240-6231-46d7-9099-b16a97d79aac.png?v=1789582018",
+    "prepared": "/shop-redesign/products/white/blue-tees-player-gps-speaker.webp"
+  },
+  {
+    "slug": "jolly-golf-the-purist-classic-golf-bag-organizer-pouch",
+    "source": "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/purist-canvas-lineup.jpg?v=1789573030",
+    "catalogPrimary": "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/purist-canvas-lineup.jpg?v=1789573030",
+    "prepared": "/shop-redesign/products/white/jolly-golf-the-purist-classic-golf-bag-organizer-pouch.webp"
+  },
+  {
+    "slug": "bluegrass-fairways-handmade-leather-golf-yardage-book-cover-scorecard-holder-vintage-bourbon",
+    "source": "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/242D2DF2-60E4-4E67-8353-444A83849E0F.jpg?v=1789573042",
+    "catalogPrimary": "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/242D2DF2-60E4-4E67-8353-444A83849E0F.jpg?v=1789573042",
+    "prepared": "/shop-redesign/products/white/bluegrass-fairways-handmade-leather-golf-yardage-book-cover-scorecard-holder-vintage-bourbon.webp"
+  },
+  {
+    "slug": "will-leather-saddle-belt",
+    "source": "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/60078_SADDLE_BELT_TAN_001_61d8e0d1-3437-47b3-b85c-79c3836fbe2b.jpg?v=1789573017",
+    "catalogPrimary": "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/60078_SADDLE_BELT_TAN_001_61d8e0d1-3437-47b3-b85c-79c3836fbe2b.jpg?v=1789573017",
+    "prepared": "/shop-redesign/products/white/will-leather-saddle-belt.webp"
+  },
+  {
+    "slug": "winston-solid-tradition-leather-headcover",
+    "source": "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/2204_source_1689323398.jpg?v=1789573004",
+    "catalogPrimary": "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/2204_source_1689323398.jpg?v=1789573004",
+    "prepared": "/shop-redesign/products/white/winston-solid-tradition-leather-headcover.webp"
+  },
+  {
+    "slug": "stitch-monte-carlo-leather-head-cover",
+    "source": "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/5355b562c9f3b0ac5c20e7afe4cf6_bbe554d7-c528-4a72-9fcd-bf8c8b176163.png?v=1789572988",
+    "catalogPrimary": "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/5355b562c9f3b0ac5c20e7afe4cf6_bbe554d7-c528-4a72-9fcd-bf8c8b176163.png?v=1789572988",
+    "prepared": "/shop-redesign/products/white/stitch-monte-carlo-leather-head-cover.webp"
   }
 ]

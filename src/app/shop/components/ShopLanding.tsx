@@ -4,8 +4,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import type { ShopifyProduct } from "@/lib/shopify";
-import { shopProductPhoto } from "@/lib/shopProductPhotos";
-import { selectShopEdit, shopGiftPicks, shopSelectionNote } from "@/lib/shopMerchandising";
+import { shopProductPhoto, shopProductLabel } from "@/lib/shopProductPhotos";
+import { selectShopEdit } from "@/lib/shopMerchandising";
 import { useMembership } from "@/app/context/MembershipContext";
 import { money, variantLabel } from "@/lib/shopOutfit";
 import { SHOP_CATEGORIES, GIFT_TIERS } from "../shopCollections";
@@ -18,6 +18,23 @@ import "./shop-redesign.css";
 import "./shop-redesign-native.css";
 import "./shop-outfit.css";
 import "./shop-first.css";
+
+function ProductCard({ product: p, onQuick }: { product: ShopifyProduct; onQuick: (p: ShopifyProduct) => void }) {
+  const available = p.variants.some(v => v.availableForSale);
+  return <article className="card">
+    <div className="card__media">
+      <a href={`/shop/${p.slug}`} aria-label={p.name}><img src={shopProductPhoto(p)} alt={p.name} loading="lazy" /></a>
+      <button className="shop-card-options" onClick={() => onQuick(p)} aria-label={`View options for ${p.name}`}>
+        <span aria-hidden="true">{available ? "+" : "↗"}</span>
+      </button>
+    </div>
+    <div className="card__body">
+      <p className="card__brand">{p.brand}</p>
+      <a className="card__name" href={`/shop/${p.slug}`} title={p.name}>{shopProductLabel(p)}</a>
+      <div className="card__row"><span className="card__price">{money(p.price)}</span>{!available && <span className="shop-stock">Unavailable</span>}</div>
+    </div>
+  </article>;
+}
 
 export function ShopLanding({ products, productsByCategory, theme, journalPosts = [] }: {
   products: ShopifyProduct[];
@@ -32,9 +49,8 @@ export function ShopLanding({ products, productsByCategory, theme, journalPosts 
   const [error, setError] = useState("");
   const dialog = useRef<HTMLDialogElement>(null);
   const edit = useMemo(() => selectShopEdit(products), [products]);
-  const layers = ["technically-golf-nio-half-zip", "duckhead-classic-fit-gold-school-chino-khaki", "tasc-release-hybrid-jacket"]
+  const gear = ["voice-caddie-laser-fit", "blue-tees-player-gps-speaker", "garmin-approach-s70", "bushnell-tour-v7-shift"]
     .map(slug => products.find(p => p.slug === slug)).filter((p): p is ShopifyProduct => !!p);
-  const heroProduct = products.find(p => p.slug === "rhone-commuter-1-4-zip");
   useEffect(() => {
     function update() {
       const outfit = document.getElementById("outfit")?.getBoundingClientRect();
@@ -77,110 +93,68 @@ export function ShopLanding({ products, productsByCategory, theme, journalPosts 
       <ShopPasswordGate accent={theme.accent} />
       <div className="shop-redesign shop-first" style={{ "--accent": theme.accent, "--accent-d": theme.accentDark } as CSSProperties}>
         <section className="shop-hero" id="hero" aria-labelledby="shopHeroTitle">
+          <img className="shop-hero__image" src="/shop/hero-fall-2026.jpg" alt="A golf course in the evening light" fetchPriority="high" />
           <div className="wrap shop-hero__in">
             <div className="shop-hero__copy">
-              <p className="eyebrow">{theme.eyebrow}</p>
-              <h1 id="shopHeroTitle">Golf apparel and gear.<br /><em>Selected by Mully.</em></h1>
-              <p>Polos, pants, layers, and gear for the season ahead. Shop individual pieces or put a full outfit together.</p>
-              <div className="shop-hero__actions">
-                <a className="btn btn--accent" href="#edit">Shop the edit ↗</a>
-                <a className="ulink" href="#outfit">Build an outfit ↗</a>
-              </div>
-              <span className="shop-hero__reassurance">No subscription required.</span>
-            </div>
-            <div className="shop-hero__media">
-              <img src={theme.heroImage} alt="Rhone Commuter quarter-zip worn with khaki trousers" fetchPriority="high" />
-              {heroProduct && <a className="shop-hero__caption" href={`/shop/${heroProduct.slug}`}>
-                <span>In the edit</span>{heroProduct.name} <span aria-hidden>↗</span>
-              </a>}
+              <h1 id="shopHeroTitle">The {theme.season.charAt(0).toUpperCase() + theme.season.slice(1)} Edit</h1>
+              <a className="btn shop-hero__cta" href="#edit">Shop the edit</a>
             </div>
           </div>
         </section>
         <section className="shop-categories" id="cats" aria-label="Shop by category">
           <nav className="wrap shop-categories__row" aria-label="Product categories">
-            {SHOP_CATEGORIES.map(c => {
-              const p = productsByCategory[c.handle]?.[0];
-              return <a key={c.key} href={`/shop/collection/${c.handle}`}>
-                {p?.images[0] && <img src={shopProductPhoto(p)} alt="" loading="lazy" />}
-                <span>{c.label}</span><span aria-hidden>↗</span>
-              </a>;
-            })}
+            {SHOP_CATEGORIES.map(c => <a key={c.key} href={`/shop/collection/${c.handle}`}>{c.label}</a>)}
+            <a href="#outfit">Build an outfit</a>
           </nav>
         </section>
         <section className="sec" id="edit">
           <div className="wrap">
             <div className="sechead">
-              <div><p className="eyebrow">Apparel / equipment / everyday gear</p><h2 className="h2">The Mully Edit.</h2><p className="lede">Our current selection of apparel and gear.</p></div>
-              <a className="ulink" href="/shop/collection/shop-all">Shop all ↗</a>
+              <h2 className="h2">The Mully Edit</h2>
+              <a className="ulink" href="/shop/collection/shop-all">Shop all</a>
             </div>
             <div className="grid shop-edit-grid">
-              {edit.map(p => <article className="card" key={p.slug}>
-                <div className="card__media">
-                  <a href={`/shop/${p.slug}`}><img src={shopProductPhoto(p)} alt={p.name} loading="lazy" /></a>
-                  <button className="card__quick" onClick={() => openQuick(p)}>
-                    {p.variants.some(v => v.availableForSale) ? "Choose options" : "View availability"} · {money(p.price)}
-                  </button>
-                </div>
-                <div className="card__body">
-                  <div className="card__brand"><span>{p.brand}</span>{p.rating && p.reviewCount ? <span className="card__stars">★ {p.rating} ({p.reviewCount})</span> : null}</div>
-                  <a className="card__name" href={`/shop/${p.slug}`}>{p.name}</a>
-                  <div className="card__row"><span className="card__price">{money(p.price)}</span>{!p.variants.some(v => v.availableForSale) && <span className="shop-stock">Currently unavailable</span>}</div>
-                  {shopSelectionNote(p) && <p className="shop-selection-note">{shopSelectionNote(p)}</p>}
-                </div>
-              </article>)}
+              {edit.map(p => <ProductCard key={p.slug} product={p} onQuick={openQuick} />)}
             </div>
             {!edit.length && <p>New pieces are on their way. Please check back soon.</p>}
           </div>
         </section>
         <ShopOutfitBuilder products={products} byCategory={productsByCategory} />
-        {layers.length > 0 && <section className="sec shop-layer-story" id="seasonal-story">
+        {gear.length > 0 && <section className="sec shop-gear" id="seasonal-story">
           <div className="wrap">
             <div className="sechead">
-              <div><p className="eyebrow">The seasonal notes</p><h2 className="h2">Layers for cooler rounds.</h2></div>
-              <p className="lede">Start with a half-zip and chinos. Keep a jacket close for the early tee time.</p>
+              <h2 className="h2">Gear worth bringing</h2>
+              <a className="ulink" href="/shop/collection/shop-tech">Shop gear</a>
             </div>
-            <div className="shop-story-pieces">
-              {layers.map((p, i) => <a href={`/shop/${p.slug}`} key={p.slug}>
-                <span className="eyebrow">{["The first layer", "The foundation", "The extra layer"][i]}</span>
-                <img src={shopProductPhoto(p)} alt={p.name} loading="lazy" />
-                <span className="shop-story-pieces__brand">{p.brand}</span>
-                <h3>{p.name}</h3>
-                <span>{money(p.price)} · View piece ↗</span>
-              </a>)}
+            <div className="grid shop-edit-grid">
+              {gear.map(p => <ProductCard key={p.slug} product={p} onQuick={openQuick} />)}
             </div>
           </div>
         </section>}
-        <section className="sec sec--cream" id="gift-tiers">
+        <section className="sec shop-gifts" id="gift-tiers">
           <div className="wrap">
-            <div className="sechead"><div><p className="eyebrow">A good place to start</p><h2 className="h2">Gifts for golfers.</h2><p className="lede">Find a gift that fits the person, and your budget.</p></div></div>
-            <div className="gifts">
-              {GIFT_TIERS.map(t => {
-                const picks = shopGiftPicks(products, t.tag);
-                return <div className="gift" key={t.key}>
-                  <div className="gift__head"><span className="gift__tier">{t.accent}</span><span className="gift__range">{t.title}</span></div>
-                  <div className="gift__items">{picks.map(p => <a key={p.slug} href={`/shop/${p.slug}`} title={p.name}><img src={shopProductPhoto(p)} alt={p.name} loading="lazy" /><span>{money(p.price)}</span></a>)}</div>
-                  <a className="ulink" href={`/shop/gifts/${t.key}`}>Shop gifts ↗</a>
-                </div>;
-              })}
+            <div className="sechead"><h2 className="h2">Gifts for golfers</h2></div>
+            <div className="shop-gift-links">
+              {GIFT_TIERS.map(t => <a key={t.key} href={`/shop/gifts/${t.key}`}><span>{t.title}</span><span aria-hidden="true">→</span></a>)}
             </div>
           </div>
         </section>
         <section className="sec" id="journal">
           <div className="wrap">
-            <div className="sechead"><div><p className="eyebrow">Beyond the product page</p><h2 className="h2">From the Journal.</h2><p className="lede">What to wear, where to play, and the gear worth a closer look.</p></div><a className="ulink" href="/blog">Read the Journal ↗</a></div>
+            <div className="sechead"><h2 className="h2">From the Journal</h2><a className="ulink" href="/blog">View all</a></div>
             <div className="journal">
-              {journalPosts.length ? journalPosts.map(p => <a className="jcard" href={`/blog/${p.slug}`} key={p.slug}><img src={p.image} alt={p.imageAlt || ""} loading="lazy" /><h3>{p.title} <span aria-hidden>↗</span></h3><p>{p.excerpt}</p></a>) : [
+              {journalPosts.length ? journalPosts.map(p => <a className="jcard" href={`/blog/${p.slug}`} key={p.slug}><img src={p.image} alt={p.imageAlt || ""} loading="lazy" /><h3>{p.title}</h3></a>) : [
                 ["The Shelf", "A closer look at the products on our radar.", "/shop-redesign/lifestyle/style-quiet.jpg", "/lp/editorial"],
                 ["Golf destinations", "Explore the places in our destination edit.", "/shop-redesign/lifestyle/pebble.jpg", "/lp/editorial?category=destinations#editorial-top"],
                 ["The Mully 100", "Our collection of golf-adjacent Amazon finds.", "/shop-redesign/lifestyle/kiawah.jpg", "/lp/mully100"],
-              ].map(([name, copy, image, href]) => <a className="jcard" href={href} key={name}><img src={image} alt="" loading="lazy" /><h3>{name} <span aria-hidden>↗</span></h3><p>{copy}</p></a>)}
+              ].map(([name, , image, href]) => <a className="jcard" href={href} key={name}><img src={image} alt="" loading="lazy" /><h3>{name}</h3></a>)}
             </div>
           </div>
         </section>
         <ShopNewsletter />
         <section className="sec shop-faq" id="faq">
           <div className="wrap faqwrap">
-            <div><h2 className="h2">A few useful answers.</h2><p className="lede">Sizing, shipping, and shopping with Mully.</p></div>
+            <div><h2 className="h2">Good to know</h2></div>
             <div className="faq">
               <details><summary>Do I need a subscription to shop?<i /></summary><div><p>No. Shop individual products whenever you like. Mully Reserve is an optional quarterly service.</p></div></details>
               <details><summary>How do I choose my size?<i /></summary><div><p>Use the brand-specific size chart on each product page or the builder’s Size &amp; fit guide. Choose a size for each piece before adding it to your bag.</p></div></details>
