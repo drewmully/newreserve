@@ -1,0 +1,28 @@
+{
+  "client": {
+    "base_url": "https://www.mymully.com",
+    "auth": { "type": "bearer" }
+  },
+  "resources": [
+    {
+      "name": "store_daily",
+      "primary_key": ["report_date", "definition_version"],
+      "endpoint": {
+        "path": "/api/analytics/reports/production",
+        "method": "GET",
+        "data_selector": "store_daily",
+        "paginator": { "type": "single_page" }
+      }
+    },
+    {
+      "name": "product_daily",
+      "primary_key": ["report_date", "definition_version", "sku_bucket"],
+      "endpoint": {
+        "path": "/api/analytics/reports/production",
+        "method": "GET",
+        "data_selector": "product_daily",
+        "paginator": { "type": "single_page" }
+      }
+    }
+  ]
+}
