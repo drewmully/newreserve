@@ -31,9 +31,9 @@ describe("shouldUseMembershipProvider", () => {
     const { shouldUseMembershipProvider } = await import("@/app/context/Providers");
 
     expect(shouldUseMembershipProvider("/")).toBe(false);
-    expect(shouldUseMembershipProvider("/faq")).toBe(false);
+    expect(shouldUseMembershipProvider("/faq")).toBe(true);
     expect(shouldUseMembershipProvider("/handoff")).toBe(false);
-    expect(shouldUseMembershipProvider("/policies/privacy")).toBe(false);
+    expect(shouldUseMembershipProvider("/policies/privacy")).toBe(true);
     expect(shouldUseMembershipProvider("/reservecard")).toBe(false);
     expect(shouldUseMembershipProvider("/mulligan")).toBe(false);
     expect(shouldUseMembershipProvider("/shop")).toBe(true);

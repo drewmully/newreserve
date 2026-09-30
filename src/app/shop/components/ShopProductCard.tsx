@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { ShopifyProduct } from "@/lib/shopify";
 import { useMembership } from "../../context/MembershipContext";
+import { shopProductPhoto, shopProductLabel } from "@/lib/shopProductPhotos";
 
 /**
  * V1-style product card: brand chip top-right, white background,
@@ -20,25 +21,19 @@ export function ShopProductCard({
   /** Optional accent hex used for the member-price highlight, per seasonal theme. */
   accent?: string;
 }) {
-  // Same defensive pattern ShopClient uses for the public /shop.
-  let tier: string | null = null;
-  try {
-    tier = useMembership().tier ?? null;
-  } catch {
-    tier = null;
-  }
+  const { tier } = useMembership();
   const isMember = tier && tier !== "free";
   const displayPrice = isMember ? product.reservePrice : product.price;
 
-  const hero = product.images[0];
+  const hero = shopProductPhoto(product);
 
   return (
     <Link
       href={`/shop/${product.slug}`}
-      className="group flex flex-col"
+      className="shop-product-card group flex flex-col"
       data-testid={`shop-card-${product.slug}`}
     >
-      <div className="relative aspect-square w-full overflow-hidden bg-white">
+      <div className="shop-product-card__image">
         {hero && (
           <Image
             src={hero}
@@ -48,22 +43,11 @@ export function ShopProductCard({
             className="object-contain p-4 transition-transform duration-500 group-hover:scale-[1.04] sm:p-6"
           />
         )}
-        {product.brand && (
-          <span className="absolute right-3 top-3 border border-charcoal/10 bg-white px-2 py-1 text-[9px] font-mono uppercase tracking-[0.2em] text-charcoal/60">
-            {product.brand}
-          </span>
-        )}
       </div>
-      <div className="mt-4 flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="text-[10px] font-mono uppercase tracking-[0.2em] text-charcoal/50">
-            {product.collection || "Accessories"}
-          </div>
-          <h3 className="mt-1 font-serif text-base leading-snug text-charcoal sm:text-lg">
-            {product.name}
-          </h3>
-        </div>
-        <div className="flex shrink-0 flex-col items-end">
+      <div>
+        <p className="shop-product-card__brand">{product.brand}</p>
+        <h3>{shopProductLabel(product)}</h3>
+        <div className="shop-product-card__price">
           {isMember && product.price !== product.reservePrice && (
             <span className="text-[11px] font-mono text-charcoal/40 line-through">
               ${product.price.toFixed(0)}

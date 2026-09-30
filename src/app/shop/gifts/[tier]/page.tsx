@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCollectionProducts, type ShopifyProduct } from "@/lib/shopify";
-import { ShopSeasonalHeader } from "../../components/ShopSeasonalHeader";
+import { ShopPageShell } from "../../components/ShopPageShell";
 import { ShopProductCard } from "../../components/ShopProductCard";
 import { ScrollToTop } from "../../components/ScrollToTop";
 import { ShopPasswordGate } from "../../components/ShopPasswordGate";
@@ -60,46 +60,38 @@ export default async function ShopGiftTierPage({ params }: Props) {
   );
 
   return (
-    <div className="min-h-screen bg-white">
-      <ShopSeasonalHeader accent={theme.accent} />
+    <ShopPageShell>
       <ScrollToTop />
       <ShopPasswordGate accent={theme.accent} />
 
-      <main className="shop-main pb-24">
-        <section className="border-b border-charcoal/10 bg-cream">
-          <div className="mx-auto max-w-7xl px-6 py-12 md:px-12 md:py-16">
+      <main className="shop-page-main">
+        <header className="shop-page-heading">
             <Link
               href="/shop"
-              className="text-[11px] font-mono uppercase tracking-[0.2em] text-charcoal/50 transition-colors hover:text-charcoal"
+              className="shop-text-link shop-page-kicker"
             >
               ← Shop
             </Link>
-            <div
-              className="mt-4 text-[10px] font-mono uppercase tracking-[0.2em]"
-              style={{ color: theme.accent }}
-            >
-              {tier.accent}
-            </div>
-            <h1 className="mt-2 font-serif text-4xl tracking-tight text-charcoal sm:text-6xl">
+            <h1>
               Gifts {tier.title}
             </h1>
             <p className="mt-4 max-w-xl text-sm text-charcoal/70">
               {tier.subtitle}.
             </p>
-          </div>
-        </section>
+        </header>
+        <nav className="shop-collection-nav" aria-label="Gift budgets">
+          {GIFT_TIERS.map(t => <Link key={t.key} href={`/shop/gifts/${t.key}`} aria-current={tierKey === t.key ? "page" : undefined}>{t.title}</Link>)}
+        </nav>
 
-        <section className="mx-auto max-w-7xl px-6 py-16 md:px-12 md:py-20">
+        <section aria-label="Gift selection">
           {products.length === 0 ? (
             <div className="rounded-none border border-dashed border-charcoal/20 bg-cream/60 px-8 py-20 text-center">
               <p className="mx-auto max-w-md text-sm text-charcoal/60">
-                No products tagged{" "}
-                <code className="font-mono text-xs">{tier.tag}</code> yet. Add
-                the tag in Shopify Admin to include a product in this tier.
+                No gifts in this edit right now. Explore another budget or visit the full shop.
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-x-5 gap-y-10 md:grid-cols-3 md:gap-x-8 lg:grid-cols-4">
+            <div className="shop-catalog-grid">
               {products.map((p) => (
                 <ShopProductCard key={p.slug} product={p} accent={theme.accent} />
               ))}
@@ -107,6 +99,6 @@ export default async function ShopGiftTierPage({ params }: Props) {
           )}
         </section>
       </main>
-    </div>
+    </ShopPageShell>
   );
 }

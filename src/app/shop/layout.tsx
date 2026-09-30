@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import "./shop-pages.css";
 
 /**
  * Shop-scoped layout. The only job here is to clamp horizontal overflow so

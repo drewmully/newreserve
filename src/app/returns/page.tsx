@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useMembership } from "../context/MembershipContext";
-import { ShopHeader } from "../components/ShopHeader";
+import { ShopPageShell } from "../shop/components/ShopPageShell";
 
 /* ═══════════════════════════════════════════
    RETURNS FLOW — 4 Steps
@@ -319,10 +319,8 @@ function ReturnsContent() {
   }
 
   return (
-    <div className="min-h-screen bg-bone">
-      <ShopHeader />
-
-      <main className="pt-24 pb-24 px-6 md:px-12">
+    <ShopPageShell>
+      <main className="shop-returns-main">
         <div className="max-w-2xl mx-auto">
 
           {/* ── Step indicator ── */}
@@ -811,21 +809,6 @@ function ReturnsContent() {
         </div>
       </main>
 
-      {/* ─── FOOTER ─── */}
-      <footer className="py-10 px-6 md:px-12 bg-forest">
-        <div className="max-w-6xl mx-auto flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <span className="flex items-center gap-2 text-bone">
-            <svg viewBox="0 0 1002 540" fill="currentColor" className="h-4 w-auto" aria-hidden="true"><path d="M0,0 H1002 V540 H0 Z M50,1 L998,269 L50,538 Z" fillRule="evenodd" /></svg>
-            <span className="font-serif text-xl font-bold tracking-wide">mully.</span>
-          </span>
-          <div className="flex items-center gap-8">
-            <Link href="/policies/terms" className="text-sm text-bone/50 hover:text-bone transition-colors duration-300">Terms</Link>
-            <Link href="/policies/privacy" className="text-sm text-bone/50 hover:text-bone transition-colors duration-300">Privacy</Link>
-            <Link href="/faq" className="text-sm text-bone/50 hover:text-bone transition-colors duration-300">FAQ</Link>
-          </div>
-          <p className="text-xs text-bone/30">&copy; {new Date().getFullYear()} Mully Group, Inc.</p>
-        </div>
-      </footer>
-    </div>
+    </ShopPageShell>
   );
 }

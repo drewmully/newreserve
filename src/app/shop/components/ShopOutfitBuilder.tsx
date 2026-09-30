@@ -7,7 +7,6 @@ import { getSizeGuide } from "@/lib/sizeCharts";
 import { shopProductPhoto, shopProductLabel } from "@/lib/shopProductPhotos";
 import {
   OUTFIT_SLOTS,
-  OUTFIT_STORAGE_KEY,
   RESERVE_OUTFIT_PRICE,
   money,
   outfitEstimate,
@@ -15,6 +14,7 @@ import {
   variantLabel,
 } from "@/lib/shopOutfit";
 import { trackEvent } from "@/lib/tracking";
+import { createMembershipCheckout } from "@/lib/shopifyCheckout";
 
 export function ShopOutfitBuilder({
   products,
@@ -88,44 +88,28 @@ export function ShopOutfitBuilder({
     fitRef.current?.showModal();
   }
   async function add() {
-    if (chooseMissing() || !chosen.length) return;
+    if (busy || chooseMissing() || !chosen.length) return;
     setError("");
-    if (mode === "reserve") {
-      const guide = {
-        createdAt: Date.now(),
-        items: chosen.map((p) => {
-          const v = p.variants.find((x) => x.id === variants[p.slug])!;
-          return {
-            slug: p.slug,
-            name: p.name,
-            brand: p.brand,
-            variantId: v.id,
-            size: variantLabel(v),
-            image: v.image || p.images[0] || "",
-          };
-        }),
-      };
-      try {
-        sessionStorage.setItem(OUTFIT_STORAGE_KEY, JSON.stringify(guide));
-      } catch {
-        setError(
-          "Allow session storage to carry your outfit into Reserve, or continue from the main Mully page.",
-        );
-        return;
-      }
-      void trackEvent("shop_outfit_reserve_clicked", {
-        properties: {
-          source: "shop_outfit",
-          products: chosen.map((p) => p.slug),
-        },
-      });
-      window.location.assign("/?shop_outfit=1#quiz");
+    if (unavailable && mode === "once") {
+      setError("Choose available sizes for each piece before checking out.");
       return;
     }
-    if (unavailable) {
-      setError(
-        "One of these options is unavailable. Please choose an available size or remove that piece.",
-      );
+    if (mode === "reserve") {
+      if (!full) { setError("Choose a top, bottom, and layer for Reserve."); return; }
+      setBusy(true);
+      try {
+        void trackEvent("shop_outfit_reserve_clicked", {properties:{source:"shop_outfit",products:chosen.map(p=>p.slug)}});
+        await createMembershipCheckout("member", {
+          firstBoxItems: selected.map((p,i) => ({
+            variantId: variants[p!.slug],
+            slot: (["Top","Bottom","Layer"] as const)[i],
+            name: p!.name,
+            size: variantLabel(selectedVariants[i]!),
+          })),
+        });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "We couldn’t open checkout. Please try again.");
+      } finally { setBusy(false); }
       return;
     }
     setBusy(true);
@@ -317,7 +301,7 @@ export function ShopOutfitBuilder({
                         title={
                           v.availableForSale
                             ? variantLabel(v)
-                            : `${variantLabel(v)}: unavailable for one-time purchase`
+                            : `${variantLabel(v)}: unavailable`
                         }
                         onClick={() =>
                           setVariants((x) => ({ ...x, [current.slug]: v.id }))
@@ -330,7 +314,7 @@ export function ShopOutfitBuilder({
                       </button>
                     ))}
                   </div>
-                  {current.variants.every(v => !v.availableForSale) && <p className="outfit__stock-note">Sold out · Select a size for your Reserve style guide.</p>}
+                  {current.variants.every(v => !v.availableForSale) && <p className="outfit__stock-note">Sold out individually · Available to select for your Reserve first box.</p>}
                 </>
               ) : (
                 <p>Select a piece to see its sizes.</p>
@@ -450,19 +434,19 @@ export function ShopOutfitBuilder({
                   <span className="purchase-option__saving">
                     {full && estimate.total > RESERVE_OUTFIT_PRICE
                       ? `Save ${money(estimate.total - RESERVE_OUTFIT_PRICE)} vs. BOGO15`
-                      : "Choose all 3 for your style guide"}
+                      : "Your first outfit, included"}
                   </span>
                   <span className="purchase-option__copy">
-                    Use this outfit as your guide. New styles every 3 months.
+                    This outfit first. New styles curated every 3 months.
                   </span>
                 </span>
               </label>
             </fieldset>
             <p className="outfit__terms" aria-live="polite">
               {mode === "reserve"
-                ? "Reserve checkout: $250/quarter. Cancel after your first quarter, before renewal. Exact styles depend on availability."
+                ? "$250 every 3 months, plus any tax/shipping. These pieces ship once. Future boxes are newly curated. Cancel before renewal."
                 : unavailable
-                  ? "Selected sizes are sold out. Edit your pieces, or use them as a Reserve style guide."
+                  ? "Selected sizes are sold out individually. Edit your pieces or choose Reserve."
                   : "15% off one lowest-priced item with 2+. Shopify confirms eligibility and your final total in the bag."}
             </p>
             {error && (
@@ -480,11 +464,11 @@ export function ShopOutfitBuilder({
               onClick={add}
             >
               {busy
-                ? "Adding…"
+                ? mode === "reserve" ? "Opening checkout…" : "Adding…"
                 : missing >= 0
                   ? "Choose remaining sizes →"
                   : mode === "reserve"
-                    ? "Continue with Mully Reserve →"
+                    ? "Checkout with Reserve →"
                     : unavailable
                       ? "Selected sizes sold out"
                       : `Add ${chosen.length === 1 ? "piece" : "outfit"} to bag`}

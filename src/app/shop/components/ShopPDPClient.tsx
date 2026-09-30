@@ -15,6 +15,7 @@ import {
   type ProductVariantSelection,
 } from "@/lib/productVariants";
 import { orderProductImagesBySelection } from "@/lib/shopDisplay";
+import { shopProductPhoto } from "@/lib/shopProductPhotos";
 import { ProductImageGallery } from "./ShopClient";
 import { ShopProductCard } from "./ShopProductCard";
 import { getSizeGuide } from "@/lib/sizeCharts";
@@ -75,10 +76,14 @@ export function ShopPDPClient({
   );
 
   const orderedImages = useMemo(
-    () =>
-      Object.keys(selection).length > 0
+    () => {
+      const images = Object.keys(selection).length > 0
         ? orderProductImagesBySelection(product, selection)
-        : product.images,
+        : product.images;
+      // Only normalize the original primary photo. Never substitute the
+      // wrong color for a selected variant's image.
+      return images.map(image => image === product.images[0] ? shopProductPhoto(product) : image);
+    },
     [product, selection]
   );
 
@@ -148,10 +153,7 @@ export function ShopPDPClient({
 
   // Merge current product into the catalog used by Ways to Wear so its own
   // handle resolves for the drawer preview.
-  const outfitsCatalog = useMemo(
-    () => [product, ...relatedProducts.filter((p) => p.slug !== product.slug)],
-    [product, relatedProducts]
-  );
+  const outfitsCatalog = [product, ...relatedProducts.filter((p) => p.slug !== product.slug)];
 
   return (
     <div className="mx-auto max-w-7xl">
