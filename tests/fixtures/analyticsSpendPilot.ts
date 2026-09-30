@@ -1,15 +1,20 @@
 import type { AnalyticsRpcClient } from "@/lib/analytics/rpcStore";
+import { nyDate } from "@/lib/analytics/primitives";
 export const spendPilotProject = "a".repeat(20);
 export const spendPilotAccount = "1234567890";
 export function spendPilotScope(allDue = false) {
   const now = Date.now(), iso = (offset: number) => new Date(now + offset).toISOString();
+  // Report days must already be closed in the fixture account's New York zone.
+  // UTC yesterday is still NY today between UTC midnight and NY midnight.
+  const calendar = Date.parse(`${nyDate(iso(0))}T12:00:00Z`);
+  const closedDate = (daysBack: number) => new Date(calendar - daysBack * 86400000).toISOString().slice(0, 10);
   return {
     pilotId: "fixture:pilot", projectRef: spendPilotProject, accountId: spendPilotAccount,
     loginCustomerId: "9876543210", maxPages: 5, expiresAt: iso(3 * 86400000),
     approvalRef: "fixture:approval", actorRef: "fixture:operator",
     days: [
-      { runId: "fixture:day1", date: iso(-2 * 86400000).slice(0, 10), dueAt: iso(-3600000) },
-      { runId: "fixture:day2", date: iso(-86400000).slice(0, 10), dueAt: iso(allDue ? -1800000 : 86400000) },
+      { runId: "fixture:day1", date: closedDate(2), dueAt: iso(-3600000) },
+      { runId: "fixture:day2", date: closedDate(1), dueAt: iso(allDue ? -1800000 : 86400000) },
     ],
   };
 }
