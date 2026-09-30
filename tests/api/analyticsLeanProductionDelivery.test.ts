@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { createHmac, randomUUID } from "node:crypto";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { productionReportGet, validProductionReportPayload } from "@/lib/analytics/productionReportDelivery";
+import { ratio } from "@/lib/analytics/reporting";
 import { composeRetainedOrderReports } from "@/lib/analytics/shopifyRetainedOrder";
 import { runtimeSource, runtimePolicy } from "../fixtures/analyticsRetainedRuntime";
 import { runShopifyPipeline } from "@/lib/analytics/shopifyPipeline";
@@ -107,6 +108,28 @@ it("produces correct daily totals and ratio-of-sums AOV without raw lineage", as
   });
   const response = await productionReportGet(request(),env,transport);
   expect(response.status).toBe(200); expect(await response.json()).toEqual(data);
+});
+it.each([
+  ["positive fraction", "2.000000", 3, "0.666666"],
+  ["negative fraction", "-2.000000", 3, "-0.666666"],
+  ["zero numerator", "0.000000", 3, "0.000000"],
+  ["withheld numerator", null, 3, null],
+  ["zero denominator", "2.000000", 0, null],
+  ["withheld denominator", "2.000000", null, null],
+] as const)("preserves the reporting ratio contract for %s AOV", async (_case, purchase, orders, expected) => {
+  await materialize(); await enable();
+  // Synthetic retained aggregate inputs isolate the actual RPC's ratio serialization.
+  await db.query(`update lean_private.report_store_daily
+    set purchase_merchandise_net_usd=$1::numeric,eligible_orders=$2::bigint`, [purchase,orders]);
+  const data = await read() as {store_daily:Record<string,unknown>[];product_daily:Record<string,unknown>[]};
+  expect(validProductionReportPayload(data)).toBe(true);
+  expect(data.store_daily[0].aov_usd).toBe(expected);
+  expect(data.store_daily[0].aov_usd).toBe(ratio(purchase,orders === null ? null : `${orders}.000000`));
+  expect((data.store_daily[0].readiness as Record<string,unknown>).aov_usd)
+    .toBe(expected === null ? "withheld" : "observed_unverified");
+  const response = await productionReportGet(request(),env,async () => Response.json(data));
+  expect(response.status).toBe(200);
+  expect((await response.json()).store_daily[0].aov_usd).toBe(expected);
 });
 it("exports latest revisions only and preserves stale flags after stopping", async () => {
   await materialize(); await materialize("1",false,"2026-01-03T12:00:00Z"); await enable();
