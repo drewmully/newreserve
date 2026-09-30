@@ -22,8 +22,12 @@ it.each([
   expect(ports.database).not.toHaveBeenCalled();
   expect(network).not.toHaveBeenCalled();
 });
-it("installs no analytics schedule and disables review-branch deployment", () => {
+it("installs only the two approved analytics schedules and disables review-branch deployment", () => {
   const config = JSON.parse(readFileSync("vercel.json", "utf8"));
-  expect(config.crons.some((row: { path: string }) => row.path.startsWith("/api/analytics/"))).toBe(false);
+  expect(config.crons.filter((row: { path: string }) => row.path.startsWith("/api/analytics/"))).toEqual([
+    { path: "/api/analytics/ingest/scheduled", schedule: "2-59/5 * * * *" },
+    { path: "/api/analytics/subscriptions/scheduled", schedule: "4-59/5 * * * *" },
+  ]);
   expect(config.git.deploymentEnabled["review/analytics-initial-validation"]).toBe(false);
+  expect(config.git.deploymentEnabled["review/analytics-vercel-timers"]).toBe(false);
 });
