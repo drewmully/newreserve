@@ -45,7 +45,7 @@ export const SHOP_CATEGORIES: ShopCategoryMeta[] = [
     label: "Tops",
     handle: SHOP_CATEGORY_HANDLES.tops,
     eyebrow: "Polos & quarter-zips",
-    detail: "What you're actually judged on.",
+    detail: "Polos and quarter-zips.",
   },
   {
     key: "bottoms",
@@ -114,6 +114,6 @@ export const GIFT_TIERS = [
     tag: GIFT_TAGS.threeHundredPlus,
     title: "$300 & Up",
     subtitle: "The one they'll talk about.",
-    accent: "Reserve",
+    accent: "Standout gifts",
   },
 ] as const;

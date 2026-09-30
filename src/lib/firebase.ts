@@ -219,9 +219,15 @@ export async function syncUserProfile(user: User): Promise<UserDocument> {
  * it on the same device automatically.
  */
 export async function sendOTPEmail(email: string): Promise<void> {
+  const { shopReturnFromLogin } = await import("./shopLogin");
+  const destination = new URL("/login", window.location.origin);
+  const shopReturn = window.location.pathname === "/login"
+    ? shopReturnFromLogin(window.location.search)
+    : null;
+  if (shopReturn) destination.searchParams.set("returnTo", shopReturn);
   const actionCodeSettings = {
     // Must be whitelisted in Firebase Console → Authentication → Settings → Authorized domains.
-    url: `${window.location.origin}/login`,
+    url: destination.toString(),
     handleCodeInApp: true,
   };
   await sendSignInLinkToEmail(auth, email, actionCodeSettings);

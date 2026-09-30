@@ -1,203 +1,102 @@
 "use client";
-
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { useMembership } from "../../context/MembershipContext";
 import { ShopSlideCart } from "./ShopSlideCart";
 import { MullyWordmark } from "./MullyWordmark";
 import { ShopAnnouncementBar } from "./ShopAnnouncementBar";
+import { safeShopReturn } from "@/lib/shopLogin";
 
-/**
- * Shop-only header. 4 primary categories with a hover mega menu on the last
- * one to expose Bags/Accessories/Shop All without cluttering the top nav.
- *
- * Baymard 2024: 88% of top US ecommerce sites use hover mega menus. NNG:
- * mega menus cut nav time 37% for stores with >10 SKUs across categories.
- * We deliberately keep only 4 primary items to keep the header light.
- *
- * Two visual states, driven by route and scroll position (Huckberry pattern):
- *
- *  - **Transparent-on-hero**: on `/shop` while the user is inside the top
- *    ~90% of the viewport, the header sits directly on top of the seasonal
- *    hero image with white text and no background. This integrates the
- *    header into the hero photograph.
- *  - **Solid**: on every other shop route, and on `/shop` after the user has
- *    scrolled past the hero, the header renders on a solid white background
- *    with charcoal text and a soft bottom border.
- *
- * The dark announcement bar always renders above the header.
- */
+const apparel = [
+  ["Tops", "/shop/collection/shop-tops"],
+  ["Bottoms", "/shop/collection/shop-bottoms"],
+  ["Outerwear", "/shop/collection/shop-outerwear"],
+];
+const gear = [
+  ["Tech", "/shop/collection/shop-tech"],
+  ["Bags", "/shop/collection/shop-bags"],
+  ["Accessories", "/shop/collection/shop-accessories"],
+];
+
 export function ShopSeasonalHeader({ accent }: { accent: string }) {
-  const { cartCount, setCartOpen } = useMembership();
-  const [openMenu, setOpenMenu] = useState<string | null>(null);
+  const { cartCount, setCartOpen, isSignedIn, authLoading } = useMembership();
   const pathname = usePathname();
-  const [scrolledPastHero, setScrolledPastHero] = useState(false);
-
-  // Only the /shop landing has a full-viewport dark hero the header can
-  // sit on. Every other route starts with white/cream content.
-  const hasHero = pathname === "/shop";
-
-  useEffect(() => {
-    if (!hasHero) return;
-    // Flip to the solid state once the user has scrolled past ~85vh — a
-    // touch before the hero fully leaves so the transition feels tight.
-    const threshold = () => Math.round(window.innerHeight * 0.85);
-    const onScroll = () => setScrolledPastHero(window.scrollY > threshold());
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
-  }, [hasHero]);
-
-  const isTransparent = hasHero && !scrolledPastHero;
-  const tone: "light" | "dark" = isTransparent ? "light" : "dark";
-
-  // Colors switch together so the whole header reads coherently.
-  const linkColor = isTransparent
-    ? "text-white/85 hover:text-white"
-    : "text-charcoal/70 hover:text-charcoal";
-  const iconColor = isTransparent ? "text-white" : "text-charcoal";
-  const headerBg = isTransparent
-    ? "bg-transparent"
-    : "bg-white/95 backdrop-blur-md border-b border-charcoal/10";
-
-  const primary = [
-    {
-      key: "apparel",
-      label: "Apparel",
-      href: "/shop/collection/shop-tops",
-      submenu: [
-        { label: "Tops", href: "/shop/collection/shop-tops" },
-        { label: "Bottoms", href: "/shop/collection/shop-bottoms" },
-        { label: "Outerwear", href: "/shop/collection/shop-outerwear" },
-      ],
-    },
-    {
-      key: "tech",
-      label: "Tech",
-      href: "/shop/collection/shop-tech",
-    },
-    {
-      key: "gear",
-      label: "Gear",
-      href: "/shop/collection/shop-bags",
-      submenu: [
-        { label: "Bags", href: "/shop/collection/shop-bags" },
-        { label: "Accessories", href: "/shop/collection/shop-accessories" },
-      ],
-    },
-    {
-      key: "all",
-      label: "Shop All",
-      href: "/shop/collection/shop-all",
-    },
-  ];
-
+  const menu = useRef<HTMLDialogElement>(null);
+  const menuButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => { menu.current?.close(); }, [pathname]);
+  const loginHref = `/login?returnTo=${encodeURIComponent(safeShopReturn(pathname) || "/shop")}`;
+  function loginClick(e: React.MouseEvent<HTMLAnchorElement>) {
+    if (isSignedIn || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    e.preventDefault();
+    const destination = safeShopReturn(window.location.pathname + window.location.search + window.location.hash) || "/shop";
+    window.location.assign(`/login?returnTo=${encodeURIComponent(destination)}`);
+  }
+  const utility = "inline-flex min-h-11 items-center gap-2 text-[11px] uppercase tracking-[.1em] text-charcoal";
   return (
     <>
-      {/*
-        Global padding rule: on non-hero routes we push the main content down
-        by (announcement 32px + header 64px) = 6rem. On the /shop landing,
-        the hero is intentionally allowed to render under the header, so
-        `shop-main` sits at 0 there and the hero occupies the full viewport
-        below the announcement strip.
-      */}
       <style>{`
-        .shop-main { padding-top: 6rem; }
-        .shop-main--hero { padding-top: 2rem; } /* just clears announcement bar; hero sits behind transparent header */
+        .shop-main,.shop-main--hero{padding-top:6rem}
+        .shop-nav-menu{position:fixed;inset:0 auto 0 0;margin:0;width:min(390px,100%);height:100dvh;max-height:100dvh;max-width:100%;border:0;padding:24px;background:#faf9f6;color:#2a2a2a}
+        .shop-nav-menu::backdrop{background:rgba(30,23,18,.45)}
+        .shop-nav-menu a{display:flex;min-height:44px;align-items:center}
+        .shop-nav-summary{cursor:pointer;list-style:none;min-height:44px;display:flex;align-items:center;gap:8px}
+        .shop-nav-summary::-webkit-details-marker{display:none}
+        .shop-nav-summary::after{content:"+";font-size:13px}
+        details[open]>.shop-nav-summary::after{content:"−"}
+        .shop-nav a:focus-visible,.shop-nav button:focus-visible,.shop-nav summary:focus-visible{outline:2px solid ${accent};outline-offset:3px}
       `}</style>
       <ShopAnnouncementBar />
-      <header
-        className={`fixed left-0 right-0 top-8 z-40 transition-colors duration-300 ${headerBg}`}
-      >
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6 md:px-12">
-          <Link href="/shop" aria-label="Mully Shop home">
-            <MullyWordmark accent={accent} tone={tone} className="text-2xl" />
-          </Link>
-
-          <nav
-            className="hidden items-center gap-8 md:flex"
-            onMouseLeave={() => setOpenMenu(null)}
-          >
-            {primary.map((item) => (
-              <div
-                key={item.key}
-                className="relative"
-                onMouseEnter={() =>
-                  setOpenMenu(item.submenu ? item.key : null)
-                }
-              >
-                <Link
-                  href={item.href}
-                  className={`flex items-center gap-1 text-[11px] font-mono uppercase tracking-[0.2em] transition-colors ${linkColor}`}
-                >
-                  {item.label}
-                  {item.submenu && (
-                    <svg
-                      className="h-2.5 w-2.5"
-                      viewBox="0 0 12 12"
-                      fill="none"
-                      aria-hidden="true"
-                    >
-                      <path
-                        d="M3 4.5l3 3 3-3"
-                        stroke="currentColor"
-                        strokeWidth={1.5}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  )}
-                </Link>
-                {item.submenu && openMenu === item.key && (
-                  <div className="absolute left-1/2 top-full -translate-x-1/2 pt-4">
-                    <div className="min-w-[180px] border border-charcoal/10 bg-white py-2 shadow-lg">
-                      {item.submenu.map((sub) => (
-                        <Link
-                          key={sub.href}
-                          href={sub.href}
-                          className="block px-5 py-2 text-[11px] font-mono uppercase tracking-[0.2em] text-charcoal/70 transition-colors hover:bg-cream hover:text-charcoal"
-                        >
-                          {sub.label}
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
+      <header className="shop-nav fixed left-0 right-0 top-8 z-40 border-b border-charcoal/10 bg-white/95 backdrop-blur-md">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-3 sm:px-6 lg:px-12">
+          <div className="flex items-center gap-2">
+            <button ref={menuButton} className="flex h-11 w-11 items-center justify-center lg:hidden" onClick={() => menu.current?.showModal()} aria-label="Open shop menu" aria-haspopup="dialog">
+              <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18" strokeWidth="1.5" /></svg>
+            </button>
+            <Link href="/shop" aria-label="Mully Shop home"><MullyWordmark accent={accent} tone="dark" className="text-2xl" /></Link>
+          </div>
+          <nav aria-label="Shop navigation" className="hidden items-center gap-6 text-[11px] uppercase tracking-[.12em] lg:flex">
+            <Link href="/shop#edit" className="inline-flex min-h-11 items-center">The Edit</Link>
+            {([["Apparel", apparel], ["Gear & Tech", gear]] as const).map(([label, links]) => (
+              <details className="relative" key={label} onBlur={e => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node | null)) e.currentTarget.open = false;
+              }} onKeyDown={e => { if (e.key === "Escape") { e.currentTarget.open = false; e.currentTarget.querySelector("summary")?.focus(); } }}>
+                <summary className="shop-nav-summary">{label}</summary>
+                <div className="absolute left-0 top-full min-w-48 border border-charcoal/10 bg-white p-3 shadow-sm">
+                  {links.map(([name, href]) => <Link className="flex min-h-11 items-center px-3 hover:bg-cream" key={href} href={href} onClick={e => { const d = e.currentTarget.closest("details"); if (d) d.open = false; }}>{name}</Link>)}
+                </div>
+              </details>
             ))}
+            <Link href="/shop#gift-tiers" className="inline-flex min-h-11 items-center">Gifts</Link>
+            <Link href="/shop/collection/shop-all" className="inline-flex min-h-11 items-center">Shop all</Link>
           </nav>
-
-          <button
-            onClick={() => setCartOpen(true)}
-            className={`relative flex items-center gap-2 transition-opacity duration-200 hover:opacity-70 ${iconColor}`}
-            aria-label="Cart"
-          >
-            <svg
-              className="h-5 w-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={1.5}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"
-              />
-            </svg>
-            <span className="text-[11px] font-mono uppercase tracking-[0.2em]">Cart</span>
-            {cartCount > 0 && (
-              <span
-                className="absolute -right-2 -top-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-medium text-white"
-                style={{ backgroundColor: accent }}
-              >
-                {cartCount}
-              </span>
-            )}
-          </button>
+          <div className="flex items-center gap-3 sm:gap-5">
+            <Link href={!authLoading && isSignedIn ? "/account" : loginHref} onClick={loginClick} className={utility}>
+              {!authLoading && isSignedIn ? "Account" : "Log in"}
+            </Link>
+            <button onClick={() => setCartOpen(true)} className={`${utility} relative min-w-11 justify-center`} aria-label={`Bag${cartCount ? `, ${cartCount} items` : ""}`}>
+              <svg width="20" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="M5 7h14l1 14H4L5 7Z M8 8V5a4 4 0 0 1 8 0v3" /></svg>
+              <span className="hidden sm:inline">Bag</span>
+              {cartCount > 0 && <span className="absolute -right-1 top-0 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] text-white" style={{ backgroundColor: accent }}>{cartCount}</span>}
+            </button>
+          </div>
         </div>
       </header>
+      <dialog ref={menu} className="shop-nav-menu" aria-labelledby="shopMenuTitle" onClose={() => menuButton.current?.focus()}>
+        <div className="flex items-center justify-between border-b border-charcoal/15 pb-4">
+          <h2 id="shopMenuTitle" className="font-serif text-2xl">Shop Mully</h2>
+          <button className="h-11 w-11 text-3xl" onClick={() => menu.current?.close()} aria-label="Close shop menu">×</button>
+        </div>
+        <nav aria-label="Mobile shop navigation" className="mt-4" onClick={e => { if ((e.target as HTMLElement).closest("a")) menu.current?.close(); }}>
+          <Link href="/shop#edit" className="font-serif text-xl">The Mully Edit</Link>
+          {[...apparel, ...gear, ["Gifts", "/shop#gift-tiers"], ["Shop all", "/shop/collection/shop-all"]].map(([name, href]) => <Link key={href} href={href} className="text-sm">{name}</Link>)}
+          <div className="mt-4 border-t border-charcoal/15 pt-3 text-sm">
+            <Link href="/blog">From the Journal</Link>
+            <Link href="/lp/subscription">Explore Mully Reserve</Link>
+            <Link href={isSignedIn ? "/account" : loginHref}>{isSignedIn ? "Account" : "Log in"}</Link>
+          </div>
+        </nav>
+      </dialog>
       <ShopSlideCart accent={accent} />
     </>
   );
