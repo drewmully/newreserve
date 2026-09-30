@@ -21,6 +21,9 @@ export type SubscriptionCollectionOptions = {
   pageSize: number;
   status: "ACTIVE" | "PAUSED" | "CANCELLED" | "EXPIRED" | null;
   signal?: AbortSignal;
+  /** Server-only continuation channel; never included in the public result/evidence. */
+  continueAfter?: string | null;
+  onContinuation?: (cursor: string | null) => void;
 };
 type Row = Record<string, unknown>;
 function object(value: unknown): Row {
@@ -100,13 +103,17 @@ export async function collectSubscriptionSnapshot(
 ) {
   if (options.enabled !== true) return { state: "disabled" as const };
   if (Object.keys(options).some(k => !["enabled", "shop", "asOf", "evidenceRef", "maxPages",
-    "maxRows", "maxBytes", "pageSize", "status", "signal"].includes(k)) ||
+    "maxRows", "maxBytes", "pageSize", "status", "signal", "continueAfter", "onContinuation"].includes(k)) ||
       !Number.isSafeInteger(options.maxPages) || options.maxPages < 1 || options.maxPages > 20 ||
       !Number.isSafeInteger(options.maxRows) || options.maxRows < 1 || options.maxRows > 1000 ||
       !Number.isSafeInteger(options.maxBytes) || options.maxBytes < 1 || options.maxBytes > 4000000 ||
       !Number.isSafeInteger(options.pageSize) || options.pageSize < 1 || options.pageSize > 100 ||
       ![null, "ACTIVE", "PAUSED", "CANCELLED", "EXPIRED"].includes(options.status) ||
-      typeof transport !== "function") throw new Error("subscription_collection_configuration");
+      typeof transport !== "function" ||
+      options.continueAfter != null && (typeof options.continueAfter !== "string" || !options.continueAfter.length ||
+        Buffer.byteLength(options.continueAfter) > 4096) ||
+      options.onContinuation !== undefined && typeof options.onContinuation !== "function")
+    throw new Error("subscription_collection_configuration");
   if (options.status !== null && JSON.stringify(policy.countedStatuses) !== JSON.stringify([options.status]) ||
       policy.recurringValue !== null)
     throw new Error("subscription_collection_policy");
@@ -119,7 +126,8 @@ export async function collectSubscriptionSnapshot(
   const pageEvidence: { pageNumber: number; requestedPageSize: number; rowCount: number; hasNextPage: boolean;
     requestCursorDigest: string | null; projectedDigest: string }[] = [];
   const revisions = new Map<string, string | null>(), cursors = new Set<string>();
-  let cursor: string | null = null;
+  let cursor: string | null = options.continueAfter ?? null;
+  if (cursor !== null) cursors.add(cursor);
   const startedAt = new Date().toISOString();
   let bytes = 0, rawRows = 0, requests = 0, paginationEnded = false, rowLimit = false;
   try {
@@ -180,12 +188,13 @@ export async function collectSubscriptionSnapshot(
       projectedDigest: key("loop-projected-page", JSON.stringify(projected)) });
     if (!pageInfo.hasNextPage) { paginationEnded = true; break; }
     if (typeof pageInfo.nextCursor !== "string" || !pageInfo.nextCursor.length ||
-        pageInfo.nextCursor.length > 4096 || cursors.has(pageInfo.nextCursor))
+        Buffer.byteLength(pageInfo.nextCursor) > 4096 || cursors.has(pageInfo.nextCursor))
       throw new Error("subscription_collection_cursor");
     cursor = pageInfo.nextCursor; cursors.add(cursor);
     if (rawRows === options.maxRows) { rowLimit = true; break; }
     if (bytes >= options.maxBytes) throw new Error("subscription_collection_byte_budget");
   }
+  options.onContinuation?.(paginationEnded ? null : cursor);
   return {
     state: paginationEnded ? "pagination_ended" as const : rowLimit ? "row_limit" as const : "page_limit" as const,
     collection: { requests, bytes, rawRows, startedAt, finishedAt: new Date().toISOString(), consistency: "unverified" as const,
