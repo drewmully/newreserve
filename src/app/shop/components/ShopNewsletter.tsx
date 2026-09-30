@@ -28,9 +28,8 @@ export function ShopNewsletter() {
     <section className="sec shop-newsletter" id="shop-newsletter">
       <div className="wrap shop-newsletter__in">
         <div>
-          <p className="eyebrow">Keep discovering</p>
-          <h2 className="h2">The next edit,<br />in your inbox.</h2>
-          <p className="lede">New arrivals, useful gear, and the stories behind our picks.</p>
+          <h2 className="h2">The next edit, in your inbox.</h2>
+          <p className="lede">New arrivals and good finds. Nothing extra.</p>
         </div>
         {status === "done" ? (
           <div className="shop-newsletter__success" role="status">

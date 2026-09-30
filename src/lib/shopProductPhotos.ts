@@ -16,6 +16,13 @@ const names: Record<string, string> = {
   "rhone-commuter-short-7": 'Commuter short · 7"',
   "rhone-commuter-1-4-zip": "Commuter quarter-zip",
   "duckhead-fremont-sport-performance-quilted-vest-brandy-brown": "Fremont quilted vest",
+  "olydoe-og-supima-hollow-polo": "Supima hollow polo",
+  "duckhead-classic-fit-gold-school-chino-khaki": "Gold School chino",
+  "voice-caddie-laser-fit": "Laser Fit rangefinder",
+  "blue-tees-player-gps-speaker": "Player+ GPS speaker",
+  "garmin-approach-s70": "Approach S70",
+  "bushnell-tour-v7-shift": "Tour V7 Shift",
+  "winston-solid-tradition-leather-headcover": "Tradition leather headcover",
 };
 
 export function shopProductLabel(p: Pick<ShopifyProduct, "slug" | "name">): string {
