@@ -49,7 +49,7 @@ beforeEach(async () => {
     alter default privileges in schema public grant execute on functions to anon,authenticated,service_role,lean_posthog_reader`);
   await db.exec(readFileSync(migration, "utf8"));
   await db.query(`insert into lean_private.pipeline_scope(shop,project_ref,enabled,from_time,until_time,policy,approval_ref,actor_ref)
-    values($1,$2,true,'2026-01-01','2026-02-01',$3::jsonb,'fixture:approved','fixture:actor')`,
+    values($1,$2,true,'2026-01-01T00:00:00Z','2026-02-01T00:00:00Z',$3::jsonb,'fixture:approved','fixture:actor')`,
   [shop, project, JSON.stringify(runtimePolicy)]);
 }, 30000);
 afterEach(async () => { await db?.close(); expect(network).not.toHaveBeenCalled(); vi.unstubAllGlobals(); });
