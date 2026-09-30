@@ -94,7 +94,10 @@ export function ShopLanding({ products, productsByCategory, theme, journalPosts 
       <ShopPasswordGate accent={theme.accent} />
       <div className="shop-redesign shop-first" style={{ "--accent": theme.accent, "--accent-d": theme.accentDark } as CSSProperties}>
         <section className="shop-hero" id="hero" aria-labelledby="shopHeroTitle">
-          <img className="shop-hero__image" src="/shop/hero-fall-2026.jpg" alt="A golf course in the evening light" fetchPriority="high" />
+          <picture>
+            <source media="(max-width: 600px) and (orientation: portrait)" srcSet="/shop-redesign/lifestyle/fall-firepit-mobile.webp" width={1086} height={1448} />
+            <img className="shop-hero__image" src="/shop-redesign/lifestyle/fall-firepit-desktop.webp" alt="AI-styled fall outfit: a striped polo, braided brown belt, tailored khakis and white golf shoes beside a clubhouse firepit" width={1672} height={941} fetchPriority="high" loading="eager" />
+          </picture>
           <div className="wrap shop-hero__in">
             <div className="shop-hero__copy">
               <h1 id="shopHeroTitle">The {theme.season.charAt(0).toUpperCase() + theme.season.slice(1)} Edit</h1>

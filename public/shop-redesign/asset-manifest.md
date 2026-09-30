@@ -1,5 +1,14 @@
 # Shop-first revision asset provenance
 
+## September 30 approved fall lifestyle hero
+
+- **Scope:** User-approved AI-created fictional adult model and fictional country-club firepit scene. This is aspirational editorial imagery, not documentary photography, a real-person endorsement, or exact product imagery.
+- **Garment reference:** Merchant's Quiet Golf Remy Polo image, https://cdn.shopify.com/s/files/1/0561/0530/4256/files/RemyPoloWine1.jpg?v=1789572975. The user requested the striped polo tucked into tailored/tapered khakis with a no-break hem, a brown braided belt, white golf shoes, and a glass of bourbon beside a firepit. Accessories and trousers are styling concepts, not promises of specific purchasable SKUs.
+- **Generation:** GPT Image 2.5 Flare for the initial scene; GPT Image 2.5 Sunburst for the approved tailoring refinement and text removal. Desktop environment extended for wide hero framing; portrait retains the approved seated composition.
+- **Files:** `lifestyle/fall-firepit-desktop.webp` and `lifestyle/fall-firepit-mobile.webp`. Compressed WebP derivatives of the approved concept; no baked-in text. Responsive `<picture>` chooses portrait only on small portrait viewports.
+- **Live copy:** The existing seasonal heading and `[ shop ]` remain accessible HTML; the CTA still leads to the full edit, not a claim that the exact generated outfit is available. Descriptive alt text identifies AI styling.
+- **Preserved:** Existing merchant product photography, inventory, offer logic, sizing, builder viewport rules, Reserve handoff, login, and the `mullyshop` soft-launch gate. The gate is unchanged and remains a client-side preview curtain, not server authentication.
+
 ## September 30 palette and full-edit rail
 
 - Replaced the duplicate category navigation below the hero with a 32px decorative palette: cream `#EDE6D6`, camel `#B08558`, olive `#5B613F`, taupe `#9B8B7A`, espresso `#4A3528`. Faint hex labels are decorative and hidden from assistive technology.
