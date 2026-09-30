@@ -1,6 +1,7 @@
 {
   "git": {
     "deploymentEnabled": {
+      "review/analytics-vercel-timers": false,
       "review/analytics-order-exclusion": false,
       "review/analytics-subscription-live": false,
       "review/analytics-order-size-live": false,
@@ -47,6 +48,14 @@
     }
   },
   "crons": [
+    {
+      "path": "/api/analytics/ingest/scheduled",
+      "schedule": "2-59/5 * * * *"
+    },
+    {
+      "path": "/api/analytics/subscriptions/scheduled",
+      "schedule": "4-59/5 * * * *"
+    },
     {
       "path": "/api/email/process",
       "schedule": "0 * * * *"
