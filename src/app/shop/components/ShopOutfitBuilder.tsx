@@ -90,7 +90,7 @@ export function ShopOutfitBuilder({
   async function add() {
     if (busy || chooseMissing() || !chosen.length) return;
     setError("");
-    if (unavailable) {
+    if (unavailable && mode === "once") {
       setError("Choose available sizes for each piece before checking out.");
       return;
     }
@@ -103,11 +103,9 @@ export function ShopOutfitBuilder({
           firstBoxItems: selected.map((p,i) => ({
             variantId: variants[p!.slug],
             slot: (["Top","Bottom","Layer"] as const)[i],
+            name: p!.name,
+            size: variantLabel(selectedVariants[i]!),
           })),
-          attributes: [
-            {key:"_mully_shop_first_box",value:"v1"},
-            {key:"_mully_style_guide",value:chosen.map(p=>`${p.name}: ${variantLabel(p.variants.find(v=>v.id===variants[p.slug])!)}`).join("; ").slice(0,1000)},
-          ],
         });
       } catch (err) {
         setError(err instanceof Error ? err.message : "We couldn’t open checkout. Please try again.");
@@ -316,7 +314,7 @@ export function ShopOutfitBuilder({
                       </button>
                     ))}
                   </div>
-                  {current.variants.every(v => !v.availableForSale) && <p className="outfit__stock-note">Sold out · Choose another piece for your outfit.</p>}
+                  {current.variants.every(v => !v.availableForSale) && <p className="outfit__stock-note">Sold out individually · Available to select for your Reserve first box.</p>}
                 </>
               ) : (
                 <p>Select a piece to see its sizes.</p>
@@ -448,7 +446,7 @@ export function ShopOutfitBuilder({
               {mode === "reserve"
                 ? "$250 every 3 months, plus any tax/shipping. These pieces ship once. Future boxes are newly curated. Cancel before renewal."
                 : unavailable
-                  ? "Selected sizes are sold out. Edit your pieces to continue."
+                  ? "Selected sizes are sold out individually. Edit your pieces or choose Reserve."
                   : "15% off one lowest-priced item with 2+. Shopify confirms eligibility and your final total in the bag."}
             </p>
             {error && (
@@ -461,7 +459,7 @@ export function ShopOutfitBuilder({
               disabled={
                 busy ||
                 !chosen.length ||
-                (missing < 0 && unavailable)
+                (missing < 0 && unavailable && mode === "once")
               }
               onClick={add}
             >
@@ -470,7 +468,7 @@ export function ShopOutfitBuilder({
                 : missing >= 0
                   ? "Choose remaining sizes →"
                   : mode === "reserve"
-                    ? unavailable ? "Selected sizes sold out" : "Checkout with Reserve →"
+                    ? "Checkout with Reserve →"
                     : unavailable
                       ? "Selected sizes sold out"
                       : `Add ${chosen.length === 1 ? "piece" : "outfit"} to bag`}

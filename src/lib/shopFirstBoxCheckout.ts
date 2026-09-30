@@ -1,6 +1,6 @@
 import { RESERVE_OUTFIT_PRICE } from "./shopOutfit";
 
-export type FirstBoxItem = { variantId: string; slot: "Top" | "Bottom" | "Layer" };
+export type FirstBoxItem = { variantId: string; slot: "Top" | "Bottom" | "Layer"; name: string; size: string };
 type Money = { amount: string; currencyCode: string };
 type VerifiedLine = {
   quantity: number;
@@ -13,33 +13,33 @@ export type FirstBoxCart = {
   lines: { nodes: VerifiedLine[]; pageInfo: { hasNextPage: boolean } };
 };
 
-/** These are separate, one-time merchandise lines. Never put selections on
- * the recurring line: subscription apps can retain its properties on renewal. */
-export function firstBoxLines(items: FirstBoxItem[], subscriptionVariant: string) {
+/** The box is the only purchased product. Keep its first-box packing list at
+ * order level, not on the subscription line/contract, so it is not recurring. */
+export function firstBoxAttributes(items: FirstBoxItem[], subscriptionVariant: string) {
   if (items.length !== 3 || new Set(items.map(i => i.variantId)).size !== 3 ||
       new Set(items.map(i => i.slot)).size !== 3 ||
       items.some(i => !["Top","Bottom","Layer"].includes(i.slot) ||
         !/^gid:\/\/shopify\/ProductVariant\/\d+$/.test(i.variantId) ||
-        i.variantId === subscriptionVariant)) {
+        i.variantId === subscriptionVariant || !i.name?.trim() || !i.size?.trim())) {
     throw new Error("Choose one top, bottom, and layer for your first shipment.");
   }
-  return items.map(item => ({
-    merchandiseId: item.variantId, quantity: 1,
-    attributes: [
-      { key: "Shipment", value: "First box only" },
-      { key: "Outfit piece", value: item.slot },
-    ],
-    // Intentionally no sellingPlanId.
-  }));
+  return [
+    {key:"_mully_shop_first_box",value:"v2"},
+    {key:"First box",value:"Selected outfit. Future shipments are newly curated."},
+    ...items.flatMap(item => [
+      {key:`First box ${item.slot}`,value:`${item.name.trim()} / ${item.size.trim()} (qty 1)`.slice(0,500)},
+      {key:`_first_box_${item.slot.toLowerCase()}_variant`,value:item.variantId},
+    ]),
+  ];
 }
 
-/** Fail closed. A UI estimate or a cart's existence is not proof of pricing.
- * Shopify must apply the merchant's conditional first-box discount itself. */
-export function assertFirstBoxCart(cart: FirstBoxCart | undefined, items: FirstBoxItem[], subscriptionVariant: string, sellingPlan: string) {
-  const error = "We couldn’t confirm the $250 first-box offer. No checkout was opened. Please contact Mully or buy your outfit once.";
+/** Verify the single Reserve product/plan and its undiscounted box price.
+ * Garment inventory is irrelevant: those variants are packing instructions. */
+export function assertFirstBoxCart(cart: FirstBoxCart | undefined, subscriptionVariant: string, sellingPlan: string) {
+  const error = "We couldn’t confirm the $250 Reserve checkout. No checkout was opened. Please try again or contact Mully.";
   const isMoney = (m: Money | undefined, cents: number) => m?.currencyCode === "USD" &&
     Number.isFinite(Number(m.amount)) && Math.round(Number(m.amount) * 100) === cents;
-  if (!cart || cart.lines.pageInfo.hasNextPage || cart.lines.nodes.length !== 4 ||
+  if (!cart?.lines?.nodes || cart.lines.pageInfo.hasNextPage || cart.lines.nodes.length !== 1 ||
     !isMoney(cart.cost.subtotalAmount, RESERVE_OUTFIT_PRICE * 100)) throw new Error(error);
   const lines = cart.lines.nodes;
   const recurring = lines.filter(l => l.sellingPlanAllocation);
@@ -47,9 +47,4 @@ export function assertFirstBoxCart(cart: FirstBoxCart | undefined, items: FirstB
       recurring[0].sellingPlanAllocation?.sellingPlan.id !== sellingPlan ||
       recurring[0].quantity !== 1 || !recurring[0].merchandise.availableForSale ||
       !isMoney(recurring[0].cost.totalAmount, RESERVE_OUTFIT_PRICE * 100)) throw new Error(error);
-  for (const item of items) {
-    const matches = lines.filter(l => l.merchandise.id === item.variantId);
-    if (matches.length !== 1 || matches[0].quantity !== 1 || matches[0].sellingPlanAllocation ||
-      !matches[0].merchandise.availableForSale || !isMoney(matches[0].cost.totalAmount, 0)) throw new Error(error);
-  }
 }

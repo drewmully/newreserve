@@ -54,18 +54,17 @@ describe("shop outfit offer and handoff", () => {
       fireEvent.click(within(screen.getByRole("group", {name:`${slot.label} size`})).getByRole("button", {name:/^M(?:·|$)/}));
     }
   }
-  it("goes directly to subscription checkout with three first-box lines, no quiz or recurring product properties", () => {
+  it("goes directly to subscription checkout with first-box instructions, no quiz or recurring garment properties", () => {
     render(<ShopOutfitBuilder products={products} byCategory={byCategory} />);
     chooseSizes();
     fireEvent.click(screen.getByRole("radio", {name:/Mully Reserve/}));
     fireEvent.click(screen.getByRole("button", {name:"Checkout with Reserve →"}));
     expect(mocks.checkout).toHaveBeenCalledWith("member", {
       firstBoxItems: [
-        {slot:"Top",variantId:products[0].variants[0].id},
-        {slot:"Bottom",variantId:products[2].variants[0].id},
-        {slot:"Layer",variantId:products[4].variants[0].id},
+        {slot:"Top",variantId:products[0].variants[0].id,name:products[0].name,size:"M"},
+        {slot:"Bottom",variantId:products[2].variants[0].id,name:products[2].name,size:"M"},
+        {slot:"Layer",variantId:products[4].variants[0].id,name:products[4].name,size:"M"},
       ],
-      attributes: expect.arrayContaining([expect.objectContaining({key:"_mully_shop_first_box",value:"v1"})]),
     });
     expect(mocks.add).not.toHaveBeenCalled();
     expect(sessionStorage.getItem(OUTFIT_STORAGE_KEY)).toBeNull();
@@ -78,13 +77,15 @@ describe("shop outfit offer and handoff", () => {
     fireEvent.click(screen.getByRole("button", {name:"Checkout with Reserve →"}));
     expect(await screen.findByRole("alert")).toHaveTextContent("Could not confirm");
   });
-  it("cannot buy sold-out pieces through the subscription option", () => {
+  it("blocks sold-out individual purchases but allows them as Reserve box instructions", () => {
     const sold = products.map(p => ({...p,variants:p.variants.map(v => ({...v,availableForSale:false}))}));
     render(<ShopOutfitBuilder products={sold} byCategory={{}} />);
     chooseSizes();
-    fireEvent.click(screen.getByRole("radio", {name:/Mully Reserve/}));
     expect(screen.getByRole("button", {name:"Selected sizes sold out"})).toBeDisabled();
-    expect(mocks.checkout).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("radio", {name:/Mully Reserve/}));
+    fireEvent.click(screen.getByRole("button", {name:"Checkout with Reserve →"}));
+    expect(mocks.checkout).toHaveBeenCalledOnce();
+    expect(mocks.add).not.toHaveBeenCalled();
   });
   it("keeps the Reserve price in the purchase summary, not the mobile selection footer", () => {
     const { container } = render(<ShopOutfitBuilder products={products} byCategory={byCategory} />);

@@ -1,5 +1,5 @@
 import { SHOPIFY_MEMBERSHIP_PLANS } from "./membershipConfig";
-import { firstBoxLines, assertFirstBoxCart, type FirstBoxItem } from "./shopFirstBoxCheckout";
+import { firstBoxAttributes, assertFirstBoxCart, type FirstBoxItem } from "./shopFirstBoxCheckout";
 import { buildCheckoutOriginAttributes } from "./shopifyCheckoutOrigin";
 import { recordJourneyCart } from "./analytics/journeyClient";
 import {
@@ -87,7 +87,7 @@ export interface CreateMembershipCheckoutOptions {
    * property hidden on the storefront but still visible in admin/order data.
    */
   subscriptionLineAttributes?: Array<{ key: string; value: string }>;
-  /** Shop builder only. Shopify must confirm first-box pricing before redirect. */
+  /** First-box order instructions only. Reserve remains the only cart line. */
   firstBoxItems?: FirstBoxItem[];
 }
 
@@ -192,9 +192,7 @@ export async function createMembershipCheckout(
   if (foundingGift.attach && foundingGift.variantGid) {
     lines.push({ merchandiseId: foundingGift.variantGid, quantity: 1 });
   }
-  if (options.firstBoxItems) {
-    lines.push(...firstBoxLines(options.firstBoxItems, merchandiseId));
-  }
+  if (options.firstBoxItems) attributes.push(...firstBoxAttributes(options.firstBoxItems, merchandiseId));
 
   // Auto-apply the Founding 100 rangefinder discount when the gift line is
   // attached. The Shopify discount is configured to apply only to the
@@ -213,6 +211,11 @@ export async function createMembershipCheckout(
     attributes,
     discountCodes: discountCodes.length ? discountCodes : null,
     buyerIdentity: options.email ? { email: options.email } : null,
+    ...(options.firstBoxItems ? { note: [
+      "Mully Reserve: first-box outfit",
+      ...options.firstBoxItems.map(item => `${item.slot}: ${item.name.slice(0,300)} / ${item.size.slice(0,100)} (qty 1)`),
+      "First shipment only. Future boxes are newly curated.",
+    ].join("\n") } : {}),
   };
 
   const res = await fetch(`https://${domain}/api/2024-10/graphql.json`, {
@@ -227,16 +230,19 @@ export async function createMembershipCheckout(
         $attributes: [AttributeInput!]
         $discountCodes: [String!]
         $buyerIdentity: CartBuyerIdentityInput
+        ${options.firstBoxItems ? "$note: String" : ""}
       ) {
         cartCreate(input: {
           lines: $lines,
           attributes: $attributes,
           discountCodes: $discountCodes,
           buyerIdentity: $buyerIdentity
+          ${options.firstBoxItems ? "note: $note" : ""}
         }) {
           cart {
             id checkoutUrl
-            ${options.firstBoxItems ? `cost { subtotalAmount { amount currencyCode } }
+            ${options.firstBoxItems ? `note attributes { key value }
+            cost { subtotalAmount { amount currencyCode } }
             lines(first: 10) {
               pageInfo { hasNextPage }
               nodes { quantity merchandise { ... on ProductVariant { id availableForSale } }
@@ -291,7 +297,7 @@ export async function createMembershipCheckout(
     if (json?.data?.cartCreate?.userErrors?.length) {
       throw new Error("Some selected pieces could not be added. Please review your outfit and try again.");
     }
-    assertFirstBoxCart(json?.data?.cartCreate?.cart, options.firstBoxItems, merchandiseId, sellingPlanId);
+    assertFirstBoxCart(json?.data?.cartCreate?.cart, merchandiseId, sellingPlanId);
   }
   await recordJourneyCart(json?.data?.cartCreate?.cart?.id);
   // Append `?return_url=` (and email pre-fill) the same way UpgradeModal does.
