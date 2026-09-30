@@ -40,6 +40,7 @@ full job's family/as-of and deferred-original checks. It deliberately refuses
 `behaviorMode: "excluded"` because that is not a session-validation scope.
 
 It writes only `session-validation.json`: projected aggregate funnel rows,
+optional acquisition aggregates and attribution digests described below,
 input/evidence/expected digests, version/as-of metadata and explicit
 `certified: false`, `registered: false`, `enabled: false`, `hostedCalls: 0`.
 It never writes canonical facts, raw event data, identifiers or tokens.
@@ -131,6 +132,89 @@ Retain unknown attribution/customer metrics as unavailable. This journey scope
 does not establish first-customer status, acquisition attribution, whole-store
 session counts or whole-day commerce completeness.
 
+## Optional attribution and first-party ROAS comparison
+
+The same command can also compare the existing builder's order attribution and
+acquisition aggregates. This is optional; omit `expected.acquisition` to keep the
+original session-only invocation and output unchanged. It does not add a source
+reader, model, feed, adapter, permission grant or default policy.
+
+Previously the runner built these results internally but compared only funnel
+rows. A saved ratio-only comparison cannot establish which order, session,
+touch or campaign received credit. The optional check closes that offline
+validation gap using exact independent expectations, not candidate-derived ones.
+
+Add `expected.acquisition` with exactly these four fields:
+
+| Field | Required value |
+| --- | --- |
+| `evidenceRef` | Nonblank reference to the independently reviewed order/touch and aggregate controls |
+| `independentlyExtracted` | `true`; this is an operator claim whose authority still needs review |
+| `orders` | Complete independently enumerated order-credit rows, including pending/unattributed/not-applicable rows |
+| `daily` | Complete independently enumerated acquisition rows for the reporting scope |
+
+Each `orders` row contains exactly:
+
+```text
+order_id, model_version, acquisition_session_key, touch_event_key,
+channel, campaign_id, attribution_status, lookback_days,
+conversion_time_basis, credit_weight, conversion_date, attribution_complete
+```
+
+These are the existing `order_attribution` fields, excluding publication ID.
+Use private normalized keys, JSON integers for `lookback_days`, a boolean for
+`attribution_complete`, and the existing fixed decimal text for `credit_weight`.
+Missing session/touch/campaign keys stay null where the model requires it.
+Rows are matched by `order_id` and `model_version`.
+
+Each `daily` row contains exactly:
+
+```text
+report_date, channel, campaign_bucket, model_version,
+attributed_purchase_merchandise_net_usd, credited_orders,
+spend_usd, first_party_roas
+```
+
+Rows are matched by date/channel/campaign/model. Monetary values, credited
+orders and ROAS use existing six-place decimal text or null, never floating
+point numbers. Both arrays are bounded at 20,000 rows. Empty arrays are valid
+only when the independently expected complete result is actually empty.
+Duplicates, missing/extra rows, extra columns, wrong links and changed values
+fail. A correct aggregate cannot excuse credit assigned to the wrong touch.
+
+The existing source chain remains `prepareRefresh` → configured-field-only
+PostHog normalization → job coverage bounds → `buildFullReports`. In addition
+to the session inputs, a numeric ROAS case needs:
+
+- Permission-supported temporal identity linking the order and touch session.
+  The current model requires resolved matching customer IDs, unlike anonymous
+  session conversion. Complete lifetime first-order history is not required
+  for ROAS, but current permission and temporal identity are.
+- Approved campaign mapping and complete lookback/grace controls bounded by
+  the retained event read. Unknown tokens are not inferred to be direct.
+- Independently reconciled original purchase values and exact order-credit
+  scope, not ledger-net sales substituted for purchase value.
+- The existing normalized `marketing_spend_daily` input plus independent
+  source/account/day proof and approved comparison buckets. Deriving controls
+  from the same normalized rows does not establish completeness or compatible
+  spend. Do not divide selected-product revenue by whole-account spend.
+
+The replay does not approve the configured model, 30-day lookback, direct
+fallback, seven-day conversion window or ingestion grace. Those definitions
+must be selected and approved for the actual case. Preserve original frozen
+as-of and evidence timestamps. Do not widen them to make a test pass.
+
+The private result adds `acquisition.daily`, order-count and digest evidence,
+and separate `numericRoasRows` and `nullRoasRows`. It never emits the compared
+order/session/touch keys or raw events. The result directory/file retain modes
+0700/0600; refusal to overwrite and fixed sanitized CLI errors are unchanged.
+Campaign aggregates and digests are still private review material, not a public
+export or anonymization guarantee.
+
+A matching null ROAS is unavailable-output verification, not numeric acceptance.
+Synthetic numeric fixtures verify software only. New-customer and nCAC
+denominators are deliberately not added to this comparison.
+
 ## Stop conditions and current blocker
 
 Stop on any missing or changed evidence hash, unknown permission/revocation,
@@ -141,12 +225,14 @@ set gates to true, strip a failed check, expand a window, retry a live source,
 or activate anything to make the replay pass. Missing readiness may legitimately
 match an independently expected null output; that is not a positive metric pass.
 
-The inspected existing isolated path had no scoped grants or checkout receipts.
-Consequently the real positive case cannot currently be executed. The exact
-missing inputs are the already authorized grant/event/coverage packet and, for
-conversion, its verified checkout/paid-order packet. If no such retained case
-exists, prospective creation requires a separately scoped production-owner
-proposal and approval; this document is not that approval.
+The saved September 25 isolated-path diagnostic had no scoped grants or checkout
+receipts. It is not a fresh or global claim of absence. A positive real replay
+requires an already authorized grant/event/coverage packet and, for conversion,
+its verified checkout/paid-order packet. For acquisition, add the resolved
+touch/campaign and compatible spend evidence above. First check the retained
+source owner's records. If no such retained case exists, prospective creation
+requires a separately scoped production-owner proposal and approval; this
+document is not that approval.
 
 ## Implementation versus live completion
 
