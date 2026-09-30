@@ -1,12 +1,14 @@
 "use client";
 import { useState } from "react";
 import type { ShopifyProduct } from "@/lib/shopify";
+import { ColorSwatches } from "./ColorSwatches";
 
 /** Compact, exact variant selection. Never silently substitutes another size. */
-export function CompactVariantPicker({ product, value, onChange, allowUnavailable = false }: {
+export function CompactVariantPicker({ product, value, onChange, onPreview, allowUnavailable = false }: {
   product: ShopifyProduct;
   value: string;
   onChange: (id: string) => void;
+  onPreview?: (image: string) => void;
   allowUnavailable?: boolean;
 }) {
   const groups = Array.from(new Set(product.variants.flatMap(v => v.selectedOptions.map(o => o.name))))
@@ -26,6 +28,8 @@ export function CompactVariantPicker({ product, value, onChange, allowUnavailabl
       }
     }
     setSelection(updated);
+    const preview = product.variants.find(v => v.image && v.selectedOptions.every(o => !updated[o.name] || updated[o.name] === o.value));
+    if (preview?.image) onPreview?.(preview.image);
     const exact = product.variants.find(v => v.selectedOptions.every(o => updated[o.name] === o.value));
     onChange(exact && (allowUnavailable || exact.availableForSale) ? exact.id : "");
   }
@@ -35,13 +39,11 @@ export function CompactVariantPicker({ product, value, onChange, allowUnavailabl
       o.name === name ? o.value === value : !selection[o.name] || o.value === selection[o.name]));
   return <div className={`shop-variant-picker${hasInseam ? " shop-variant-picker--inseam" : ""}`}>
     {groups.map(group => {
-      if (group.values.length === 1) return <p className="shop-variant-single" key={group.name}>{group.name}: {group.values[0]}</p>;
       const isColor = /^colou?r$/i.test(group.name);
-      if (isColor) return <label className="shop-variant-color" key={group.name}>
-        <span>Color</span><select aria-label="Color" value={selection[group.name] || ""} onChange={e => pick(group.name, e.target.value)}>
-          {group.values.map(v => <option key={v}>{v}</option>)}
-        </select>
-      </label>;
+      if (isColor) return <ColorSwatches key={group.name} name={group.name}
+        values={group.values} selected={selection[group.name] || group.values[0]}
+        variants={product.variants} onChange={v => pick(group.name, v)} />;
+      if (group.values.length === 1) return <p className="shop-variant-single" key={group.name}>{group.name}: {group.values[0]}</p>;
       return <fieldset key={group.name} className="shop-variant-dimension">
         <legend>{group.name === "Size" && groups.some(g => g.name === "Inseam") ? "Waist" : group.name}</legend>
         {hasInseam && <select className="shop-variant-mobile-select"

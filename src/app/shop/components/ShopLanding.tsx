@@ -11,7 +11,6 @@ import { money, variantLabel } from "@/lib/shopOutfit";
 import { GIFT_TIERS } from "../shopCollections";
 import type { SeasonalTheme } from "../seasonalTheme";
 import { ScrollToTop } from "./ScrollToTop";
-import { ShopPasswordGate } from "./ShopPasswordGate";
 import { ShopOutfitBuilder } from "./ShopOutfitBuilder";
 import { ShopNewsletter } from "./ShopNewsletter";
 import { ShopEditRail } from "./ShopEditRail";
@@ -49,6 +48,7 @@ export function ShopLanding({ products, productsByCategory, theme, journalPosts 
   const { addItemsToCart } = useMembership();
   const [quick, setQuick] = useState<ShopifyProduct | null>(null);
   const [variant, setVariant] = useState("");
+  const [previewImage, setPreviewImage] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [quickIsOpen, setQuickIsOpen] = useState(false);
@@ -82,6 +82,7 @@ export function ShopLanding({ products, productsByCategory, theme, journalPosts 
   function openQuick(p: ShopifyProduct, fromHero = false) {
     quickTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setQuick(p);
+    setPreviewImage("");
     setStyledLook(fromHero);
     setVariant(p.variants.length === 1 ? p.variants[0].id : "");
     setError("");
@@ -107,7 +108,6 @@ export function ShopLanding({ products, productsByCategory, theme, journalPosts 
   return (
     <>
       <ScrollToTop />
-      <ShopPasswordGate accent={theme.accent} />
       <div className="shop-redesign shop-first" style={{ "--accent": theme.accent, "--accent-d": theme.accentDark } as CSSProperties}>
         <section className="shop-hero" id="hero" aria-labelledby="shopHeroTitle">
           <picture>
@@ -192,7 +192,7 @@ export function ShopLanding({ products, productsByCategory, theme, journalPosts 
           <div className="outfit-fit__head"><h2 id="quick-title">{quick?.name}</h2><button onClick={() => dialog.current?.close()} aria-label="Close product options">×</button></div>
           {quick && <>
             <div className="shop-quick__product">
-              <img src={activeVariant?.image || shopProductPhoto(quick)} alt={quick.name} width={140} height={160} />
+              <img src={activeVariant?.image || previewImage || shopProductPhoto(quick)} alt={quick.name} width={140} height={160} />
               <div>
                 <p className="shop-quick__brand">{quick.brand}</p>
                 <p className="shop-quick__price">{money(activeVariant?.price ?? quick.price)}</p>
@@ -201,13 +201,15 @@ export function ShopLanding({ products, productsByCategory, theme, journalPosts 
                 {styledLook && <p className="shop-quick__note">Styled illustration. Product photos show the actual item; fit may differ.</p>}
               </div>
             </div>
-            {quick.variants[0]?.selectedOptions.length > 1 ? <CompactVariantPicker key={quick.slug} product={quick} value={variant} onChange={setVariant} /> : <label className="quick-select">Choose your option<select value={variant} onChange={e => setVariant(e.target.value)}>
+            {quick.variants[0]?.selectedOptions.length > 1 ? <CompactVariantPicker key={quick.slug} product={quick} value={variant} onChange={setVariant} onPreview={setPreviewImage} /> : <label className="quick-select">Choose your option<select value={variant} onChange={e => setVariant(e.target.value)}>
               <option value="">Select a size / option</option>
               {quick.variants.map(v => <option key={v.id} value={v.id} disabled={!v.availableForSale}>{variantLabel(v)}{!v.availableForSale ? " · Unavailable" : ""}</option>)}
             </select></label>}
+            <div className="shop-quick__actions">
             {error && <p role="alert">{error}</p>}
             <button className="btn btn--accent btn--block" disabled={!activeVariant?.availableForSale || busy} onClick={addQuick}>{busy ? "Adding…" : !quick.variants.some(v => v.availableForSale) ? "Currently unavailable" : "Add to bag"}</button>
             <a href={`/shop/${quick.slug}`}>Full details, sizing &amp; availability ↗</a>
+            </div>
           </>}
         </dialog>
       </div>

@@ -32,11 +32,16 @@ beforeEach(()=>{
 });
 afterEach(()=>{vi.unstubAllGlobals();vi.unstubAllEnvs()});
 describe("Reserve checkout wiring",()=>{
-  it("redirects directly only after verified pricing and keeps selections off the recurring line",async()=>{
+  it("shows explicit first-shipment details while retaining order-level fulfillment metadata",async()=>{
     await createMembershipCheckout("member",{firstBoxItems:items,discountCodes:["BOGO15"],subscriptionLineAttributes:[{key:"Outfit Top",value:"must not recur"}]});
     const payload=JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(payload.variables.lines).toHaveLength(1);
-    expect(payload.variables.lines[0]).toEqual({merchandiseId:plan.merchandiseId,quantity:1,sellingPlanId:plan.sellingPlanGid});
+    expect(payload.variables.lines[0]).toEqual({merchandiseId:plan.merchandiseId,quantity:1,sellingPlanId:plan.sellingPlanGid,attributes:[
+      {key:"First shipment only · Top",value:"Polo / M"},
+      {key:"First shipment only · Bottom",value:"Pant / 32"},
+      {key:"First shipment only · Layer",value:"Vest / M"},
+      {key:"Future shipments",value:"New styles curated for you. $250 every 3 months (4x/year)."},
+    ]});
     expect(payload.variables.discountCodes).toBeNull();
     expect(payload.variables.attributes).toContainEqual({key:"First box Top",value:"Polo / M (qty 1)"});
     expect(payload.variables.note).toContain("Top: Polo / M (qty 1)");

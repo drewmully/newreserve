@@ -10,7 +10,6 @@ import {
 import { ShopPDPClient } from "../components/ShopPDPClient";
 import { ShopPageShell } from "../components/ShopPageShell";
 import { ScrollToTop } from "../components/ScrollToTop";
-import { ShopPasswordGate } from "../components/ShopPasswordGate";
 import { getSeasonalTheme } from "../seasonalTheme";
 import { getVariantById, getVariantSelection } from "@/lib/productVariants";
 
@@ -101,7 +100,6 @@ export default async function ProductPage({ params, searchParams }: Props) {
   return (
     <ShopPageShell className="shop-pdp">
       <ScrollToTop />
-      <ShopPasswordGate accent={theme.accent} />
 
       <main className="shop-main pb-24">
         {/* Product detail (breadcrumb is rendered inside ShopPDPClient) */}

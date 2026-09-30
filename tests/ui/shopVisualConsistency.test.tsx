@@ -5,7 +5,6 @@ import type { ShopifyProduct } from "@/lib/shopify";
 import { getSeasonalTheme } from "@/app/shop/seasonalTheme";
 vi.mock("@/app/context/MembershipContext", () => ({ useMembership: () => ({ addItemsToCart: vi.fn() }) }));
 vi.mock("@/app/shop/components/ScrollToTop", () => ({ ScrollToTop: () => null }));
-vi.mock("@/app/shop/components/ShopPasswordGate", () => ({ ShopPasswordGate: () => null }));
 vi.mock("@/app/shop/components/ShopOutfitBuilder", () => ({ ShopOutfitBuilder: () => <section id="outfit" /> }));
 vi.mock("@/app/shop/components/ShopNewsletter", () => ({ ShopNewsletter: () => null }));
 import { ShopLanding } from "@/app/shop/components/ShopLanding";
@@ -32,14 +31,15 @@ describe("quiet shop visual contract",()=>{
     expect(hero.querySelector("a")).toHaveAttribute("href","#edit");
     expect(container.querySelector(".shop-selection-note")).toBeNull();
   });
-  it("ships real responsive image files while preserving the existing password gate",()=>{
+  it("ships real responsive images and publicly accessible shop routes",()=>{
     for (const view of ["desktop","mobile"]) {
       const asset=readFileSync(`public/shop-redesign/lifestyle/fall-firepit-${view}.webp`);
       expect(asset.subarray(8,12).toString()).toBe("WEBP");
       expect(asset.byteLength).toBeLessThan(500_000);
     }
-    const gate=readFileSync("src/app/shop/components/ShopPasswordGate.tsx","utf8");
-    expect(gate).toContain('const CORRECT_PASSWORD = "mullyshop"');
+    for (const path of ["components/ShopLanding.tsx","[slug]/page.tsx","collection/[handle]/page.tsx","gifts/[tier]/page.tsx"]) {
+      expect(readFileSync(`src/app/shop/${path}`,"utf8")).not.toContain("ShopPasswordGate");
+    }
     const css=readFileSync("src/app/shop/components/shop-first.css","utf8");
     expect(css).toContain("calc(100svh - 128px)");
     expect(css).toContain("@media(min-aspect-ratio:2/1)");

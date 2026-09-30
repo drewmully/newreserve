@@ -139,3 +139,4 @@
 .shop-first .outfit a,.shop-first .outfit__next button{ text-underline-offset:4px}
 .shop-first .outfit a:hover,.shop-first .outfit__next button:hover{text-decoration:underline}
 @media(prefers-reduced-motion:reduce){.shop-first *{scroll-behavior:auto!important;transition:none!important}}
+.shop-redesign .shop-newsletter__personalize{margin-top:12px;min-height:44px;font-size:12px;text-decoration:underline;text-underline-offset:4px}

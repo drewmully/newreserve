@@ -1,5 +1,12 @@
 # Shop-first revision asset provenance
 
+## Reserve clarity and signup refinement
+
+- Signup visual: the existing real course photograph `/shop/hero-fall-2026.jpg` from the merchant's site, reused only inside the signup overlay.
+- Membership service artwork: `reserve-membership.png`, 1200×1200, composed from that course photograph and the site's loaded Playfair Display/Inter fonts with the existing typographic Mully wordmark. Not an illustration of promised shipment contents.
+- Product color selectors use the current Shopify variant image, requested at 120px from the Shopify CDN. No guessed brand color hexes or invented fabric patterns.
+- Reference: user-supplied Bad Birdie popup screenshot plus observation of https://badbirdiegolf.com/. Borrowed preference-first interaction, not its identity, imagery, or mystery-discount claim.
+
 ## September 30 shoppable hero hotspots
 
 - Two restrained plus markers and compact labels link the illustration to the existing Quiet Golf Remy Polo and Duckhead Gold School Chino catalog handles. Missing products do not receive a marker.
