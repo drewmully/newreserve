@@ -43,3 +43,29 @@ jobs:
           LEAN_ANALYTICS_SUPABASE_URL: https://xnfjdbpjuaezxjgargto.supabase.co
           LEAN_ANALYTICS_PIPELINE_SECRET: ${{ secrets.LEAN_ANALYTICS_PIPELINE_SECRET }}
         run: node scripts/analytics/scheduled-pipeline.mjs
+  subscriptions:
+    # Independent from commerce. DB048/049 owns the approved plan and source budget.
+    if: >-
+      github.repository == 'drewmully/newreserve' &&
+      github.ref == 'refs/heads/main' &&
+      vars.LEAN_SUBSCRIPTIONS_SCHEDULE_ENABLED == 'true' &&
+      vars.LEAN_SUBSCRIPTIONS_DISPATCH_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.20.1"
+      - name: Advance one approved subscription page without retries
+        env:
+          LEAN_SUBSCRIPTIONS_SCHEDULE_ENABLED: ${{ vars.LEAN_SUBSCRIPTIONS_SCHEDULE_ENABLED }}
+          LEAN_SUBSCRIPTIONS_DISPATCH_ENABLED: ${{ vars.LEAN_SUBSCRIPTIONS_DISPATCH_ENABLED }}
+          LEAN_SUBSCRIPTIONS_SCHEDULE_START_AT: ${{ vars.LEAN_SUBSCRIPTIONS_SCHEDULE_START_AT }}
+          LEAN_SUBSCRIPTIONS_SCHEDULE_STOP_AT: ${{ vars.LEAN_SUBSCRIPTIONS_SCHEDULE_STOP_AT }}
+          LEAN_ANALYTICS_RUNNER_ORIGIN: https://www.mymully.com
+          LEAN_ANALYTICS_PIPELINE_PROJECT_REF: xnfjdbpjuaezxjgargto
+          LEAN_ANALYTICS_SUBSCRIPTIONS_SECRET: ${{ secrets.LEAN_ANALYTICS_SUBSCRIPTIONS_SECRET }}
+        run: node scripts/analytics/scheduled-subscriptions.mjs
