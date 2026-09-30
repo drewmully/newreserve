@@ -1,0 +1,18 @@
+{
+  "client": {
+    "base_url": "https://www.mymully.com",
+    "auth": { "type": "bearer" }
+  },
+  "resources": [
+    {
+      "name": "subscription_observations",
+      "primary_key": ["cycle"],
+      "endpoint": {
+        "path": "/api/analytics/reports/subscriptions",
+        "method": "GET",
+        "data_selector": "subscription_observations",
+        "paginator": { "type": "single_page" }
+      }
+    }
+  ]
+}
