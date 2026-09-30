@@ -6,10 +6,10 @@
 .shop-first .sec:not(.outfit) .h2{font-size:30px;line-height:1.2;letter-spacing:-.025em}
 .shop-first .ulink{font-family:var(--sans);font-size:12px;letter-spacing:0;text-transform:none;min-height:44px;display:inline-flex;align-items:center;padding:0}
 .shop-first .ulink:after{bottom:9px}
-.shop-first .shop-hero{position:relative;height:clamp(390px,58svh,620px);background:#28302a;isolation:isolate;overflow:hidden}
-.shop-first .shop-hero__image{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 58%;z-index:-2}
-.shop-first .shop-hero:after{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(90deg,rgba(10,20,12,.35),transparent 65%),linear-gradient(0deg,rgba(10,20,12,.38),transparent 65%)}
-.shop-first .shop-hero__in{height:100%;display:flex;align-items:flex-end;padding-bottom:44px}
+.shop-first .shop-hero{position:relative;height:clamp(390px,42vw,720px);max-height:calc(100svh - 128px);background:#28302a;isolation:isolate;overflow:hidden}
+.shop-first .shop-hero__image{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 61%;z-index:-2}
+.shop-first .shop-hero:after{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background:linear-gradient(90deg,rgba(10,20,12,.3),transparent 60%),linear-gradient(0deg,rgba(10,20,12,.18),transparent 45%)}
+.shop-first .shop-hero__in{height:100%;width:100%;max-width:none;display:flex;align-items:flex-end;padding:0 clamp(18px,7vw,180px) 44px}
 .shop-first .shop-hero h1{font:400 clamp(38px,4vw,58px)/1.1 var(--serif);letter-spacing:-.025em;color:white;margin:0 0 22px}
 .shop-first .shop-hero__cta{display:inline-flex;align-items:center;background:transparent;color:white;border:0;font:400 16px var(--sans);letter-spacing:.035em;text-transform:none;min-height:44px;padding:0;transition:opacity .2s ease}
 .shop-first .shop-hero__cta:hover{opacity:.75}
@@ -75,9 +75,7 @@
  .shop-first .sec:not(.outfit){padding:36px 0}
  .shop-first .sec:not(.outfit) .sechead{gap:12px;margin-bottom:18px}
  .shop-first .sec:not(.outfit) .h2{font-size:25px}
- .shop-first .shop-hero{height:390px;max-height:62svh;min-height:290px}
- .shop-first .shop-hero__in{padding-bottom:30px}
- .shop-first .shop-hero__image{object-position:62% center}
+ .shop-first .shop-hero__in{padding:0 18px 18px}
  .shop-first .shop-hero h1{font-size:38px;margin-bottom:20px}
  .shop-first .shop-colorway-strip>div{padding:0 6px 6px}
  .shop-first .shop-colorway-strip span{font-size:8px;letter-spacing:0}
@@ -103,5 +101,16 @@
  .shop-first .shop-newsletter__fields .btn{padding:12px;font-size:11px}
  .shop-first .shop-faq .faqwrap{gap:20px}
  .shop-first .faq summary{font-size:13px}
+}
+@media(max-width:600px) and (orientation:portrait){
+ .shop-first .shop-hero{height:min(133.333vw,calc(100svh - 128px));max-height:none}
+ .shop-first .shop-hero__image{object-position:center center}
+ .shop-first .shop-hero:after{background:linear-gradient(0deg,rgba(10,15,12,.48),transparent 31%)}
+ .shop-first .shop-hero h1{font-size:clamp(30px,8vw,38px);margin-bottom:4px}
+}
+/* Preserve the complete outfit on very short/ultrawide screens rather than
+   cutting off the model's face or shoes to fill the background. */
+@media(min-aspect-ratio:2/1){
+ .shop-first .shop-hero{height:max(320px,35vw);max-height:none}
 }
 @media(prefers-reduced-motion:reduce){.shop-first *{scroll-behavior:auto!important;transition:none!important}}

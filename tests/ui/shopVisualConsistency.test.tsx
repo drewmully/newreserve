@@ -24,8 +24,25 @@ describe("quiet shop visual contract",()=>{
     const hero=container.querySelector("#hero")!;
     expect(hero.textContent?.trim()).toBe("The Fall Edit[ shop ]");
     expect(hero.querySelectorAll("a")).toHaveLength(1);
-    expect(hero.querySelector("img")).toHaveAttribute("src","/shop/hero-fall-2026.jpg");
+    expect(hero.querySelector("img")).toHaveAttribute("src","/shop-redesign/lifestyle/fall-firepit-desktop.webp");
+    expect(hero.querySelector("img")).toHaveAttribute("fetchpriority","high");
+    expect(hero.querySelector("img")).toHaveAttribute("loading","eager");
+    expect(hero.querySelector("source")).toHaveAttribute("srcset","/shop-redesign/lifestyle/fall-firepit-mobile.webp");
+    expect(hero.querySelector("source")).toHaveAttribute("media","(max-width: 600px) and (orientation: portrait)");
+    expect(hero.querySelector("a")).toHaveAttribute("href","#edit");
     expect(container.querySelector(".shop-selection-note")).toBeNull();
+  });
+  it("ships real responsive image files while preserving the existing password gate",()=>{
+    for (const view of ["desktop","mobile"]) {
+      const asset=readFileSync(`public/shop-redesign/lifestyle/fall-firepit-${view}.webp`);
+      expect(asset.subarray(8,12).toString()).toBe("WEBP");
+      expect(asset.byteLength).toBeLessThan(500_000);
+    }
+    const gate=readFileSync("src/app/shop/components/ShopPasswordGate.tsx","utf8");
+    expect(gate).toContain('const CORRECT_PASSWORD = "mullyshop"');
+    const css=readFileSync("src/app/shop/components/shop-first.css","utf8");
+    expect(css).toContain("calc(100svh - 128px)");
+    expect(css).toContain("@media(min-aspect-ratio:2/1)");
   });
   it("uses a normalized packshot and retains accessible options",()=>{
     const show=vi.fn(function(this: HTMLDialogElement) { this.open=true; });
