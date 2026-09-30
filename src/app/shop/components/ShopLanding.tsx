@@ -8,12 +8,13 @@ import { shopProductPhoto, shopProductLabel } from "@/lib/shopProductPhotos";
 import { selectShopEdit } from "@/lib/shopMerchandising";
 import { useMembership } from "@/app/context/MembershipContext";
 import { money, variantLabel } from "@/lib/shopOutfit";
-import { SHOP_CATEGORIES, GIFT_TIERS } from "../shopCollections";
+import { GIFT_TIERS } from "../shopCollections";
 import type { SeasonalTheme } from "../seasonalTheme";
 import { ScrollToTop } from "./ScrollToTop";
 import { ShopPasswordGate } from "./ShopPasswordGate";
 import { ShopOutfitBuilder } from "./ShopOutfitBuilder";
 import { ShopNewsletter } from "./ShopNewsletter";
+import { ShopEditRail } from "./ShopEditRail";
 import "./shop-redesign.css";
 import "./shop-redesign-native.css";
 import "./shop-outfit.css";
@@ -48,7 +49,7 @@ export function ShopLanding({ products, productsByCategory, theme, journalPosts 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const dialog = useRef<HTMLDialogElement>(null);
-  const edit = useMemo(() => selectShopEdit(products), [products]);
+  const edit = useMemo(() => selectShopEdit(products, products.length), [products]);
   const gear = ["voice-caddie-laser-fit", "blue-tees-player-gps-speaker", "garmin-approach-s70", "bushnell-tour-v7-shift"]
     .map(slug => products.find(p => p.slug === slug)).filter((p): p is ShopifyProduct => !!p);
   useEffect(() => {
@@ -97,25 +98,21 @@ export function ShopLanding({ products, productsByCategory, theme, journalPosts 
           <div className="wrap shop-hero__in">
             <div className="shop-hero__copy">
               <h1 id="shopHeroTitle">The {theme.season.charAt(0).toUpperCase() + theme.season.slice(1)} Edit</h1>
-              <a className="btn shop-hero__cta" href="#edit">Shop the edit</a>
+              <a className="shop-hero__cta" href="#edit" aria-label="Shop the edit">[ shop ]</a>
             </div>
           </div>
         </section>
-        <section className="shop-categories" id="cats" aria-label="Shop by category">
-          <nav className="wrap shop-categories__row" aria-label="Product categories">
-            {SHOP_CATEGORIES.map(c => <a key={c.key} href={`/shop/collection/${c.handle}`}>{c.label}</a>)}
-            <a href="#outfit">Build an outfit</a>
-          </nav>
-        </section>
+        <div className="shop-colorway-strip" aria-hidden="true">
+          {[
+            ["#EDE6D6", 24, false], ["#B08558", 18, false], ["#5B613F", 26, true],
+            ["#9B8B7A", 16, false], ["#4A3528", 16, true],
+          ].map(([hex, width, dark]) => <div key={String(hex)} style={{ backgroundColor: String(hex), flex: Number(width) }} className={dark ? "is-dark" : ""}><span>{hex}</span></div>)}
+        </div>
         <section className="sec" id="edit">
           <div className="wrap">
-            <div className="sechead">
-              <h2 className="h2">The Mully Edit</h2>
-              <a className="ulink" href="/shop/collection/shop-all">Shop all</a>
-            </div>
-            <div className="grid shop-edit-grid">
+            <ShopEditRail count={edit.length} season={theme.season}>
               {edit.map(p => <ProductCard key={p.slug} product={p} onQuick={openQuick} />)}
-            </div>
+            </ShopEditRail>
             {!edit.length && <p>New pieces are on their way. Please check back soon.</p>}
           </div>
         </section>
