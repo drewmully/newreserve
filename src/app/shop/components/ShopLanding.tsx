@@ -15,6 +15,7 @@ import { ShopPasswordGate } from "./ShopPasswordGate";
 import { ShopOutfitBuilder } from "./ShopOutfitBuilder";
 import { ShopNewsletter } from "./ShopNewsletter";
 import { ShopEditRail } from "./ShopEditRail";
+import { ShopHeroHotspots } from "./ShopHeroHotspots";
 import "./shop-redesign.css";
 import "./shop-redesign-native.css";
 import "./shop-outfit.css";
@@ -48,7 +49,11 @@ export function ShopLanding({ products, productsByCategory, theme, journalPosts 
   const [variant, setVariant] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [quickIsOpen, setQuickIsOpen] = useState(false);
+  const [styledLook, setStyledLook] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null);
+  const heroImage = useRef<HTMLImageElement>(null);
+  const quickTrigger = useRef<HTMLElement | null>(null);
   const edit = useMemo(() => selectShopEdit(products, products.length), [products]);
   const gear = ["voice-caddie-laser-fit", "blue-tees-player-gps-speaker", "garmin-approach-s70", "bushnell-tour-v7-shift"]
     .map(slug => products.find(p => p.slug === slug)).filter((p): p is ShopifyProduct => !!p);
@@ -66,11 +71,20 @@ export function ShopLanding({ products, productsByCategory, theme, journalPosts 
       delete document.body.dataset.shopBuilderInView;
     };
   }, []);
-  function openQuick(p: ShopifyProduct) {
+  useEffect(() => {
+    if (!quickIsOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previous; };
+  }, [quickIsOpen]);
+  function openQuick(p: ShopifyProduct, fromHero = false) {
+    quickTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setQuick(p);
+    setStyledLook(fromHero);
     setVariant(p.variants.length === 1 ? p.variants[0].id : "");
     setError("");
     dialog.current?.showModal();
+    setQuickIsOpen(true);
   }
   async function addQuick() {
     const v = quick?.variants.find(x => x.id === variant);
@@ -96,7 +110,7 @@ export function ShopLanding({ products, productsByCategory, theme, journalPosts 
         <section className="shop-hero" id="hero" aria-labelledby="shopHeroTitle">
           <picture>
             <source media="(max-width: 600px) and (orientation: portrait)" srcSet="/shop-redesign/lifestyle/fall-firepit-mobile.webp" width={1086} height={1448} />
-            <img className="shop-hero__image" src="/shop-redesign/lifestyle/fall-firepit-desktop.webp" alt="AI-styled fall outfit: a striped polo, braided brown belt, tailored khakis and white golf shoes beside a clubhouse firepit" width={1672} height={941} fetchPriority="high" loading="eager" />
+            <img ref={heroImage} className="shop-hero__image" src="/shop-redesign/lifestyle/fall-firepit-desktop.webp" alt="AI-styled fall outfit: a striped polo, braided brown belt, tailored khakis and white golf shoes beside a clubhouse firepit" width={1672} height={941} fetchPriority="high" loading="eager" />
           </picture>
           <div className="wrap shop-hero__in">
             <div className="shop-hero__copy">
@@ -104,6 +118,7 @@ export function ShopLanding({ products, productsByCategory, theme, journalPosts 
               <a className="shop-hero__cta" href="#edit" aria-label="Shop the edit">[ shop ]</a>
             </div>
           </div>
+          <ShopHeroHotspots imageRef={heroImage} products={products} onSelect={p => openQuick(p, true)} />
         </section>
         <div className="shop-colorway-strip" aria-hidden="true">
           {[
@@ -164,16 +179,31 @@ export function ShopLanding({ products, productsByCategory, theme, journalPosts 
             </div>
           </div>
         </section>
-        <dialog ref={dialog} className="outfit-fit" aria-labelledby="quick-title">
+        <dialog ref={dialog} id="shop-quick-dialog" className="outfit-fit shop-quick" aria-labelledby="quick-title"
+          onClose={() => { setQuickIsOpen(false); quickTrigger.current?.focus({ preventScroll: true }); }}
+          onClick={e => {
+            if (e.target !== e.currentTarget) return;
+            const r = e.currentTarget.getBoundingClientRect();
+            if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) e.currentTarget.close();
+          }}
+        >
           <div className="outfit-fit__head"><h2 id="quick-title">{quick?.name}</h2><button onClick={() => dialog.current?.close()} aria-label="Close product options">×</button></div>
           {quick && <>
-            <p>{quick.brand} · {money(activeVariant?.price ?? quick.price)}</p>
+            <div className="shop-quick__product">
+              <img src={activeVariant?.image || shopProductPhoto(quick)} alt={quick.name} width={140} height={160} />
+              <div>
+                <p className="shop-quick__brand">{quick.brand}</p>
+                <p className="shop-quick__price">{money(activeVariant?.price ?? quick.price)}</p>
+                {!quick.variants.some(v => v.availableForSale) && <p className="shop-quick__stock" role="status">Currently unavailable</p>}
+                {styledLook && <p className="shop-quick__note">Styled illustration. Product photos show the actual item; fit may differ.</p>}
+              </div>
+            </div>
             <label className="quick-select">Choose your option<select value={variant} onChange={e => setVariant(e.target.value)}>
               <option value="">Select a size / option</option>
               {quick.variants.map(v => <option key={v.id} value={v.id} disabled={!v.availableForSale}>{variantLabel(v)}{!v.availableForSale ? " · Unavailable" : ""}</option>)}
             </select></label>
             {error && <p role="alert">{error}</p>}
-            <button className="btn btn--accent btn--block" disabled={!activeVariant?.availableForSale || busy} onClick={addQuick}>{busy ? "Adding…" : "Add to bag"}</button>
+            <button className="btn btn--accent btn--block" disabled={!activeVariant?.availableForSale || busy} onClick={addQuick}>{busy ? "Adding…" : !quick.variants.some(v => v.availableForSale) ? "Currently unavailable" : "Add to bag"}</button>
             <a href={`/shop/${quick.slug}`}>Full details, sizing &amp; availability ↗</a>
           </>}
         </dialog>

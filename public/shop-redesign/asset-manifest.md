@@ -1,5 +1,14 @@
 # Shop-first revision asset provenance
 
+## September 30 shoppable hero hotspots
+
+- Two restrained plus markers and compact labels link the illustration to the existing Quiet Golf Remy Polo and Duckhead Gold School Chino catalog handles. Missing products do not receive a marker.
+- Separate normalized coordinates are calibrated for the desktop and mobile hero images. Positions are projected through the actual `object-fit: cover` scale and computed `object-position`, updated on image load and resize. Page scrolling needs no per-frame tracking.
+- Visible markers are 22–24px with 44px button targets; no pulsing or autoplay. Native product dialogs support Escape, backdrop dismissal, focus restoration, body scroll locking and mobile bottom-sheet layout.
+- The shared modal shows actual catalog/variant photography, current price, available sizes and the existing BOGO15 cart handoff. Sold-out options remain disabled.
+- Hero-entry modals identify the image as styling inspiration and warn that actual fit may differ; the illustration is not an exact photographic claim about the chinos' tailoring.
+- Verification: 41 targeted tests across 8 files, TypeScript and scoped ESLint. Browser checks cover 320–2560px, portrait/landscape and the 600/601px source breakpoint. Both products are currently reported unavailable by the storefront; purchasable-variant and error paths are covered with test fixtures, not a live purchase.
+
 ## September 30 approved fall lifestyle hero
 
 - **Scope:** User-approved AI-created fictional adult model and fictional country-club firepit scene. This is aspirational editorial imagery, not documentary photography, a real-person endorsement, or exact product imagery.
