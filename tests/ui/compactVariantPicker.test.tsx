@@ -25,7 +25,7 @@ describe("compact exact variant selection", () => {
   it("clears incompatible selections when changing to a different color run", () => {
     const change = vi.fn();
     render(<CompactVariantPicker product={product} value="1" onChange={change} />);
-    fireEvent.change(screen.getByLabelText("Color"), {target:{value:"Stone"}});
+    fireEvent.click(screen.getByRole("button", {name:"Stone"}));
     expect(change).toHaveBeenLastCalledWith("");
     fireEvent.click(screen.getByRole("group", {name:"Waist"}).querySelector('[data-size="34"]')!);
     fireEvent.click(screen.getByRole("group", {name:"Inseam"}).querySelector('[data-size="34"]')!);

@@ -58,7 +58,7 @@ describe("shop outfit offer and handoff", () => {
     render(<ShopOutfitBuilder products={products} byCategory={byCategory} />);
     chooseSizes();
     fireEvent.click(screen.getByRole("radio", {name:/Mully Reserve/}));
-    fireEvent.click(screen.getByRole("button", {name:"Checkout with Reserve →"}));
+    fireEvent.click(screen.getByRole("button", {name:"Subscribe for $250 / season →"}));
     expect(mocks.checkout).toHaveBeenCalledWith("member", {
       firstBoxItems: [
         {slot:"Top",variantId:products[0].variants[0].id,name:products[0].name,size:"M"},
@@ -74,7 +74,7 @@ describe("shop outfit offer and handoff", () => {
     render(<ShopOutfitBuilder products={products} byCategory={byCategory} />);
     chooseSizes();
     fireEvent.click(screen.getByRole("radio", {name:/Mully Reserve/}));
-    fireEvent.click(screen.getByRole("button", {name:"Checkout with Reserve →"}));
+    fireEvent.click(screen.getByRole("button", {name:"Subscribe for $250 / season →"}));
     expect(await screen.findByRole("alert")).toHaveTextContent("Could not confirm");
   });
   it("blocks sold-out individual purchases but allows them as Reserve box instructions", () => {
@@ -83,7 +83,7 @@ describe("shop outfit offer and handoff", () => {
     chooseSizes();
     expect(screen.getByRole("button", {name:"Selected sizes sold out"})).toBeDisabled();
     fireEvent.click(screen.getByRole("radio", {name:/Mully Reserve/}));
-    fireEvent.click(screen.getByRole("button", {name:"Checkout with Reserve →"}));
+    fireEvent.click(screen.getByRole("button", {name:"Subscribe for $250 / season →"}));
     expect(mocks.checkout).toHaveBeenCalledOnce();
     expect(mocks.add).not.toHaveBeenCalled();
   });

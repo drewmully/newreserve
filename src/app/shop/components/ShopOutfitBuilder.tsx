@@ -34,6 +34,7 @@ export function ShopOutfitBuilder({
   const [indices, setIndices] = useState<(number | null)[]>([0, 0, 0]);
   const [active, setActive] = useState(0);
   const [variants, setVariants] = useState<Record<string, string>>({});
+  const [previewImages, setPreviewImages] = useState<Record<string, string>>({});
   const [mode, setMode] = useState<"once" | "reserve">("once");
   const [review, setReview] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -239,7 +240,7 @@ export function ShopOutfitBuilder({
                     }}
                   >
                     <span className="outfit-choice__image">
-                      {p.images[0] && <img src={p.variants.find(v => v.id === variants[p.slug])?.image || shopProductPhoto(p)} alt={p.name} />}
+                      {p.images[0] && <img src={p.variants.find(v => v.id === variants[p.slug])?.image || previewImages[p.slug] || shopProductPhoto(p)} alt={p.name} />}
                       <span className="outfit-choice__check" aria-hidden>
                         {indices[active] === i ? "✓" : "+"}
                       </span>
@@ -289,6 +290,7 @@ export function ShopOutfitBuilder({
                   </div>
                   <div role="group" aria-labelledby="outfitSizeLabel">
                     <CompactVariantPicker key={current.slug} product={current} value={variants[current.slug] || ""}
+                      onPreview={image => setPreviewImages(x => ({...x, [current.slug]: image}))}
                       allowUnavailable onChange={id => setVariants(x => ({...x, [current.slug]: id}))} />
                   </div>
                   {selectedVariants[active]?.currentlyNotInStock && <p className="outfit__stock-note">Preorder · Ships in about {current.preOrderEtaWeeks || 2} weeks</p>}
@@ -407,22 +409,22 @@ export function ShopOutfitBuilder({
                 />
                 <span>
                   <span className="purchase-option__title">
-                    Mully Reserve <strong>{money(RESERVE_OUTFIT_PRICE)}</strong>
+                    Subscribe &amp; save <strong>{money(RESERVE_OUTFIT_PRICE)}<small> / season</small></strong>
                   </span>
                   <span className="purchase-option__saving">
                     {full && estimate.total > RESERVE_OUTFIT_PRICE
-                      ? `Save ${money(estimate.total - RESERVE_OUTFIT_PRICE)} vs. BOGO15`
-                      : "Your first outfit, included"}
+                      ? `Mully Reserve · Save ${money(estimate.total - RESERVE_OUTFIT_PRICE)} on this outfit`
+                      : "Mully Reserve · Your first outfit, included"}
                   </span>
                   <span className="purchase-option__copy">
-                    This outfit first. New styles curated every 3 months.
+                    Your outfit first. Then our team curates new styles with your $250 seasonal budget. 4 shipments a year.
                   </span>
                 </span>
               </label>
             </fieldset>
             <p className="outfit__terms" aria-live="polite">
               {mode === "reserve"
-                ? "$250 every 3 months, plus any tax/shipping. These pieces ship once. Future boxes are newly curated. Cancel before renewal."
+                ? "Subscription: $250 charged today and automatically every 3 months, plus tax/shipping. New styles each season. Cancel before your next renewal."
                 : unavailable
                   ? "Selected sizes are sold out individually. Edit your pieces or choose Reserve."
                   : "15% off one lowest-priced item with 2+. Shopify confirms eligibility and your final total in the bag."}
@@ -446,7 +448,7 @@ export function ShopOutfitBuilder({
                 : missing >= 0
                   ? "Choose remaining sizes →"
                   : mode === "reserve"
-                    ? "Checkout with Reserve →"
+                    ? "Subscribe for $250 / season →"
                     : unavailable
                       ? "Selected sizes sold out"
                       : `Add ${chosen.length === 1 ? "piece" : "outfit"} to bag`}

@@ -32,6 +32,12 @@
 .shop-redesign .outfit__size-head button{height:32px;text-decoration:underline;font-size:11px}
 .shop-redesign .outfit__sizes{display:flex;flex-wrap:wrap;gap:5px}
 .shop-variant-picker{display:flex;flex-direction:column;gap:6px;min-width:0}
+.shop-redesign .shop-quick .shop-variant-picker{gap:16px;margin-top:16px}
+.shop-redesign .shop-quick__actions{margin-top:24px;padding-top:18px;border-top:1px solid var(--line);display:grid;gap:4px}
+.shop-redesign .shop-quick__actions .btn{min-height:48px;flex-shrink:0}
+.shop-redesign .shop-quick__actions a{padding-top:12px}
+.shop-redesign .purchase-option__title strong{white-space:nowrap}
+.shop-redesign .purchase-option__title strong small{font-size:10px;font-weight:400}
 .shop-variant-color{display:flex;gap:8px;align-items:center;font-size:12px}
 .shop-variant-color select{flex:1;min-width:0;height:38px;border:1px solid var(--line);background:white;padding:0 8px;font-size:12px}
 .shop-variant-single{font-size:11px;color:var(--muted);margin:0}
@@ -172,4 +178,5 @@
  .shop-redesign .outfit__workspace{gap:4px}
  .shop-redesign .outfit__stock-note{margin-top:3px}
  .shop-redesign .outfit.is-review .h2{font-size:21px}
+ .shop-redesign .outfit.is-review .outfit__board{display:none}
 }
