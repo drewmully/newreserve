@@ -1,5 +1,13 @@
 # Shop-first revision asset provenance
 
+## September 30 palette and full-edit rail
+
+- Replaced the duplicate category navigation below the hero with a 32px decorative palette: cream `#EDE6D6`, camel `#B08558`, olive `#5B613F`, taupe `#9B8B7A`, espresso `#4A3528`. Faint hex labels are decorative and hidden from assistive technology.
+- The hero action is now a transparent, text-only `[ shop ]` link with a 44px interaction area and a visible keyboard-focus state.
+- The Mully Edit includes every product supplied by the live shop catalog, preserving the existing availability-first merchandising order rather than truncating to four products. All products remain reachable in one native horizontal row, with touch/trackpad scrolling, previous/next buttons, keyboard arrows and Home/End. No autoplay or vertical-scroll hijacking.
+- Existing prepared images remain preferred where their catalog-primary guard matches; other pieces retain their merchant-provided imagery. No product images or inventory data were invented to expand the rail.
+- Category navigation remains in the main header; Build an outfit now appears in both desktop navigation and the mobile menu. The builder's viewport and checkout behavior are unchanged.
+
 ## September 30 visual consistency correction
 
 - **Hero:** Existing Mully course photograph at `/shop/hero-fall-2026.jpg`, previously used on https://www.mymully.com/shop, returns as a full-width image with one seasonal headline and one shop action. No generated imagery.

@@ -55,7 +55,7 @@ export function ShopSeasonalHeader({ accent }: { accent: string }) {
             </button>
             <Link href="/shop" aria-label="Mully Shop home"><MullyWordmark accent={accent} tone="dark" className="text-2xl" /></Link>
           </div>
-          <nav aria-label="Shop navigation" className="hidden items-center gap-6 text-[11px] uppercase tracking-[.12em] lg:flex">
+          <nav aria-label="Shop navigation" className="hidden items-center gap-4 text-[11px] uppercase tracking-[.1em] lg:flex xl:gap-6">
             <Link href="/shop#edit" className="inline-flex min-h-11 items-center">The Edit</Link>
             {([["Apparel", apparel], ["Gear & Tech", gear]] as const).map(([label, links]) => (
               <details className="relative" key={label} onBlur={e => {
@@ -68,6 +68,7 @@ export function ShopSeasonalHeader({ accent }: { accent: string }) {
               </details>
             ))}
             <Link href="/shop#gift-tiers" className="inline-flex min-h-11 items-center">Gifts</Link>
+            <Link href="/shop#outfit" className="inline-flex min-h-11 items-center">Build an outfit</Link>
             <Link href="/shop/collection/shop-all" className="inline-flex min-h-11 items-center">Shop all</Link>
           </nav>
           <div className="flex items-center gap-3 sm:gap-5">
@@ -89,6 +90,7 @@ export function ShopSeasonalHeader({ accent }: { accent: string }) {
         </div>
         <nav aria-label="Mobile shop navigation" className="mt-4" onClick={e => { if ((e.target as HTMLElement).closest("a")) menu.current?.close(); }}>
           <Link href="/shop#edit" className="font-serif text-xl">The Mully Edit</Link>
+          <Link href="/shop#outfit" className="text-sm">Build an outfit</Link>
           {[...apparel, ...gear, ["Gifts", "/shop#gift-tiers"], ["Shop all", "/shop/collection/shop-all"]].map(([name, href]) => <Link key={href} href={href} className="text-sm">{name}</Link>)}
           <div className="mt-4 border-t border-charcoal/15 pt-3 text-sm">
             <Link href="/blog">From the Journal</Link>

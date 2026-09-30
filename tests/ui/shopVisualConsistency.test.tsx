@@ -22,7 +22,7 @@ describe("quiet shop visual contract",()=>{
   it("keeps the hero to one short seasonal headline and one action",()=>{
     const {container}=render(<ShopLanding products={[product]} productsByCategory={{}} theme={getSeasonalTheme(new Date(2026,8,30))} />);
     const hero=container.querySelector("#hero")!;
-    expect(hero.textContent?.trim()).toBe("The Fall EditShop the edit");
+    expect(hero.textContent?.trim()).toBe("The Fall Edit[ shop ]");
     expect(hero.querySelectorAll("a")).toHaveLength(1);
     expect(hero.querySelector("img")).toHaveAttribute("src","/shop/hero-fall-2026.jpg");
     expect(container.querySelector(".shop-selection-note")).toBeNull();
@@ -46,5 +46,14 @@ describe("quiet shop visual contract",()=>{
     expect(css).toContain(".sec:not(.outfit)");
     expect(css).toContain("grid-template-columns:repeat(4,minmax(0,1fr))");
     expect(css).toContain("grid-template-columns:repeat(2,minmax(0,1fr))");
+  });
+  it("keeps every catalog piece in the edit and replaces the secondary nav with decorative colors",()=>{
+    const products=Array.from({length:7},(_,i)=>({...product,slug:`piece-${i}`,name:`Piece ${i}`}));
+    const {container}=render(<ShopLanding products={products} productsByCategory={{}} theme={getSeasonalTheme()} />);
+    expect(container.querySelectorAll("#mully-edit-rail .card")).toHaveLength(7);
+    expect(container.querySelector(".shop-categories")).toBeNull();
+    expect(container.querySelector(".shop-colorway-strip")).toHaveAttribute("aria-hidden","true");
+    expect(container.querySelectorAll(".shop-colorway-strip>div")).toHaveLength(5);
+    expect(screen.getByRole("link",{name:"Shop the edit"})).toHaveTextContent("[ shop ]");
   });
 });
