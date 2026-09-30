@@ -37,7 +37,8 @@ export async function POST(req: NextRequest) {
     const bounded = pilot ? await boundedShopifyPilotClient({ ...config, client: getAnalyticsSupabase(),
       pilotId: process.env.LEAN_ANALYTICS_SHOPIFY_PILOT_ID ?? "", signal }) : null;
     const result = await runShopifyPipeline({ ...config, client: bounded?.client ?? getAnalyticsSupabase(),
-      ...(bounded ? { signal: bounded.signal, fetcher: boundedShopifyPilotFetch(config.shop, bounded.signal) } : {}) });
+      signal: bounded?.signal ?? signal,
+      ...(bounded ? { fetcher: boundedShopifyPilotFetch(config.shop, bounded.signal) } : {}) });
     return NextResponse.json(result, { status: result.state === "failed" ? 422 :
       result.state === "lost_lease" ? 409 : 200 });
   } catch { return NextResponse.json({ state: "unavailable" }, { status: 503 }); }

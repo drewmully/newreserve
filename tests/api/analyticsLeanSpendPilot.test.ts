@@ -84,6 +84,16 @@ it("advances to a later due date without redeployment, but direct claims cannot 
   expect(await advanceGoogleSpendPilot({ ...options(), fetcher })).toEqual({ state: "complete" });
   expect(fetcher).not.toHaveBeenCalled();
 });
+it.each([
+  ["2026-09-30T01:00:00Z", ["2026-09-27", "2026-09-28"]],
+  ["2026-09-30T05:00:00Z", ["2026-09-28", "2026-09-29"]],
+  ["2026-03-09T04:30:00Z", ["2026-03-07", "2026-03-08"]],
+  ["2026-11-02T04:30:00Z", ["2026-10-30", "2026-10-31"]],
+])("keeps both fixture report days closed in New York at %s", (instant, dates) => {
+  const clock = vi.spyOn(Date, "now").mockReturnValue(Date.parse(instant));
+  try { expect(spendPilotScope(true).days.map(day => day.date)).toEqual(dates); }
+  finally { clock.mockRestore(); }
+});
 it("source failures stop after one attempt and prevent advancing or direct retries", async () => {
   await enable();
   const fetcher = vi.fn<typeof fetch>(async () => new Response("private", { status: 403 }));
