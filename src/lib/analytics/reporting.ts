@@ -150,12 +150,18 @@ export function funnelDaily(f: Facts, s: ReportScope, funnelVersion: string, sta
     });
   });
 }
-export function customerCohort(f: Facts, s: ReportScope, policy: {
+export type CustomerCohortPolicy = {
   cohortMonth: string; horizonDays: number; graceSeconds: number; asOf: string;
   acquisitionDefinition: string; approvalRef: string; fullMonthCovered: boolean;
   originalLedgerIds: ReadonlySet<string>; ledgerLineageComplete: boolean;
   historyCompleteThrough?: ReadonlyMap<string, string>;
-}): Row {
+};
+export type CustomerCohortComponents = {
+  cohortMonth: string; horizonDays: number; graceSeconds: number; acquisitionDefinition: string; asOf: string;
+  mature: boolean; cohortCustomers: number | null; repeatCustomers: number | null; revenueUsd: string | null;
+};
+/** Primitive counts and exact dollars. This is not a report or an averaged rate. */
+export function customerCohortComponents(f: Facts, s: ReportScope, policy: CustomerCohortPolicy): CustomerCohortComponents {
   preflight(f, s); nyDate(policy.asOf);
   if (!policy.approvalRef || !Number.isSafeInteger(policy.horizonDays) || policy.horizonDays < 0 ||
       !Number.isSafeInteger(policy.graceSeconds) || policy.graceSeconds < 0 || !/^\d{4}-\d{2}-01$/.test(policy.cohortMonth)) throw new Error("invalid_cohort_policy");
@@ -194,14 +200,25 @@ export function customerCohort(f: Facts, s: ReportScope, policy: {
     }
   }
   const revenue = mature && valuesComplete ? decimal(total) : null;
+  return { cohortMonth: policy.cohortMonth, horizonDays: policy.horizonDays,
+    graceSeconds: policy.graceSeconds, acquisitionDefinition: policy.acquisitionDefinition, asOf: policy.asOf,
+    mature, cohortCustomers: mature ? customers.length : null, repeatCustomers: mature ? repeat : null, revenueUsd: revenue };
+}
+/** Compute ratios once, after any independently complete primitive assembly. */
+export function customerCohortReport(s: ReportScope, c: CustomerCohortComponents): Row {
+  const denominator = c.cohortCustomers === null ? null : count(c.cohortCustomers);
   const row = output(s, {
-    cohort_month: policy.cohortMonth, observation_age_days: policy.horizonDays,
-    acquisition_definition_version: policy.acquisitionDefinition, as_of_at: policy.asOf, mature,
+    cohort_month: c.cohortMonth, observation_age_days: c.horizonDays,
+    acquisition_definition_version: c.acquisitionDefinition, as_of_at: c.asOf, mature: c.mature,
   }, {
-    cohort_customers: mature ? customers.length : null, repeat_customers: mature ? repeat : null,
-    observed_net_merchandise_sales_usd: revenue, repeat_purchase_rate: mature ? ratio(count(repeat), count(customers.length)) : null,
-    revenue_ltv_usd: ratio(revenue, mature ? count(customers.length) : null),
+    cohort_customers: c.cohortCustomers, repeat_customers: c.repeatCustomers,
+    observed_net_merchandise_sales_usd: c.revenueUsd,
+    repeat_purchase_rate: ratio(c.repeatCustomers === null ? null : count(c.repeatCustomers), denominator),
+    revenue_ltv_usd: ratio(c.revenueUsd, denominator),
   });
   delete row.report_date;
   return row;
+}
+export function customerCohort(f: Facts, s: ReportScope, policy: CustomerCohortPolicy): Row {
+  return customerCohortReport(s, customerCohortComponents(f, s, policy));
 }
