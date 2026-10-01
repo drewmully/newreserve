@@ -15,23 +15,29 @@ vi.mock("@/lib/firebase-admin", () => {
       if(store.fail)throw new Error("storage unavailable");
       const writes: typeof store.writes = [];
       const put = (r:{path:string},data:Record<string,unknown>)=>writes.push({path:r.path,data});
-      await fn({
+      const result = await fn({
         get:async(r:{path:string})=>({exists:store.docs.has(r.path),data:()=>store.docs.get(r.path)}),
         set:put,update:put,
       });
       for(const w of writes)store.docs.set(w.path,{...store.docs.get(w.path),...w.data});
       store.writes.push(...writes);
+      return result;
     },
   }};
 });
 vi.mock("firebase-admin/firestore",()=>({FieldValue:{serverTimestamp:()=>"server-time"}}));
+vi.mock("@/lib/shopSignupReward",()=>({issueSignupReward:vi.fn()}));
+import { issueSignupReward } from "@/lib/shopSignupReward";
 import { POST } from "@/app/api/shop/signup/route";
 import { EMAIL_CONSENT, SMS_CONSENT, normalizeSignupPhone } from "@/lib/shopSignup";
 const req=(body:unknown,origin="https://mymully.com")=>new Request("https://mymully.com/api/shop/signup",{
   method:"POST",headers:{"Content-Type":"application/json",Origin:origin,"x-forwarded-for":"192.0.2.1"},body:JSON.stringify(body),
 });
 const email={stage:"email",email:" Test@Example.com ",interest:"tops",consent:true};
-beforeEach(()=>{store.docs.clear();store.writes.length=0;store.fail=false});
+beforeEach(()=>{
+  store.docs.clear();store.writes.length=0;store.fail=false;
+  vi.mocked(issueSignupReward).mockReset().mockResolvedValue({code:"MULLY-"+"A".repeat(24),percent:10,redeemed:false});
+});
 describe("shop consent capture",()=>{
   it("rejects missing consent, invalid inputs and cross-origin requests without writes",async()=>{
     for(const body of [null,[],{...email,consent:false},{...email,email:"bad"},{...email,interest:"invented"},{stage:"sms",phone:"555",consent:true}]){
@@ -49,7 +55,17 @@ describe("shop consent capture",()=>{
     expect((await POST(req({stage:"sms",phone:"(248) 555-0123",receipt,consent:false}))).status).toBe(400);
     expect((await POST(req({stage:"sms",phone:"(248) 555-0123",receipt,consent:true}))).status).toBe(200);
     expect(store.docs.get(lead.path)).toMatchObject({phone:"+12485550123",smsConsent:{text:SMS_CONSENT,channel:"sms"},email:"test@example.com"});
+    expect((await POST(req({stage:"sms",phone:"+12485550123",receipt,consent:true}))).status).toBe(200);
     expect((await POST(req({stage:"sms",phone:"+12485550124",receipt,consent:true}))).status).toBe(403);
+  });
+  it("does not advertise a code on Shopify failure and allows same-phone retry",async()=>{
+    const {receipt}=await (await POST(req(email))).json();
+    vi.mocked(issueSignupReward).mockRejectedValueOnce(new Error("timeout"));
+    const body={stage:"sms",phone:"+12485550123",receipt,consent:true};
+    const failed=await POST(req(body));
+    expect(failed.status).toBe(503);
+    expect(await failed.json()).toEqual({error:"reward_unavailable"});
+    expect((await POST(req(body))).status).toBe(200);
   });
   it("will not attach SMS with an invented receipt or claim storage success on failure",async()=>{
     expect((await POST(req({stage:"sms",phone:"+12485550123",receipt:"a".repeat(64),consent:true}))).status).toBe(403);

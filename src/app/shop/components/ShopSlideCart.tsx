@@ -52,6 +52,7 @@ export function ShopSlideCart({ accent }: { accent: string }) {
   }
 
   const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const savings = Math.max(0, cart.reduce((sum, item) => sum + (item.retailPrice ?? item.price) * item.quantity, 0) - cartTotal);
 
   return (
     <>
@@ -209,7 +210,7 @@ export function ShopSlideCart({ accent }: { accent: string }) {
             {/* Footer */}
             <footer className="border-t border-charcoal/10 px-6 py-5">
               {cartOfferNotice && <p role="status" className="pb-3 text-xs text-charcoal/70">{cartOfferNotice}</p>}
-              {cart.some(item => (item.retailPrice ?? item.price) > item.price) && <p className="pb-3 text-xs text-forest">Shopify savings applied: ${(cart.reduce((sum,item) => sum + ((item.retailPrice ?? item.price)-item.price)*item.quantity,0)).toFixed(2)}</p>}
+              {savings > 0 && <p className="pb-3 text-xs text-forest">Shopify savings applied: ${savings.toFixed(2)}</p>}
               <div className="flex items-center justify-between pb-4">
                 <span className="text-[11px] font-mono uppercase tracking-[0.24em] text-charcoal/60">
                   Subtotal
