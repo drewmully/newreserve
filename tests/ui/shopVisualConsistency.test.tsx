@@ -69,7 +69,8 @@ describe("quiet shop visual contract",()=>{
     const {container}=render(<ShopLanding products={products} productsByCategory={{}} theme={getSeasonalTheme()} />);
     expect(container.querySelectorAll("#mully-edit-rail .card")).toHaveLength(7);
     expect(container.querySelector(".shop-categories")).toBeNull();
-    expect(container.querySelector(".shop-colorway-strip")).toHaveAttribute("aria-hidden","true");
+    expect(container.querySelector(".shop-colorway-strip")).toHaveAttribute("aria-label","Wear the colors of fall");
+    expect(container.querySelector(".shop-colorway-strip")).toHaveTextContent("wearthecolorsoffall");
     expect(container.querySelectorAll(".shop-colorway-strip>div")).toHaveLength(5);
     expect(screen.getByRole("link",{name:"Shop the edit"})).toHaveTextContent("[ shop ]");
   });

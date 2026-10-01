@@ -18,6 +18,10 @@ const gear = [
   ["Bags", "/shop/collection/shop-bags"],
   ["Accessories", "/shop/collection/shop-accessories"],
 ];
+const allCategories = [
+  ["Shop everything", "/shop/collection/shop-all"], ...apparel, ...gear,
+  ["Gifts", "/shop#gift-tiers"],
+];
 
 export function ShopSeasonalHeader({ accent }: { accent: string }) {
   const { cartCount, setCartOpen, isSignedIn, authLoading } = useMembership();
@@ -62,6 +66,13 @@ export function ShopSeasonalHeader({ accent }: { accent: string }) {
         .shop-nav nav>a:hover,.shop-nav-summary:hover,.shop-nav-menu a:hover,.shop-nav nav>a:focus-visible,.shop-nav-summary:focus-visible{background-size:100% 1px}
         .shop-nav .shop-build-link,.shop-nav-menu .shop-build-link{padding:0 12px;background-color:#e8ebd6;color:#333721;font-weight:600;white-space:nowrap;transition:background-color 180ms ease,background-size 180ms ease}
         .shop-nav .shop-build-link:hover,.shop-nav-menu .shop-build-link:hover{background-color:#dce2bf}
+        .shop-all-menu{position:relative;display:flex;align-items:center}
+        .shop-all-menu>a{display:flex;align-items:center;min-height:44px}
+        .shop-all-menu>button{min-height:44px;min-width:28px;background:none;border:0;cursor:pointer}
+        .shop-all-dropdown{position:absolute;top:100%;left:0;display:none;grid-template-columns:1fr 1fr;width:340px;background:#fff;border:1px solid #ddd9d0;padding:14px;box-shadow:0 12px 28px #30292312}
+        .shop-all-menu.is-open .shop-all-dropdown{display:grid}
+        .shop-all-dropdown a{display:flex;align-items:center;min-height:44px;padding:0 12px}
+        .shop-all-dropdown a:hover{background:#f5f1e8}
         .shop-nav-menu .shop-build-link{margin:8px 0}
         @media(prefers-reduced-motion:reduce){.shop-nav *,.shop-nav-menu *{transition:none!important}}
       `}</style>
@@ -75,7 +86,8 @@ export function ShopSeasonalHeader({ accent }: { accent: string }) {
             <Link href="/shop" aria-label="Mully Shop home"><MullyWordmark accent={accent} tone="dark" className="text-2xl" /></Link>
           </div>
           <nav aria-label="Shop navigation" className="hidden items-center gap-4 text-[11px] uppercase tracking-[.1em] lg:flex xl:gap-6">
-            <Link href="/shop#edit" className="inline-flex min-h-11 items-center">The Edit</Link>
+            <ShopAllDropdown />
+            <Link href="/shop/new-arrivals" className="inline-flex min-h-11 items-center">New Arrivals</Link>
             {([["Apparel", apparel], ["Gear", gear]] as const).map(([label, links]) => (
               <details className="relative" key={label} onBlur={e => {
                 if (!e.currentTarget.contains(e.relatedTarget as Node | null)) e.currentTarget.open = false;
@@ -88,7 +100,6 @@ export function ShopSeasonalHeader({ accent }: { accent: string }) {
             ))}
             <Link href="/shop#gift-tiers" className="inline-flex min-h-11 items-center">Gifts</Link>
             <Link href="/shop#outfit" onClick={outfitClick} className="shop-build-link inline-flex min-h-11 items-center">Build an outfit</Link>
-            <Link href="/shop/collection/shop-all" className="inline-flex min-h-11 items-center">Shop all</Link>
           </nav>
           <div className="flex items-center gap-3 sm:gap-5">
             <Link href={!authLoading && isSignedIn ? "/account" : loginHref} onClick={loginClick} className={utility}>
@@ -108,9 +119,12 @@ export function ShopSeasonalHeader({ accent }: { accent: string }) {
           <button className="h-11 w-11 text-3xl" onClick={() => menu.current?.close()} aria-label="Close shop menu">×</button>
         </div>
         <nav aria-label="Mobile shop navigation" className="mt-4" onClick={e => { if ((e.target as HTMLElement).closest("a")) menu.current?.close(); }}>
-          <Link href="/shop#edit" className="font-serif text-xl">The Mully Edit</Link>
-          <Link href="/shop#outfit" onClick={outfitClick} className="shop-build-link text-sm">Build an outfit</Link>
-          {[...apparel, ...gear, ["Gifts", "/shop#gift-tiers"], ["Shop all", "/shop/collection/shop-all"]].map(([name, href]) => <Link key={href} href={href} className="text-sm">{name}</Link>)}
+          <Link href="/shop/collection/shop-all" className="font-serif text-xl">Shop All</Link>
+          <Link href="/shop/new-arrivals" className="text-sm">New Arrivals</Link>
+          <details><summary className="shop-nav-summary">Apparel</summary>{apparel.map(([name,href])=><Link key={href} href={href} className="pl-4 text-sm">{name}</Link>)}</details>
+          <details><summary className="shop-nav-summary">Gear</summary>{gear.map(([name,href])=><Link key={href} href={href} className="pl-4 text-sm">{name}</Link>)}</details>
+          <Link href="/shop#gift-tiers" className="text-sm">Gifts</Link>
+          <Link href="/shop#outfit" onClick={outfitClick} className="shop-build-link text-sm">Build an Outfit</Link>
           <div className="mt-4 border-t border-charcoal/15 pt-3 text-sm">
             <Link href="/blog">From the Journal</Link>
             <Link href="/lp/subscription">Explore Mully Reserve</Link>
@@ -121,4 +135,26 @@ export function ShopSeasonalHeader({ accent }: { accent: string }) {
       <ShopSlideCart accent={accent} />
     </>
   );
+}
+
+function ShopAllDropdown() {
+  const root = useRef<HTMLDivElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  function setOpen(open: boolean) {
+    root.current?.classList.toggle("is-open", open);
+    trigger.current?.setAttribute("aria-expanded", String(open));
+  }
+  return <div ref={root} className="shop-all-menu"
+    onMouseEnter={() => { if (matchMedia("(hover:hover)").matches) setOpen(true); }}
+    onMouseLeave={() => { if (!root.current?.contains(document.activeElement)) setOpen(false); }}
+    onFocus={e => { if ((e.target as HTMLElement) !== trigger.current) setOpen(true); }}
+    onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOpen(false); }}
+    onKeyDown={e => { if (e.key === "Escape") { e.stopPropagation(); trigger.current?.focus(); setOpen(false); } }}>
+    <Link href="/shop/collection/shop-all">Shop All</Link>
+    <button ref={trigger} type="button" aria-label="Show all shop categories" aria-controls="shopAllCategories" aria-expanded="false"
+      onClick={() => setOpen(!root.current?.classList.contains("is-open"))}>⌄</button>
+    <div id="shopAllCategories" className="shop-all-dropdown">
+      {allCategories.map(([label,href]) => <Link key={href} href={href} onClick={() => setOpen(false)}>{label}</Link>)}
+    </div>
+  </div>;
 }
