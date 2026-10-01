@@ -1,6 +1,7 @@
 {
   "git": {
     "deploymentEnabled": {
+      "review/analytics-refresh-google-auth": false,
       "review/analytics-vercel-timers": false,
       "review/analytics-order-exclusion": false,
       "review/analytics-subscription-live": false,
