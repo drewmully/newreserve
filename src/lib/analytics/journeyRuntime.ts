@@ -3,6 +3,9 @@ import { collectionEvent, type Journey } from "./collection";
 import { getAnalyticsSupabase } from "./serverClient";
 import { signCheckoutContext } from "./checkout-context";
 import { shopifyShop } from "./shopifySource";
+import { boundedJourneyRpc, resolveJourneyRuntime, reserveFamilies, reserveGrantPrefix, reserveRuntime,
+  type JourneyPolicy } from "./journeyPolicyRuntime";
+export { boundedJourneyRpc } from "./journeyPolicyRuntime";
 
 export type JourneyGrant = {
   projectRef: string; posthogProject: string; shop: string; subjectId: string;
@@ -10,19 +13,12 @@ export type JourneyGrant = {
   permissionEvidenceRef: string; tokenHash: string;
 };
 export type JourneyRuntime = { env: NodeJS.ProcessEnv; request: typeof fetch; now: () => number;
+  captureKeyCandidates?: string[]; policy?: JourneyPolicy; policyResolved?: boolean;
   rpc: (name: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }> };
 export const journeyDefaults = (): JourneyRuntime => ({ env: process.env, request: fetch, now: Date.now,
+  captureKeyCandidates: [process.env.LEAN_POSTHOG_CAPTURE_KEY, process.env.POSTHOG_PROJECT_API_KEY,
+    process.env.NEXT_PUBLIC_POSTHOG_KEY].filter((v): v is string => typeof v === "string"),
   rpc: async (name, args) => getAnalyticsSupabase().rpc(name, args).abortSignal(AbortSignal.timeout(1000)) });
-// Bound callers even if a custom transport ignores cancellation. Production
-// RPCs also abort their HTTP request; no retry after an ambiguous write.
-export async function boundedJourneyRpc(runtime: JourneyRuntime, name: string, args: Record<string, unknown>) {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([runtime.rpc(name, args), new Promise<never>((_, reject) => {
-      timer = setTimeout(() => reject(new Error("journey_timeout")), 1000);
-    })]);
-  } finally { clearTimeout(timer); }
-}
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 export function journeyToken(req: Request) {
   const values = (req.headers.get("cookie") ?? "").split(";").map(v => v.trim())
@@ -34,6 +30,8 @@ export function journeyToken(req: Request) {
  * The DB checks current permission on every event/context operation.
  */
 export async function journeyGrant(req: Request, verifiedUid?: string, runtime: JourneyRuntime = journeyDefaults()): Promise<JourneyGrant | null> {
+  if (!journeyToken(req)) return null;
+  runtime = await resolveJourneyRuntime(runtime);
   const e = runtime.env;
   if (e.LEAN_ANALYTICS_JOURNEYS_ENABLED !== "true" || req.headers.get("sec-gpc") === "1" ||
       req.headers.get("dnt") === "1") return null;
@@ -43,8 +41,11 @@ export async function journeyGrant(req: Request, verifiedUid?: string, runtime: 
   try {
     const shop = shopifyShop(e.LEAN_SHOPIFY_SHOP_DOMAIN ?? "");
     const tokenHash = createHash("sha256").update(token).digest("hex");
-    const result = await boundedJourneyRpc(runtime, "lean_journey_grant", { p_project: e.LEAN_ANALYTICS_PIPELINE_PROJECT_REF,
-      p_shop: shop, p_token_hash: tokenHash });
+    const result = runtime.policy
+      ? await boundedJourneyRpc(runtime, "lean_journey_runtime_grant", {
+        p_config: runtime.policy.configToken, p_token_hash: tokenHash })
+      : await boundedJourneyRpc(runtime, "lean_journey_grant", { p_project: e.LEAN_ANALYTICS_PIPELINE_PROJECT_REF,
+        p_shop: shop, p_token_hash: tokenHash });
     const g = result.data as Omit<JourneyGrant, "tokenHash"> | null, now = runtime.now();
     if (result.error || !g || g.projectRef !== e.LEAN_ANALYTICS_PIPELINE_PROJECT_REF ||
         g.posthogProject !== e.LEAN_POSTHOG_PROJECT_ID || g.shop !== shop ||
@@ -53,6 +54,8 @@ export async function journeyGrant(req: Request, verifiedUid?: string, runtime: 
         !Number.isFinite(Date.parse(g.expiresAt)) || Date.parse(g.validFrom) > now ||
         Date.parse(g.expiresAt) <= now || Date.parse(g.expiresAt) - Date.parse(g.validFrom) > 86400000 ||
         g.firebaseUid !== null && g.firebaseUid !== verifiedUid) return null;
+    // A DB-mode grant must never escape its policy via the old environment lane.
+    if (!runtime.policy && g.permissionEvidenceRef.startsWith(reserveGrantPrefix)) return null;
     return { ...g, tokenHash };
   } catch { return null; }
 }
@@ -72,6 +75,11 @@ export async function captureJourney(req: Request, name: string, actionId: unkno
     const step = legacySteps[name];
     const id = typeof actionId === "string" ? actionId.replace(/^evt-/, "") : "";
     if (!step || !uuid.test(id)) return false;
+    if (!journeyToken(req)) return false;
+    runtime = await resolveJourneyRuntime(runtime);
+    if (runtime.policy && (req.headers.get("origin") !== reserveRuntime.origin ||
+        new URL(req.url).origin !== reserveRuntime.origin)) return false;
+    if (runtime.policy && !reserveFamilies.has(`lean_${step[0]}_${step[1]}`)) return false;
     const g = await journeyGrant(req, verifiedUid, runtime);
     if (!g) return false;
     const eventId = stableJourneyAction(`${g.sessionId}:${name}:${id}`);
@@ -80,11 +88,16 @@ export async function captureJourney(req: Request, name: string, actionId: unkno
     const host = runtime.env.LEAN_POSTHOG_CAPTURE_ORIGIN;
     const key = runtime.env.LEAN_POSTHOG_CAPTURE_KEY;
     if (!["https://us.i.posthog.com", "https://eu.i.posthog.com"].includes(host ?? "") || !key?.trim()) return false;
-    const action = await boundedJourneyRpc(runtime, "lean_journey_action", { p_project: g.projectRef, p_shop: g.shop,
-      p_token_hash: g.tokenHash, p_action: id, p_family: event.event });
+    const action = runtime.policy
+      ? await boundedJourneyRpc(runtime, "lean_journey_runtime_action", { p_config: runtime.policy.configToken,
+        p_token_hash: g.tokenHash, p_action: id, p_family: event.event })
+      : await boundedJourneyRpc(runtime, "lean_journey_action", { p_project: g.projectRef, p_shop: g.shop,
+        p_token_hash: g.tokenHash, p_action: id, p_family: event.event });
     if (action.error || typeof action.data !== "string" || !Number.isFinite(Date.parse(action.data)) ||
         Date.parse(action.data) < Date.parse(g.validFrom) || Date.parse(action.data) >= Date.parse(g.expiresAt) ||
-        Date.parse(action.data) > runtime.now()) return false;
+        Date.parse(action.data) > runtime.now() ||
+        runtime.policy && (Date.parse(runtime.policy.validUntil) <= runtime.now() ||
+          Date.parse(g.expiresAt) <= runtime.now())) return false;
     const response = await runtime.request(`${host}/capture/`, { method: "POST", redirect: "error",
       signal: AbortSignal.timeout(1500), headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ api_key: key, event: event.event, properties: { ...event.properties,
@@ -104,6 +117,8 @@ export function stableJourneyAction(value: string) {
 export async function attachJourneyCart(req: Request, cartId: unknown, verifiedUid?: string,
   runtime: JourneyRuntime = journeyDefaults()): Promise<boolean> {
   try {
+    // DB-mode scope is Reserve actions only, never a new cart capability.
+    if (runtime.policy) return false;
     if (runtime.env.LEAN_ANALYTICS_JOURNEYS_ENABLED !== "true" ||
         typeof cartId !== "string" || cartId.length > 600) return false;
     const match = cartId.match(/^gid:\/\/shopify\/Cart\/([a-zA-Z0-9_-]{1,200})\?key=[a-zA-Z0-9_-]{1,300}$/);
@@ -111,7 +126,8 @@ export async function attachJourneyCart(req: Request, cartId: unknown, verifiedU
     const g = await journeyGrant(req, verifiedUid, runtime);
     const secret = runtime.env.LEAN_CHECKOUT_CONTEXT_SECRET ?? "";
     const storefront = runtime.env.LEAN_SHOPIFY_STOREFRONT_TOKEN;
-    if (!g || secret.length < 32 || !storefront?.trim()) return false;
+    if (!g || g.permissionEvidenceRef.startsWith(reserveGrantPrefix) ||
+        secret.length < 32 || !storefront?.trim()) return false;
     const now = Math.floor(runtime.now() / 1000), ttl = Math.min(3600, Math.floor(Date.parse(g.expiresAt) / 1000) - now);
     if (ttl < 60) return false;
     const token = signCheckoutContext({ project: g.posthogProject, shop: g.shop, checkoutId: match[1],
@@ -135,9 +151,11 @@ export async function attachJourneyCart(req: Request, cartId: unknown, verifiedU
 export async function attachJourneyDraft(req: Request, draftId: unknown, actualShop: string, verifiedUid: string,
   runtime: JourneyRuntime = journeyDefaults()): Promise<boolean> {
   try {
+    if (runtime.policy) return false;
     if (typeof draftId !== "string" || !/^[1-9]\d{0,24}$/.test(draftId) || !verifiedUid) return false;
     const g = await journeyGrant(req, verifiedUid, runtime), secret = runtime.env.LEAN_CHECKOUT_CONTEXT_SECRET ?? "";
-    if (!g || g.shop !== actualShop || secret.length < 32) return false;
+    if (!g || g.permissionEvidenceRef.startsWith(reserveGrantPrefix) ||
+        g.shop !== actualShop || secret.length < 32) return false;
     const now = Math.floor(runtime.now() / 1000), ttl = Math.min(3600, Math.floor(Date.parse(g.expiresAt) / 1000) - now);
     if (ttl < 60) return false;
     const token = signCheckoutContext({ project: g.posthogProject, shop: g.shop, checkoutId: `draft_${draftId}`,

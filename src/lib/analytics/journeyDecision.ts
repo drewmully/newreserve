@@ -1,12 +1,16 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { boundedJourneyRpc, journeyDefaults, journeyGrant, journeyToken, type JourneyRuntime } from "./journeyRuntime";
 import { shopifyShop } from "./shopifySource";
+import { resolveJourneyRuntime, withdrawalRuntime, reserveRuntime } from "./journeyPolicyRuntime";
 
 export const journeyCookieName = "__Host-mully_analytics";
 /** Explicit consent is an action on our same-origin route under an installed
  * operator-approved policy. No marketing flag or customer ID is accepted. */
 export async function decideJourney(req: Request, decision: "allow" | "withdraw",
   verifiedUid?: string, runtime: JourneyRuntime = journeyDefaults()) {
+  runtime = decision === "withdraw" ? withdrawalRuntime(runtime) : await resolveJourneyRuntime(runtime);
+  if (runtime.policy && (req.headers.get("origin") !== reserveRuntime.origin ||
+      new URL(req.url).origin !== reserveRuntime.origin)) throw new Error("permission_unavailable");
   const e = runtime.env, project = e.LEAN_ANALYTICS_PIPELINE_PROJECT_REF;
   if ((decision !== "withdraw" && e.LEAN_ANALYTICS_JOURNEYS_ENABLED !== "true") || !/^[a-z]{20}$/.test(project ?? "") ||
       e.LEAN_ANALYTICS_SUPABASE_URL !== `https://${project}.supabase.co`)
@@ -29,11 +33,18 @@ export async function decideJourney(req: Request, decision: "allow" | "withdraw"
   if (!e.LEAN_ANALYTICS_PERMISSION_POLICY?.trim() || !/^[1-9]\d{0,9}$/.test(e.LEAN_POSTHOG_PROJECT_ID ?? ""))
     throw new Error("permission_unavailable");
   const token = randomBytes(32).toString("hex");
-  const result = await boundedJourneyRpc(runtime, "lean_journey_issue", {
+  if (!runtime.policy && e.LEAN_ANALYTICS_PERMISSION_POLICY === reserveRuntime.policy)
+    throw new Error("permission_unavailable");
+  const args = {
     p_project: project, p_shop: shop, p_posthog: e.LEAN_POSTHOG_PROJECT_ID,
     p_policy: e.LEAN_ANALYTICS_PERMISSION_POLICY, p_token_hash: createHash("sha256").update(token).digest("hex"),
     p_subject: randomBytes(32).toString("hex"), p_session: randomUUID(), p_uid: verifiedUid ?? null,
-  });
+  };
+  const result = runtime.policy
+    ? await boundedJourneyRpc(runtime, "lean_journey_runtime_issue", {
+      p_config: runtime.policy.configToken, p_token_hash: args.p_token_hash, p_subject: args.p_subject,
+      p_session: args.p_session, p_uid: args.p_uid })
+    : await boundedJourneyRpc(runtime, "lean_journey_issue", args);
   const value = result.data as { expiresAt?: unknown } | null;
   const ttl = typeof value?.expiresAt === "string" ? Math.floor((Date.parse(value.expiresAt) - runtime.now()) / 1000) : NaN;
   if (result.error || !Number.isFinite(ttl) || ttl < 1 || ttl > 86400) throw new Error("permission_unconfirmed");
