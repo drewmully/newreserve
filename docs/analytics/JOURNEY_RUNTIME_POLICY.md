@@ -14,6 +14,19 @@ The new path is fixed to production/main, Supabase `xnfjdbpjuaezxjgargto`,
 actions. It does not enable Style Game, Text Mully, campaign properties,
 customer links or the cart/draft conversion bridge.
 
+`checkout_clicked` is shared by unrelated checkout buttons. In DB mode it maps
+to `lean_reserve_checkout` only for the existing `choose_plan` producer with
+`plan=member`, or `reserve_founders_lp` with `plan=member` and
+`method=shopify_checkout`. Generic shop carts, access plans and missing/unknown
+producer context are withheld. This narrows event classification; client-supplied
+context is not permission, customer identity or proof of a paid checkout.
+Source/plan/method are not added to the provider payload.
+
+The newer `shop_outfit_reserve_clicked` event stays withheld. It is not admitted
+by the existing track route or lean mapping. Adding it would require a separately
+reviewed producer contract and must not silently expand existing advertising
+dispatch. Do not interpret absence as zero Reserve intent.
+
 An owner must explicitly approve and enable the exact `reserve-runtime-v1`
 row in the existing `lean_private.journey_policies`. Its existing approval
 reference and TTL remain mandatory. The two added columns are

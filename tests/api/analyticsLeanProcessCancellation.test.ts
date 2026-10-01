@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 const port = vi.hoisted(() => ({ run: vi.fn(), client: vi.fn(() => ({})) }));
 vi.mock("@/lib/analytics/serverClient", () => ({ getAnalyticsSupabase: port.client }));
-vi.mock("@/lib/analytics/shopifyPipeline", () => ({
+vi.mock("@/lib/analytics/shopifyPipeline", async importActual => ({
+  ...await importActual<typeof import("@/lib/analytics/shopifyPipeline")>(),
   runShopifyPipeline: port.run,
   validatePipelineTarget: vi.fn(),
   pipelineRpc: vi.fn(),

@@ -331,7 +331,9 @@ export async function POST(request: NextRequest) {
   const eventId = randomUUID();
 
   await Promise.allSettled([
-    captureJourney(request, eventName, properties.event_id, uid),
+    captureJourney(request, eventName, properties.event_id, uid, undefined, {
+      source: properties.source, plan: properties.plan, method: properties.method,
+    }),
     dispatchAnalyticsEvent(event),
     persistAnalyticsEvent(eventId, { ...event, uid }),
     aggregateKpiDaily({ ...event, uid }),
