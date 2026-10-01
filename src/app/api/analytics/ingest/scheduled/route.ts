@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
       ...process.env,
       LEAN_ANALYTICS_SCHEDULE_ENABLED: process.env.LEAN_ANALYTICS_VERCEL_SCHEDULE_ENABLED,
       LEAN_ANALYTICS_RUNNER_ORIGIN: process.env.LEAN_ANALYTICS_RUNNER_ORIGIN ?? "https://www.mymully.com",
-    }, { signal: req.signal });
+    }, { signal: AbortSignal.any([req.signal, invocationDeadline]) });
     // A separate empty-by-default DB binding can admit one finite financial
     // read using the existing native token. Never compete with commerce work.
     let financialCheckpoint: { state: string; calls?: number } | undefined;

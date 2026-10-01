@@ -55,7 +55,8 @@ orders, and an expiry no more than24 hours after registration.
 
 Only an authenticated timer invocation whose commerce result is `idle` can
 attempt the checkpoint. At least70 seconds must remain in the same180-second
-invocation budget. The financial reader has a65-second deadline and at most
+invocation budget. The entire financial lane has a65-second deadline, including
+claim, source reads and commit, and at most
 `2 + 8 * inventory_size` native Shopify requests. It uses the existing runtime
 token with explicit `financial_no_geo`; no new environment variable, public
 diagnostic endpoint or caller-supplied scope is introduced.
@@ -76,6 +77,14 @@ durable completed state. The old public history-commit RPC rejects every
 checkpoint-bound job, including disabled and expired bindings. Unbound jobs
 retain the reviewed history implementation behind the wrapper; runtime and
 destination roles cannot call its private delegate.
+
+Every checkpoint RPC uses the production PostgREST transport's abort signal.
+The caller also stops waiting at the shared deadline. An aborted request does
+not prove a database rollback. If a claim or commit may have reached PostgreSQL,
+the response is `held`, with no retry. The operator must reconcile durable
+checkpoint and history state read-only before any recovery. No new source read
+or commit starts after the signal aborts, but an already dispatched commit may
+finish after the caller has stopped waiting.
 
 The response adds only `financialCheckpoint.state` and a source-request count
 when available. It does not return source rows, IDs, policies or credentials.

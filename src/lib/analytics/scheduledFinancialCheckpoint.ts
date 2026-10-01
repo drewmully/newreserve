@@ -12,13 +12,57 @@ const inventoryKey = (order: HistoryOrder) => JSON.stringify([
   order.id, new Date(order.createdAt).toISOString(), new Date(order.updatedAt).toISOString(),
 ]);
 
+/** Bound caller settlement as well as transport. An aborted HTTP response does
+ * not prove that PostgreSQL rolled back a claim or commit already in flight. */
+function beforeAbort<T>(signal: AbortSignal, start: () => PromiseLike<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const abort = () => reject(new Error("financial_checkpoint_deadline"));
+    signal.addEventListener("abort", abort, { once: true });
+    const finish = () => signal.removeEventListener("abort", abort);
+    if (signal.aborted) { finish(); abort(); return; }
+    Promise.resolve().then(() => {
+      signal.throwIfAborted();
+      return start();
+    }).then(value => { finish(); resolve(value); }, error => { finish(); reject(error); });
+  });
+}
+
+type CheckpointOptions = {
+  client: AnalyticsRpcClient; projectRef: string; databaseUrl: string; shop: string;
+  accessToken: string; signal: AbortSignal; now: string; fetcher?: typeof fetch;
+};
+
 /** Called only after an authenticated production commerce timer reports idle.
  * One owner-bound attempt. No retry, queue replay, report build or publication.
  */
-export async function runScheduledFinancialCheckpoint(options: {
-  client: AnalyticsRpcClient; projectRef: string; databaseUrl: string; shop: string;
-  accessToken: string; signal: AbortSignal; now: string; fetcher?: typeof fetch;
-}) {
+export async function runScheduledFinancialCheckpoint(options: CheckpointOptions) {
+  // Include the claim and every subsequent database await in the same lane
+  // budget, itself bounded by the timer's remaining invocation budget.
+  const signal = AbortSignal.any([options.signal, AbortSignal.timeout(65000)]);
+  let dispatched = false;
+  const client: AnalyticsRpcClient = { rpc(name, args) {
+    return beforeAbort(signal, () => {
+      const request = options.client.rpc(name, args) as ReturnType<AnalyticsRpcClient["rpc"]> & {
+        abortSignal?: (value: AbortSignal) => ReturnType<AnalyticsRpcClient["rpc"]>;
+      };
+      // Production Supabase returns a lazy PostgREST builder. Do not silently
+      // fall back to a Promise-only client that cannot cancel its transport.
+      if (typeof request.abortSignal !== "function") throw new Error("financial_checkpoint_rpc_transport");
+      const abortable = request.abortSignal(signal);
+      signal.throwIfAborted();
+      dispatched = true;
+      return abortable;
+    });
+  } };
+  try {
+    return await beforeAbort(signal, () => runCheckpoint({ ...options, client, signal }));
+  } catch (error) {
+    if (signal.aborted) return { state: dispatched ? "held" : "deadline" };
+    throw error;
+  }
+}
+
+async function runCheckpoint(options: CheckpointOptions) {
   validatePipelineTarget(options.projectRef, options.databaseUrl);
   if (options.projectRef !== project || options.shop !== shop || !options.accessToken.trim())
     throw new Error("financial_checkpoint_target");
@@ -35,7 +79,7 @@ export async function runScheduledFinancialCheckpoint(options: {
     throw new Error("financial_checkpoint_inventory");
   const ids = new Set(inventory.map(order => order.id));
   let calls = 0, inventoryRead = false;
-  const signal = AbortSignal.any([options.signal, AbortSignal.timeout(65000)]);
+  const signal = options.signal;
   const nativeFetch = options.fetcher ?? fetch;
   const fetcher: typeof fetch = async (url, init) => {
     signal.throwIfAborted();

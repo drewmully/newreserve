@@ -1,4 +1,5 @@
 import { PGlite } from "@electric-sql/pglite";
+import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
 import { afterAll, afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
@@ -45,7 +46,20 @@ const native = (changeInventory = false, headers = true) => vi.fn<typeof fetch>(
   else throw new Error("unexpected source query");
   return Response.json({ data }, { headers: headers ? { "X-Shopify-API-Version": "2026-07" } : {} });
 });
-const client: AnalyticsRpcClient = { async rpc(name, args) {
+type RpcResult = { data: unknown; error: unknown };
+function abortableClient(execute: (name: string, args: Record<string, unknown>) => Promise<RpcResult>): AnalyticsRpcClient {
+  return { rpc(name, args) {
+    let signal: AbortSignal | undefined;
+    return {
+      abortSignal(value: AbortSignal) { signal = value; return this; },
+      then: ((resolve, reject) => Promise.resolve().then(() => {
+        signal?.throwIfAborted();
+        return execute(name, args);
+      }).then(resolve, reject)) as PromiseLike<RpcResult>["then"],
+    };
+  } };
+}
+const client = abortableClient(async (name, args) => {
   if (!["lean_financial_checkpoint_claim", "lean_financial_checkpoint_commit", "lean_history_read"].includes(name))
     throw new Error("unexpected RPC");
   const pairs = Object.entries(args);
@@ -55,7 +69,7 @@ const client: AnalyticsRpcClient = { async rpc(name, args) {
       pairs.map(([key, value]) => key === "p_rows" ? JSON.stringify(value) : value));
     return { data: result.rows[0].value, error: null };
   } catch (error) { return { data: null, error }; }
-} };
+});
 const options = (fetcher: typeof fetch = native()) => ({ client, projectRef: project,
   databaseUrl: `https://${project}.supabase.co`, shop, accessToken: "fixture-not-a-token",
   signal: new AbortController().signal, now: new Date().toISOString(), fetcher });
@@ -129,22 +143,22 @@ it("does not turn headerless connector data into an accepted native source", asy
 });
 it("holds a lost commit response without replaying a successful write", async () => {
   await register();
-  const lost: AnalyticsRpcClient = { async rpc(name, args) {
+  const lost = abortableClient(async (name, args) => {
     const response = await client.rpc(name, args);
     if (name === "lean_financial_checkpoint_commit") throw new Error("lost response");
     return response;
-  } };
+  });
   await expect(runScheduledFinancialCheckpoint({ ...options(), client: lost })).rejects.toThrow();
   expect(await runScheduledFinancialCheckpoint(options())).toEqual({ state: "complete", calls: 0 });
   expect((await db.query("select * from lean_private.history_pages")).rows).toHaveLength(1);
 });
 it("rechecks disablement at commit and retains no source", async () => {
   await register();
-  const paused: AnalyticsRpcClient = { async rpc(name, args) {
+  const paused = abortableClient(async (name, args) => {
     if (name === "lean_financial_checkpoint_commit")
       await db.exec("update lean_private.financial_checkpoints set enabled=false");
     return client.rpc(name, args);
-  } };
+  });
   await expect(runScheduledFinancialCheckpoint({ ...options(), client: paused })).rejects.toThrow("checkpoint_conflict");
   expect((await db.query("select * from lean_private.history_pages")).rows).toHaveLength(0);
 });
@@ -242,6 +256,96 @@ it("does not add a 65-second source lane when the commerce supervisor consumed t
   expect(await response.json()).toMatchObject({ state: "idle", financialCheckpoint: { state: "deadline", calls: 0 } });
   expect(fetcher).toHaveBeenCalledTimes(1);
   expect((await db.query<{ attempted_at: string | null }>("select attempted_at from lean_private.financial_checkpoints")).rows[0].attempted_at).toBeNull();
+});
+it.each(["lean_financial_checkpoint_claim", "lean_history_read", "lean_financial_checkpoint_commit"])(
+  "aborts the real PostgREST transport and settles held during delayed %s without replay", async delayed => {
+    await register();
+    // Supabase constructs an unused Realtime client even for RPC-only tests.
+    // Node20 has no global WebSocket. No socket is opened in this test.
+    if (!globalThis.WebSocket) vi.stubGlobal("WebSocket", class {});
+    const deadline = new AbortController(), started: string[] = [];
+    let delayedSignal: AbortSignal | undefined, release!: () => void, reached!: () => void, finished!: () => void;
+    const atDelay = new Promise<void>(resolve => { reached = resolve; });
+    const lateResponse = new Promise<void>(resolve => { release = resolve; });
+    const lateSqlFinished = new Promise<void>(resolve => { finished = resolve; });
+    const rpcFetch: typeof fetch = async (url, init) => {
+      const name = new URL(String(url)).pathname.split("/").at(-1)!;
+      started.push(name);
+      if (name === delayed) {
+        delayedSignal = init?.signal as AbortSignal;
+        reached();
+        // Model a server that already accepted the HTTP request and can finish
+        // after cancellation. The client must not equate abort with rollback.
+        await lateResponse;
+      }
+      const result = await client.rpc(name, JSON.parse(String(init?.body)));
+      if (name === delayed) finished();
+      return Response.json(result.error ? { message: String(result.error) } : result.data,
+        { status: result.error ? 400 : 200 });
+    };
+    const transport = createClient(`https://${project}.supabase.co`, "fixture-not-a-key", {
+      global: { fetch: rpcFetch }, auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const fetcher = native();
+    const result = runScheduledFinancialCheckpoint({ ...options(fetcher), client: transport, signal: deadline.signal });
+    await atDelay;
+    expect(delayedSignal).toBeInstanceOf(AbortSignal);
+    deadline.abort();
+    expect(await result).toEqual({ state: "held" });
+    expect(delayedSignal!.aborted).toBe(true);
+    const callsBeforeLateResponse = fetcher.mock.calls.length;
+    release();
+    await lateSqlFinished;
+    expect(started.filter(name => name === delayed)).toHaveLength(1);
+    expect(fetcher).toHaveBeenCalledTimes(callsBeforeLateResponse);
+    expect(started.at(-1)).toBe(delayed);
+    const saved = await db.query<{ complete: boolean }>("select complete from lean_private.history_jobs");
+    expect(saved.rows[0].complete).toBe(delayed === "lean_financial_checkpoint_commit");
+  },
+);
+it("starts the 65-second lane budget before claim, not after its response", async () => {
+  const lane = new AbortController();
+  let reached!: () => void;
+  const atClaim = new Promise<void>(resolve => { reached = resolve; });
+  const timeout = vi.spyOn(AbortSignal, "timeout").mockReturnValue(lane.signal);
+  const delayed = abortableClient(async () => { reached(); return new Promise(() => {}); });
+  const result = runScheduledFinancialCheckpoint({ ...options(), client: delayed });
+  await atClaim;
+  expect(timeout).toHaveBeenCalledWith(65000);
+  lane.abort();
+  expect(await result).toEqual({ state: "held" });
+});
+it("does not dispatch any RPC or native request when already aborted", async () => {
+  const controller = new AbortController(); controller.abort();
+  const rpc = vi.fn(client.rpc), fetcher = native();
+  expect(await runScheduledFinancialCheckpoint({
+    ...options(fetcher), client: { rpc }, signal: controller.signal,
+  })).toEqual({ state: "deadline" });
+  expect(rpc).not.toHaveBeenCalled(); expect(fetcher).not.toHaveBeenCalled();
+});
+it("never starts the commit RPC after native reads abort the lane", async () => {
+  await register();
+  const controller = new AbortController(), source = native(), rpcNames: string[] = [];
+  let financialReads = 0;
+  const fetcher: typeof fetch = async (url, init) => {
+    const response = await source(url, init);
+    if (JSON.parse(String(init?.body)).query === PILOT_FINANCIAL_QUERY && ++financialReads === 2)
+      controller.abort();
+    return response;
+  };
+  const tracked = abortableClient(async (name, args) => { rpcNames.push(name); return client.rpc(name, args); });
+  expect(await runScheduledFinancialCheckpoint({
+    ...options(fetcher), client: tracked, signal: controller.signal,
+  })).toEqual({ state: "held" });
+  expect(rpcNames).toEqual(["lean_financial_checkpoint_claim", "lean_history_read"]);
+  expect((await db.query("select * from lean_private.history_pages")).rows).toHaveLength(0);
+});
+it("rejects a Promise-only RPC client rather than pretending its transport is abortable", async () => {
+  const fetcher = native();
+  await expect(runScheduledFinancialCheckpoint({
+    ...options(fetcher), client: { rpc: async () => ({ data: { state: "disabled" }, error: null }) },
+  })).rejects.toThrow("pipeline_storage_unavailable");
+  expect(fetcher).not.toHaveBeenCalled();
 });
 it("rolls back installation if a destination role inherits execution through another role", async () => {
   const unsafe = new PGlite();
