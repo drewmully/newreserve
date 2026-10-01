@@ -46,6 +46,8 @@ export function resolveTemporalIdentity(input: {
 export type HistoryEvidence = {
   expectedSources: string[]; completeSources: string[]; approvalRef: string | null;
   migrationsReconciled: boolean;
+  /** Optional independently covered source cutoff, not the report's run time. */
+  completeThrough?: string;
 };
 export function buildCustomer(customerId: string, resolution: IdentityResolution["status"],
   permitted: boolean, evidence: HistoryEvidence, orders: Row[], publication: string): Row {

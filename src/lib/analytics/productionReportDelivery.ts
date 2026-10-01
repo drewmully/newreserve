@@ -1,4 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
+import { validProductionWorkbookPayload } from "./productionWorkbookDelivery";
 export const productionReportPath = "/api/analytics/reports/production";
 const project = "xnfjdbpjuaezxjgargto";
 const headers = { "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" };
@@ -47,7 +48,14 @@ export async function productionReportGet(req: Request, env: Record<string,strin
   if (env.LEAN_PRODUCTION_REPORTS_ENABLED !== "true" || env.VERCEL_ENV !== "production" ||
     env.VERCEL_GIT_COMMIT_REF !== "main") return empty(404);
   if (req.method !== "GET") return empty(405);
-  const secret = env.LEAN_PRODUCTION_REPORTS_SECRET ?? "";
+  // Switching the fixed contract requires a separate server opt-in and bearer.
+  // The default remains SQL050's original two-resource observed-only contract.
+  const mode = env.LEAN_PRODUCTION_REPORTS_MODE ?? "observed";
+  if (mode !== "observed" && mode !== "workbook") return empty(503);
+  const workbook = mode === "workbook";
+  if (workbook && env.LEAN_PRODUCTION_WORKBOOK_REPORTS_ENABLED !== "true") return empty(404);
+  const secret = (workbook ? env.LEAN_PRODUCTION_WORKBOOK_REPORTS_SECRET : env.LEAN_PRODUCTION_REPORTS_SECRET) ?? "";
+  if (workbook && secret === env.LEAN_PRODUCTION_REPORTS_SECRET) return empty(503);
   if (secret.length < 32 || secret.length > 512) return empty(503);
   const expected = Buffer.from(`Bearer ${secret}`), supplied = Buffer.from(req.headers.get("authorization") ?? "");
   if (expected.length !== supplied.length || !timingSafeEqual(expected,supplied)) return empty(401);
@@ -59,10 +67,11 @@ export async function productionReportGet(req: Request, env: Record<string,strin
   if (env.LEAN_ANALYTICS_PIPELINE_PROJECT_REF !== project ||
     env.LEAN_ANALYTICS_SUPABASE_URL !== `https://${project}.supabase.co` || !key?.trim()) return empty(503);
   try {
-    const response = await transport(`https://${project}.supabase.co/rest/v1/rpc/lean_production_reports_read`, {
+    const rpc = workbook ? "lean_production_workbook_reports_read" : "lean_production_reports_read";
+    const response = await transport(`https://${project}.supabase.co/rest/v1/rpc/${rpc}`, {
       method: "POST", redirect: "error", signal: AbortSignal.timeout(15000),
       headers: { "Content-Type": "application/json", apikey: key, Authorization: `Bearer ${key}` },
-      body: "{}",
+      body: workbook ? JSON.stringify({ p_project_ref: project }) : "{}",
     });
     if (!response.ok) return empty(503);
     const reader = response.body?.getReader(); if (!reader) return empty(503);
@@ -76,7 +85,7 @@ export async function productionReportGet(req: Request, env: Record<string,strin
       }
     } finally { reader.releaseLock(); }
     const text = Buffer.concat(chunks).toString("utf8");
-    if (!validProductionReportPayload(JSON.parse(text))) return empty(503);
+    if (!(workbook ? validProductionWorkbookPayload : validProductionReportPayload)(JSON.parse(text))) return empty(503);
     return new Response(text,{status:200,headers:{...headers,"Content-Type":"application/json"}});
   } catch { return empty(503); }
 }

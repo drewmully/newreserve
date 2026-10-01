@@ -62,6 +62,10 @@ function validatePayload(section: EvidenceSection, payload: unknown) {
           [...e.expectedSources, ...e.completeSources].some(s => !text(s)) ||
           typeof e.migrationsReconciled !== "boolean" ||
           !(e.approvalRef === null || text(e.approvalRef))) throw new Error("invalid_history_evidence");
+      if (Object.hasOwn(e, "completeThrough")) {
+        if (typeof e.completeThrough !== "string") throw new Error("invalid_history_evidence");
+        nyDate(e.completeThrough);
+      }
     }
     return;
   }
