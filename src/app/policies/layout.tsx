@@ -9,8 +9,7 @@ export default function PoliciesLayout({ children }: { children: React.ReactNode
         <nav className="shop-support-links" aria-label="Policies">
           {[["Refund","refund"],["Privacy","privacy"],["Shipping","shipping"],["Terms","terms"]].map(([label,path]) =>
             <Link key={path} className="shop-text-link" href={`/policies/${path}`}>{label}</Link>)}
-          {process.env.NEXT_PUBLIC_LEAN_ANALYTICS_JOURNEYS_ENABLED === "true" &&
-            <Link className="shop-text-link" href="/analytics-preferences">Analytics preferences</Link>}
+          <Link className="shop-text-link" href="/analytics-preferences">Analytics preferences</Link>
         </nav>
       </div>
     </main>

@@ -1,6 +1,7 @@
 {
   "git": {
     "deploymentEnabled": {
+      "review/analytics-journey-policy": false,
       "review/analytics-financial-checkpoint": false,
       "review/analytics-refresh-google-auth": false,
       "review/analytics-vercel-timers": false,
