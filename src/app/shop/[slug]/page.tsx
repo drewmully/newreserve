@@ -89,7 +89,10 @@ export default async function ProductPage({ params, searchParams }: Props) {
   // A final-sale assortment needs its own focused terms, not the standard
   // apparel template's free-returns strip, color picker or outfit upsells.
   if (product.slug === "mystery-bundle-closeout") {
-    return <MysteryBundleClient product={product} initialVariantId={preferredVariant?.id} />;
+    const mysteryVariant = product.variants.find(variant =>
+      variant.id === requestedVariantId || variant.id.split("/").pop() === requestedVariantId
+    );
+    return <MysteryBundleClient product={product} initialVariantId={mysteryVariant?.id} />;
   }
   const theme = getSeasonalTheme();
 
