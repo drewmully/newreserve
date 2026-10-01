@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { autoImplementMethods } from "next/dist/server/route-modules/app-route/helpers/auto-implement-methods";
 import { GET, maxDuration } from "@/app/api/analytics/ingest/scheduled/route";
 
 const secret = "synthetic-cron-secret-not-a-credential";
@@ -54,6 +55,29 @@ describe("default-off commerce Vercel fallback", () => {
   it("rejects caller query arguments", async () => {
     expect((await GET(request(`${path}?order=1`))).status).toBe(400);
     expect(network).not.toHaveBeenCalled();
+  });
+  it("rejects authenticated HEAD forwarded by Next.js before network", async () => {
+    const req = new NextRequest(path, { method: "HEAD",
+      headers: { authorization: `Bearer ${secret}` } });
+    const response = await autoImplementMethods({ GET }).HEAD(req, {});
+    expect(response).toMatchObject({ status: 405 });
+    expect(network).not.toHaveBeenCalled();
+  });
+  it.each([
+    ["content-length", "1"],
+    ["transfer-encoding", "chunked"],
+  ])("rejects body-framing header %s before network", async (name, value) => {
+    const req = request();
+    req.headers.set(name, value);
+    expect(req.body).toBeNull();
+    expect((await GET(req)).status).toBe(400);
+    expect(network).not.toHaveBeenCalled();
+  });
+  it("permits an explicit zero content length for an ordinary GET", async () => {
+    const req = request();
+    req.headers.set("content-length", "0");
+    expect((await GET(req)).status).toBe(200);
+    expect(network).toHaveBeenCalledTimes(1);
   });
   it.each([
     ["LEAN_ANALYTICS_PIPELINE_ENABLED", "false"],

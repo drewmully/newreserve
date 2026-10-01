@@ -22,7 +22,9 @@ export async function GET(req: NextRequest) {
   const supplied = Buffer.from(req.headers.get("authorization") ?? "");
   if (expected.length !== supplied.length || !timingSafeEqual(expected, supplied))
     return new NextResponse(null, { status: 401, headers });
-  if (req.nextUrl.search || req.body !== null)
+  if (req.method !== "GET") return new NextResponse(null, { status: 405, headers });
+  if (req.nextUrl.search || req.body !== null || req.headers.has("transfer-encoding") ||
+      (req.headers.has("content-length") && req.headers.get("content-length") !== "0"))
     return new NextResponse(null, { status: 400, headers });
   // This fallback is exclusively for an explicitly configured standing scope.
   // Its opt-in maps to the existing supervisor's schedule admission switch.

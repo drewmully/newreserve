@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { autoImplementMethods } from "next/dist/server/route-modules/app-route/helpers/auto-implement-methods";
 import { GET, maxDuration } from "@/app/api/analytics/subscriptions/scheduled/route";
 import { GET as commerceGET } from "@/app/api/analytics/ingest/scheduled/route";
 
@@ -59,6 +60,29 @@ describe("independent default-off subscription fallback", () => {
     expect((await GET(request(path, "wrong"))).status).toBe(401);
     expect((await GET(request(`${path}?plan=override`))).status).toBe(400);
     expect(network).not.toHaveBeenCalled();
+  });
+  it("rejects authenticated HEAD forwarded by Next.js before network", async () => {
+    const req = new NextRequest(path, { method: "HEAD",
+      headers: { authorization: `Bearer ${secret}` } });
+    const response = await autoImplementMethods({ GET }).HEAD(req, {});
+    expect(response).toMatchObject({ status: 405 });
+    expect(network).not.toHaveBeenCalled();
+  });
+  it.each([
+    ["content-length", "1"],
+    ["transfer-encoding", "chunked"],
+  ])("rejects body-framing header %s before network", async (name, value) => {
+    const req = request();
+    req.headers.set(name, value);
+    expect(req.body).toBeNull();
+    expect((await GET(req)).status).toBe(400);
+    expect(network).not.toHaveBeenCalled();
+  });
+  it("permits an explicit zero content length for an ordinary GET", async () => {
+    const req = request();
+    req.headers.set("content-length", "0");
+    expect((await GET(req)).status).toBe(200);
+    expect(network).toHaveBeenCalledTimes(1);
   });
   it.each([
     [start - 1, "not_started"], [start + 7 * 86400000 - 999, "expired"],

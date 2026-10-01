@@ -33,6 +33,7 @@
       "review/analytics-040-history-import": false,
       "review/analytics-initial-validation": false,
       "review/analytics-destination-acceptance": false,
+      "review/analytics-timer-admission": false,
       "feat/analytics-spend-source": false,
       "feat/analytics-full-report-build": false,
       "feat/analytics-commerce-reports": false,
