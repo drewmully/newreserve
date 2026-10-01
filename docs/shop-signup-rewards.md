@@ -24,7 +24,7 @@ Shopify selects the best eligible discount when discounts cannot combine, per it
 
 ## QA
 
-- 32 focused API/UI/cart tests passing. TypeScript check passed before the final inline-form additions; recheck in CI before release.
+- 32 focused API/UI/cart tests passing. Final TypeScript check passes (`tsc --noEmit`, exit 0).
 - Desktop 1440px and mobile 390px browser checks passed for popup email, SMS upgrade, code display, dismissal and inline-form handoff. UI signup responses were mocked to avoid writing fabricated consent; live discount arithmetic was tested separately against Shopify.
 
 - API tests: input and consent validation, separate email/SMS evidence, bound receipts, same-phone retry, rate limiting, no false success if Shopify fails.
