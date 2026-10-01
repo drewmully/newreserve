@@ -1,7 +1,7 @@
 # Default-off Vercel commerce supervisor
 
 This optional GET route reuses `runScheduledPipeline` without changing the
-existing process route, dispatcher, SQL, subscriptions or report delivery.
+existing process route, dispatcher, subscriptions or report delivery.
 This combined release adds both analytics schedule entries to `vercel.json`.
 An approved deployment registers those triggers; processing remains default-off
 behind the independent dedicated flags. Publication, deployment and configuration
@@ -30,8 +30,10 @@ This mapping does not bypass the dispatcher or database's independent gates.
 
 The real existing supervisor performs health GET, at most one saved-receipt
 POST when work exists, then final health GET, under one180-second deadline.
-Idle makes only one GET; no new order selection, source policy or replay is
-accepted from the caller. HTTP errors and ambiguous processing are not retried.
+The commerce supervisor makes only one GET when idle. The separate financial
+checkpoint below may then run if the owner has enabled its database binding.
+No order selection, source policy or replay is accepted from the caller.
+HTTP errors and ambiguous processing are not retried.
 The handler permits240 seconds for completion/response and sends no-store
 aggregate results only. `complete` is invocation completion, not report success.
 Admitted invocations log `analytics_vercel_scheduled_invocation` with that same
@@ -42,12 +44,59 @@ may predate the failed POST; it is not proof that the attempt committed or faile
 The existing `/api/analytics/ingest/process` GET remains read-only health.
 Do not schedule that route expecting it to process orders.
 
+## Optional finite financial checkpoint
+
+SQL054 creates an empty owner-only checkpoint registry. Installation alone
+does not register or enable a job. After separate approval, an owner may bind
+one new SQL018 history job to an independently captured order inventory.
+The fixed target is the existing production shop and database. Scope is one
+closed New York creation day within the past60 days, one page, at most five
+orders, and an expiry no more than24 hours after registration.
+
+Only an authenticated timer invocation whose commerce result is `idle` can
+attempt the checkpoint. At least70 seconds must remain in the same180-second
+invocation budget. The financial reader has a65-second deadline and at most
+`2 + 8 * inventory_size` native Shopify requests. It uses the existing runtime
+token with explicit `financial_no_geo`; no new environment variable, public
+diagnostic endpoint or caller-supplied scope is introduced.
+
+The native metadata page must exactly match the saved IDs and revisions before
+financial hydration. The existing readers verify real API-version headers and
+revision stability. The fixed financial allowlist excludes customer, cart,
+address and order-size fields before retention. SQL rechecks the binding,
+expiry, lease, inventory and projection at the atomic history-page commit.
+These authority checks require READ COMMITTED.
+The public history-commit wrapper also requires READ COMMITTED for unbound
+jobs. REPEATABLE READ and SERIALIZABLE callers must not use that writer.
+
+Claim consumes the single attempt. Errors and ambiguous responses are held
+for operator reconciliation, not automatically retried or reclaimed after
+expiry. A lost response after a successful commit is recognized from the
+durable completed state. The old public history-commit RPC rejects every
+checkpoint-bound job, including disabled and expired bindings. Unbound jobs
+retain the reviewed history implementation behind the wrapper; runtime and
+destination roles cannot call its private delegate.
+
+The response adds only `financialCheckpoint.state` and a source-request count
+when available. It does not return source rows, IDs, policies or credentials.
+A missing migration or unavailable checkpoint leaves the original commerce
+result unchanged. The checkpoint does not replay queue work, change the
+standing sales window, build or release a report, or enable a destination
+import. A completed source read still needs financial mapping, independent
+reconciliation and the separate report/destination acceptance steps.
+
+Pause or recover only the new checkpoint binding. Do not reset its attempt,
+force the old history writer, widen the standing pipeline or disable unrelated
+commerce work. This version supports the financial checkpoint alone; any
+additional scheduled source domain needs separately reviewed exclusion guards.
+
 ## Concurrency and capacity limitations
 
 A process-local guard rejects overlapping requests to the same isolate.
 It is **not distributed deduplication**. Database work leases retain ownership
 fencing across instances; separate concurrent invocations can claim different
-items. No new lock table or timer framework is introduced.
+commerce items. The finite financial checkpoint has its separate single-attempt
+SQL054 binding. No new timer framework is introduced.
 
 At a nominal five-minute interval there are twelve intended invocations per
 hour, at most one advancement per invocation. This is not a global cap,
