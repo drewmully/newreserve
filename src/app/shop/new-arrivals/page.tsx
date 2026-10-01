@@ -1,12 +1,17 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { getCollectionProducts } from "@/lib/shopify";
+import { getCollectionProducts, type ShopifyProduct } from "@/lib/shopify";
 import { ShopPageShell } from "../components/ShopPageShell";
 import { ShopProductCard } from "../components/ShopProductCard";
 export const revalidate = 60;
 export const metadata: Metadata = {title:"New Arrivals | Mully",description:"The latest additions to the Mully shop."};
 export default async function NewArrivals() {
-  const products = await getCollectionProducts("shop-all", true);
+  let products: ShopifyProduct[] = [];
+  try {
+    products = await getCollectionProducts("shop-all", true);
+  } catch (error) {
+    console.error("[shop new arrivals] Catalog unavailable", error);
+  }
   return <ShopPageShell><main className="shop-page-main">
     <header className="shop-page-heading"><Link href="/shop" className="shop-text-link shop-page-kicker">← The shop</Link>
       <h1>New arrivals.</h1><p>The latest additions to the edit, newest first.</p></header>
