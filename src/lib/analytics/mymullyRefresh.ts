@@ -9,6 +9,8 @@ import { mullyCustomerId } from "./mymullySource";
 import { mapJourneyPermissions, type JourneyPermissions } from "./journeyPermissions";
 import type { FullBuildEvidence } from "./fullReportBuild";
 import { prepareOriginalPurchases, type OriginalPurchaseInput } from "./originalPurchasePreparation";
+import { prepareCustomerHistorySource, type CustomerHistorySource } from "./customerHistorySource";
+import type { HistoryInventory } from "./historyInventory";
 
 export type MullyRefreshInput = {
   refresh: RefreshInput;
@@ -25,6 +27,8 @@ export type MullyRefreshInput = {
   /** Explicitly retain independently reviewed historical evidence. Current
    * permission/removals always come from the fresh authority snapshot. */
   retainReviewed?: Partial<Record<"identity" | "customerHistory", string>>;
+  /** Separately approved complete inventory, never inferred from current profiles. */
+  customerHistory?: { source: CustomerHistorySource; inventory: HistoryInventory };
 };
 /** Connect the customer adapter to the existing refresh graph. No side effects.
  * Only the five adapter-owned sections are replaced. Reviewed controls, commerce,
@@ -36,6 +40,24 @@ export function prepareMullyRefresh(input: MullyRefreshInput, secrets: { checkou
     throw new Error("mully_refresh_mapping_version");
   let packets = mullySourcePackets(input.source, { scope: refresh.intake.scope,
     sourceId: b.sourceId, schemaVersion: b.schemaVersion });
+  const history = input.customerHistory;
+  if (history && (input.retainReviewed?.customerHistory ||
+      history.source.sourceId === b.sourceId ||
+      refresh.intake.bindings.some(prior => prior.sourceId === history.source.sourceId)))
+    throw new Error("mully_history_source_collision");
+  const preparedHistory = history ? prepareCustomerHistorySource(history.source, {
+    scope: refresh.intake.scope, asOf: refresh.intake.asOf, expiresAt: refresh.expiresAt,
+    inventory: history.inventory, snapshot: input.source.snapshot, orders: input.source.orders,
+    cohorts: refresh.policy.cohorts,
+    cohortCoverage: refresh.intake.packets.find(p => p.section === "cohortCoverage")?.payload as FullBuildEvidence["cohortCoverage"] ?? [],
+  }) : undefined;
+  if (preparedHistory) {
+    if (refresh.commercePolicy.sourceInventory !== undefined &&
+        evidenceDigest(refresh.commercePolicy.sourceInventory) !== evidenceDigest(preparedHistory.inventory))
+      throw new Error("mully_history_inventory_collision");
+    refresh.commercePolicy.sourceInventory = preparedHistory.inventory;
+    packets = [...packets.filter(p => p.section !== "customerHistory"), preparedHistory.packet];
+  }
   for (const [section, sourceId] of Object.entries(input.retainReviewed ?? {})) {
     if (!["identity", "customerHistory"].includes(section) || !sourceId?.trim())
       throw new Error("mully_invalid_retained_section");
@@ -121,7 +143,8 @@ export function prepareMullyRefresh(input: MullyRefreshInput, secrets: { checkou
   refresh.intake.bindings = [
     ...refresh.intake.bindings.map(prior => ({ ...prior, sections: prior.sections.filter(s => !sections.has(s)) }))
       .filter(prior => prior.sections.length),
-    { ...b, sections: packets.map(p => p.section), independentControlSource: false },
+    { ...b, sections: packets.filter(p => p.sourceId === b.sourceId).map(p => p.section), independentControlSource: false },
+    ...(preparedHistory ? [preparedHistory.binding] : []),
   ];
   const bundle = prepareRefresh(refresh);
   return { bundle, sourceDigest: evidenceDigest(input.source), refresh };

@@ -1,5 +1,7 @@
 import { buildFullReports, type FullBuildEvidence, type FullBuildPolicy } from "./fullReportBuild";
 import { readPosthogBehavior, validateBehaviorSource, type BehaviorSource } from "./posthogSource";
+import { prepareProductionBehaviorEvidence, validateJourneyPermissionSource,
+  type ProductionBehaviorSource } from "./productionBehaviorInput";
 import { pipelineRpc, validatePipelineTarget } from "./shopifyPipeline";
 import { sourceObject, sourceString } from "./shopifySource";
 import type { AnalyticsRpcClient } from "./rpcStore";
@@ -7,6 +9,8 @@ import type { Candidate } from "./certification";
 import { randomUUID } from "node:crypto";
 import { deferredOrders, verifyDeferredReplacements } from "./deferredCommerce";
 import { sessionConversionWindowDays } from "./calculationPolicy";
+import { prepareFreshGoogleSpendBuild, guardFreshGoogleSpendReports,
+  type FreshGoogleSpendReportInput } from "./googleSpendReportInput";
 
 /** Evidence can narrow observed coverage; it cannot extend a source read.
  * This is deliberately conservative at the NY calendar-day edges.
@@ -43,6 +47,8 @@ export function boundBehaviorEvidence(evidence: FullBuildEvidence, source: Behav
 export async function runFullReportJob(options: {
   client: AnalyticsRpcClient; projectRef: string; databaseUrl: string; runId: string;
   posthogKey: string; request?: typeof fetch;
+  journeyPermissionReadKey?: string; journeyPermissionReadApproved?: boolean;
+  clock?: () => string;
 }) {
   validatePipelineTarget(options.projectRef, options.databaseUrl);
   if (!options.runId.trim() || options.runId.length > 128) throw new Error("invalid_full_run");
@@ -53,7 +59,7 @@ export async function runFullReportJob(options: {
   const policy = sourceObject(input.policy) as FullBuildPolicy;
   sessionConversionWindowDays(policy.conversionWindowDays);
   const evidence = sourceObject(input.evidence) as FullBuildEvidence;
-  const behavior = sourceObject(input.behavior) as BehaviorSource;
+  const behavior = sourceObject(input.behavior) as ProductionBehaviorSource;
   verifyDeferredReplacements(deferredOrders(input.deferredOrders), evidence, sourceString(input.shop));
   const mode = policy.behaviorMode ?? "required";
   if (!["required", "excluded"].includes(mode)) throw new Error("invalid_behavior_mode");
@@ -62,20 +68,40 @@ export async function runFullReportJob(options: {
       Object.values(policy.stages).some(f => !Object.hasOwn(behavior.families, f)) ||
       Object.keys(behavior.families).some(f => !Object.values(policy.stages).includes(f))))
     throw new Error("full_behavior_policy_mismatch");
+  if (mode === "excluded" && Object.hasOwn(behavior, "journeyPermissionSource"))
+    throw new Error("excluded_journey_permission_source");
+  if (mode === "required") validateJourneyPermissionSource(behavior, {
+    projectRef: options.projectRef, shop: sourceString(input.shop), mappingVersion: policy.mappingVersion,
+  }, evidence);
   const lease = { ...args, p_token: randomUUID() };
   const claimed = await pipelineRpc(options.client, "lean_full_claim", lease);
   if (claimed === false) return { state: "busy_or_exhausted" };
   if (claimed !== true) throw new Error("invalid_full_claim");
   let result: ReturnType<typeof buildFullReports>;
   try {
+    const base = sourceObject(input.facts) as Candidate;
+    const freshSpend = Object.hasOwn(input, "freshGoogleSpend") ? prepareFreshGoogleSpendBuild({
+      freshGoogleSpend: input.freshGoogleSpend as FreshGoogleSpendReportInput,
+      base, evidence, projectRef: options.projectRef,
+      publication: sourceString(input.publication), shop: sourceString(input.shop),
+      fromDate: sourceString(input.fromDate), throughDate: sourceString(input.throughDate), asOf: policy.asOf,
+    }) : undefined;
+    const reportBase = freshSpend?.base ?? base, reportEvidence = freshSpend?.evidence ?? evidence;
+    const behaviorInput = mode === "excluded" ? { evidence: reportEvidence, assertFresh: () => {} } : await prepareProductionBehaviorEvidence({
+      behavior, evidence: reportEvidence, projectRef: options.projectRef, shop: sourceString(input.shop),
+      mappingVersion: policy.mappingVersion, readKey: options.journeyPermissionReadKey,
+      sourceReadApproved: options.journeyPermissionReadApproved, request: options.request, clock: options.clock,
+    });
     const events = mode === "excluded" ? [] :
       await readPosthogBehavior(behavior, options.posthogKey, options.request);
-    const base = sourceObject(input.facts) as Candidate;
-    result = buildFullReports({ base,
+    behaviorInput.assertFresh();
+    result = buildFullReports({ base: reportBase,
       publication: sourceString(input.publication), shop: sourceString(input.shop),
       fromDate: sourceString(input.fromDate), throughDate: sourceString(input.throughDate),
-      policy, evidence: mode === "excluded" ? evidence :
-        boundBehaviorEvidence(evidence, behavior, policy, base), events });
+      policy, evidence: mode === "excluded" ? behaviorInput.evidence :
+        boundBehaviorEvidence(behaviorInput.evidence, behavior, policy, reportBase), events });
+    if (freshSpend) guardFreshGoogleSpendReports(result.reports, freshSpend.storeRatioAdmission);
+    behaviorInput.assertFresh();
   } catch {
     await pipelineRpc(options.client, "lean_full_fail", lease);
     throw new Error("full_transform_unavailable");

@@ -12,6 +12,7 @@ import { reportDates } from "./commerceCandidate";
 import { checked, key, nyDate, type Row } from "./primitives";
 import { observedCampaigns } from "./campaignSource";
 import { sessionConversionWindowDays } from "./calculationPolicy";
+import { admitCashSourceEvidence, type CashSourceAdmission } from "./cashSourceEvidence";
 
 export type FullBuildPolicy = {
   definition: string; mappingVersion: string; sessionVersion: string; funnelVersion: string;
@@ -46,7 +47,8 @@ export type FullBuildEvidence = {
     membershipBasis?: "source_line_discount" | "source_evidence" | "approved_bundle_rule" }[];
   proofs: Reconciliation[];
   externalControls: Record<string, { passed: boolean; evidenceRef: string }>;
-  dateCoverage: { date: string; gates: Gates; evidenceRef: string }[];
+  dateCoverage: { date: string; gates: Gates; evidenceRef: string;
+    cashSourceAdmission?: CashSourceAdmission }[];
   comparisons: string[];
   cohortCoverage: { month: string; horizonDays: number; fullMonthCovered: boolean;
     ledgerLineageComplete: boolean; originalLedgerIds: string[]; evidenceRef: string }[];
@@ -86,7 +88,7 @@ export function buildFullReports(input: {
   if (mode === "excluded" && input.events.length) throw new Error("excluded_behavior_events");
   // Apply the exclusion at the transform boundary too: callers cannot retain
   // all-passed browser controls or turn an absent source into a measured zero.
-  const e = mode === "excluded" ? withoutBehaviorEvidence(input.evidence) : input.evidence;
+  let e = mode === "excluded" ? withoutBehaviorEvidence(input.evidence) : input.evidence;
   if (![p.definition, p.mappingVersion, p.sessionVersion, p.funnelVersion, p.normalizationVersion,
     p.project, p.approvalRef, e.ref].every(v => typeof v === "string" && v.trim())) throw new Error("full_build_policy_required");
   nyDate(p.asOf);
@@ -125,6 +127,17 @@ export function buildFullReports(input: {
     if (old && ["order_id", "parent_payment_id", "source_amount", "source_currency", "transaction_kind"]
       .some(field => old[field] !== row[field])) throw new Error("settlement_conflicts_with_transaction");
     facts.payments = facts.payments.filter(v => v.payment_id !== row.payment_id); facts.payments.push(row);
+  }
+  const cashAdmissions = e.dateCoverage.flatMap(row => row.cashSourceAdmission ? [row.cashSourceAdmission] : []);
+  if (cashAdmissions.length > 1) throw new Error("duplicate_cash_source_admission");
+  if (cashAdmissions.length) {
+    const { context, controls } = cashAdmissions[0];
+    if (context.scope.shop !== shop || context.scope.fromDate !== input.fromDate ||
+        context.scope.throughDate !== input.throughDate || context.asOf !== p.asOf)
+      throw new Error("cash_consumer_scope");
+    // Check the actual final set, including retained base and replacement cash.
+    // Keep the registered evidence reference required by the SQL finish guard.
+    e = { ...admitCashSourceEvidence(e, context, controls, facts.payments).evidence, ref: e.ref };
   }
   for (const offer of e.offers) {
     if (!offer.evidenceRef || !offer.mappingVersion) throw new Error("offer_evidence_required");
@@ -236,7 +249,10 @@ export function buildFullReports(input: {
       acquisitionDefinition: cohort.acquisitionDefinition, approvalRef: p.approvalRef,
       fullMonthCovered: !!claim?.evidenceRef && claim.fullMonthCovered,
       ledgerLineageComplete: !!claim?.evidenceRef && claim.ledgerLineageComplete,
-      originalLedgerIds: new Set(claim?.originalLedgerIds ?? []) }));
+      originalLedgerIds: new Set(claim?.originalLedgerIds ?? []),
+      historyCompleteThrough: Object.values(e.customerHistory).some(h => h.completeThrough !== undefined)
+        ? new Map(Object.entries(e.customerHistory).filter(([, h]) => h.completeThrough !== undefined)
+          .map(([id, h]) => [id, h.completeThrough!])) : undefined }));
   }
   // Certification/selection is separate. Even reconciled numbers are private candidates.
   for (const rows of Object.values(reports)) for (const row of rows)

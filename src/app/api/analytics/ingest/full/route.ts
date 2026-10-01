@@ -19,6 +19,8 @@ export async function POST(req: NextRequest) {
       databaseUrl: process.env.LEAN_ANALYTICS_SUPABASE_URL ?? "",
       runId: process.env.LEAN_ANALYTICS_FULL_RUN_ID ?? "",
       posthogKey: process.env.LEAN_POSTHOG_QUERY_READ_KEY ?? "",
+      journeyPermissionReadKey: process.env.LEAN_MULLY_SOURCE_READ_KEY,
+      journeyPermissionReadApproved: process.env.LEAN_MULLY_SOURCE_READ_APPROVED === "true",
       shop: process.env.LEAN_SHOPIFY_SHOP_DOMAIN ?? "",
       shopifyToken: process.env.LEAN_SHOPIFY_ANALYTICS_READ_TOKEN ?? "",
       googleClientId: process.env.LEAN_GOOGLE_ADS_OAUTH_CLIENT_ID ?? "",

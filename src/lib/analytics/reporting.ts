@@ -154,16 +154,22 @@ export function customerCohort(f: Facts, s: ReportScope, policy: {
   cohortMonth: string; horizonDays: number; graceSeconds: number; asOf: string;
   acquisitionDefinition: string; approvalRef: string; fullMonthCovered: boolean;
   originalLedgerIds: ReadonlySet<string>; ledgerLineageComplete: boolean;
+  historyCompleteThrough?: ReadonlyMap<string, string>;
 }): Row {
   preflight(f, s); nyDate(policy.asOf);
   if (!policy.approvalRef || !Number.isSafeInteger(policy.horizonDays) || policy.horizonDays < 0 ||
       !Number.isSafeInteger(policy.graceSeconds) || policy.graceSeconds < 0 || !/^\d{4}-\d{2}-01$/.test(policy.cohortMonth)) throw new Error("invalid_cohort_policy");
+  if (policy.historyCompleteThrough) for (const cutoff of policy.historyCompleteThrough.values()) nyDate(cutoff);
   const customers = f.customers.filter(c => String(c.acquisition_date ?? "").slice(0, 7) === policy.cohortMonth.slice(0, 7));
-  const mature = policy.fullMonthCovered && policy.ledgerLineageComplete && s.gates.customers && s.gates.ledger && s.gates.orders &&
+  const mature = policy.fullMonthCovered && s.gates.customers && s.gates.orders &&
     customers.every(c => c.analytics_permitted === true && c.identity_status === "resolved" && c.history_complete === true &&
       typeof c.first_eligible_order_at === "string" &&
-      Date.parse(c.first_eligible_order_at) + policy.horizonDays * 86400000 + policy.graceSeconds * 1000 <= Date.parse(policy.asOf));
-  let total = ZERO, repeat = 0, valuesComplete = true;
+      Date.parse(c.first_eligible_order_at) + policy.horizonDays * 86400000 + policy.graceSeconds * 1000 <=
+        Math.min(Date.parse(policy.asOf), policy.historyCompleteThrough
+          ? Date.parse(policy.historyCompleteThrough.get(String(c.customer_id)) ?? "") : Infinity));
+  // Repeat purchase depends on eligible orders, not financial lineage. LTV
+  // still requires independently complete ledger values for the same cohort.
+  let total = ZERO, repeat = 0, valuesComplete = policy.ledgerLineageComplete && s.gates.ledger;
   if (mature) for (const c of customers) {
     const start = Date.parse(c.first_eligible_order_at as string), end = start + policy.horizonDays * 86400000;
     const orders = f.orders.filter(o => o.customer_id === c.customer_id && o.eligibility_status === "eligible" &&

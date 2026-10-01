@@ -1,0 +1,35 @@
+{
+  "client": { "base_url": "https://www.mymully.com", "auth": { "type": "bearer" } },
+  "resources": [
+    {
+      "name": "store_daily",
+      "primary_key": ["shop_id", "report_date", "definition_version", "publication_id"],
+      "endpoint": { "path": "/api/analytics/reports/production", "method": "GET", "data_selector": "store_daily", "paginator": { "type": "single_page" } }
+    },
+    {
+      "name": "product_daily",
+      "primary_key": ["shop_id", "report_date", "sku_bucket", "definition_version", "publication_id"],
+      "endpoint": { "path": "/api/analytics/reports/production", "method": "GET", "data_selector": "product_daily", "paginator": { "type": "single_page" } }
+    },
+    {
+      "name": "acquisition_daily",
+      "primary_key": ["shop_id", "report_date", "channel", "campaign_bucket", "model_version", "definition_version", "publication_id"],
+      "endpoint": { "path": "/api/analytics/reports/production", "method": "GET", "data_selector": "acquisition_daily", "paginator": { "type": "single_page" } }
+    },
+    {
+      "name": "customer_cohorts",
+      "primary_key": ["shop_id", "cohort_month", "observation_age_days", "acquisition_definition_version", "as_of_at", "definition_version", "publication_id"],
+      "endpoint": { "path": "/api/analytics/reports/production", "method": "GET", "data_selector": "customer_cohorts", "paginator": { "type": "single_page" } }
+    },
+    {
+      "name": "funnel_daily",
+      "primary_key": ["shop_id", "report_date", "stage_id", "funnel_version", "definition_version", "publication_id"],
+      "endpoint": { "path": "/api/analytics/reports/production", "method": "GET", "data_selector": "funnel_daily", "paginator": { "type": "single_page" } }
+    },
+    {
+      "name": "report_status",
+      "primary_key": ["resource_name", "publication_id"],
+      "endpoint": { "path": "/api/analytics/reports/production", "method": "GET", "data_selector": "report_status", "paginator": { "type": "single_page" } }
+    }
+  ]
+}
