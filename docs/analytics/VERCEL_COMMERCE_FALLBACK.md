@@ -1,7 +1,7 @@
 # Default-off Vercel commerce supervisor
 
 This optional GET route reuses `runScheduledPipeline` without changing the
-existing process route, dispatcher, subscriptions or report delivery.
+existing process route, subscriptions or report delivery.
 This combined release adds both analytics schedule entries to `vercel.json`.
 An approved deployment registers those triggers; processing remains default-off
 behind the independent dedicated flags. Publication, deployment and configuration
@@ -40,6 +40,11 @@ Admitted invocations log `analytics_vercel_scheduled_invocation` with that same
 aggregate state/counts; caught exceptions log only a static unavailable state.
 On failure, any returned health is the last successfully parsed observation and
 may predate the failed POST; it is not proof that the attempt committed or failed.
+Financial admission never uses that stale observation. A completed processing
+cycle requires a parsed POST result of `done`, `excluded` or `idle`, followed by
+a fresh, validated final health response. A200 with malformed, missing or unknown
+state is not a successful cycle. Transport and response-body aborts stop the
+cycle without a retry.
 
 The existing `/api/analytics/ingest/process` GET remains read-only health.
 Do not schedule that route expecting it to process orders.
@@ -53,9 +58,18 @@ The fixed target is the existing production shop and database. Scope is one
 closed New York creation day within the past60 days, one page, at most five
 orders, and an expiry no more than24 hours after registration.
 
-Only an authenticated timer invocation whose commerce result is `idle` can
-attempt the checkpoint. At least70 seconds must remain in the same180-second
-invocation budget. The entire financial lane has a65-second deadline, including
+An authenticated timer invocation may attempt the checkpoint after an idle
+observation or one completed commerce processing cycle. Remaining pending work
+does not require waiting for an empty queue. Latest health must have the scope
+enabled, nonnegative safe-integer counts and finite nonnegative backlog age,
+with zero leased work, dead work and expired leases. A post-cycle `unhealthy`
+result admits finance only when its warning is an old pending backlog, not an
+arbitrary error. Commerce keeps its warning and HTTP status even if the separate
+financial checkpoint succeeds.
+
+At least70 seconds must remain in the same180-second invocation budget. A slow
+commerce cycle skips finance without a claim, rather than shortening commerce
+or starting another deadline. The entire financial lane has a65-second deadline, including
 claim, source reads and commit, and at most
 `2 + 8 * inventory_size` native Shopify requests. It uses the existing runtime
 token with explicit `financial_no_geo`; no new environment variable, public
@@ -86,8 +100,10 @@ checkpoint and history state read-only before any recovery. No new source read
 or commit starts after the signal aborts, but an already dispatched commit may
 finish after the caller has stopped waiting.
 
-The response adds only `financialCheckpoint.state` and a source-request count
-when available. It does not return source rows, IDs, policies or credentials.
+The response adds `financialAdmission` with the observed phase, terminal POST
+state when applicable and validated aggregate health counts. It also includes
+`financialCheckpoint.state` and a source-request count when available. It does
+not return source rows, IDs, policies or credentials.
 A missing migration or unavailable checkpoint leaves the original commerce
 result unchanged. The checkpoint does not replay queue work, change the
 standing sales window, build or release a report, or enable a destination
@@ -106,6 +122,15 @@ It is **not distributed deduplication**. Database work leases retain ownership
 fencing across instances; separate concurrent invocations can claim different
 commerce items. The finite financial checkpoint has its separate single-attempt
 SQL054 binding. No new timer framework is introduced.
+
+Commerce-first admission is sequential only within one invocation. Another
+worker may claim commerce after the zero-lease health observation and overlap
+the checkpoint's bounded native reads. Health is not a global source lock.
+Accepting this additional provider load requires explicit release and
+operational approval. It replaces the former idle-only admission contract; it
+does not authorize bypassing an already-approved idle-only registration guard.
+Keep old immutable bindings and held attempts for reconciliation. Code release
+alone does not register, activate or renew a checkpoint.
 
 At a nominal five-minute interval there are twelve intended invocations per
 hour, at most one advancement per invocation. This is not a global cap,

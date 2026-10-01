@@ -1,7 +1,7 @@
 /** Default-off production supervisor. No database credential, source inventory,
  * registration, publication, or scheduling side effect exists in this module. */
 import { pathToFileURL } from "node:url";
-import { dispatchConfig, runDispatch } from "./dispatch-pipeline.mjs";
+import { dispatchConfig, parsePipelineHealth, readPipelineJson, runDispatch } from "./dispatch-pipeline.mjs";
 
 const productionOrigin = "https://www.mymully.com/";
 const productionProject = "xnfjdbpjuaezxjgargto";
@@ -68,24 +68,22 @@ export async function runScheduledPipeline(env, { fetcher = fetch, now = Date.no
     if (signal?.aborted) return { state: "cancelled", calls: 0 };
     try {
       preflightCalls = 1;
+      const preflightSignal = AbortSignal.any([AbortSignal.timeout(95000), active]);
       const response = await fetcher(prepared.config.url, {
         method: "GET", redirect: "error",
         headers: { authorization: `Bearer ${prepared.config.secret}` },
-        signal: AbortSignal.any([AbortSignal.timeout(95000), active]),
+        signal: preflightSignal,
       });
       if (!response.ok) throw new Error("health_unavailable");
-      const data = await response.json();
-      for (const key of ["pending", "leased", "dead", "done", "oldestPendingSeconds", "expiredLeases"])
-        if (!Number.isFinite(data[key]) || data[key] < 0) throw new Error("invalid_health");
-      for (const key of ["pending", "leased", "dead", "done", "expiredLeases"])
-        if (!Number.isSafeInteger(data[key])) throw new Error("invalid_health");
+      const data = parsePipelineHealth(await readPipelineJson(response, preflightSignal));
       if (data.enabled !== true) return { state: "scope_disabled", calls: 1 };
       health = { healthy: data.dead === 0 && data.expiredLeases === 0 &&
         data.oldestPendingSeconds < 900, pending: data.pending,
         dead: data.dead, oldestPendingSeconds: data.oldestPendingSeconds };
       // Normal idle production is not a failed test and must not hydrate a source.
       if (data.pending === 0 && data.expiredLeases === 0)
-        return { state: health.healthy ? "idle" : "unhealthy", calls: 1, health };
+        return { state: health.healthy ? "idle" : "unhealthy", calls: 1, health,
+          financialAdmission: { phase: "idle", health: data } };
       // Known backlog/dead-letter warnings remain visible, but must not freeze
       // unrelated eligible work. Existing SQL owns capped retry/expired-lease
       // recovery; this invocation still advances at most one saved receipt.
@@ -100,13 +98,17 @@ export async function runScheduledPipeline(env, { fetcher = fetch, now = Date.no
     if (firstClockRead) { firstClockRead = false; return admittedAt; }
     return now();
   };
+  let completedCycle;
   const result = await runDispatch(prepared.config, {
     fetcher, now: dispatchClock, signal: active, onResult: value => { health = value; },
+    onCompletedCycle: value => { completedCycle = value; },
   });
   // "complete" means only that this bounded invocation ended successfully.
   // It is not proof of a new source event, complete coverage or published reports.
   return { ...result, ...(deadline.aborted && !signal?.aborted ? { state: "deadline" } : {}),
-    calls: result.calls + preflightCalls, ...(health ? { health } : {}) };
+    calls: result.calls + preflightCalls, ...(health ? { health } : {}),
+    ...(prepared.mode === "continuous" && completedCycle
+      ? { financialAdmission: { phase: "post_cycle", ...completedCycle } } : {}) };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
