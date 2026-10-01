@@ -1,6 +1,8 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { runScheduledPipeline } from "../../../../../../scripts/analytics/scheduled-pipeline.mjs";
+import { getAnalyticsSupabase } from "@/lib/analytics/serverClient";
+import { runScheduledFinancialCheckpoint } from "@/lib/analytics/scheduledFinancialCheckpoint";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,7 +12,7 @@ const headers = { "Cache-Control": "no-store" };
 // Same-isolate protection only. Database leases remain the cross-instance fence.
 let running = false;
 
-/** No schedule is installed by this route. Commerce only; never subscriptions.
+/** No schedule is installed by this route. Never processes subscriptions.
  * Existing /ingest/process GET remains read-only health. */
 export async function GET(req: NextRequest) {
   if (process.env.VERCEL_ENV !== "production" ||
@@ -35,15 +37,35 @@ export async function GET(req: NextRequest) {
   if (running) return NextResponse.json({ state: "busy" }, { status: 409, headers });
   running = true;
   try {
+    const admittedAt = Date.now();
+    const invocationDeadline = AbortSignal.timeout(180000);
     const result = await runScheduledPipeline({
       ...process.env,
       LEAN_ANALYTICS_SCHEDULE_ENABLED: process.env.LEAN_ANALYTICS_VERCEL_SCHEDULE_ENABLED,
       LEAN_ANALYTICS_RUNNER_ORIGIN: process.env.LEAN_ANALYTICS_RUNNER_ORIGIN ?? "https://www.mymully.com",
-    }, { signal: req.signal });
+    }, { signal: AbortSignal.any([req.signal, invocationDeadline]) });
+    // A separate empty-by-default DB binding can admit one finite financial
+    // read using the existing native token. Never compete with commerce work.
+    let financialCheckpoint: { state: string; calls?: number } | undefined;
+    if (result.state === "idle") {
+      if (invocationDeadline.aborted || Date.now() - admittedAt > 110000) {
+        financialCheckpoint = { state: "deadline", calls: 0 };
+      } else try {
+        financialCheckpoint = await runScheduledFinancialCheckpoint({
+          client: getAnalyticsSupabase(),
+          projectRef: process.env.LEAN_ANALYTICS_PIPELINE_PROJECT_REF ?? "",
+          databaseUrl: process.env.LEAN_ANALYTICS_SUPABASE_URL ?? "",
+          shop: process.env.LEAN_SHOPIFY_SHOP_DOMAIN ?? "",
+          accessToken: process.env.LEAN_SHOPIFY_ANALYTICS_READ_TOKEN ?? "",
+          now: new Date().toISOString(), signal: AbortSignal.any([req.signal, invocationDeadline]),
+        });
+      } catch { financialCheckpoint = { state: "unavailable" }; }
+    }
+    const response = { ...result, ...(financialCheckpoint ? { financialCheckpoint } : {}) };
     // Only the existing supervisor's aggregate state/counts are returned.
     // "complete" means one bounded invocation ended, not a report was published.
-    console.info(JSON.stringify({ event: "analytics_vercel_scheduled_invocation", ...result }));
-    return NextResponse.json(result, {
+    console.info(JSON.stringify({ event: "analytics_vercel_scheduled_invocation", ...response }));
+    return NextResponse.json(response, {
       status: result.state === "idle" || result.state === "complete" ? 200 : 503, headers,
     });
   } catch {
