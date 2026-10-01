@@ -20,19 +20,55 @@ export function dispatchConfig(env) {
     throw new Error("invalid_dispatch_budget");
   return { url: new URL("/api/analytics/ingest/process", url).href, secret, interval, maxCalls, deadlineSeconds };
 }
-export async function dispatchOnce(config, fetcher = fetch, signal = undefined) {
+/** Read only the aggregate response, with the same signal already attached to
+ * the fetch transport. A lost POST body is ambiguous, not a completed cycle. */
+export function readPipelineJson(response, signal) {
+  return new Promise((resolve, reject) => {
+    const abort = () => reject(new Error("pipeline_response_aborted"));
+    const finish = () => signal.removeEventListener("abort", abort);
+    if (signal.aborted) { abort(); return; }
+    signal.addEventListener("abort", abort, { once: true });
+    Promise.resolve().then(() => {
+      signal.throwIfAborted();
+      return response.json();
+    }).then(value => {
+      finish();
+      if (signal.aborted) abort(); else resolve(value);
+    }, error => { finish(); reject(error); });
+  });
+}
+export function parsePipelineHealth(data) {
+  if (!data || typeof data !== "object" || Array.isArray(data) || typeof data.enabled !== "boolean")
+    throw new Error("pipeline_invalid_health");
+  for (const key of ["pending", "leased", "dead", "done", "expiredLeases"])
+    if (!Number.isSafeInteger(data[key]) || data[key] < 0) throw new Error("pipeline_invalid_health");
+  if (!Number.isFinite(data.oldestPendingSeconds) || data.oldestPendingSeconds < 0)
+    throw new Error("pipeline_invalid_health");
+  return { enabled: data.enabled, pending: data.pending, leased: data.leased,
+    dead: data.dead, done: data.done, expiredLeases: data.expiredLeases,
+    oldestPendingSeconds: data.oldestPendingSeconds };
+}
+/** @param {ReturnType<typeof dispatchConfig>} config
+ * @param {typeof fetch} fetcher
+ * @param {AbortSignal | undefined} signal
+ * @param {(cycle: {postState: string, health: ReturnType<typeof parsePipelineHealth>}) => void} onCompletedCycle */
+export async function dispatchOnce(config, fetcher = fetch, signal = undefined, onCompletedCycle = () => {}) {
   const headers = { authorization: `Bearer ${config.secret}` };
   const options = { headers, redirect: "error",
     signal: AbortSignal.any([AbortSignal.timeout(95000), ...(signal ? [signal] : [])]) };
   // Do not log response bodies: reverse-proxy errors may contain private data.
   const response = await fetcher(config.url, { ...options, method: "POST" });
   if (!response.ok) throw new Error("pipeline_dispatch_failed");
+  const post = await readPipelineJson(response, options.signal);
+  if (!post || typeof post !== "object" || Array.isArray(post) ||
+      !["done", "excluded", "idle"].includes(post.state))
+    throw new Error("pipeline_invalid_dispatch_result");
   const health = await fetcher(config.url, { ...options, method: "GET" });
   if (!health.ok) throw new Error("pipeline_health_unavailable");
-  const data = await health.json();
-  for (const key of ["pending", "leased", "dead", "done", "oldestPendingSeconds", "expiredLeases"])
-    if (!Number.isFinite(data[key]) || data[key] < 0) throw new Error("pipeline_invalid_health");
+  const data = parsePipelineHealth(await readPipelineJson(health, options.signal));
   if (data.enabled !== true) throw new Error("pipeline_scope_disabled");
+  options.signal.throwIfAborted();
+  onCompletedCycle({ postState: post.state, health: data });
   return { healthy: data.dead === 0 && data.expiredLeases === 0 && data.oldestPendingSeconds < 900,
     pending: data.pending, dead: data.dead, oldestPendingSeconds: data.oldestPendingSeconds };
 }
@@ -41,10 +77,11 @@ export async function dispatchOnce(config, fetcher = fetch, signal = undefined) 
  * @param {ReturnType<typeof dispatchConfig>} config
  * @param {{fetcher?: typeof fetch, signal?: AbortSignal,
  * pause?: (ms: number, value: undefined, options: {signal: AbortSignal}) => Promise<unknown>,
- * now?: () => number, onResult?: (result: Awaited<ReturnType<typeof dispatchOnce>>) => void}} options
+ * now?: () => number, onResult?: (result: Awaited<ReturnType<typeof dispatchOnce>>) => void,
+ * onCompletedCycle?: (cycle: {postState: string, health: ReturnType<typeof parsePipelineHealth>}) => void}} options
  */
 export async function runDispatch(config, {
-  fetcher = fetch, signal, pause = sleep, now = Date.now, onResult = () => {},
+  fetcher = fetch, signal, pause = sleep, now = Date.now, onResult = () => {}, onCompletedCycle = () => {},
 } = {}) {
   const started = now(), expires = started + config.deadlineSeconds * 1000;
   const deadline = AbortSignal.timeout(config.deadlineSeconds * 1000);
@@ -62,9 +99,11 @@ export async function runDispatch(config, {
   while (calls + 2 <= config.maxCalls) {
     if (stopped()) return { state: stopped(), calls };
     try {
-      const result = await dispatchOnce(config, boundedFetch, active);
+      let completedCycle;
+      const result = await dispatchOnce(config, boundedFetch, active, value => { completedCycle = value; });
       if (stopped()) return { state: stopped(), calls };
       onResult(result);
+      if (completedCycle) onCompletedCycle(completedCycle);
       if (!result.healthy) return { state: "unhealthy", calls };
     } catch { return { state: stopped() ?? "failed", calls }; }
     if (calls + 2 > config.maxCalls) break;

@@ -106,6 +106,32 @@ describe("bounded production schedule", () => {
     expect((await runScheduledPipeline(scope(), { fetcher, now: () => start })).state).toBe("unhealthy");
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
+  it("carries fresh post-cycle counts separately from a stale preflight observation", async () => {
+    let calls = 0;
+    const preflight = { ...healthy, pending: 8, oldestPendingSeconds: 2000 };
+    const finalHealth = { ...healthy, pending: 7, leased: 1, oldestPendingSeconds: 2005 };
+    const fetcher = vi.fn(async (_url, options) => {
+      calls++;
+      return Response.json(options.method === "POST" ? { state: "done" } : calls === 1 ? preflight : finalHealth);
+    });
+    const result = await runScheduledPipeline(scope({ LEAN_ANALYTICS_SCHEDULE_MODE: "continuous",
+      LEAN_ANALYTICS_SCHEDULE_START_AT: undefined, LEAN_ANALYTICS_SCHEDULE_STOP_AT: undefined }), { fetcher });
+    expect(result).toMatchObject({ state: "unhealthy", calls: 3,
+      financialAdmission: { phase: "post_cycle", postState: "done", health: finalHealth } });
+  });
+  it.each(["POST", "final GET"])("never reuses preflight health for admission after a lost %s", async phase => {
+    let calls = 0;
+    const fetcher = vi.fn(async (_url, options) => {
+      calls++;
+      if (phase === "POST" && options.method === "POST" || phase === "final GET" && calls === 3)
+        throw new Error("lost response");
+      return Response.json(options.method === "POST" ? { state: "done" } : { ...healthy, pending: 8 });
+    });
+    const result = await runScheduledPipeline(scope({ LEAN_ANALYTICS_SCHEDULE_MODE: "continuous",
+      LEAN_ANALYTICS_SCHEDULE_START_AT: undefined, LEAN_ANALYTICS_SCHEDULE_STOP_AT: undefined }), { fetcher });
+    expect(result.state).toBe("failed");
+    expect(result).not.toHaveProperty("financialAdmission");
+  });
 
   it("does not retry an ambiguous request or log a provider response", async () => {
     const fetcher = vi.fn(async () => { throw new Error("private provider content"); });

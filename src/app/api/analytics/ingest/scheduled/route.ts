@@ -44,10 +44,23 @@ export async function GET(req: NextRequest) {
       LEAN_ANALYTICS_SCHEDULE_ENABLED: process.env.LEAN_ANALYTICS_VERCEL_SCHEDULE_ENABLED,
       LEAN_ANALYTICS_RUNNER_ORIGIN: process.env.LEAN_ANALYTICS_RUNNER_ORIGIN ?? "https://www.mymully.com",
     }, { signal: AbortSignal.any([req.signal, invocationDeadline]) });
-    // A separate empty-by-default DB binding can admit one finite financial
-    // read using the existing native token. Never compete with commerce work.
+    // Commerce retains its cycle first. A separate owner-bound financial lane
+    // may then use spare time despite backlog, never alongside it in this
+    // invocation. Health is an observation, not a cross-worker source lock.
     let financialCheckpoint: { state: string; calls?: number } | undefined;
-    if (result.state === "idle") {
+    const admission = result.financialAdmission;
+    const health = admission?.health;
+    const validHealth = health?.enabled === true &&
+      ["pending", "leased", "dead", "done", "expiredLeases"].every(key =>
+        Number.isSafeInteger(health[key]) && health[key] >= 0) &&
+      Number.isFinite(health.oldestPendingSeconds) && health.oldestPendingSeconds >= 0 &&
+      health.leased === 0 && health.dead === 0 && health.expiredLeases === 0;
+    const idle = result.state === "idle" && admission?.phase === "idle" && health?.pending === 0;
+    const completedCycle = admission?.phase === "post_cycle" &&
+      ["done", "excluded", "idle"].includes(admission.postState) &&
+      (result.state === "complete" || (result.state === "unhealthy" &&
+        health?.pending > 0 && health.oldestPendingSeconds >= 900));
+    if (validHealth && (idle || completedCycle)) {
       if (invocationDeadline.aborted || Date.now() - admittedAt > 110000) {
         financialCheckpoint = { state: "deadline", calls: 0 };
       } else try {

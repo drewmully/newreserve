@@ -38,7 +38,8 @@ describe("explicit continuous production operation", () => {
   it.each([
     { dead: 1 }, { expiredLeases: 1 }, { oldestPendingSeconds: 900 },
   ])("continues bounded backlog recovery while preserving health warnings: %j", async bad => {
-    const fetcher = vi.fn(async () => Response.json({ ...health, pending: 1, ...bad }));
+    const fetcher = vi.fn(async (_url, init) =>
+      Response.json(init.method === "POST" ? { state: "done" } : { ...health, pending: 1, ...bad }));
     expect((await runScheduledPipeline(env, { fetcher })).state).toBe("unhealthy");
     expect(fetcher).toHaveBeenCalledTimes(3);
   });
@@ -48,7 +49,8 @@ describe("explicit continuous production operation", () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
   it("allows the existing SQL to recover one expired lease", async () => {
-    const fetcher = vi.fn(async () => Response.json({ ...health, leased: 1, expiredLeases: 1 }));
+    const fetcher = vi.fn(async (_url, init) =>
+      Response.json(init.method === "POST" ? { state: "done" } : { ...health, leased: 1, expiredLeases: 1 }));
     expect((await runScheduledPipeline(env, { fetcher })).state).toBe("unhealthy");
     expect(fetcher).toHaveBeenCalledTimes(3);
   });

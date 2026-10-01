@@ -45,3 +45,38 @@ it("honors cancellation before calls and stops after unhealthy or failed replies
   expect(await runDispatch(config(), { fetcher: async () => new Response("private", { status: 503 }) }))
     .toEqual({ state: "failed", calls: 1 });
 });
+it.each(["done", "excluded", "idle"])("records a completed cycle only after terminal POST %s and fresh health", async state => {
+  const completed = vi.fn(), fetcher = vi.fn(async (_url, init) =>
+    Response.json(init.method === "POST" ? { state } : healthy));
+  expect(await runDispatch(config(), { fetcher, onCompletedCycle: completed })).toEqual({ state: "complete", calls: 2 });
+  expect(completed).toHaveBeenCalledExactlyOnceWith({ postState: state, health: healthy });
+});
+it.each([{ state: "disabled" }, { state: "unavailable" }, { state: "complete" }, {}, [], null])(
+  "refuses a nonterminal 200 POST without reading health or recording completion: %j", async body => {
+    const completed = vi.fn(), fetcher = vi.fn(async () => Response.json(body));
+    expect(await runDispatch(config(), { fetcher, onCompletedCycle: completed })).toEqual({ state: "failed", calls: 1 });
+    expect(fetcher).toHaveBeenCalledTimes(1); expect(completed).not.toHaveBeenCalled();
+  },
+);
+it.each(["pending", "leased", "dead", "done", "expiredLeases"])(
+  "rejects invalid final-health %s rather than attaching completion provenance", async field => {
+    for (const value of [-1, 0.5, Number.MAX_SAFE_INTEGER + 1, null, "0"]) {
+      const completed = vi.fn();
+      expect(await runDispatch(config(), { fetcher: wire({ ...healthy, [field]: value }), onCompletedCycle: completed }))
+        .toEqual({ state: "failed", calls: 2 });
+      expect(completed).not.toHaveBeenCalled();
+    }
+  },
+);
+it("settles when the POST body aborts and does not continue to a health request", async () => {
+  const stop = new AbortController(), completed = vi.fn();
+  let reached!: () => void;
+  const reading = new Promise<void>(resolve => { reached = resolve; });
+  const response = Response.json({ state: "done" });
+  vi.spyOn(response, "json").mockImplementation(async () => { reached(); return new Promise(() => {}); });
+  const fetcher = vi.fn(async () => response);
+  const running = runDispatch(config(), { fetcher, signal: stop.signal, onCompletedCycle: completed });
+  await reading; stop.abort();
+  expect(await running).toEqual({ state: "cancelled", calls: 1 });
+  expect(fetcher).toHaveBeenCalledTimes(1); expect(completed).not.toHaveBeenCalled();
+});

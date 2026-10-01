@@ -102,11 +102,11 @@ beforeEach(async () => {
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 afterAll(async () => { await db?.close(); });
-async function register() {
+async function register(orders = inventory()) {
   await db.query(`insert into lean_private.financial_checkpoints
     (run_id,project_ref,shop,inventory,inventory_ref,approval_ref,actor_ref,expires_at,enabled)
     values('fixture',$1,$2,$3::jsonb,'fixture:independent-inventory','fixture:approval','fixture:parent',
-      clock_timestamp()+interval '1 hour',true)`, [project, shop, JSON.stringify(inventory())]);
+      clock_timestamp()+interval '1 hour',true)`, [project, shop, JSON.stringify(orders)]);
 }
 it("makes no source requests with the default-empty selector", async () => {
   const fetcher = native();
@@ -226,7 +226,8 @@ function timerConfig() {
     CRON_SECRET: "fixture-cron-secret-not-real-123456789",
   });
 }
-const timerRequest = () => new NextRequest("https://www.mymully.com/api/analytics/ingest/scheduled", {
+const timerRequest = (signal?: AbortSignal) => new NextRequest("https://www.mymully.com/api/analytics/ingest/scheduled", {
+  signal,
   headers: { authorization: "Bearer fixture-cron-secret-not-real-123456789" },
 });
 const health = { enabled: true, pending: 0, leased: 0, dead: 0, done: 0,
@@ -243,6 +244,165 @@ it("runs the new bound source through the actual authenticated idle timer withou
     financialCheckpoint: { state: "complete", calls: 6 } });
   expect(text).not.toMatch(/gid:|250|fixture|2026-07/);
   expect(JSON.stringify(vi.mocked(console.info).mock.calls)).not.toMatch(/gid:|250|fixture|2026-07/);
+});
+it.each(["done", "excluded", "idle"])(
+  "runs a two-order checkpoint after terminal commerce %s despite backlog, preserving the warning and single attempt", async state => {
+    const orders = [...inventory(), { ...inventory()[0], id: "gid://shopify/Order/200" }];
+    await register(orders); timerConfig();
+    const traffic: string[] = [];
+    const backlog = { ...health, pending: 453, done: 137, oldestPendingSeconds: 9200 };
+    const shopify = vi.fn<typeof fetch>(async (_url, init) => {
+      const { query, variables } = JSON.parse(String(init?.body));
+      let data;
+      if (query === HISTORY_ACCESS_QUERY)
+        data = { currentAppInstallation: { accessScopes: [{ handle: "read_orders" }] } };
+      else if (query === HISTORY_ORDERS_QUERY) data = { orders: connection(orders) };
+      else if (query === SHOPIFY_FINANCIAL_ORDER_QUERY) data = { order: { ...order(), id: variables.id } };
+      else if (query === PILOT_FINANCIAL_QUERY) data = { order: { ...financial(), id: variables.id } };
+      else throw new Error("unexpected source request");
+      return Response.json({ data }, { headers: { "X-Shopify-API-Version": "2026-07" } });
+    });
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>(async (url, init) => {
+      if (String(url).endsWith("/ingest/process")) {
+        traffic.push(`commerce:${init?.method}`);
+        return Response.json(init?.method === "POST" ? { state } : backlog);
+      }
+      traffic.push("financial");
+      return shopify(url, init);
+    }));
+    vi.spyOn(console, "info").mockImplementation(() => {});
+    const response = await GET(timerRequest()), body = await response.json();
+    expect(response.status).toBe(503);
+    expect(body).toMatchObject({ state: "unhealthy", calls: 3, health: { healthy: false, pending: 453 },
+      financialAdmission: { phase: "post_cycle", postState: state, health: backlog },
+      financialCheckpoint: { state: "complete", calls: 10 } });
+    expect(traffic.slice(0, 3)).toEqual(["commerce:GET", "commerce:POST", "commerce:GET"]);
+    expect(shopify).toHaveBeenCalledTimes(10);
+    expect(shopify.mock.calls.length).toBeLessThanOrEqual(18);
+    expect((await db.query<{ row_count: number }>("select row_count from lean_private.history_jobs")).rows[0].row_count).toBe(2);
+    const second = await GET(timerRequest());
+    expect(await second.json()).toMatchObject({ financialCheckpoint: { state: "complete", calls: 0 } });
+    expect(shopify).toHaveBeenCalledTimes(10);
+    expect((await db.query("select * from lean_private.history_pages")).rows).toHaveLength(1);
+    expect(JSON.stringify(vi.mocked(console.info).mock.calls)).not.toMatch(/gid:|fixture-not|2026-07/);
+  },
+);
+it("also admits a completed cycle with recent pending work while keeping commerce HTTP200", async () => {
+  await register(); timerConfig();
+  const source = native();
+  vi.stubGlobal("fetch", vi.fn<typeof fetch>(async (url, init) =>
+    String(url).endsWith("/ingest/process")
+      ? Response.json(init?.method === "POST" ? { state: "done" } : { ...health, pending: 2, oldestPendingSeconds: 899 })
+      : source(url, init)));
+  vi.spyOn(console, "info").mockImplementation(() => {});
+  const response = await GET(timerRequest());
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ state: "complete", calls: 3,
+    financialCheckpoint: { state: "complete", calls: 6 } });
+});
+it.each([
+  ["dead", { dead: 1 }], ["leased", { leased: 1 }], ["expired lease", { expiredLeases: 1 }],
+  ["missing count", { leased: undefined }], ["fractional count", { done: 0.5 }],
+  ["unsafe count", { pending: Number.MAX_SAFE_INTEGER + 1 }], ["negative age", { oldestPendingSeconds: -1 }],
+  ["disabled scope", { enabled: false }],
+])("does not claim finance when final health has %s", async (_name, change) => {
+  await register(); timerConfig();
+  let calls = 0;
+  const source = native(), backlog = { ...health, pending: 2, oldestPendingSeconds: 2000 };
+  vi.stubGlobal("fetch", vi.fn<typeof fetch>(async (url, init) => {
+    if (!String(url).endsWith("/ingest/process")) return source(url, init);
+    calls++;
+    return Response.json(init?.method === "POST" ? { state: "done" } : calls === 1 ? backlog : { ...backlog, ...change });
+  }));
+  vi.spyOn(console, "info").mockImplementation(() => {});
+  expect(await (await GET(timerRequest())).json()).not.toHaveProperty("financialCheckpoint");
+  expect(source).not.toHaveBeenCalled();
+  expect((await db.query<{ attempted_at: string | null }>("select attempted_at from lean_private.financial_checkpoints")).rows[0].attempted_at).toBeNull();
+});
+it("refuses a recently leased idle observation despite its legacy healthy summary", async () => {
+  await register(); timerConfig();
+  const source = native();
+  vi.stubGlobal("fetch", vi.fn<typeof fetch>(async (url, init) =>
+    String(url).endsWith("/ingest/process") ? Response.json({ ...health, leased: 1, oldestPendingSeconds: 10 }) : source(url, init)));
+  vi.spyOn(console, "info").mockImplementation(() => {});
+  expect(await (await GET(timerRequest())).json()).toMatchObject({ state: "idle" });
+  expect(source).not.toHaveBeenCalled();
+  expect((await db.query<{ attempted_at: string | null }>("select attempted_at from lean_private.financial_checkpoints")).rows[0].attempted_at).toBeNull();
+});
+it.each(["malformed POST", "unknown POST", "lost POST", "lost final GET"])(
+  "does not turn %s into financial admission using preflight health", async phase => {
+    await register(); timerConfig();
+    let calls = 0;
+    const source = native();
+    vi.stubGlobal("fetch", vi.fn<typeof fetch>(async (url, init) => {
+      if (!String(url).endsWith("/ingest/process")) return source(url, init);
+      calls++;
+      if (init?.method === "POST") {
+        if (phase === "lost POST") throw new Error("lost POST response");
+        if (phase === "malformed POST") return new Response("not JSON");
+        return Response.json({ state: phase === "unknown POST" ? "disabled" : "done" });
+      }
+      if (phase === "lost final GET" && calls === 3) throw new Error("lost final health");
+      return Response.json({ ...health, pending: 2, oldestPendingSeconds: 2000 });
+    }));
+    vi.spyOn(console, "info").mockImplementation(() => {});
+    expect(await (await GET(timerRequest())).json()).toMatchObject({ state: "failed" });
+    expect(source).not.toHaveBeenCalled();
+    expect((await db.query<{ attempted_at: string | null }>("select attempted_at from lean_private.financial_checkpoints")).rows[0].attempted_at).toBeNull();
+  },
+);
+it("keeps the shared budget after a slow completed commerce cycle", async () => {
+  await register(); timerConfig();
+  let clock = Date.now(), calls = 0;
+  vi.spyOn(Date, "now").mockImplementation(() => clock);
+  const source = native();
+  vi.stubGlobal("fetch", vi.fn<typeof fetch>(async (url, init) => {
+    if (!String(url).endsWith("/ingest/process")) return source(url, init);
+    calls++; if (calls === 3) clock += 110001;
+    return Response.json(init?.method === "POST" ? { state: "done" } : { ...health, pending: 2, oldestPendingSeconds: 2000 });
+  }));
+  vi.spyOn(console, "info").mockImplementation(() => {});
+  expect(await (await GET(timerRequest())).json()).toMatchObject({
+    state: "unhealthy", financialCheckpoint: { state: "deadline", calls: 0 },
+  });
+  expect(source).not.toHaveBeenCalled();
+  expect((await db.query<{ attempted_at: string | null }>("select attempted_at from lean_private.financial_checkpoints")).rows[0].attempted_at).toBeNull();
+});
+it("admits at the exact 70-second remainder without changing the financial lane's 65-second budget", async () => {
+  await register(); timerConfig();
+  let clock = Date.now(), calls = 0;
+  vi.spyOn(Date, "now").mockImplementation(() => clock);
+  const timeout = vi.spyOn(AbortSignal, "timeout"), source = native();
+  vi.stubGlobal("fetch", vi.fn<typeof fetch>(async (url, init) => {
+    if (!String(url).endsWith("/ingest/process")) return source(url, init);
+    calls++; if (calls === 3) clock += 110000;
+    return Response.json(init?.method === "POST" ? { state: "done" } : { ...health, pending: 2, oldestPendingSeconds: 2000 });
+  }));
+  vi.spyOn(console, "info").mockImplementation(() => {});
+  expect(await (await GET(timerRequest())).json()).toMatchObject({ state: "unhealthy",
+    financialCheckpoint: { state: "complete", calls: 6 } });
+  expect(timeout).toHaveBeenCalledWith(180000);
+  expect(timeout).toHaveBeenCalledWith(65000);
+});
+it.each(["POST", "final GET"])("does not claim finance after an aborted %s body", async phase => {
+  await register(); timerConfig();
+  const stop = new AbortController(), source = native();
+  let calls = 0, reached!: () => void;
+  const reading = new Promise<void>(resolve => { reached = resolve; });
+  vi.stubGlobal("fetch", vi.fn<typeof fetch>(async (url, init) => {
+    if (!String(url).endsWith("/ingest/process")) return source(url, init);
+    calls++;
+    const response = Response.json(init?.method === "POST" ? { state: "done" } : { ...health, pending: 2, oldestPendingSeconds: 2000 });
+    if (phase === "POST" && init?.method === "POST" || phase === "final GET" && calls === 3)
+      vi.spyOn(response, "json").mockImplementation(async () => { reached(); return new Promise(() => {}); });
+    return response;
+  }));
+  vi.spyOn(console, "info").mockImplementation(() => {});
+  const result = GET(timerRequest(stop.signal));
+  await reading; stop.abort();
+  expect(await (await result).json()).toMatchObject({ state: "cancelled" });
+  expect(source).not.toHaveBeenCalled();
+  expect((await db.query<{ attempted_at: string | null }>("select attempted_at from lean_private.financial_checkpoints")).rows[0].attempted_at).toBeNull();
 });
 it("does not add a 65-second source lane when the commerce supervisor consumed the shared deadline", async () => {
   await register(); timerConfig();
