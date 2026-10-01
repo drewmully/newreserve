@@ -4,15 +4,16 @@ import { buildCustomer, normalizeIdentity, resolveTemporalIdentity, type History
 import { deriveSessions, finalizeSessionConversions, linkCheckoutOrders, normalizeEvents,
   type CheckoutEvidence, type ObservedEvent, type SessionCoverage } from "./sessions";
 import { acquisitionDaily, customerCohort, funnelDaily, productDaily, storeDaily,
-  type Facts, type Gates, type ReportScope } from "./reporting";
+  customerCohortReport, ratio, type Facts, type Gates, type ReportScope } from "./reporting";
 import { validateCandidateGraph, reconcileCandidate, type Candidate, type Reconciliation } from "./certification";
 import { normalizeCommerce, type CommerceDecision, type ShopifySnapshot } from "./commerce";
 import { normalizeLedger, normalizePayment, uniqueLedger, type Movement, type PaymentEvidence } from "./financial";
 import { reportDates } from "./commerceCandidate";
-import { checked, key, nyDate, type Row } from "./primitives";
+import { checked, decimal, key, nyDate, type Row } from "./primitives";
 import { observedCampaigns } from "./campaignSource";
 import { sessionConversionWindowDays } from "./calculationPolicy";
 import { admitCashSourceEvidence, type CashSourceAdmission } from "./cashSourceEvidence";
+import { admitCustomerGeneration, type CustomerGenerationBinding, type CustomerGenerationInput } from "./historyCustomerSource";
 
 export type FullBuildPolicy = {
   definition: string; mappingVersion: string; sessionVersion: string; funnelVersion: string;
@@ -23,6 +24,8 @@ export type FullBuildPolicy = {
   /** Immutable operator scope. Excluded behavior is unavailable, never zero. */
   behaviorMode?: "required" | "excluded";
   cohorts: { month: string; horizonDays: number; graceSeconds: number; acquisitionDefinition: string }[];
+  /** Immutable reference only. The SQL wrapper derives and fences the input. */
+  customerGeneration?: CustomerGenerationBinding;
 };
 /** Owner-supplied evidence, never arbitrary "all gates true" from an HTTP caller.
  * Current permission/removals must come from the analytics consent authority,
@@ -52,6 +55,8 @@ export type FullBuildEvidence = {
   comparisons: string[];
   cohortCoverage: { month: string; horizonDays: number; fullMonthCovered: boolean;
     ledgerLineageComplete: boolean; originalLedgerIds: string[]; evidenceRef: string }[];
+  /** SQL-derived only; forbidden in owner-stored evidence by the outer wrapper. */
+  customerGeneration?: CustomerGenerationInput;
 };
 const gateTables: Record<keyof Gates, string[]> = {
   ledger: ["sales_ledger"], cash: ["payments"], orders: ["orders", "order_items"],
@@ -213,6 +218,10 @@ export function buildFullReports(input: {
     }])), campaigns });
   const issues = validateCandidateGraph(facts, pub, p.attribution.modelVersion);
   if (issues.length) throw new Error(`invalid_full_candidate:${issues.join(",")}`);
+  const customerInput = admitCustomerGeneration(e.customerGeneration, {
+    binding: p.customerGeneration, shop, fromDate: input.fromDate, throughDate: input.throughDate,
+    dates, policy: p, orders: facts.orders, customers: facts.customers,
+  });
   const coverage = unique(e.dateCoverage, v => v.date);
   const verified = Object.fromEntries(Object.values(gateTables).flat().map(t => [t, proofReady(t)]));
   const scope = (date: string): ReportScope => {
@@ -235,15 +244,49 @@ export function buildFullReports(input: {
     customer_cohorts: [], funnel_daily: [] };
   for (const date of dates) {
     const s = scope(date);
-    reports.store_daily.push(storeDaily(facts as Facts, s));
+    const store = storeDaily(facts as Facts, s);
+    const acquisition = acquisitionDaily(facts as Facts, s, new Set(e.comparisons));
+    if (customerInput) {
+      const covered = coverage.get(date);
+      const n = covered?.evidenceRef && covered.gates.customers === true ? customerInput.dates.get(date)! : null;
+      if (n !== null && typeof store.eligible_orders === "number" && n > store.eligible_orders)
+        throw new Error("customer_generation_conflicting_order_coverage");
+      store.new_customers = n;
+      store.ncac_usd = ratio(store.spend_usd as string | null, n === null ? null : decimal(BigInt(n) * BigInt(1000000)));
+      Object.assign(store.readiness as Record<string, string>, {
+        new_customers: n === null ? "withheld" : "ready", ncac_usd: store.ncac_usd === null ? "withheld" : "ready",
+      });
+      for (const row of acquisition) {
+        const selected = facts.order_attribution.filter(a => a.conversion_date === date && a.channel === row.channel &&
+          (a.campaign_id ?? (["unattributed", "not_applicable"].includes(String(a.channel)) ? a.channel : "no_campaign")) === row.campaign_bucket);
+        const credits = n !== null && s.gates.attribution && selected.every(a => a.attribution_complete === true)
+          ? decimal(BigInt(selected.filter(a => customerInput.firstOrderKeys.has(String(a.order_id))).length) * BigInt(1000000)) : null;
+        row.weighted_new_customers = credits;
+        row.ncac_usd = ratio(row.spend_usd as string | null, credits);
+        Object.assign(row.readiness as Record<string, string>, {
+          weighted_new_customers: credits === null ? "withheld" : "ready", ncac_usd: row.ncac_usd === null ? "withheld" : "ready",
+        });
+      }
+    }
+    reports.store_daily.push(store);
     reports.product_daily.push(...productDaily(facts as Facts, s));
-    reports.acquisition_daily.push(...acquisitionDaily(facts as Facts, s, new Set(e.comparisons)));
+    reports.acquisition_daily.push(...acquisition);
     reports.funnel_daily.push(...funnelDaily(facts as Facts, s, p.funnelVersion, Object.keys(p.stages)));
   }
   const cohortClaims = unique(e.cohortCoverage, v => key(v.month, String(v.horizonDays)));
   for (const cohort of p.cohorts) {
     const claim = cohortClaims.get(key(cohort.month, String(cohort.horizonDays)));
     const s = scope(dates[0]);
+    if (customerInput) {
+      let components = customerInput.cohorts.get(`${cohort.month}:${cohort.horizonDays}`)!;
+      // This is a metric-specific external input, not a generic proof gate.
+      // Keep the full build's explicit cohort coverage and lineage withholdings.
+      if (!claim?.evidenceRef || !claim.fullMonthCovered)
+        components = { ...components, mature: false, cohortCustomers: null, repeatCustomers: null, revenueUsd: null };
+      else if (!claim.ledgerLineageComplete) components = { ...components, revenueUsd: null };
+      reports.customer_cohorts.push(customerCohortReport(s, components));
+      continue;
+    }
     reports.customer_cohorts.push(customerCohort(facts as Facts, s, { cohortMonth: cohort.month,
       horizonDays: cohort.horizonDays, graceSeconds: cohort.graceSeconds, asOf: p.asOf,
       acquisitionDefinition: cohort.acquisitionDefinition, approvalRef: p.approvalRef,

@@ -35,6 +35,7 @@
       "review/analytics-destination-acceptance": false,
       "review/analytics-timer-admission": false,
       "review/analytics-workbook-input-delivery": false,
+      "review/analytics-customer-history-acceptance": false,
       "feat/analytics-spend-source": false,
       "feat/analytics-full-report-build": false,
       "feat/analytics-commerce-reports": false,
