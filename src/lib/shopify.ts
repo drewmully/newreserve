@@ -466,13 +466,14 @@ const CART_FIELDS = `
 // ─── Product queries ──────────────────────────────────────────────────────────
 
 export async function getCollectionProducts(
-  collectionHandle: string
+  collectionHandle: string,
+  newestFirst = false,
 ): Promise<ShopifyProduct[]> {
   // Refresh the curated assortment and keep preorder availability current.
   const query = `
-    query CollectionProductsV5($handle: String!) {
+    query CollectionProductsV6($handle: String!, $sortKey: ProductCollectionSortKeys!, $reverse: Boolean!) {
       collection(handle: $handle) {
-        products(first: 50) {
+        products(first: 50, sortKey: $sortKey, reverse: $reverse) {
           nodes { ${PRODUCT_FIELDS} }
         }
       }
@@ -481,7 +482,7 @@ export async function getCollectionProducts(
 
   const data = await storefrontFetch<{
     collection: { products: { nodes: RawProduct[] } } | null;
-  }>(query, { handle: collectionHandle }, 60);
+  }>(query, { handle: collectionHandle, sortKey: newestFirst ? "CREATED" : "COLLECTION_DEFAULT", reverse: newestFirst }, 60);
 
   return (data.collection?.products.nodes ?? []).map(mapProduct);
 }

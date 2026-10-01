@@ -1,552 +1,168 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
 import { useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import type { ShopifyProduct } from "@/lib/shopify";
 import { useMembership } from "@/app/context/MembershipContext";
 import { getSizeGuide } from "@/lib/sizeCharts";
 import { shopProductPhoto, shopProductLabel } from "@/lib/shopProductPhotos";
-import {
-  OUTFIT_SLOTS,
-  RESERVE_OUTFIT_PRICE,
-  money,
-  outfitEstimate,
-  outfitOptions,
-  variantLabel,
-} from "@/lib/shopOutfit";
+import { OUTFIT_SLOTS, RESERVE_OUTFIT_PRICE, money, outfitEstimate, outfitOptions, variantLabel } from "@/lib/shopOutfit";
 import { trackEvent } from "@/lib/tracking";
 import { createMembershipCheckout } from "@/lib/shopifyCheckout";
 import { CompactVariantPicker } from "./CompactVariantPicker";
+import "./guided-outfit.css";
 
-export function ShopOutfitBuilder({
-  products,
-  byCategory,
-}: {
-  products: ShopifyProduct[];
-  byCategory: Record<string, ShopifyProduct[]>;
-}) {
-  const options = useMemo(
-    () =>
-      OUTFIT_SLOTS.map((s) =>
-        outfitOptions(products, byCategory[s.category] || [], s.slugs),
-      ),
-    [products, byCategory],
-  );
-  const [indices, setIndices] = useState<(number | null)[]>([0, 0, 0]);
-  const [active, setActive] = useState(0);
-  const [variants, setVariants] = useState<Record<string, string>>({});
-  const [previewImages, setPreviewImages] = useState<Record<string, string>>({});
-  const [mode, setMode] = useState<"once" | "reserve">("once");
-  const [review, setReview] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [fit, setFit] = useState<ShopifyProduct | null>(null);
-  const fitRef = useRef<HTMLDialogElement>(null);
-  const [zoom, setZoom] = useState<ShopifyProduct | null>(null);
-  const zoomRef = useRef<HTMLDialogElement>(null);
-  const root = useRef<HTMLElement>(null);
-  const { addItemsToCart } = useMembership();
-  const selected = options.map((list, i) =>
-    indices[i] === null ? undefined : list[indices[i]!],
-  );
-  const chosen = selected.filter((p): p is ShopifyProduct => !!p);
-  const current = selected[active];
-  const selectedVariants = selected.map((p) =>
-    p?.variants.find((v) => v.id === variants[p.slug]),
-  );
-  const missing = selected.findIndex((p, i) => p && !selectedVariants[i]);
-  const full = chosen.length === 3;
-  const estimate = outfitEstimate(
-    chosen.map(
-      (p) =>
-        p.variants.find((v) => v.id === variants[p.slug])?.price ?? p.price,
-    ),
-  );
-  const unavailable = selectedVariants.some((v) => v && !v.availableForSale);
-  function tab(i: number) {
-    setActive(i);
-    setReview(false);
-    setError("");
+const isFit = (name: string) => /^(size|waist|inseam)$/i.test(name);
+function groups(p: ShopifyProduct) {
+  return [...new Set(p.variants.flatMap(v=>v.selectedOptions.map(o=>o.name)))].map(name=>({
+    name,values:[...new Set(p.variants.flatMap(v=>v.selectedOptions.filter(o=>o.name===name).map(o=>o.value)))],
+  }));
+}
+function initialOptions(p: ShopifyProduct) {
+  const base=p.variants[0];
+  return Object.fromEntries(groups(p).filter(g=>!isFit(g.name)||g.values.length===1)
+    .map(g=>[g.name,base?.selectedOptions.find(o=>o.name===g.name)?.value||g.values[0]]));
+}
+
+export function ShopOutfitBuilder({products,byCategory}:{products:ShopifyProduct[];byCategory:Record<string,ShopifyProduct[]>}) {
+  const choices=useMemo(()=>OUTFIT_SLOTS.map(s=>outfitOptions(products,byCategory[s.category]||[],s.slugs)),[products,byCategory]);
+  const [indices,setIndices]=useState([0,0,0]);
+  const [selections,setSelections]=useState<Record<string,Record<string,string>>>({});
+  const [step,setStep]=useState<0|1|2>(0);
+  const [separate,setSeparate]=useState(false);
+  const [mode,setMode]=useState<"once"|"reserve">("once");
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState("");
+  const [editSlot,setEditSlot]=useState(0);
+  const root=useRef<HTMLElement>(null);
+  const customize=useRef<HTMLDialogElement>(null);
+  const fit=useRef<HTMLDialogElement>(null);
+  const {addItemsToCart}=useMembership();
+  const selected=choices.map((list,i)=>list[indices[i]]);
+  const complete=selected.every(Boolean);
+  const config=(p:ShopifyProduct)=>({...initialOptions(p),...selections[p.slug]});
+  const variants=selected.map(p=>p?.variants.find(v=>v.selectedOptions.every(o=>config(p)[o.name]===o.value)));
+  const ready=complete&&variants.every(Boolean);
+  const unavailable=variants.some(v=>v&&!v.availableForSale);
+  const estimate=outfitEstimate(selected.filter(Boolean).map((p,i)=>variants[i]?.price??p.price));
+  const colors=(p:ShopifyProduct)=>Object.entries(config(p)).filter(([name])=>!isFit(name)).map(([,v])=>v).filter(v=>v!=="Default Title").join(" / ");
+  const sizeGroup=(p?:ShopifyProduct)=>p?groups(p).find(g=>/^(size|waist)$/i.test(g.name)):undefined;
+  const topSize=sizeGroup(selected[0]),layerSize=sizeGroup(selected[2]);
+  const sharedSizes=topSize?.values.filter(size=>layerSize?.values.includes(size))||[];
+  const shared=sharedSizes.length>0&&!separate;
+  const sharedValue=selected[0]&&selected[2]&&topSize&&layerSize&&config(selected[0])[topSize.name]===config(selected[2])[layerSize.name]
+    ?config(selected[0])[topSize.name]:"";
+  function go(next:0|1|2) {
+    setStep(next);setError("");
+    requestAnimationFrame(()=>root.current?.scrollIntoView?.({block:"start",behavior:"instant"}));
   }
-  function reveal() {
-    root.current?.scrollIntoView({ block: "start", behavior: "instant" });
+  function pick(p:ShopifyProduct,name:string,value:string) {
+    setSelections(old=>({...old,[p.slug]:{...config(p),[name]:value}}));setError("");
   }
-  function chooseMissing() {
-    if (missing < 0) return false;
-    tab(missing);
-    requestAnimationFrame(() => {
-      reveal();
-      root.current
-        ?.querySelector<HTMLButtonElement>("[data-size]")
-        ?.focus({ preventScroll: true });
-    });
-    return true;
-  }
-  function reviewOutfit() {
-    setReview(true);
-    requestAnimationFrame(reveal);
-  }
-  function showFit(p: ShopifyProduct) {
-    setFit(p);
-    fitRef.current?.showModal();
-  }
+  function show(dialog:HTMLDialogElement|null){dialog?.showModal();document.body.style.overflow="hidden"}
+  function close(dialog:HTMLDialogElement|null){dialog?.close();document.body.style.overflow=""}
   async function add() {
-    if (busy || chooseMissing() || !chosen.length) return;
-    setError("");
-    if (unavailable && mode === "once") {
-      setError("Choose available sizes for each piece before checking out.");
-      return;
-    }
-    if (mode === "reserve") {
-      if (!full) { setError("Choose a top, bottom, and layer for Reserve."); return; }
-      setBusy(true);
-      try {
-        void trackEvent("shop_outfit_reserve_clicked", {properties:{source:"shop_outfit",products:chosen.map(p=>p.slug)}});
-        await createMembershipCheckout("member", {
-          firstBoxItems: selected.map((p,i) => ({
-            variantId: variants[p!.slug],
-            slot: (["Top","Bottom","Layer"] as const)[i],
-            name: p!.name,
-            size: variantLabel(selectedVariants[i]!),
-          })),
-        });
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "We couldn’t open checkout. Please try again.");
-      } finally { setBusy(false); }
-      return;
-    }
-    setBusy(true);
-    try {
-      await addItemsToCart(
-        chosen.map((p) => {
-          const v = p.variants.find((x) => x.id === variants[p.slug])!;
-          return {
-            slug: p.slug,
-            name: p.name,
-            brand: p.brand,
-            price: v.price,
-            retailPrice: v.price,
-            variantId: v.id,
-            image: v.image || p.images[0],
-            variantTitle: variantLabel(v),
-          };
-        }),
-      );
-    } catch {
-      setError(
-        "We couldn’t add the outfit. Your bag has been refreshed; check it before retrying.",
-      );
-    } finally {
-      setBusy(false);
-    }
+    if(busy||!ready)return;
+    if(mode==="once"&&unavailable){setError("One of your sizes is unavailable. Change the size or piece.");return}
+    setBusy(true);setError("");
+    try{
+      if(mode==="reserve"){
+        void trackEvent("shop_outfit_reserve_clicked",{properties:{source:"shop_guided_outfit",products:selected.map(p=>p.slug)}});
+        await createMembershipCheckout("member",{firstBoxItems:selected.map((p,i)=>({
+          variantId:variants[i]!.id,slot:OUTFIT_SLOTS[i].label,name:p.name,size:variantLabel(variants[i]!),
+        }))});
+      }else{
+        await addItemsToCart(selected.map((p,i)=>({
+          slug:p.slug,name:p.name,brand:p.brand,price:variants[i]!.price,retailPrice:variants[i]!.price,
+          variantId:variants[i]!.id,image:variants[i]!.image||shopProductPhoto(p),variantTitle:variantLabel(variants[i]!),
+        })));
+      }
+    }catch(e){setError(e instanceof Error?e.message:"We couldn’t open your bag. Please try again.")}
+    finally{setBusy(false)}
   }
-  const sizeCount = selectedVariants.filter(Boolean).length;
-  const guide = fit ? getSizeGuide(fit.slug) : null;
-  return (
-    <section
-      id="outfit"
-      ref={root}
-      className={`sec sec--cream outfit${review ? " is-review" : ""}`}
-      aria-labelledby="outfitTitle"
-    >
-      <div className="wrap">
-        <div className="sechead">
-          <div>
-            <h2 className="h2" id="outfitTitle">
-              Build your outfit.
-            </h2>
-            <p className="lede">
-              Pick your pieces. Choose your sizes. Make it yours.
-            </p>
-          </div>
-          <button
-            className="outfit__back"
-            onClick={() => {
-              setReview(false);
-              reveal();
-            }}
-          >
-            ← Edit pieces
-          </button>
+  function fitFields(p:ShopifyProduct,label:string){
+    return <div className="guided-fit-fields" key={p.slug}>{groups(p).filter(g=>isFit(g.name)).map(g=><label key={g.name}>
+      <span>{label} {g.name==="Size"&&groups(p).some(x=>/^inseam$/i.test(x.name))?"waist":g.name.toLowerCase()}</span>
+      <select aria-label={`${label} ${g.name==="Size"&&groups(p).some(x=>/^inseam$/i.test(x.name))?"waist":g.name.toLowerCase()}`}
+        value={config(p)[g.name]||""} onChange={e=>pick(p,g.name,e.target.value)}>
+        <option value="" disabled>Choose</option>{g.values.map(value=><option key={value} value={value} disabled={
+          !p.variants.some(v=>v.selectedOptions.every(o=>o.name===g.name?o.value===value:!config(p)[o.name]||config(p)[o.name]===o.value))
+        }>{value}</option>)}
+      </select></label>)}</div>;
+  }
+  return <section id="outfit" ref={root} className={`sec sec--cream guided-outfit guided-step-${step}`} aria-labelledby="outfitTitle">
+    <div className="wrap">
+      <header className="guided-heading"><div><p className="guided-kicker">The outfit, already figured out.</p>
+        <h2 className="h2" id="outfitTitle">Good together. Easy to make yours.</h2></div>
+        <ol aria-label="Outfit progress">{["The look","Your sizes","Review"].map((s,i)=><li key={s} aria-current={step===i?"step":undefined}><span>{i<step?"✓":i+1}</span>{s}</li>)}</ol>
+      </header>
+      {!complete?<p>We’re refreshing this outfit. <Link href="/shop/collection/shop-all">Explore the shop →</Link></p>:<div className="guided-layout">
+        <div className="guided-look">
+          <div className="guided-board">{selected.map((p,i)=><article key={p.slug}>
+            <div className="guided-photo"><img src={variants[i]?.image||p.variants.find(v=>v.image&&v.selectedOptions.every(o=>!config(p)[o.name]||config(p)[o.name]===o.value))?.image||shopProductPhoto(p)} alt={p.name}/></div>
+            <div className="guided-piece"><span>{p.brand}</span><h3>{shopProductLabel(p)}</h3><p>{variants[i]?variantLabel(variants[i]!):colors(p)}</p></div>
+          </article>)}</div>
+          <div className="guided-look-footer"><span>A top. A bottom. A finishing layer.</span>
+            <button onClick={()=>show(customize.current)}>Swap a piece or color ↗</button></div>
         </div>
-        <div className="outfit__layout">
-          <div className="outfit__workspace">
-            <div
-              className="outfit__tabs"
-              role="tablist"
-              aria-label="Outfit categories"
-            >
-              {OUTFIT_SLOTS.map((slot, i) => (
-                <button
-                  key={slot.label}
-                  id={`outfitTab${i}`}
-                  role="tab"
-                  aria-selected={active === i}
-                  aria-controls="outfitCards"
-                  tabIndex={active === i ? 0 : -1}
-                  onClick={() => tab(i)}
-                  onKeyDown={(e) => {
-                    if (
-                      ["ArrowRight", "ArrowLeft", "Home", "End"].includes(e.key)
-                    ) {
-                      e.preventDefault();
-                      const n =
-                        e.key === "Home"
-                          ? 0
-                          : e.key === "End"
-                            ? 2
-                            : (i + (e.key === "ArrowRight" ? 1 : 2)) % 3;
-                      tab(n);
-                      document.getElementById(`outfitTab${n}`)?.focus();
-                    }
-                  }}
-                >
-                  <span className="outfit-tab__number">{selectedVariants[i] ? "✓" : i + 1}</span>
-                  {selected[i]?.images[0] && (
-                    <img
-                      className="outfit-tab__thumb"
-                      src={selectedVariants[i]?.image || shopProductPhoto(selected[i]!)}
-                      alt=""
-                    />
-                  )}
-                  <span>
-                    {slot.label}
-                    <small>
-                      {selectedVariants[i]
-                        ? variantLabel(selectedVariants[i]!)
-                        : selected[i]
-                          ? "Pick size"
-                          : "Add piece"}
-                    </small>
-                  </span>
-                </button>
-              ))}
-            </div>
-            <div
-              id="outfitCards"
-              role="tabpanel"
-              aria-labelledby={`outfitTab${active}`}
-            >
-              {options[active].map((p, i) => (
-                <article className="outfit-choice" key={p.slug}>
-                  <button
-                    className="outfit-choice__pick"
-                    aria-label={`Choose ${p.name}`}
-                    aria-pressed={indices[active] === i}
-                    onClick={() => {
-                      setIndices((xs) =>
-                        xs.map((x, j) => (j === active ? i : x)),
-                      );
-                      setError("");
-                    }}
-                  >
-                    <span className="outfit-choice__image">
-                      {p.images[0] && <img src={p.variants.find(v => v.id === variants[p.slug])?.image || previewImages[p.slug] || shopProductPhoto(p)} alt={p.name} />}
-                      <span className="outfit-choice__check" aria-hidden>
-                        {indices[active] === i ? "✓" : "+"}
-                      </span>
-                    </span>
-                    <span className="outfit-choice__meta">
-                      <span className="outfit-choice__brand">{p.brand}</span>
-                      <span className="outfit-choice__name" title={p.name}>
-                        {shopProductLabel(p)}
-                      </span>
-                      <span className="outfit-choice__foot">
-                        <span>{money(p.price)}</span>
-                        <span className="outfit-choice__state">
-                          {indices[active] === i ? "Selected" : "Choose"}
-                        </span>
-                      </span>
-                    </span>
-                  </button>
-                  <button
-                    className="outfit-choice__zoom"
-                    aria-label={`Enlarge ${p.name} photo`}
-                    onClick={() => {
-                      setZoom(p);
-                      zoomRef.current?.showModal();
-                    }}
-                  >
-                    ⤢
-                  </button>
-                </article>
-              ))}
-              {!options[active].length && (
-                <p>
-                  No pieces in this category yet. Browse the shop for more
-                  options.
-                </p>
-              )}
-            </div>
-            <div className="outfit__size">
-              {current ? (
-                <>
-                  <div className="outfit__size-head">
-                    <span id="outfitSizeLabel">
-                      {OUTFIT_SLOTS[active].label} size
-                    </span>
-                    <button onClick={() => showFit(current)}>
-                      Size &amp; fit ↗
-                    </button>
-                  </div>
-                  <div role="group" aria-labelledby="outfitSizeLabel">
-                    <CompactVariantPicker key={current.slug} product={current} value={variants[current.slug] || ""}
-                      onPreview={image => setPreviewImages(x => ({...x, [current.slug]: image}))}
-                      allowUnavailable onChange={id => setVariants(x => ({...x, [current.slug]: id}))} />
-                  </div>
-                  {selectedVariants[active]?.currentlyNotInStock && <p className="outfit__stock-note">Preorder · Ships in about {current.preOrderEtaWeeks || 2} weeks</p>}
-                  {current.variants.every(v => !v.availableForSale) && <p className="outfit__stock-note">Sold out individually · Available to select for your Reserve first box.</p>}
-                </>
-              ) : (
-                <p>Select a piece to see its sizes.</p>
-              )}
-            </div>
-            <div className="outfit__next">
-              <span>
-                Tap a photo to switch. Your sizes stay saved.
-              </span>
-              <button
-                onClick={() => (active < 2 ? tab(active + 1) : reviewOutfit())}
-              >
-                {active < 2
-                  ? `Next: choose a ${OUTFIT_SLOTS[active + 1].label.toLowerCase()} →`
-                  : "Review your outfit →"}
-              </button>
-            </div>
+        <div className="guided-panel">
+          <div className="guided-content">
+            {step===0?<><p className="guided-kicker">Selected by Mully</p><h3>Less choosing.<br/>More wearing.</h3>
+              <p>Start with this three-piece look. Tell us your sizes, and we’ll take care of the rest.</p>
+              <div className="guided-total"><strong>{money(estimate.total)}</strong><span>Outfit total · BOGO15 estimate<br/>{money(estimate.savings)} off one piece</span></div>
+              <p className="guided-quiet">Like the look? No need to choose every piece.</p>
+            </>:step===1?<><div className="guided-panel-title"><h3>Make it your size.</h3><button onClick={()=>show(fit.current)}>Size &amp; fit ↗</button></div>
+              {shared?<fieldset className="guided-shared-size"><legend>Top &amp; layer size</legend>
+                <div>{sharedSizes.map(value=><button key={value} aria-pressed={sharedValue===value} onClick={()=>{
+                  setSelections(old=>({...old,[selected[0].slug]:{...config(selected[0]),[topSize!.name]:value},[selected[2].slug]:{...config(selected[2]),[layerSize!.name]:value}}));
+                }}>{value}</button>)}</div></fieldset>:<>{fitFields(selected[0],"Top")}{fitFields(selected[2],"Layer")}</>}
+              {fitFields(selected[1],"Trouser")}
+              {sharedSizes.length>0&&<label className="guided-separate"><input type="checkbox" checked={separate} onChange={e=>setSeparate(e.target.checked)}/>I wear different top and layer sizes</label>}
+              <p className="guided-quiet">Same look. Your fit. Change any piece or color whenever you like.</p>
+            </>:<><div className="guided-panel-title"><h3>Your outfit. Your call.</h3><button onClick={()=>go(1)}>Edit sizes</button></div>
+              <ul className="guided-review-lines">{selected.map((p,i)=><li key={p.slug}><span>{OUTFIT_SLOTS[i].label}</span><strong>{variants[i]?variantLabel(variants[i]!):"Choose size"}</strong></li>)}</ul>
+              <fieldset className="guided-purchase"><legend className="sr-only">How would you like it?</legend>
+                <label className={mode==="once"?"is-selected":""}><input type="radio" name="guided-purchase" checked={mode==="once"} onChange={()=>setMode("once")}/>
+                  <span><strong>Just this time <b>{money(estimate.total)}</b></strong><small>BOGO15 estimate · {money(estimate.savings)} off one piece</small></span></label>
+                <label className={mode==="reserve"?"is-selected":""}><input type="radio" name="guided-purchase" checked={mode==="reserve"} onChange={()=>setMode("reserve")}/>
+                  <span><strong>Subscribe &amp; save <b>{money(RESERVE_OUTFIT_PRICE)}<em> / season</em></b></strong><small>Mully Reserve · {estimate.total>250?`Save ${money(estimate.total-250)} on this outfit`:"Your first outfit included"}</small>
+                    <p>Your outfit first. Then new styles curated with your $250 seasonal budget. 4 shipments a year.</p></span></label>
+              </fieldset>
+              <p className="guided-terms">{mode==="reserve"?"Subscription: $250 today and automatically every 3 months, plus tax/shipping. Cancel before your next renewal.":"One-time purchase. Shopify confirms the best eligible offer and final total in your bag."}</p>
+            </>}
+            {error&&<p className="guided-error" role="alert">{error}</p>}
           </div>
-          <aside
-            className="outfit__summary"
-            id="outfitSummary"
-            aria-label="Your outfit"
-          >
-            <div className="outfit__summary-head">
-              <h3>Your outfit.</h3>
-              <span id="outfitCount">{chosen.length} of 3 pieces</span>
-            </div>
-            <div className="outfit__board">
-              {OUTFIT_SLOTS.map((s, i) => (
-                <button
-                  key={s.label}
-                  onClick={() => tab(i)}
-                  aria-label={`Edit ${s.label}`}
-                >
-                  <span className="outfit__board-label">{s.label} ↗</span>
-                  {selected[i]?.images[0] ? (
-                    <img src={selectedVariants[i]?.image || shopProductPhoto(selected[i]!)} alt={selected[i]!.name} />
-                  ) : (
-                    <span className="outfit__placeholder">+</span>
-                  )}
-                </button>
-              ))}
-            </div>
-            <ul className="outfit__lines">
-              {OUTFIT_SLOTS.map((s, i) => (
-                <li key={s.label}>
-                  <button className="outfit__line-name" onClick={() => tab(i)}>
-                    {selected[i]
-                      ? shopProductLabel(selected[i]!)
-                      : `+ Choose a ${s.label.toLowerCase()}`}
-                    <span className="outfit__line-size">
-                      {selectedVariants[i]
-                        ? variantLabel(selectedVariants[i]!)
-                        : "Choose size"}{" "}
-                      · Edit
-                    </span>
-                  </button>
-                  {selected[i] && (
-                    <button
-                      className="outfit__remove"
-                      aria-label={`Remove ${s.label}`}
-                      onClick={() => {
-                        setIndices((xs) =>
-                          xs.map((x, j) => (j === i ? null : x)),
-                        );
-                        setMode("once");
-                      }}
-                    >
-                      ×
-                    </button>
-                  )}
-                </li>
-              ))}
-            </ul>
-            <fieldset className="outfit__purchase">
-              <legend>How would you like it?</legend>
-              <label
-                className={`purchase-option ${mode === "once" ? "is-selected" : ""}`}
-                id="onceOption"
-              >
-                <input
-                  type="radio"
-                  name="outfitPurchase"
-                  checked={mode === "once"}
-                  onChange={() => setMode("once")}
-                />
-                <span>
-                  <span className="purchase-option__title">
-                    Just this time{" "}
-                    <span className="purchase-option__prices">
-                      {estimate.savings > 0 && (
-                        <s>{money(estimate.subtotal)}</s>
-                      )}
-                      <strong>{money(estimate.total)}</strong>
-                    </span>
-                  </span>
-                  <span className="purchase-option__saving">
-                    BOGO15 estimate · {money(estimate.savings)} off one piece
-                  </span>
-                </span>
-              </label>
-              <label
-                className={`purchase-option purchase-option--subscription ${mode === "reserve" ? "is-selected" : ""} ${!full ? "is-disabled" : ""}`}
-                id="subscriptionOption"
-              >
-                <input
-                  type="radio"
-                  name="outfitPurchase"
-                  disabled={!full}
-                  checked={mode === "reserve"}
-                  onChange={() => setMode("reserve")}
-                />
-                <span>
-                  <span className="purchase-option__title">
-                    Subscribe &amp; save <strong>{money(RESERVE_OUTFIT_PRICE)}<small> / season</small></strong>
-                  </span>
-                  <span className="purchase-option__saving">
-                    {full && estimate.total > RESERVE_OUTFIT_PRICE
-                      ? `Mully Reserve · Save ${money(estimate.total - RESERVE_OUTFIT_PRICE)} on this outfit`
-                      : "Mully Reserve · Your first outfit, included"}
-                  </span>
-                  <span className="purchase-option__copy">
-                    Your outfit first. Then our team curates new styles with your $250 seasonal budget. 4 shipments a year.
-                  </span>
-                </span>
-              </label>
-            </fieldset>
-            <p className="outfit__terms" aria-live="polite">
-              {mode === "reserve"
-                ? "Subscription: $250 charged today and automatically every 3 months, plus tax/shipping. New styles each season. Cancel before your next renewal."
-                : unavailable
-                  ? "Selected sizes are sold out individually. Edit your pieces or choose Reserve."
-                  : "15% off one lowest-priced item with 2+. Shopify confirms eligibility and your final total in the bag."}
-            </p>
-            {error && (
-              <p className="outfit-error" role="alert">
-                {error}
-              </p>
-            )}
-            <button
-              className="btn btn--accent btn--block"
-              disabled={
-                busy ||
-                !chosen.length ||
-                (missing < 0 && unavailable && mode === "once")
-              }
-              onClick={add}
-            >
-              {busy
-                ? mode === "reserve" ? "Opening checkout…" : "Adding…"
-                : missing >= 0
-                  ? "Choose remaining sizes →"
-                  : mode === "reserve"
-                    ? "Subscribe for $250 / season →"
-                    : unavailable
-                      ? "Selected sizes sold out"
-                      : `Add ${chosen.length === 1 ? "piece" : "outfit"} to bag`}
+          <div className="guided-actions">
+            {step>0&&<button className="guided-back" onClick={()=>go(step===2?1:0)}>← Back</button>}
+            <button className="btn btn--accent" disabled={!complete||busy||(step===1&&!ready)||(step===2&&(!ready||(mode==="once"&&unavailable)))}
+              onClick={()=>step===0?go(1):step===1?go(2):add()}>
+              {busy?mode==="reserve"?"Opening checkout…":"Adding…":step===0?"Choose my sizes →":step===1?"Review my outfit →":mode==="reserve"?"Subscribe for $250 / season →":unavailable?"Selected sizes sold out":"Add outfit to bag"}
             </button>
-            <p className="outfit__fine">
-              {selectedVariants.some(v => v?.currentlyNotInStock) ? "Preorder. First shipment ships in about 2 weeks." : "No subscription unless you enroll in Reserve."}
-            </p>
-          </aside>
-          <div className="outfit__mobile-footer">
-            <button
-              className="btn btn--accent btn--block"
-              onClick={() => {
-                if (!chooseMissing()) reviewOutfit();
-              }}
-            >
-              {missing >= 0
-                ? `Choose ${OUTFIT_SLOTS[missing].label.toLowerCase()} size →`
-                : `Review outfit · ${money(estimate.total)}`}
-            </button>
-            <p id="outfitMobileProgress">
-              {sizeCount} of {chosen.length} sizes chosen · BOGO15 estimate{" "}
-              {money(estimate.total)}
-            </p>
+            {step===2&&<p>{variants.some(v=>v?.currentlyNotInStock)?"Preorder · First shipment ships in about 2 weeks.":"No subscription unless you choose Reserve."}</p>}
           </div>
         </div>
-        <p className="outfit__preview">
-          Live catalog options. Availability and final pricing confirmed by
-          Shopify.
-        </p>
-      </div>
-      <dialog className="outfit-fit outfit-photo" ref={zoomRef} aria-labelledby="outfitPhotoTitle">
-        <div className="outfit-fit__head">
-          <h2 id="outfitPhotoTitle">{zoom ? shopProductLabel(zoom) : "Product photo"}</h2>
-          <button onClick={() => zoomRef.current?.close()} aria-label="Close enlarged photo">×</button>
-        </div>
-        {zoom && <>
-          <img src={shopProductPhoto(zoom)} alt={zoom.name} />
-          <button className="outfit-photo__fit" onClick={() => { zoomRef.current?.close(); showFit(zoom); }}>Size &amp; fit ↗</button>
-        </>}
-      </dialog>
-      <dialog
-        className="outfit-fit"
-        ref={fitRef}
-        aria-labelledby="outfitFitTitle"
-      >
-        <div className="outfit-fit__head">
-          <h2 id="outfitFitTitle">Size &amp; fit</h2>
-          <button
-            onClick={() => fitRef.current?.close()}
-            aria-label="Close size guide"
-          >
-            ×
-          </button>
-        </div>
-        {fit && (
-          <>
-            <p className="outfit-fit__brand">{fit.brand}</p>
-            <h3>{fit.name}</h3>
-            <p>
-              {fit.fitNotes || guide?.fitNote || fit.sizing || fit.description}
-            </p>
-            {guide && (
-              <>
-                <div className="fit-table">
-                  <table>
-                    <caption>
-                      {guide.chart.measurementType === "garment"
-                        ? "Garment measurements"
-                        : "Body measurements"}
-                      , inches
-                    </caption>
-                    <thead>
-                      <tr>
-                        <th>Size</th>
-                        {guide.chart.columns.map((c) => (
-                          <th key={c}>{c}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {guide.chart.rows.map((r) => (
-                        <tr key={r.size}>
-                          <th>{r.size}</th>
-                          {guide.chart.columns.map((c) => (
-                            <td key={c}>{r[c]}</td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <p className="outfit-fit__note">{guide.source}</p>
-              </>
-            )}
-            <a href={`/shop/${fit.slug}`}>View full product details ↗</a>
-          </>
-        )}
-      </dialog>
-    </section>
-  );
+      </div>}
+    </div>
+    <dialog className="guided-dialog" ref={customize} aria-labelledby="guidedCustomizeTitle" onClose={()=>{document.body.style.overflow=""}}>
+      <div className="guided-dialog-head"><h2 id="guidedCustomizeTitle">Make a small change.</h2><button aria-label="Close outfit customization" onClick={()=>close(customize.current)}>×</button></div>
+      <div className="guided-dialog-tabs">{OUTFIT_SLOTS.map((s,i)=><button key={s.label} aria-pressed={editSlot===i} onClick={()=>setEditSlot(i)}>{s.label}</button>)}</div>
+      <div className="guided-alternatives">{choices[editSlot].map((p,i)=><button key={p.slug} aria-label={`Choose ${p.name}`} aria-pressed={indices[editSlot]===i} onClick={()=>{
+        setIndices(old=>old.map((n,j)=>j===editSlot?i:n));setMode("once");setError("");
+      }}><img src={shopProductPhoto(p)} alt=""/><span>{shopProductLabel(p)}</span><small>{money(p.price)}</small></button>)}</div>
+      {selected[editSlot]&&<CompactVariantPicker key={`${selected[editSlot].slug}-${editSlot}`} product={selected[editSlot]} value={variants[editSlot]?.id||""} allowUnavailable onChange={id=>{
+        const p=selected[editSlot];const v=p.variants.find(v=>v.id===id);
+        setSelections(old=>({...old,[p.slug]:v?Object.fromEntries(v.selectedOptions.map(o=>[o.name,o.value])):{}}));
+      }}/>}
+      <button className="btn btn--accent" onClick={()=>{close(customize.current);if(step===2&&!ready)go(1)}}>Keep this look →</button>
+    </dialog>
+    <dialog className="guided-dialog" ref={fit} aria-labelledby="guidedFitTitle" onClose={()=>{document.body.style.overflow=""}}>
+      <div className="guided-dialog-head"><h2 id="guidedFitTitle">Size &amp; fit.</h2><button aria-label="Close outfit size guide" onClick={()=>close(fit.current)}>×</button></div>
+      {selected.filter(Boolean).map(p=>{const guide=getSizeGuide(p.slug);return <details key={p.slug} className="guided-fit-guide"><summary>{p.name}</summary>
+        <p>{p.fitNotes||guide?.fitNote||p.sizing||"See product details for fit information."}</p>
+        {guide&&<div className="fit-table"><table><caption>{guide.chart.measurementType==="garment"?"Garment":"Body"} measurements, inches</caption>
+          <thead><tr><th>Size</th>{guide.chart.columns.map(c=><th key={c}>{c}</th>)}</tr></thead>
+          <tbody>{guide.chart.rows.map(r=><tr key={r.size}><th>{r.size}</th>{guide.chart.columns.map(c=><td key={c}>{r[c]}</td>)}</tr>)}</tbody></table></div>}
+        <Link href={`/shop/${p.slug}`}>Full product details ↗</Link></details>})}
+    </dialog>
+  </section>;
 }

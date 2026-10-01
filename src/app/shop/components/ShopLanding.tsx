@@ -122,11 +122,11 @@ export function ShopLanding({ products, productsByCategory, theme, journalPosts 
           </div>
           <ShopHeroHotspots imageRef={heroImage} products={products} onSelect={p => openQuick(p, true)} />
         </section>
-        <div className="shop-colorway-strip" aria-hidden="true">
+        <div className="shop-colorway-strip" aria-label="Wear the colors of fall">
           {[
             ["#EDE6D6", 24, false], ["#B08558", 18, false], ["#5B613F", 26, true],
             ["#9B8B7A", 16, false], ["#4A3528", 16, true],
-          ].map(([hex, width, dark]) => <div key={String(hex)} style={{ backgroundColor: String(hex), flex: Number(width) }} className={dark ? "is-dark" : ""}><span>{hex}</span></div>)}
+          ].map(([hex, width, dark], i) => <div key={String(hex)} style={{ backgroundColor: String(hex), flex: Number(width) }} className={dark ? "is-dark" : ""}><span>{["wear", "the", "colors", "of", "fall"][i]}</span></div>)}
         </div>
         <section className="sec" id="edit">
           <div className="wrap">
