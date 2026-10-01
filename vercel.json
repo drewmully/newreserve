@@ -1,6 +1,7 @@
 {
   "git": {
     "deploymentEnabled": {
+      "review/analytics-workbook-runtime": false,
       "review/analytics-journey-policy": false,
       "review/analytics-financial-checkpoint": false,
       "review/analytics-refresh-google-auth": false,
