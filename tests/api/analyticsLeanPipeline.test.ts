@@ -1,4 +1,5 @@
 import { PGlite } from "@electric-sql/pglite";
+import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
 import { createHmac, randomUUID } from "node:crypto";
 import { beforeEach, afterEach, describe, it, expect, vi } from "vitest";
@@ -90,7 +91,16 @@ const client: AnalyticsRpcClient = { async rpc(name, args) {
   }
 } };
 beforeEach(async () => {
-  routePort.client = client;
+  routePort.client = createClient(`https://${projectRef}.supabase.co`, "fixture-only", {
+    auth: { persistSession: false },
+    global: { fetch: async (url, init) => {
+      expect(init?.signal).toBeInstanceOf(AbortSignal);
+      const name = new URL(String(url)).pathname.split("/").pop()!;
+      const result = await client.rpc(name, JSON.parse(String(init?.body)));
+      return new Response(JSON.stringify(result.error ? { message: "fixture_sql_failed" } : result.data),
+        { status: result.error ? 400 : 200, headers: { "Content-Type": "application/json" } });
+    } },
+  });
   network = vi.fn(() => { throw new Error("external_network_forbidden"); }); vi.stubGlobal("fetch", network);
   db = new PGlite();
   await db.exec(`create role service_role; create role anon; create role authenticated;

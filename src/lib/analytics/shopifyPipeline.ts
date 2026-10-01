@@ -61,6 +61,38 @@ export async function pipelineRpc(client: AnalyticsRpcClient, name: string, args
   if (result.error) throw new Error("pipeline_storage_unavailable");
   return result.data;
 }
+/** Bound caller settlement even if an already-dispatched request ignores abort.
+ * Cancellation is not proof of database rollback. Never retry a mutation here. */
+function beforePipelineAbort<T>(signal: AbortSignal, start: () => PromiseLike<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const cleanup = () => signal.removeEventListener("abort", abort);
+    const abort = () => { cleanup(); reject(new Error("pipeline_deadline")); };
+    signal.addEventListener("abort", abort, { once: true });
+    if (signal.aborted) { abort(); return; }
+    Promise.resolve().then(() => {
+      signal.throwIfAborted();
+      return start();
+    }).then(value => {
+      cleanup();
+      if (signal.aborted) abort(); else resolve(value);
+    }, error => { cleanup(); reject(error); });
+  });
+}
+/** Production boundary. Supabase's lazy PostgREST builder must receive the
+ * actual signal before dispatch. Promise-only clients are not a safe fallback. */
+export function boundedPipelineClient(client: AnalyticsRpcClient, signal: AbortSignal): AnalyticsRpcClient {
+  return { rpc(name, args) {
+    return beforePipelineAbort(signal, () => {
+      const request = client.rpc(name, args) as ReturnType<AnalyticsRpcClient["rpc"]> & {
+        abortSignal?: (value: AbortSignal) => ReturnType<AnalyticsRpcClient["rpc"]>;
+      };
+      if (typeof request.abortSignal !== "function") throw new Error("pipeline_rpc_transport");
+      const abortable = request.abortSignal(signal);
+      signal.throwIfAborted();
+      return abortable;
+    });
+  } };
+}
 export function mappingPolicy(source: PilotSource, policy: PipelinePolicy): PilotPolicy {
   const classes = sourceObject(policy.productClasses);
   const lineClasses: PilotPolicy["lineClasses"] = Object.fromEntries(
@@ -82,6 +114,23 @@ export function mappingPolicy(source: PilotSource, policy: PipelinePolicy): Pilo
 export async function runShopifyPipeline(options: {
   client: AnalyticsRpcClient; projectRef: string; databaseUrl: string;
   shop: string; accessToken: string; fetcher?: typeof fetch; signal?: AbortSignal;
+}) {
+  // Include claim, source, retain, mapping and finish in one budget. After
+  // caller settlement, the same signal forbids every subsequent RPC initiation.
+  const signal = options.signal ?? AbortSignal.timeout(60000);
+  const client: AnalyticsRpcClient = { rpc(name, args) {
+    return beforePipelineAbort(signal, () => options.client.rpc(name, args));
+  } };
+  const nativeFetch = options.fetcher ?? fetch;
+  const fetcher: typeof fetch = (url, init) => beforePipelineAbort(signal, () => nativeFetch(url, {
+    ...init, signal: AbortSignal.any([signal, ...(init?.signal ? [init.signal] : [])]),
+  }));
+  return beforePipelineAbort(signal, () => runPipeline({ ...options, client, fetcher, signal }));
+}
+
+async function runPipeline(options: {
+  client: AnalyticsRpcClient; projectRef: string; databaseUrl: string;
+  shop: string; accessToken: string; fetcher?: typeof fetch; signal: AbortSignal;
 }) {
   validatePipelineTarget(options.projectRef, options.databaseUrl);
   shopifyShop(options.shop);
@@ -125,7 +174,7 @@ export async function runShopifyPipeline(options: {
     phase = "source_unavailable";
     if (claim.source === null) {
       source = await readPilotSource({ shop: options.shop, accessToken: options.accessToken,
-        fetcher: options.fetcher, signal: options.signal ?? AbortSignal.timeout(60000),
+        fetcher: options.fetcher, signal: options.signal,
         ...(policy.sourceProjection ? { projection: policy.sourceProjection } : {}) }, orderGid);
       verifyHydration(sourceString(claim.topic), claim.payload, source);
       if (policy.sourceRetention) source = projectPilotRetention(source);
@@ -168,6 +217,9 @@ export async function runShopifyPipeline(options: {
       }
     }
   } catch {
+    // Do not clear a lease or schedule a retry after our caller timed out.
+    // Existing database attempt/lease fencing owns any later reconciliation.
+    options.signal.throwIfAborted();
     if (storageInFlight) throw new Error("pipeline_storage_ambiguous");
     const failed = await pipelineRpc(options.client, "lean_pipeline_fail", { ...args, p_code: phase });
     return { state: failed === true ? "failed" : "lost_lease" };

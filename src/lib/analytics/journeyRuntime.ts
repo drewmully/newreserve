@@ -66,11 +66,20 @@ const legacySteps: Record<string, [Journey, string]> = {
   sg_begin: ["style_game", "started"], sg_played: ["style_game", "completed"],
   sg_checkout_start: ["style_game", "checkout"],
 };
+export type JourneyProducerContext = { source?: unknown; plan?: unknown; method?: unknown };
+/** checkout_clicked is shared with generic shop carts. These are the existing
+ * Reserve membership producers, not permission or proof of a paid checkout.
+ * Do not forward their context into the minimal provider payload. */
+function reserveCheckoutProducer(context?: JourneyProducerContext) {
+  return context?.plan === "member" && (context.source === "choose_plan" ||
+    context.source === "reserve_founders_lp" && context.method === "shopify_checkout");
+}
 /** New privacy-minimal lane; never changes the existing advertising dispatch.
  * sms_click is deliberately NOT mapped to "activated": intent isn't activation.
  */
 export async function captureJourney(req: Request, name: string, actionId: unknown,
-  verifiedUid?: string, runtime: JourneyRuntime = journeyDefaults()): Promise<boolean> {
+  verifiedUid?: string, runtime: JourneyRuntime = journeyDefaults(),
+  producerContext?: JourneyProducerContext): Promise<boolean> {
   try {
     const step = legacySteps[name];
     const id = typeof actionId === "string" ? actionId.replace(/^evt-/, "") : "";
@@ -80,6 +89,7 @@ export async function captureJourney(req: Request, name: string, actionId: unkno
     if (runtime.policy && (req.headers.get("origin") !== reserveRuntime.origin ||
         new URL(req.url).origin !== reserveRuntime.origin)) return false;
     if (runtime.policy && !reserveFamilies.has(`lean_${step[0]}_${step[1]}`)) return false;
+    if (runtime.policy && name === "checkout_clicked" && !reserveCheckoutProducer(producerContext)) return false;
     const g = await journeyGrant(req, verifiedUid, runtime);
     if (!g) return false;
     const eventId = stableJourneyAction(`${g.sessionId}:${name}:${id}`);

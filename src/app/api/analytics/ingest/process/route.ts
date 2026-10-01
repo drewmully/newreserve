@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getAnalyticsSupabase } from "@/lib/analytics/serverClient";
-import { pipelineRpc, runShopifyPipeline, validatePipelineTarget } from "@/lib/analytics/shopifyPipeline";
+import { boundedPipelineClient, pipelineRpc, runShopifyPipeline, validatePipelineTarget } from "@/lib/analytics/shopifyPipeline";
 import { boundedShopifyPilotClient, boundedShopifyPilotFetch } from "@/lib/analytics/shopifyBoundedPilot";
 
 export const runtime = "nodejs";
@@ -33,10 +33,11 @@ export async function POST(req: NextRequest) {
     const config = configuration(req);
     if (config instanceof NextResponse) return config;
     const signal = AbortSignal.any([req.signal, AbortSignal.timeout(60000)]);
+    const client = boundedPipelineClient(getAnalyticsSupabase(), signal);
     const pilot = process.env.LEAN_ANALYTICS_SHOPIFY_PILOT_ENABLED === "true";
-    const bounded = pilot ? await boundedShopifyPilotClient({ ...config, client: getAnalyticsSupabase(),
+    const bounded = pilot ? await boundedShopifyPilotClient({ ...config, client,
       pilotId: process.env.LEAN_ANALYTICS_SHOPIFY_PILOT_ID ?? "", signal }) : null;
-    const result = await runShopifyPipeline({ ...config, client: bounded?.client ?? getAnalyticsSupabase(),
+    const result = await runShopifyPipeline({ ...config, client: bounded?.client ?? client,
       signal: bounded?.signal ?? signal,
       ...(bounded ? { fetcher: boundedShopifyPilotFetch(config.shop, bounded.signal) } : {}) });
     return NextResponse.json(result, { status: result.state === "failed" ? 422 :
@@ -48,7 +49,8 @@ export async function GET(req: NextRequest) {
   try {
     const config = configuration(req);
     if (config instanceof NextResponse) return config;
-    const data = await pipelineRpc(getAnalyticsSupabase(), "lean_pipeline_health", {
+    const signal = AbortSignal.any([req.signal, AbortSignal.timeout(5000)]);
+    const data = await pipelineRpc(boundedPipelineClient(getAnalyticsSupabase(), signal), "lean_pipeline_health", {
       p_project_ref: config.projectRef, p_shop: config.shop,
     });
     return NextResponse.json(data, { headers: { "Cache-Control": "no-store" } });
