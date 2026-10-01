@@ -12,6 +12,7 @@ import { ShopPageShell } from "../components/ShopPageShell";
 import { ScrollToTop } from "../components/ScrollToTop";
 import { getSeasonalTheme } from "../seasonalTheme";
 import { getVariantById, getVariantSelection } from "@/lib/productVariants";
+import { MysteryBundleClient } from "../components/MysteryBundleClient";
 
 export const revalidate = 3600;
 
@@ -85,6 +86,14 @@ export default async function ProductPage({ params, searchParams }: Props) {
     ? getVariantById(product, requestedVariantId)
     : null;
   const initialSelection = getVariantSelection(preferredVariant);
+  // A final-sale assortment needs its own focused terms, not the standard
+  // apparel template's free-returns strip, color picker or outfit upsells.
+  if (product.slug === "mystery-bundle-closeout") {
+    const mysteryVariant = product.variants.find(variant =>
+      variant.id === requestedVariantId || variant.id.split("/").pop() === requestedVariantId
+    );
+    return <MysteryBundleClient product={product} initialVariantId={mysteryVariant?.id} />;
+  }
   const theme = getSeasonalTheme();
 
   // Related products for the "More from Brand" and "You may also like" rails.
