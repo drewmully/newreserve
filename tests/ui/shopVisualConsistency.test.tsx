@@ -72,7 +72,7 @@ describe("quiet shop visual contract",()=>{
     expect(container.querySelector(".shop-colorway-strip")).toHaveAttribute("aria-hidden","true");
     expect(container.querySelector(".shop-colorway-strip")).toBeEmptyDOMElement();
     const css=readFileSync("src/app/shop/components/shop-first.css","utf8");
-    expect(css).toMatch(/\.shop-colorway-strip\{height:16px/);
+    expect(css).toMatch(/\.shop-colorway-strip\{height:8px/);
     expect(css).toContain("background:linear-gradient(90deg,#ede6d6");
     expect(screen.getByRole("link",{name:"Shop the edit"})).toHaveTextContent("[ shop ]");
   });
