@@ -29,6 +29,7 @@ import {
 } from "@/lib/benefits";
 import { SponsorshipsTab } from "./SponsorshipsTab";
 import { prefetchSponsorshipBoard } from "@/lib/sponsorshipClient";
+import { ShopifySubscriptionPanel } from "../account/ShopifySubscriptionPanel";
 
 /* ═══════════════════════════════════════════
    DASHBOARD — Shop · Community · Club · Benefits
@@ -260,6 +261,7 @@ function DashboardContent() {
 
       {/* ─── TAB CONTENT ─── */}
       <main className={isLegacy ? "pt-56 pb-24" : "pt-48 pb-24"}>
+        {isSignedIn && subscriptions?.shopify_outfit && <div className="mx-auto max-w-7xl px-6 md:px-12"><ShopifySubscriptionPanel /></div>}
         <div key={activeTab} className="animate-tab-in">
           {activeTab === "shop" && (isSignedIn ? <ShopTab /> : <GatedTab type="shop" onUpgrade={() => setUpgradeOpen(true)} />)}
           {activeTab === "drops" && (isPaid ? <DropsTab /> : <GatedTab type="drops" onUpgrade={() => setUpgradeOpen(true)} />)}
@@ -1245,7 +1247,7 @@ function BenefitsTab({ onUpgrade }: { onUpgrade: () => void }) {
             <p className={`text-xs tracking-[0.3em] uppercase font-medium mb-2 text-sage`}>Your Tier</p>
             <h2 className={`font-serif text-3xl mb-2 ${isFree ? "text-obsidian" : "text-bone"}`}>{tierLabel}</h2>
             <p className={`text-sm ${isFree ? "text-charcoal/50" : "text-bone/50"}`}>
-              Member since February 2026 &middot; {displayPrice}
+              {subscriptions?.shopify_outfit ? "Purchase item price: " : "Membership · "}{displayPrice}
             </p>
           </div>
           {isFree && (

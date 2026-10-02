@@ -29,6 +29,7 @@ import {
   type ShopifyCart,
 } from "@/lib/shopify";
 import { buildCheckoutOriginAttributes } from "@/lib/shopifyCheckoutOrigin";
+import { useShopifySubscriptions, type ShopifySubscription, type ShopifySubscriptionState } from "./useShopifySubscriptions";
 import { resolveMemberTierFromVariantId, resolveLegacyFromVariantId, getTierLabel } from "@/lib/membershipConfig";
 import {
   buildCompleteOnboardingUpdatePayload,
@@ -212,6 +213,9 @@ interface MembershipContextValue {
   // Store credit & subscriptions
   storeCredit: StoreCreditState | null;
   subscriptions: SubscriptionsState | null;
+  shopifySubscriptions: ShopifySubscriptionState;
+  refreshShopifySubscriptions: () => Promise<void>;
+  acceptShopifySubscriptions: (contracts: ShopifySubscription[]) => void;
 
   // Notifications
   messagingPreferences: { email_marketing: boolean; sms_marketing: boolean };
@@ -379,6 +383,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
   // ── Store credit & subscriptions ──────────────────────────────────────────
   const [storeCredit, setStoreCredit] = useState<StoreCreditState | null>(null);
   const [subscriptions, setSubscriptions] = useState<SubscriptionsState | null>(null);
+  const nativeSubscriptions = useShopifySubscriptions(user, Boolean(subscriptions?.shopify_outfit));
 
   // ── Fit profile ───────────────────────────────────────────────────────────
   const [fitProfile, setFitProfileState] = useState<FitProfile>(EMPTY_FIT);
@@ -1242,6 +1247,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
         // Store credit & subscriptions
         storeCredit,
         subscriptions,
+        ...nativeSubscriptions,
 
         // Notifications
         messagingPreferences,
