@@ -10,21 +10,21 @@ export function shopProductPhoto(p: Pick<ShopifyProduct, "slug" | "images">): st
 }
 
 const names: Record<string, string> = {
-  "quiet-golf-remy-polo-active-pique": "Remy polo",
-  "rhone-delta-pique-polo": "Delta piqué polo",
-  "rhone-commuter-pant": "Commuter pant",
-  "rhone-commuter-short-7": 'Commuter short · 7"',
-  "rhone-commuter-1-4-zip": "Commuter quarter-zip",
-  "duckhead-fremont-sport-performance-quilted-vest-brandy-brown": "Fremont quilted vest",
-  "olydoe-og-supima-hollow-polo": "Supima hollow polo",
-  "duckhead-classic-fit-gold-school-chino-khaki": "Gold School chino",
-  "voice-caddie-laser-fit": "Laser Fit rangefinder",
-  "blue-tees-player-gps-speaker": "Player+ GPS speaker",
+  "quiet-golf-remy-polo-active-pique": "Remy Polo",
+  "rhone-delta-pique-polo": "Delta Piqué Polo",
+  "rhone-commuter-pant": "Commuter Pant",
+  "rhone-commuter-short-7": 'Commuter Short · 7"',
+  "rhone-commuter-1-4-zip": "Commuter Quarter-Zip",
+  "duckhead-fremont-sport-performance-quilted-vest-brandy-brown": "Fremont Quilted Vest",
+  "olydoe-og-supima-hollow-polo": "Supima Hollow Polo",
+  "duckhead-classic-fit-gold-school-chino-khaki": "Gold School Chino",
+  "voice-caddie-laser-fit": "Laser Fit Rangefinder",
+  "blue-tees-player-gps-speaker": "Player+ GPS Speaker",
   "garmin-approach-s70": "Approach S70",
   "bushnell-tour-v7-shift": "Tour V7 Shift",
-  "winston-solid-tradition-leather-headcover": "Tradition leather headcover",
+  "winston-solid-tradition-leather-headcover": "Tradition Leather Headcover",
 };
 
 export function shopProductLabel(p: Pick<ShopifyProduct, "slug" | "name">): string {
-  return names[p.slug] || p.name.replace(/^(Olydoe|Rhone|Quiet Golf|Technically Golf|Primo|Duck Head|Winston|Leon) /, "");
+  return names[p.slug] || p.name.replace(/^(Olydoe|Rhone|Quiet Golf|Technically Golf|Primo|Duck Head|Winston|Leon|Stitch|Jolly Golf) /, "");
 }

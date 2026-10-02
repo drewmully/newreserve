@@ -13,4 +13,10 @@ describe("merchant-sourced outfit photos", () => {
     expect(shopProductPhoto({ slug: "new", images: [] })).toBe("");
     expect(shopProductLabel({ slug: "new", name: "New merchant product" })).toBe("New merchant product");
   });
+  it("shows card names in title case without repeating the brand", () => {
+    expect(shopProductLabel({ slug: "quiet-golf-remy-polo-active-pique", name: "Quiet Golf Remy Polo" })).toBe("Remy Polo");
+    expect(shopProductLabel({ slug: "duckhead-classic-fit-gold-school-chino-khaki", name: "Duck Head Classic Fit Gold School Chino" })).toBe("Gold School Chino");
+    expect(shopProductLabel({ slug: "stitch-birdie-bag", name: "Stitch Birdie Bag" })).toBe("Birdie Bag");
+    expect(shopProductLabel({ slug: "jolly-golf-purist-organizer", name: "Jolly Golf The Purist Golf Bag Organizer" })).toBe("The Purist Golf Bag Organizer");
+  });
 });
