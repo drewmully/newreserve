@@ -1,4 +1,7 @@
 import { PGlite } from "@electric-sql/pglite";
+vi.mock("@/lib/analytics/scheduledPipelineCatchup", () => ({
+  runScheduledPipelineCatchup: vi.fn(async () => ({ state: "off" })),
+}));
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
 import { afterAll, afterEach, beforeAll, beforeEach, expect, it, vi } from "vitest";

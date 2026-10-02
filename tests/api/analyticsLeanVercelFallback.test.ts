@@ -2,6 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { autoImplementMethods } from "next/dist/server/route-modules/app-route/helpers/auto-implement-methods";
 import { GET, maxDuration } from "@/app/api/analytics/ingest/scheduled/route";
+vi.mock("@/lib/analytics/scheduledPipelineCatchup", () => ({
+  runScheduledPipelineCatchup: vi.fn(async () => ({ state: "off" })),
+}));
 
 const secret = "synthetic-cron-secret-not-a-credential";
 const pipelineSecret = "synthetic-pipeline-secret-not-a-credential";
