@@ -3,6 +3,17 @@ import { NextRequest } from "next/server";
 import { autoImplementMethods } from "next/dist/server/route-modules/app-route/helpers/auto-implement-methods";
 import { GET, maxDuration } from "@/app/api/analytics/subscriptions/scheduled/route";
 import { GET as commerceGET } from "@/app/api/analytics/ingest/scheduled/route";
+vi.mock("@/lib/analytics/serverClient", async () => {
+  const { createClient } = await vi.importActual<typeof import("@supabase/supabase-js")>("@supabase/supabase-js");
+  const client = createClient("https://xnfjdbpjuaezxjgargto.supabase.co", "fixture-only", {
+    auth: { persistSession: false }, global: { fetch: async (url, init) => {
+      expect(String(url)).toBe("https://xnfjdbpjuaezxjgargto.supabase.co/rest/v1/rpc/lean_pipeline_ordinary_batch_admission");
+      expect(init?.signal).toBeInstanceOf(AbortSignal);
+      return Response.json({ state: "off" });
+    } },
+  });
+  return { getAnalyticsSupabase: () => client };
+});
 vi.mock("@/lib/analytics/scheduledPipelineCatchup", () => ({
   runScheduledPipelineCatchup: vi.fn(async () => ({ state: "off" })),
 }));

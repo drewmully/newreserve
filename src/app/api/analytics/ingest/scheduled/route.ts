@@ -1,9 +1,10 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { runScheduledPipeline } from "../../../../../../scripts/analytics/scheduled-pipeline.mjs";
+import { runScheduledPipeline, scheduledPipelineConfig } from "../../../../../../scripts/analytics/scheduled-pipeline.mjs";
 import { getAnalyticsSupabase } from "@/lib/analytics/serverClient";
 import { runScheduledFinancialCheckpoint } from "@/lib/analytics/scheduledFinancialCheckpoint";
 import { runScheduledPipelineCatchup } from "@/lib/analytics/scheduledPipelineCatchup";
+import { readOrdinaryBatchAdmission, runOrdinaryPipelineBatch } from "@/lib/analytics/ordinaryPipelineBatch";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -40,11 +41,46 @@ export async function GET(req: NextRequest) {
   try {
     const admittedAt = Date.now();
     const invocationDeadline = AbortSignal.timeout(180000);
-    const result = await runScheduledPipeline({
+    const scheduleEnvironment = {
       ...process.env,
       LEAN_ANALYTICS_SCHEDULE_ENABLED: process.env.LEAN_ANALYTICS_VERCEL_SCHEDULE_ENABLED,
       LEAN_ANALYTICS_RUNNER_ORIGIN: process.env.LEAN_ANALYTICS_RUNNER_ORIGIN ?? "https://www.mymully.com",
-    }, { signal: AbortSignal.any([req.signal, invocationDeadline]) });
+    };
+    // Reuse, rather than bypass or duplicate, the supervisor's fixed origin,
+    // project/URL, process-secret and continuous-mode configuration checks.
+    const prepared = scheduledPipelineConfig(scheduleEnvironment, admittedAt);
+    if (prepared.state !== "ready")
+      return NextResponse.json({ state: prepared.state, calls: 0 }, { status: 503, headers });
+    // Read-only/default-off owner control, after all existing caller and source
+    // identity gates. Never fall back after an unknown admission failure.
+    const active = AbortSignal.any([req.signal, invocationDeadline]);
+    let ordinary;
+    try {
+      ordinary = await readOrdinaryBatchAdmission(getAnalyticsSupabase(),
+        AbortSignal.any([active, AbortSignal.timeout(5000)]));
+    } catch {
+      return NextResponse.json({ state: "capacity_unavailable", calls: 0 }, { status: 503, headers });
+    }
+    if (ordinary.state !== "off") {
+      if (ordinary.state !== "ready")
+        return NextResponse.json({ state: ordinary.state, calls: 0 }, { status: 503, headers });
+      const batch = await runOrdinaryPipelineBatch({
+        client: getAnalyticsSupabase(),
+        projectRef: process.env.LEAN_ANALYTICS_PIPELINE_PROJECT_REF ?? "",
+        databaseUrl: process.env.LEAN_ANALYTICS_SUPABASE_URL ?? "",
+        shop: process.env.LEAN_SHOPIFY_SHOP_DOMAIN ?? "",
+        accessToken: process.env.LEAN_SHOPIFY_ANALYTICS_READ_TOKEN ?? "",
+        admission: ordinary, signal: active, deadline: admittedAt + 80000,
+      });
+      const response = { ...batch, calls: 0 }; // No proxy POST/GET; native starts are separate.
+      console.info(JSON.stringify({ event: "analytics_vercel_scheduled_invocation", ...response }));
+      // The standing branch owns this invocation. Never also run EXTRA or the
+      // optional financial lane, even after a settled failure or lost response.
+      return NextResponse.json(response, {
+        status: batch.state === "complete" || batch.state === "idle" ? 200 : 503, headers,
+      });
+    }
+    const result = await runScheduledPipeline(scheduleEnvironment, { signal: active });
     // Commerce retains its cycle first. A separate owner-bound financial lane
     // may then use spare time despite backlog, never alongside it in this
     // invocation. Health is an observation, not a cross-worker source lock.

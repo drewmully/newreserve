@@ -43,6 +43,7 @@ async function response(name: string, args: Record<string, unknown>) {
 const rpcFetch: typeof fetch = async (url, init) => {
   expect(init?.signal).toBeInstanceOf(AbortSignal);
   const name = new URL(String(url)).pathname.split("/").pop()!, args = JSON.parse(String(init?.body));
+  if (name === "lean_pipeline_ordinary_batch_admission") return Response.json({ state: "off" });
   calls.push(name === "lean_pipeline_throughput_step" ? String(args.p_operation) : name);
   return intercept?.(name,args) ?? response(name,args);
 };
