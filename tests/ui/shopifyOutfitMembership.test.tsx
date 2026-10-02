@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import { SHOPIFY_OUTFIT_SUBSCRIPTION, SHOPIFY_MEMBERSHIP_PLANS, LOOP_CHANGE_PLAN_OPTIONS, resolveMemberTierFromVariantId, isSupportedSellingPlanId } from "@/lib/membershipConfig";
 import { outfitMembershipFromPaidOrder, readShopifyOutfitMembership } from "@/lib/shopifyOutfitMembership";
 import { ShopifyOutfitMembershipCard } from "@/app/account/ShopifyOutfitMembershipCard";
@@ -36,12 +36,14 @@ describe("Shopify outfit subscription account bridge", () => {
     expect(outfitMembershipFromPaidOrder({...order,line_items:[{...order.line_items[0],price:"0"}]})).toBeNull();
     expect(readShopifyOutfitMembership({provider:"shopify"})).toBeNull();
   });
-  it("links to verified hosted customer accounts, not Loop or a client-provided URL", () => {
-    render(<ShopifyOutfitMembershipCard membership={outfitMembershipFromPaidOrder(order)!}/>);
-    expect(screen.getByRole("link",{name:"Manage Shopify subscription"}))
-      .toHaveAttribute("href","https://shopify.com/56105304256/account");
+  it("opens the in-site manager instead of redirecting to a hosted account portal", () => {
+    const manage = vi.fn();
+    render(<ShopifyOutfitMembershipCard membership={outfitMembershipFromPaidOrder(order)!} onManage={manage}/>);
+    fireEvent.click(screen.getByRole("button",{name:"Manage subscription"}));
+    expect(manage).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
     expect(screen.getByText("Last payment: $299.95")).toBeInTheDocument();
-    expect(screen.getByText(/same email you used at checkout/)).toBeInTheDocument();
+    expect(screen.getByText(/same Shopify email you used at checkout/)).toBeInTheDocument();
     expect(screen.queryByText("Active")).not.toBeInTheDocument();
   });
 });

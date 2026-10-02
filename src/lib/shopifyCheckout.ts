@@ -115,6 +115,14 @@ export async function createMembershipCheckout(
     return;
   }
   if (options.firstBoxItems && tier !== "member") throw new Error("First-box outfits require quarterly Reserve.");
+  if (options.firstBoxItems) {
+    // Do not take new subscriptions until the native account integration has
+    // been configured and verified. Existing Loop entry points are unaffected.
+    const readiness = await fetch("/api/shopify-customer/ready", { cache: "no-store" });
+    if (!readiness.ok || !(await readiness.json()).enabled) {
+      throw new Error("Reserve enrollment is temporarily unavailable. You can still buy this outfit just this time.");
+    }
+  }
 
   // Founding 100 gift: if the offer is active and slots remain, attach the
   // rangefinder as a second cart line and mark the order with a cart

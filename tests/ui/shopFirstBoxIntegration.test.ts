@@ -27,14 +27,16 @@ beforeEach(()=>{
   vi.stubEnv("NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN","example.myshopify.com");
   vi.stubEnv("NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN","test-public-token");
   vi.stubGlobal("window",{location,localStorage:{setItem:vi.fn()}});
-  fetchMock=vi.fn().mockResolvedValue({json:async()=>result()});
+  fetchMock=vi.fn().mockImplementation(async (url: string)=>url==="/api/shopify-customer/ready"
+    ? {ok:true,json:async()=>({enabled:true})}
+    : {ok:true,json:async()=>result()});
   vi.stubGlobal("fetch",fetchMock);
 });
 afterEach(()=>{vi.unstubAllGlobals();vi.unstubAllEnvs()});
 describe("Reserve checkout wiring",()=>{
   it("shows explicit first-shipment details while retaining order-level fulfillment metadata",async()=>{
     await createMembershipCheckout("member",{firstBoxItems:items,discountCodes:["BOGO15"],subscriptionLineAttributes:[{key:"Outfit Top",value:"must not recur"}]});
-    const payload=JSON.parse(fetchMock.mock.calls[0][1].body);
+    const payload=JSON.parse(fetchMock.mock.calls.find(call=>String(call[0]).includes("graphql.json"))![1].body);
     expect(payload.variables.lines).toHaveLength(1);
     expect(payload.variables.lines[0]).toEqual({merchandiseId:plan.merchandiseId,quantity:1,sellingPlanId:plan.sellingPlanGid,attributes:[
       {key:"First shipment only · Top",value:"Polo / M"},
@@ -50,8 +52,16 @@ describe("Reserve checkout wiring",()=>{
     expect(location.href).toContain("return_url=");
   });
   it("never redirects when Shopify changes the box price",async()=>{
-    fetchMock.mockResolvedValue({json:async()=>result("500")});
+    fetchMock.mockImplementation(async (url: string)=>url==="/api/shopify-customer/ready"
+      ? {ok:true,json:async()=>({enabled:true})}
+      : {ok:true,json:async()=>result("500")});
     await expect(createMembershipCheckout("member",{firstBoxItems:items})).rejects.toThrow("No checkout was opened");
+    expect(location.href).toBe("https://www.mymully.com/shop");
+  });
+  it("blocks new enrollment until native account management is enabled", async()=>{
+    fetchMock.mockResolvedValue({ok:true,json:async()=>({enabled:false})});
+    await expect(createMembershipCheckout("member",{firstBoxItems:items})).rejects.toThrow("temporarily unavailable");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(location.href).toBe("https://www.mymully.com/shop");
   });
   it("preserves existing subscription entry point lines, properties and discount behavior",async()=>{

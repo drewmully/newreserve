@@ -172,8 +172,6 @@ export const SHOPIFY_OUTFIT_SUBSCRIPTION = {
   amount: 299.95,
   productId: 10250499719360,
   provider: "shopify" as const,
-  // Verified via shop.customerAccountsV2.url. Not the headless /account route.
-  accountUrl: "https://shopify.com/56105304256/account",
 };
 
 const VARIANT_TIER_MAP: Record<string, PaidMemberTier> = {
