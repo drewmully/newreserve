@@ -20,7 +20,11 @@ const products = SHOP_HERO_HOTSPOTS.map((hotspot, i) => ({
     { id: `variant-${i}-m`, title: "M", price: i ? 118 : 114, availableForSale: !i, selectedOptions: [{ name: "Size", value: "M" }] },
   ],
 })) as ShopifyProduct[];
-const mount = (catalog = products) => render(<ShopLanding products={catalog} productsByCategory={{}} theme={getSeasonalTheme(new Date(2026, 8, 30))} />);
+const mount = (catalog = products) => {
+  const view=render(<ShopLanding products={catalog} productsByCategory={{}} theme={getSeasonalTheme(new Date(2026, 8, 30))} />);
+  view.container.querySelector("details.shop-hero-look")?.setAttribute("open","");
+  return view;
+};
 
 let portrait = false;
 let width = 1440;
@@ -55,15 +59,15 @@ describe("image-coordinate hotspots", () => {
     expect(projectHeroPoint({ width: 0, height: 0, naturalWidth: 0, naturalHeight: 0, point: { x: .5, y: .5 } })).toBeNull();
     expect(projectHeroPoint({ width: 400, height: 100, naturalWidth: 400, naturalHeight: 400, point: { x: .5, y: .01 } })).toBeNull();
   });
-  it("repositions on image load and viewport changes without scroll listeners", async () => {
-    mount();
+  it("uses a quiet expandable tray instead of markers on the distant figure", async () => {
+    const {container}=mount();
     const button = await screen.findByRole("button", { name: "Shop Quiet Golf Polo" });
-    const before = button.style.top;
-    portrait = true; width = 320; height = 320 * 4 / 3;
-    fireEvent(window, new Event("resize"));
-    await waitFor(() => expect(parseFloat(button.style.left)).toBeCloseTo(195.2));
-    expect(button.style.top).not.toBe(before);
-    expect(parseFloat(button.style.top)).toBeCloseTo(height * .29);
+    expect(button.style.top).toBe("");
+    expect(container.querySelector(".shop-hero-hotspot")).toBeNull();
+    const tray=container.querySelector("details.shop-hero-look")!;
+    fireEvent.keyDown(tray,{key:"Escape"});
+    expect(tray).not.toHaveAttribute("open");
+    expect(tray.querySelector("summary")).toHaveFocus();
   });
   it("omits a hotspot when its matching product is absent", async () => {
     mount([products[0]]);
