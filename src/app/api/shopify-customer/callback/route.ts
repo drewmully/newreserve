@@ -14,7 +14,9 @@ export async function GET(request: NextRequest) {
     await completeCustomerConnection(state, code);
     destination.searchParams.set("shopify", "connected");
   } catch (error) {
-    destination.searchParams.set("shopify", error instanceof CustomerAccountError ? error.code : "connection_failed");
+    const code = error instanceof CustomerAccountError ? error.code : "connection_failed";
+    console.warn("[shopify-customer] connection callback failed", { code });
+    destination.searchParams.set("shopify", code);
   }
   const response = NextResponse.redirect(destination, 303);
   response.cookies.set(CUSTOMER_STATE_COOKIE, "", { httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 0 });

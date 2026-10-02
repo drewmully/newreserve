@@ -113,7 +113,10 @@ async function loadPage() {
   return mod.default;
 }
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  window.history.replaceState({}, "", "/");
+});
 
 describe("account stale-state messaging", () => {
   beforeEach(() => {
@@ -192,6 +195,16 @@ describe("native subscription management in the existing account modal", () => {
     render(<SubscriptionManagerModal open provider="shopify" onClose={vi.fn()} />);
     expect(await screen.findByRole("button", { name: "Connect Shopify account" })).toBeInTheDocument();
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  });
+
+  it("reports a failed callback rather than hiding the failure behind a generic reconnect prompt", async () => {
+    window.history.replaceState({}, "", "/account?manage=shopify&shopify=permissions_required");
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: false, json: async () => ({ needsConnection: true, error: "Connect your Shopify account." }),
+    }));
+    const { SubscriptionManagerModal } = await import("@/app/account/SubscriptionManagerModal");
+    render(<SubscriptionManagerModal open provider="shopify" onClose={vi.fn()} />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("subscription access is not enabled");
   });
 
   it("does not close or report success after a failed cancellation", async () => {

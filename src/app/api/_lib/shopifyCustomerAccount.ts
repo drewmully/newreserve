@@ -7,6 +7,9 @@ const AUTH_URL = "https://shopify.com/authentication/56105304256/oauth/authorize
 const TOKEN_URL = "https://shopify.com/authentication/56105304256/oauth/token";
 const GRAPHQL_URL = "https://shopify.com/56105304256/account/customer/api/2026-10/graphql";
 export const CUSTOMER_CALLBACK = "https://www.mymully.com/api/shopify-customer/callback";
+// Public-client Customer API tokens are bound to a registered JavaScript origin.
+// Server-side fetch does not supply this browser header automatically.
+export const CUSTOMER_ORIGIN = new URL(CUSTOMER_CALLBACK).origin;
 export const CUSTOMER_STATE_COOKIE = "__Host-mully-shopify-state";
 const SESSION_COLLECTION = "shopify_customer_sessions"; // Admin SDK only, no client rule grants.
 const STATE_COLLECTION = "shopify_customer_oauth_states";
@@ -49,12 +52,17 @@ async function tokenRequest(params: Record<string, string>): Promise<Tokens> {
   const { clientId } = config();
   const response = await fetch(TOKEN_URL, {
     method: "POST", cache: "no-store", signal: AbortSignal.timeout(15000),
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    headers: { "Content-Type": "application/x-www-form-urlencoded", Origin: CUSTOMER_ORIGIN },
     body: new URLSearchParams({ client_id: clientId, ...params }),
   });
   const data = await response.json();
   if (!response.ok || typeof data.access_token !== "string" || !Number.isFinite(Number(data.expires_in)) || Number(data.expires_in) <= 0) {
     // Do not log raw OAuth responses: they can contain credentials.
+    const safeErrors = ["invalid_client", "invalid_grant", "invalid_request", "invalid_scope", "unauthorized_client", "unsupported_grant_type"];
+    console.warn("[shopify-customer] token exchange failed", {
+      status: response.status,
+      error: safeErrors.includes(data.error) ? data.error : "invalid_token_response",
+    });
     throw new CustomerAccountError(401, "connect_required", "Please reconnect your Shopify account.");
   }
   return { accessToken: data.access_token, refreshToken: typeof data.refresh_token === "string" ? data.refresh_token : null, expiresAt: Date.now() + Number(data.expires_in) * 1000 };
@@ -63,10 +71,22 @@ export async function customerGraphQL<T>(accessToken: string, query: string, var
   const response = await fetch(GRAPHQL_URL, {
     method: "POST", cache: "no-store", signal: AbortSignal.timeout(15000),
     // Shopify Customer Account API uses the access token without "Bearer".
-    headers: { "Content-Type": "application/json", Authorization: accessToken },
+    headers: { "Content-Type": "application/json", Authorization: accessToken, Origin: CUSTOMER_ORIGIN },
     body: JSON.stringify({ query, variables }),
   });
   const data = await response.json();
+  if (!response.ok || data.errors?.length || !data.data) {
+    // Status and allowlisted error codes only. Never log tokens, response
+    // bodies, emails, customer IDs, callback URLs, or authorization codes.
+    const safeCodes = ["ACCESS_DENIED", "UNAUTHENTICATED", "THROTTLED"];
+    console.warn("[shopify-customer] customer API failed", {
+      status: response.status,
+      codes: Array.isArray(data.errors)
+        ? data.errors.map((error: { extensions?: { code?: string } }) =>
+          safeCodes.includes(error.extensions?.code || "") ? error.extensions!.code : "GRAPHQL_ERROR")
+        : [],
+    });
+  }
   if (response.status === 401 || data.errors?.some((error: { extensions?: { code?: string } }) => error.extensions?.code === "UNAUTHENTICATED")) {
     throw new CustomerAccountError(401, "connect_required", "Please reconnect your Shopify account.");
   }
