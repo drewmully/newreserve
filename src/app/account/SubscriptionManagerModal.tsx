@@ -1,7 +1,9 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { useMembership } from "../context/MembershipContext";
 import { LOOP_CHANGE_PLAN_OPTIONS } from "@/lib/membershipConfig";
+import type { ShopifySubscription } from "../context/useShopifySubscriptions";
 
 interface LoopSubscriptionRecord extends Record<string, unknown> {
   id: string;
@@ -25,7 +27,7 @@ const CONNECTION_ERRORS: Record<string, string> = {
 };
 
 export function SubscriptionManagerModal({ open, onClose, provider = "loop" }: { open: boolean; onClose: () => void; provider?: "loop" | "shopify" }) {
-  const { user } = useMembership();
+  const { user, acceptShopifySubscriptions, refreshShopifySubscriptions } = useMembership();
   const [subscriptions, setSubscriptions] = useState<LoopSubscriptionRecord[]>([]);
   const [selectedSubscriptionId, setSelectedSubscriptionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -62,13 +64,14 @@ export function SubscriptionManagerModal({ open, onClose, provider = "loop" }: {
           : [];
 
     setSubscriptions(nextSubscriptions);
+    if (native) acceptShopifySubscriptions(nextSubscriptions as ShopifySubscription[]);
     setSelectedSubscriptionId((current) => {
       if (current && nextSubscriptions.some((subscription) => subscription.id === current)) {
         return current;
       }
       return nextSubscriptions[0]?.id ?? null;
     });
-  }, [user, native]);
+  }, [user, native, acceptShopifySubscriptions]);
 
   useEffect(() => {
     if (!open || !user) return;
@@ -138,11 +141,25 @@ export function SubscriptionManagerModal({ open, onClose, provider = "loop" }: {
         setError(message);
         return false;
       }
-      await loadSubscriptions(token);
+      if (native) {
+        const payload = await res.json();
+        if (!payload.contract?.id || !payload.contract?.status) {
+          setError("Shopify returned an incomplete update. Refresh to confirm the current status before trying again.");
+          return false;
+        }
+        const updated = subscriptions.map(item => item.id === payload.contract.id
+          ? { ...item, status: payload.contract.status } : item);
+        setSubscriptions(updated);
+        acceptShopifySubscriptions(updated as ShopifySubscription[]);
+        // A failed readback must not turn a confirmed cancellation into a failure.
+        void refreshShopifySubscriptions();
+      } else {
+        await loadSubscriptions(token);
+      }
       return true;
     } catch (err) {
       console.error(`[SubManager] ${path} error:`, err);
-      setError("Subscription action failed. Please try again.");
+      setError("We couldn’t confirm the update. Refresh to check your current status before trying again.");
       return false;
     } finally {
       setActionLoading(false);
@@ -262,7 +279,7 @@ export function SubscriptionManagerModal({ open, onClose, provider = "loop" }: {
                       <span className="text-sm font-medium text-obsidian">{native && typeof sub?.currency === "string" ? new Intl.NumberFormat("en-US", {style:"currency",currency:sub.currency}).format(price) : `$${price}`}</span>
                     </div>
                   )}
-                  {nextBilling && (
+                  {nextBilling && (!native || isActive) && (
                     <div className="flex items-center justify-between px-4 py-3">
                       <span className="text-xs text-charcoal/40">Next billing</span>
                       <span className="text-sm text-obsidian">{nextBilling}</span>
@@ -273,7 +290,13 @@ export function SubscriptionManagerModal({ open, onClose, provider = "loop" }: {
                 {/* Actions */}
                 <div className="space-y-2.5">
                   {isCancelled && native ? (
-                    <p className="text-sm text-charcoal/60">This subscription is cancelled. There are no further automatic renewals.</p>
+                    <div className="space-y-3">
+                      <p className="text-sm text-charcoal/60">This subscription is cancelled. There are no further automatic renewals.</p>
+                      {subscriptions.every(item => item.status === "CANCELLED") && <>
+                        <Link href="/shop#outfit" className="flex min-h-11 items-center justify-center rounded-xl bg-forest px-4 text-sm font-medium text-bone transition-colors hover:bg-forest-dark">Start a new subscription</Link>
+                        <p className="text-xs leading-relaxed text-charcoal/60">Choose a new outfit and review current pricing at checkout. A new subscription requires a new purchase.</p>
+                      </>}
+                    </div>
                   ) : isCancelled ? (
                     <button
                       onClick={() => callAction("/api/loop/subscription/reactivate")}

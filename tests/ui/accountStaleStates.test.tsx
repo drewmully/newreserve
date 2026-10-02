@@ -24,6 +24,8 @@ const mocks = vi.hoisted(() => {
     setTier,
     setFitProfile,
     membershipState: {
+      acceptShopifySubscriptions: vi.fn(),
+      refreshShopifySubscriptions: vi.fn().mockResolvedValue(undefined),
       user: { getIdToken },
       isSignedIn: true,
       authLoading: false,
@@ -171,7 +173,7 @@ describe("native subscription management in the existing account modal", () => {
   it("shows native live details and sends pause only to the native endpoint", async () => {
     const fetch = vi.fn()
       .mockResolvedValueOnce({ ok: true, json: async () => ({ subscriptions: [contract] }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ contract: { id: contract.id, status: "PAUSED" } }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ subscriptions: [{ ...contract, status: "PAUSED" }] }) });
     vi.stubGlobal("fetch", fetch);
     const { SubscriptionManagerModal } = await import("@/app/account/SubscriptionManagerModal");

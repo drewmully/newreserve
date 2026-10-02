@@ -579,6 +579,7 @@ function SubscriptionSection({
 }) {
   const [manageOpen, setManageOpen] = useState(false);
   const [nativeManageOpen, setNativeManageOpen] = useState(false);
+  const { shopifySubscriptions, refreshShopifySubscriptions } = useMembership();
 
   const tierPricingFallback: Record<string, string> = {
     free: "Free",
@@ -599,7 +600,7 @@ function SubscriptionSection({
     }
   }, [outfit]);
   const nativePanel = outfit ? <>
-    <ShopifyOutfitMembershipCard membership={outfit} onManage={() => setNativeManageOpen(true)} />
+    <ShopifyOutfitMembershipCard membership={outfit} live={shopifySubscriptions} onRefresh={() => { void refreshShopifySubscriptions(); }} onManage={() => setNativeManageOpen(true)} />
     <SubscriptionManagerModal provider="shopify" open={nativeManageOpen} onClose={() => setNativeManageOpen(false)} />
   </> : null;
   if (outfit && subscriptions.total_subscription_count === 0) {
