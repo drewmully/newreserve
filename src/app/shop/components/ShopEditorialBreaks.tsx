@@ -77,7 +77,7 @@ function StoryBand({ b, products }: { b: StoryBreak; products: ShopifyProduct[] 
           {products.map((p) => (
             <li key={p.slug}>
               <Link href={`/shop/${p.slug}`} className="shop-edit-piece" data-testid={`story-piece-${p.slug}`}>
-                <img src={shopProductPhoto(p)} alt="" loading="lazy" />
+                <img src={(p as ShopifyProduct & { cardImage?: string }).cardImage || shopProductPhoto(p)} alt="" loading="lazy" />
                 <span><small>{p.brand}</small>{shopProductLabel(p)}<b>{money(p.price)}</b></span>
               </Link>
             </li>
@@ -103,12 +103,14 @@ function Tile({ b, product }: { b: TileBreak; product: ShopifyProduct }) {
 }
 
 /** Interleave product cards with editorial breaks at their configured positions. */
-export function withEditorialBreaks(
-  products: ShopifyProduct[],
-  renderCard: (p: ShopifyProduct) => ReactNode,
+export function withEditorialBreaks<T extends ShopifyProduct>(
+  products: T[],
+  renderCard: (p: T) => ReactNode,
   breaks: EditorialBreak[] = SHOP_ALL_BREAKS
 ): ReactNode[] {
-  const bySlug = new Map(products.map((p) => [p.slug, p]));
+  // First card per slug is the lead color; that is what the story should show.
+  const bySlug = new Map<string, ShopifyProduct>();
+  for (const p of products) if (!bySlug.has(p.slug)) bySlug.set(p.slug, p);
   const out: ReactNode[] = [];
   products.forEach((p, i) => {
     for (const b of breaks) {

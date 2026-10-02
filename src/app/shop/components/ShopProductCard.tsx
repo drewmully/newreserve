@@ -18,7 +18,7 @@ export function ShopProductCard({
   product,
   accent,
 }: {
-  product: ShopifyProduct;
+  product: ShopifyProduct & { displayKey?: string; cardColor?: string; cardImage?: string; preferredVariantId?: string };
   /** Optional accent hex used for the member-price highlight, per seasonal theme. */
   accent?: string;
 }) {
@@ -26,13 +26,19 @@ export function ShopProductCard({
   const isMember = tier && tier !== "free";
   const displayPrice = isMember ? product.reservePrice : product.price;
 
-  const hero = shopProductPhoto(product);
+  const hero = product.cardImage || shopProductPhoto(product);
+  const href = product.preferredVariantId
+    ? `/shop/${product.slug}?variant=${encodeURIComponent(product.preferredVariantId)}`
+    : `/shop/${product.slug}`;
+  const colorVariants = product.cardColor
+    ? product.variants.filter(v => v.selectedOptions?.some(o => /^colou?r$/i.test(o.name) && o.value === product.cardColor))
+    : product.variants;
 
   return (
     <Link
-      href={`/shop/${product.slug}`}
+      href={href}
       className="shop-product-card group flex flex-col"
-      data-testid={`shop-card-${product.slug}`}
+      data-testid={`shop-card-${product.displayKey ?? product.slug}`}
     >
       <div className="shop-product-card__image">
         {hero && (
@@ -48,6 +54,7 @@ export function ShopProductCard({
       <div>
         <p className="shop-product-card__brand">{product.brand}</p>
         <h3>{shopProductLabel(product)}</h3>
+        {product.cardColor && <p className="shop-product-card__color">{product.cardColor}</p>}
         <div className="shop-product-card__price">
           {isMember && product.price !== product.reservePrice && (
             <span className="text-[11px] font-mono text-charcoal/40 line-through">
@@ -61,7 +68,7 @@ export function ShopProductCard({
             {money(displayPrice)}
           </span>
         </div>
-        {product.variants.some(v => v.currentlyNotInStock) && <p className="mt-1 text-xs text-charcoal/60">Preorder · About {product.preOrderEtaWeeks || 2} weeks</p>}
+        {colorVariants.some(v => v.currentlyNotInStock) && <p className="mt-1 text-xs text-charcoal/60">Preorder · About {product.preOrderEtaWeeks || 2} weeks</p>}
       </div>
     </Link>
   );
