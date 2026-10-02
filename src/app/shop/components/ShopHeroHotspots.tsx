@@ -1,35 +1,47 @@
 "use client";
-/* eslint-disable @next/next/no-img-element */
-import type { ShopifyProduct } from "@/lib/shopify";
-import { SHOP_HERO_HOTSPOTS } from "@/lib/shopHeroHotspots";
-import { shopProductPhoto } from "@/lib/shopProductPhotos";
-import { money } from "@/lib/shopOutfit";
+import { useEffect, useState, type RefObject } from "react";
+import { projectHeroPoint } from "@/lib/shopHeroHotspots";
 
-/** Distant editorial photography calls for a quiet product tray, not body markers. */
-export function ShopHeroHotspots({ products, onSelect }: {
-  products: ShopifyProduct[];
-  onSelect: (product: ShopifyProduct) => void;
+/** Project the torso point through the responsive crop, never the viewport. */
+export function ShopHeroHotspots({ imageRef }: {
+  imageRef: RefObject<HTMLImageElement | null>;
 }) {
-  const look=SHOP_HERO_HOTSPOTS.flatMap(item=>{
-    const product=products.find(p=>p.slug===item.slug);
-    return product?[{...item,product}]:[];
-  });
-  if(!look.length)return null;
-  return <details className="shop-hero-look" onKeyDown={e=>{
-    if(e.key==="Escape"){
-      e.currentTarget.open=false;
-      e.currentTarget.querySelector("summary")?.focus();
+  const [point,setPoint]=useState<{x:number;y:number}|null>(null);
+  useEffect(()=>{
+    const image=imageRef.current;
+    if(!image)return;
+    let frame=0;
+    function update(){
+      if(!image?.complete||!image.naturalWidth){setPoint(null);return}
+      const box=image.getBoundingClientRect();
+      const mobile=image.currentSrc.includes("-mobile");
+      const [x,y]=getComputedStyle(image).objectPosition.split(" ");
+      const percent=(value:string)=>value?.endsWith("%")?parseFloat(value)/100:.5;
+      setPoint(projectHeroPoint({width:box.width,height:box.height,naturalWidth:image.naturalWidth,naturalHeight:image.naturalHeight,
+        point:mobile?{x:.659,y:.625}:{x:.695,y:.625},positionX:percent(x),positionY:percent(y)}));
     }
-  }}>
-    <summary><span aria-hidden="true">+</span> Shop the look</summary>
-    <div className="shop-hero-look__products" role="group" aria-label="Shop the hero look">
-      {look.map(({slug,label,product})=><button key={slug} type="button"
-        aria-label={`Shop ${label}`} aria-haspopup="dialog" aria-controls="shop-quick-dialog"
-        onClick={()=>onSelect(product)}>
-        <img src={shopProductPhoto(product)} alt="" width={52} height={62}/>
-        <span>{label}<small>{money(product.price)}</small></span>
-        <span aria-hidden="true">↗</span>
-      </button>)}
-    </div>
-  </details>;
+    const schedule=()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(update)};
+    const observer=typeof ResizeObserver!=="undefined"?new ResizeObserver(schedule):null;
+    observer?.observe(image);
+    image.addEventListener("load",schedule);
+    image.addEventListener("error",schedule);
+    window.addEventListener("resize",schedule);
+    schedule();
+    return ()=>{cancelAnimationFrame(frame);observer?.disconnect();image.removeEventListener("load",schedule);
+      image.removeEventListener("error",schedule);window.removeEventListener("resize",schedule)};
+  },[imageRef]);
+  if(!point)return null;
+  return <a href="#outfit" className="shop-hero-hotspot" aria-label="Shop the look: build this outfit"
+    style={{left:point.x,top:point.y}} onClick={e=>{
+      if(e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;
+      const target=document.getElementById("outfit");
+      if(!target)return;
+      e.preventDefault();
+      window.history.replaceState(window.history.state,"","#outfit");
+      target.focus({preventScroll:true});
+      target.scrollIntoView({block:"start",behavior:window.matchMedia("(prefers-reduced-motion: reduce)").matches?"instant":"smooth"});
+    }}>
+    <span className="shop-hero-hotspot__plus" aria-hidden="true">+</span>
+    <span className="shop-hero-hotspot__label" aria-hidden="true">Shop the look</span>
+  </a>;
 }

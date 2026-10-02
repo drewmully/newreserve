@@ -100,7 +100,7 @@ export function ShopOutfitBuilder({products,byCategory}:{products:ShopifyProduct
         }>{value}</option>)}
       </select></label>)}</div>;
   }
-  return <section id="outfit" ref={root} className={`sec sec--cream guided-outfit guided-step-${step}`} aria-labelledby="outfitTitle">
+  return <section id="outfit" ref={root} tabIndex={-1} className={`sec sec--cream guided-outfit guided-step-${step}`} aria-labelledby="outfitTitle">
     <div className="wrap">
       <header className="guided-heading"><div>
         <h2 className="h2" id="outfitTitle">Your fall outfit, for less.</h2>

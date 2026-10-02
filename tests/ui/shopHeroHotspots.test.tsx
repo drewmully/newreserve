@@ -7,7 +7,7 @@ import { getSeasonalTheme } from "@/app/shop/seasonalTheme";
 const cart = vi.hoisted(() => ({ add: vi.fn() }));
 vi.mock("@/app/context/MembershipContext", () => ({ useMembership: () => ({ addItemsToCart: cart.add }) }));
 vi.mock("@/app/shop/components/ScrollToTop", () => ({ ScrollToTop: () => null }));
-vi.mock("@/app/shop/components/ShopOutfitBuilder", () => ({ ShopOutfitBuilder: () => <section id="outfit" /> }));
+vi.mock("@/app/shop/components/ShopOutfitBuilder", () => ({ ShopOutfitBuilder: () => <section id="outfit" tabIndex={-1} /> }));
 vi.mock("@/app/shop/components/ShopNewsletter", () => ({ ShopNewsletter: () => null }));
 import { ShopLanding } from "@/app/shop/components/ShopLanding";
 
@@ -22,7 +22,6 @@ const products = SHOP_HERO_HOTSPOTS.map((hotspot, i) => ({
 })) as ShopifyProduct[];
 const mount = (catalog = products) => {
   const view=render(<ShopLanding products={catalog} productsByCategory={{}} theme={getSeasonalTheme(new Date(2026, 8, 30))} />);
-  view.container.querySelector("details.shop-hero-look")?.setAttribute("open","");
   return view;
 };
 
@@ -59,27 +58,35 @@ describe("image-coordinate hotspots", () => {
     expect(projectHeroPoint({ width: 0, height: 0, naturalWidth: 0, naturalHeight: 0, point: { x: .5, y: .5 } })).toBeNull();
     expect(projectHeroPoint({ width: 400, height: 100, naturalWidth: 400, naturalHeight: 400, point: { x: .5, y: .01 } })).toBeNull();
   });
-  it("uses a quiet expandable tray instead of markers on the distant figure", async () => {
+  it("pins a single outfit link to the torso across responsive crops", async () => {
     const {container}=mount();
-    const button = await screen.findByRole("button", { name: "Shop Quiet Golf Polo" });
-    expect(button.style.top).toBe("");
-    expect(container.querySelector(".shop-hero-hotspot")).toBeNull();
-    const tray=container.querySelector("details.shop-hero-look")!;
-    fireEvent.keyDown(tray,{key:"Escape"});
-    expect(tray).not.toHaveAttribute("open");
-    expect(tray.querySelector("summary")).toHaveFocus();
+    const link = await screen.findByRole("link", { name: "Shop the look: build this outfit" });
+    expect(link).toHaveAttribute("href","#outfit");
+    expect(container.querySelector(".shop-hero-look__products")).toBeNull();
+    portrait = true; width = 320; height = 320 * 4 / 3;
+    fireEvent(window, new Event("resize"));
+    await waitFor(() => expect(parseFloat(link.style.left)).toBeCloseTo(width*.659));
+    expect(parseFloat(link.style.top)).toBeCloseTo(height*.625);
   });
-  it("omits a hotspot when its matching product is absent", async () => {
-    mount([products[0]]);
-    await screen.findByRole("button", { name: "Shop Quiet Golf Polo" });
-    expect(screen.queryByRole("button", { name: "Shop Duckhead Chinos" })).not.toBeInTheDocument();
+  it("jumps to and focuses the outfit builder instead of opening product options", async () => {
+    const {container}=mount();
+    const scroll=vi.fn();
+    const target=container.querySelector("#outfit") as HTMLElement;
+    target.scrollIntoView=scroll;
+    vi.stubGlobal("matchMedia",vi.fn(()=>({matches:true})));
+    fireEvent.click(await screen.findByRole("link",{name:"Shop the look: build this outfit"}));
+    expect(target).toHaveFocus();
+    expect(scroll).toHaveBeenCalledWith({block:"start",behavior:"instant"});
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(window.location.hash).toBe("#outfit");
+    vi.unstubAllGlobals();
   });
 });
 
 describe("hero product purchase modal", () => {
   it("opens the real product and adds only the selected available variant through the existing cart", async () => {
     mount();
-    const trigger = await screen.findByRole("button", { name: "Shop Quiet Golf Polo" });
+    const trigger = screen.getByRole("button", { name: `View options for ${products[0].name}` });
     trigger.focus(); fireEvent.click(trigger);
     const dialog = screen.getByRole("dialog", { name: products[0].name });
     expect(within(dialog).getByRole("img")).toHaveAttribute("src", products[0].images[0]);
@@ -96,18 +103,18 @@ describe("hero product purchase modal", () => {
   });
   it("truthfully displays sold-out chinos, source photo and styling note", async () => {
     mount();
-    fireEvent.click(await screen.findByRole("button", { name: "Shop Duckhead Chinos" }));
+    fireEvent.click(screen.getByRole("button", { name: `View options for ${products[1].name}` }));
     const dialog = screen.getByRole("dialog", { name: products[1].name });
     expect(within(dialog).getByRole("img")).toHaveAttribute("src", products[1].images[0]);
     expect(within(dialog).getByRole("status")).toHaveTextContent("Currently unavailable");
-    expect(within(dialog).getByText(/Styled illustration/)).toBeInTheDocument();
+    expect(within(dialog).queryByText(/Styled illustration/)).not.toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "Currently unavailable" })).toBeDisabled();
     expect(within(dialog).getByRole("link")).toHaveAttribute("href", `/shop/${products[1].slug}`);
     expect(cart.add).not.toHaveBeenCalled();
   });
   it("restores focus and page scroll after closing, and resets the size between products", async () => {
     mount();
-    const trigger = await screen.findByRole("button", { name: "Shop Quiet Golf Polo" });
+    const trigger = screen.getByRole("button", { name: `View options for ${products[0].name}` });
     trigger.focus(); fireEvent.click(trigger);
     const dialog = screen.getByRole("dialog", { name: products[0].name });
     fireEvent.change(within(dialog).getByRole("combobox"), { target: { value: "variant-0-m" } });
@@ -115,13 +122,13 @@ describe("hero product purchase modal", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Close product options" }));
     expect(trigger).toHaveFocus();
     expect(document.body.style.overflow).toBe("");
-    fireEvent.click(screen.getByRole("button", { name: "Shop Duckhead Chinos" }));
+    fireEvent.click(screen.getByRole("button", { name: `View options for ${products[1].name}` }));
     expect(screen.getByRole("combobox")).toHaveValue("");
   });
   it("shows retryable cart errors without closing or falsely reporting success", async () => {
     cart.add.mockRejectedValueOnce(new Error("unavailable"));
     mount();
-    fireEvent.click(await screen.findByRole("button", { name: "Shop Quiet Golf Polo" }));
+    fireEvent.click(screen.getByRole("button", { name: `View options for ${products[0].name}` }));
     const dialog = screen.getByRole("dialog", { name: products[0].name });
     fireEvent.change(within(dialog).getByRole("combobox"), { target: { value: "variant-0-m" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Add to bag" }));
