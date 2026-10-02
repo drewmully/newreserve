@@ -8,17 +8,20 @@ The existing MyMully account UX reads Shopify-native contracts and offers pause,
 
 ## Required merchant configuration
 
-Configure a public Customer Account API client in the Shopify Headless channel:
+Configure the Customer Account API client in the Shopify Headless channel:
 
 - Enable `customer_read_customers` and `customer_write_subscription_contracts`.
 - Register exactly `https://www.mymully.com/api/shopify-customer/callback`.
 - Register `https://www.mymully.com` in JavaScript origins. Server-side requests explicitly send this origin for the public client.
 - Provide its public client ID as server environment variable `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_ID`.
+- For a **confidential** client, also set `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_SECRET` as a sensitive server-only production environment variable. The server uses HTTP Basic authentication on the token endpoint for both authorization-code exchange and refresh. Public clients omit this secret and retain PKCE-only authentication. Never use a `NEXT_PUBLIC_` variable for the secret.
 - Generate a dedicated random 32-byte key, base64 encoded, as server environment variable `SHOPIFY_CUSTOMER_SESSION_SECRET`. Do not expose it to the browser, source control, or logs.
 - Keep `SHOPIFY_NATIVE_SUBSCRIPTIONS_ENABLED` unset or `false` until the launch checks below pass. This flag gates only new outfit subscriptions.
 - Do not set the unrelated global `SUBSCRIPTIONS_BACKEND=shopify` flag.
 
-The client ID is public configuration, not an Admin API token. A Shopify-hosted subscription management URL is not needed. Shopify authentication may require email verification; the customer returns to MyMully to manage their subscription. Shopify documents these permissions in its [API access scopes](https://shopify.dev/docs/api/usage/access-scopes) and the public-client flow in [Customer Account API authentication](https://shopify.dev/docs/storefronts/headless/building-with-the-customer-account-api/authenticate-customers).
+The client ID is public configuration, not an Admin API token. A Shopify-hosted subscription management URL is not needed. Shopify authentication may require email verification; the customer returns to MyMully to manage their subscription. Shopify documents these permissions in its [API access scopes](https://shopify.dev/docs/api/usage/access-scopes), client types in [Customer Account API setup](https://shopify.dev/docs/storefronts/headless/building-with-the-customer-account-api/getting-started), and token authentication in its [API reference](https://shopify.dev/docs/api/customer/latest).
+
+Live verification on October 2 identified `invalid_client` at the token endpoint. The merchant confirmed the existing Headless client is confidential. The required secret was not configured in the initial PKCE-only implementation. An origin header alone does not fix confidential-client authentication.
 
 ## Identity and security
 

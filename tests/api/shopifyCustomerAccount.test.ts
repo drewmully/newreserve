@@ -6,6 +6,7 @@ import { canActOnContract, isOutfitContract, type CustomerContract } from "@/lib
 beforeEach(()=>{
   vi.clearAllMocks();
   vi.stubEnv("SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_ID","public-client");
+  vi.stubEnv("SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_SECRET","");
   vi.stubEnv("SHOPIFY_CUSTOMER_SESSION_SECRET",Buffer.alloc(32,7).toString("base64"));
   vi.stubEnv("SHOPIFY_NATIVE_SUBSCRIPTIONS_ENABLED","false");
   vi.stubGlobal("fetch",mocks.fetch);
@@ -13,11 +14,30 @@ beforeEach(()=>{
 afterEach(()=>{vi.unstubAllGlobals();vi.unstubAllEnvs();});
 describe("native customer identity and session security",()=>{
   it("sends the canonical registered origin on customer API requests",async()=>{
+    vi.stubEnv("SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_SECRET","test-confidential-secret");
     mocks.fetch.mockResolvedValue({ok:true,status:200,json:async()=>({data:{customer:{id:"gid://shopify/Customer/1"}}})});
     await customerGraphQL("token","query { customer { id } }");
     expect(mocks.fetch).toHaveBeenCalledWith(expect.any(String),expect.objectContaining({
       headers:expect.objectContaining({Origin:"https://www.mymully.com",Authorization:"token"}),
     }));
+  });
+  it("authenticates confidential clients during code exchange without leaking secrets to logs",async()=>{
+    vi.stubEnv("SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_SECRET","test-confidential-secret");
+    mocks.collection.mockReturnValue({doc:()=>({})});
+    mocks.transaction.mockImplementation(async fn=>fn({get:async()=>({data:()=>({uid:"uid",verifier:"pkce-verifier",expiresAt:Date.now()+60000})}),delete:vi.fn()}));
+    mocks.fetch.mockResolvedValue({ok:false,status:401,json:async()=>({error:"invalid_client",error_description:"Never log this secret-containing text"})});
+    const warn=vi.spyOn(console,"warn").mockImplementation(()=>{});
+    try {
+      await expect(completeCustomerConnection("a".repeat(43),"test-code")).rejects.toMatchObject({status:503,code:"client_configuration_error"});
+      const authorization=`Basic ${Buffer.from("public-client:test-confidential-secret").toString("base64")}`;
+      expect(mocks.fetch).toHaveBeenCalledWith(expect.any(String),expect.objectContaining({
+        headers:expect.objectContaining({Authorization:authorization,Origin:"https://www.mymully.com"}),
+      }));
+      const logged=JSON.stringify(warn.mock.calls);
+      expect(logged).not.toContain("test-confidential-secret");
+      expect(logged).not.toContain(authorization);
+      expect(logged).not.toContain("Never log");
+    } finally { warn.mockRestore(); }
   });
   it("recognizes expired authentication returned in a GraphQL HTTP 200 response",async()=>{
     mocks.fetch.mockResolvedValue({ok:true,status:200,json:async()=>({errors:[{extensions:{code:"UNAUTHENTICATED"}}]})});
@@ -32,6 +52,7 @@ describe("native customer identity and session security",()=>{
     expect(mocks.fetch).not.toHaveBeenCalled();
   });
   it("refreshes expired tokens under a lease and stores only encrypted replacements",async()=>{
+    vi.stubEnv("SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_SECRET","test-confidential-secret");
     const stored: Record<string,unknown>={encrypted:sealCustomerSession({accessToken:"old",refreshToken:"refresh",expiresAt:0,customerId:"gid://shopify/Customer/1"})};
     const ref={get:async()=>({exists:true,data:()=>({...stored})})};
     mocks.collection.mockReturnValue({doc:()=>ref});
@@ -43,7 +64,10 @@ describe("native customer identity and session security",()=>{
     mocks.fetch.mockResolvedValue({ok:true,json:async()=>({access_token:"renewed",refresh_token:"rotated",expires_in:3600})});
     expect(await getLinkedCustomerSession("uid")).toMatchObject({accessToken:"renewed",refreshToken:"rotated"});
     expect(mocks.fetch).toHaveBeenCalledWith(expect.any(String),expect.objectContaining({
-      headers:expect.objectContaining({Origin:"https://www.mymully.com"}),
+      headers:expect.objectContaining({
+        Origin:"https://www.mymully.com",
+        Authorization:`Basic ${Buffer.from("public-client:test-confidential-secret").toString("base64")}`,
+      }),
     }));
     expect(JSON.stringify(stored)).not.toContain("rotated");
     expect(openCustomerSession(String(stored.encrypted))).toMatchObject({accessToken:"renewed"});
@@ -93,6 +117,7 @@ describe("native customer identity and session security",()=>{
     expect(mocks.fetch).toHaveBeenNthCalledWith(1,expect.any(String),expect.objectContaining({
       headers:expect.objectContaining({Origin:"https://www.mymully.com"}),
     }));
+    expect(mocks.fetch.mock.calls[0][1].headers).not.toHaveProperty("Authorization");
     expect(del).toHaveBeenCalledOnce();
     expect(mocks.transaction).toHaveBeenCalledTimes(1);
   });
