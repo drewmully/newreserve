@@ -37,7 +37,7 @@ export function ShopOutfitBuilder({products,byCategory}:{products:ShopifyProduct
   const root=useRef<HTMLElement>(null);
   const customize=useRef<HTMLDialogElement>(null);
   const fit=useRef<HTMLDialogElement>(null);
-  const {addItemsToCart}=useMembership();
+  const {addItemsToCart,email}=useMembership();
   const selected=choices.map((list,i)=>list[indices[i]]);
   const complete=selected.every(Boolean);
   const config=(p:ShopifyProduct)=>({...initialOptions(p),...selections[p.slug]});
@@ -68,7 +68,7 @@ export function ShopOutfitBuilder({products,byCategory}:{products:ShopifyProduct
     try{
       if(mode==="reserve"){
         void trackEvent("shop_outfit_reserve_clicked",{properties:{source:"shop_guided_outfit",products:selected.map(p=>p.slug)}});
-        await createMembershipCheckout("member",{firstBoxItems:selected.map((p,i)=>({
+        await createMembershipCheckout("member",{email:email||undefined,firstBoxItems:selected.map((p,i)=>({
           variantId:variants[i]!.id,slot:OUTFIT_SLOTS[i].label,name:p.name,size:variantLabel(variants[i]!),
         }))});
       }else{
@@ -135,10 +135,10 @@ export function ShopOutfitBuilder({products,byCategory}:{products:ShopifyProduct
                 <label className={mode==="once"?"is-selected":""}><input type="radio" name="guided-purchase" checked={mode==="once"} onChange={()=>setMode("once")}/>
                   <span><strong>Just this time <b>{money(estimate.total)}</b></strong><small>BOGO15 estimate · {money(estimate.savings)} off one piece</small></span></label>
                 <label className={mode==="reserve"?"is-selected":""}><input type="radio" name="guided-purchase" checked={mode==="reserve"} onChange={()=>setMode("reserve")}/>
-                  <span><strong>Subscribe &amp; save <b>{money(RESERVE_OUTFIT_PRICE)}<em> / season</em></b></strong><small>Mully Reserve · {estimate.total>250?`Save ${money(estimate.total-250)} on this outfit`:"Your first outfit included"}</small>
-                    <p>Your outfit first. Then new styles curated with your $250 seasonal budget. 4 shipments a year.</p></span></label>
+                  <span><strong>Subscribe {estimate.total>RESERVE_OUTFIT_PRICE?"& save": "to Reserve"} <b>{money(RESERVE_OUTFIT_PRICE)}<em> / season</em></b></strong><small>Mully Reserve · {estimate.total>RESERVE_OUTFIT_PRICE?`Save ${money(estimate.total-RESERVE_OUTFIT_PRICE)} on this outfit`:"Your first outfit included"}</small>
+                    <p>Your outfit first. Then new styles curated with your {money(RESERVE_OUTFIT_PRICE)} seasonal budget. 4 shipments a year.</p></span></label>
               </fieldset>
-              <p className="guided-terms">{mode==="reserve"?"Subscription: $250 today and automatically every 3 months, plus tax/shipping. Cancel before your next renewal.":"One-time purchase. Shopify confirms the best eligible offer and final total in your bag."}</p>
+              <p className="guided-terms">{mode==="reserve"?`Subscription: ${money(RESERVE_OUTFIT_PRICE)} today and automatically every 3 months, plus tax/shipping. Cancel before your next renewal.`:"One-time purchase. Shopify confirms the best eligible offer and final total in your bag."}</p>
             </>}
             {error&&<p className="guided-error" role="alert">{error}</p>}
           </div>
@@ -146,7 +146,7 @@ export function ShopOutfitBuilder({products,byCategory}:{products:ShopifyProduct
             {step>0&&<button className="guided-back" onClick={()=>go(step===2?1:0)}>← Back</button>}
             <button className="btn btn--accent" disabled={!complete||busy||(step===1&&!ready)||(step===2&&(!ready||(mode==="once"&&unavailable)))}
               onClick={()=>step===0?go(1):step===1?go(2):add()}>
-              {busy?mode==="reserve"?"Opening checkout…":"Adding…":step===0?"Choose my sizes →":step===1?"Review my outfit →":mode==="reserve"?"Subscribe for $250 / season →":unavailable?"Selected sizes sold out":"Add outfit to bag"}
+              {busy?mode==="reserve"?"Opening checkout…":"Adding…":step===0?"Choose my sizes →":step===1?"Review my outfit →":mode==="reserve"?`Subscribe for ${money(RESERVE_OUTFIT_PRICE)} / season →`:unavailable?"Selected sizes sold out":"Add outfit to bag"}
             </button>
             {step===2&&<p>{variants.some(v=>v?.currentlyNotInStock)?"Preorder · First shipment ships in about 2 weeks.":"No subscription unless you choose Reserve."}</p>}
           </div>

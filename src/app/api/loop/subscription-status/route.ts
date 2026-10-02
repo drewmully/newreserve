@@ -12,6 +12,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
+import { readShopifyOutfitMembership } from "@/lib/shopifyOutfitMembership";
 import {
   getLoopSubscriptionStatus,
   getLoopManageSubscriptionUrl,
@@ -45,11 +46,18 @@ export async function GET(request: NextRequest) {
   if (!context) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
+  // This paid-order receipt is server-managed and independent of Loop's cache.
+  // Never invent an ACTIVE contract status or pass Shopify contracts to Loop.
+  const outfit = readShopifyOutfitMembership(context.userData.shopify_outfit_membership);
+  const withOutfit = (subscriptions: unknown) => ({
+    ...((subscriptions ?? EMPTY_SUBSCRIPTIONS) as Record<string, unknown>),
+    ...(outfit ? { shopify_outfit: outfit } : {}),
+  });
 
   // No Shopify customer: return cache
   if (!context.loopCustomerIdentifier) {
     return NextResponse.json({
-      subscriptions: context.userData.subscriptions ?? EMPTY_SUBSCRIPTIONS,
+      subscriptions: withOutfit(context.userData.subscriptions),
       source: "cache",
     });
   }
@@ -75,11 +83,11 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ subscriptions, source: "loop" });
+    return NextResponse.json({ subscriptions: withOutfit(subscriptions), source: "loop" });
   } catch {
     // Loop unavailable: serve Firestore cache
     return NextResponse.json({
-      subscriptions: context.userData.subscriptions ?? EMPTY_SUBSCRIPTIONS,
+      subscriptions: withOutfit(context.userData.subscriptions),
       source: "cache",
     });
   }

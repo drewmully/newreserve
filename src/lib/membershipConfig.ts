@@ -158,9 +158,28 @@ export const LOOP_CHANGE_PLAN_OPTIONS = [
   },
 ] as const;
 
+/** Shopify Subscriptions enrollment used ONLY by the shop outfit builder.
+ * Keep the existing Loop plans and their change-plan options unchanged. */
+export const SHOPIFY_OUTFIT_SUBSCRIPTION = {
+  ...createPlan({
+    tier: "member",
+    label: "Mully Reserve | The Seasonal Edit",
+    price: "$299.95 every 3 months",
+    variantId: 50408581267648,
+    sellingPlanId: 6627721408,
+    sellingPlanGroupId: 2199224512,
+  }),
+  amount: 299.95,
+  productId: 10250499719360,
+  provider: "shopify" as const,
+  // Verified via shop.customerAccountsV2.url. Not the headless /account route.
+  accountUrl: "https://shopify.com/56105304256/account",
+};
+
 const VARIANT_TIER_MAP: Record<string, PaidMemberTier> = {
   [String(SHOPIFY_MEMBERSHIP_PLANS.access.variantId)]: "access",
   [String(SHOPIFY_MEMBERSHIP_PLANS.member.variantId)]: "member",
+  [String(SHOPIFY_OUTFIT_SUBSCRIPTION.variantId)]: "member",
 };
 
 for (const legacyVariantId of MEMBER_LEGACY_VARIANT_IDS) {

@@ -23,6 +23,7 @@ import {
 import { adminDb, adminAuth } from "@/lib/firebase-admin";
 import { sendPlainText } from "@/lib/email/resend";
 import { resolveMemberTierFromVariantId } from "@/lib/membershipConfig";
+import { outfitMembershipFromPaidOrder } from "@/lib/shopifyOutfitMembership";
 import {
   startFlow,
   completeSequence,
@@ -619,6 +620,7 @@ export async function POST(request: NextRequest) {
   const tierUpdate = email && !isGiftOrder(order.note_attributes)
     ? (async () => {
         const tier = resolveTierFromLineItems(order.line_items);
+        const outfitMembership = outfitMembershipFromPaidOrder(order);
         if (!tier || tier === "free") {
           // Fallback: even without a matching line item, Loop may already
           // consider this customer active. Provision only if so.
@@ -663,6 +665,7 @@ export async function POST(request: NextRequest) {
               created_at: Date.now(),
               updated_at: Date.now(),
               tier_paid_at: Date.now(),
+              ...(outfitMembership ? { shopify_outfit_membership: outfitMembership } : {}),
               // Snapshot the just-paid order so the /auth/callback client
               // can fetch its value + Meta CAPI event_id for browser-side
               // dedup without re-hitting Shopify. `event_id_captured` is
@@ -704,6 +707,7 @@ export async function POST(request: NextRequest) {
               tier,
               updated_at: Date.now(),
               tier_paid_at: Date.now(),
+              ...(outfitMembership ? { shopify_outfit_membership: outfitMembership } : {}),
               // Refresh the latest_purchase snapshot so /auth/callback can
               // dedup the CAPI Purchase for this order too, not just the
               // very first one. See the parallel comment above.

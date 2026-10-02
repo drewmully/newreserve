@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMembershipCheckout } from "@/lib/shopifyCheckout";
-import { SHOPIFY_MEMBERSHIP_PLANS } from "@/lib/membershipConfig";
+import { SHOPIFY_MEMBERSHIP_PLANS, SHOPIFY_OUTFIT_SUBSCRIPTION } from "@/lib/membershipConfig";
 import type { FirstBoxItem } from "@/lib/shopFirstBoxCheckout";
 vi.mock("@/lib/attribution",()=>({getStoredAttribution:()=>({}),attributionToCartAttributes:()=>[]}));
 vi.mock("@/lib/shopifyCheckoutOrigin",()=>({buildCheckoutOriginAttributes:()=>[]}));
 vi.mock("@/lib/analytics/journeyClient",()=>({recordJourneyCart:vi.fn().mockResolvedValue(undefined)}));
-const plan=SHOPIFY_MEMBERSHIP_PLANS.member;
+const plan=SHOPIFY_OUTFIT_SUBSCRIPTION;
 const items: FirstBoxItem[] = [
   {slot:"Top",variantId:"gid://shopify/ProductVariant/1",name:"Polo",size:"M"},
   {slot:"Bottom",variantId:"gid://shopify/ProductVariant/2",name:"Pant",size:"32"},
@@ -13,12 +13,12 @@ const items: FirstBoxItem[] = [
 ];
 const location = {origin:"https://www.mymully.com",href:"https://www.mymully.com/shop"};
 let fetchMock: ReturnType<typeof vi.fn>;
-function result(amount="250.00") {
+function result(amount="299.95") {
   return {data:{cartCreate:{userErrors:[],cart:{
     id:"gid://shopify/Cart/test",checkoutUrl:"https://checkout.example.test/test",
     cost:{subtotalAmount:{amount,currencyCode:"USD"}},
     lines:{pageInfo:{hasNextPage:false},nodes:[
-      {quantity:1,merchandise:{id:plan.merchandiseId,availableForSale:true},sellingPlanAllocation:{sellingPlan:{id:plan.sellingPlanGid}},cost:{totalAmount:{amount:"250.00",currencyCode:"USD"}}},
+      {quantity:1,merchandise:{id:plan.merchandiseId,availableForSale:true},sellingPlanAllocation:{sellingPlan:{id:plan.sellingPlanGid}},cost:{totalAmount:{amount:"299.95",currencyCode:"USD"}}},
     ]},
   }}}};
 }
@@ -40,7 +40,7 @@ describe("Reserve checkout wiring",()=>{
       {key:"First shipment only · Top",value:"Polo / M"},
       {key:"First shipment only · Bottom",value:"Pant / 32"},
       {key:"First shipment only · Layer",value:"Vest / M"},
-      {key:"Future shipments",value:"New styles curated for you. $250 every 3 months (4x/year)."},
+      {key:"Future shipments",value:"New styles curated for you. $299.95 every 3 months (4x/year)."},
     ]});
     expect(payload.variables.discountCodes).toBeNull();
     expect(payload.variables.attributes).toContainEqual({key:"First box Top",value:"Polo / M (qty 1)"});
@@ -55,6 +55,7 @@ describe("Reserve checkout wiring",()=>{
     expect(location.href).toBe("https://www.mymully.com/shop");
   });
   it("preserves existing subscription entry point lines, properties and discount behavior",async()=>{
+    const plan=SHOPIFY_MEMBERSHIP_PLANS.member;
     await createMembershipCheckout("member",{discountCodes:["EXISTING"],subscriptionLineAttributes:[{key:"Style",value:"Classic"}]});
     const payload=JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(payload.variables.lines).toEqual([{merchandiseId:plan.merchandiseId,quantity:1,sellingPlanId:plan.sellingPlanGid,attributes:[{key:"Style",value:"Classic"}]}]);

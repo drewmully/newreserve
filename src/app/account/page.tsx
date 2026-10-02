@@ -1,4 +1,5 @@
 "use client";
+import { ShopifyOutfitMembershipCard } from "./ShopifyOutfitMembershipCard";
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
@@ -595,8 +596,14 @@ function SubscriptionSection({
   const isPaid = tier !== "free";
   const isActive = subscriptions?.status.toUpperCase() === "ACTIVE";
   const isStale = subscriptions?.isStale === true;
+  const outfit = subscriptions?.shopify_outfit;
+  if (outfit && subscriptions.total_subscription_count === 0) {
+    return <ShopifyOutfitMembershipCard membership={outfit} />;
+  }
 
   return (
+    <>
+    {outfit && <ShopifyOutfitMembershipCard membership={outfit} />}
     <section className="mb-8">
       <SectionLabel>Membership</SectionLabel>
       <div className={`rounded-xl border overflow-hidden ${isPaid ? "bg-forest border-forest" : "bg-cream border-taupe/12"}`}>
@@ -676,6 +683,7 @@ function SubscriptionSection({
 
       <SubscriptionManagerModal open={manageOpen} onClose={() => setManageOpen(false)} />
     </section>
+    </>
   );
 }
 

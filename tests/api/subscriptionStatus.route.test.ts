@@ -51,6 +51,26 @@ async function loadRoute() {
 }
 
 describe("GET /api/loop/subscription-status", () => {
+  it("keeps the Shopify enrollment separate even when Loop reports no subscriptions", async () => {
+    verifyIdTokenMock.mockResolvedValue({ uid: "native_member" });
+    const outfit = {provider:"shopify",variant_id:50408581267648,order_id:"123",paid_at:"2026-10-02T14:00:00Z",amount:"299.95",currency:"USD"};
+    const userRef = {
+      get: vi.fn().mockResolvedValue({exists:true,data:()=>({
+        shopify_customer_id:"123",shopify_outfit_membership:outfit,
+      })}),
+      update: vi.fn().mockResolvedValue(undefined),
+    };
+    adminDbCollectionMock.mockReturnValue({doc:vi.fn(()=>userRef)});
+    getLoopSubscriptionStatusMock.mockResolvedValue({
+      mullybox_active:false,status:"none",total_subscription_count:0,active_subscription_ids:[],
+    });
+    getLoopManageSubscriptionUrlMock.mockReturnValue(null);
+    getLoopNextUnblockUrlMock.mockReturnValue(null);
+    const { GET } = await loadRoute();
+    const res = await GET(makeRequest());
+    expect((await res.json()).subscriptions.shopify_outfit).toEqual(outfit);
+    expect(userRef.update.mock.calls[0][0]).not.toHaveProperty("shopify_outfit_membership");
+  });
   beforeEach(() => {
     verifyIdTokenMock.mockReset();
     adminDbCollectionMock.mockReset();

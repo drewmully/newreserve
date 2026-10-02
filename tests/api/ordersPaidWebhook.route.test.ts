@@ -6,6 +6,11 @@ const dispatchAnalyticsEventMock = vi.fn();
 const persistAnalyticsEventMock = vi.fn();
 const aggregateKpiDailyMock = vi.fn();
 const adminDbCollectionMock = vi.fn();
+const createUserMock = vi.fn();
+const generateSignInLinkMock = vi.fn();
+const sendPlainTextMock = vi.fn();
+
+vi.mock("@/lib/email/resend", () => ({ sendPlainText: sendPlainTextMock }));
 
 vi.mock("@/app/api/_lib/analytics", () => ({
   dispatchAnalyticsEvent: dispatchAnalyticsEventMock,
@@ -17,6 +22,11 @@ vi.mock("@/app/api/_lib/kpiReporting", () => ({
 }));
 
 vi.mock("@/lib/firebase-admin", () => ({
+  adminAuth: {
+    createUser: createUserMock,
+    getUserByEmail: vi.fn(),
+    generateSignInWithEmailLink: generateSignInLinkMock,
+  },
   adminDb: {
     collection: adminDbCollectionMock,
   },
@@ -56,7 +66,44 @@ describe("POST /api/webhooks/shopify/orders-paid", () => {
     persistAnalyticsEventMock.mockReset().mockResolvedValue(undefined);
     aggregateKpiDailyMock.mockReset().mockResolvedValue(undefined);
     adminDbCollectionMock.mockReset();
+    createUserMock.mockReset().mockResolvedValue({uid:"new_outfit_member"});
+    generateSignInLinkMock.mockReset().mockResolvedValue("https://example.test/sign-in");
+    sendPlainTextMock.mockReset().mockResolvedValue(undefined);
     process.env.SHOPIFY_WEBHOOK_SECRET = "webhook_secret";
+  });
+
+  it("creates a new Shopify outfit member with customer linkage and the existing account-unlock flow", async () => {
+    const setUser = vi.fn().mockResolvedValue(undefined);
+    const emptyUsers = vi.fn().mockResolvedValue({empty:true,docs:[]});
+    adminDbCollectionMock.mockImplementation((name: string) => {
+      if (name === "webhook_receipts") return {doc:()=>({
+        get:async()=>({exists:false}),set:async()=>undefined,
+      })};
+      if (name === "users") return {
+        where:()=>({limit:()=>({get:emptyUsers})}),
+        doc:()=>({set:setUser}),
+      };
+      throw new Error(`Unexpected collection ${name}`);
+    });
+    const { POST } = await loadRoute();
+    const response = await POST(buildRequest({
+      secret:"webhook_secret",
+      body:JSON.stringify({
+        id:1002,order_number:78,email:"new@example.test",total_price:"299.95",
+        processed_at:"2026-10-02T14:00:00Z",created_at:"2026-10-02T14:00:00Z",
+        currency:"USD",customer:{id:1000,email:"new@example.test"},
+        line_items:[{id:1,title:"Seasonal Edit",variant_id:50408581267648,quantity:1,price:"299.95"}],
+      }),
+    }));
+    expect(response.status).toBe(200);
+    expect(createUserMock).toHaveBeenCalledWith({email:"new@example.test"});
+    expect(setUser).toHaveBeenCalledWith(expect.objectContaining({
+      tier:"member",shopify_customer_id:"1000",
+      shopify_outfit_membership:expect.objectContaining({provider:"shopify",variant_id:50408581267648}),
+    }));
+    expect(sendPlainTextMock).toHaveBeenCalledWith(expect.objectContaining({
+      to:"new@example.test",category:"magic_link_unlock",sendClass:"transactional",
+    }));
   });
 
   it("returns 401 when HMAC is invalid", async () => {
@@ -106,7 +153,10 @@ describe("POST /api/webhooks/shopify/orders-paid", () => {
     expect(dispatchAnalyticsEventMock).not.toHaveBeenCalled();
   });
 
-  it("processes valid webhook and updates user tier from variant", async () => {
+  it.each([
+    {variant:47601025482944,tier:"access",price:"99.00"},
+    {variant:50408581267648,tier:"member",price:"299.95"},
+  ])("provisions $tier account access from paid variant $variant", async ({variant,tier,price}) => {
     const receiptGet = vi.fn().mockResolvedValue({ exists: false });
     const receiptSet = vi.fn().mockResolvedValue(undefined);
     const userUpdate = vi.fn().mockResolvedValue(undefined);
@@ -148,6 +198,7 @@ describe("POST /api/webhooks/shopify/orders-paid", () => {
       email: "member@example.com",
       phone: null,
       total_price: "249.00",
+      processed_at: "2026-10-02T14:00:00Z",
       currency: "USD",
       browser_ip: "198.51.100.24",
       client_details: {
@@ -160,9 +211,9 @@ describe("POST /api/webhooks/shopify/orders-paid", () => {
           id: 1,
           title: "Reserve Access Plan",
           quantity: 1,
-          price: "99.00",
+          price,
           sku: "ACCESS",
-          variant_id: 47601025482944,
+          variant_id: variant,
         },
       ],
     });
@@ -196,10 +247,19 @@ describe("POST /api/webhooks/shopify/orders-paid", () => {
     expect(aggregateKpiDailyMock).toHaveBeenCalledTimes(1);
     expect(userUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
-        tier: "access",
+        tier,
         shopify_customer_id: "999",
       })
     );
+    if (variant === 50408581267648) {
+      expect(userUpdate).toHaveBeenCalledWith(expect.objectContaining({
+        shopify_outfit_membership: expect.objectContaining({
+          provider:"shopify",variant_id:variant,amount:"299.95",order_id:"1001",
+        }),
+      }));
+    } else {
+      expect(userUpdate.mock.calls[0][0]).not.toHaveProperty("shopify_outfit_membership");
+    }
   });
 
   it("matches Shopify GID customer ids and uses the Firebase UID for purchases", async () => {

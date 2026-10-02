@@ -71,6 +71,7 @@ export async function uploadCommunityImage(file: File): Promise<string> {
    ═══════════════════════════════════════════ */
 
 export interface UserDocument {
+  shopify_outfit_membership?: import("./shopifyOutfitMembership").ShopifyOutfitMembership;
   onboarding_profile?: {
     birth_month: string;
     birth_day: string;

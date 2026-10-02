@@ -997,7 +997,9 @@ function BenefitsTab({ onUpgrade }: { onUpgrade: () => void }) {
     black: "By Invitation",
   };
 
-  const displayPrice = subscriptions?.planPrice ?? tierPricingFallback[tier];
+  const displayPrice = subscriptions?.shopify_outfit
+    ? `${new Intl.NumberFormat("en-US", { style: "currency", currency: subscriptions.shopify_outfit.currency }).format(Number(subscriptions.shopify_outfit.amount))} last payment · Shopify`
+    : subscriptions?.planPrice ?? tierPricingFallback[tier];
 
   const postBenefitInteraction = useCallback(
     async (payload: {

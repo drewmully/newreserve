@@ -1,4 +1,4 @@
-import { SHOPIFY_MEMBERSHIP_PLANS } from "./membershipConfig";
+import { SHOPIFY_MEMBERSHIP_PLANS, SHOPIFY_OUTFIT_SUBSCRIPTION } from "./membershipConfig";
 import { firstBoxAttributes, firstBoxDisplayAttributes, assertFirstBoxCart, type FirstBoxItem } from "./shopFirstBoxCheckout";
 import { buildCheckoutOriginAttributes } from "./shopifyCheckoutOrigin";
 import { recordJourneyCart } from "./analytics/journeyClient";
@@ -105,7 +105,9 @@ export async function createMembershipCheckout(
       sellingPlanId: SHOPIFY_MEMBERSHIP_PLANS.member.sellingPlanGid,
     },
   };
-  const { merchandiseId, sellingPlanId } = PLANS[tier];
+  const { merchandiseId, sellingPlanId } = options.firstBoxItems
+    ? { merchandiseId: SHOPIFY_OUTFIT_SUBSCRIPTION.merchandiseId, sellingPlanId: SHOPIFY_OUTFIT_SUBSCRIPTION.sellingPlanGid }
+    : PLANS[tier];
   const domain = process.env.NEXT_PUBLIC_SHOPIFY_STORE_DOMAIN;
   const token = process.env.NEXT_PUBLIC_SHOPIFY_STOREFRONT_TOKEN;
   if (!domain || !token) {
@@ -119,7 +121,7 @@ export async function createMembershipCheckout(
   // attribute so the orders-paid webhook can atomically claim a slot.
   // Only applies to the "member" tier (Reserve Member subscription).
   const foundingGift =
-    tier === "member"
+    tier === "member" && !options.firstBoxItems
       ? await shouldAttachFoundingHundredGift()
       : { attach: false, variantGid: null };
 
