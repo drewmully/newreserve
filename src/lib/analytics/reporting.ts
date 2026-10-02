@@ -160,6 +160,13 @@ export type CustomerCohortComponents = {
   cohortMonth: string; horizonDays: number; graceSeconds: number; acquisitionDefinition: string; asOf: string;
   mature: boolean; cohortCustomers: number | null; repeatCustomers: number | null; revenueUsd: string | null;
 };
+/** Cohort intervals retain the six fractional digits accepted by the fact contract. */
+function cohortInstant(value: unknown): bigint | null {
+  if (typeof value !== "string") return null;
+  try { nyDate(value); } catch { return null; }
+  const fraction = (value.match(/\.(\d+)Z$/)?.[1] ?? "").padEnd(6, "0");
+  return BigInt(Date.parse(value)) * BigInt(1000) + BigInt(fraction.slice(3));
+}
 /** Primitive counts and exact dollars. This is not a report or an averaged rate. */
 export function customerCohortComponents(f: Facts, s: ReportScope, policy: CustomerCohortPolicy): CustomerCohortComponents {
   preflight(f, s); nyDate(policy.asOf);
@@ -167,33 +174,40 @@ export function customerCohortComponents(f: Facts, s: ReportScope, policy: Custo
       !Number.isSafeInteger(policy.graceSeconds) || policy.graceSeconds < 0 || !/^\d{4}-\d{2}-01$/.test(policy.cohortMonth)) throw new Error("invalid_cohort_policy");
   if (policy.historyCompleteThrough) for (const cutoff of policy.historyCompleteThrough.values()) nyDate(cutoff);
   const customers = f.customers.filter(c => String(c.acquisition_date ?? "").slice(0, 7) === policy.cohortMonth.slice(0, 7));
+  const horizon = BigInt(policy.horizonDays) * BigInt(86400) * SCALE;
+  const grace = BigInt(policy.graceSeconds) * SCALE, asOf = cohortInstant(policy.asOf)!;
   const mature = policy.fullMonthCovered && s.gates.customers && s.gates.orders &&
-    customers.every(c => c.analytics_permitted === true && c.identity_status === "resolved" && c.history_complete === true &&
-      typeof c.first_eligible_order_at === "string" &&
-      Date.parse(c.first_eligible_order_at) + policy.horizonDays * 86400000 + policy.graceSeconds * 1000 <=
-        Math.min(Date.parse(policy.asOf), policy.historyCompleteThrough
-          ? Date.parse(policy.historyCompleteThrough.get(String(c.customer_id)) ?? "") : Infinity));
+    customers.every(c => {
+      const first = cohortInstant(c.first_eligible_order_at);
+      const cutoff = policy.historyCompleteThrough
+        ? cohortInstant(policy.historyCompleteThrough.get(String(c.customer_id))) : asOf;
+      return c.analytics_permitted === true && c.identity_status === "resolved" && c.history_complete === true &&
+        first !== null && cutoff !== null && first + horizon + grace <= asOf && first + horizon + grace <= cutoff;
+    });
   // Repeat purchase depends on eligible orders, not financial lineage. LTV
   // still requires independently complete ledger values for the same cohort.
   let total = ZERO, repeat = 0, valuesComplete = policy.ledgerLineageComplete && s.gates.ledger;
   if (mature) for (const c of customers) {
-    const start = Date.parse(c.first_eligible_order_at as string), end = start + policy.horizonDays * 86400000;
-    const orders = f.orders.filter(o => o.customer_id === c.customer_id && o.eligibility_status === "eligible" &&
-      typeof o.paid_at === "string" && Date.parse(o.paid_at) >= start && Date.parse(o.paid_at) < end);
+    const start = cohortInstant(c.first_eligible_order_at)!, end = start + horizon;
+    const orders = f.orders.filter(o => {
+      if (o.customer_id !== c.customer_id || o.eligibility_status !== "eligible") return false;
+      const paid = cohortInstant(o.paid_at);
+      return paid !== null && paid >= start && paid < end;
+    });
     if (orders.some(o => o.order_id !== c.first_eligible_order_id)) repeat++;
     const ids = new Set(orders.map(o => o.order_id));
     for (const l of f.sales_ledger) {
       if (!ids.has(l.order_id) || !merchandise.has(l.component as string) || l.sales_eligible !== true) continue;
       const original = policy.originalLedgerIds.has(l.ledger_entry_id as string);
-      const occurred = Date.parse(l.effective_at as string);
+      const occurred = cohortInstant(l.effective_at);
       const parent = orders.find(o => o.order_id === l.order_id)!;
       // Original components may predate payment, but must precede the H-day
       // endpoint. An impossible original clock withholds revenue, not a zero.
-      if (typeof l.effective_at !== "string" || !Number.isFinite(occurred) || original && occurred >= end) {
+      if (occurred === null || original && occurred >= end) {
         valuesComplete = false;
         continue;
       }
-      if (original || occurred >= Date.parse(parent.paid_at as string) && occurred < end) {
+      if (original || occurred >= cohortInstant(parent.paid_at)! && occurred < end) {
         if (l.amount_usd === null) valuesComplete = false;
         else total += micros(l.amount_usd as string);
       }

@@ -33,6 +33,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseService, withJobRun } from "@/app/api/_lib/supabaseService";
 import { postAdSpendToPostHog } from "@/app/api/admin/cron/_lib/postAdSpendToPostHog";
+import { createMetaSpendReader, metaSpendCents, metaDeliveryCount,
+  type MetaInsightsRow } from "@/app/api/admin/cron/_lib/metaSpendSource";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -54,50 +56,6 @@ function reqEnv() {
     env: Object.fromEntries(keys.map((k) => [k, process.env[k] || ""])),
     apiVersion: process.env.META_API_VERSION || DEFAULT_API_VERSION,
   };
-}
-
-interface MetaInsightsRow {
-  date_start: string;
-  date_stop: string;
-  spend?: string;
-  impressions?: string;
-  clicks?: string;
-  reach?: string;
-  // Ad-set-level only
-  adset_id?: string;
-  adset_name?: string;
-  campaign_id?: string;
-  campaign_name?: string;
-  // actions[] arrives as an array of {action_type, value}
-  actions?: Array<{ action_type: string; value: string }>;
-  // action_values[] same shape but with monetary value (purchase revenue)
-  action_values?: Array<{ action_type: string; value: string }>;
-}
-
-interface MetaInsightsResponse {
-  data?: MetaInsightsRow[];
-  paging?: { next?: string };
-  error?: { message: string; code: number };
-}
-
-async function fetchAllPages(initialUrl: string): Promise<MetaInsightsRow[]> {
-  const out: MetaInsightsRow[] = [];
-  let url: string | undefined = initialUrl;
-  let safety = 25;
-  while (url && safety > 0) {
-    const r = await fetch(url);
-    if (!r.ok) {
-      throw new Error(`meta insights: ${r.status} ${await r.text()}`);
-    }
-    const j = (await r.json()) as MetaInsightsResponse;
-    if (j.error) {
-      throw new Error(`meta insights error: ${j.error.code} ${j.error.message}`);
-    }
-    for (const row of j.data || []) out.push(row);
-    url = j.paging?.next;
-    safety--;
-  }
-  return out;
 }
 
 /**
@@ -159,6 +117,8 @@ export async function GET(req: NextRequest) {
 
   const url = new URL(req.url);
   const days = Number(url.searchParams.get("days") || "14");
+  if (!Number.isSafeInteger(days) || days < 1 || days > 31)
+    return NextResponse.json({ error: "invalid_days" }, { status: 400 });
 
   const result = await withJobRun("meta-ads-spend", async ({ setMeta, bumpRows }) => {
     const { missing, env, apiVersion } = reqEnv();
@@ -167,48 +127,45 @@ export async function GET(req: NextRequest) {
       return { skipped: true, missing };
     }
 
-    const accountId = env.META_AD_ACCOUNT_ID.startsWith("act_")
-      ? env.META_AD_ACCOUNT_ID
-      : `act_${env.META_AD_ACCOUNT_ID}`;
-    const token = env.META_MARKETING_API_TOKEN;
+    const reader = createMetaSpendReader({
+      accountId: env.META_AD_ACCOUNT_ID, token: env.META_MARKETING_API_TOKEN, apiVersion,
+      signal: AbortSignal.any([req.signal, AbortSignal.timeout(90000)]),
+    });
+    const account = await reader.readAccount();
+    const accountId = account.accountId;
 
     const end = new Date();
     const start = new Date();
     start.setUTCDate(end.getUTCDate() - days);
     const fmt = (d: Date) => d.toISOString().slice(0, 10);
-    const timeRange = JSON.stringify({ since: fmt(start), until: fmt(end) });
+    const range = { since: fmt(start), until: fmt(end) };
 
     // ── Pull 1: account-level daily totals → marketing_spend_daily ────────
     const accountFields = ["spend", "impressions", "clicks"].join(",");
-    const accountUrl =
-      `https://graph.facebook.com/${apiVersion}/${accountId}/insights` +
-      `?level=account&fields=${accountFields}` +
-      `&time_increment=1&time_range=${encodeURIComponent(timeRange)}` +
-      `&access_token=${token}`;
-    const accountRows = await fetchAllPages(accountUrl);
+    const accountResult = await reader.readInsights({ ...range, level: "account", fields: accountFields });
+    const accountRows = accountResult.rows;
+    const accountCollectedAt = new Date().toISOString();
 
     const spendRows = accountRows
-      .filter((r) => r.date_start && Number(r.spend || 0) > 0)
       .map((r) => ({
         brand: "mully",
         spend_date: r.date_start,
         channel: "meta_ads",
         source: "meta_marketing_api",
-        amount: Number(Number(r.spend || 0).toFixed(2)),
+        amount: metaSpendCents(r.spend) / 100,
         raw: {
           spend: r.spend,
           impressions: r.impressions,
           clicks: r.clicks,
+          account_id: accountId,
+          source_currency: account.currency,
+          source_timezone: account.timezone,
+          pagination_complete: accountResult.paginationComplete,
+          source_observed_at: accountCollectedAt,
+          requested_from: range.since,
+          requested_through: range.until,
         },
       }));
-
-    const svc = getSupabaseService();
-    if (spendRows.length > 0) {
-      const { error } = await svc
-        .from("marketing_spend_daily")
-        .upsert(spendRows, { onConflict: "brand,spend_date,channel,source" });
-      if (error) throw new Error(`marketing_spend upsert: ${error.message}`);
-    }
 
     // ── Pull 2: per-ad-set daily snapshots → meta_ad_performance_snapshots ─
     const adsetFields = [
@@ -223,12 +180,9 @@ export async function GET(req: NextRequest) {
       "actions",
       "action_values",
     ].join(",");
-    const adsetUrl =
-      `https://graph.facebook.com/${apiVersion}/${accountId}/insights` +
-      `?level=adset&fields=${adsetFields}` +
-      `&time_increment=1&time_range=${encodeURIComponent(timeRange)}` +
-      `&access_token=${token}`;
-    const adsetRows = await fetchAllPages(adsetUrl);
+    const adsetResult = await reader.readInsights({ ...range, level: "adset", fields: adsetFields });
+    const adsetRows = adsetResult.rows;
+    const adsetCollectedAt = new Date().toISOString();
 
     const snapshotRows = adsetRows
       .filter((r) => r.date_start && r.adset_id)
@@ -239,17 +193,41 @@ export async function GET(req: NextRequest) {
         campaign_name: r.campaign_name || null,
         adset_id: r.adset_id || "(unknown)",
         adset_name: r.adset_name || null,
-        impressions: Number(r.impressions || 0),
-        clicks: Number(r.clicks || 0),
+        impressions: metaDeliveryCount(r.impressions),
+        clicks: metaDeliveryCount(r.clicks),
         reach: Number(r.reach || 0),
-        spend_cents: Math.round(Number(r.spend || 0) * 100),
+        spend_cents: metaSpendCents(r.spend),
         initiate_checkouts: extractInitiateCheckouts(r.actions),
         purchases: extractPurchases(r.actions),
         purchase_revenue_cents: Math.round(
           extractPurchaseRevenue(r.action_values) * 100
         ),
-        raw: r,
+        raw: { ...r, account_id: accountId, source_currency: account.currency,
+          source_timezone: account.timezone, pagination_complete: adsetResult.paginationComplete,
+          source_observed_at: adsetCollectedAt },
       }));
+
+    // Finish and validate both bounded source reads before either table changes.
+    // Explicit returned zeros replace old positive values; missing dates do not.
+    setMeta({
+      source_account_id: accountId,
+      source_currency: account.currency,
+      source_timezone: account.timezone,
+      account_pages: accountResult.pages,
+      adset_pages: adsetResult.pages,
+      account_collected_at: accountCollectedAt,
+      adset_collected_at: adsetCollectedAt,
+      account_missing_dates: accountResult.missingDates,
+      adset_missing_dates: adsetResult.missingDates,
+      all_marketing_inventory_complete: false,
+    });
+    const svc = getSupabaseService();
+    if (spendRows.length > 0) {
+      const { error } = await svc
+        .from("marketing_spend_daily")
+        .upsert(spendRows, { onConflict: "brand,spend_date,channel,source" });
+      if (error) throw new Error(`marketing_spend upsert: ${error.message}`);
+    }
 
     if (snapshotRows.length > 0) {
       const { error } = await svc
@@ -282,9 +260,9 @@ export async function GET(req: NextRequest) {
       .filter((r) => r.date_start)
       .map((r) => ({
         spend_date: r.date_start,
-        amount: Number(Number(r.spend || 0).toFixed(2)),
-        impressions: Number(r.impressions || 0),
-        clicks: Number(r.clicks || 0),
+        amount: metaSpendCents(r.spend) / 100,
+        impressions: metaDeliveryCount(r.impressions),
+        clicks: metaDeliveryCount(r.clicks),
       }));
     const posthogResult = await postAdSpendToPostHog({
       channel: "meta_ads",
