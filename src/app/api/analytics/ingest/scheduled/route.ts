@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { runScheduledPipeline } from "../../../../../../scripts/analytics/scheduled-pipeline.mjs";
 import { getAnalyticsSupabase } from "@/lib/analytics/serverClient";
 import { runScheduledFinancialCheckpoint } from "@/lib/analytics/scheduledFinancialCheckpoint";
+import { runScheduledPipelineCatchup } from "@/lib/analytics/scheduledPipelineCatchup";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -60,7 +61,23 @@ export async function GET(req: NextRequest) {
       ["done", "excluded", "idle"].includes(admission.postState) &&
       (result.state === "complete" || (result.state === "unhealthy" &&
         health?.pending > 0 && health.oldestPendingSeconds >= 900));
-    if (validHealth && (idle || completedCycle)) {
+    let catchup: Awaited<ReturnType<typeof runScheduledPipelineCatchup>> | undefined;
+    if (validHealth && completedCycle && health.pending > 0) {
+      try {
+        catchup = await runScheduledPipelineCatchup({
+          client: getAnalyticsSupabase(),
+          projectRef: process.env.LEAN_ANALYTICS_PIPELINE_PROJECT_REF ?? "",
+          databaseUrl: process.env.LEAN_ANALYTICS_SUPABASE_URL ?? "",
+          shop: process.env.LEAN_SHOPIFY_SHOP_DOMAIN ?? "",
+          accessToken: process.env.LEAN_SHOPIFY_ANALYTICS_READ_TOKEN ?? "",
+          deadline: admittedAt + 180000, signal: AbortSignal.any([req.signal, invocationDeadline]),
+        });
+      } catch { catchup = { state: "held", extraClaims: 0, exclusions: 0,
+        retainedSourceSteps: 0, nativeHydrations: 0, nativeRequests: 0 }; }
+    }
+    // A separately approved throughput grant owns this invocation's spare
+    // capacity. Never run the optional financial lane alongside a burst/hold.
+    if ((!catchup || catchup.state === "off") && validHealth && (idle || completedCycle)) {
       if (invocationDeadline.aborted || Date.now() - admittedAt > 110000) {
         financialCheckpoint = { state: "deadline", calls: 0 };
       } else try {
@@ -74,7 +91,8 @@ export async function GET(req: NextRequest) {
         });
       } catch { financialCheckpoint = { state: "unavailable" }; }
     }
-    const response = { ...result, ...(financialCheckpoint ? { financialCheckpoint } : {}) };
+    const response = { ...result, ...(catchup ? { catchup } : {}),
+      ...(financialCheckpoint ? { financialCheckpoint } : {}) };
     // Only the existing supervisor's aggregate state/counts are returned.
     // "complete" means one bounded invocation ended, not a report was published.
     console.info(JSON.stringify({ event: "analytics_vercel_scheduled_invocation", ...response }));

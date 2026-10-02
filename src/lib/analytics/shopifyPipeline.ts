@@ -107,6 +107,20 @@ export function mappingPolicy(source: PilotSource, policy: PipelinePolicy): Pilo
   );
   return { ...policy, lineClasses };
 }
+/** Only an unedited, complete annual-access-only order is a candidate for the
+ * separately owner-authorized SQL exclusion. Unknown/mixed products still map
+ * through the existing fail-closed catalog gate. SQL rechecks this evidence. */
+function annualAccessOnly(source: PilotSource): boolean {
+  const order = sourceObject(source.commerce.order);
+  const connection = sourceObject(order.lineItems);
+  const lines = sourceArray(connection.nodes).map(sourceObject);
+  if (order.edited !== false || sourceObject(connection.pageInfo).hasNextPage !== false ||
+      lines.length < 1 || lines.length > 100) return false;
+  const ids = lines.map(line => shopifyId(line.id, "LineItem"));
+  return new Set(ids).size === ids.length && lines.every(line =>
+    shopifyId(sourceObject(line.product).id, "Product") === "8501257175232" &&
+    line.isGiftCard === false && Number.isSafeInteger(line.quantity) && (line.quantity as number) > 0);
+}
 /** One receipt per bounded dispatch. Shopify calls are read-only, snapshots are
  * durable, and the database fences atomic materialization + queue completion.
  * This produces observed candidate facts, NEVER a certified full-store release.
@@ -145,6 +159,7 @@ async function runPipeline(options: {
   let output: ReturnType<typeof mapPilotSource> | undefined;
   let productReports: ReturnType<typeof composeRetainedOrderReports>["productReports"] | undefined;
   let beforeWindow = false;
+  let annualAccess = false;
   let storageInFlight = false;
   let phase = "invalid_receipt";
   try {
@@ -201,9 +216,10 @@ async function runPipeline(options: {
     verifyHydration(sourceString(claim.topic), claim.payload, source);
     beforeWindow = created < from;
     if (!beforeWindow && created >= until) throw new Error("pipeline_outside_approved_window");
+    annualAccess = !beforeWindow && annualAccessOnly(source);
     // A proven old creation date rules out facts independently of catalog.
     // Financial/catalog mapping remains mandatory only for the in-window path.
-    if (!beforeWindow) {
+    if (!beforeWindow && !annualAccess) {
       const mappedPolicy = mappingPolicy(source, policy);
       const publication = sourceString(claim.publication), evidence = `lean_private.pipeline_snapshots/${claim.workId}`;
       if (policy.retainedReports === "product-v1") {
@@ -229,6 +245,12 @@ async function runPipeline(options: {
     const excluded = await pipelineRpc(options.client, "lean_pipeline_exclude_before_window", args);
     if (typeof excluded !== "boolean") throw new Error("pipeline_invalid_exclusion");
     return excluded ? { state: "excluded", reason: "excluded_before_window" } : { state: "lost_lease" };
+  }
+  if (annualAccess) {
+    // No catch-and-fail or retry: a lost finalizer response may follow commit.
+    const excluded = await pipelineRpc(options.client, "lean_pipeline_exclude_annual_access", args);
+    if (typeof excluded !== "boolean") throw new Error("pipeline_invalid_exclusion");
+    return excluded ? { state: "excluded", reason: "excluded_annual_access" } : { state: "lost_lease" };
   }
   if (!output) throw new Error("pipeline_missing_output");
   // No catch-and-fail around finish: its response may be lost AFTER commit.

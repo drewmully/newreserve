@@ -3,6 +3,9 @@ import { NextRequest } from "next/server";
 import { autoImplementMethods } from "next/dist/server/route-modules/app-route/helpers/auto-implement-methods";
 import { GET, maxDuration } from "@/app/api/analytics/subscriptions/scheduled/route";
 import { GET as commerceGET } from "@/app/api/analytics/ingest/scheduled/route";
+vi.mock("@/lib/analytics/scheduledPipelineCatchup", () => ({
+  runScheduledPipelineCatchup: vi.fn(async () => ({ state: "off" })),
+}));
 
 const start = Date.parse("2026-09-30T21:48:23.557Z");
 const secret = "synthetic-cron-not-a-credential";
