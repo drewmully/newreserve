@@ -57,3 +57,4 @@
  .shop-signup__skip{margin-top:8px}
 }
 @media(prefers-reduced-motion:reduce){.shop-signup[open]{animation:none}.shop-signup *{transition:none!important}}
+.shop-signup__reward { overflow-wrap: anywhere; padding: 12px; border: 1px solid currentColor; font-size: 14px; line-height: 1.6; }
