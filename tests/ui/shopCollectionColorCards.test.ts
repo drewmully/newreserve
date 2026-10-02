@@ -46,3 +46,15 @@ describe("buildSwatchCards", () => {
     expect(cards[1].swatches).toEqual([]);
   });
 });
+
+describe("white colorway card photos", () => {
+  it("uses the on-model shot for Pima Snow White in cards and swatches", () => {
+    const pima = product("olydoe-pima-long-sleeve-polo", ["Oceana", "Snow White"], [img("o.jpg", "Pima, Oceana"), img("w.jpg", "Pima, Snow White")]);
+    const [, white] = buildColorCards([pima]);
+    expect(white.cardImage).toContain("OLS-SW-1.jpg");
+    expect(white.cardImageFit).toBe("cover");
+    const [sw] = buildSwatchCards([pima]);
+    expect(sw.swatches?.[1]).toMatchObject({ color: "Snow White", fit: "cover" });
+    expect(sw.swatches?.[0].fit).toBeUndefined();
+  });
+});

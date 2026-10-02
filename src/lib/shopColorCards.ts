@@ -2,17 +2,30 @@ import type { ShopifyProduct } from "@/lib/shopify";
 import { buildShopDisplayProducts, type ShopCatalogProduct } from "@/lib/shopDisplay";
 import { shopProductPhoto } from "@/lib/shopProductPhotos";
 
-export type ShopSwatch = { color: string; image: string; variantId?: string };
+export type ShopSwatch = { color: string; image: string; variantId?: string; fit?: "cover" };
 
 export type ShopColorCard = ShopifyProduct & {
   displayKey: string;
   cardColor?: string;
   cardImage?: string;
+  /** "cover" for full-bleed lifestyle photos; default is contained flat-lay. */
+  cardImageFit?: "cover";
   preferredVariantId?: string;
   /** Number of photographed colors this product has (for "+N more colors"). */
   colorCount?: number;
   /** Present on Shop all swatch cards: every photographed color, lead first. */
   swatches?: ShopSwatch[];
+};
+
+/**
+ * Card photos for colorways whose flat-lay is white-on-white and reads washed
+ * out in the grid. These are the brand's own on-model shots (already on the
+ * PDP); product pages keep their original gallery order.
+ */
+const CDN = "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/";
+const CARD_IMAGE_OVERRIDES: Record<string, Record<string, string>> = {
+  "olydoe-pima-long-sleeve-polo": { "Snow White": `${CDN}OLS-SW-1.jpg?v=1790961368` },
+  "olydoe-oxford-pique-polo": { "Snow White / Ghost Gray": `${CDN}OOP-SWG-1.jpg?v=1790961364` },
 };
 
 /**
@@ -27,12 +40,14 @@ function colorCardsFor(product: ShopifyProduct): ShopColorCard[] {
     const img = d.cardImage ?? d.images[0];
     if (!img || seen.has(img)) continue;
     seen.add(img);
+    const override = d.cardColor ? CARD_IMAGE_OVERRIDES[product.slug]?.[d.cardColor] : undefined;
     cards.push({
       ...product,
       displayKey: d.displayKey,
       cardColor: display.length > 1 ? d.cardColor : undefined,
       // Keep the prepared, normalized webp when the card shows the catalog primary.
-      cardImage: img === product.images[0] ? shopProductPhoto(product) : img,
+      cardImage: override ?? (img === product.images[0] ? shopProductPhoto(product) : img),
+      ...(override ? { cardImageFit: "cover" as const } : {}),
       preferredVariantId: display.length > 1 ? d.preferredVariantId : undefined,
     });
   }
@@ -64,7 +79,12 @@ export function buildSwatchCards(products: ShopifyProduct[]): ShopColorCard[] {
     return {
       ...lead,
       displayKey: product.slug,
-      swatches: cards.map((c) => ({ color: c.cardColor ?? "", image: c.cardImage ?? "", variantId: c.preferredVariantId })),
+      swatches: cards.map((c) => ({
+        color: c.cardColor ?? "",
+        image: c.cardImage ?? "",
+        variantId: c.preferredVariantId,
+        ...(c.cardImageFit ? { fit: c.cardImageFit } : {}),
+      })),
     };
   });
 }
