@@ -79,7 +79,7 @@ export function ShopProductCard({
               className="shop-swatch"
               aria-label={s.color}
               aria-pressed={i === active}
-              style={{ background: swatchBackground(s.color) }}
+              style={{ background: swatchBackground(s.color, product.slug) }}
               onMouseEnter={() => setActive(i)}
               onFocus={() => setActive(i)}
               onClick={() => setActive(i)}
@@ -95,7 +95,7 @@ export function ShopProductCard({
         <h3>{shopProductLabel(product)}</h3>
         {(color || product.swatches) && (
           <p className="shop-product-card__color">
-            {!product.swatches && color && <i aria-hidden="true" style={{ background: swatchBackground(color) }} />}
+            {!product.swatches && color && <i aria-hidden="true" style={{ background: swatchBackground(color, product.slug) }} />}
             {color || "\u00a0"}
           </p>
         )}
