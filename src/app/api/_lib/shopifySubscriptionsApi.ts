@@ -694,13 +694,13 @@ export const GET_CONTRACT_QUERY = `
           }
         }
       }
-      billingCycles(first: 1) {
-        edges {
-          node {
-            cycleIndex
-            skipped
-            billingAttemptExpectedDate
-          }
+    }
+    subscriptionBillingCycles(contractId: $id, first: 1) {
+      edges {
+        node {
+          cycleIndex
+          skipped
+          billingAttemptExpectedDate
         }
       }
     }
@@ -744,6 +744,16 @@ export interface ContractSummary {
   prepaidRemaining: number | null;
 }
 
+function parseSupportedBillingInstant(value: string | null | undefined): number {
+  // Date.parse truncates fractions beyond milliseconds. Refuse that precision
+  // rather than claim two distinct provider instants identify the same cycle.
+  if (typeof value !== "string" ||
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(value)) {
+    return Number.NaN;
+  }
+  return Date.parse(value);
+}
+
 export async function getContract(contractId: string): Promise<ContractSummary | null> {
   const data = await subscriptionsGraphQL<{
     subscriptionContract: {
@@ -769,23 +779,25 @@ export async function getContract(contractId: string): Promise<ContractSummary |
           };
         }>;
       };
-      billingCycles: {
-        edges: Array<{
-          node: {
-            cycleIndex: number;
-            skipped: boolean;
-            billingAttemptExpectedDate: string | null;
-          };
-        }>;
-      };
     } | null;
+    subscriptionBillingCycles: {
+      edges: Array<{ node: NonNullable<ContractSummary["nextBillingCycle"]> }>;
+    };
   }>(GET_CONTRACT_QUERY, { id: contractId });
 
   const contract = data.subscriptionContract;
   if (!contract) return null;
 
   const maxCycles = contract.billingPolicy?.maxCycles ?? null;
-  const nextCycle = contract.billingCycles.edges[0]?.node ?? null;
+  // Billing cycles are a root query, not a SubscriptionContract field. A
+  // bounded first cycle is not necessarily the next one. Keep the existing
+  // nullable summary unknown unless the provider dates establish that match.
+  const candidateCycle = data.subscriptionBillingCycles.edges[0]?.node ?? null;
+  const nextBillingTime = parseSupportedBillingInstant(contract.nextBillingDate);
+  const cycleBillingTime = parseSupportedBillingInstant(candidateCycle?.billingAttemptExpectedDate);
+  const nextCycle = Number.isFinite(nextBillingTime) && nextBillingTime === cycleBillingTime
+    ? candidateCycle
+    : null;
   const prepaidRemaining =
     maxCycles !== null && nextCycle
       ? Math.max(0, maxCycles - (nextCycle.cycleIndex - 1))

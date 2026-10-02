@@ -240,12 +240,16 @@ describe("shopifySubscriptionsApi", () => {
     expect(body.variables.input.idempotencyKey).toMatch(/^retry_/);
   });
 
-  it("getContract computes prepaidRemaining from maxCycles - (nextCycleIndex - 1)", async () => {
-    mockFetchOnce({
+  it.each([
+    ["seconds", "2026-09-15T00:00:00Z", "2026-09-15T00:00:00Z"],
+    ["equivalent offsets", "2026-09-15T00:00:00.500Z", "2026-09-14T17:00:00.500-07:00"],
+    ["equivalent supported fractions", "2026-09-15T00:00:00.5Z", "2026-09-15T00:00:00.500Z"],
+  ])("getContract computes prepaidRemaining for matching supported instants: %s", async (_name, expectedDate, nextDate) => {
+    const spy = mockFetchOnce({
       subscriptionContract: {
         id: "gid://shopify/SubscriptionContract/6",
         status: "ACTIVE",
-        nextBillingDate: "2026-09-15T00:00:00Z",
+        nextBillingDate: nextDate,
         customer: { id: "gid://shopify/Customer/1", email: "a@b.co" },
         billingPolicy: {
           interval: "MONTH",
@@ -255,22 +259,86 @@ describe("shopifySubscriptionsApi", () => {
         },
         deliveryPolicy: { interval: "MONTH", intervalCount: 3 },
         lines: { edges: [] },
-        billingCycles: {
-          edges: [
-            {
-              node: {
-                cycleIndex: 2,
-                skipped: false,
-                billingAttemptExpectedDate: "2026-09-15T00:00:00Z",
-              },
+      },
+      subscriptionBillingCycles: {
+        edges: [
+          {
+            node: {
+              cycleIndex: 2,
+              skipped: false,
+              billingAttemptExpectedDate: expectedDate,
             },
-          ],
-        },
+          },
+        ],
       },
     });
     const api = await loadApi();
     const summary = await api.getContract("gid://shopify/SubscriptionContract/6");
     expect(summary?.prepaidRemaining).toBe(3);
+    expect(summary?.nextBillingCycle?.cycleIndex).toBe(2);
+    expect(spy).toHaveBeenCalledTimes(1);
+    const [url, init] = spy.mock.calls[0]!;
+    const request = init as RequestInit;
+    const body = JSON.parse(request.body as string);
+    expect(url).toBe("https://mullybox-store.myshopify.com/admin/api/2024-10/graphql.json");
+    expect(request.headers).toMatchObject({ "X-Shopify-Access-Token": OK_ENV.SHOPIFY_SUBSCRIPTIONS_TOKEN });
+    expect(body.variables).toEqual({ id: "gid://shopify/SubscriptionContract/6" });
+    expect(body.query).toContain("subscriptionBillingCycles(contractId: $id, first: 1)");
+    expect(body.query).not.toMatch(/\bbillingCycles\s*\(/);
+    expect(body.query).toContain("lines(first: 20)");
+  });
+
+  it.each([
+    ["earlier cycle", "2026-08-15T00:00:00Z", "2026-09-15T00:00:00Z"],
+    ["later cycle", "2026-10-15T00:00:00Z", "2026-09-15T00:00:00Z"],
+    ["missing expected date", null, "2026-09-15T00:00:00Z"],
+    ["missing next date", "2026-09-15T00:00:00Z", null],
+    ["invalid dates", "not-a-date", "not-a-date"],
+    ["sub-millisecond mismatch", "2026-09-15T00:00:00.000499Z", "2026-09-15T00:00:00.000500Z"],
+    ["reversed sub-millisecond mismatch", "2026-09-15T00:00:00.000500Z", "2026-09-15T00:00:00.000499Z"],
+    ["identical unsupported precision", "2026-09-15T00:00:00.000500Z", "2026-09-15T00:00:00.000500Z"],
+    ["unsupported precision on one side", "2026-09-15T00:00:00.000000Z", "2026-09-15T00:00:00Z"],
+  ])("getContract withholds an unproven next cycle: %s", async (_name, expectedDate, nextDate) => {
+    const spy = mockFetchOnce({
+      subscriptionContract: {
+        id: "gid://shopify/SubscriptionContract/6", status: "ACTIVE",
+        nextBillingDate: nextDate, customer: null,
+        billingPolicy: { interval: "MONTH", intervalCount: 3, minCycles: null, maxCycles: 4 },
+        deliveryPolicy: { interval: "MONTH", intervalCount: 3 },
+        lines: { edges: [{ node: { id: "gid://shopify/SubscriptionLine/1" } }] },
+      },
+      subscriptionBillingCycles: {
+        edges: [{ node: { cycleIndex: 1, skipped: false, billingAttemptExpectedDate: expectedDate } }],
+      },
+    });
+    const api = await loadApi();
+    const summary = await api.getContract("gid://shopify/SubscriptionContract/6");
+    expect(summary?.nextBillingCycle).toBeNull();
+    expect(summary?.prepaidRemaining).toBeNull();
+    expect(summary?.lines[0]?.id).toBe("gid://shopify/SubscriptionLine/1");
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it("getContract handles an empty root cycle connection", async () => {
+    mockFetchOnce({
+      subscriptionContract: {
+        id: "gid://shopify/SubscriptionContract/6", status: "ACTIVE",
+        nextBillingDate: "2026-09-15T00:00:00Z", customer: null,
+        billingPolicy: { interval: "MONTH", intervalCount: 3, minCycles: null, maxCycles: 4 },
+        deliveryPolicy: null, lines: { edges: [] },
+      },
+      subscriptionBillingCycles: { edges: [] },
+    });
+    const api = await loadApi();
+    const summary = await api.getContract("gid://shopify/SubscriptionContract/6");
+    expect(summary?.nextBillingCycle).toBeNull();
+    expect(summary?.prepaidRemaining).toBeNull();
+  });
+
+  it("getContract returns null for a missing contract", async () => {
+    mockFetchOnce({ subscriptionContract: null, subscriptionBillingCycles: { edges: [] } });
+    const api = await loadApi();
+    expect(await api.getContract("gid://shopify/SubscriptionContract/6")).toBeNull();
   });
 
   it("throws on non-200 responses (after retry wrapper exhausts on 5xx)", async () => {

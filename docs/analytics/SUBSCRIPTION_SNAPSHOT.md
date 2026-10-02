@@ -10,6 +10,17 @@ PostHog delivery or billing actions. No current subscription data was collected.
 `billingPolicy.interval/intervalCount`, `isPrepaid`, and `lines[].price`.
 Its customer display chooses `active[0]` / `lines[0]` and prefixes `$` without
 checking currency. It cannot establish all-contract metrics or recurring value.
+The separate Shopify account reader uses the root `subscriptionBillingCycles`
+query, bounded to one cycle. It exposes that cycle as `nextBillingCycle` only
+when its expected billing timestamp matches the contract's `nextBillingDate`.
+Both timestamps must include an explicit UTC designator or numeric offset and
+at most three fractional-second digits. Higher precision is withheld, never
+truncated to manufacture a match. Otherwise that field and `prepaidRemaining`
+stay null. This fixes a query-shape
+error without traversing history or claiming that the first returned cycle is
+the next renewal. Its existing `prepaidRemaining` arithmetic is not proof of
+remaining deliveries or recurring revenue, and the reader is not an analytics
+inventory source.
 `loopRocks.ts` paginates an ACTIVE-filtered list and has a 200-page cap; an
 ACTIVE scan cannot establish excluded or unknown statuses for another policy.
 The prepaid fixture in `migratePrepaidAnnual.route.test.ts` additionally shows
