@@ -22,6 +22,7 @@ import "./shop-outfit.css";
 import "./shop-first.css";
 
 function ProductCard({ product: p, onQuick }: { product: ShopifyProduct; onQuick: (p: ShopifyProduct) => void }) {
+  const { hasShopDiscount } = useMembership();
   const available = p.variants.some(v => v.availableForSale);
   return <article className="card">
     <div className="card__media">
@@ -33,7 +34,7 @@ function ProductCard({ product: p, onQuick }: { product: ShopifyProduct; onQuick
     <div className="card__body">
       <p className="card__brand">{p.brand}</p>
       <a className="card__name" href={`/shop/${p.slug}`} title={p.name}>{shopProductLabel(p)}</a>
-      <div className="card__row"><span className="card__price">{money(p.price)}</span>{!available && <span className="shop-stock">Unavailable</span>}</div>
+      <div className="card__row"><span className="card__price">{hasShopDiscount && <del>{money(p.price)} </del>}{money(hasShopDiscount ? p.reservePrice : p.price)}</span>{!available && <span className="shop-stock">Unavailable</span>}</div>
       {p.variants.some(v => v.currentlyNotInStock) && <p className="shop-stock">Preorder · About {p.preOrderEtaWeeks || 2} weeks</p>}
     </div>
   </article>;
@@ -45,7 +46,7 @@ export function ShopLanding({ products, productsByCategory, theme, journalPosts 
   theme: SeasonalTheme;
   journalPosts?: Array<{slug: string; title: string; excerpt: string; image: string; imageAlt: string}>;
 }) {
-  const { addItemsToCart } = useMembership();
+  const { addItemsToCart, hasShopDiscount } = useMembership();
   const [quick, setQuick] = useState<ShopifyProduct | null>(null);
   const [variant, setVariant] = useState("");
   const [previewImage, setPreviewImage] = useState("");
@@ -190,7 +191,7 @@ export function ShopLanding({ products, productsByCategory, theme, journalPosts 
               <img src={activeVariant?.image || previewImage || shopProductPhoto(quick)} alt={quick.name} width={140} height={160} />
               <div>
                 <p className="shop-quick__brand">{quick.brand}</p>
-                <p className="shop-quick__price">{money(activeVariant?.price ?? quick.price)}</p>
+                <p className="shop-quick__price">{money(hasShopDiscount ? (activeVariant?.reservePrice ?? quick.reservePrice) : (activeVariant?.price ?? quick.price))}{hasShopDiscount && <small> · Active subscriber, 15% off</small>}</p>
                 {!quick.variants.some(v => v.availableForSale) && <p className="shop-quick__stock" role="status">Currently unavailable</p>}
                 {activeVariant?.currentlyNotInStock && <p className="shop-quick__stock">Preorder · Ships in about {quick.preOrderEtaWeeks || 2} weeks</p>}
                 {styledLook && <p className="shop-quick__note">Styled illustration. Product photos show the actual item; fit may differ.</p>}

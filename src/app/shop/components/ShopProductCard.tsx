@@ -35,8 +35,7 @@ export function ShopProductCard({
   /** Optional accent hex used for the member-price highlight, per seasonal theme. */
   accent?: string;
 }) {
-  const { tier } = useMembership();
-  const isMember = tier && tier !== "free";
+  const { hasShopDiscount: isMember } = useMembership();
   const displayPrice = isMember ? product.reservePrice : product.price;
   const [active, setActive] = useState(0);
 

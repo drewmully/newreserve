@@ -29,6 +29,8 @@ import {
   type ShopifyCart,
 } from "@/lib/shopify";
 import { buildCheckoutOriginAttributes } from "@/lib/shopifyCheckoutOrigin";
+import { readShopReward, rewardCodes } from "@/lib/shopRewards";
+import { useShopBenefit } from "./useShopBenefit";
 import { useShopifySubscriptions, type ShopifySubscription, type ShopifySubscriptionState } from "./useShopifySubscriptions";
 import { resolveMemberTierFromVariantId, resolveLegacyFromVariantId, getTierLabel } from "@/lib/membershipConfig";
 import {
@@ -177,6 +179,7 @@ interface MembershipContextValue {
 
   // Tier
   tier: MemberTier;
+  hasShopDiscount: boolean;
   setTier: (tier: MemberTier) => void;
   tierLabel: string;
   isLegacy: boolean;
@@ -189,6 +192,7 @@ interface MembershipContextValue {
   cart: CartItem[];
   cartId: string | null;
   cartCheckoutUrl: string | null;
+  prepareShopCheckout: () => Promise<string>;
   cartLoading: boolean;
   cartOfferNotice: string;
   cartOpen: boolean;
@@ -199,6 +203,7 @@ interface MembershipContextValue {
   updateCartItem: (lineId: string, quantity: number) => Promise<void>;
   cartCount: number;
   cartTotal: number;
+  cartOrderDiscount: number;
 
   // Fit profile
   fitProfile: FitProfile;
@@ -352,6 +357,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
   const [cartCheckoutUrl, setCartCheckoutUrl] = useState<string | null>(null);
   const [cartLoading, setCartLoading] = useState(false);
   const [cartOfferNotice, setCartOfferNotice] = useState("");
+  const [cartOrderDiscount, setCartOrderDiscount] = useState(0);
   const [cartOpen, setCartOpen] = useState(false);
   const batchInFlight = useRef(false);
 
@@ -384,6 +390,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
   const [storeCredit, setStoreCredit] = useState<StoreCreditState | null>(null);
   const [subscriptions, setSubscriptions] = useState<SubscriptionsState | null>(null);
   const nativeSubscriptions = useShopifySubscriptions(user, Boolean(subscriptions?.shopify_outfit));
+  const hasShopDiscount = useShopBenefit(user, nativeSubscriptions.shopifySubscriptions.contracts);
 
   // ── Fit profile ───────────────────────────────────────────────────────────
   const [fitProfile, setFitProfileState] = useState<FitProfile>(EMPTY_FIT);
@@ -421,6 +428,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
     cartIdRef.current = sc.id;
     setCartId(sc.id);
     setCartCheckoutUrl(sc.checkoutUrl);
+    setCartOrderDiscount(sc.orderDiscountAmount ?? 0);
     setCart(
       sc.lines.map((line) => ({
         slug: line.productSlug,
@@ -504,6 +512,31 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
   );
 
   /* ── Cart rehydration on login ── */
+  const refreshShopCart = useCallback(async () => {
+    const id = cartIdRef.current;
+    if (!id) throw new Error("Your bag is empty.");
+    let result = await getCart(id);
+    if (!result) throw new Error("Your bag expired. Please add your items again.");
+    if (user?.email) result = await updateCartBuyerIdentity(id, { email: user.email });
+    const reward = readShopReward();
+    if (reward) result = await cartDiscountCodesUpdate(id, rewardCodes((result.discountCodes ?? []).map(c => c.code), reward));
+    syncFromShopifyCart(result);
+    return result;
+  }, [user, syncFromShopifyCart]);
+
+  const prepareShopCheckout = useCallback(async () => {
+    const result = await refreshShopCart();
+    if (!result.lines.length || !result.checkoutUrl) throw new Error("Your bag is empty.");
+    return result.checkoutUrl;
+  }, [refreshShopCart]);
+
+  useEffect(() => {
+    const refresh = () => { if (cartIdRef.current && !batchInFlight.current) void refreshShopCart().catch(() => {}); };
+    window.addEventListener("mully:shop-reward", refresh);
+    if (cartOpen) refresh();
+    return () => window.removeEventListener("mully:shop-reward", refresh);
+  }, [refreshShopCart, cartOpen]);
+
   const rehydrateCart = useCallback(
     async (uid: string | null, userEmail?: string | null) => {
       const candidates: Array<{
@@ -775,6 +808,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
         setCart([]);
         setCartId(null);
         setCartCheckoutUrl(null);
+        setCartOrderDiscount(0);
         setFitProfileState(EMPTY_FIT);
         setStoreCredit(null);
         setSubscriptions(null);
@@ -853,7 +887,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
           setCartOfferNotice("We couldn't verify the offer. This bag shows Shopify's current price.");
         }
       }
-      if (user?.email) void bindCartBuyerIdentity(result.id, user.email);
+      await refreshShopCart().catch(() => setCartOfferNotice("Offers will be checked again before checkout."));
       setCartOpen(true);
       for (const item of items) void trackEvent("add_to_cart", {
         product_id: item.slug, variant_id: item.variantId, name: item.name,
@@ -870,7 +904,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
       batchInFlight.current = false;
       setCartLoading(false);
     }
-  }, [user, syncFromShopifyCart, persistCartId, persistCartIdLocally, bindCartBuyerIdentity]);
+  }, [user, syncFromShopifyCart, persistCartId, persistCartIdLocally, refreshShopCart]);
 
   const addToCart = useCallback(
     async (item: Omit<CartItem, "quantity">) => {
@@ -930,7 +964,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
         } else {
           persistCartIdLocally(null, result.id);
         }
-        if (user?.email) bindCartBuyerIdentity(result.id, user.email);
+        await refreshShopCart();
 
         void trackEvent("add_to_cart", {
           product_id: item.slug,
@@ -951,7 +985,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
       syncFromShopifyCart,
       persistCartId,
       persistCartIdLocally,
-      bindCartBuyerIdentity,
+      refreshShopCart,
     ]
   );
 
@@ -1190,7 +1224,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const cartCount = cart.reduce((sum, c) => sum + c.quantity, 0);
-  const cartTotal = cart.reduce((sum, c) => sum + c.price * c.quantity, 0);
+  const cartTotal = Math.max(0, cart.reduce((sum, c) => sum + c.price * c.quantity, 0) - cartOrderDiscount);
 
   return (
     <MembershipContext.Provider
@@ -1211,6 +1245,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
 
         // Tier
         tier,
+        hasShopDiscount,
         setTier,
         tierLabel: getTierLabel(tier, isLegacy, legacyPlan),
         isLegacy,
@@ -1223,6 +1258,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
         cart,
         cartId,
         cartCheckoutUrl,
+        prepareShopCheckout,
         cartLoading,
         cartOfferNotice,
         cartOpen,
@@ -1233,6 +1269,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
         updateCartItem,
         cartCount,
         cartTotal,
+        cartOrderDiscount,
 
         // Fit profile
         fitProfile,

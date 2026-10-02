@@ -22,7 +22,7 @@ describe("shop-aware login", () => {
   it("leaves paid onboarding in control", () => {
     expect(shopReturnFromLogin("?paid=1&returnTo=%2Fshop")).toBeNull();
     expect(shopReturnFromLogin("?paid_member=1&returnTo=%2Fshop")).toBeNull();
-    expect(shopReturnFromLogin("")).toBeNull();
+    expect(shopReturnFromLogin("")).toBe("/");
   });
 });
 

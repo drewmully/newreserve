@@ -9,7 +9,7 @@
  */
 export function ShopAnnouncementBar() {
   const items = [
-    { icon: TruckIcon, text: "Free U.S. Shipping over $95" },
+    { icon: TruckIcon, text: "Ships from Mully Fulfillment" },
     { icon: TagIcon, text: "Buy one, get 15% off the second" },
     { icon: ReturnIcon, text: "Free U.S. Returns" },
   ];
@@ -39,7 +39,7 @@ export function ShopAnnouncementBar() {
  * strip everything but the promise itself.
  */
 function shortLabel(full: string): string {
-  if (full.startsWith("Free U.S. Shipping")) return "Ship $95+";
+  if (full.startsWith("Ships from")) return "Mully Fulfillment";
   if (full.startsWith("Buy one")) return "BOGO 15%";
   if (full.startsWith("Free U.S. Returns")) return "Free Returns";
   return full;

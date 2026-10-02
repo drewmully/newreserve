@@ -42,12 +42,15 @@ describe("shop consent capture",()=>{
   });
   it("saves email before SMS, binds the follow-up receipt and records separate exact consent",async()=>{
     const r=await POST(req(email));expect(r.status).toBe(200);
-    const {receipt}=await r.json();
+    const {receipt,reward}=await r.json();
+    expect(reward).toEqual({code:"MULLYEDIT10",percent:10});
     const lead=store.writes.find(w=>/^shop_marketing_leads\/[^/]+$/.test(w.path))!;
     expect(lead.data).toMatchObject({email:"test@example.com",interest:"tops",sendingStatus:"not_synced",emailConsent:{text:EMAIL_CONSENT,channel:"email",granted:true}});
     expect(lead.data).not.toHaveProperty("phone");
     expect((await POST(req({stage:"sms",phone:"(248) 555-0123",receipt,consent:false}))).status).toBe(400);
-    expect((await POST(req({stage:"sms",phone:"(248) 555-0123",receipt,consent:true}))).status).toBe(200);
+    const sms=await POST(req({stage:"sms",phone:"(248) 555-0123",receipt,consent:true}));
+    expect(sms.status).toBe(200);
+    expect((await sms.json()).reward).toEqual({code:"MULLYTEXT15",percent:15});
     expect(store.docs.get(lead.path)).toMatchObject({phone:"+12485550123",smsConsent:{text:SMS_CONSENT,channel:"sms"},email:"test@example.com"});
     expect((await POST(req({stage:"sms",phone:"+12485550124",receipt,consent:true}))).status).toBe(403);
   });

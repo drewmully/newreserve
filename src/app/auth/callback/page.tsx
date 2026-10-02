@@ -141,7 +141,7 @@ export default function AuthCallbackPage() {
   // whether gtag was ready, which dropped conversions on slow networks.
   useEffect(() => {
     if (!authLoading && isSignedIn && conversionFired) {
-      const timer = setTimeout(() => router.replace("/home"), 1500);
+      const timer = setTimeout(() => router.replace("/"), 1500);
       return () => clearTimeout(timer);
     }
   }, [authLoading, isSignedIn, conversionFired, router]);
@@ -266,11 +266,11 @@ export default function AuthCallbackPage() {
         <h1 className="font-serif text-2xl text-obsidian mb-2">Purchase Confirmed</h1>
         <p className="text-sm text-charcoal/50 leading-relaxed mb-8">
           Thank you for your purchase. Your membership is being updated —
-          you&apos;ll be redirected to your dashboard shortly.
+          you&apos;ll be redirected to the shop shortly.
         </p>
 
         <Link
-          href="/home"
+          href="/"
           className="inline-flex items-center justify-center h-11 px-8 rounded-xl bg-forest text-bone text-sm font-medium tracking-wider uppercase hover:bg-forest-dark transition-colors duration-300"
         >
           Go to Dashboard

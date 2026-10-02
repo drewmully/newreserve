@@ -37,7 +37,7 @@ export function ShopOutfitBuilder({products,byCategory}:{products:ShopifyProduct
   const root=useRef<HTMLElement>(null);
   const customize=useRef<HTMLDialogElement>(null);
   const fit=useRef<HTMLDialogElement>(null);
-  const {addItemsToCart,email}=useMembership();
+  const {addItemsToCart,email,hasShopDiscount}=useMembership();
   const selected=choices.map((list,i)=>list[indices[i]]);
   const complete=selected.every(Boolean);
   const config=(p:ShopifyProduct)=>({...initialOptions(p),...selections[p.slug]});
@@ -45,6 +45,10 @@ export function ShopOutfitBuilder({products,byCategory}:{products:ShopifyProduct
   const ready=complete&&variants.every(Boolean);
   const unavailable=variants.some(v=>v&&!v.availableForSale);
   const estimate=outfitEstimate(selected.filter(Boolean).map((p,i)=>variants[i]?.price??p.price));
+  if(hasShopDiscount){
+    estimate.savings=Math.round(estimate.subtotal*.15*100)/100;
+    estimate.total=estimate.subtotal-estimate.savings;
+  }
   const colors=(p:ShopifyProduct)=>Object.entries(config(p)).filter(([name])=>!isFit(name)).map(([,v])=>v).filter(v=>v!=="Default Title").join(" / ");
   const sizeGroup=(p?:ShopifyProduct)=>p?groups(p).find(g=>/^(size|waist)$/i.test(g.name)):undefined;
   const topSize=sizeGroup(selected[0]),layerSize=sizeGroup(selected[2]);
@@ -120,7 +124,7 @@ export function ShopOutfitBuilder({products,byCategory}:{products:ShopifyProduct
           <div className="guided-content">
             {step===0?<><p className="guided-kicker">Selected by Mully</p><h3>The look is ready.<br/>Make it yours.</h3>
               <p>Choose your sizes. Swap a piece only if you want to.</p>
-              <div className="guided-bundle-note"><strong>Buy the outfit. Save together.</strong><span>15% off one piece with BOGO15. Applied in your bag.</span></div>
+              <div className="guided-bundle-note"><strong>Buy the outfit. Save together.</strong><span>{hasShopDiscount?"Your active subscription saves 15% on every piece.":"15% off one piece with BOGO15. Applied in your bag."}</span></div>
             </>:step===1?<><div className="guided-panel-title"><h3>Make it your size.</h3><button onClick={()=>show(fit.current)}>Size &amp; fit ↗</button></div>
               {shared?<fieldset className="guided-shared-size"><legend>Top &amp; layer size</legend>
                 <div>{sharedSizes.map(value=><button key={value} aria-pressed={sharedValue===value} onClick={()=>{
@@ -133,7 +137,7 @@ export function ShopOutfitBuilder({products,byCategory}:{products:ShopifyProduct
               <ul className="guided-review-lines">{selected.map((p,i)=><li key={p.slug}><span>{OUTFIT_SLOTS[i].label}</span><strong>{variants[i]?variantLabel(variants[i]!):"Choose size"}</strong></li>)}</ul>
               <fieldset className="guided-purchase"><legend className="sr-only">How would you like it?</legend>
                 <label className={mode==="once"?"is-selected":""}><input type="radio" name="guided-purchase" checked={mode==="once"} onChange={()=>setMode("once")}/>
-                  <span><strong>Just this time <b>{money(estimate.total)}</b></strong><small>BOGO15 estimate · {money(estimate.savings)} off one piece</small></span></label>
+                  <span><strong>Just this time <b>{money(estimate.total)}</b></strong><small>{hasShopDiscount?"Subscriber estimate":"BOGO15 estimate"} · {money(estimate.savings)} off {hasShopDiscount?"the outfit":"one piece"}</small></span></label>
                 <label className={mode==="reserve"?"is-selected":""}><input type="radio" name="guided-purchase" checked={mode==="reserve"} onChange={()=>setMode("reserve")}/>
                   <span><strong>Subscribe {estimate.total>RESERVE_OUTFIT_PRICE?"& save": "to Reserve"} <b>{money(RESERVE_OUTFIT_PRICE)}<em> / season</em></b></strong><small>Mully Reserve · {estimate.total>RESERVE_OUTFIT_PRICE?`Save ${money(estimate.total-RESERVE_OUTFIT_PRICE)} on this outfit`:"Your first outfit included"}</small>
                     <p>Your outfit first. Then new styles curated with your {money(RESERVE_OUTFIT_PRICE)} seasonal budget. 4 shipments a year.</p></span></label>

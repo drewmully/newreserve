@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { useMembership } from "../context/MembershipContext";
 import { trackEvent } from "@/lib/tracking";
-import { MEMBER_DISCOUNT_RATE } from "@/lib/shopify";
 
 export function SlideCart() {
   const {
@@ -13,12 +12,13 @@ export function SlideCart() {
     removeFromCart,
     updateCartItem,
     cartTotal,
+    cartOrderDiscount = 0,
     cartCheckoutUrl,
     cartLoading,
-    tier,
-    user,
+    hasShopDiscount,
+    prepareShopCheckout,
   } = useMembership();
-  const isPaid = tier !== "free";
+  const isPaid = hasShopDiscount;
 
   // Loading state for the checkout button. The draft-order round-trip now
   // happens on click (not on every cart change) so we show a spinner during
@@ -50,39 +50,9 @@ export function SlideCart() {
       },
     });
 
-    const fallbackUrl = buildReturnUrl(cartCheckoutUrl);
-
-    // Free tier or signed-out user: skip the API and use the plain Storefront URL.
-    if (!user || !isPaid) {
-      window.location.assign(fallbackUrl);
-      return;
-    }
-
     setCheckoutPending(true);
     try {
-      const token = await user.getIdToken();
-      const cartItems = cart
-        .filter((item) => item.variantId && item.quantity >= 1)
-        .map((item) => ({
-          variantId: item.variantId!,
-          quantity: item.quantity,
-          retailPrice: item.retailPrice ?? item.price,
-        }));
-
-      const res = await fetch("/api/shopify/checkout", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ checkoutUrl: fallbackUrl, cartItems }),
-      });
-      if (res.ok) {
-        const data = (await res.json()) as { checkoutUrl: string; error?: string };
-        window.location.assign(data.checkoutUrl ?? fallbackUrl);
-        return;
-      }
-      console.error("[SlideCart] checkout API error:", res.status, await res.text());
+      window.location.assign(buildReturnUrl(await prepareShopCheckout()));
     } catch (err) {
       console.error("[SlideCart] checkout click failed:", err);
     } finally {
@@ -90,7 +60,6 @@ export function SlideCart() {
       // only runs if something failed and we fall through to the fallback.
       setCheckoutPending(false);
     }
-    window.location.assign(fallbackUrl);
   }
 
   useEffect(() => {
@@ -238,16 +207,16 @@ export function SlideCart() {
                       {item.name}
                     </p>
                     <div className="flex items-center gap-1.5">
-                      {isPaid && item.retailPrice ? (
+                      {item.retailPrice && item.retailPrice > item.price ? (
                         <>
                           <span className="text-xs text-charcoal/40 line-through">
                             ${item.retailPrice.toFixed(2)}
                           </span>
                           <p className="text-sm text-forest font-medium">
-                            ${(item.retailPrice * (1 - MEMBER_DISCOUNT_RATE)).toFixed(2)}
+                            ${item.price.toFixed(2)}
                           </p>
                           <span className="text-[9px] tracking-wide uppercase text-forest bg-forest/10 px-1 py-0.5 rounded font-medium">
-                            Member
+                            Saved
                           </span>
                         </>
                       ) : (
@@ -331,14 +300,14 @@ export function SlideCart() {
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-charcoal/50">Shipping</span>
-                <span className="text-forest font-medium">Free</span>
+                <span className="text-forest font-medium">At checkout</span>
               </div>
               {isPaid ? (
                 (() => {
                   const savings = cart.reduce((sum, item) => {
                     const retail = item.retailPrice ?? item.price;
-                    return sum + retail * MEMBER_DISCOUNT_RATE * item.quantity;
-                  }, 0);
+                    return sum + (retail - item.price) * item.quantity;
+                  }, cartOrderDiscount);
                   return savings > 0 ? (
                     <div className="flex items-center justify-between text-sm">
                       <span className="text-forest/80">Member savings</span>
