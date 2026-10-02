@@ -54,7 +54,6 @@ export function ShopLanding({ products, productsByCategory, theme, journalPosts 
   const [quickIsOpen, setQuickIsOpen] = useState(false);
   const [styledLook, setStyledLook] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null);
-  const heroImage = useRef<HTMLImageElement>(null);
   const quickTrigger = useRef<HTMLElement | null>(null);
   const edit = useMemo(() => selectShopEdit(products, products.length), [products]);
   const gear = ["winston-golf-tour-towel", "technically-golf-tiger-stripe-needlepoint-belt", "duckhead-stretch-belt", "leon-weekender-duffel"]
@@ -111,8 +110,8 @@ export function ShopLanding({ products, productsByCategory, theme, journalPosts 
       <div className="shop-redesign shop-first" style={{ "--accent": theme.accent, "--accent-d": theme.accentDark } as CSSProperties}>
         <section className="shop-hero" id="hero" aria-labelledby="shopHeroTitle">
           <picture>
-            <source media="(max-width: 600px) and (orientation: portrait)" srcSet="/shop-redesign/lifestyle/fall-firepit-mobile.webp" width={1086} height={1448} />
-            <img ref={heroImage} className="shop-hero__image" src="/shop-redesign/lifestyle/fall-firepit-desktop.webp" alt="AI-styled fall outfit: a striped polo, braided brown belt, tailored khakis and white golf shoes beside a clubhouse firepit" width={1672} height={941} fetchPriority="high" loading="eager" />
+            <source media="(max-width: 600px) and (orientation: portrait)" srcSet="/shop-redesign/lifestyle/fall-fairway-mobile.webp" width={600} height={800} />
+            <img className="shop-hero__image" src="/shop-redesign/lifestyle/fall-fairway-desktop.webp" alt="AI-styled editorial scene of a distant golfer in a striped polo and tailored khakis walking across a foggy autumn fairway" width={1920} height={800} fetchPriority="high" loading="eager" />
           </picture>
           <div className="wrap shop-hero__in">
             <div className="shop-hero__copy">
@@ -120,7 +119,7 @@ export function ShopLanding({ products, productsByCategory, theme, journalPosts 
               <a className="shop-hero__cta" href="#edit" aria-label="Shop the edit">[ shop ]</a>
             </div>
           </div>
-          <ShopHeroHotspots imageRef={heroImage} products={products} onSelect={p => openQuick(p, true)} />
+          <ShopHeroHotspots products={products} onSelect={p => openQuick(p, true)} />
         </section>
         <div className="shop-colorway-strip" aria-label="Wear the colors of fall">
           {[

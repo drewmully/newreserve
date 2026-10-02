@@ -23,17 +23,17 @@ describe("quiet shop visual contract",()=>{
     const hero=container.querySelector("#hero")!;
     expect(hero.textContent?.trim()).toBe("The Fall Edit[ shop ]");
     expect(hero.querySelectorAll("a")).toHaveLength(1);
-    expect(hero.querySelector("img")).toHaveAttribute("src","/shop-redesign/lifestyle/fall-firepit-desktop.webp");
+    expect(hero.querySelector("img")).toHaveAttribute("src","/shop-redesign/lifestyle/fall-fairway-desktop.webp");
     expect(hero.querySelector("img")).toHaveAttribute("fetchpriority","high");
     expect(hero.querySelector("img")).toHaveAttribute("loading","eager");
-    expect(hero.querySelector("source")).toHaveAttribute("srcset","/shop-redesign/lifestyle/fall-firepit-mobile.webp");
+    expect(hero.querySelector("source")).toHaveAttribute("srcset","/shop-redesign/lifestyle/fall-fairway-mobile.webp");
     expect(hero.querySelector("source")).toHaveAttribute("media","(max-width: 600px) and (orientation: portrait)");
     expect(hero.querySelector("a")).toHaveAttribute("href","#edit");
     expect(container.querySelector(".shop-selection-note")).toBeNull();
   });
   it("ships real responsive images and publicly accessible shop routes",()=>{
     for (const view of ["desktop","mobile"]) {
-      const asset=readFileSync(`public/shop-redesign/lifestyle/fall-firepit-${view}.webp`);
+      const asset=readFileSync(`public/shop-redesign/lifestyle/fall-fairway-${view}.webp`);
       expect(asset.subarray(8,12).toString()).toBe("WEBP");
       expect(asset.byteLength).toBeLessThan(500_000);
     }

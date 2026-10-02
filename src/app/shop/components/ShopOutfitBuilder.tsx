@@ -81,6 +81,16 @@ export function ShopOutfitBuilder({products,byCategory}:{products:ShopifyProduct
     finally{setBusy(false)}
   }
   function fitFields(p:ShopifyProduct,label:string){
+    if(label==="Trouser")return <div className="guided-trouser-fit">{groups(p).filter(g=>isFit(g.name)).map(g=>{
+      const name=g.name==="Size"&&groups(p).some(x=>/^inseam$/i.test(x.name))?"waist":g.name.toLowerCase();
+      return <fieldset className="guided-number-size" key={g.name} aria-label={`Trouser ${name}`}>
+        <legend>{name==="inseam"?"Inseam":name==="waist"?"Waist":"Trouser size"} {["waist","inseam"].includes(name)&&<span>inches</span>}</legend>
+        <div style={{gridTemplateColumns:`repeat(${Math.min(g.values.length,6)},minmax(0,1fr))`}}>{g.values.map(value=><button
+          type="button" key={value} aria-pressed={config(p)[g.name]===value}
+          disabled={!p.variants.some(v=>v.selectedOptions.every(o=>o.name===g.name?o.value===value:!config(p)[o.name]||config(p)[o.name]===o.value))}
+          onClick={()=>pick(p,g.name,value)}>{value}</button>)}</div>
+      </fieldset>;
+    })}</div>;
     return <div className="guided-fit-fields" key={p.slug}>{groups(p).filter(g=>isFit(g.name)).map(g=><label key={g.name}>
       <span>{label} {g.name==="Size"&&groups(p).some(x=>/^inseam$/i.test(x.name))?"waist":g.name.toLowerCase()}</span>
       <select aria-label={`${label} ${g.name==="Size"&&groups(p).some(x=>/^inseam$/i.test(x.name))?"waist":g.name.toLowerCase()}`}
@@ -92,30 +102,30 @@ export function ShopOutfitBuilder({products,byCategory}:{products:ShopifyProduct
   }
   return <section id="outfit" ref={root} className={`sec sec--cream guided-outfit guided-step-${step}`} aria-labelledby="outfitTitle">
     <div className="wrap">
-      <header className="guided-heading"><div><p className="guided-kicker">The outfit, already figured out.</p>
-        <h2 className="h2" id="outfitTitle">Good together. Easy to make yours.</h2></div>
+      <header className="guided-heading"><div>
+        <h2 className="h2" id="outfitTitle">Your fall outfit, for less.</h2>
+        <p className="guided-intro">Three pieces. Already paired. Just choose your sizes.</p></div>
         <ol aria-label="Outfit progress">{["The look","Your sizes","Review"].map((s,i)=><li key={s} aria-current={step===i?"step":undefined}><span>{i<step?"✓":i+1}</span>{s}</li>)}</ol>
       </header>
       {!complete?<p>We’re refreshing this outfit. <Link href="/shop/collection/shop-all">Explore the shop →</Link></p>:<div className="guided-layout">
         <div className="guided-look">
           <div className="guided-board">{selected.map((p,i)=><article key={p.slug}>
             <div className="guided-photo"><img src={variants[i]?.image||p.variants.find(v=>v.image&&v.selectedOptions.every(o=>!config(p)[o.name]||config(p)[o.name]===o.value))?.image||shopProductPhoto(p)} alt={p.name}/></div>
-            <div className="guided-piece"><span>{p.brand}</span><h3>{shopProductLabel(p)}</h3><p>{variants[i]?variantLabel(variants[i]!):colors(p)}</p></div>
+            <div className="guided-piece"><span>{p.brand}</span><h3>{shopProductLabel(p)}</h3><strong className="guided-piece-price">{money(variants[i]?.price??p.price)}</strong><p>{variants[i]?variantLabel(variants[i]!):colors(p)}</p></div>
           </article>)}</div>
           <div className="guided-look-footer"><span>A top. A bottom. A finishing layer.</span>
             <button onClick={()=>show(customize.current)}>Swap a piece or color ↗</button></div>
         </div>
         <div className="guided-panel">
           <div className="guided-content">
-            {step===0?<><p className="guided-kicker">Selected by Mully</p><h3>Less choosing.<br/>More wearing.</h3>
-              <p>Start with this three-piece look. Tell us your sizes, and we’ll take care of the rest.</p>
-              <div className="guided-total"><strong>{money(estimate.total)}</strong><span>Outfit total · BOGO15 estimate<br/>{money(estimate.savings)} off one piece</span></div>
-              <p className="guided-quiet">Like the look? No need to choose every piece.</p>
+            {step===0?<><p className="guided-kicker">Selected by Mully</p><h3>The look is ready.<br/>Make it yours.</h3>
+              <p>Choose your sizes. Swap a piece only if you want to.</p>
+              <div className="guided-bundle-note"><strong>Buy the outfit. Save together.</strong><span>15% off one piece with BOGO15. Applied in your bag.</span></div>
             </>:step===1?<><div className="guided-panel-title"><h3>Make it your size.</h3><button onClick={()=>show(fit.current)}>Size &amp; fit ↗</button></div>
               {shared?<fieldset className="guided-shared-size"><legend>Top &amp; layer size</legend>
                 <div>{sharedSizes.map(value=><button key={value} aria-pressed={sharedValue===value} onClick={()=>{
                   setSelections(old=>({...old,[selected[0].slug]:{...config(selected[0]),[topSize!.name]:value},[selected[2].slug]:{...config(selected[2]),[layerSize!.name]:value}}));
-                }}>{value}</button>)}</div></fieldset>:<>{fitFields(selected[0],"Top")}{fitFields(selected[2],"Layer")}</>}
+                }}>{value}</button>)}</div></fieldset>:<div className="guided-independent">{fitFields(selected[0],"Top")}{fitFields(selected[2],"Layer")}</div>}
               {fitFields(selected[1],"Trouser")}
               {sharedSizes.length>0&&<label className="guided-separate"><input type="checkbox" checked={separate} onChange={e=>setSeparate(e.target.checked)}/>I wear different top and layer sizes</label>}
               <p className="guided-quiet">Same look. Your fit. Change any piece or color whenever you like.</p>
