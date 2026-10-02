@@ -25,9 +25,16 @@ export default async function ShopPage() {
 
   // Fetch each category collection independently so one 404 doesn't blank
   // the whole landing.
-  const settled = await Promise.allSettled(
-    SHOP_CATEGORIES.map(({ handle }) => getCollectionProducts(handle))
-  );
+  const [editResult, ...settled] = await Promise.allSettled([
+    getCollectionProducts("shop-all"),
+    ...SHOP_CATEGORIES.map(({ handle }) => getCollectionProducts(handle)),
+  ]);
+  // The Edit and Shop All share Shopify's collection-default order.
+  // Keep category data separate for the outfit builder and other sections.
+  const editProducts = editResult.status === "fulfilled" ? editResult.value : [];
+  if (editResult.status === "rejected") {
+    console.error('[ShopPage] Shopify collection "shop-all" failed:', editResult.reason);
+  }
 
   const productsByCategory: Record<string, ShopifyProduct[]> = {};
   const seen = new Set<string>();
@@ -66,6 +73,7 @@ export default async function ShopPage() {
       <main className="shop-main shop-main--hero pb-0">
         <ShopLanding
           products={merged}
+          editProducts={editProducts}
           productsByCategory={productsByCategory}
           theme={theme}
           journalPosts={journalPosts}

@@ -171,19 +171,19 @@ export default function LoginPage() {
           if (!alreadyPaid && (selectedTier === "access" || selectedTier === "member")) {
             return createMembershipCheckout(selectedTier);
           } else {
-            router.replace("/home");
+            router.replace("/");
           }
         }).catch((err) => {
           console.error("[Login] pending onboarding apply failed:", err);
           router.replace("/onboarding");
         });
       } catch {
-        router.replace(onboardingCompleted ? "/home" : "/onboarding");
+        router.replace("/");
       }
       return;
     }
 
-    router.replace(onboardingCompleted ? "/home" : "/onboarding");
+    router.replace("/");
   }, [authLoading, isSignedIn, onboardingCompleted, router, completeOnboarding, setTier]);
 
   /* ── Resend cooldown countdown ── */

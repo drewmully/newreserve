@@ -18,12 +18,15 @@ export function ShopSlideCart({ accent }: { accent: string }) {
     removeFromCart,
     updateCartItem,
     cartTotal,
+    cartOrderDiscount = 0,
     cartCheckoutUrl,
+    prepareShopCheckout,
     cartLoading,
     cartOfferNotice,
   } = useMembership();
 
   const [checkoutPending, setCheckoutPending] = useState(false);
+  const [checkoutError, setCheckoutError] = useState("");
 
   useEffect(() => {
     if (cartOpen) {
@@ -48,7 +51,9 @@ export function ShopSlideCart({ accent }: { accent: string }) {
       },
     });
     setCheckoutPending(true);
-    window.location.assign(cartCheckoutUrl);
+    setCheckoutError("");
+    try { window.location.assign(await prepareShopCheckout()); }
+    catch { setCheckoutError("We couldn't refresh your checkout. Please try again."); setCheckoutPending(false); }
   }
 
   const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
@@ -209,6 +214,7 @@ export function ShopSlideCart({ accent }: { accent: string }) {
             {/* Footer */}
             <footer className="border-t border-charcoal/10 px-6 py-5">
               {cartOfferNotice && <p role="status" className="pb-3 text-xs text-charcoal/70">{cartOfferNotice}</p>}
+              {cartOrderDiscount > 0 && <p className="pb-3 text-xs text-forest">Order savings applied: ${cartOrderDiscount.toFixed(2)}</p>}
               {cart.some(item => (item.retailPrice ?? item.price) > item.price) && <p className="pb-3 text-xs text-forest">Shopify savings applied: ${(cart.reduce((sum,item) => sum + ((item.retailPrice ?? item.price)-item.price)*item.quantity,0)).toFixed(2)}</p>}
               <div className="flex items-center justify-between pb-4">
                 <span className="text-[11px] font-mono uppercase tracking-[0.24em] text-charcoal/60">
@@ -227,7 +233,7 @@ export function ShopSlideCart({ accent }: { accent: string }) {
                 {checkoutPending ? "Redirecting…" : "Checkout"}
               </button>
               <p className="mt-3 text-center text-[10px] font-mono uppercase tracking-[0.2em] text-charcoal/40">
-                Shipping and taxes at checkout
+                {checkoutError || "Shipping and taxes at checkout"}
               </p>
             </footer>
           </>

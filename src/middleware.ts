@@ -6,10 +6,11 @@ const MAINTENANCE_MODE = process.env.MAINTENANCE_MODE === "true";
 /**
  * Route consolidation (2026-09-18):
  *
- *   /                → serves the winning LP directly (ConsultQuizFirstClient)
- *   /lp/consult      → 301 to /
- *   /lp/discover     → 301 to /
- *   /lp/subscription → 301 to /
+ *   /                → curated shop
+ *   /subscription    → preserved subscription LP (ConsultQuizFirstClient)
+ *   /lp/consult      → 301 to /subscription
+ *   /lp/discover     → 301 to /subscription
+ *   /lp/subscription → 301 to /subscription
  *
  * Rationale (data over 30 days):
  *   - /lp/consult inline_quiz arm: 1.70% session→CTA click (winner)
@@ -47,7 +48,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.rewrite(new URL("/maintenance", request.url));
   }
 
-  // ─── 301 consolidated LP paths to `/` ───
+  // Consolidated subscription LP paths retain their original funnel.
   // Preserve any query params so utm_*/gclid/fbclid survive the redirect.
   // Also handle trailing slash variants (/lp/consult/).
   const normalized = pathname.endsWith("/") && pathname.length > 1
@@ -56,9 +57,17 @@ export function middleware(request: NextRequest) {
 
   if (CONSOLIDATED_LP_PATHS.has(normalized)) {
     const url = request.nextUrl.clone();
-    url.pathname = "/";
+    url.pathname = "/subscription";
     url.search = search;
     return NextResponse.redirect(url, 301);
+  }
+
+  // Keep old bookmarks functional, but retire the dashboard entry points.
+  if (normalized === "/home" || normalized === "/dashboard") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/";
+    url.searchParams.delete("tab");
+    return NextResponse.redirect(url, 307);
   }
 
   return NextResponse.next();

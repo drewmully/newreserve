@@ -33,3 +33,28 @@ describe("buildColorCards", () => {
     expect(cards[0].cardColor).toBeUndefined();
   });
 });
+
+import { buildSwatchCards } from "../../src/lib/shopColorCards";
+describe("buildSwatchCards", () => {
+  const chino = product("chino", ["Khaki", "Navy"], [img("k.jpg", "Chino, Khaki"), img("n.jpg", "Chino, Navy")]);
+  const belt = product("belt", ["Brown"], [img("b.jpg", "Belt")]);
+  it("keeps one card per product with every photographed color as a swatch", () => {
+    const cards = buildSwatchCards([chino, belt]);
+    expect(cards.map((c) => c.displayKey)).toEqual(["chino", "belt"]);
+    expect(cards[0].swatches?.map((s) => [s.color, s.image])).toEqual([["Khaki", "k.jpg"], ["Navy", "n.jpg"]]);
+    expect(cards[0].swatches?.[1].variantId).toBe("gid://shopify/ProductVariant/chino1");
+    expect(cards[1].swatches).toEqual([]);
+  });
+});
+
+describe("white colorway card photos", () => {
+  it("uses the on-model shot for Pima Snow White in cards and swatches", () => {
+    const pima = product("olydoe-pima-long-sleeve-polo", ["Oceana", "Snow White"], [img("o.jpg", "Pima, Oceana"), img("w.jpg", "Pima, Snow White")]);
+    const [, white] = buildColorCards([pima]);
+    expect(white.cardImage).toContain("OLS-SW-1.jpg");
+    expect(white.cardImageFit).toBe("cover");
+    const [sw] = buildSwatchCards([pima]);
+    expect(sw.swatches?.[1]).toMatchObject({ color: "Snow White", fit: "cover" });
+    expect(sw.swatches?.[0].fit).toBeUndefined();
+  });
+});

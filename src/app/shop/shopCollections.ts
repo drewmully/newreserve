@@ -59,7 +59,7 @@ export const SHOP_CATEGORIES: ShopCategoryMeta[] = [
     label: "Outerwear",
     handle: SHOP_CATEGORY_HANDLES.outerwear,
     eyebrow: "Vests, pullovers, shells",
-    detail: "The 6 a.m. tee time in October.",
+    detail: "Stay warm during the frost delay.",
   },
   {
     key: "gear",

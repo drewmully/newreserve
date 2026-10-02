@@ -315,8 +315,7 @@ function ProductTile({
   privateReleasesHandle: string;
 }) {
   const ctx = useMembershipSafe();
-  const tier = ctx?.tier ?? "free";
-  const isPaid = tier !== "free";
+  const isPaid = ctx?.hasShopDiscount ?? false;
   const primaryImage = product.cardImage ?? product.images?.[0];
   const secondaryImage = product.cardSecondaryImage ?? product.images?.[1];
   const hrefParams = new URLSearchParams();
@@ -791,7 +790,7 @@ function AddToCartButtonInner({
       <button
         onClick={() => {
           if (ctx && product) {
-            const isPaid = ctx.tier !== "free";
+            const isPaid = ctx.hasShopDiscount;
             const variant =
               resolveVariantBySelection(product, selection) ??
               getDefaultProductVariant(product);
@@ -843,7 +842,7 @@ export function ProductPriceDisplay({
   reservePrice: number;
 }) {
   const ctx = useMembershipSafe();
-  const isPaid = (ctx?.tier ?? "free") !== "free";
+  const isPaid = ctx?.hasShopDiscount ?? false;
   const pricing = resolveTieredPriceDisplay({ price, reservePrice }, isPaid);
 
   return (

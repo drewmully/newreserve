@@ -3,7 +3,6 @@
 import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { PageViewTracker } from "../components/PageViewTracker";
-import { Back9WelcomeOverlay } from "../components/Back9WelcomeOverlay";
 import { Suspense, type ReactNode } from "react";
 
 const MembershipProvider = dynamic<{ children: ReactNode }>(() =>
@@ -19,7 +18,7 @@ const EmailLinkHandler = dynamic(
 );
 
 const MEMBERSHIP_EXEMPT_PREFIXES = [
-  "/",
+  "/subscription",
   "/handoff",
   "/mulligan",
   "/reservecard",
@@ -47,7 +46,6 @@ export function Providers({ children }: { children: ReactNode }) {
       </Suspense>
       {shouldWrapWithMembership ? (
         <MembershipProvider>
-          <Back9WelcomeOverlay />
           {children}
         </MembershipProvider>
       ) : (

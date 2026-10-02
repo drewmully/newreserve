@@ -30,7 +30,8 @@ describe("shouldUseMembershipProvider", () => {
   it("skips the provider only on truly static public routes", async () => {
     const { shouldUseMembershipProvider } = await import("@/app/context/Providers");
 
-    expect(shouldUseMembershipProvider("/")).toBe(false);
+    expect(shouldUseMembershipProvider("/")).toBe(true);
+    expect(shouldUseMembershipProvider("/subscription")).toBe(false);
     expect(shouldUseMembershipProvider("/faq")).toBe(true);
     expect(shouldUseMembershipProvider("/handoff")).toBe(false);
     expect(shouldUseMembershipProvider("/policies/privacy")).toBe(true);

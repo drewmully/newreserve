@@ -229,6 +229,24 @@ describe("Membership cart persistence", () => {
     expect(membership.cart[0].variantId).toBe(second.variantId);
   });
 
+  it("includes order-level welcome savings and refreshes the code before checkout", async () => {
+    mocks.setCurrentUser(null);
+    localStorage.setItem("mully_cart_id_guest", "welcome-cart");
+    localStorage.setItem("mully_shop_reward_v1", "MULLYEDIT10");
+    const cart = { ...makeShopifyCart("welcome-cart"), orderDiscountAmount: 3.8 };
+    mocks.getCart.mockResolvedValue(cart);
+    mocks.cartAttributesUpdate.mockResolvedValue(cart);
+    mocks.cartDiscountCodesUpdate.mockResolvedValue(cart);
+    const Provider = await loadProvider();
+    render(<Provider><CartProbe /></Provider>);
+    await waitFor(() => expect(membership.cartTotal).toBe(34.2));
+    await act(async () => {
+      expect(await membership.prepareShopCheckout()).toBe(cart.checkoutUrl);
+    });
+    expect(mocks.cartDiscountCodesUpdate).toHaveBeenCalledWith("welcome-cart", ["MULLYEDIT10"]);
+    expect(membership.cartOrderDiscount).toBe(3.8);
+  });
+
   it("does not create a simulated successful bag on Shopify failure", async () => {
     mocks.setCurrentUser(null);
     const Provider = await loadProvider();

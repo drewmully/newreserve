@@ -102,7 +102,7 @@ vi.mock("@/lib/dropConfig", () => ({
 }));
 
 async function loadPage() {
-  const mod = await import("@/app/dashboard/page");
+  const mod = await import("@/app/dashboard/LegacyDashboard");
   return mod.default;
 }
 
