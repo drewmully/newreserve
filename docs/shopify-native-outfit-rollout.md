@@ -12,6 +12,7 @@ Configure a public Customer Account API client in the Shopify Headless channel:
 
 - Enable `customer_read_customers` and `customer_write_subscription_contracts`.
 - Register exactly `https://www.mymully.com/api/shopify-customer/callback`.
+- Register `https://www.mymully.com` in JavaScript origins. Server-side requests explicitly send this origin for the public client.
 - Provide its public client ID as server environment variable `SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_ID`.
 - Generate a dedicated random 32-byte key, base64 encoded, as server environment variable `SHOPIFY_CUSTOMER_SESSION_SECRET`. Do not expose it to the browser, source control, or logs.
 - Keep `SHOPIFY_NATIVE_SUBSCRIPTIONS_ENABLED` unset or `false` until the launch checks below pass. This flag gates only new outfit subscriptions.

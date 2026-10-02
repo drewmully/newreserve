@@ -12,6 +12,13 @@ beforeEach(()=>{
 });
 afterEach(()=>{vi.unstubAllGlobals();vi.unstubAllEnvs();});
 describe("native customer identity and session security",()=>{
+  it("sends the canonical registered origin on customer API requests",async()=>{
+    mocks.fetch.mockResolvedValue({ok:true,status:200,json:async()=>({data:{customer:{id:"gid://shopify/Customer/1"}}})});
+    await customerGraphQL("token","query { customer { id } }");
+    expect(mocks.fetch).toHaveBeenCalledWith(expect.any(String),expect.objectContaining({
+      headers:expect.objectContaining({Origin:"https://www.mymully.com",Authorization:"token"}),
+    }));
+  });
   it("recognizes expired authentication returned in a GraphQL HTTP 200 response",async()=>{
     mocks.fetch.mockResolvedValue({ok:true,status:200,json:async()=>({errors:[{extensions:{code:"UNAUTHENTICATED"}}]})});
     await expect(customerGraphQL("token","query { customer { id } }")).rejects.toMatchObject({code:"connect_required"});
@@ -35,6 +42,9 @@ describe("native customer identity and session security",()=>{
     }));
     mocks.fetch.mockResolvedValue({ok:true,json:async()=>({access_token:"renewed",refresh_token:"rotated",expires_in:3600})});
     expect(await getLinkedCustomerSession("uid")).toMatchObject({accessToken:"renewed",refreshToken:"rotated"});
+    expect(mocks.fetch).toHaveBeenCalledWith(expect.any(String),expect.objectContaining({
+      headers:expect.objectContaining({Origin:"https://www.mymully.com"}),
+    }));
     expect(JSON.stringify(stored)).not.toContain("rotated");
     expect(openCustomerSession(String(stored.encrypted))).toMatchObject({accessToken:"renewed"});
     expect(stored.refreshLease).toBeUndefined();
@@ -80,6 +90,9 @@ describe("native customer identity and session security",()=>{
       .mockResolvedValueOnce({ok:true,status:200,json:async()=>({data:{customer:{id:"gid://shopify/Customer/2",emailAddress:{emailAddress:"other@example.test"}}}})});
     mocks.getUser.mockResolvedValue({email:"a@example.test",emailVerified:true});
     await expect(completeCustomerConnection("a".repeat(43),"code")).rejects.toMatchObject({code:"account_mismatch"});
+    expect(mocks.fetch).toHaveBeenNthCalledWith(1,expect.any(String),expect.objectContaining({
+      headers:expect.objectContaining({Origin:"https://www.mymully.com"}),
+    }));
     expect(del).toHaveBeenCalledOnce();
     expect(mocks.transaction).toHaveBeenCalledTimes(1);
   });

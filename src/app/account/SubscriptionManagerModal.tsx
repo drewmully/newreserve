@@ -13,6 +13,16 @@ type SubView = "main" | "change-plan" | "cancel";
 
 const PLAN_OPTIONS = LOOP_CHANGE_PLAN_OPTIONS;
 
+const CONNECTION_ERRORS: Record<string, string> = {
+  connect_required: "Shopify sign-in returned, but we could not finish connecting your account. Please contact Mully if another attempt fails.",
+  permissions_required: "Shopify sign-in succeeded, but subscription access is not enabled for this storefront. Please contact Mully.",
+  account_mismatch: "That Shopify login does not match your MyMully account. Use the same email you used at checkout.",
+  verify_email: "Please verify your MyMully email before connecting Shopify.",
+  expired_callback: "The Shopify connection expired. Please connect again.",
+  setup_required: "Subscription management is being configured. Please contact Mully.",
+  shopify_unavailable: "Shopify could not complete the account connection. Please try again later.",
+};
+
 export function SubscriptionManagerModal({ open, onClose, provider = "loop" }: { open: boolean; onClose: () => void; provider?: "loop" | "shopify" }) {
   const { user } = useMembership();
   const [subscriptions, setSubscriptions] = useState<LoopSubscriptionRecord[]>([]);
@@ -66,15 +76,19 @@ export function SubscriptionManagerModal({ open, onClose, provider = "loop" }: {
     setCancelReason("");
     setError(null);
     setNeedsConnection(false);
+    const callbackCode = native ? new URLSearchParams(window.location.search).get("shopify") : null;
+    const callbackError = callbackCode && callbackCode !== "connected"
+      ? CONNECTION_ERRORS[callbackCode] || "The Shopify connection could not be completed. Please try again."
+      : null;
     loadSubscriptions()
       .catch((err) => {
         console.error("[SubManager] load failed:", err);
         setSubscriptions([]);
         setSelectedSubscriptionId(null);
-        setError(err instanceof Error ? err.message : "Subscription data is temporarily unavailable.");
+        setError(callbackError || (err instanceof Error ? err.message : "Subscription data is temporarily unavailable."));
       })
       .finally(() => setLoading(false));
-  }, [loadSubscriptions, open, user]);
+  }, [loadSubscriptions, native, open, user]);
 
   // Escape key
   useEffect(() => {
