@@ -7,6 +7,8 @@ export interface ShopifyOutfitMembership {
   variant_id: number;
   order_id: string;
   paid_at: string;
+  /** Original unit price on the paid order, before discounts, tax or shipping.
+   * Not the amount charged and not a live contract renewal price. */
   amount: string;
   currency: string;
 }

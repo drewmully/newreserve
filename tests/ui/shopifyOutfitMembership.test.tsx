@@ -42,7 +42,8 @@ describe("Shopify outfit subscription account bridge", () => {
     fireEvent.click(screen.getByRole("button",{name:"Manage subscription"}));
     expect(manage).toHaveBeenCalledOnce();
     expect(screen.queryByRole("link")).not.toBeInTheDocument();
-    expect(screen.getByText("Last payment: $299.95")).toBeInTheDocument();
+    expect(screen.getByText("Item price before discounts: $299.95")).toBeInTheDocument();
+    expect(screen.queryByText(/Last payment/)).not.toBeInTheDocument();
     expect(screen.getByText(/same Shopify email you used at checkout/)).toBeInTheDocument();
     expect(screen.queryByText("Active")).not.toBeInTheDocument();
   });

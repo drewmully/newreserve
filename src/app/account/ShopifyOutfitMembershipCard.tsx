@@ -6,7 +6,7 @@ export function ShopifyOutfitMembershipCard({ membership, onManage }: { membersh
       <p className="mb-2 text-[10px] uppercase tracking-[0.18em] text-bone/60">Shopify subscription</p>
       <h3 className="font-serif text-lg">Mully Reserve · The Seasonal Edit</h3>
       <p className="mt-1 text-sm text-bone/70">
-        Last payment: {new Intl.NumberFormat("en-US", { style: "currency", currency: membership.currency }).format(Number(membership.amount))}
+        Item price before discounts: {new Intl.NumberFormat("en-US", { style: "currency", currency: membership.currency }).format(Number(membership.amount))}
       </p>
       <p className="mt-3 max-w-xl text-sm leading-relaxed text-bone/70">
         View your renewal date, pause, resume or cancel right here.
