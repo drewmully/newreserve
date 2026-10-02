@@ -50,9 +50,20 @@ function stateRef(state: string) { return adminDb.collection(STATE_COLLECTION).d
 
 async function tokenRequest(params: Record<string, string>): Promise<Tokens> {
   const { clientId } = config();
+  // Shopify confidential clients authenticate the initial exchange AND refresh
+  // with HTTP Basic. Keep the secret server-only and never send it to GraphQL.
+  // Public clients continue to use the existing PKCE flow without this header.
+  const clientSecret = process.env.SHOPIFY_CUSTOMER_ACCOUNT_CLIENT_SECRET;
+  const headers: Record<string, string> = {
+    "Content-Type": "application/x-www-form-urlencoded",
+    Origin: CUSTOMER_ORIGIN,
+  };
+  if (clientSecret) {
+    headers.Authorization = `Basic ${Buffer.from(`${clientId}:${clientSecret}`, "utf8").toString("base64")}`;
+  }
   const response = await fetch(TOKEN_URL, {
     method: "POST", cache: "no-store", signal: AbortSignal.timeout(15000),
-    headers: { "Content-Type": "application/x-www-form-urlencoded", Origin: CUSTOMER_ORIGIN },
+    headers,
     body: new URLSearchParams({ client_id: clientId, ...params }),
   });
   const data = await response.json();
@@ -63,6 +74,9 @@ async function tokenRequest(params: Record<string, string>): Promise<Tokens> {
       status: response.status,
       error: safeErrors.includes(data.error) ? data.error : "invalid_token_response",
     });
+    if (data.error === "invalid_client" || data.error === "unauthorized_client") {
+      throw new CustomerAccountError(503, "client_configuration_error", "Shopify account connection needs a storefront configuration update. Please contact Mully; signing in again will not fix this.");
+    }
     throw new CustomerAccountError(401, "connect_required", "Please reconnect your Shopify account.");
   }
   return { accessToken: data.access_token, refreshToken: typeof data.refresh_token === "string" ? data.refresh_token : null, expiresAt: Date.now() + Number(data.expires_in) * 1000 };

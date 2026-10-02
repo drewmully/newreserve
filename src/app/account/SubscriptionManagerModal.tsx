@@ -14,6 +14,7 @@ type SubView = "main" | "change-plan" | "cancel";
 const PLAN_OPTIONS = LOOP_CHANGE_PLAN_OPTIONS;
 
 const CONNECTION_ERRORS: Record<string, string> = {
+  client_configuration_error: "Shopify account connection needs a storefront configuration update. Please contact Mully; signing in again will not fix this.",
   connect_required: "Shopify sign-in returned, but we could not finish connecting your account. Please contact Mully if another attempt fails.",
   permissions_required: "Shopify sign-in succeeded, but subscription access is not enabled for this storefront. Please contact Mully.",
   account_mismatch: "That Shopify login does not match your MyMully account. Use the same email you used at checkout.",
