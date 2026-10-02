@@ -56,8 +56,8 @@ describe("guided outfit flow",()=>{
   it("shows Reserve only at review and passes first-shipment selections",()=>{
     render(<ShopOutfitBuilder products={products} byCategory={byCategory}/>);chooseSizes();
     fireEvent.click(screen.getByRole("radio",{name:/Subscribe & save/}));
-    fireEvent.click(screen.getByRole("button",{name:"Subscribe for $250 / season →"}));
-    expect(mocks.checkout).toHaveBeenCalledWith("member",{firstBoxItems:[
+    fireEvent.click(screen.getByRole("button",{name:"Subscribe for $299.95 / season →"}));
+    expect(mocks.checkout).toHaveBeenCalledWith("member",{email:undefined,firstBoxItems:[
       {slot:"Top",variantId:products[0].variants[0].id,name:products[0].name,size:"M"},
       {slot:"Bottom",variantId:products[2].variants[1].id,name:products[2].name,size:"L"},
       {slot:"Layer",variantId:products[4].variants[0].id,name:products[4].name,size:"M"},
@@ -98,7 +98,7 @@ describe("guided outfit flow",()=>{
     mocks.checkout.mockRejectedValueOnce(new Error("Could not confirm the first-box price."));
     render(<ShopOutfitBuilder products={products} byCategory={byCategory}/>);chooseSizes();
     fireEvent.click(screen.getByRole("radio",{name:/Subscribe & save/}));
-    fireEvent.click(screen.getByRole("button",{name:"Subscribe for $250 / season →"}));
+    fireEvent.click(screen.getByRole("button",{name:"Subscribe for $299.95 / season →"}));
     expect(await screen.findByRole("alert")).toHaveTextContent("Could not confirm");
   });
   it("blocks unavailable one-time items but preserves Reserve instructions",()=>{
@@ -106,7 +106,7 @@ describe("guided outfit flow",()=>{
     render(<ShopOutfitBuilder products={sold} byCategory={{}}/>);chooseSizes();
     expect(screen.getByRole("button",{name:"Selected sizes sold out"})).toBeDisabled();
     fireEvent.click(screen.getByRole("radio",{name:/Subscribe & save/}));
-    fireEvent.click(screen.getByRole("button",{name:"Subscribe for $250 / season →"}));
+    fireEvent.click(screen.getByRole("button",{name:"Subscribe for $299.95 / season →"}));
     expect(mocks.checkout).toHaveBeenCalledOnce();
   });
   it("keeps product swapping optional and never borrows sizes from another product",()=>{

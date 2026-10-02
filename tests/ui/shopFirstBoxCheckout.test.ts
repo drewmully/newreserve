@@ -9,9 +9,9 @@ const items: FirstBoxItem[] = [
 ];
 function cart(): FirstBoxCart {
   return {
-    cost:{subtotalAmount:{amount:"250.00",currencyCode:"USD"}},
+    cost:{subtotalAmount:{amount:"299.95",currencyCode:"USD"}},
     lines:{pageInfo:{hasNextPage:false},nodes:[
-      {quantity:1,merchandise:{id:reserve,availableForSale:true},sellingPlanAllocation:{sellingPlan:{id:plan}},cost:{totalAmount:{amount:"250.00",currencyCode:"USD"}}},
+      {quantity:1,merchandise:{id:reserve,availableForSale:true},sellingPlanAllocation:{sellingPlan:{id:plan}},cost:{totalAmount:{amount:"299.95",currencyCode:"USD"}}},
     ]},
   };
 }
@@ -28,7 +28,7 @@ describe("Reserve box with initial-order instructions", () => {
       expect(()=>firstBoxAttributes(input,reserve)).toThrow();
     }
   });
-  it("accepts a single undiscounted $250 Reserve line, without checking garment counts", () => {
+  it("accepts a single undiscounted $299.95 Reserve line, without checking garment counts", () => {
     expect(()=>assertFirstBoxCart(cart(),reserve,plan)).not.toThrow();
   });
   it.each(["retail extra","discounted subscription","missing plan","wrong plan","missing line","extra line","wrong currency","box unavailable","changed variant","wrong quantity","truncated"] as const)("fails closed on %s", kind => {

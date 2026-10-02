@@ -100,6 +100,7 @@ export interface StoreCreditState {
 }
 
 export interface SubscriptionsState {
+  shopify_outfit?: import("@/lib/shopifyOutfitMembership").ShopifyOutfitMembership | null;
   mullybox_active: boolean;
   status: string;
   total_subscription_count: number;
@@ -601,6 +602,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
 
         // Captured after syncUserProfile, used after Loop reconciliation
         let firestoreIsLegacy = false;
+        let hasShopifyOutfitMembership = false;
         let firestoreBack9WelcomeSeen = false;
 
         if (loginTrackedUidRef.current !== firebaseUser.uid) {
@@ -647,9 +649,13 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
               normalizeStoreCreditState(profile.store_credit, "cache")
             );
           }
-          if (profile.subscriptions) {
+          hasShopifyOutfitMembership = Boolean(profile.shopify_outfit_membership);
+          if (profile.subscriptions || profile.shopify_outfit_membership) {
             setSubscriptions(
-              normalizeSubscriptionsState(profile.subscriptions, "cache")
+              normalizeSubscriptionsState({
+                ...profile.subscriptions,
+                shopify_outfit: profile.shopify_outfit_membership ?? null,
+              }, "cache")
             );
           }
           if (profile.fit_profile && typeof profile.fit_profile === "object") {
@@ -710,7 +716,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
           if (res.ok) {
             const data = await res.json() as { subscriptions: Array<Record<string, unknown>>; source: string };
             const resolved = resolveTierFromLoopSubs(data.subscriptions);
-            if (resolved) {
+            if (resolved && !(hasShopifyOutfitMembership && resolved.tier === "access")) {
               const { tier: loopTier, variantId } = resolved;
               const legacy = resolveLegacyFromVariantId(variantId);
               setTier(loopTier);

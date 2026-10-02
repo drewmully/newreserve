@@ -1,4 +1,4 @@
-import { RESERVE_OUTFIT_PRICE } from "./shopOutfit";
+import { RESERVE_OUTFIT_PRICE, money } from "./shopOutfit";
 
 export type FirstBoxItem = { variantId: string; slot: "Top" | "Bottom" | "Layer"; name: string; size: string };
 type Money = { amount: string; currencyCode: string };
@@ -43,22 +43,22 @@ export function firstBoxDisplayAttributes(items: FirstBoxItem[], subscriptionVar
       key: `First shipment only · ${item.slot}`,
       value: `${item.name.trim()} / ${item.size.trim()}`.slice(0, 500),
     })),
-    { key: "Future shipments", value: "New styles curated for you. $250 every 3 months (4x/year)." },
+    { key: "Future shipments", value: `New styles curated for you. ${money(RESERVE_OUTFIT_PRICE)} every 3 months (4x/year).` },
   ];
 }
 
 /** Verify the single Reserve product/plan and its undiscounted box price.
  * Garment inventory is irrelevant: those variants are packing instructions. */
 export function assertFirstBoxCart(cart: FirstBoxCart | undefined, subscriptionVariant: string, sellingPlan: string) {
-  const error = "We couldn’t confirm the $250 Reserve checkout. No checkout was opened. Please try again or contact Mully.";
+  const error = `We couldn’t confirm the ${money(RESERVE_OUTFIT_PRICE)} Reserve checkout. No checkout was opened. Please try again or contact Mully.`;
   const isMoney = (m: Money | undefined, cents: number) => m?.currencyCode === "USD" &&
     Number.isFinite(Number(m.amount)) && Math.round(Number(m.amount) * 100) === cents;
   if (!cart?.lines?.nodes || cart.lines.pageInfo.hasNextPage || cart.lines.nodes.length !== 1 ||
-    !isMoney(cart.cost.subtotalAmount, RESERVE_OUTFIT_PRICE * 100)) throw new Error(error);
+    !isMoney(cart.cost.subtotalAmount, Math.round(RESERVE_OUTFIT_PRICE * 100))) throw new Error(error);
   const lines = cart.lines.nodes;
   const recurring = lines.filter(l => l.sellingPlanAllocation);
   if (recurring.length !== 1 || recurring[0].merchandise.id !== subscriptionVariant ||
       recurring[0].sellingPlanAllocation?.sellingPlan.id !== sellingPlan ||
       recurring[0].quantity !== 1 || !recurring[0].merchandise.availableForSale ||
-      !isMoney(recurring[0].cost.totalAmount, RESERVE_OUTFIT_PRICE * 100)) throw new Error(error);
+      !isMoney(recurring[0].cost.totalAmount, Math.round(RESERVE_OUTFIT_PRICE * 100))) throw new Error(error);
 }

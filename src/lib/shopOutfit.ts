@@ -1,4 +1,5 @@
 import type { ShopifyProduct, ShopifyProductVariant } from "./shopify";
+import { SHOPIFY_OUTFIT_SUBSCRIPTION } from "./membershipConfig";
 
 export const OUTFIT_SLOTS = [
   {
@@ -21,7 +22,7 @@ export const OUTFIT_SLOTS = [
   },
 ] as const;
 export const OUTFIT_STORAGE_KEY = "mully_shop_outfit_v1";
-export const RESERVE_OUTFIT_PRICE = 250;
+export const RESERVE_OUTFIT_PRICE = SHOPIFY_OUTFIT_SUBSCRIPTION.amount;
 export const money = (n: number) =>
   new Intl.NumberFormat("en-US", {
     style: "currency",
