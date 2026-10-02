@@ -40,8 +40,9 @@ function ProductCard({ product: p, onQuick }: { product: ShopifyProduct; onQuick
   </article>;
 }
 
-export function ShopLanding({ products, productsByCategory, theme, journalPosts = [] }: {
+export function ShopLanding({ products, editProducts = products, productsByCategory, theme, journalPosts = [] }: {
   products: ShopifyProduct[];
+  editProducts?: ShopifyProduct[];
   productsByCategory: Record<string, ShopifyProduct[]>;
   theme: SeasonalTheme;
   journalPosts?: Array<{slug: string; title: string; excerpt: string; image: string; imageAlt: string}>;
@@ -57,7 +58,7 @@ export function ShopLanding({ products, productsByCategory, theme, journalPosts 
   const dialog = useRef<HTMLDialogElement>(null);
   const heroImage = useRef<HTMLImageElement>(null);
   const quickTrigger = useRef<HTMLElement | null>(null);
-  const edit = useMemo(() => selectShopEdit(products, products.length), [products]);
+  const edit = useMemo(() => selectShopEdit(editProducts, editProducts.length), [editProducts]);
   const gear = ["winston-golf-tour-towel", "technically-golf-tiger-stripe-needlepoint-belt", "duckhead-stretch-belt", "leon-weekender-duffel"]
     .map(slug => products.find(p => p.slug === slug)).filter((p): p is ShopifyProduct => !!p);
   useEffect(() => {

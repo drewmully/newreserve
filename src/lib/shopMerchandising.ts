@@ -1,18 +1,8 @@
 import type { ShopifyProduct } from "./shopify";
 
-const EDIT = [
-  "olydoe-og-supima-hollow-polo", "duckhead-classic-fit-gold-school-chino-khaki",
-  "duckhead-fremont-sport-performance-quilted-vest-brandy-brown",
-  "leon-weekender-duffel",
-];
+/** Preserve the merchant's Shop All collection order, including unavailable items. */
 export function selectShopEdit(products: ShopifyProduct[], limit = 4): ShopifyProduct[] {
-  const rank = (p: ShopifyProduct) => {
-    const i = EDIT.indexOf(p.slug);
-    return (p.variants.some(v => v.availableForSale) ? 0 : 10000)
-      + (p.tags?.includes("shop-featured") ? 0 : 100)
-      + (i >= 0 ? i : 1000);
-  };
-  return [...products].sort((a, b) => rank(a) - rank(b)).slice(0, limit);
+  return products.slice(0, limit);
 }
 /** Merchant-maintained editorial content only; never fabricate a selection claim. */
 export function shopSelectionNote(p: ShopifyProduct): string {

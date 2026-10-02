@@ -30,10 +30,20 @@ const product = (slug: string, available: boolean, tags: string[] = []) =>
   ({ slug, tags, variants: [{ availableForSale: available }] }) as ShopifyProduct;
 
 describe("shop merchandising", () => {
-  it("prioritizes purchasable products without mutating catalog order", () => {
-    const products = [product("technically-golf-performance-polo", false), product("new", true)];
-    expect(selectShopEdit(products)[0].slug).toBe("new");
-    expect(products[0].slug).toBe("technically-golf-performance-polo");
+  it("preserves Shop All order regardless of stock, featured tags, or former pinned picks", () => {
+    const products = [
+      product("merchant-first", false),
+      product("new", true),
+      product("olydoe-og-supima-hollow-polo", true, ["shop-featured"]),
+      product("leon-weekender-duffel", true),
+      product("merchant-last", true),
+    ];
+    expect(selectShopEdit(products, products.length)).toEqual(products);
+    expect(selectShopEdit(products, 2)).toEqual(products.slice(0, 2));
+    expect(selectShopEdit(products)).toHaveLength(4);
+    expect(selectShopEdit(products)).not.toBe(products);
+    expect(products[0].slug).toBe("merchant-first");
+    expect(selectShopEdit([])).toEqual([]);
   });
   it("only selects merchant-tagged gifts", () => {
     expect(shopGiftPicks([product("a", true), product("b", true, ["gift"])], "gift").map(p => p.slug)).toEqual(["b"]);
