@@ -14,6 +14,7 @@ type CardProduct = ShopifyProduct & {
   displayKey?: string;
   cardColor?: string;
   cardImage?: string;
+  cardImageFit?: "cover";
   preferredVariantId?: string;
   colorCount?: number;
   swatches?: ShopSwatch[];
@@ -43,6 +44,7 @@ export function ShopProductCard({
   const color = swatch?.color ?? product.cardColor;
   const variantId = swatch ? swatch.variantId : product.preferredVariantId;
   const hero = swatch?.image || product.cardImage || shopProductPhoto(product);
+  const cover = (swatch ? swatch.fit : product.cardImageFit) === "cover";
   const href = variantId
     ? `/shop/${product.slug}?variant=${encodeURIComponent(variantId)}`
     : `/shop/${product.slug}`;
@@ -61,7 +63,9 @@ export function ShopProductCard({
             alt={product.imageDetails?.[0]?.altText || label}
             fill
             sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
-            className="object-contain p-4 transition-transform duration-500 group-hover:scale-[1.04] sm:p-6"
+            className={cover
+              ? "shop-product-card__photo--cover object-cover transition-transform duration-500 group-hover:scale-[1.04]"
+              : "object-contain p-4 transition-transform duration-500 group-hover:scale-[1.04] sm:p-6"}
           />
         )}
       </Link>
