@@ -5,6 +5,7 @@ import { getCollectionProducts } from "@/lib/shopify";
 import { ShopPageShell } from "../../components/ShopPageShell";
 import { ShopProductCard } from "../../components/ShopProductCard";
 import { ScrollToTop } from "../../components/ScrollToTop";
+import { withEditorialBreaks } from "../../components/ShopEditorialBreaks";
 import { SHOP_CATEGORIES, SHOP_CATEGORY_HANDLES } from "../../shopCollections";
 
 export const revalidate = 3600;
@@ -42,8 +43,10 @@ export default async function ShopCollectionPage({ params }: Props) {
         {categories.map(c => <Link key={c.handle} href={`/shop/collection/${c.handle}`} aria-current={handle === c.handle ? "page" : undefined}>{c.label}</Link>)}
       </nav>
       <p className="text-xs text-charcoal/60 mb-6">{products.length} {products.length === 1 ? "piece" : "pieces"}</p>
-      <div className="shop-catalog-grid">
-        {products.map(product => <ShopProductCard key={product.slug} product={product} accent="#4A3528" />)}
+      <div className={handle === "shop-all" ? "shop-catalog-grid shop-catalog-grid--editorial" : "shop-catalog-grid"}>
+        {handle === "shop-all"
+          ? withEditorialBreaks(products, product => <ShopProductCard key={product.slug} product={product} accent="#4A3528" />)
+          : products.map(product => <ShopProductCard key={product.slug} product={product} accent="#4A3528" />)}
       </div>
       {products.length === 0 && <div className="py-16">
         <p>{failed ? "We couldn’t load this collection. Please try again shortly." : "No pieces in this collection right now."}</p>
