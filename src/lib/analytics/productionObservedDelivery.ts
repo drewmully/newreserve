@@ -14,31 +14,40 @@ type Authorization = {
   revision: string; snapshot_hash: string; token_sha256: string; project_ref: string;
   source_id: string; audience: string; path: string; manifest_sha256: string;
   scope_sha256: string; shop: string;
-  approval_ref: string; not_before: string; expires_at: string;
-};
+  approval_ref: string; not_before: string;
+} & ({
+  expires_at: string; authorization_mode?: never;
+} | {
+  expires_at: null; authorization_mode: "standing";
+});
 const fields = ["revision", "snapshot_hash", "token_sha256", "project_ref", "source_id", "audience", "path",
   "manifest_sha256", "scope_sha256", "shop", "approval_ref", "not_before", "expires_at"];
 function validAuthorization(value: unknown): value is Authorization {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const a = value as Record<string, unknown>;
-  if (Object.keys(a).sort().join(",") !== [...fields].sort().join(",") ||
-    fields.some(k => typeof a[k] !== "string" || !(a[k] as string).trim() || (a[k] as string).length > 512)) return false;
+  const standing = a.authorization_mode === "standing";
+  const expectedFields = standing ? [...fields, "authorization_mode"] : fields;
+  if (Object.keys(a).sort().join(",") !== [...expectedFields].sort().join(",") ||
+    (standing && a.expires_at !== null) ||
+    fields.filter(k => !standing || k !== "expires_at")
+      .some(k => typeof a[k] !== "string" || !(a[k] as string).trim() || (a[k] as string).length > 512)) return false;
   const b = value as Authorization;
   return /^[1-9][0-9]{0,18}$/.test(b.revision) && BigInt(b.revision) <= BigInt("9223372036854775807") &&
     /^[a-f0-9]{64}$/.test(b.snapshot_hash) && /^[a-f0-9]{64}$/.test(b.token_sha256) &&
     b.project_ref === project && b.source_id === source && b.audience === audience &&
     b.path === observedDeliveryPath && b.manifest_sha256 === observedDeliveryManifestHash &&
     /^[a-f0-9]{64}$/.test(b.scope_sha256) && b.shop === "mullybox-store.myshopify.com" &&
-    [b.not_before, b.expires_at].every(t => /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}Z$/.test(t) &&
+    [b.not_before, ...(b.expires_at === null ? [] : [b.expires_at])].every(t => /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{6}Z$/.test(t) &&
       Number.isFinite(Date.parse(t))) &&
-    Date.parse(b.expires_at) > Date.parse(b.not_before) &&
-    Date.parse(b.expires_at) - Date.parse(b.not_before) <= 604800000;
+    (standing || (b.expires_at !== null && Date.parse(b.expires_at) > Date.parse(b.not_before) &&
+      Date.parse(b.expires_at) - Date.parse(b.not_before) <= 604800000));
 }
-const current = (a: Authorization) => Date.now() >= Date.parse(a.not_before) && Date.now() < Date.parse(a.expires_at);
+const current = (a: Authorization) => Date.now() >= Date.parse(a.not_before) &&
+  (a.authorization_mode === "standing" || (a.expires_at !== null && Date.now() < Date.parse(a.expires_at)));
 
 /**
- * Separate default-closed observed route. Standing authorization is finite,
- * revision/scope/source-bound and never renewed here. Existing routes and their
+ * Separate default-closed observed route. Finite or explicitly standing authority
+ * is revision/scope/source-bound and never renewed here. Existing routes and their
  * grants stay untouched. Two RPCs read 017/047/050, never a full-build fallback.
  */
 export async function productionObservedDeliveryGet(req: Request,
@@ -114,7 +123,7 @@ export async function productionObservedDeliveryGet(req: Request,
     if (!validObservedDeliveryPayload(data)) return empty(503);
     const statuses = (data as { report_status: Record<string, unknown>[] }).report_status;
     if (statuses.some(s => s.shop_id !== auth.shop ||
-      Date.parse(String(s.valid_until)) > Date.parse(auth.expires_at) ||
+      (auth.expires_at !== null && Date.parse(String(s.valid_until)) > Date.parse(auth.expires_at)) ||
       Date.parse(String(s.checked_at)) > Date.now() ||
       Date.parse(String(s.valid_until)) <= Date.now()) || !current(auth)) return empty(503);
     check();

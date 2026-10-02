@@ -63,6 +63,7 @@ function abortableClient(execute: (name: string, args: Record<string, unknown>) 
   } };
 }
 const client = abortableClient(async (name, args) => {
+  if (name === "lean_pipeline_ordinary_batch_admission") return { data: { state: "off" }, error: null };
   if (!["lean_financial_checkpoint_claim", "lean_financial_checkpoint_commit", "lean_history_read"].includes(name))
     throw new Error("unexpected RPC");
   const pairs = Object.entries(args);
