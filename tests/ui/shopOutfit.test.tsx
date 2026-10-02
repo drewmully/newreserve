@@ -21,7 +21,7 @@ beforeEach(()=>{
 function chooseSizes(){
   fireEvent.click(screen.getByRole("button",{name:"Choose my sizes →"}));
   fireEvent.click(within(screen.getByRole("group",{name:"Top & layer size"})).getByRole("button",{name:"M"}));
-  fireEvent.change(screen.getByLabelText("Trouser size"),{target:{value:"L"}});
+  fireEvent.click(within(screen.getByRole("group",{name:"Trouser size"})).getByRole("button",{name:"L"}));
   fireEvent.click(screen.getByRole("button",{name:"Review my outfit →"}));
 }
 describe("guided outfit flow",()=>{
@@ -31,6 +31,11 @@ describe("guided outfit flow",()=>{
     expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
     expect(screen.queryByRole("radio")).not.toBeInTheDocument();
     expect(screen.queryByText(/Subscribe & save/)).not.toBeInTheDocument();
+    expect(screen.getByRole("heading",{name:"Your fall outfit, for less."})).toBeInTheDocument();
+    expect(document.querySelector(".guided-total")).toBeNull();
+    expect([...document.querySelectorAll(".guided-piece-price")].map(p=>p.textContent)).toEqual(["$114","$138","$128"]);
+    expect(OUTFIT_SLOTS[2].slugs[0]).toBe("duckhead-fremont-sport-performance-quilted-vest-brandy-brown");
+    expect(screen.getByText("15% off one piece with BOGO15. Applied in your bag.")).toBeInTheDocument();
   });
   it("requires explicit sizes, shares top/layer size, then sends three exact variants",()=>{
     render(<ShopOutfitBuilder products={products} byCategory={byCategory}/>);
@@ -38,7 +43,7 @@ describe("guided outfit flow",()=>{
     expect(screen.getByRole("button",{name:"Review my outfit →"})).toBeDisabled();
     fireEvent.click(within(screen.getByRole("group",{name:"Top & layer size"})).getByRole("button",{name:"M"}));
     expect(screen.getByRole("button",{name:"Review my outfit →"})).toBeDisabled();
-    fireEvent.change(screen.getByLabelText("Trouser size"),{target:{value:"L"}});
+    fireEvent.click(within(screen.getByRole("group",{name:"Trouser size"})).getByRole("button",{name:"L"}));
     fireEvent.click(screen.getByRole("button",{name:"Review my outfit →"}));
     expect(screen.getByRole("radio",{name:/Just this time/})).toBeChecked();
     fireEvent.click(screen.getByRole("button",{name:"Add outfit to bag"}));
@@ -59,13 +64,32 @@ describe("guided outfit flow",()=>{
     ]});
     expect(mocks.add).not.toHaveBeenCalled();
   });
+  it("uses explicit waist and inseam buttons and hands off the exact trouser variant",()=>{
+    const trousers={...products[2],variants:["32","34"].flatMap(waist=>["30","32"].map(inseam=>({
+      ...products[2].variants[0],id:`gid://shopify/ProductVariant/${waist}${inseam}`,title:`${waist} / ${inseam}`,
+      selectedOptions:[{name:"Size",value:waist},{name:"Inseam",value:inseam}],
+    })))};
+    render(<ShopOutfitBuilder products={products.map(p=>p.slug===trousers.slug?trousers:p)} byCategory={{}}/>);
+    fireEvent.click(screen.getByRole("button",{name:"Choose my sizes →"}));
+    fireEvent.click(within(screen.getByRole("group",{name:"Top & layer size"})).getByRole("button",{name:"M"}));
+    const waist=within(screen.getByRole("group",{name:"Trouser waist"}));
+    const inseam=within(screen.getByRole("group",{name:"Trouser inseam"}));
+    expect(waist.getByRole("button",{name:"34"})).toHaveAttribute("aria-pressed","false");
+    fireEvent.click(waist.getByRole("button",{name:"34"}));
+    expect(screen.getByRole("button",{name:"Review my outfit →"})).toBeDisabled();
+    fireEvent.click(inseam.getByRole("button",{name:"32"}));
+    expect(waist.getByRole("button",{name:"34"})).toHaveAttribute("aria-pressed","true");
+    fireEvent.click(screen.getByRole("button",{name:"Review my outfit →"}));
+    fireEvent.click(screen.getByRole("button",{name:"Add outfit to bag"}));
+    expect(mocks.add.mock.calls[0][0][1].variantId).toBe("gid://shopify/ProductVariant/3432");
+  });
   it("allows different top and layer sizes without guessing",()=>{
     render(<ShopOutfitBuilder products={products} byCategory={byCategory}/>);
     fireEvent.click(screen.getByRole("button",{name:"Choose my sizes →"}));
     fireEvent.click(screen.getByLabelText("I wear different top and layer sizes"));
     fireEvent.change(screen.getByLabelText("Top size"),{target:{value:"M"}});
     fireEvent.change(screen.getByLabelText("Layer size"),{target:{value:"L"}});
-    fireEvent.change(screen.getByLabelText("Trouser size"),{target:{value:"M"}});
+    fireEvent.click(within(screen.getByRole("group",{name:"Trouser size"})).getByRole("button",{name:"M"}));
     fireEvent.click(screen.getByRole("button",{name:"Review my outfit →"}));
     fireEvent.click(screen.getByRole("button",{name:"Add outfit to bag"}));
     expect(mocks.add.mock.calls[0][0][2].variantId).toBe(products[4].variants[1].id);

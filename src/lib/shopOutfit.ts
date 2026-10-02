@@ -15,8 +15,8 @@ export const OUTFIT_SLOTS = [
     label: "Layer",
     category: "shop-outerwear",
     slugs: [
-      "olydoe-merino-ponte-quarter-zip",
       "duckhead-fremont-sport-performance-quilted-vest-brandy-brown",
+      "olydoe-merino-ponte-quarter-zip",
     ],
   },
 ] as const;
