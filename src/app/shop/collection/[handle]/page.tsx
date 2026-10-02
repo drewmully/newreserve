@@ -6,7 +6,7 @@ import { ShopPageShell } from "../../components/ShopPageShell";
 import { ShopProductCard } from "../../components/ShopProductCard";
 import { ScrollToTop } from "../../components/ScrollToTop";
 import { withEditorialBreaks } from "../../components/ShopEditorialBreaks";
-import { buildColorCards } from "@/lib/shopColorCards";
+import { buildColorCards, buildSwatchCards } from "@/lib/shopColorCards";
 import { SHOP_CATEGORIES, SHOP_CATEGORY_HANDLES } from "../../shopCollections";
 
 export const revalidate = 3600;
@@ -33,7 +33,8 @@ export default async function ShopCollectionPage({ params }: Props) {
       : await getCollectionProducts(handle);
   }
   catch (err) { failed = true; console.error("[shop collection] Catalog unavailable", err); }
-  const cards = buildColorCards(products);
+  // Shop all: one card per product with color swatches. Category pages: a card per color.
+  const cards = handle === "shop-all" ? buildSwatchCards(products) : buildColorCards(products);
   return <ShopPageShell>
     <ScrollToTop />
     <main className="shop-page-main">
