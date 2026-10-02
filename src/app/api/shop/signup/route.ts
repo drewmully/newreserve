@@ -3,6 +3,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase-admin";
 import { SHOP_INTERESTS, SHOP_CONSENT_VERSION, EMAIL_CONSENT, SMS_CONSENT, normalizeSignupPhone } from "@/lib/shopSignup";
+import { SHOP_REWARDS } from "@/lib/shopRewards";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -61,6 +62,7 @@ export async function POST(req: Request) {
         ...(stage === "email" ? { email, interest, emailConsent: evidence } : { phone, smsConsent: evidence }),
         ...(!existing.exists ? { createdAt: FieldValue.serverTimestamp(), sendingStatus: "not_synced" } : {}),
         updatedAt: FieldValue.serverTimestamp(), source: "shop-edit-popup",
+        reward: SHOP_REWARDS[stage],
       }, { merge: true });
       tx.set(lead.collection("consent_events").doc(), {
         ...evidence, ...(stage === "email" ? { email, interest } : { phone }),
@@ -68,7 +70,7 @@ export async function POST(req: Request) {
       if (stage === "email") tx.set(session, { leadId: id, expiresAtMs: now + 1800_000, expiresAt: new Date(now + 1800_000), used: false });
       else tx.update(session, { used: true });
     });
-    return respond({ ok: true, ...(stage === "email" ? { receipt } : {}) });
+    return respond({ ok: true, reward: SHOP_REWARDS[stage], ...(stage === "email" ? { receipt } : {}) });
   } catch (error) {
     const reason = error instanceof Error ? error.message : "";
     if (reason === "rate_limited") return respond({ error: reason }, 429);

@@ -26,7 +26,7 @@ export function ShopFooter({ accent }: { accent: string }) {
             <ul className="mt-4 space-y-2 text-sm text-charcoal/70">
               <li><Link href="/login?returnTo=%2Fshop" className="hover:text-charcoal">Log in / Account</Link></li>
               <li><Link href="/blog" className="hover:text-charcoal">From the Journal</Link></li>
-              <li><Link href="/lp/subscription" className="hover:text-charcoal">Explore Mully Reserve</Link></li>
+              <li><Link href="/subscription" className="hover:text-charcoal">Explore Mully Reserve</Link></li>
               <li>
                 <Link href="/shop/collection/shop-tops" className="hover:text-charcoal">
                   Tops

@@ -31,11 +31,11 @@ describe("shop login does not enroll shoppers", () => {
     expect(mocks.complete).not.toHaveBeenCalled();
     expect(mocks.checkout).not.toHaveBeenCalled();
   });
-  it("retains the default member sign-in path", async () => {
+  it("returns normal member sign-in to the shop homepage", async () => {
     mocks.completed = true;
     window.history.replaceState({}, "", "/login");
     render(<LoginPage />);
-    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/home"));
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/"));
   });
   it("retains paid membership onboarding priority", async () => {
     window.history.replaceState({}, "", "/login?paid=1&returnTo=%2Fshop");

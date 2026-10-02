@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { useMembership } from "@/app/context/MembershipContext";
 import { SHOP_INTERESTS, EMAIL_CONSENT, SMS_CONSENT } from "@/lib/shopSignup";
 import { MullyWordmark } from "./MullyWordmark";
+import { saveShopReward, type ShopReward } from "@/lib/shopRewards";
 import "./shop-signup.css";
 
 const STORAGE = "mully_shop_signup_v1";
@@ -21,6 +22,7 @@ export function ShopSignupPopup() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [open, setOpen] = useState(false);
+  const [reward, setReward] = useState<ShopReward | null>(null);
   cartOpenRef.current = cartOpen;
 
   function remember(days: number) {
@@ -31,7 +33,7 @@ export function ShopSignupPopup() {
     dialog.current?.close();
   }
   useEffect(() => {
-    if (pathname !== "/shop") return;
+    if (pathname !== "/shop" && pathname !== "/") return;
     const started = Date.now();
     let interacted = false;
     let dismissedUntil = 0;
@@ -111,6 +113,7 @@ export function ShopSignupPopup() {
           : "We couldn’t save that just now. Please try again.");
       }
       remember(365);
+      if (result.reward) { setReward(result.reward); saveShopReward(result.reward); }
       if (step === "email") { setReceipt(result.receipt); setStep("sms"); }
       else setStep("done");
     } catch (e) { setError(e instanceof Error ? e.message : "Please try again."); }
@@ -124,9 +127,9 @@ export function ShopSignupPopup() {
       <div className="shop-signup__content">
         <div className="shop-signup__top"><MullyWordmark accent="#4A3528" /><button type="button" aria-label="Close signup" onClick={close}>×</button></div>
         <p className="shop-signup__eyebrow">{step === "interest" ? "A more personal edit" : step === "email" ? "01 / The email edit" : step === "sms" ? "02 / Texts, if you like" : "You’re on the list"}</p>
-        <h2 id="signup-heading" tabIndex={-1} data-step-focus>{step === "interest" ? "Good finds.\nYour kind." : step === "email" ? "Your next good find." : step === "sms" ? "A little heads-up?" : "Consider it curated."}</h2>
+        <h2 id="signup-heading" tabIndex={-1} data-step-focus>{step === "interest" ? "Good finds.\nYour kind." : step === "email" ? "Your edit. 10% off." : step === "sms" ? "Make it 15%?" : "Good taste. Rewarded."}</h2>
         {step === "interest" ? <>
-          <p>What catches your eye? We’ll keep your edit relevant.</p>
+          <p>What catches your eye? Choose your edit, then join our email list for 10% off.</p>
           <div className="shop-signup__choices">
             {SHOP_INTERESTS.map(item => <button key={item.id} onClick={() => { setInterest(item.id); setStep("email"); }}>
               <span>{item.label}<small>{item.note}</small></span><span aria-hidden="true">↗</span>
@@ -134,10 +137,13 @@ export function ShopSignupPopup() {
           </div>
           <button className="shop-signup__skip" onClick={close}>Just browsing</button>
         </> : step === "done" ? <>
-          <p>Your preferences are saved. We’ll keep the good finds coming, and the noise down.</p>
+          <p>{reward ? `${reward.percent}% off your purchase. Your code is saved for this browser and will be added to your bag.` : "Your preferences are saved."}</p>
+          {reward && <p className="shop-signup__reward"><strong>{reward.code}</strong><span>Enter at checkout on another device.</span></p>}
+          <p className="shop-signup__fine">One use per customer on one-time merchandise. No expiry. Cannot be combined with other offers. Shopify applies the best eligible discount.</p>
           <button className="shop-signup__submit" onClick={close}>Back to the edit ↗</button>
         </> : <form key={step} onSubmit={submit}>
-          <p>{step === "email" ? `New arrivals and considered picks${interest === "everything" ? ", across the full edit" : ` in ${SHOP_INTERESTS.find(i => i.id === interest)?.label.toLowerCase()}`}. Nothing extra.` : "Your email is saved. Add your number for occasional drop alerts, or skip this step."}</p>
+          <p>{step === "email" ? "Considered picks, new arrivals and 10% off your purchase. Join our email list below." : "Your 10% is yours. Sign up for occasional texts to upgrade to 15%, or keep your email reward."}</p>
+          {step === "sms" && reward && <p className="shop-signup__reward"><strong>{reward.code}</strong><span>{reward.percent}% off, already saved.</span></p>}
           <label className="shop-signup__input-label">{step === "email" ? "Email address" : "Mobile number (optional)"}
             <input name={step === "email" ? "email" : "phone"} type={step === "email" ? "email" : "tel"}
               autoComplete={step === "email" ? "email" : "tel"} inputMode={step === "email" ? "email" : "tel"}
@@ -148,9 +154,9 @@ export function ShopSignupPopup() {
           </label>
           <div className="shop-signup__trap" aria-hidden="true"><label>Company<input name="company" autoComplete="off" tabIndex={-1} /></label></div>
           {error && <p className="shop-signup__error" role="alert">{error}</p>}
-          <button className="shop-signup__submit" disabled={busy}>{busy ? "Saving…" : step === "email" ? "Get my edit ↗" : "Add text updates ↗"}</button>
+          <button className="shop-signup__submit" disabled={busy}>{busy ? "Saving…" : step === "email" ? "Get 10% off ↗" : "Upgrade to 15% ↗"}</button>
           <button className="shop-signup__skip" type="button" onClick={step === "sms" ? () => { setStep("done"); setError(""); } : close}>
-            {step === "sms" ? "Email is enough" : "Not right now"}
+            {step === "sms" ? "Keep my 10%" : "Not right now"}
           </button>
           <p className="shop-signup__fine">No purchase or Reserve subscription required.</p>
         </form>}

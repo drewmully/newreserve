@@ -57,3 +57,6 @@
  .shop-signup__skip{margin-top:8px}
 }
 @media(prefers-reduced-motion:reduce){.shop-signup[open]{animation:none}.shop-signup *{transition:none!important}}
+.shop-signup__reward{padding:14px 16px;border:1px dashed #9a8b77;background:#f7f5ee;display:flex;flex-direction:column;gap:5px}
+.shop-signup__reward strong{letter-spacing:.14em;font-size:17px}
+.shop-signup__reward span{font-size:12px;color:#6d665c}

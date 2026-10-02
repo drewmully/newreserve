@@ -64,7 +64,7 @@ export function ShopPDPClient({
   accent,
   relatedProducts = [],
 }: ShopPDPClientProps) {
-  const { addItemsToCart } = useMembership();
+  const { addItemsToCart, hasShopDiscount } = useMembership();
   const [selection, setSelection] = useState<ProductVariantSelection>(() =>
     getInitialVariantSelection(product, initialSelection)
   );
@@ -99,8 +99,8 @@ export function ShopPDPClient({
     : "default";
 
   const displayVariant = selectedVariant ?? getDefaultProductVariant(product);
-  const price = displayVariant?.price ?? product.price;
-  const retailPrice = displayVariant?.reservePrice ?? product.reservePrice;
+  const retailPrice = displayVariant?.price ?? product.price;
+  const price = hasShopDiscount ? (displayVariant?.reservePrice ?? product.reservePrice) : retailPrice;
   const showStrikethrough =
     typeof retailPrice === "number" && retailPrice > price;
 
@@ -325,7 +325,7 @@ export function ShopPDPClient({
           {/* Trust strip */}
           <div className="mt-6 grid grid-cols-3 gap-0 border border-charcoal/10 bg-cream/50 text-center">
             {[
-              { k: "Free US Shipping", v: "Orders $95+" },
+              { k: "Mully Fulfillment", v: "Shipping at checkout" },
               { k: "Free Returns", v: "Within 30 days" },
               { k: "Real Support", v: "Real people" },
             ].map((item, i) => (

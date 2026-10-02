@@ -213,6 +213,7 @@ export interface ShopifyCart {
   checkoutUrl: string;
   lines: ShopifyCartLine[];
   totalAmount: number;
+  orderDiscountAmount?: number;
   currency: string;
   discountCodes?: Array<{ code: string; applicable: boolean }>;
 }
@@ -286,6 +287,7 @@ interface RawCart {
   cost: { totalAmount: { amount: string; currencyCode: string } };
   lines: { nodes: RawCartLine[] };
   discountCodes?: Array<{ code: string; applicable: boolean }>;
+  discountAllocations?: Array<{ discountedAmount: { amount: string } }>;
 }
 
 // ─── Mappers ──────────────────────────────────────────────────────────────────
@@ -359,6 +361,7 @@ function mapCart(raw: RawCart): ShopifyCart {
     id: raw.id,
     checkoutUrl: raw.checkoutUrl,
     totalAmount: parseFloat(raw.cost.totalAmount.amount),
+    orderDiscountAmount: (raw.discountAllocations ?? []).reduce((sum, d) => sum + Number(d.discountedAmount.amount), 0),
     currency: raw.cost.totalAmount.currencyCode,
     discountCodes: raw.discountCodes,
     lines: raw.lines.nodes.map((line) => {
@@ -457,6 +460,7 @@ const CART_FIELDS = `
   id
   checkoutUrl
   discountCodes { code applicable }
+  discountAllocations { discountedAmount { amount } }
   cost { totalAmount { amount currencyCode } }
   lines(first: 100) {
     nodes { ${CART_LINE_FIELDS} }

@@ -32,6 +32,7 @@ vi.mock("next/link", () => ({
 vi.mock("@/app/context/MembershipContext", () => ({
   useMembership: () => ({
     ...mocks.membershipState,
+    hasShopDiscount: mocks.membershipState.tier !== "free",
     cartCount: 0,
     cartOpen: false,
     setCartOpen: vi.fn(),

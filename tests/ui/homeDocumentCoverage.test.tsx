@@ -4,6 +4,7 @@ import type { ImgHTMLAttributes, ReactNode } from "react";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+vi.mock("@/lib/firebase", () => ({ auth: {}, db: {} }));
 
 const mocks = vi.hoisted(() => {
   const replace = vi.fn();
@@ -116,12 +117,13 @@ vi.mock("@/lib/shopify", () => ({
     groups.flatMap((group) => group.products),
 }));
 
-vi.mock("@/lib/dropConfig", () => ({
+vi.mock("@/lib/dropConfig", async importOriginal => ({
+  ...await importOriginal<typeof import("@/lib/dropConfig")>(),
   getExclusiveDropDate: () => new Date("2030-05-15T21:00:00-04:00"),
 }));
 
 async function loadPage() {
-  const mod = await import("@/app/home/page");
+  const mod = await import("@/app/home/LegacyMemberHome");
   return mod.default;
 }
 

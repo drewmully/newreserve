@@ -130,17 +130,6 @@ export default function AccountPage() {
     <ShopPageShell>
       <main className="shop-account-main">
         <div className="max-w-xl mx-auto">
-          {/* ── Back link ── */}
-          <Link
-            href="/home"
-            className="inline-flex items-center gap-1.5 text-xs text-charcoal/35 hover:text-forest transition-colors duration-300 mb-6"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-            </svg>
-            Dashboard
-          </Link>
-
           {/* ── Page title + tier badge ── */}
           <div className="flex items-center gap-3 mb-10">
             <h1 className="font-serif text-2xl md:text-3xl text-obsidian">Account</h1>
@@ -808,7 +797,7 @@ function OrdersSection({ orders }: { orders: OrdersState }) {
             Your history will appear here after your first purchase.
           </p>
           <Link
-            href="/dashboard?tab=shop"
+            href="/"
             className="inline-flex items-center justify-center h-9 px-5 rounded-lg border border-taupe/20 text-xs font-medium tracking-wider uppercase text-charcoal/45 hover:border-forest/30 hover:text-forest transition-all duration-300"
           >
             Browse Pro Shop

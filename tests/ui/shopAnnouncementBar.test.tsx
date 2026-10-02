@@ -12,7 +12,7 @@ describe("shop announcement styling", () => {
   });
   it("preserves full and compact offer labels", () => {
     render(<ShopAnnouncementBar />);
-    for (const text of ["Free U.S. Shipping over $95", "Buy one, get 15% off the second", "Free U.S. Returns", "Ship $95+", "BOGO 15%", "Free Returns"]) {
+    for (const text of ["Ships from Mully Fulfillment", "Buy one, get 15% off the second", "Free U.S. Returns", "Mully Fulfillment", "BOGO 15%", "Free Returns"]) {
       expect(screen.getByText(text)).toBeInTheDocument();
     }
   });

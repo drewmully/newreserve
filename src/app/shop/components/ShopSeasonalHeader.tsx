@@ -37,11 +37,11 @@ export function ShopSeasonalHeader({ accent }: { accent: string }) {
     window.location.assign(`/login?returnTo=${encodeURIComponent(destination)}`);
   }
   function outfitClick(e: React.MouseEvent<HTMLAnchorElement>) {
-    if (pathname !== "/shop" || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    if ((pathname !== "/shop" && pathname !== "/") || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     const target = document.getElementById("outfit");
     if (!target) return;
     e.preventDefault();
-    window.history.replaceState(window.history.state, "", "/shop#outfit");
+    window.history.replaceState(window.history.state, "", `${pathname}#outfit`);
     requestAnimationFrame(() => {
       window.scrollTo({
         top: window.scrollY + target.getBoundingClientRect().top - 96,
@@ -83,7 +83,7 @@ export function ShopSeasonalHeader({ accent }: { accent: string }) {
             <button ref={menuButton} className="flex h-11 w-11 items-center justify-center lg:hidden" onClick={() => menu.current?.showModal()} aria-label="Open shop menu" aria-haspopup="dialog">
               <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18" strokeWidth="1.5" /></svg>
             </button>
-            <Link href="/shop" aria-label="Mully Shop home"><MullyWordmark accent={accent} tone="dark" className="text-2xl" /></Link>
+            <Link href="/" aria-label="Mully Shop home"><MullyWordmark accent={accent} tone="dark" className="text-2xl" /></Link>
           </div>
           <nav aria-label="Shop navigation" className="hidden items-center gap-4 text-[11px] uppercase tracking-[.1em] lg:flex xl:gap-6">
             <ShopAllDropdown />
