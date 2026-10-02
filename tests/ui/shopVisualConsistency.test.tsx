@@ -23,17 +23,17 @@ describe("quiet shop visual contract",()=>{
     const hero=container.querySelector("#hero")!;
     expect(hero.textContent?.trim()).toBe("The Fall Edit[ shop ]");
     expect(hero.querySelectorAll("a")).toHaveLength(1);
-    expect(hero.querySelector("img")).toHaveAttribute("src","/shop-redesign/lifestyle/fall-fairway-desktop.webp");
+    expect(hero.querySelector("img")).toHaveAttribute("src","/shop-redesign/lifestyle/fall-fairway-vest-desktop.webp");
     expect(hero.querySelector("img")).toHaveAttribute("fetchpriority","high");
     expect(hero.querySelector("img")).toHaveAttribute("loading","eager");
-    expect(hero.querySelector("source")).toHaveAttribute("srcset","/shop-redesign/lifestyle/fall-fairway-mobile.webp");
+    expect(hero.querySelector("source")).toHaveAttribute("srcset","/shop-redesign/lifestyle/fall-fairway-vest-mobile.webp");
     expect(hero.querySelector("source")).toHaveAttribute("media","(max-width: 600px) and (orientation: portrait)");
     expect(hero.querySelector("a")).toHaveAttribute("href","#edit");
     expect(container.querySelector(".shop-selection-note")).toBeNull();
   });
   it("ships real responsive images and publicly accessible shop routes",()=>{
     for (const view of ["desktop","mobile"]) {
-      const asset=readFileSync(`public/shop-redesign/lifestyle/fall-fairway-${view}.webp`);
+      const asset=readFileSync(`public/shop-redesign/lifestyle/fall-fairway-vest-${view}.webp`);
       expect(asset.subarray(8,12).toString()).toBe("WEBP");
       expect(asset.byteLength).toBeLessThan(500_000);
     }
@@ -69,9 +69,11 @@ describe("quiet shop visual contract",()=>{
     const {container}=render(<ShopLanding products={products} productsByCategory={{}} theme={getSeasonalTheme()} />);
     expect(container.querySelectorAll("#mully-edit-rail .card")).toHaveLength(7);
     expect(container.querySelector(".shop-categories")).toBeNull();
-    expect(container.querySelector(".shop-colorway-strip")).toHaveAttribute("aria-label","Wear the colors of fall");
-    expect(container.querySelector(".shop-colorway-strip")).toHaveTextContent("wearthecolorsoffall");
-    expect(container.querySelectorAll(".shop-colorway-strip>div")).toHaveLength(5);
+    expect(container.querySelector(".shop-colorway-strip")).toHaveAttribute("aria-hidden","true");
+    expect(container.querySelector(".shop-colorway-strip")).toBeEmptyDOMElement();
+    const css=readFileSync("src/app/shop/components/shop-first.css","utf8");
+    expect(css).toMatch(/\.shop-colorway-strip\{height:16px/);
+    expect(css).toContain("background:linear-gradient(90deg,#ede6d6");
     expect(screen.getByRole("link",{name:"Shop the edit"})).toHaveTextContent("[ shop ]");
   });
 });
