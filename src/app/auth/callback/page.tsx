@@ -86,9 +86,43 @@ export default function AuthCallbackPage() {
           return;
         }
 
-        const txnId =
+        // Fetch the real order value + deterministic event_id from Firestore
+        // so the Google Ads conversion carries the actual purchase amount
+        // (previously hard-coded to 1.0, which broke ROAS in Ads Manager).
+        // Uses the same /api/purchase-context endpoint the Meta pixel fire
+        // below uses. `transaction_id` is set to `purchase_<shopify_order_id>`
+        // so Google Ads dedupes against the server-side webhook conversion.
+        let orderValue: number | undefined;
+        let orderCurrency = "USD";
+        let txnId =
           localStorage.getItem("mully_pending_txn_id") ||
           `mully-callback-${Date.now()}`;
+        try {
+          const { getAuth } = await import("firebase/auth");
+          const user = getAuth().currentUser;
+          if (user) {
+            const idToken = await user.getIdToken();
+            const resp = await fetch("/api/purchase-context", {
+              headers: { Authorization: `Bearer ${idToken}` },
+              cache: "no-store",
+            });
+            if (resp.ok) {
+              const ctx = (await resp.json()) as {
+                has_purchase?: boolean;
+                event_id?: string;
+                value?: number;
+                currency?: string;
+              };
+              if (ctx.has_purchase) {
+                if (typeof ctx.value === "number") orderValue = ctx.value;
+                if (ctx.currency) orderCurrency = ctx.currency;
+                if (ctx.event_id) txnId = ctx.event_id; // purchase_<order_id>
+              }
+            }
+          }
+        } catch (err) {
+          console.warn("[gtag] purchase-context fetch failed, firing with fallback value:", err);
+        }
 
         // event_callback fires once the conversion ping has been sent (or
         // event_timeout elapses). We use it to delay the redirect so gtag
@@ -106,8 +140,11 @@ export default function AuthCallbackPage() {
 
         window.gtag?.("event", "conversion", {
           send_to: `${conversionId}/${purchaseLabel}`,
-          value: 1.0,
-          currency: "USD",
+          // Fall back to 0 (not 1.0) if we couldn't resolve the real value —
+          // 0 signals "unknown" and keeps the conversion counted while making
+          // the value-tracking issue obvious in reports.
+          value: orderValue ?? 0,
+          currency: orderCurrency,
           transaction_id: txnId,
           event_callback: finish,
           event_timeout: 1500,
