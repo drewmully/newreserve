@@ -21,6 +21,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseService } from "@/app/api/_lib/supabaseService";
 import { sendPlainText } from "@/lib/email/resend";
+import { queueKlaviyoContact } from "@/lib/klaviyo/syncState";
 
 export const runtime = "nodejs";
 
@@ -200,6 +201,12 @@ export async function POST(req: Request) {
       console.warn("[simulatorclubs/apply] resend notify failed", err);
     }
   }
+
+  queueKlaviyoContact({
+    source: "simulatorclubs-apply",
+    email,
+    eventProperties: { step },
+  });
 
   return NextResponse.json({
     ok: true,

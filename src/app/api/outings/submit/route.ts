@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { queueKlaviyoContact } from "@/lib/klaviyo/syncState";
 
 export async function POST(request: Request) {
   const { name, email, eventType, guestCount, budget, message } =
@@ -68,6 +69,17 @@ export async function POST(request: Request) {
       // Log but don't fail the request if Slack notification fails
       console.error("Slack notification error:", slackError);
     }
+  }
+
+  if (typeof email === "string") {
+    const [firstName, ...rest] = String(name ?? "").trim().split(/\s+/);
+    queueKlaviyoContact({
+      source: "outings-submit",
+      email,
+      firstName: firstName || null,
+      lastName: rest.join(" ") || null,
+      eventProperties: { event_type: eventType, guest_count: Number(guestCount) || null },
+    });
   }
 
   return NextResponse.json({ success: true });

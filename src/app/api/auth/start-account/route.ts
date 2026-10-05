@@ -22,6 +22,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
+import { queueKlaviyoContact } from "@/lib/klaviyo/syncState";
 
 interface StartAccountBody {
   email?: unknown;
@@ -158,6 +159,15 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
+
+  // Contact only: creating an account is not marketing consent (Firebase's
+  // default messaging_preferences are not consent either).
+  queueKlaviyoContact({
+    source: "account-start",
+    email,
+    properties: { mully_account_signup_source: source ?? "homepage_email_cta" },
+    eventProperties: { signup_source: source ?? "homepage_email_cta", is_new_user: isNewUser },
+  });
 
   return NextResponse.json({ uid, customToken, isNewUser });
 }

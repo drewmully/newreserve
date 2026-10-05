@@ -13,6 +13,8 @@ import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase-admin";
+import { captureSyncFields, scheduleKlaviyoSync } from "@/lib/klaviyo/syncState";
+import { DROP_BAR_CONSENT, SHOP_NEWSLETTER_CONSENT } from "@/lib/shopSignup";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -152,6 +154,7 @@ export async function POST(req: Request) {
             stylistOptInAt: optIn ? FieldValue.serverTimestamp() : null,
             stylistFollowUpStatus: optIn ? "pending" : "declined",
             lastSeenAt: FieldValue.serverTimestamp(),
+            ...(optIn ? captureSyncFields("stylist") : {}),
           },
           { merge: true },
         );
@@ -169,10 +172,14 @@ export async function POST(req: Request) {
       },
     });
 
+    if (optIn) scheduleKlaviyoSync(COLLECTION, docId, ["stylist"]);
     return NextResponse.json({ ok: true, stage: "stylist" });
   }
 
-  // Stage "email" (default): initial capture.
+  // Stage "email" (default): initial capture. Consent is per submission:
+  // required for the shop footer, optional (unticked checkbox) on the
+  // editorial drop bar. Only this submission's consent drives a subscribe.
+  const consent = body.consent === true;
   try {
     await adminDb
       .collection(COLLECTION)
@@ -181,12 +188,14 @@ export async function POST(req: Request) {
         {
           email,
           source: shopSignup ? "shop-newsletter" : "editorial-drop-bar",
-          ...(shopSignup ? {
+          ...(consent ? {
             emailMarketingConsent: true,
             emailMarketingConsentAt: FieldValue.serverTimestamp(),
-            emailMarketingConsentVersion: "shop-newsletter-2026-09",
-            emailMarketingConsentText: "I’d like emails from Mully. Unsubscribe anytime.",
+            emailMarketingConsentVersion: shopSignup ? "shop-newsletter-2026-09" : "editorial-drop-bar-2026-10",
+            emailMarketingConsentText: shopSignup ? SHOP_NEWSLETTER_CONSENT : DROP_BAR_CONSENT,
           } : {}),
+          lastSubmissionConsent: consent,
+          ...captureSyncFields("email"),
           variant: variant ?? null,
           ip,
           userAgent,
@@ -201,6 +210,8 @@ export async function POST(req: Request) {
     console.error("[drop-signup] firestore write failed", err);
     return NextResponse.json({ error: "write_failed" }, { status: 500 });
   }
+
+  scheduleKlaviyoSync(COLLECTION, docId, ["email"]);
 
   // Fire PostHog after the write so a failed event doesn't lose the email.
   await firePostHog(email, variant, distinctId, {
