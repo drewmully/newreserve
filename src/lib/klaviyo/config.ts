@@ -16,7 +16,7 @@ export const KLAVIYO_REVISION = "2026-07-15";
  * Set after the list is created in Klaviyo. While empty, consented stages
  * fail with `list_not_configured` and are retried, so nothing is lost.
  */
-export const KLAVIYO_SIGNUP_LIST_ID = "";
+export const KLAVIYO_SIGNUP_LIST_ID = "SFJgUB";
 
 /** Klaviyo metric name for every on-site capture. */
 export const SIGNUP_METRIC = "Mully Site Signup";
