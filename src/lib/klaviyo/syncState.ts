@@ -49,6 +49,10 @@ export function toDate(value: unknown, fallback = new Date()): Date {
   const secs = v?._seconds ?? v?.seconds;
   if (typeof secs === "number") return new Date(secs * 1000);
   if (typeof value === "number") return new Date(value);
+  if (typeof value === "string") {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
   return fallback;
 }
 
