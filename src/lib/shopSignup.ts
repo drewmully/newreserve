@@ -7,6 +7,10 @@ export const SHOP_INTERESTS = [
 export const SHOP_CONSENT_VERSION = "shop-edit-2026-09-30";
 export const EMAIL_CONSENT = "I agree to receive marketing emails from Mully. Unsubscribe anytime.";
 export const SMS_CONSENT = "I agree to receive recurring automated marketing texts from Mully Group, Inc. at the number provided. Up to 4 messages/month. Consent is not a condition of purchase. Message and data rates may apply. Reply STOP to cancel, HELP for help.";
+/** Footer newsletter consent copy (shown in ShopNewsletter, stored as evidence). */
+export const SHOP_NEWSLETTER_CONSENT = "I’d like emails from Mully. Unsubscribe anytime.";
+/** Optional, unticked checkbox on the /lp/editorial "Never miss a drop" bar. */
+export const DROP_BAR_CONSENT = "Email me new drops and offers. Unsubscribe anytime.";
 export function normalizeSignupPhone(raw: unknown): string | null {
   if (typeof raw !== "string" || raw.length > 35) return null;
   const digits = raw.replace(/[\s().-]/g, "");

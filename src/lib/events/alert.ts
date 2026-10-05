@@ -18,7 +18,8 @@ export type AlertKind =
   | "unresolvable_event"
   | "unknown_topic"
   | "verification_failed"
-  | "reconciler_gap";
+  | "reconciler_gap"
+  | "klaviyo_sync_failed";
 
 export type AlertSeverity = "info" | "warning" | "critical";
 

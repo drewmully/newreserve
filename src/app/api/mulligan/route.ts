@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Timestamp } from "firebase-admin/firestore";
+import { queueKlaviyoContact } from "@/lib/klaviyo/syncState";
 import { adminDb } from "@/lib/firebase-admin";
 
 const VALID_CHOICES = new Set(["member", "access"]);
@@ -81,6 +82,8 @@ export async function POST(request: NextRequest) {
       },
       { merge: true }
     );
+
+  queueKlaviyoContact({ source: "mulligan", email, firstName, lastName, eventProperties: { reactivation_choice: reactivationChoice } });
 
   return NextResponse.json({ ok: true });
 }

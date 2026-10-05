@@ -14,6 +14,7 @@ import {
   verifyFoundersToken,
 } from "@/lib/foundersCampaign";
 import { createClient } from "@supabase/supabase-js";
+import { queueKlaviyoContact } from "@/lib/klaviyo/syncState";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -94,5 +95,8 @@ export async function POST(req: Request) {
     }),
   });
   const upstreamJson = await upstream.json().catch(() => ({}));
+  if (upstream.ok) {
+    queueKlaviyoContact({ source: "founders-hold", email, eventProperties: { campaign_id: FOUNDERS_CAMPAIGN_ID } });
+  }
   return NextResponse.json(upstreamJson, { status: upstream.status });
 }

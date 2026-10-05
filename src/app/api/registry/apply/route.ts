@@ -3,6 +3,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { adminDb, adminAuth } from "@/lib/firebase-admin";
 import { createReviewToken } from "@/lib/registry-tokens";
 import { sendPlainText } from "@/lib/email/resend";
+import { queueKlaviyoContact } from "@/lib/klaviyo/syncState";
 
 const ADMIN_EMAIL = "info@Mullybox.com";
 
@@ -217,6 +218,8 @@ export async function POST(req: NextRequest) {
     console.error("[registry/apply] Resend error:", err);
     // Application was saved — don't fail the request, just log
   }
+
+  if (userEmail) queueKlaviyoContact({ source: "registry-apply", email: userEmail });
 
   return NextResponse.json({ ok: true });
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Timestamp } from "firebase-admin/firestore";
+import { queueKlaviyoContact } from "@/lib/klaviyo/syncState";
 import { adminDb } from "@/lib/firebase-admin";
 
 function normalizeString(value: unknown): string {
@@ -68,6 +69,8 @@ export async function POST(request: NextRequest) {
       },
       { merge: true }
     );
+
+  queueKlaviyoContact({ source: "reserve-card", email, eventProperties: { selected_plan: selectedPlan } });
 
   return NextResponse.json({ ok: true });
 }

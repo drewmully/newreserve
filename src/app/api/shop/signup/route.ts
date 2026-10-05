@@ -4,14 +4,16 @@ import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase-admin";
 import { SHOP_INTERESTS, SHOP_CONSENT_VERSION, EMAIL_CONSENT, SMS_CONSENT, normalizeSignupPhone } from "@/lib/shopSignup";
 import { SHOP_REWARDS } from "@/lib/shopRewards";
+import { captureSyncFields, scheduleKlaviyoSync } from "@/lib/klaviyo/syncState";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const digest = (value: string) => createHash("sha256").update(value).digest("hex");
 const respond = (body: object, status = 200) => NextResponse.json(body, { status, headers: { "Cache-Control": "no-store" } });
 
-/** Capture only. No provider subscription, outbound message or automation is
- * triggered here. Consent evidence is kept separate from sending eligibility. */
+/** Capture first. Consent evidence is stored in Firestore before anything
+ * else; the Klaviyo sync runs in after() once the response is sent and can
+ * never change or fail this response. */
 export async function POST(req: Request) {
   if (req.headers.get("origin") !== new URL(req.url).origin) return respond({ error: "invalid_origin" }, 403);
   if (!req.headers.get("content-type")?.includes("application/json")) return respond({ error: "invalid_content_type" }, 415);
@@ -41,6 +43,7 @@ export async function POST(req: Request) {
   const rate = adminDb.collection("shop_signup_rate_limits").doc(digest(`${ip}:${windowKey}`));
   const receipt = stage === "email" ? randomBytes(32).toString("hex") : String(body.receipt);
   const session = adminDb.collection("shop_signup_sessions").doc(digest(receipt));
+  let leadId = "";
   try {
     await adminDb.runTransaction(async tx => {
       const limit = await tx.get(rate);
@@ -49,6 +52,7 @@ export async function POST(req: Request) {
       if (stage === "sms" && (!priorSession?.exists || priorSession.data()?.expiresAtMs < now || priorSession.data()?.used))
         throw new Error("expired_receipt");
       const id = stage === "email" ? digest(email) : priorSession!.data()!.leadId;
+      leadId = id;
       const lead = adminDb.collection("shop_marketing_leads").doc(id);
       const existing = await tx.get(lead);
       const evidence = {
@@ -60,7 +64,8 @@ export async function POST(req: Request) {
       tx.set(rate, { count: (limit.data()?.count || 0) + 1, expiresAt: new Date(now + 86400_000) });
       tx.set(lead, {
         ...(stage === "email" ? { email, interest, emailConsent: evidence } : { phone, smsConsent: evidence }),
-        ...(!existing.exists ? { createdAt: FieldValue.serverTimestamp(), sendingStatus: "not_synced" } : {}),
+        ...(!existing.exists ? { createdAt: FieldValue.serverTimestamp() } : {}),
+        ...captureSyncFields(stage),
         updatedAt: FieldValue.serverTimestamp(), source: "shop-edit-popup",
         reward: SHOP_REWARDS[stage],
       }, { merge: true });
@@ -70,6 +75,7 @@ export async function POST(req: Request) {
       if (stage === "email") tx.set(session, { leadId: id, expiresAtMs: now + 1800_000, expiresAt: new Date(now + 1800_000), used: false });
       else tx.update(session, { used: true });
     });
+    scheduleKlaviyoSync("shop_marketing_leads", leadId, [stage]);
     return respond({ ok: true, reward: SHOP_REWARDS[stage], ...(stage === "email" ? { receipt } : {}) });
   } catch (error) {
     const reason = error instanceof Error ? error.message : "";

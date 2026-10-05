@@ -20,6 +20,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { DROP_BAR_CONSENT } from "@/lib/shopSignup";
 
 const STORAGE_KEY = "mully_drop_bar_state";
 const DISMISS_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -105,6 +106,9 @@ export default function DropWatchBar() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [optIn, setOptIn] = useState(true);
+  // Email marketing consent. Optional and unticked by default: without it
+  // the signup is saved as a contact only, never subscribed.
+  const [emailConsent, setEmailConsent] = useState(false);
   const [hp, setHp] = useState(""); // honeypot
   const inputRef = useRef<HTMLInputElement | null>(null);
   const phoneRef = useRef<HTMLInputElement | null>(null);
@@ -188,6 +192,7 @@ export default function DropWatchBar() {
         body: JSON.stringify({
           email: trimmed,
           hp,
+          consent: emailConsent,
           variant: getHomepageVariant(),
           distinctId: getDistinctId(),
         }),
@@ -283,7 +288,7 @@ export default function DropWatchBar() {
       "transition-all duration-500 ease-out";
     const shape = inStylistStage
       ? "w-[calc(100%-1.5rem)] md:w-auto md:max-w-[640px] rounded-2xl"
-      : "w-[calc(100%-1.5rem)] md:w-auto md:max-w-[560px] rounded-full";
+      : "w-[calc(100%-1.5rem)] md:w-auto md:max-w-[560px] rounded-2xl";
     if (!visible) {
       return `${base} ${shape} opacity-0 translate-y-4 pointer-events-none`;
     }
@@ -410,9 +415,10 @@ export default function DropWatchBar() {
       ) : (
         <form
           onSubmit={submit}
-          className="flex items-center gap-2 md:gap-3"
+          className="flex flex-col gap-1.5"
           noValidate
         >
+          <div className="flex items-center gap-2 md:gap-3">
           <span
             className="hidden md:inline text-[10px] tracking-[0.28em] uppercase text-bone/70 shrink-0 pl-1"
           >
@@ -501,6 +507,22 @@ export default function DropWatchBar() {
               />
             </svg>
           </button>
+          </div>
+          <label className="flex items-start gap-2 cursor-pointer select-none pl-1">
+            <input
+              type="checkbox"
+              checked={emailConsent}
+              onChange={(e) => setEmailConsent(e.target.checked)}
+              disabled={status === "submitting"}
+              className="mt-[2px] w-3 h-3 accent-bone shrink-0 cursor-pointer"
+            />
+            <span className="text-[11px] leading-snug text-bone/70">
+              {DROP_BAR_CONSENT}{" "}
+              <a href="/policies/privacy" target="_blank" rel="noopener noreferrer" className="underline underline-offset-2 hover:text-bone">
+                Privacy
+              </a>
+            </span>
+          </label>
         </form>
       )}
     </div>
