@@ -288,3 +288,15 @@ describe("no PII in logs", () => {
     expect(JSON.stringify(ref.state.data.klaviyoSync)).not.toContain(EMAIL);
   });
 });
+
+describe("historical consent time", () => {
+  it("parses ISO strings and clamps future or current times into the past", async () => {
+    const { toDate } = await import("@/lib/klaviyo/syncState");
+    const { pastConsentTime } = await import("@/lib/klaviyo/syncSignup");
+    expect(toDate("2026-10-01T23:29:36.000Z").toISOString()).toBe("2026-10-01T23:29:36.000Z");
+    const now = new Date("2026-10-05T12:00:00.000Z");
+    expect(pastConsentTime(new Date("2026-10-01T00:00:00.000Z"), now)).toBe("2026-10-01T00:00:00.000Z");
+    expect(pastConsentTime(now, now)).toBe("2026-10-05T11:59:00.000Z");
+    expect(pastConsentTime(new Date("bad"), now)).toBe("2026-10-05T11:59:00.000Z");
+  });
+});

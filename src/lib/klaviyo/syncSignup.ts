@@ -108,7 +108,7 @@ export async function syncSignupToKlaviyo(input: SignupSyncInput): Promise<Signu
       }
       const consent = () =>
         input.historical
-          ? { marketing: { consent: "SUBSCRIBED", consented_at: input.historical.consentedAt.toISOString() } }
+          ? { marketing: { consent: "SUBSCRIBED", consented_at: pastConsentTime(input.historical.consentedAt) } }
           : { marketing: { consent: "SUBSCRIBED" } };
       const subscriptions = clean({
         email: wantEmail ? consent() : undefined,
@@ -163,4 +163,11 @@ export async function syncSignupToKlaviyo(input: SignupSyncInput): Promise<Signu
     }
     return { status: "failed", errorCode: "unexpected" };
   }
+}
+
+/** Klaviyo requires historical consented_at to be in the past; clamp to 1 minute ago. */
+export function pastConsentTime(at: Date, now: Date = new Date()): string {
+  const latest = now.getTime() - 60_000;
+  const t = Number.isNaN(at.getTime()) ? latest : Math.min(at.getTime(), latest);
+  return new Date(t).toISOString();
 }
