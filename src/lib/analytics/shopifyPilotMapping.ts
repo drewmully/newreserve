@@ -6,6 +6,7 @@ import type { PilotSource } from "./shopifyPilotSource";
 import { storeDaily, type Facts } from "./reporting";
 import { validateCandidateGraph, type Candidate } from "./certification";
 import type { OrderSizeSidecarOption } from "./shopifyOrderSize";
+import { approvedRefundDiscrepancy, type RefundSupplement } from "./pipelineIngestionAmendment";
 
 function amount(value: unknown): bigint {
   const m = sourceObject(sourceObject(value).shopMoney);
@@ -29,6 +30,8 @@ export type PilotPolicy = Omit<ShopifyMappingPolicy, "sourceEvidenceRef"> & {
   financialApprovalRef: string;
   saleClock: "paid_at";
   refundClock: "refund_created_at";
+  /** Separate owner-admitted historical evidence, never a source rewrite. */
+  refundSupplement?: RefundSupplement;
 };
 export function mapPilotSource(source: PilotSource, policy: PilotPolicy, publication: string, evidenceRef: string,
   options?: OrderSizeSidecarOption) {
@@ -81,12 +84,17 @@ export function mapPilotSource(source: PilotSource, policy: PilotPolicy, publica
     const reference = expectedRefunds.find(r => r.id === refund.id);
     if (!reference || reference.updatedAt !== refund.updatedAt || sourceObject(refund.order).id !== raw.id)
       throw new Error("pilot_refund_set_mismatch");
-    if (complete(refund.orderAdjustments).length || (refund.duties !== null && sourceArray(refund.duties).length))
+    const adjustments = complete(refund.orderAdjustments);
+    if (refund.duties !== null && sourceArray(refund.duties).length)
+      throw new Error("pilot_refund_adjustments_or_duties_unsupported");
+    if (adjustments.length && !policy.refundSupplement)
       throw new Error("pilot_refund_adjustments_or_duties_unsupported");
     const effectiveAt = sourceString(refund.createdAt); nyDate(effectiveAt);
     if (Date.parse(effectiveAt) < Date.parse(order.paid_at as string) || Date.parse(effectiveAt) > Date.parse(raw.updatedAt as string))
       throw new Error("pilot_refund_clock_invalid");
     const parts: Movement["slices"] = [];
+    if (adjustments.length) parts.push(slice(`discrepancy:${adjustments[0].id}`,
+      "other_sales_adjustment", micros(approvedRefundDiscrepancy(source, refund, policy.refundSupplement))));
     for (const line of complete(refund.refundLineItems)) {
       const lineId = shopifyId(sourceObject(line.lineItem).id, "LineItem");
       const original = mapped.order_items.find(i => i.source_line_id === lineId);
