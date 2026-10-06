@@ -9,9 +9,10 @@ import type { PartitionInventory } from "./partitionInventory";
 import { FINANCIAL_RETENTION, projectPilotRetention } from "./shopifyRetention";
 import { composeRetainedOrderReports } from "./shopifyRetainedOrder";
 import { nyDate } from "./primitives";
+import { amendedPipelinePolicy, type IngestionAdmission } from "./pipelineIngestionAmendment";
 
 export const PIPELINE_VERSION = "shopify-observed-v1";
-export type PipelinePolicy = Omit<PilotPolicy, "lineClasses"> & {
+export type PipelinePolicy = Omit<PilotPolicy, "lineClasses" | "refundSupplement"> & {
   productClasses: Record<string, "merchandise">;
   /** Operator-owned, persisted in each claimed snapshot policy. Omission keeps
    * the legacy query; this does not minimize the separately stored webhook. */
@@ -162,6 +163,7 @@ async function runPipeline(options: {
   let annualAccess = false;
   let storageInFlight = false;
   let phase = "invalid_receipt";
+  let amendment: IngestionAdmission | undefined;
   try {
     const policy = sourceObject(claim.policy) as PipelinePolicy;
     if (policy.retainedReports !== undefined && policy.retainedReports !== "product-v1")
@@ -220,7 +222,9 @@ async function runPipeline(options: {
     // A proven old creation date rules out facts independently of catalog.
     // Financial/catalog mapping remains mandatory only for the in-window path.
     if (!beforeWindow && !annualAccess) {
-      const mappedPolicy = mappingPolicy(source, policy);
+      const amended = amendedPipelinePolicy(source, policy, claim.ingestionAmendment);
+      amendment = amended.admission;
+      const mappedPolicy = mappingPolicy(source, amended.policy);
       const publication = sourceString(claim.publication), evidence = `lean_private.pipeline_snapshots/${claim.workId}`;
       if (policy.retainedReports === "product-v1") {
         const composed = composeRetainedOrderReports(source, mappedPolicy, publication, evidence, PIPELINE_VERSION,
@@ -254,10 +258,13 @@ async function runPipeline(options: {
   }
   if (!output) throw new Error("pipeline_missing_output");
   // No catch-and-fail around finish: its response may be lost AFTER commit.
-  const finished = await pipelineRpc(options.client, productReports ? "lean_pipeline_finish_extended" : "lean_pipeline_finish", {
+  const finished = await pipelineRpc(options.client, amendment ? "lean_pipeline_finish_amended" :
+    productReports ? "lean_pipeline_finish_extended" : "lean_pipeline_finish", {
     ...args, p_facts: output.facts, p_reports: output.reports,
+    ...(amendment ? { p_amendment_revision: amendment.revision } : {}),
     ...(productReports ? { p_product_reports: productReports, p_order_item_sizes: output.order_item_sizes ?? null } : {}),
   });
   if (typeof finished !== "boolean") throw new Error("pipeline_invalid_finish");
-  return { state: finished ? "done" : "lost_lease" };
+  return { state: finished ? "done" : "lost_lease",
+    ...(finished && amendment ? { mappingEvidenceRef: `lean_private.pipeline_ingestion_completions/${claim.workId}` } : {}) };
 }
