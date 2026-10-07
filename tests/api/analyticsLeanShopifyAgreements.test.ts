@@ -86,6 +86,55 @@ it("accepts an associated provider payment timestamp before order creation and a
   expect(result.snapshot.paidAt).toBe("2026-01-01T11:59:59Z");
   expect(result.movements[0].effectiveAt).toBe("2026-01-01T11:59:59Z");
 });
+it("keeps a proven original purchase after later cancellation with an earlier original agreement", () => {
+  const f = fixture();
+  (f.commerce.order.transactions as SourceObject[])[0].processedAt = "2026-01-01T11:59:55Z";
+  f.document.agreements[0].happenedAt = "2026-01-01T11:59:58Z";
+  f.commerce.order.cancelledAt = "2026-01-02T12:01:00Z";
+  const result = map(f);
+  expect(result.snapshot.paidAt).toBe("2026-01-01T11:59:55Z");
+  expect(result.snapshot.lines[0].quantity).toBe(2);
+  expect(result.snapshot.lines[0].merchandiseDiscount).toBe("2.000000");
+  expect(result.decision).toEqual(f.policy.decision);
+  expect(f.commerce.order.cancelledAt).toBe("2026-01-02T12:01:00Z");
+});
+it("preserves distinct signed RETURN adjustments without loosening merchandise or allocation signs", () => {
+  const f = fixture(), rows = f.document.agreements[1].sales as SourceObject[];
+  rows.push(...["263.50", "-263.50"].map((amount, i) => ({
+    ...sale(String(20 + i), amount, "0", "0"), __typename: "AdjustmentSale",
+    lineType: "ADJUSTMENT", actionType: "RETURN", quantity: null,
+  })));
+  const result = map(f), adjustments = result.movements.filter(m =>
+    m.slices.some(s => s.component === "other_sales_adjustment"));
+  expect(adjustments.map(m => m.sourceTotal)).toEqual(["263.500000", "-263.500000"]);
+  expect(new Set(adjustments.map(m => m.id)).size).toBe(2);
+  expect(adjustments.every(m => m.effectiveAt === changed && m.slices[0].lineId === null)).toBe(true);
+  rows[1].totalTaxAmount = bag("1");
+  expect(() => map(f)).toThrow("agreement_action_sign");
+  rows[1].totalTaxAmount = bag("0");
+  rows[1].totalDiscountAmountBeforeTaxes = bag("1");
+  expect(() => map(f)).toThrow("agreement_action_sign");
+});
+it("counts equal before/after ProductSale discounts once only when tax is zero", () => {
+  const f = fixture(), original = (f.document.agreements[0].sales as SourceObject[])[0];
+  const returned = (f.document.agreements[1].sales as SourceObject[])[0];
+  original.totalTaxAmount = bag("0");
+  original.totalDiscountAmountAfterTaxes = bag("2");
+  returned.totalTaxAmount = bag("0");
+  returned.totalDiscountAmountAfterTaxes = bag("-1");
+  const result = map(f);
+  expect(result.snapshot.lines[0]).toMatchObject({
+    quantity: 2, unitPrice: "11.000000", merchandiseDiscount: "2.000000",
+  });
+  expect(result.movements[1].slices[0]).toMatchObject({
+    component: "merchandise_refund", amount: "-10.000000",
+  });
+  returned.totalDiscountAmountAfterTaxes = bag("-2");
+  expect(() => map(f)).toThrow("agreement_after_tax_discount_review");
+  returned.totalDiscountAmountAfterTaxes = bag("-1");
+  returned.totalTaxAmount = bag("-1");
+  expect(() => map(f)).toThrow("agreement_after_tax_discount_review");
+});
 it("keeps new post-purchase lines out of the original basket and marks allocation unresolved", () => {
   const f = fixture();
   f.document.agreements[1] = { id: gid("OrderEditAgreement", "12"), __typename: "OrderEditAgreement",
@@ -131,7 +180,7 @@ const bad: [string, (f: ReturnType<typeof fixture>) => void, string][] = [
   ["future source", f => { f.document.capturedAt = created; }, "agreement_source_scope"],
   ["missing financial approval", f => { f.policy.financialApprovalRef = ""; }, "agreement_policy_required"],
   ["test order", f => { f.commerce.order.test = true; }, "agreement_requires_eligible_order"],
-  ["cancelled order", f => { f.commerce.order.cancelledAt = updated; }, "agreement_requires_eligible_order"],
+  ["cancellation before original payment", f => { f.commerce.order.cancelledAt = created; }, "agreement_cancellation_chronology"],
   ["missing original", f => { f.document.agreements.shift(); }, "agreement_original_required"],
   ["duplicate agreements", f => { f.document.agreements.push(f.document.agreements[0]); }, "agreement_invalid_set"],
   ["mismatched original total", f => { f.commerce.order.originalTotalPriceSet = bag("30"); }, "agreement_original_total_mismatch"],

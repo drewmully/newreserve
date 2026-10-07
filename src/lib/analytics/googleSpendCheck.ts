@@ -20,10 +20,11 @@ function count(value: unknown): bigint | null {
  * A separate customer/day query controls the campaign sums. Missing days remain
  * missing, never synthesized as verified zero. No record details leave this check.
  */
-export async function checkGoogleSpend(input: {
+type GoogleCheckInput = {
   scope: GoogleCheckScope; auth: GoogleSpendAuth; developerToken: string;
   fetcher?: typeof fetch; now?: string; signal?: AbortSignal;
-}) {
+};
+async function executeGoogleSpendCheck(input: GoogleCheckInput) {
   const scope = input.scope, dates = reportDates(scope.fromDate, scope.throughDate);
   if (Object.keys(scope).some(k => !["accountId", "loginCustomerId", "fromDate", "throughDate",
     "maxPages", "maxRequests", "deadlineSeconds", "approvalRef", "actorRef", "includeDeliveryMetrics"].includes(k)) ||
@@ -124,7 +125,7 @@ export async function checkGoogleSpend(input: {
   }) : [];
   const deliveryReady = deliveryRows.length === dates.length && deliveryRows.every(row => row.matches) &&
     bases[0].sourceCurrency === "USD" && bases[0].sourceTimezone === "America/New_York";
-  return { state: rows.every(row => row.matches) ? "sample_amounts_match" : "sample_amounts_unverified",
+  const summary = { state: rows.every(row => row.matches) ? "sample_amounts_match" : "sample_amounts_unverified",
     accountId: scope.accountId, currency: bases[0].sourceCurrency, timezone: bases[0].sourceTimezone,
     capturedAt, requests, bytes, rows, certification: "unverified", databaseWrites: false,
     independentCoverageCertified: false, approvalRef: scope.approvalRef,
@@ -135,5 +136,34 @@ export async function checkGoogleSpend(input: {
         ? bases.flatMap(base => normalizeSpendBase(base, "google-check-delivery")) : [], deliveryReady),
       metricAcceptance: false,
     } } : {}),
+  };
+  return { summary, bases, control };
+}
+
+/** Existing public summary is unchanged. It is not registration evidence. */
+export async function checkGoogleSpend(input: GoogleCheckInput) {
+  return (await executeGoogleSpendCheck(input)).summary;
+}
+
+/** Private producer input. Separate campaign and customer queries must both
+ * complete and match. Callers cannot submit campaign rows or proof booleans. */
+export async function captureGoogleIndependentControls(input: Omit<GoogleCheckInput, "now">) {
+  if (input.scope.includeDeliveryMetrics !== true || input.scope.fromDate !== input.scope.throughDate)
+    throw new Error("google_control_capture_scope");
+  const startedAt = new Date().toISOString();
+  const { summary, bases, control } = await executeGoogleSpendCheck(input);
+  const completedAt = new Date().toISOString();
+  if (summary.state !== "sample_amounts_match" || summary.delivery?.state !== "sample_delivery_match" ||
+    bases.length !== 1 || !bases[0].rows.length || bases[0].rows.length > 10000)
+    throw new Error("google_control_capture_unverified");
+  return { startedAt, completedAt, accountId: summary.accountId, date: input.scope.fromDate,
+    currency: summary.currency, timezone: summary.timezone,
+    campaigns: bases[0].rows.map(row => ({ id: row.campaignId, costMicros: row.costMicros,
+      clicks: row.clicks!, impressions: row.impressions! })),
+    totalCostMicros: summary.rows[0].controlMicros!,
+    clicks: summary.delivery.rows[0].controlClicks!, impressions: summary.delivery.rows[0].controlImpressions!,
+    requests: summary.requests, bytes: summary.bytes,
+    // Actual customer response retained privately for receipt hashing only.
+    accountResponse: control,
   };
 }

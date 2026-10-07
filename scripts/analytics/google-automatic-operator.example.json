@@ -1,0 +1,22 @@
+{
+  "enabled": false,
+  "version": 1,
+  "projectId": "353503",
+  "origin": null,
+  "notBefore": null,
+  "expiresAt": null,
+  "grantId": null,
+  "grantRevision": null,
+  "standingPolicy": null,
+  "standingRevision": null,
+  "destinationContractSha256": null,
+  "approvalRef": null,
+  "actorRef": null,
+  "attemptPath": null,
+  "maxApplicationCalls": 3,
+  "maxConnectorCalls": 5,
+  "allowCapture": false,
+  "allowMetaCapture": false,
+  "allowAdvance": false,
+  "allowObserve": false
+}

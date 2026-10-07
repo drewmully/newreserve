@@ -30,6 +30,14 @@ edit collection does not move it. Missing payment timestamps, crossing the
 original total without exact equality, changes before full payment and incomplete
 transaction lists fail. An authorization is not counted as a second payment.
 
+The original agreement and payment can precede `Order.createdAt`; their source
+clocks are preserved. Agreement ordering, change-after-payment chronology and
+the retained order revision remain checked. For an explicitly eligible original
+purchase, a later cancellation is admitted only after proving exact original
+full payment and verifying that cancellation follows both that payment and the
+original agreement, no later than the retained revision. Cancellation does not
+create an eligibility decision or relax the ordinary current-snapshot mapper.
+
 The supported [sale actions](https://shopify.dev/docs/api/admin-graphql/2026-07/enums/SaleActionType)
 map as follows:
 
@@ -40,6 +48,18 @@ map as follows:
 | Product return | Signed net merchandise refund plus tax at approved agreement time |
 | Product price/discount update | Signed gross/discount adjustment, preserving net merchandise arithmetic |
 | Shipping, duty, adjustment and fee | Explicit non-merchandise components, with separate tax |
+
+An `AdjustmentSale` with line type `ADJUSTMENT` can carry a positive `RETURN`
+amount when its tax and discount amounts are explicitly zero. It remains a
+signed order-level adjustment, not merchandise or a cash refund. Each source
+sale ID and clock survives, including opposite-signed adjustment pairs.
+Merchandise return signs and unsupported allocation checks are unchanged.
+
+For a typed `ProductSale` with line type `PRODUCT` and action `ORDER` or `RETURN`,
+equal before- and after-tax discount amounts are supported when tax is explicitly zero. The before-tax
+discount is counted once. Signed return values stay separate from the original
+basket. Unequal discounts, nonzero tax with a nonzero after-tax discount and
+unsupported sale types still require allocation review.
 
 Later lines not present in the original basket remain unallocated, not linked
 to a fabricated purchase line. Product financial metrics are intrinsically
@@ -75,7 +95,7 @@ Its result is `snapshot_only`, never enabled or registered.
 
 This is not an all-financial-cases implementation. Unsupported gift card, tip,
 additional fee and unknown sale types; after-tax discount allocation; ambiguous
-payment ordering; cancelled/test orders; nonintegral unit-price reconstruction;
+payment ordering; unproven cancellation chronology/test orders; nonintegral unit-price reconstruction;
 and original product/offer metadata still require authoritative mappings.
 Gateway chargebacks and their reversals are not sales agreements and are not
 invented here. Source completeness and independent accounting controls remain

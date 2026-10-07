@@ -1,9 +1,9 @@
-import { prepareMetaSpendDay, spendRef, type MetaSpendDay } from "./metaSpendInput";
+import { prepareMetaSpendDay, spendRef, type MetaSpendPacket } from "./metaSpendInput";
 import type { FreshSpendMarketingInventory } from "./googleSpendReportInput";
 
 /** Owner-only preparation. Both SQL registrations remain disabled; returned
  * arguments are not evidence that any authority or source has been verified. */
-export function prepareMetaSpendRegistration(packet: MetaSpendDay, timing: {
+export function prepareMetaSpendRegistration(packet: MetaSpendPacket, timing: {
   freshnessCutoffAt: string; asOf: string;
 }) {
   prepareMetaSpendDay(packet, { projectRef: packet.projectRef, shop: packet.shop,
@@ -12,7 +12,8 @@ export function prepareMetaSpendRegistration(packet: MetaSpendDay, timing: {
     !/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(packet.shop) ||
     Buffer.byteLength(JSON.stringify(packet)) > 1000000) throw new Error("meta_registration_target_or_budget");
   return { state: "prepared", enabled: false, registered: false, metricAcceptance: false,
-    registration: { rpc: "lean_marketing_spend_day_register", args: { p_packet: structuredClone(packet) } } };
+    registration: { rpc: packet.version === 2 ? "lean_marketing_spend_hourly_register" : "lean_marketing_spend_day_register",
+      args: { p_packet: structuredClone(packet) } } };
 }
 export function prepareMultiProviderSpendBinding(input: {
   runId: string; projectRef: string; generationIds: string[];

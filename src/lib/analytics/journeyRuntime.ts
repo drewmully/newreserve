@@ -3,8 +3,9 @@ import { collectionEvent, type Journey } from "./collection";
 import { getAnalyticsSupabase } from "./serverClient";
 import { signCheckoutContext } from "./checkout-context";
 import { shopifyShop } from "./shopifySource";
-import { boundedJourneyRpc, resolveJourneyRuntime, reserveFamilies, reserveGrantPrefix, reserveRuntime,
+import { boundedJourneyRpc, reserveFamilies, reserveGrantPrefix, reserveRuntime,
   type JourneyPolicy } from "./journeyPolicyRuntime";
+import { resolveJourneyRuntime, isReserveCartRuntime, reserveCartGrantPrefix } from "./journeyCheckoutPolicy";
 export { boundedJourneyRpc } from "./journeyPolicyRuntime";
 
 export type JourneyGrant = {
@@ -42,7 +43,7 @@ export async function journeyGrant(req: Request, verifiedUid?: string, runtime: 
     const shop = shopifyShop(e.LEAN_SHOPIFY_SHOP_DOMAIN ?? "");
     const tokenHash = createHash("sha256").update(token).digest("hex");
     const result = runtime.policy
-      ? await boundedJourneyRpc(runtime, "lean_journey_runtime_grant", {
+      ? await boundedJourneyRpc(runtime, isReserveCartRuntime(runtime) ? "lean_journey_checkout_grant" : "lean_journey_runtime_grant", {
         p_config: runtime.policy.configToken, p_token_hash: tokenHash })
       : await boundedJourneyRpc(runtime, "lean_journey_grant", { p_project: e.LEAN_ANALYTICS_PIPELINE_PROJECT_REF,
         p_shop: shop, p_token_hash: tokenHash });
@@ -55,7 +56,7 @@ export async function journeyGrant(req: Request, verifiedUid?: string, runtime: 
         Date.parse(g.expiresAt) <= now || Date.parse(g.expiresAt) - Date.parse(g.validFrom) > 86400000 ||
         g.firebaseUid !== null && g.firebaseUid !== verifiedUid) return null;
     // A DB-mode grant must never escape its policy via the old environment lane.
-    if (!runtime.policy && g.permissionEvidenceRef.startsWith(reserveGrantPrefix)) return null;
+    if (!runtime.policy && [reserveGrantPrefix, reserveCartGrantPrefix].some(p => g.permissionEvidenceRef.startsWith(p))) return null;
     return { ...g, tokenHash };
   } catch { return null; }
 }
@@ -99,7 +100,7 @@ export async function captureJourney(req: Request, name: string, actionId: unkno
     const key = runtime.env.LEAN_POSTHOG_CAPTURE_KEY;
     if (!["https://us.i.posthog.com", "https://eu.i.posthog.com"].includes(host ?? "") || !key?.trim()) return false;
     const action = runtime.policy
-      ? await boundedJourneyRpc(runtime, "lean_journey_runtime_action", { p_config: runtime.policy.configToken,
+      ? await boundedJourneyRpc(runtime, isReserveCartRuntime(runtime) ? "lean_journey_checkout_action" : "lean_journey_runtime_action", { p_config: runtime.policy.configToken,
         p_token_hash: g.tokenHash, p_action: id, p_family: event.event })
       : await boundedJourneyRpc(runtime, "lean_journey_action", { p_project: g.projectRef, p_shop: g.shop,
         p_token_hash: g.tokenHash, p_action: id, p_family: event.event });
@@ -127,8 +128,12 @@ export function stableJourneyAction(value: string) {
 export async function attachJourneyCart(req: Request, cartId: unknown, verifiedUid?: string,
   runtime: JourneyRuntime = journeyDefaults()): Promise<boolean> {
   try {
-    // DB-mode scope is Reserve actions only, never a new cart capability.
-    if (runtime.policy) return false;
+    runtime = await resolveJourneyRuntime(runtime);
+    const cartPolicy = isReserveCartRuntime(runtime);
+    // Original v1 is still actions-only. Only the separate successor permits a cart.
+    if (runtime.policy && !cartPolicy) return false;
+    if (cartPolicy && (req.headers.get("origin") !== reserveRuntime.origin ||
+        new URL(req.url).origin !== reserveRuntime.origin)) return false;
     if (runtime.env.LEAN_ANALYTICS_JOURNEYS_ENABLED !== "true" ||
         typeof cartId !== "string" || cartId.length > 600) return false;
     const match = cartId.match(/^gid:\/\/shopify\/Cart\/([a-zA-Z0-9_-]{1,200})\?key=[a-zA-Z0-9_-]{1,300}$/);
@@ -137,8 +142,11 @@ export async function attachJourneyCart(req: Request, cartId: unknown, verifiedU
     const secret = runtime.env.LEAN_CHECKOUT_CONTEXT_SECRET ?? "";
     const storefront = runtime.env.LEAN_SHOPIFY_STOREFRONT_TOKEN;
     if (!g || g.permissionEvidenceRef.startsWith(reserveGrantPrefix) ||
+        !cartPolicy && g.permissionEvidenceRef.startsWith(reserveCartGrantPrefix) ||
         secret.length < 32 || !storefront?.trim()) return false;
-    const now = Math.floor(runtime.now() / 1000), ttl = Math.min(3600, Math.floor(Date.parse(g.expiresAt) / 1000) - now);
+    const now = Math.floor(runtime.now() / 1000), ttl = Math.min(3600,
+      Math.floor(Date.parse(g.expiresAt) / 1000) - now,
+      cartPolicy ? Math.floor(Date.parse(runtime.policy!.validUntil) / 1000) - now : Infinity);
     if (ttl < 60) return false;
     const token = signCheckoutContext({ project: g.posthogProject, shop: g.shop, checkoutId: match[1],
       sessionId: g.sessionId, serverSubject: g.subjectId, analyticsPermitted: true, now, ttlSeconds: ttl }, secret)!;
@@ -151,8 +159,15 @@ export async function attachJourneyCart(req: Request, cartId: unknown, verifiedU
     if (!response.ok) return false;
     const result = await response.json();
     if (result.errors?.length || result.data?.cart?.id !== cartId) return false;
-    const saved = await boundedJourneyRpc(runtime, "lean_checkout_receipt", { p_project: g.projectRef, p_shop: g.shop,
-      p_token_hash: g.tokenHash, p_cart: match[1], p_context: token });
+    // Recheck current DB policy/removal after vendor I/O; an earlier grant read
+    // cannot authorize a receipt after withdrawal or a changed capability.
+    if (cartPolicy && (runtime.now() >= (now + ttl) * 1000 ||
+        !(await journeyGrant(req, verifiedUid, runtime)))) return false;
+    const saved = cartPolicy
+      ? await boundedJourneyRpc(runtime, "lean_journey_checkout_receipt", {
+        p_config: runtime.policy!.configToken, p_token_hash: g.tokenHash, p_cart: match[1], p_context: token })
+      : await boundedJourneyRpc(runtime, "lean_checkout_receipt", { p_project: g.projectRef, p_shop: g.shop,
+        p_token_hash: g.tokenHash, p_cart: match[1], p_context: token });
     return !saved.error && saved.data === true;
   } catch { return false; }
 }
@@ -164,7 +179,7 @@ export async function attachJourneyDraft(req: Request, draftId: unknown, actualS
     if (runtime.policy) return false;
     if (typeof draftId !== "string" || !/^[1-9]\d{0,24}$/.test(draftId) || !verifiedUid) return false;
     const g = await journeyGrant(req, verifiedUid, runtime), secret = runtime.env.LEAN_CHECKOUT_CONTEXT_SECRET ?? "";
-    if (!g || g.permissionEvidenceRef.startsWith(reserveGrantPrefix) ||
+    if (!g || [reserveGrantPrefix, reserveCartGrantPrefix].some(p => g.permissionEvidenceRef.startsWith(p)) ||
         g.shop !== actualShop || secret.length < 32) return false;
     const now = Math.floor(runtime.now() / 1000), ttl = Math.min(3600, Math.floor(Date.parse(g.expiresAt) / 1000) - now);
     if (ttl < 60) return false;

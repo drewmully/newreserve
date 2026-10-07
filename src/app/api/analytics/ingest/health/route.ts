@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAnalyticsSupabase } from "@/lib/analytics/serverClient";
 import { pipelineRpc, validatePipelineTarget } from "@/lib/analytics/shopifyPipeline";
 import { shopifyShop, sourceObject } from "@/lib/analytics/shopifySource";
+import { googleStandingBinding } from "@/lib/analytics/googleStandingBinding";
 export const runtime = "nodejs";
 export const maxDuration = 15;
 /** Separate read-only monitor credential. No request-supplied project/shop,
@@ -25,6 +26,21 @@ export async function GET(req: NextRequest) {
       { p_project_ref: project, p_shop: shop }));
     if (!["healthy", "attention", "disabled", "unconfigured"].includes(String(result.state)) || !Array.isArray(result.issues))
       throw new Error("invalid_health_response");
+    if (process.env.LEAN_GOOGLE_STANDING_ENABLED === "true") {
+      const policy = googleStandingBinding(process.env);
+      const google = sourceObject(await pipelineRpc(getAnalyticsSupabase(), "lean_google_standing_health",
+        { p_project_ref: project, p_policy: policy.policy, p_revision: policy.revision }));
+      if (!["healthy", "attention"].includes(String(google.state)) || !Array.isArray(google.issues) ||
+        google.issues.some(x => typeof x !== "string" || !/^google_[a-z_]+$/.test(x)) ||
+        typeof google.googleImportAcceptanceVerified !== "boolean" ||
+        (google.state === "healthy") !== (google.issues.length === 0 && google.googleImportAcceptanceVerified === true))
+        throw new Error("google_health_response");
+      result.issues = [...new Set([...result.issues, ...google.issues])].sort();
+      if (google.state !== "healthy") result.state = "attention";
+      result.googleImportAcceptanceVerified = google.googleImportAcceptanceVerified;
+      // Existing five-domain and actual live-provider claims are not promoted.
+      result.posthogReadbackVerified = false;
+    }
     return NextResponse.json(result, { status: result.state === "healthy" ? 200 : 503, headers });
   } catch {
     return NextResponse.json({ state: "unavailable" }, { status: 503, headers });

@@ -13,6 +13,7 @@ import { prepareFreshGoogleSpendBuild, guardFreshGoogleSpendReports,
   type FreshGoogleSpendReportInput } from "./googleSpendReportInput";
 import { prepareMultiProviderSpendBuild, type MultiProviderSpendInput } from "./multiProviderSpendInput";
 import { prepareGoogleDeliveryReport } from "./googleDeliveryReport";
+import type { NativeSpendWindowInput, NativeSpendWindowBinding } from "./nativeSpendWindowInput";
 
 /** Evidence can narrow observed coverage; it cannot extend a source read.
  * This is deliberately conservative at the NY calendar-day edges.
@@ -58,12 +59,28 @@ export async function runFullReportJob(options: {
   const input = sourceObject(await pipelineRpc(options.client, "lean_full_inputs", args));
   if (["disabled", "blocked", "complete"].includes(String(input.state))) return { state: String(input.state) };
   if (input.state !== "ready") throw new Error("invalid_full_input");
-  const policy = sourceObject(input.policy) as FullBuildPolicy;
+  let policy = sourceObject(input.policy) as FullBuildPolicy;
   sessionConversionWindowDays(policy.conversionWindowDays);
   if (Object.hasOwn(policy, "googleDelivery") &&
     Date.parse(policy.asOf) > Date.parse(options.clock?.() ?? new Date().toISOString()))
     return { state: "not_due" };
-  const evidence = sourceObject(input.evidence) as FullBuildEvidence;
+  let evidence = sourceObject(input.evidence) as FullBuildEvidence;
+  // Only the cycle-bound SQL input wrapper supplies these immutable sources.
+  // Do not invent a generic whole-table reconciliation or mutate stored policy.
+  if (Object.hasOwn(input, "nativeSpendWindow") || Object.hasOwn(input, "nativeSpendWindowBinding")) {
+    if (Object.hasOwn(policy, "nativeSpendWindow") || Object.hasOwn(evidence, "nativeSpendWindow"))
+      throw new Error("native_spend_window_duplicate_input");
+    const packet = sourceObject(input.nativeSpendWindow) as NativeSpendWindowInput;
+    const binding = sourceObject(input.nativeSpendWindowBinding) as NativeSpendWindowBinding;
+    if (binding.projectRef !== options.projectRef || binding.runId !== options.runId ||
+        binding.shop !== input.shop || binding.digest !== packet.digest || !Object.hasOwn(input, "multiProviderSpend"))
+      throw new Error("native_spend_window_runtime_scope");
+    policy = { ...policy, nativeSpendWindow: binding };
+    evidence = { ...structuredClone(evidence), nativeSpendWindow: packet };
+    evidence.dateCoverage = evidence.dateCoverage.map(day => ({ ...day,
+      gates: { ...day.gates, spend: day.date === binding.date },
+    }));
+  }
   const behavior = sourceObject(input.behavior) as ProductionBehaviorSource;
   verifyDeferredReplacements(deferredOrders(input.deferredOrders), evidence, sourceString(input.shop));
   const mode = policy.behaviorMode ?? "required";
@@ -92,6 +109,7 @@ export async function runFullReportJob(options: {
       base, evidence, projectRef: options.projectRef,
       publication: sourceString(input.publication), shop: sourceString(input.shop),
       fromDate: sourceString(input.fromDate), throughDate: sourceString(input.throughDate), asOf: policy.asOf,
+      nativeSpendWindowBinding: policy.nativeSpendWindow,
     }) : Object.hasOwn(input, "freshGoogleSpend") ? prepareFreshGoogleSpendBuild({
       freshGoogleSpend: input.freshGoogleSpend as FreshGoogleSpendReportInput,
       base, evidence, projectRef: options.projectRef,

@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAnalyticsSupabase } from "@/lib/analytics/serverClient";
 import { runFullPipeline } from "@/lib/analytics/fullPipeline";
 import { googleSpendAuthFromEnv } from "@/lib/analytics/googleSpendSource";
+import { runGoogleStandingPipeline } from "@/lib/analytics/googleStandingOperation";
+import { googleStandingBinding } from "@/lib/analytics/googleStandingBinding";
 export const runtime = "nodejs";
 export const maxDuration = 90;
 export async function POST(req: NextRequest) {
@@ -14,7 +16,7 @@ export async function POST(req: NextRequest) {
     return new NextResponse(null, { status: 401 });
   if (req.nextUrl.search || req.body !== null) return new NextResponse(null, { status: 400 });
   try {
-    const result = await runFullPipeline({
+    const input = {
       client: getAnalyticsSupabase(), projectRef: process.env.LEAN_ANALYTICS_PIPELINE_PROJECT_REF ?? "",
       databaseUrl: process.env.LEAN_ANALYTICS_SUPABASE_URL ?? "",
       runId: process.env.LEAN_ANALYTICS_FULL_RUN_ID ?? "",
@@ -29,7 +31,14 @@ export async function POST(req: NextRequest) {
       googleAuth: googleSpendAuthFromEnv(process.env),
       googleDeveloperToken: process.env.LEAN_GOOGLE_ADS_DEVELOPER_TOKEN,
       now: new Date().toISOString(),
-    });
+    };
+    const standing = process.env.LEAN_GOOGLE_STANDING_ENABLED === "true";
+    if (standing && (process.env.VERCEL_ENV !== "production" || process.env.VERCEL_GIT_COMMIT_REF !== "main"))
+      throw new Error("google_standing_environment");
+    if (standing && process.env.LEAN_ANALYTICS_FULL_RUN_ID?.trim()) throw new Error("ambiguous_full_run_mode");
+    const result = standing
+      ? await runGoogleStandingPipeline(input, googleStandingBinding(process.env), undefined, req.signal)
+      : await runFullPipeline(input);
     return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });
   } catch {
     return NextResponse.json({ state: "unavailable" }, { status: 503, headers: { "Cache-Control": "no-store" } });

@@ -2,6 +2,7 @@ import { normalizeSpendBase, type SpendBase } from "./spend";
 import { reportDates } from "./commerceCandidate";
 import { nyDate } from "./primitives";
 import { evidenceDigest } from "./evidenceIntake";
+import { prepareMetaHourlySpendDay, type MetaHourlySpendDay } from "./metaHourlySpendInput";
 
 export type MetaSpendDay = {
   version: 1; projectRef: string; shop: string; generationId: string;
@@ -19,6 +20,7 @@ export type MetaSpendDay = {
     totalCostMicros: string; campaigns: { id: string; costMicros: string }[];
   };
 };
+export type MetaSpendPacket = MetaSpendDay | MetaHourlySpendDay;
 export const spendRef = (s: unknown): s is string => typeof s === "string" && s === s.trim() &&
   s.length > 0 && s.length <= 512 && !/[\u0000-\u001f]/.test(s);
 export function spendInstant(s: string): number {
@@ -40,9 +42,10 @@ function unsigned(value: unknown): bigint {
 /** Converts retained ad-set/day rows into the existing campaign/day spend facts.
  * No live read, key cleanup, missing-day fill, control invention or certification.
  */
-export function prepareMetaSpendDay(packet: MetaSpendDay, input: {
+export function prepareMetaSpendDay(packet: MetaSpendPacket, input: {
   projectRef: string; shop: string; publication: string; freshnessCutoffAt: string; asOf: string;
 }) {
+  if (packet?.version === 2) return prepareMetaHourlySpendDay(packet, input);
   if (!exact(packet, ["version", "projectRef", "shop", "generationId", "accountId", "date",
     "sourceCurrency", "sourceTimezone", "approvalRef", "actorRef", "source", "control"]) ||
     packet.version !== 1 || packet.projectRef !== input.projectRef || packet.shop !== input.shop ||
