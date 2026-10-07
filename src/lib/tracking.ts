@@ -59,6 +59,26 @@ function getOrCreateSessionId(): string {
   }
 }
 
+const KLAVIYO_KX_KEY = "mully_kx";
+
+/**
+ * Klaviyo appends `_kx` (its exchange id) to links in Klaviyo emails. Keep the
+ * latest one so later events from this browser can be tied to that existing
+ * Klaviyo profile server-side. It is opaque and contains no email address.
+ */
+function getKlaviyoExchangeId(): string | undefined {
+  try {
+    const fromUrl = new URLSearchParams(window.location.search).get("_kx");
+    if (fromUrl && /^[A-Za-z0-9._~-]{8,256}$/.test(fromUrl)) {
+      localStorage.setItem(KLAVIYO_KX_KEY, fromUrl);
+      return fromUrl;
+    }
+    return localStorage.getItem(KLAVIYO_KX_KEY) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function getUrlParam(name: string): string | null {
   try {
     return new URLSearchParams(window.location.search).get(name);
@@ -583,6 +603,7 @@ export async function trackEvent(
         anonymous_id,
         page_url:
           typeof window !== "undefined" ? window.location.href : undefined,
+        klaviyo_kx: getKlaviyoExchangeId(),
         properties: mergedProperties,
       }),
     });

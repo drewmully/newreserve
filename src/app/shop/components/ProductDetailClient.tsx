@@ -52,6 +52,7 @@ export function ProductDetailClient({
   // Fire proshop_product_viewed once on mount. Captures source (dashboard vs public)
   // via referrer/path so we can attribute PDP traffic back to where members entered.
   const viewedRef = useRef(false);
+  const heroImage = product.images?.[0];
   useEffect(() => {
     if (viewedRef.current) return;
     viewedRef.current = true;
@@ -82,10 +83,12 @@ export function ProductDetailClient({
         collection_handle: "reserve-pro-shop",
         price: product.price,
         reserve_price: product.reservePrice,
+        image_url: heroImage,
         source,
       },
     });
   }, [
+    heroImage,
     product.slug,
     product.variantId,
     product.name,

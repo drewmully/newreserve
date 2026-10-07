@@ -18,6 +18,7 @@ export function MysteryBundleClient({ product, initialVariantId }: {
     trackEvent("proshop_product_viewed", { properties: {
       product_slug: product.slug, name: product.name, price: product.price,
       variant_id: product.variantId, source: "mystery_bundle_pdp",
+      brand: "Mully", image_url: product.images?.[0],
     } });
   }, [product]);
   return <>

@@ -151,6 +151,14 @@
     {
       "path": "/api/admin/cron/klaviyo-sync-report",
       "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/admin/cron/klaviyo-member-sync",
+      "schedule": "20 8 * * *"
+    },
+    {
+      "path": "/api/admin/cron/klaviyo-restock-check",
+      "schedule": "25 * * * *"
     }
   ]
 }

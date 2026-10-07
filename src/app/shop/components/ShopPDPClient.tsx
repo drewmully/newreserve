@@ -138,6 +138,7 @@ export function ShopPDPClient({
         source: "shop_pdp_v4",
         price: product.price,
         reserve_price: product.reservePrice,
+        image_url: product.images?.[0],
       },
     });
   }, [product]);

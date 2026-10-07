@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { getClientIp } from "@/app/api/_lib/clientIp";
 import { dispatchAnalyticsEvent } from "@/app/api/_lib/analytics";
 import { recordAISalesSignal } from "@/app/api/_lib/aiSalesAgents";
@@ -11,6 +11,9 @@ import {
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { checkRateLimit } from "@/lib/rateLimit";
 import { captureJourney } from "@/lib/analytics/journeyRuntime";
+import { isLifecycleEnabled } from "@/lib/klaviyo/lifecycleConfig";
+import { resolveKlaviyoIdentity } from "@/lib/klaviyo/identity";
+import { mapSiteEvent, sendSiteEventToKlaviyo } from "@/lib/klaviyo/siteEvents";
 
 const VALID_EVENTS = new Set([
   "page_view",
@@ -196,22 +199,25 @@ function sanitizeProperties(
   return sanitized;
 }
 
-async function resolveVerifiedUid(
+async function resolveVerifiedUser(
   request: NextRequest,
   claimedUid?: string
-): Promise<string | undefined> {
+): Promise<{ uid?: string; verifiedEmail?: string }> {
   const token = getBearerToken(request);
   if (!token) {
     if (claimedUid) {
       throw new Error("AUTH_REQUIRED_FOR_USER_ID");
     }
-    return undefined;
+    return {};
   }
 
   let decodedUid: string;
+  let verifiedEmail: string | undefined;
   try {
     const decoded = await adminAuth.verifyIdToken(token, true);
     decodedUid = decoded.uid;
+    // Only a verified email may identify a member to Klaviyo.
+    verifiedEmail = decoded.email_verified === true && typeof decoded.email === "string" ? decoded.email : undefined;
   } catch {
     throw new Error("INVALID_AUTH_TOKEN");
   }
@@ -220,7 +226,17 @@ async function resolveVerifiedUid(
     throw new Error("USER_ID_MISMATCH");
   }
 
-  return claimedUid ?? decodedUid;
+  return { uid: claimedUid ?? decodedUid, verifiedEmail };
+}
+
+/** Arrays are dropped by sanitizeProperties; keep the two the Klaviyo mapping needs. */
+function klaviyoFields(
+  properties: Record<string, string | number | boolean | null>,
+  raw: unknown,
+): Record<string, unknown> {
+  const bag = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+  const list = (v: unknown) => (Array.isArray(v) ? v.slice(0, 20) : undefined);
+  return { ...properties, products: list(bag.products), cart_item_names: list(bag.cart_item_names) };
 }
 
 async function resolveServerSegments(uid?: string): Promise<string[]> {
@@ -267,8 +283,9 @@ export async function POST(request: NextRequest) {
 
   const claimedUid = sanitizeString(body.user_id, 128);
   let uid: string | undefined;
+  let verifiedEmail: string | undefined;
   try {
-    uid = await resolveVerifiedUid(request, claimedUid);
+    ({ uid, verifiedEmail } = await resolveVerifiedUser(request, claimedUid));
   } catch (error) {
     if (!(error instanceof Error)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -344,6 +361,19 @@ export async function POST(request: NextRequest) {
       properties,
     }),
   ]);
+
+  // Klaviyo lifecycle mirror: known visitors only, after the response.
+  if (isLifecycleEnabled("site_events")) {
+    const mapped = mapSiteEvent(eventName, klaviyoFields(properties, body.properties));
+    if (mapped) {
+      const identity = resolveKlaviyoIdentity({
+        verifiedEmail,
+        cookieHeader: request.headers.get("cookie"),
+        exchangeId: body.klaviyo_kx,
+      });
+      if (identity) after(() => sendSiteEventToKlaviyo(identity, mapped).then(() => undefined));
+    }
+  }
 
   return NextResponse.json({ ok: true, event_id: eventId });
 }

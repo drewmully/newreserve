@@ -95,6 +95,16 @@ export interface CartItem {
   image?: string;
 }
 
+/** Cart context for the Klaviyo "Mully Added to Cart" event (cart recovery). */
+function cartSnapshot(cart: ShopifyCart) {
+  return {
+    checkout_url: cart.checkoutUrl,
+    cart_total: cart.totalAmount,
+    cart_item_count: cart.lines.reduce((n, line) => n + line.quantity, 0),
+    cart_item_names: cart.lines.map((line) => line.productName).filter(Boolean).slice(0, 20),
+  };
+}
+
 export interface StoreCreditState {
   balance_cents: number;
   currency: string;
@@ -892,6 +902,8 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
       for (const item of items) void trackEvent("add_to_cart", {
         product_id: item.slug, variant_id: item.variantId, name: item.name,
         brand: item.brand, value: item.price, quantity: 1, user_id: user?.uid,
+        variant_title: item.variantTitle, image_url: item.image,
+        ...cartSnapshot(result),
       });
       // Stock can change between browsing and mutation; show the actual bag.
       const complete = lines.every(line => {
@@ -974,6 +986,9 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
           value: item.price,
           quantity: newQty,
           user_id: user?.uid,
+          variant_title: item.variantTitle,
+          image_url: item.image,
+          ...cartSnapshot(result),
         });
       } catch (err) {
         console.error("[Cart] addToCart Shopify sync failed:", err);
