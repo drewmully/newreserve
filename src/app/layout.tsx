@@ -6,6 +6,7 @@ import { heroHeadline, heroCta } from "../flags";
 import { Providers } from "./context/Providers";
 import { PostHogFlagSync } from "./components/PostHogFlagSync";
 import { AnalyticsTracker } from "./components/AnalyticsTracker";
+import { SourceSessionNavigation } from "./components/SourceSessionNavigation";
 import "./globals.css";
 
 /**
@@ -217,6 +218,7 @@ export default async function RootLayout({
         />
         <Providers>{children}</Providers>
         <AnalyticsTracker />
+        <SourceSessionNavigation />
         <Suspense fallback={null}>
           <FlagValuesWithTracking />
         </Suspense>

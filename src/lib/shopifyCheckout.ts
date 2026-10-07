@@ -2,6 +2,7 @@ import { SHOPIFY_MEMBERSHIP_PLANS, SHOPIFY_OUTFIT_SUBSCRIPTION } from "./members
 import { firstBoxAttributes, firstBoxDisplayAttributes, assertFirstBoxCart, type FirstBoxItem } from "./shopFirstBoxCheckout";
 import { buildCheckoutOriginAttributes } from "./shopifyCheckoutOrigin";
 import { recordJourneyCart } from "./analytics/journeyClient";
+import { recordSourceSessionCart } from "./analytics/journeySourceSessionClient";
 import {
   getStoredAttribution,
   attributionToCartAttributes,
@@ -312,6 +313,7 @@ export async function createMembershipCheckout(
     assertFirstBoxCart(json?.data?.cartCreate?.cart, merchandiseId, sellingPlanId);
   }
   await recordJourneyCart(json?.data?.cartCreate?.cart?.id);
+  await recordSourceSessionCart(json?.data?.cartCreate?.cart?.id);
   // Append `?return_url=` (and email pre-fill) the same way UpgradeModal does.
   // Shopify honors `return_url` query param and bounces the buyer back to
   // /auth/callback as an authenticated session via Leo's pattern.

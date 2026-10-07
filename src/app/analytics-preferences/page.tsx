@@ -1,6 +1,6 @@
 import PreferencesClient from "./PreferencesClient";
 import { journeyDefaults } from "@/lib/analytics/journeyRuntime";
-import { resolveJourneyRuntime } from "@/lib/analytics/journeyPolicyRuntime";
+import { resolveJourneyRuntime, isReserveCartRuntime } from "@/lib/analytics/journeyCheckoutPolicy";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -9,5 +9,5 @@ export default async function AnalyticsPreferences() {
   const runtime = await resolveJourneyRuntime(journeyDefaults());
   const legacy = process.env.LEAN_ANALYTICS_JOURNEYS_ENABLED === "true" &&
     process.env.NEXT_PUBLIC_LEAN_ANALYTICS_JOURNEYS_ENABLED === "true";
-  return <PreferencesClient allowEnabled={!!runtime.policy || legacy} />;
+  return <PreferencesClient allowEnabled={!!runtime.policy || legacy} checkoutLinking={isReserveCartRuntime(runtime)} />;
 }

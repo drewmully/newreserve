@@ -10,6 +10,8 @@ import { decimal, micros, type Row } from "./primitives";
 import { deferredOrders } from "./deferredCommerce";
 import { assertInventorySources } from "./historyInventory";
 import { assemblePartitionPages, validatePartitionInventory, type PartitionPage } from "./partitionInventory";
+import { prepareSalesEventWindow, type SalesEventWindowInput } from "./salesEventWindowInput";
+import { evidenceDigest } from "./evidenceIntake";
 
 /** Saved sources only: no vendor credentials, source discovery or live requests.
  * This joins selected observations, NOT independently certified store coverage.
@@ -31,6 +33,22 @@ export async function runObservedReportJob(options: {
   const deferred = deferredOrders(rawPolicy.deferredOrders);
   const matched = new Set<string>();
   let sources = sourceArray(input.history);
+  if (rawPolicy.salesEventWindow !== undefined || input.salesEventWindow !== undefined) {
+    if (rawPolicy.partitionInventory !== undefined || rawPolicy.sourceInventory !== undefined)
+      throw new Error("event_window_not_history_inventory");
+    const packet = input.salesEventWindow as SalesEventWindowInput;
+    const binding = sourceObject(rawPolicy.salesEventWindow);
+    if (!packet || binding.version !== 1 || binding.digest !== packet.digest)
+      throw new Error("event_window_report_binding");
+    const admitted = prepareSalesEventWindow(packet, { publication, projectRef: options.projectRef,
+      shop, fromDate, throughDate, asOf: sourceString(input.sourceAsOf) });
+    if (evidenceDigest(sources) !== evidenceDigest(admitted.sourceRows) ||
+        evidenceDigest(deferred) !== evidenceDigest(admitted.deferred) ||
+        evidenceDigest({ decision: policy.decision, productClasses: policy.productClasses,
+          financialApprovalRef: policy.financialApprovalRef, saleClock: policy.saleClock, refundClock: policy.refundClock }) !==
+        evidenceDigest(packet.businessPolicy))
+      throw new Error("event_window_report_source_or_policy_changed");
+  }
   if (rawPolicy.partitionInventory !== undefined) {
     if (sources.length) throw new Error("partition_inline_source_rejected");
     const manifest = validatePartitionInventory(rawPolicy.partitionInventory, {

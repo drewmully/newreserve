@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { googleDeliveryDefinition, googleDeliveryMetrics, googleDeliveryPath } from "./googleDeliveryReport";
+import { googleStandingBinding } from "./googleStandingBinding";
 
 type Row = Record<string, unknown>;
 const object = (v: unknown): v is Row => !!v && typeof v === "object" && !Array.isArray(v);
@@ -71,9 +72,17 @@ export async function googleDeliveryGet(req: Request,
   const binding: Binding = { runId: env.LEAN_GOOGLE_DELIVERY_RUN_ID ?? "",
     resultHash: env.LEAN_GOOGLE_DELIVERY_RESULT_HASH ?? "", accountId: env.LEAN_GOOGLE_DELIVERY_ACCOUNT_ID ?? "",
     date: env.LEAN_GOOGLE_DELIVERY_DATE ?? "" };
-  if (!/^[A-Za-z0-9_-]{1,100}$/.test(binding.runId) || !/^[a-f0-9]{32}$/.test(binding.resultHash) ||
-    !/^\d{10}$/.test(binding.accountId) || !/^\d{4}-\d\d-\d\d$/.test(binding.date) ||
-    !Number.isFinite(Date.parse(binding.date)) || new Date(binding.date).toISOString().slice(0, 10) !== binding.date ||
+  const standing = env.LEAN_GOOGLE_STANDING_ENABLED === "true";
+  let policy: ReturnType<typeof googleStandingBinding> | undefined;
+  try {
+    if (standing) {
+      policy = googleStandingBinding(env);
+      if (binding.runId || binding.resultHash || binding.date) return empty(503);
+    }
+  } catch { return empty(503); }
+  if ((!standing && (!/^[A-Za-z0-9_-]{1,100}$/.test(binding.runId) || !/^[a-f0-9]{32}$/.test(binding.resultHash) ||
+    !/^\d{4}-\d\d-\d\d$/.test(binding.date) || !Number.isFinite(Date.parse(binding.date)) ||
+    new Date(binding.date).toISOString().slice(0, 10) !== binding.date)) || !/^\d{10}$/.test(binding.accountId) ||
     env.LEAN_ANALYTICS_PIPELINE_PROJECT_REF !== project ||
     env.LEAN_ANALYTICS_SUPABASE_URL !== `https://${project}.supabase.co` ||
     !env.LEAN_ANALYTICS_SUPABASE_SERVICE_ROLE_KEY?.trim()) return empty(503);
@@ -89,11 +98,14 @@ export async function googleDeliveryGet(req: Request,
   try {
     if (controller.signal.aborted) return empty(503);
     const key = env.LEAN_ANALYTICS_SUPABASE_SERVICE_ROLE_KEY;
-    const response = await Promise.race([transport(`https://${project}.supabase.co/rest/v1/rpc/lean_google_delivery_read`, {
+    const rpc = standing ? "lean_google_standing_read" : "lean_google_delivery_read";
+    const response = await Promise.race([transport(`https://${project}.supabase.co/rest/v1/rpc/${rpc}`, {
       method: "POST", redirect: "error", signal: controller.signal,
       headers: { "Content-Type": "application/json", apikey: key, Authorization: `Bearer ${key}` },
-      body: JSON.stringify({ p_project_ref: project, p_run: binding.runId, p_result_hash: binding.resultHash,
-        p_account_id: binding.accountId, p_date: binding.date }),
+      body: JSON.stringify(policy
+        ? { p_project_ref: project, p_policy: policy.policy, p_revision: policy.revision, p_account_id: binding.accountId }
+        : { p_project_ref: project, p_run: binding.runId, p_result_hash: binding.resultHash,
+          p_account_id: binding.accountId, p_date: binding.date }),
     }), aborted]);
     if (!response.ok) { void response.body?.cancel().catch(() => {}); return empty(503); }
     reader = response.body?.getReader();
@@ -108,7 +120,18 @@ export async function googleDeliveryGet(req: Request,
       chunks.push(part.value);
     }
     const text = new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks));
-    if (!validGoogleDeliveryPayload(JSON.parse(text), binding) ||
+    const data = JSON.parse(text);
+    if (standing) {
+      // The policy-bound RPC selects and validates one generation under its lock.
+      // Request input cannot choose or expand the run/date scope.
+      const status = object(data) && object(data.google_delivery_status) ? data.google_delivery_status : {};
+      const rows = object(data) && Array.isArray(data.google_account_daily) ? data.google_account_daily : [];
+      if (typeof status.run_id !== "string" || !/^[A-Za-z0-9_-]{1,100}$/.test(status.run_id) ||
+        typeof status.result_hash !== "string" || !/^[a-f0-9]{32}$/.test(status.result_hash) ||
+        !object(rows[0]) || typeof rows[0].report_date !== "string") return empty(503);
+      Object.assign(binding, { runId: status.run_id, resultHash: status.result_hash, date: rows[0].report_date });
+    }
+    if (!validGoogleDeliveryPayload(data, binding) ||
       controller.signal.aborted || Date.now() >= deadline) return empty(503);
     return new Response(text, { status: 200, headers: { ...headers, "Content-Type": "application/json" } });
   } catch { return empty(503); }

@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyShopifyHmac } from "@/lib/events/verify";
 import { mirrorLegacyShopifyDelivery } from "@/lib/events/ingest";
+import { recordSourceSessionPaid } from "@/lib/analytics/journeySourceSessionPaid";
 import type { QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { randomUUID } from "crypto";
 import { dispatchAnalyticsEvent } from "@/app/api/_lib/analytics";
@@ -386,6 +387,12 @@ export async function POST(request: NextRequest) {
   const isValid = verifyShopifyHmac(request.headers, rawBody);
   if (!isValid) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Auxiliary prospective lineage, before the business duplicate short-circuit.
+  // A failure is not a retained receipt and must not interrupt paid-order work.
+  if (await recordSourceSessionPaid(request.headers, rawBody) === "unconfirmed") {
+    console.warn("[lean-source-session] paid_receipt_unconfirmed");
   }
 
   await mirrorLegacyShopifyDelivery(request.headers, rawBody, "orders/paid");

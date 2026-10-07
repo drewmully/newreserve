@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 /** Separate opt-in for the lean reporting lane, not an advertising CMP. */
-export default function PreferencesClient({ allowEnabled }: { allowEnabled: boolean }) {
+export default function PreferencesClient({ allowEnabled, checkoutLinking = false }: { allowEnabled: boolean; checkoutLinking?: boolean }) {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   async function decide(decision: "allow" | "withdraw") {
@@ -9,7 +9,8 @@ export default function PreferencesClient({ allowEnabled }: { allowEnabled: bool
     try {
       const response = await fetch("/api/analytics/journey/decision", {
         method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ decision }), signal: AbortSignal.timeout(5000),
+        body: JSON.stringify({ decision, ...(checkoutLinking && decision === "allow"
+          ? { policyVersion: "reserve-cart-runtime-v2" } : {}) }), signal: AbortSignal.timeout(5000),
       });
       setMessage(response.ok ? decision === "allow"
         ? "Optional journey analytics enabled for this visit."
@@ -20,7 +21,10 @@ export default function PreferencesClient({ allowEnabled }: { allowEnabled: bool
   }
   return <main className="mx-auto max-w-xl px-6 py-16">
     <h1 className="text-2xl font-semibold">Optional journey analytics</h1>
-    <p className="my-6">Allow this visit&apos;s actions and verified checkout to be used in our new journey reports.
+    <p className="my-6">{checkoutLinking
+      ? <>Allow this visit&apos;s Reserve actions and verified Shopify cart to be linked in our journey reports.
+        If you later place an order, its verified checkout link may be used to measure conversion. </>
+      : <>Allow this visit&apos;s actions and verified checkout to be used in our new journey reports. </>}
       This is optional and does not affect purchases or membership. Permission lasts no longer than 24 hours.
       It does not change existing advertising or SMS preferences.</p>
     <div className="flex gap-4">

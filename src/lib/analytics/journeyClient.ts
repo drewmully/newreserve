@@ -9,7 +9,8 @@ async function existingFirebaseToken(): Promise<string | undefined> {
   return getAuth(app).currentUser?.getIdToken();
 }
 export async function recordJourneyCart(cartId: unknown, firebaseIdToken?: string): Promise<void> {
-  if (process.env.NEXT_PUBLIC_LEAN_ANALYTICS_JOURNEYS_ENABLED !== "true" ||
+  if ((process.env.NEXT_PUBLIC_LEAN_ANALYTICS_JOURNEYS_ENABLED !== "true" &&
+      process.env.NEXT_PUBLIC_LEAN_RESERVE_CART_ENABLED !== "true") ||
       typeof window === "undefined" || typeof cartId !== "string") return;
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {

@@ -159,10 +159,11 @@ export function mapShopifyAgreements(commerce: ShopifyOrderDocument, document: A
   if (!policy.sourceEvidenceRef.trim() || !policy.financialApprovalRef.trim() ||
       !policy.decision.approvalRef.trim() || policy.saleClock !== "paid_at" ||
       policy.changeClock !== "agreement_happened_at") throw new Error("agreement_policy_required");
-  // These exclusions still require explicit review rather than guessing their
-  // cash/acquisition treatment from a cancellation flag.
-  if (o.test !== false || o.cancelledAt !== null || policy.decision.eligibility !== "eligible")
+  // Original eligibility still comes from the approved decision. A later
+  // cancellation does not erase a separately proven original paid purchase.
+  if (o.test !== false || policy.decision.eligibility !== "eligible")
     throw new Error("agreement_requires_eligible_order");
+  const cancelledAt = o.cancelledAt === null ? null : instant(o.cancelledAt);
   function money(value: unknown) {
     const m = sourceObject(sourceObject(value).shopMoney);
     if (m.currencyCode !== currency) throw new Error("agreement_currency_mismatch");
@@ -193,6 +194,9 @@ export function mapShopifyAgreements(commerce: ShopifyOrderDocument, document: A
     }
   }
   if (!paidAt) throw new Error("agreement_original_payment_required");
+  if (cancelledAt && (Date.parse(cancelledAt) <= Math.max(Date.parse(paidAt), Date.parse(originalAt)) ||
+      Date.parse(cancelledAt) > Date.parse(updatedAt)))
+    throw new Error("agreement_cancellation_chronology");
   // If order edits preceded original full payment, later captures cannot prove
   // what amount originally made this purchase eligible.
   if (agreements.some(a => a !== original && Date.parse(instant(a.happenedAt)) <= Date.parse(paidAt!)))
@@ -211,9 +215,11 @@ export function mapShopifyAgreements(commerce: ShopifyOrderDocument, document: A
   };
   for (const a of agreements) {
     const happenedAt = instant(a.happenedAt);
+    // Associated provider events can precede Order.createdAt. Preserve their
+    // clocks while keeping original/change ordering and the revision bound.
     if (!Object.hasOwn(allowedAgreements, String(a.__typename)) || allowedAgreements[String(a.__typename)] !== a.reason ||
-        Date.parse(happenedAt) < Date.parse(originalAt) || Date.parse(happenedAt) > Date.parse(updatedAt) ||
-        Date.parse(originalAt) < Date.parse(createdAt)) throw new Error("agreement_type_or_time");
+        Date.parse(happenedAt) < Date.parse(originalAt) || Date.parse(happenedAt) > Date.parse(updatedAt))
+      throw new Error("agreement_type_or_time");
     const sales = sourceArray(a.sales).map(sourceObject);
     if (!sales.length || sales.length > 1000) throw new Error("agreement_invalid_sales");
     for (const s of sales) {
@@ -222,12 +228,21 @@ export function mapShopifyAgreements(commerce: ShopifyOrderDocument, document: A
       if (!["ORDER", "RETURN", "UPDATE"].includes(action) || (a === original && action !== "ORDER"))
         throw new Error("agreement_unknown_action");
       const total = money(s.totalAmount), tax = money(s.totalTaxAmount), discount = money(s.totalDiscountAmountBeforeTaxes);
-      // After-tax discounts need an approved allocation treatment; don't assign
-      // all of a tax-inclusive discount to merchandise.
-      if (money(s.totalDiscountAmountAfterTaxes) !== BigInt(0)) throw new Error("agreement_after_tax_discount_review");
+      // Equal before/after discounts on a zero-tax ProductSale have no tax
+      // allocation difference. Count the before-tax amount once, not twice.
+      const afterTaxDiscount = money(s.totalDiscountAmountAfterTaxes);
+      const sameZeroTaxProductDiscount = type === "PRODUCT" && s.__typename === "ProductSale" &&
+        ["ORDER", "RETURN"].includes(action) && tax === BigInt(0) && afterTaxDiscount === discount;
+      if (afterTaxDiscount !== BigInt(0) && !sameZeroTaxProductDiscount)
+        throw new Error("agreement_after_tax_discount_review");
       const net = total - tax;
+      // AdjustmentSale is a signed order-level component, even on RETURN.
+      // Limit the positive-return case to explicit zero tax/discount amounts;
+      // do not relax merchandise signs or invent an adjustment allocation.
+      const signedReturnAdjustment = type === "ADJUSTMENT" && s.__typename === "AdjustmentSale" &&
+        tax === BigInt(0) && discount === BigInt(0);
       if (action === "ORDER" && (total < BigInt(0) || tax < BigInt(0) || discount < BigInt(0)) ||
-          action === "RETURN" && (total > BigInt(0) || tax > BigInt(0)))
+          action === "RETURN" && (total > BigInt(0) && !signedReturnAdjustment || tax > BigInt(0)))
         throw new Error("agreement_action_sign");
       const slices: Movement["slices"] = [];
       function slice(component: Component, amount: bigint, lineId: string | null, unresolved = false) {

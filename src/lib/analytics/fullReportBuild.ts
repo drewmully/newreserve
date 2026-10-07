@@ -15,6 +15,10 @@ import { sessionConversionWindowDays } from "./calculationPolicy";
 import { admitCashSourceEvidence, type CashSourceAdmission } from "./cashSourceEvidence";
 import { admitCustomerGeneration, validateCustomerGenerationContext, type CustomerGenerationBinding, type CustomerGenerationInput } from "./historyCustomerSource";
 import { PURCHASE_PROCESSING_SCHEMA, resolvePurchaseHistoryOwnership } from "./purchaseHistoryOwnership";
+import { admitSalesEventWindow, type SalesEventWindowInput, type SalesEventWindowBinding } from "./salesEventWindowInput";
+import { prepareSessionEntries, mapEntryObservations, mapEntryCheckoutEvidence, deriveEntrySessions,
+  sessionEntryDayCount, type SessionEntryPolicy, type SourceSessionEntryInput } from "./sessionEntryInput";
+import { admitNativeSpendWindow, type NativeSpendWindowBinding, type NativeSpendWindowInput } from "./nativeSpendWindowInput";
 
 export type FullBuildPolicy = {
   definition: string; mappingVersion: string; sessionVersion: string; funnelVersion: string;
@@ -27,6 +31,10 @@ export type FullBuildPolicy = {
   cohorts: { month: string; horizonDays: number; graceSeconds: number; acquisitionDefinition: string }[];
   /** Immutable reference only. The SQL wrapper derives and fences the input. */
   customerGeneration?: CustomerGenerationBinding;
+  /** Explicit selected sales-event window, never a whole-store inventory. */
+  salesEventWindow?: SalesEventWindowBinding;
+  sessionEntryPolicy?: SessionEntryPolicy;
+  nativeSpendWindow?: NativeSpendWindowBinding;
 };
 /** Owner-supplied evidence, never arbitrary "all gates true" from an HTTP caller.
  * Current permission/removals must come from the analytics consent authority,
@@ -58,6 +66,10 @@ export type FullBuildEvidence = {
     ledgerLineageComplete: boolean; originalLedgerIds: string[]; evidenceRef: string }[];
   /** SQL-derived only; forbidden in owner-stored evidence by the outer wrapper. */
   customerGeneration?: CustomerGenerationInput;
+  /** Retained independent event locator plus exact native source dependencies. */
+  salesEventWindow?: SalesEventWindowInput;
+  sessionEntries?: SourceSessionEntryInput;
+  nativeSpendWindow?: NativeSpendWindowInput;
 };
 const gateTables: Record<keyof Gates, string[]> = {
   ledger: ["sales_ledger"], cash: ["payments"], orders: ["orders", "order_items"],
@@ -92,6 +104,16 @@ export function buildFullReports(input: {
   const mode = p.behaviorMode ?? "required";
   if (!["required", "excluded"].includes(mode)) throw new Error("invalid_behavior_mode");
   if (mode === "excluded" && input.events.length) throw new Error("excluded_behavior_events");
+  const hasEntryPolicy = Object.hasOwn(p, "sessionEntryPolicy");
+  const hasEntrySource = Object.hasOwn(input.evidence, "sessionEntries");
+  const entryObject = (v: unknown) => v !== null && typeof v === "object" && !Array.isArray(v);
+  if (hasEntryPolicy !== hasEntrySource || hasEntryPolicy &&
+      (!entryObject(p.sessionEntryPolicy) || !entryObject(input.evidence.sessionEntries) || mode === "excluded"))
+    throw new Error("entry_mode_requires_paired_active_source");
+  if (Object.hasOwn(p, "nativeSpendWindow") !== Object.hasOwn(input.evidence, "nativeSpendWindow") ||
+      Object.hasOwn(p, "nativeSpendWindow") &&
+      (!entryObject(p.nativeSpendWindow) || !entryObject(input.evidence.nativeSpendWindow)))
+    throw new Error("native_spend_window_binding");
   // Apply the exclusion at the transform boundary too: callers cannot retain
   // all-passed browser controls or turn an absent source into a measured zero.
   let e = mode === "excluded" ? withoutBehaviorEvidence(input.evidence) : input.evidence;
@@ -195,18 +217,33 @@ export function buildFullReports(input: {
     return { ...event, analyticsPermitted: !!allowed, customerId: allowed ? resolution?.customerId ?? null : null,
       distinctId: allowed ? event.distinctId : null, sourceSessionId: allowed ? event.sourceSessionId : null };
   });
-  const logical = normalizeEvents(observations, { project: p.project, publication: pub,
+  const entries = p.sessionEntryPolicy && e.sessionEntries ? prepareSessionEntries(e.sessionEntries, {
+    policy: p.sessionEntryPolicy, project: p.project, sessionVersion: p.sessionVersion,
+    mappingVersion: p.mappingVersion, publication: pub, asOf: p.asOf, identity: e.identity,
+    currentlyPermitted: e.currentlyPermitted, removedCustomers: e.removedCustomers,
+  }) : null;
+  if (entries && e.campaigns.length) throw new Error("entry_campaign_context_not_admitted");
+  const entryObservations = entries ? mapEntryObservations(observations, entries) : null;
+  const boundObservations = entryObservations
+    ? entryObservations.events.map(event => ({ ...event, campaignContext: undefined })) : observations;
+  const entryCheckout = entries ? mapEntryCheckoutEvidence(e.checkout, entries) : null;
+  const logical = normalizeEvents(boundObservations, { project: p.project, publication: pub,
     families: new Set(Object.values(p.stages)), schemaVersions: new Set(observations.map(v => v.schemaVersion)),
     sessionVersion: p.sessionVersion, normalizationVersion: p.normalizationVersion });
   const nativeControls = ["native_project_uuid_lineage", "temporal_identity_intervals", "event_customer_fk"];
   const nativeReady = nativeControls.every(k => e.externalControls[k]?.passed && e.externalControls[k].evidenceRef);
-  facts.sessions = deriveSessions(logical, { project: p.project, sessionVersion: p.sessionVersion,
+  facts.sessions = entries ? deriveEntrySessions(logical, entries, {
+    funnelVersion: p.funnelVersion, publication: pub, now: p.asOf, stages: new Map(Object.entries(p.stages)),
+    coverage: { ...e.sessionCoverage, behaviorComplete: nativeReady && e.sessionCoverage.behaviorComplete },
+    conversionWindowDays, relationsComplete: entryObservations!.unmappedActions === 0 && entryCheckout!.unmappedCheckout === 0,
+  }) : deriveSessions(logical, { project: p.project, sessionVersion: p.sessionVersion,
     conversionWindowDays,
     funnelVersion: p.funnelVersion, publication: pub, now: p.asOf, stages: new Map(Object.entries(p.stages)),
     sourceSessionIds: new Map(observations.filter(v => v.sourceSessionId).map(v =>
       [key(p.project, p.sessionVersion, v.sourceSessionId!), v.sourceSessionId!])),
     coverage: { ...e.sessionCoverage, behaviorComplete: nativeReady && e.sessionCoverage.behaviorComplete } });
-  facts.orders = linkCheckoutOrders(facts.orders, facts.sessions, e.checkout.map(v => ({ ...v, publication: pub })), pub);
+  facts.orders = linkCheckoutOrders(facts.orders, facts.sessions,
+    (entryCheckout?.checkout ?? e.checkout).map(v => ({ ...v, publication: pub })), pub);
   const customers = new Set(e.identity.map(v => v.customerId).filter((v): v is string => v !== null));
   facts.customers = [...customers].sort().map(id => buildCustomer(id, removed.has(id) ? "removed" :
     permitted.has(id) ? "resolved" : "not_permitted", permitted.has(id), e.customerHistory[id] ??
@@ -216,7 +253,8 @@ export function buildFullReports(input: {
     !!e.externalControls.event_order_diagnostics?.passed && !!e.externalControls.event_order_diagnostics.evidenceRef;
   facts.sessions = finalizeSessionConversions(facts.sessions, facts.orders, commerceComplete, conversionWindowDays);
   const attribution = unique(e.attributionCoverage, v => v.orderId);
-  const campaigns = observedCampaigns(observations, p.project, p.sessionVersion, e.campaigns);
+  const campaigns = entries ? new Map<string, CampaignContext>() :
+    observedCampaigns(observations, p.project, p.sessionVersion, e.campaigns);
   facts.sessions = facts.sessions.map(row => ({ ...row,
     traffic_source: campaigns.get(String(row.session_key))?.channel ?? null,
     campaign_id: campaigns.get(String(row.session_key))?.campaignKey ?? null,
@@ -224,9 +262,9 @@ export function buildFullReports(input: {
   facts.order_attribution = attributeOrders({ orders: facts.orders, sessions: facts.sessions, events: logical,
     publication: pub, policy: p.attribution,
     coverage: new Map([...attribution].map(([id, row]) => [id, {
-      lookbackComplete: !!row.evidenceRef && nativeReady && row.coverage.lookbackComplete,
-      identityComplete: !!row.evidenceRef && proofReady("identity_map") && row.coverage.identityComplete,
-      graceComplete: !!row.evidenceRef && row.coverage.graceComplete,
+      lookbackComplete: !entries && !!row.evidenceRef && nativeReady && row.coverage.lookbackComplete,
+      identityComplete: !entries && !!row.evidenceRef && proofReady("identity_map") && row.coverage.identityComplete,
+      graceComplete: !entries && !!row.evidenceRef && row.coverage.graceComplete,
     }])), campaigns });
   const issues = validateCandidateGraph(facts, pub, p.attribution.modelVersion);
   if (issues.length) throw new Error(`invalid_full_candidate:${issues.join(",")}`);
@@ -236,17 +274,38 @@ export function buildFullReports(input: {
   });
   const coverage = unique(e.dateCoverage, v => v.date);
   const verified = Object.fromEntries(Object.values(gateTables).flat().map(t => [t, proofReady(t)]));
+  const eventWindow = admitSalesEventWindow(e.salesEventWindow, {
+    binding: p.salesEventWindow, projectRef: e.salesEventWindow?.scope.projectRef ?? "",
+    shop, fromDate: input.fromDate, throughDate: input.throughDate, asOf: p.asOf,
+    publication: pub, facts,
+  });
+  const nativeSpend = admitNativeSpendWindow(e.nativeSpendWindow, {
+    binding: p.nativeSpendWindow, projectRef: p.nativeSpendWindow?.projectRef ?? "",
+    shop, publication: pub, fromDate: input.fromDate, throughDate: input.throughDate,
+    asOf: p.asOf, facts: facts.marketing_spend_daily,
+  });
   const scope = (date: string): ReportScope => {
     const claim = coverage.get(date);
     const gates = Object.fromEntries(Object.entries(gateTables).map(([gate, tables]) =>
       [gate, gateControls[gate as keyof Gates].every(k => e.externalControls[k]?.passed && e.externalControls[k].evidenceRef) &&
         !!claim?.evidenceRef && claim.gates[gate as keyof Gates] === true &&
         tables.every(t => verified[t])])) as Gates;
+    // Scope this exception to the four independently controlled commerce gates.
+    // It must never change global proofReady/commerceComplete, session conversion,
+    // customer, cash, behavior, spend or attribution readiness.
+    if (eventWindow?.dates.has(date) && claim?.evidenceRef === eventWindow.ref)
+      for (const gate of ["ledger", "orders", "purchase", "productAllocation"] as const)
+        gates[gate] = claim.gates[gate] === true;
+    // Exact provider/account/date union only. Generic proofReady remains false
+    // and this source-correspondence branch cannot promote any non-spend gate.
+    if (nativeSpend?.dates.has(date) && claim?.evidenceRef === e.ref)
+      gates.spend = claim.gates.spend === true;
     // Independent key totals alone do not establish semantic completeness.
     gates.customers &&= facts.customers.every(c => c.analytics_permitted === true &&
       c.identity_status === "resolved" && c.history_complete === true) &&
       facts.orders.filter(o => o.eligibility_status === "eligible").every(o => o.customer_id !== null);
     gates.attribution &&= facts.order_attribution.every(a => a.attribution_complete === true);
+    if (entries) gates.attribution = false;
     gates.behavior &&= e.sessionCoverage.behaviorComplete && nativeReady &&
       facts.sessions.every(s => s.behavior_complete === true);
     return { shop, publication: pub, definition: p.definition, model: p.attribution.modelVersion,
@@ -258,6 +317,18 @@ export function buildFullReports(input: {
     const s = scope(date);
     const store = storeDaily(facts as Facts, s);
     const acquisition = acquisitionDaily(facts as Facts, s, new Set(e.comparisons));
+    if (eventWindow && customerInput) throw new Error("conflicting_customer_scope_admissions");
+    if (eventWindow?.dates.has(date) && coverage.get(date)?.evidenceRef === eventWindow.ref) {
+      // A complete independent paid-date original population plus conclusive
+      // selected-customer histories supports this daily count, not a global
+      // customer table, lifetime history, cohort or repeat/LTV admission.
+      const n = eventWindow.customerCounts.get(date) ?? null;
+      store.new_customers = n;
+      store.ncac_usd = ratio(store.spend_usd as string | null, n === null ? null : decimal(BigInt(n) * BigInt(1000000)));
+      Object.assign(store.readiness as Record<string, string>, {
+        new_customers: n === null ? "withheld" : "ready", ncac_usd: store.ncac_usd === null ? "withheld" : "ready",
+      });
+    }
     if (customerInput) {
       const covered = coverage.get(date);
       const n = covered?.evidenceRef && covered.gates.customers === true ? customerInput.dates.get(date)! : null;
@@ -283,7 +354,21 @@ export function buildFullReports(input: {
     reports.store_daily.push(store);
     reports.product_daily.push(...productDaily(facts as Facts, s));
     reports.acquisition_daily.push(...acquisition);
-    reports.funnel_daily.push(...funnelDaily(facts as Facts, s, p.funnelVersion, Object.keys(p.stages)));
+    const funnel = funnelDaily(facts as Facts, s, p.funnelVersion, Object.keys(p.stages));
+    if (entries) {
+      const admitted = nativeReady && proofReady("sessions") && coverage.get(date)?.evidenceRef &&
+        coverage.get(date)?.gates.behavior === true;
+      const count = admitted ? sessionEntryDayCount(entries, date) : null;
+      const all = funnel.find(row => row.stage_id === "all_sessions")!;
+      all.measured_sessions = count; all.stage_reached_sessions = count;
+      Object.assign(all.readiness as Record<string, string>, {
+        measured_sessions: count === null ? "withheld" : "ready",
+        stage_reached_sessions: count === null ? "withheld" : "ready",
+      });
+      // Action stages and paid conversions remain on their original evidence
+      // and maturity gates. Entry counts cannot certify either one.
+    }
+    reports.funnel_daily.push(...funnel);
   }
   const cohortClaims = unique(e.cohortCoverage, v => key(v.month, String(v.horizonDays)));
   for (const cohort of p.cohorts) {
@@ -313,12 +398,16 @@ export function buildFullReports(input: {
   for (const rows of Object.values(reports)) for (const row of rows)
     row.readiness = Object.fromEntries(Object.entries(row.readiness as Record<string, string>)
       .map(([k, v]) => [k, v === "ready" ? "observed_unverified" : v]));
+  const sessionEntryLineage = entries ? { ...entries.lineage,
+    unmappedActions: entryObservations!.unmappedActions, unmappedCheckout: entryCheckout!.unmappedCheckout } : null;
   const manifest = { nativeEvents: input.events.length, logicalEvents: logical.length,
-    digest: createHash("sha256").update(JSON.stringify(logical)).digest("hex"), evidenceRef: e.ref,
+    // Keep the existing five-field SQL manifest. Its digest now binds opt-in
+    // source-entry lineage as well as logical actions; legacy bytes stay stable.
+    digest: createHash("sha256").update(JSON.stringify(sessionEntryLineage ? { logical, sessionEntryLineage } : logical)).digest("hex"), evidenceRef: e.ref,
     gates: dates.map(date => ({ date, gates: scope(date).gates })) };
   if (Object.values(reports).some(rows => rows.length > 20000) ||
       Buffer.byteLength(JSON.stringify({ facts, reports, manifest })) > 16000000) throw new Error("full_output_budget");
-  return { facts, reports, manifest };
+  return { facts, reports, manifest, ...(sessionEntryLineage ? { sessionEntryLineage } : {}) };
 }
 
 export function withoutBehaviorEvidence(evidence: FullBuildEvidence): FullBuildEvidence {

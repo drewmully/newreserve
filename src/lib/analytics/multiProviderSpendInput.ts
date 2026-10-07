@@ -1,17 +1,18 @@
 import { acceptGoogleSpend } from "./googleSpendAcceptance";
 import { prepareFreshGoogleSpend } from "./googleSpendRegistration";
 import { normalizeSpendBase } from "./spend";
-import { prepareMetaSpendDay, spendInstant, spendRef, type MetaSpendDay } from "./metaSpendInput";
+import { prepareMetaSpendDay, spendInstant, spendRef, type MetaSpendPacket } from "./metaSpendInput";
 import type { FreshGoogleSpendReportInput, FreshSpendMarketingInventory } from "./googleSpendReportInput";
 import { reconcileCandidate, type Candidate } from "./certification";
 import type { FullBuildEvidence } from "./fullReportBuild";
 import { evidenceDigest } from "./evidenceIntake";
 import { reportDates } from "./commerceCandidate";
 import type { Row } from "./primitives";
+import { admitNativeSpendWindow, type NativeSpendWindowBinding } from "./nativeSpendWindowInput";
 
 export type MultiProviderSpendInput = {
   version: 1; projectRef: string; shop: string; runId: string;
-  inventory: FreshSpendMarketingInventory; metaDays: MetaSpendDay[];
+  inventory: FreshSpendMarketingInventory; metaDays: MetaSpendPacket[];
 };
 const canonical = (rows: Row[]) => rows.map(row => {
   const { publication_id: _publication, ...fields } = row;
@@ -31,6 +32,7 @@ export function prepareMultiProviderSpendBuild(input: {
   combined: MultiProviderSpendInput; freshGoogleSpend: FreshGoogleSpendReportInput;
   base: Candidate; evidence: FullBuildEvidence; projectRef: string; publication: string;
   shop: string; fromDate: string; throughDate: string; asOf: string;
+  nativeSpendWindowBinding?: NativeSpendWindowBinding;
 }) {
   const c = input.combined;
   if (!c || Object.keys(c).sort().join(",") !== ["version", "projectRef", "shop", "runId", "inventory", "metaDays"].sort().join(",") ||
@@ -66,6 +68,11 @@ export function prepareMultiProviderSpendBuild(input: {
   const base = structuredClone(input.base), evidence = structuredClone(input.evidence);
   base.marketing_spend_daily = [...google, ...meta];
   if (base.marketing_spend_daily.length > 10000) throw new Error("marketing_fact_budget");
+  const scoped = admitNativeSpendWindow(evidence.nativeSpendWindow, {
+    binding: input.nativeSpendWindowBinding, projectRef: input.projectRef, shop: input.shop,
+    publication: input.publication, fromDate: input.fromDate, throughDate: input.throughDate,
+    asOf: input.asOf, facts: base.marketing_spend_daily,
+  });
   const inventory = c.inventory;
   if (!inventory || Object.keys(inventory).sort().join(",") !== ["shop", "dates", "accounts", "complete",
     "independentlyExtracted", "evidenceRef", "approvalRef", "capturedAt", "salesScope", "salesCoverageRef",
@@ -83,7 +90,7 @@ export function prepareMultiProviderSpendBuild(input: {
   if (new Set(keys).size !== keys.length) throw new Error("marketing_inventory_duplicate");
   const expected = [JSON.stringify(["google_ads", manifest.accountId]),
     ...[...accounts].map(id => JSON.stringify(["meta_ads", id]))];
-  const inventoryReady = inventory.shop === input.shop && same(inventory.dates, dates) &&
+  const inventoryReady = !!scoped || inventory.shop === input.shop && same(inventory.dates, dates) &&
     inventory.complete === true && inventory.independentlyExtracted === true &&
     spendRef(inventory.evidenceRef) && spendRef(inventory.approvalRef) && same(keys, expected) &&
     spendInstant(inventory.capturedAt) >= spendInstant(manifest.freshnessCutoffAt) &&
@@ -92,13 +99,14 @@ export function prepareMultiProviderSpendBuild(input: {
   // from these arrived rows or promote input booleans into denominator evidence.
   const proofReady = reconcileCandidate(base, evidence.proofs, ["marketing_spend_daily"]).length === 0;
   const control = evidence.externalControls.compatible_spend_scope;
-  const scopeReady = !!inventoryReady && proofReady && control?.passed === true && spendRef(control.evidenceRef);
+  const scopeReady = !!scoped || !!inventoryReady && proofReady && control?.passed === true && spendRef(control.evidenceRef);
   evidence.dateCoverage = evidence.dateCoverage.map(day => ({ ...day,
     gates: { ...day.gates, spend: day.gates.spend === true && scopeReady && dates.includes(day.date) } }));
   const ready = scopeReady && dates.every(date => evidence.dateCoverage.some(day =>
     day.date === date && day.gates.spend && spendRef(day.evidenceRef)));
   return { base, evidence, storeRatioAdmission: {
-    mer: ready && inventory.salesScope === "whole_store_eligible_ledger" && spendRef(inventory.salesCoverageRef),
-    ncac: ready && inventory.customerScope === "whole_store_eligible_customers" && spendRef(inventory.customerCoverageRef),
-  }, checks: { inventoryReady: !!inventoryReady, proofReady, scopeReady: !!scopeReady } };
+    mer: ready && (!!scoped || inventory.salesScope === "whole_store_eligible_ledger" && spendRef(inventory.salesCoverageRef)),
+    ncac: ready && (!!scoped || inventory.customerScope === "whole_store_eligible_customers" && spendRef(inventory.customerCoverageRef)),
+  }, checks: { inventoryReady: !!inventoryReady, proofReady, scopeReady: !!scopeReady,
+    ...(scoped ? { nativeSpendWindowDigest: scoped.digest, genericReconciliationClaimed: false } : {}) } };
 }
