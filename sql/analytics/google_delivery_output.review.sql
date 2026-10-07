@@ -63,7 +63,7 @@ for each row execute function lean_private.google_delivery_immutable();
 -- completing a bound run without its optional row. The atomic wrapper below
 -- inserts it before commit. Unbound generations are untouched.
 create function lean_private.google_delivery_complete_guard() returns trigger
-language plpgsql set search_path=pg_catalog as $$
+language plpgsql security definer set search_path=pg_catalog as $$
 begin
   if new.completed_at is not null and new.policy ? 'googleDelivery' and not exists(
     select 1 from lean_private.report_google_account_daily g

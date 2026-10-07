@@ -13,7 +13,8 @@ import { checked, decimal, key, nyDate, type Row } from "./primitives";
 import { observedCampaigns } from "./campaignSource";
 import { sessionConversionWindowDays } from "./calculationPolicy";
 import { admitCashSourceEvidence, type CashSourceAdmission } from "./cashSourceEvidence";
-import { admitCustomerGeneration, type CustomerGenerationBinding, type CustomerGenerationInput } from "./historyCustomerSource";
+import { admitCustomerGeneration, validateCustomerGenerationContext, type CustomerGenerationBinding, type CustomerGenerationInput } from "./historyCustomerSource";
+import { PURCHASE_PROCESSING_SCHEMA, resolvePurchaseHistoryOwnership } from "./purchaseHistoryOwnership";
 
 export type FullBuildPolicy = {
   definition: string; mappingVersion: string; sessionVersion: string; funnelVersion: string;
@@ -162,11 +163,22 @@ export function buildFullReports(input: {
     mappings: facts.identity_map, currentlyPermitted: permitted, removedCustomers: removed,
   });
   const orderIdentities = unique(e.orderIdentities, r => r.orderId);
+  // Only a SQL-derived, completed, immutable customer binding can opt purchase
+  // orders into current processing authorization. Browser resolve stays intact.
+  const purchaseSource = e.customerGeneration?.authority?.schemaVersion === PURCHASE_PROCESSING_SCHEMA
+    ? validateCustomerGenerationContext(e.customerGeneration, {
+      binding: p.customerGeneration, shop, fromDate: input.fromDate, throughDate: input.throughDate, policy: p,
+    }) : undefined;
   facts.orders = facts.orders.map(row => {
     const link = orderIdentities.get(row.order_id as string);
     if (link && !link.evidenceRef) throw new Error("order_identity_evidence_required");
-    return { ...row, customer_id: link ? resolve(link.namespace, link.identifier,
-      (row.paid_at ?? row.created_at) as string).customerId : null };
+    const resolution = link && purchaseSource
+      ? resolvePurchaseHistoryOwnership({
+        authority: purchaseSource.authority, namespace: link.namespace, identifier: link.identifier,
+        occurredAt: (row.paid_at ?? row.created_at) as string, version: p.mappingVersion, publication: pub,
+        mappings: facts.identity_map, currentlyPermitted: permitted, removedCustomers: removed,
+      }) : link ? resolve(link.namespace, link.identifier, (row.paid_at ?? row.created_at) as string) : null;
+    return { ...row, customer_id: resolution?.customerId ?? null };
   });
   const observations = input.events.map(event => {
     if (Date.parse(event.occurredAt) > Date.parse(p.asOf)) throw new Error("future_behavior_event");
