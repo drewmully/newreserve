@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { productionReportPath } from "./productionReportDelivery";
 import { validProductionWorkbookPayload, workbookResources } from "./productionWorkbookDelivery";
+import { workbookRuntimePath, workbookRuntimeSourceId } from "./productionWorkbookRuntime";
 
 type Row = Record<string, unknown>;
 export const workbookDestinationResources = [...Object.keys(workbookResources), "report_status"];
@@ -46,7 +47,7 @@ function table(rows: Row[], resource: string) {
 const scopeFields = ["report_scope", "shop_id", "publication_id", "definition_version", "model_version",
   "funnel_version", "as_of_at", "report_from_date", "report_through_date", "atomic_resource_refresh"];
 
-function compare(value: unknown) {
+function compare(value: unknown, expectedPath: string = productionReportPath) {
   exact(value, ["version", "asOf", "binding", "rounds"]);
   if (value.version !== 1) fail();
   // The file adapter also rejects duplicate JSON members, invalid UTF-8 and depth >32.
@@ -80,7 +81,7 @@ function compare(value: unknown) {
     const s = round.source;
     exact(s, ["path", "httpStatus", "capturedAt", "evidenceRef", "complete", "body"]);
     observed(s.evidenceRef);
-    if (s.path !== productionReportPath || s.httpStatus !== 200 || s.complete !== true ||
+    if (s.path !== expectedPath || s.httpStatus !== 200 || s.complete !== true ||
         !validProductionWorkbookPayload(s.body) || Buffer.byteLength(JSON.stringify(s.body)) > 4194304) fail();
     const body = s.body as Record<string, Row[]>, captured = instant(s.capturedAt);
     if (body.report_status.some(status => scopeFields.some(k => status[k] !== scope[k]) ||
@@ -144,4 +145,19 @@ export function acceptWorkbookDestination(value: unknown) {
   try { return compare(value); }
   catch { return { version: 1, state: "not_accepted" as const,
     reason: "missing_or_invalid_retained_evidence", ...limits }; }
+}
+
+/** Separate fixed-path observer for the approved former sample source.
+ * Never rewrite supplied receipt paths or infer live authenticity/import success.
+ * The existing /reports/production comparator retains its original contract.
+ */
+export function acceptWorkbookRuntimeDestination(value: unknown) {
+  try {
+    if (!object(value) || !object(value.binding) ||
+      value.binding.projectId !== "353503" || value.binding.sourceId !== workbookRuntimeSourceId) fail();
+    return compare(value, workbookRuntimePath);
+  } catch {
+    return { version: 1, state: "not_accepted" as const,
+      reason: "missing_or_invalid_retained_evidence", ...limits };
+  }
 }

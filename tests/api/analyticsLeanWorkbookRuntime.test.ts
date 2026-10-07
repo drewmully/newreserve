@@ -13,7 +13,7 @@ import { validProductionWorkbookPayload, workbookResources } from "@/lib/analyti
 import { productionWorkbookRuntimeGet, workbookRuntimePath, workbookRuntimeManifestHash } from "@/lib/analytics/productionWorkbookRuntime";
 import type { AnalyticsRpcClient } from "@/lib/analytics/rpcStore";
 
-const project = "xnfjdbpjuaezxjgargto", source = "01a0f3c6-8758-0000-378b-d15c40a96f3a";
+const project = "xnfjdbpjuaezxjgargto", source = "01a0d9ea-e2b9-0000-381e-e68fc47de66a";
 const secret = "synthetic-workbook-bearer-never-a-real-token";
 const observed = "synthetic-observed-bearer-never-a-real-token";
 const digest = (s: string) => createHash("sha256").update(s).digest("hex");
@@ -61,7 +61,7 @@ beforeAll(async () => {
     "036_partitioned_refresh", "037_canonical_journey_timestamps", "038_google_spend_pilot",
     "040_shopify_history_import", "041_history_report_bridge", "053_production_workbook_delivery",
     "proposed_history_customer_source", "customer_generation_full_integration.review",
-    "workbook_runtime_authorization.review"]) await db.exec(sql(n));
+    "workbook_runtime_authorization.review", "workbook_sample_source_binding.review"]) await db.exec(sql(n));
 }, 30000);
 beforeEach(async () => {
   vi.stubGlobal("fetch", vi.fn(() => { throw new Error("hosted_network_forbidden"); }));
