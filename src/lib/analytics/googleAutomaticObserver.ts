@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { googleAutomaticDigest } from "./googleAutomaticCapture";
 import { validGoogleDeliveryPayload } from "./googleDeliveryRuntime";
 import { sourceObject, sourceString } from "./shopifySource";
+import { parseGoogleReadinessJson } from "./googleReadinessJson";
 
 export const googleAutomaticColumns = ["shop_id", "publication_id", "definition_version", "report_scope",
   "provider", "account_id", "report_date", "source_currency", "source_timezone", "click_definition", "as_of_at",
@@ -126,6 +127,9 @@ export async function observeGoogleAutomatic(claim: unknown, transport: GoogleOb
   const tuple = JSON.parse(result.results[0][1]);
   if (!Array.isArray(tuple) || tuple.length !== googleAutomaticColumns.length) throw new Error("google_observation_table_shape");
   const row = Object.fromEntries(googleAutomaticColumns.map((name, i) => [name, tuple[i]]));
+  // Native HogQL can encode this JSON column as a string inside tuple JSON.
+  // Decode only readiness once. Exact comparison below still owns its shape.
+  if (typeof row.readiness === "string") row.readiness = sourceObject(parseGoogleReadinessJson(row.readiness));
   if (hash(row) !== hash(expected)) throw new Error("google_observation_value_mismatch");
   const afterSchema = safeSchema(await transport.source(), b); check();
   const afterJob = latestJob(await transport.jobs(sourceString(status.not_before), new Date().toISOString()),
