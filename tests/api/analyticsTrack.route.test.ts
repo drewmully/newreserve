@@ -9,6 +9,18 @@ const aggregateKpiDailyMock = vi.fn();
 const aggregateSegmentActivityMock = vi.fn();
 const recordAISalesSignalMock = vi.fn();
 const checkRateLimitMock = vi.fn();
+const sendSiteEventMock = vi.fn();
+const afterCallbacks: Array<() => unknown> = [];
+
+vi.mock("next/server", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/server")>()),
+  after: (fn: () => unknown) => afterCallbacks.push(fn),
+}));
+
+vi.mock("@/lib/klaviyo/siteEvents", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/klaviyo/siteEvents")>()),
+  sendSiteEventToKlaviyo: sendSiteEventMock,
+}));
 
 vi.mock("@/lib/firebase-admin", () => ({
   adminAuth: {
@@ -225,5 +237,58 @@ describe("POST /api/analytics/track", () => {
       error: "Too many analytics events. Please try again later.",
     });
     expect(dispatchAnalyticsEventMock).not.toHaveBeenCalled();
+  });
+
+  describe("Klaviyo lifecycle mirror", () => {
+    const view = {
+      event_name: "proshop_product_viewed",
+      properties: { product_slug: "rhone-polo", name: "Rhone Polo", price: 108 },
+    };
+
+    beforeEach(() => {
+      afterCallbacks.length = 0;
+      sendSiteEventMock.mockReset().mockResolvedValue("sent");
+      vi.stubEnv("KLAVIYO_PRIVATE_API_KEY", "pk_test");
+      vi.stubEnv("KLAVIYO_SITE_EVENTS_ENABLED", "true");
+    });
+
+    async function post(body: Record<string, unknown>, headers?: Record<string, string>) {
+      const { POST } = await loadRoute();
+      const res = await POST(makeRequest(body, headers));
+      for (const fn of afterCallbacks) await fn();
+      return res;
+    }
+
+    it("sends nothing when the flag is off", async () => {
+      vi.stubEnv("KLAVIYO_SITE_EVENTS_ENABLED", "false");
+      verifyIdTokenMock.mockResolvedValue({ uid: "uid_123", email: "m@example.com", email_verified: true });
+      expect((await post(view, { Authorization: "Bearer t" })).status).toBe(200);
+      expect(sendSiteEventMock).not.toHaveBeenCalled();
+    });
+
+    it("identifies signed-in members by their verified email only", async () => {
+      verifyIdTokenMock.mockResolvedValue({ uid: "uid_123", email: "M@Example.com", email_verified: true });
+      await post(view, { Authorization: "Bearer t" });
+      expect(sendSiteEventMock).toHaveBeenCalledTimes(1);
+      expect(sendSiteEventMock.mock.calls[0][0]).toEqual({ kind: "verified", email: "m@example.com" });
+      expect(sendSiteEventMock.mock.calls[0][1].metric).toBe("Mully Viewed Product");
+    });
+
+    it("never trusts an unverified token email or an email in the request body", async () => {
+      verifyIdTokenMock.mockResolvedValue({ uid: "uid_123", email: "m@example.com", email_verified: false });
+      await post(view, { Authorization: "Bearer t" });
+      await post({ ...view, email: "victim@example.com" });
+      expect(sendSiteEventMock).not.toHaveBeenCalled();
+    });
+
+    it("uses the Klaviyo exchange id for anonymous visitors from Klaviyo emails", async () => {
+      await post({ ...view, klaviyo_kx: "abcDEF123_kx" });
+      expect(sendSiteEventMock.mock.calls[0][0]).toEqual({ kind: "exchange", kx: "abcDEF123_kx" });
+    });
+
+    it("ignores events that are not mirrored", async () => {
+      await post({ event_name: "page_view", klaviyo_kx: "abcDEF123_kx" });
+      expect(sendSiteEventMock).not.toHaveBeenCalled();
+    });
   });
 });

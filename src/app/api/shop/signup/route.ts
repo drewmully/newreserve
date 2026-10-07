@@ -5,6 +5,7 @@ import { adminDb } from "@/lib/firebase-admin";
 import { SHOP_INTERESTS, SHOP_CONSENT_VERSION, EMAIL_CONSENT, SMS_CONSENT, normalizeSignupPhone } from "@/lib/shopSignup";
 import { SHOP_REWARDS } from "@/lib/shopRewards";
 import { captureSyncFields, scheduleKlaviyoSync } from "@/lib/klaviyo/syncState";
+import { identityCookie } from "@/lib/klaviyo/identity";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -76,7 +77,12 @@ export async function POST(req: Request) {
       else tx.update(session, { used: true });
     });
     scheduleKlaviyoSync("shop_marketing_leads", leadId, [stage]);
-    return respond({ ok: true, reward: SHOP_REWARDS[stage], ...(stage === "email" ? { receipt } : {}) });
+    const res = respond({ ok: true, reward: SHOP_REWARDS[stage], ...(stage === "email" ? { receipt } : {}) });
+    // Consent is required on this route, so every email-stage success can be
+    // tied to later site visits (Klaviyo browse and cart events).
+    const kid = stage === "email" ? identityCookie(email) : null;
+    if (kid) res.cookies.set(kid);
+    return res;
   } catch (error) {
     const reason = error instanceof Error ? error.message : "";
     if (reason === "rate_limited") return respond({ error: reason }, 429);

@@ -10,6 +10,7 @@
  * the dedupe upsert makes it a no-op and the honeypot field filters bots.
  */
 import { NextResponse } from "next/server";
+import { identityCookie } from "@/lib/klaviyo/identity";
 import { headers } from "next/headers";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase-admin";
@@ -218,5 +219,9 @@ export async function POST(req: Request) {
     extraProps: { source: shopSignup ? "shop-newsletter" : "editorial-drop-bar" },
   });
 
-  return NextResponse.json({ ok: true, stage: "email" });
+  const res = NextResponse.json({ ok: true, stage: "email" });
+  // Consented signups only: lets later site visits reach this Klaviyo profile.
+  const kid = consent ? identityCookie(email) : null;
+  if (kid) res.cookies.set(kid);
+  return res;
 }
