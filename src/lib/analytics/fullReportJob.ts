@@ -11,6 +11,7 @@ import { deferredOrders, verifyDeferredReplacements } from "./deferredCommerce";
 import { sessionConversionWindowDays } from "./calculationPolicy";
 import { prepareFreshGoogleSpendBuild, guardFreshGoogleSpendReports,
   type FreshGoogleSpendReportInput } from "./googleSpendReportInput";
+import { prepareMultiProviderSpendBuild, type MultiProviderSpendInput } from "./multiProviderSpendInput";
 import { prepareGoogleDeliveryReport } from "./googleDeliveryReport";
 
 /** Evidence can narrow observed coverage; it cannot extend a source read.
@@ -85,7 +86,13 @@ export async function runFullReportJob(options: {
   let googleDelivery: ReturnType<typeof prepareGoogleDeliveryReport> | undefined;
   try {
     const base = sourceObject(input.facts) as Candidate;
-    const freshSpend = Object.hasOwn(input, "freshGoogleSpend") ? prepareFreshGoogleSpendBuild({
+    const freshSpend = Object.hasOwn(input, "multiProviderSpend") ? prepareMultiProviderSpendBuild({
+      combined: input.multiProviderSpend as MultiProviderSpendInput,
+      freshGoogleSpend: input.freshGoogleSpend as FreshGoogleSpendReportInput,
+      base, evidence, projectRef: options.projectRef,
+      publication: sourceString(input.publication), shop: sourceString(input.shop),
+      fromDate: sourceString(input.fromDate), throughDate: sourceString(input.throughDate), asOf: policy.asOf,
+    }) : Object.hasOwn(input, "freshGoogleSpend") ? prepareFreshGoogleSpendBuild({
       freshGoogleSpend: input.freshGoogleSpend as FreshGoogleSpendReportInput,
       base, evidence, projectRef: options.projectRef,
       publication: sourceString(input.publication), shop: sourceString(input.shop),

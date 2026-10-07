@@ -9,6 +9,8 @@ import { key } from "@/lib/analytics/primitives";
 import { buildFullReports } from "@/lib/analytics/fullReportBuild";
 import type { CustomerGenerationInput } from "@/lib/analytics/historyCustomerSource";
 import { fullFixture, orderKey } from "../fixtures/analyticsFull";
+import { PURCHASE_PROCESSING_SCHEMA, PURCHASE_OWNERSHIP_EVIDENCE } from "@/lib/analytics/purchaseHistoryOwnership";
+import { resolveTemporalIdentity } from "@/lib/analytics/identity";
 
 const project = "aaaaaaaaaaaaaaaaaaaa", shop = "fixture.myshopify.com";
 const gid = (kind: string, id: string) => `gid://shopify/${kind}/${id}`;
@@ -109,6 +111,121 @@ function fullGenerationFixture() {
   f.evidence.customerGeneration = source;
   return f;
 }
+
+function purchaseInput() {
+  const v = input();
+  v.authority.schemaVersion = PURCHASE_PROCESSING_SCHEMA;
+  v.authority.scopeRef = "purchase-history:fixture-source";
+  v.evidence.identity[0].consent = "unknown";
+  v.evidence.identity[0].type = PURCHASE_OWNERSHIP_EVIDENCE;
+  return v;
+}
+function purchaseFullFixture() {
+  const f = fullGenerationFixture();
+  Object.assign(f.evidence.customerGeneration!.authority, {
+    schemaVersion: PURCHASE_PROCESSING_SCHEMA, scopeRef: "purchase-history:fixture-source",
+  });
+  Object.assign(f.evidence.identity[0], { namespace: "shopify_customer", identifier: "90",
+    type: PURCHASE_OWNERSHIP_EVIDENCE, consent: "unknown" });
+  Object.assign(f.evidence.orderIdentities[0], { namespace: "shopify_customer", identifier: "90" });
+  f.evidence.proofs.find(p => p.table === "identity_map")!.expectedKeys = [
+    JSON.stringify(["shopify_customer", "90", "2025-01-01T00:00:00Z", "identity-v1"]),
+  ];
+  // The same historical subject has no asserted browser consent.
+  f.events[0].identityNamespace = "shopify_customer"; f.events[0].distinctId = "90";
+  f.evidence.checkout = []; f.evidence.campaigns = [];
+  return f;
+}
+
+describe("purchase-only current processing authorization", () => {
+  it("derives first purchase without fabricating historical consent or granting browser identity", () => {
+    const v = purchaseInput(), before = structuredClone(v);
+    const out = normalizeHistoryCustomer(v, now);
+    expect(v).toEqual(before);
+    expect(out.customerComplete).toBe(true);
+    expect(out.ledgerComplete).toBe(false);
+    expect(out.facts.customers[0].first_eligible_order_at).toBe("2026-01-01T12:01:00Z");
+    expect(out.facts.identity_map[0].consent_status).toBe("unknown");
+    expect(resolveTemporalIdentity({ namespace: "shopify_customer", identifier: "90",
+      occurredAt: "2026-01-01T12:01:00Z", version: v.mappingVersion, publication: v.publication,
+      mappings: out.facts.identity_map, currentlyPermitted: new Set(v.evidence.currentlyPermitted),
+      removedCustomers: new Set() })).toEqual({ customerId: null, status: "not_permitted" });
+  });
+  it.each(["legacy schema", "wrong purpose", "no provenance", "current denial", "historical denial",
+    "removed member", "removed interval", "unresolved", "conflicting", "current profile only",
+    "interval gap", "half-open end", "changed revision", "incomplete history", "missing control",
+    "expired", "stale"] as const)("refuses %s rather than inferring permission or ownership", kind => {
+    const v = purchaseInput(), row = v.evidence.identity[0];
+    if (kind === "legacy schema") v.authority.schemaVersion = "fixture-v1";
+    if (kind === "wrong purpose") v.authority.scopeRef = "browser:fixture";
+    if (kind === "no provenance") v.authority.evidenceRef = "";
+    if (kind === "current denial") v.evidence.currentlyPermitted = [];
+    if (kind === "historical denial") row.consent = "denied";
+    if (kind === "removed member") v.evidence.removedCustomers = [v.customerId!];
+    if (kind === "removed interval") row.removal = "removed";
+    if (kind === "unresolved") row.resolution = "unresolved";
+    if (kind === "conflicting") row.resolution = "conflicting";
+    if (kind === "current profile only") row.type = "current_profile";
+    if (kind === "interval gap") row.from = "2026-01-01T12:01:00.000001Z";
+    if (kind === "half-open end") row.to = "2026-01-01T12:01:00Z";
+    if (kind === "changed revision") v.orders[0].source.commerce.order.updatedAt = "2026-01-03T00:00:00Z";
+    if (kind === "incomplete history") v.evidence.customerHistory[v.customerId!].completeSources = [];
+    if (kind === "missing control") v.evidence.externalControls = {};
+    if (kind === "expired") v.expiresAt = now;
+    if (kind === "stale") v.authority.capturedAt = "2026-09-30T11:54:59Z";
+    expect(() => normalizeHistoryCustomer(v, now)).toThrow();
+  });
+  it("preserves microsecond ownership boundaries without changing the interval", () => {
+    const v = purchaseInput();
+    v.evidence.identity[0].to = "2026-01-01T12:01:00.000001Z";
+    expect(normalizeHistoryCustomer(v, now).customerComplete).toBe(true);
+    expect(v.evidence.identity[0].to).toBe("2026-01-01T12:01:00.000001Z");
+  });
+});
+
+describe("purchase-only completed generation in full reports", () => {
+  it("uses completed purchase counts and ratios while the same subject remains browser-ineligible", () => {
+    const f = purchaseFullFixture(), before = structuredClone(f.evidence.identity);
+    const out = buildFullReports(f);
+    expect(out.facts.orders[0].customer_id).toBe("customer-fixture");
+    expect(out.facts.identity_map[0].consent_status).toBe("unknown");
+    expect(f.evidence.identity).toEqual(before);
+    expect(out.facts.sessions).toHaveLength(0);
+    expect(out.reports.store_daily[0]).toMatchObject({ new_customers: 3, ncac_usd: "1.666666" });
+    expect(out.reports.customer_cohorts[0]).toMatchObject({
+      cohort_customers: 3, repeat_customers: 1, repeat_purchase_rate: "0.333333", revenue_ltv_usd: "0.666666",
+    });
+  });
+  it("keeps new and repeat counts when LTV evidence is unavailable", () => {
+    const f = purchaseFullFixture();
+    f.evidence.dateCoverage[0].gates.ledger = false;
+    f.evidence.cohortCoverage[0].ledgerLineageComplete = false;
+    const out = buildFullReports(f);
+    expect(out.reports.store_daily[0].new_customers).toBe(3);
+    expect(out.reports.customer_cohorts[0]).toMatchObject({
+      repeat_purchase_rate: "0.333333", revenue_ltv_usd: null,
+    });
+  });
+  it.each(["missing binding", "unfinished result", "wrong authority", "wrong purpose", "wrong window",
+    "unknown owner", "removed", "missing current grant", "wrong namespace", "arbitrary boolean"] as const)(
+    "refuses %s on the order-only path", kind => {
+      const f = purchaseFullFixture(), source = f.evidence.customerGeneration!;
+      if (kind === "missing binding") delete f.policy.customerGeneration;
+      if (kind === "unfinished result") source.resultHash = "";
+      if (kind === "wrong authority") source.authority.revision = "2";
+      if (kind === "wrong purpose") source.authority.scopeRef = "journey:fixture";
+      if (kind === "wrong window") source.throughDate = "2026-01-02";
+      if (kind === "unknown owner") f.evidence.identity[0].resolution = "unresolved";
+      if (kind === "removed") f.evidence.removedCustomers = ["customer-fixture"];
+      if (kind === "missing current grant") f.evidence.currentlyPermitted = [];
+      if (kind === "wrong namespace") f.evidence.orderIdentities[0].namespace = "firebase";
+      if (kind === "arbitrary boolean") {
+        source.authority.schemaVersion = "fixture-v1";
+        Object.assign(f.policy, { purchaseProcessingAllowed: true });
+      }
+      expect(() => buildFullReports(f)).toThrow();
+    });
+});
 
 describe("actual full consumer of source-derived primitives", () => {
   it("recomputes ratios once without promoting report-window fact gates", () => {

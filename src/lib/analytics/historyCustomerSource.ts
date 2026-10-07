@@ -13,6 +13,7 @@ import { micros, nyDate, type Row } from "./primitives";
 import type { CommerceDecision } from "./commerce";
 import type { AnalyticsRpcClient } from "./rpcStore";
 import { customerCohortComponents, type CustomerCohortComponents, type Facts, type ReportScope } from "./reporting";
+import { PURCHASE_PROCESSING_SCHEMA, resolvePurchaseHistoryOwnership } from "./purchaseHistoryOwnership";
 
 type CustomerEvidence = Pick<FullBuildEvidence, "ref" | "identity" | "currentlyPermitted" |
   "removedCustomers" | "customerHistory" | "orderIdentities" | "proofs" | "externalControls" | "cohortCoverage">;
@@ -84,9 +85,9 @@ const instant = (value: string) => {
  * JSON. The outer SQL input/finish/release/read fences are mandatory in production.
  * Current clock checks stay in that locked source-authority reader, not policy.asOf.
  */
-export function admitCustomerGeneration(source: CustomerGenerationInput | undefined, input: {
+export function validateCustomerGenerationContext(source: CustomerGenerationInput | undefined, input: {
   binding: CustomerGenerationBinding | undefined; shop: string; fromDate: string; throughDate: string;
-  dates: string[]; policy: FullBuildPolicy; orders: Row[]; customers: Row[];
+  policy: FullBuildPolicy;
 }) {
   if (source === undefined && input.binding === undefined) return undefined;
   const binding = input.binding, p = input.policy;
@@ -112,6 +113,16 @@ export function admitCustomerGeneration(source: CustomerGenerationInput | undefi
       ![source.authority.sourceId, source.authority.schemaVersion, source.authority.scopeRef,
         source.authority.evidenceRef].every(v => typeof v === "string" && v.trim()))
     throw new Error("customer_generation_authority");
+  return source;
+}
+
+export function admitCustomerGeneration(source: CustomerGenerationInput | undefined, input: {
+  binding: CustomerGenerationBinding | undefined; shop: string; fromDate: string; throughDate: string;
+  dates: string[]; policy: FullBuildPolicy; orders: Row[]; customers: Row[];
+}) {
+  source = validateCustomerGenerationContext(source, input);
+  if (!source) return undefined;
+  const p = input.policy;
   const count = (v: unknown) => v === null || Number.isSafeInteger(v) && Number(v) >= 0 && Number(v) <= 70000;
   if (!Array.isArray(source.dates) || !same(source.dates.map(d => d.date), input.dates) ||
       source.dates.some(d => !count(d.newCustomers)) || !Array.isArray(source.cohorts) ||
@@ -247,12 +258,15 @@ export function normalizeHistoryCustomer(input: HistoryCustomerInput, now: strin
       if (!link?.evidenceRef || link.namespace !== "shopify_customer" || link.identifier !== sourceCustomerId ||
           input.customerId === null) throw new Error("history_customer_source_link");
       usedLinks.add(link.orderId);
-      const resolution = resolveTemporalIdentity({
+      const ownership = {
         namespace: link.namespace, identifier: link.identifier,
         occurredAt: sourceString(order.paid_at ?? order.created_at),
         version: input.mappingVersion, publication: pub, mappings: facts.identity_map,
         currentlyPermitted: permitted, removedCustomers: removed,
-      });
+      };
+      const resolution = authority.schemaVersion === PURCHASE_PROCESSING_SCHEMA
+        ? resolvePurchaseHistoryOwnership({ ...ownership, authority })
+        : resolveTemporalIdentity(ownership);
       // A changed mapping/permission cannot silently move or discard a customer.
       if (resolution.status !== "resolved" || resolution.customerId !== input.customerId)
         throw new Error("history_customer_ownership_or_permission");
