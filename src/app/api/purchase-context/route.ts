@@ -105,8 +105,21 @@ export async function GET(request: NextRequest) {
   }
 
   if (latest.event_id_captured === true) {
+    // Meta dedup: `already_captured: true` tells the client to skip re-firing
+    // the fbq Purchase pixel. Still return value/currency so the Google Ads
+    // gtag conversion — which uses its own sessionStorage dedup — can send
+    // the correct order value on subsequent renders / re-visits within the
+    // freshness window.
     return NextResponse.json(
-      { has_purchase: true, already_captured: true, event_id: latest.event_id },
+      {
+        has_purchase: true,
+        already_captured: true,
+        event_id: latest.event_id,
+        value: latest.value,
+        currency: latest.currency ?? "USD",
+        order_id: latest.shopify_order_id ?? null,
+        order_number: latest.order_number ?? null,
+      },
       { status: 200, headers: { "Cache-Control": "no-store" } }
     );
   }
