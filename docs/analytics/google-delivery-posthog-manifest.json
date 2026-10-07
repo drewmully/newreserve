@@ -1,0 +1,15 @@
+{
+  "client": { "base_url": "https://www.mymully.com", "auth": { "type": "bearer" } },
+  "resources": [
+    {
+      "name": "google_account_daily",
+      "primary_key": ["shop_id", "account_id", "report_date", "definition_version", "publication_id"],
+      "endpoint": {
+        "path": "/api/analytics/reports/google-delivery",
+        "method": "GET",
+        "data_selector": "google_account_daily",
+        "paginator": { "type": "single_page" }
+      }
+    }
+  ]
+}

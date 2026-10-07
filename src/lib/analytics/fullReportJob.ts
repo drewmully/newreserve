@@ -11,6 +11,7 @@ import { deferredOrders, verifyDeferredReplacements } from "./deferredCommerce";
 import { sessionConversionWindowDays } from "./calculationPolicy";
 import { prepareFreshGoogleSpendBuild, guardFreshGoogleSpendReports,
   type FreshGoogleSpendReportInput } from "./googleSpendReportInput";
+import { prepareGoogleDeliveryReport } from "./googleDeliveryReport";
 
 /** Evidence can narrow observed coverage; it cannot extend a source read.
  * This is deliberately conservative at the NY calendar-day edges.
@@ -58,6 +59,9 @@ export async function runFullReportJob(options: {
   if (input.state !== "ready") throw new Error("invalid_full_input");
   const policy = sourceObject(input.policy) as FullBuildPolicy;
   sessionConversionWindowDays(policy.conversionWindowDays);
+  if (Object.hasOwn(policy, "googleDelivery") &&
+    Date.parse(policy.asOf) > Date.parse(options.clock?.() ?? new Date().toISOString()))
+    return { state: "not_due" };
   const evidence = sourceObject(input.evidence) as FullBuildEvidence;
   const behavior = sourceObject(input.behavior) as ProductionBehaviorSource;
   verifyDeferredReplacements(deferredOrders(input.deferredOrders), evidence, sourceString(input.shop));
@@ -78,6 +82,7 @@ export async function runFullReportJob(options: {
   if (claimed === false) return { state: "busy_or_exhausted" };
   if (claimed !== true) throw new Error("invalid_full_claim");
   let result: ReturnType<typeof buildFullReports>;
+  let googleDelivery: ReturnType<typeof prepareGoogleDeliveryReport> | undefined;
   try {
     const base = sourceObject(input.facts) as Candidate;
     const freshSpend = Object.hasOwn(input, "freshGoogleSpend") ? prepareFreshGoogleSpendBuild({
@@ -101,15 +106,27 @@ export async function runFullReportJob(options: {
       policy, evidence: mode === "excluded" ? behaviorInput.evidence :
         boundBehaviorEvidence(behaviorInput.evidence, behavior, policy, reportBase), events });
     if (freshSpend) guardFreshGoogleSpendReports(result.reports, freshSpend.storeRatioAdmission);
+    if (Object.hasOwn(policy, "googleDelivery")) {
+      if (!freshSpend) throw new Error("google_delivery_native_input_required");
+      googleDelivery = prepareGoogleDeliveryReport({
+        binding: sourceObject(input.policy).googleDelivery,
+        fresh: input.freshGoogleSpend as FreshGoogleSpendReportInput, projectRef: options.projectRef,
+        publication: sourceString(input.publication), shop: sourceString(input.shop),
+        fromDate: sourceString(input.fromDate), throughDate: sourceString(input.throughDate), asOf: policy.asOf,
+      });
+    }
     behaviorInput.assertFresh();
   } catch {
     await pipelineRpc(options.client, "lean_full_fail", lease);
     throw new Error("full_transform_unavailable");
   }
   // Ambiguous response is never replayed here. A subsequent invocation first reads state.
-  const done = await pipelineRpc(options.client, "lean_full_finish", {
+  const done = googleDelivery === undefined ? await pipelineRpc(options.client, "lean_full_finish", {
     ...lease, p_input_hash: sourceString(input.inputHash), p_facts: result.facts,
     p_reports: result.reports, p_manifest: result.manifest,
+  }) : await pipelineRpc(options.client, "lean_google_delivery_finish", {
+    ...lease, p_input_hash: sourceString(input.inputHash), p_facts: result.facts,
+    p_reports: result.reports, p_manifest: result.manifest, p_google_report: googleDelivery,
   });
   if (typeof done !== "boolean") throw new Error("invalid_full_finish");
   return { state: done ? "complete" : "changed", certification: "unverified",
