@@ -19,6 +19,7 @@
  *
  * Behavior:
  *   1. Reject if no spots remaining (unless override), surfaces 409.
+ *      Reject unavailable counts with 503 before any reservation write.
  *   2. Resolve email -> customers.id (case-insensitive). 404 if not found.
  *   3. Upsert customer_facts row with reserve_reservation_at = NOW(),
  *      reserve_reservation_expires_at = NOW() + 48h, source = ...,
@@ -115,7 +116,7 @@ export async function POST(req: Request) {
       supabase
         .from("subscribers")
         .select("id", { count: "exact", head: true })
-        .eq("plan_type", "reserve_access")
+        .eq("plan_code", "reserve_access")
         .eq("status", "active")
         .gte("acquired_at", FOUNDERS_CAMPAIGN_START),
       supabase
@@ -125,8 +126,27 @@ export async function POST(req: Request) {
         .is("reserve_reservation_paid_at", null)
         .gt("reserve_reservation_expires_at", nowIso),
     ]);
-    const paid = paidRes.count ?? 0;
-    const pending = pendingRes.count ?? 0;
+    if (
+      paidRes.error ||
+      pendingRes.error ||
+      paidRes.count === null ||
+      pendingRes.count === null ||
+      !Number.isSafeInteger(paidRes.count) ||
+      !Number.isSafeInteger(pendingRes.count) ||
+      paidRes.count < 0 ||
+      pendingRes.count < 0
+    ) {
+      console.error("[reserve-by-reply] availability count unavailable", {
+        paidStatus: paidRes.status,
+        pendingStatus: pendingRes.status,
+      });
+      return NextResponse.json(
+        { error: "availability_unavailable" },
+        { status: 503, headers: { "cache-control": "no-store" } },
+      );
+    }
+    const paid = paidRes.count;
+    const pending = pendingRes.count;
     remaining = Math.max(0, FOUNDERS_TOTAL_SPOTS - baseline - paid - pending);
     if (remaining <= 0) {
       return NextResponse.json(
