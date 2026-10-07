@@ -8,7 +8,7 @@
  *             − reserved_holds  (active reply-to-reserve holds in customer_facts)
  *
  * Cached for 30s on the edge so the LP can poll cheaply while still feeling live.
- * Returns 200 with the counter even if downstream reads fail (graceful UI fallback).
+ * Returns 503 when availability cannot be read; a failed count is not zero.
  */
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
@@ -38,40 +38,39 @@ function getSupabase() {
   return createClient(url, key, { auth: { persistSession: false } });
 }
 
+function availabilityUnavailable() {
+  return NextResponse.json(
+    {
+      error: "availability_unavailable",
+      campaign_id: FOUNDERS_CAMPAIGN_ID,
+      total_spots: FOUNDERS_TOTAL_SPOTS,
+      baseline: FOUNDERS_COUNTER_BASELINE_CLAIMED,
+      paid: null,
+      pending: null,
+      remaining: null,
+      deadline: FOUNDERS_SHIP_DATE,
+      campaign_start: FOUNDERS_CAMPAIGN_START,
+      degraded: true,
+    },
+    { status: 503, headers: { "cache-control": "no-store" } },
+  );
+}
+
 export async function GET() {
   const total = FOUNDERS_TOTAL_SPOTS;
   const supabase = getSupabase();
   if (!supabase) {
-    // No service role available, return total with zero claimed so the LP
-    // still renders. We log so prod misconfiguration surfaces immediately.
     console.error(
-      "[spots-remaining] SUPABASE_SERVICE_ROLE_KEY missing; returning fallback",
+      "[spots-remaining] SUPABASE_SERVICE_ROLE_KEY missing; availability unavailable",
     );
-    return NextResponse.json(
-      {
-        campaign_id: FOUNDERS_CAMPAIGN_ID,
-        total_spots: total,
-        baseline: FOUNDERS_COUNTER_BASELINE_CLAIMED,
-        paid: 0,
-        pending: 0,
-        remaining: Math.max(0, total - FOUNDERS_COUNTER_BASELINE_CLAIMED),
-        deadline: FOUNDERS_SHIP_DATE,
-        campaign_start: FOUNDERS_CAMPAIGN_START,
-        degraded: true,
-      },
-      {
-        headers: {
-          "cache-control": "public, max-age=10, s-maxage=30",
-        },
-      },
-    );
+    return availabilityUnavailable();
   }
 
   // 1) Paid Founders: active Reserve subscribers acquired at-or-after launch.
   const paidQuery = supabase
     .from("subscribers")
     .select("id", { count: "exact", head: true })
-    .eq("plan_type", "reserve_access")
+    .eq("plan_code", "reserve_access")
     .eq("status", "active")
     .gte("acquired_at", FOUNDERS_CAMPAIGN_START);
 
@@ -87,13 +86,25 @@ export async function GET() {
 
   const [paidRes, pendingRes] = await Promise.all([paidQuery, pendingQuery]);
 
-  if (paidRes.error)
-    console.error("[spots-remaining] paid count error", paidRes.error);
-  if (pendingRes.error)
-    console.error("[spots-remaining] pending count error", pendingRes.error);
+  if (
+    paidRes.error ||
+    pendingRes.error ||
+    paidRes.count === null ||
+    pendingRes.count === null ||
+    !Number.isSafeInteger(paidRes.count) ||
+    !Number.isSafeInteger(pendingRes.count) ||
+    paidRes.count < 0 ||
+    pendingRes.count < 0
+  ) {
+    console.error("[spots-remaining] availability count unavailable", {
+      paidStatus: paidRes.status,
+      pendingStatus: pendingRes.status,
+    });
+    return availabilityUnavailable();
+  }
 
-  const paid = paidRes.count ?? 0;
-  const pending = pendingRes.count ?? 0;
+  const paid = paidRes.count;
+  const pending = pendingRes.count;
   const baseline = FOUNDERS_COUNTER_BASELINE_CLAIMED;
   const remaining = Math.max(0, total - baseline - paid - pending);
 
