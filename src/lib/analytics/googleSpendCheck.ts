@@ -1,11 +1,21 @@
 import { reportDates } from "./commerceCandidate";
 import { authorizeGoogleSpend, readGoogleSpend, GOOGLE_ADS_VERSION, type GoogleSpendAuth } from "./googleSpendSource";
 import { sourceObject, sourceString } from "./shopifySource";
+import { normalizeSpendBase } from "./spend";
+import { deliveryMetrics } from "./reporting";
 
 export type GoogleCheckScope = {
   accountId: string; loginCustomerId: string | null; fromDate: string; throughDate: string;
   maxPages: number; maxRequests: number; deadlineSeconds: number; approvalRef: string; actorRef: string;
+  /** Explicitly include independent click/impression controls in this approved read. */
+  includeDeliveryMetrics?: boolean;
 };
+function count(value: unknown): bigint | null {
+  if (value === undefined) return null;
+  if (typeof value !== "string" || !/^(0|[1-9]\d{0,15})$/.test(value) ||
+      BigInt(value) > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error("google_check_control_count");
+  return BigInt(value);
+}
 /** Read-only sample comparison, not a registered spend job or coverage certificate.
  * A separate customer/day query controls the campaign sums. Missing days remain
  * missing, never synthesized as verified zero. No record details leave this check.
@@ -16,7 +26,8 @@ export async function checkGoogleSpend(input: {
 }) {
   const scope = input.scope, dates = reportDates(scope.fromDate, scope.throughDate);
   if (Object.keys(scope).some(k => !["accountId", "loginCustomerId", "fromDate", "throughDate",
-    "maxPages", "maxRequests", "deadlineSeconds", "approvalRef", "actorRef"].includes(k)) ||
+    "maxPages", "maxRequests", "deadlineSeconds", "approvalRef", "actorRef", "includeDeliveryMetrics"].includes(k)) ||
+      scope.includeDeliveryMetrics !== undefined && typeof scope.includeDeliveryMetrics !== "boolean" ||
       !/^\d{10}$/.test(scope.accountId) || scope.loginCustomerId !== null && !/^\d{10}$/.test(scope.loginCustomerId) ||
       !scope.approvalRef?.trim() || !scope.actorRef?.trim() || !input.developerToken?.trim() ||
       dates.length > 3 || !Number.isInteger(scope.maxPages) || scope.maxPages < 1 || scope.maxPages > 5 ||
@@ -59,28 +70,33 @@ export async function checkGoogleSpend(input: {
   }
   if (bases.some(base => base.sourceCurrency !== bases[0].sourceCurrency ||
       base.sourceTimezone !== bases[0].sourceTimezone)) throw new Error("google_check_changed_account");
+  const delivery = scope.includeDeliveryMetrics === true;
+  const controlFields = ["segments.date", "metrics.costMicros",
+    ...(delivery ? ["metrics.clicks", "metrics.impressions"] : [])];
   const response = await fetcher(
     `https://googleads.googleapis.com/${GOOGLE_ADS_VERSION}/customers/${scope.accountId}/googleAds:search`, {
       method: "POST", headers: { Authorization: `Bearer ${accessToken}`, "developer-token": input.developerToken,
         "Content-Type": "application/json", ...(scope.loginCustomerId ? { "login-customer-id": scope.loginCustomerId } : {}) },
-      body: JSON.stringify({ query: `SELECT segments.date, metrics.cost_micros FROM customer WHERE segments.date BETWEEN '${scope.fromDate}' AND '${scope.throughDate}' ORDER BY segments.date` }),
+      body: JSON.stringify({ query: `SELECT segments.date, metrics.cost_micros${delivery ? ", metrics.clicks, metrics.impressions" : ""} FROM customer WHERE segments.date BETWEEN '${scope.fromDate}' AND '${scope.throughDate}' ORDER BY segments.date` }),
     });
   if (!response.ok) throw new Error("google_check_control_http_failed");
   const control = sourceObject(await response.json());
   signal.throwIfAborted();
   if (control.error !== undefined || control.nextPageToken ||
       typeof control.fieldMask !== "string" ||
-      control.fieldMask.split(",").sort().join(",") !== "metrics.costMicros,segments.date" ||
+      control.fieldMask.split(",").sort().join(",") !== [...controlFields].sort().join(",") ||
       control.results !== undefined && !Array.isArray(control.results)) throw new Error("google_check_control_incomplete");
   const values = (control.results ?? []) as unknown[];
   if (values.length > dates.length) throw new Error("google_check_control_scope");
   const totals = new Map<string, string>();
+  const counts = new Map<string, { clicks: bigint | null; impressions: bigint | null }>();
   for (const value of values) {
     const row = sourceObject(value), date = sourceString(sourceObject(row.segments).date);
-    const amount = sourceString(sourceObject(row.metrics).costMicros);
+    const metrics = sourceObject(row.metrics), amount = sourceString(metrics.costMicros);
     if (!dates.includes(date) || totals.has(date) || !/^\d+$/.test(amount) || amount.length > 24)
       throw new Error("google_check_control_scope");
     totals.set(date, BigInt(amount).toString());
+    if (delivery) counts.set(date, { clicks: count(metrics.clicks), impressions: count(metrics.impressions) });
   }
   const rows = bases.map(base => {
     const campaignMicros = base.rows.reduce((sum, row) => sum + BigInt(row.costMicros), BigInt(0)).toString();
@@ -88,8 +104,36 @@ export async function checkGoogleSpend(input: {
     return { date: base.date, campaigns: base.rows.length, campaignMicros, controlMicros,
       matches: controlMicros !== null && campaignMicros === controlMicros };
   });
+  const deliveryRows = delivery ? bases.map((base, index) => {
+    const sum = (field: "clicks" | "impressions") => {
+      // Empty monetary evidence cannot certify a zero delivery count.
+      if (!base.rows.length) return null;
+      const values = base.rows.map(row => count(row[field]));
+      return values.some(value => value === null) ? null :
+        values.reduce<bigint>((total, value) => total + value!, BigInt(0));
+    };
+    const campaignClicks = sum("clicks"), campaignImpressions = sum("impressions");
+    const controlClicks = counts.get(base.date)?.clicks ?? null;
+    const controlImpressions = counts.get(base.date)?.impressions ?? null;
+    return { date: base.date, campaignClicks: campaignClicks?.toString() ?? null,
+      controlClicks: controlClicks?.toString() ?? null,
+      campaignImpressions: campaignImpressions?.toString() ?? null,
+      controlImpressions: controlImpressions?.toString() ?? null,
+      matches: rows[index].matches && campaignClicks !== null && campaignImpressions !== null &&
+        campaignClicks === controlClicks && campaignImpressions === controlImpressions };
+  }) : [];
+  const deliveryReady = deliveryRows.length === dates.length && deliveryRows.every(row => row.matches) &&
+    bases[0].sourceCurrency === "USD" && bases[0].sourceTimezone === "America/New_York";
   return { state: rows.every(row => row.matches) ? "sample_amounts_match" : "sample_amounts_unverified",
     accountId: scope.accountId, currency: bases[0].sourceCurrency, timezone: bases[0].sourceTimezone,
     capturedAt, requests, bytes, rows, certification: "unverified", databaseWrites: false,
-    independentCoverageCertified: false, approvalRef: scope.approvalRef };
+    independentCoverageCertified: false, approvalRef: scope.approvalRef,
+    ...(delivery ? { delivery: {
+      state: deliveryReady ? "sample_delivery_match" : "sample_delivery_unverified",
+      clickDefinition: "google_ads.metrics.clicks", rows: deliveryRows,
+      metrics: deliveryMetrics(deliveryReady
+        ? bases.flatMap(base => normalizeSpendBase(base, "google-check-delivery")) : [], deliveryReady),
+      metricAcceptance: false,
+    } } : {}),
+  };
 }
