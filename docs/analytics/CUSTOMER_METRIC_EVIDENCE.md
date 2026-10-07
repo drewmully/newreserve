@@ -70,6 +70,9 @@ The first order is determined over complete history, then assigned to the
 requested acquisition date. Repeat counts distinct customers with an
 additional eligible paid order inside `[first_paid_at, first_paid_at + H)`.
 The entire cohort must be mature through H plus the approved grace.
+The calculation preserves all six fractional timestamp digits. Neither a
+purchase or refund one microsecond before H nor coverage one microsecond
+short of H plus grace is rounded to the boundary.
 
 Revenue LTV includes each selected order's classified original merchandise
 components once, even if they predate payment. **An original component at or
