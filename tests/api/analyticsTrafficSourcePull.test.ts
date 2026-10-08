@@ -42,9 +42,13 @@ it("uses the manual page_view event, fixed six predicates and half-open UTC boun
   expect(query).not.toMatch(/SELECT.*email|SELECT.*distinct_id/);
 });
 it("makes one bounded request and stores aggregates with hashes, not private filters or IDs", async () => {
-  const request = vi.fn(async () => response()), rows = await read(request);
+  const request = vi.fn<typeof fetch>(async () => response()), rows = await read(request);
   expect(request).toHaveBeenCalledTimes(1);
   expect(request.mock.calls[0]?.length).toBe(2);
+  expect(JSON.parse(request.mock.calls[0][1]?.body as string)).toEqual({
+    query: { kind: "HogQLQuery", query: trafficPosthogQuery("2026-10-07", "2026-10-08", env()) },
+    name: "traffic-filtered-utc-v1", refresh: "force_blocking",
+  });
   expect(rows.map(r => [r.metric, r.value])).toEqual([["visitors", 12], ["accounts_created", 0], ["purchases", 2]]);
   const json = JSON.stringify(rows);
   expect(json).toContain("recorded_purchase_events_not_paid_orders");
@@ -53,6 +57,24 @@ it("makes one bounded request and stores aggregates with hashes, not private fil
 it("fills zero only for a complete empty provider response", async () => {
   const rows = await read(async () => response([]));
   expect(rows).toHaveLength(3); expect(rows.every(r => r.value === 0)).toBe(true);
+});
+it("admits nullable pagination metadata only with a valid uncached complete-shaped result", async () => {
+  const rows = await read(async () => Response.json({ columns, results: [["2026-10-07", 12, 0, 2]],
+    is_cached: false, hasMore: null, query_status: null }));
+  expect(rows.map(r => r.value)).toEqual([12, 0, 2]);
+});
+it.each([true, 0, "false", {}, []])("still refuses true or invalid hasMore metadata: %j", async hasMore => {
+  const error = await read(async () => Response.json({ columns, results: [], is_cached: false, hasMore })).catch(e => e);
+  expect(trafficPosthogDiagnostic(error).reason).toBe("pagination");
+});
+it.each([
+  [{ columns, results: [], is_cached: true, query_status: null }, "cached_response"],
+  [{ columns, results: [], is_cached: false, query_status: { complete: false } }, "query_incomplete"],
+  [{ columns: ["wrong"], results: [], is_cached: false, query_status: null }, "columns"],
+  [{ columns, results: [["2026-10-08", 1, 0, 0]], is_cached: false, query_status: null }, "row_shape"],
+])("nullable hasMore does not relax cache, completion, columns or date checks: %j", async (body, reason) => {
+  const error = await read(async () => Response.json({ ...body, hasMore: null })).catch(e => e);
+  expect(trafficPosthogDiagnostic(error).reason).toBe(reason);
 });
 it.each([
   { columns, results: [], error: "private error" }, { columns, results: [], is_cached: true },
