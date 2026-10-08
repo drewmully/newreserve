@@ -1,6 +1,6 @@
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
-import { pullTrafficPosthog, trafficPosthogQuery, trafficWindow } from "@/lib/analytics/trafficSourcePull";
+import { pullTrafficPosthog, trafficPosthogDiagnostic, trafficPosthogQuery, trafficWindow } from "@/lib/analytics/trafficSourcePull";
 import { GET } from "@/app/api/admin/cron/traffic-pull/route";
 
 const port = vi.hoisted(() => ({ writes: [] as unknown[], meta: {} as Record<string, unknown>, status: "", rows: 0 }));
@@ -99,6 +99,74 @@ it("records provider failure as error/503, not an ok empty source", async () => 
   const result = await GET(request());
   expect(result.status).toBe(503); expect(port.status).toBe("error"); expect(port.writes).toEqual([]);
   expect(port.meta.posthog_error).toBe("source_unavailable"); expect(await result.text()).not.toContain("sensitive");
+});
+it.each([
+  [400, "validation_error", "invalid_input"],
+  [403, "permission_denied", "permission_denied"],
+  [429, "throttled", "throttled"],
+] as const)("propagates only known provider classification for HTTP %i to job and response", async (status, type, code) => {
+  routeEnv(); const sensitive = "synthetic-private-detail-one.invalid-synthetic-read-secret";
+  const fetcher = vi.fn(async () => Response.json({ type, code, detail: sensitive,
+    error: sensitive, query: sensitive, headers: { authorization: sensitive } }, { status }));
+  vi.stubGlobal("fetch", fetcher);
+  const result = await GET(request()), body = await result.json();
+  const diagnostic = { reason: "http_error", httpStatus: status, providerType: type, providerCode: code };
+  expect(result.status).toBe(503); expect(body.posthog_diagnostic).toEqual(diagnostic);
+  expect(port.meta.posthog_diagnostic).toEqual(diagnostic); expect(port.status).toBe("error");
+  expect(port.writes).toEqual([]); expect(port.rows).toBe(0); expect(fetcher).toHaveBeenCalledTimes(1);
+  expect(JSON.stringify([body, port.meta])).not.toMatch(/synthetic-private|one\.invalid|synthetic-read-secret|authorization|query/);
+});
+it("does not reflect unknown provider type/code, exception messages or forged diagnostics", async () => {
+  const error = await read(async () => Response.json({ type: "private-type", code: "private-code", detail: "private-detail" },
+    { status: 400 })).catch(e => e);
+  expect(trafficPosthogDiagnostic(error)).toEqual({ reason: "http_error", httpStatus: 400,
+    providerType: "other", providerCode: "other" });
+  const network = await read(async () => { throw Object.assign(new Error("private-network"),
+    { reason: "private-reason", status: 403, providerCode: "private-code" }); }).catch(e => e);
+  expect(trafficPosthogDiagnostic(network)).toEqual({ reason: "transport", httpStatus: null,
+    providerType: null, providerCode: null });
+  expect(trafficPosthogDiagnostic(Object.assign(new Error("private"), { reason: "http_error", httpStatus: 400 })))
+    .toEqual({ reason: "unclassified", httpStatus: null, providerType: null, providerCode: null });
+});
+it.each([
+  [{ columns, results: [], is_cached: true }, "cached_response"],
+  [{ columns, results: [], hasMore: true }, "pagination"],
+  [{ columns, results: [], query_status: { complete: false } }, "query_incomplete"],
+  [{ columns, results: [], error: "private" }, "provider_error"],
+  [{ columns, results: [], query_status: { complete: true, error: "private" } }, "provider_error"],
+  [{ columns: ["private"], results: [] }, "columns"],
+  [{ columns, results: "private" }, "results_shape"],
+  [{ columns, results: [["2026-10-07", "private", 0, 0]] }, "row_shape"],
+])("distinguishes refused 200 response without reflecting payload: %j", async (body, reason) => {
+  const error = await read(async () => Response.json(body)).catch(e => e);
+  expect(trafficPosthogDiagnostic(error)).toEqual({ reason, httpStatus: 200, providerType: null, providerCode: null });
+});
+it("keeps malformed and oversized error bodies bounded and retains numeric status", async () => {
+  for (const [status, text, reason] of [[400, "private non-json", "http_error"],
+    [200, "private non-json", "invalid_json"], [403, "x".repeat(65537), "response_bytes"]] as const) {
+    const error = await read(async () => new Response(text, { status })).catch(e => e);
+    expect(trafficPosthogDiagnostic(error)).toEqual({ reason, httpStatus: status, providerType: null, providerCode: null });
+  }
+});
+it("reports configuration failure without dispatching and changed key after a response", async () => {
+  const e = env(); e.LEAN_POSTHOG_TEST_ACCOUNT_FILTERS = "invalid";
+  const fetcher = vi.fn(async () => response());
+  const error = await pullTrafficPosthog("2026-10-07", "2026-10-08", e, fetcher, () => now).catch(e => e);
+  expect(trafficPosthogDiagnostic(error).reason).toBe("configuration"); expect(fetcher).not.toHaveBeenCalled();
+  const changed = env();
+  const drift = await pullTrafficPosthog("2026-10-07", "2026-10-08", changed, async () => {
+    changed.LEAN_POSTHOG_QUERY_READ_KEY = "private-changed-key"; return response();
+  }, () => now).catch(e => e);
+  expect(trafficPosthogDiagnostic(drift)).toEqual({ reason: "configuration_changed", httpStatus: 200,
+    providerType: null, providerCode: null });
+});
+it("keeps the ten-second bound on a stalled HTTP error body, no retry", async () => {
+  vi.useFakeTimers(); const fetcher = vi.fn(async () => new Response(new ReadableStream({ start() {} }), { status: 403 }));
+  const pending = read(fetcher).catch(e => e);
+  await vi.advanceTimersByTimeAsync(10000);
+  expect(trafficPosthogDiagnostic(await pending)).toEqual({ reason: "timeout", httpStatus: 403,
+    providerType: null, providerCode: null });
+  expect(fetcher).toHaveBeenCalledTimes(1);
 });
 it("preserves valid PostHog ingestion while reporting a GA4 failure", async () => {
   routeEnv(); process.env.GA_PROPERTY_ID = "synthetic"; process.env.GOOGLE_SERVICE_ACCOUNT_JSON_BASE64 = "invalid";
