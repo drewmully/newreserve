@@ -15,8 +15,8 @@ async function context(): Promise<{ nativeSessionId: string; expiresAt: string }
   return nativeSourceSessionId.test(nativeSessionId) ? { nativeSessionId, expiresAt: state.expiresAt } : null;
 }
 const bound = new Map<string, Promise<boolean>>();
-/** Called by real navigation only, never by the Allow handler. No entry clock is sent. */
-export async function recordSourceSessionNavigation(): Promise<void> {
+const pendingNavigations = new Set<Promise<void>>();
+async function bindNavigation(): Promise<void> {
   try {
     const c = await context(); if (!c) return;
     const key = `${c.nativeSessionId}:${c.expiresAt}`;
@@ -30,13 +30,34 @@ export async function recordSourceSessionNavigation(): Promise<void> {
     if (!(await pending)) bound.delete(key);
   } catch { /* Auxiliary collection never blocks navigation. */ }
 }
+/** Called by real navigation only, never by the Allow handler. No entry clock is sent. */
+export function recordSourceSessionNavigation(): Promise<void> {
+  const pending = bindNavigation();
+  pendingNavigations.add(pending);
+  void pending.finally(() => { pendingNavigations.delete(pending); });
+  return pending;
+}
+async function finishPendingNavigation(pending: Promise<void>, milliseconds: number): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([pending.then(() => true), new Promise<boolean>(resolve => {
+      timer = setTimeout(() => resolve(false), milliseconds);
+    })]);
+  } finally { clearTimeout(timer); }
+}
 export async function recordSourceSessionCart(cartId: unknown): Promise<void> {
   try {
     if (typeof cartId !== "string") return;
     const c = await context(); if (!c) return;
+    // Do not race a real navigation's in-flight status/bind. Waiting shares the
+    // existing two-second cart budget; it cannot hold checkout for six seconds.
+    const deadline = Date.now() + 2000, pending = [...pendingNavigations];
+    if (pending.length && !(await finishPendingNavigation(Promise.all(pending).then(() => {}), 2000))) return;
+    const remaining = Math.floor(deadline - Date.now());
+    if (remaining < 1 || Date.parse(c.expiresAt) <= Date.now() || posthog.get_session_id() !== c.nativeSessionId) return;
     // No implicit native binding on checkout; a real navigation must precede it.
     await fetch("/api/analytics/source-session/cart", { method: "POST", credentials: "same-origin",
       headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cartId, nativeSessionId: c.nativeSessionId }),
-      signal: AbortSignal.timeout(2000) });
+      signal: AbortSignal.timeout(remaining) });
   } catch { /* Cart/redirect remains independent from optional reporting. */ }
 }

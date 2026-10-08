@@ -106,7 +106,7 @@ export async function readSourceSessionNativeWindow(date: string, expectedKeySha
   const response = await r.request("https://us.posthog.com/api/projects/353503/query/", {
     method: "POST", redirect: "error", signal: AbortSignal.timeout(remaining),
     headers: { Authorization: `Bearer ${r.env.LEAN_POSTHOG_QUERY_READ_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ query: { kind: "HogQLQuery", query }, name: "lean-source-entry-day-v1" }) })
+    body: JSON.stringify({ query: { kind: "HogQLQuery", query }, name: "lean-source-entry-day-v1", refresh: "force_blocking" }) })
     .catch(()=>{ throw new Error("source_report_native_transport"); });
   if (!response.ok || !response.body) throw new Error("source_report_native_response");
   const reader = response.body.getReader(), parts: Uint8Array[] = []; let bytes = 0;
@@ -123,7 +123,8 @@ export async function readSourceSessionNativeWindow(date: string, expectedKeySha
   const raw = Buffer.concat(parts);
   let result;
   try { result = JSON.parse(raw.toString("utf8")); } catch { throw new Error("source_report_native_json"); }
-  if (!result || result.error || result.is_cached === true || result.hasMore !== undefined && result.hasMore !== false || result.query_status &&
+  if (!result || result.error || result.is_cached === true ||
+    result.hasMore !== undefined && result.hasMore !== null && result.hasMore !== false || result.query_status &&
     (result.query_status.complete !== true || result.query_status.error) ||
     JSON.stringify(result.columns) !== JSON.stringify(columns) || !Array.isArray(result.results) ||
     result.results.length > SOURCE_SESSION_REPORT_PLAN.maxNativeRows || r.now()-started >= remaining)
