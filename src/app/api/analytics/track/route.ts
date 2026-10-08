@@ -53,8 +53,6 @@ const VALID_EVENTS = new Set([
   "proshop_product_viewed",
   "proshop_brand_filter_changed",
   "proshop_quick_add_clicked",
-  // Existing outfit-builder CTA; previously rejected before Klaviyo mapping.
-  "shop_outfit_reserve_clicked",
   // Post-Loop-checkout hand-off CTA — measures whether new members
   // actually take the bridge from /home (or the first-box drawer) into
   // the Pro Shop. Critical for activation.
@@ -262,7 +260,11 @@ export async function POST(request: NextRequest) {
   }
 
   const eventName = sanitizeString(body.event_name, 100);
-  if (!eventName || !VALID_EVENTS.has(eventName)) {
+  // This existing CTA is NOT authorized for legacy/ad-platform dispatch.
+  // Accept it only in the separately enabled Klaviyo lifecycle lane.
+  const klaviyoOnly = eventName === "shop_outfit_reserve_clicked"
+    && isLifecycleEnabled("site_events");
+  if (!eventName || (!VALID_EVENTS.has(eventName) && !klaviyoOnly)) {
     return NextResponse.json(
       {
         error: `Invalid or missing event_name. Valid values: ${[...VALID_EVENTS].join(", ")}`,
@@ -329,10 +331,29 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const properties = sanitizeProperties(body.properties);
+  const eventId = randomUUID();
+
+  if (klaviyoOnly) {
+    // Keep the new lane out of captureJourney, legacy analytics and AI sales.
+    // Respect explicit privacy signals before resolving a marketing identity.
+    if (request.headers.get("sec-gpc") !== "1" && request.headers.get("dnt") !== "1") {
+      const mapped = mapSiteEvent(eventName, klaviyoFields(properties, body.properties));
+      const identity = resolveKlaviyoIdentity({
+        verifiedEmail,
+        cookieHeader: request.headers.get("cookie"),
+        exchangeId: body.klaviyo_kx,
+      });
+      if (mapped && identity) {
+        after(() => sendSiteEventToKlaviyo(identity, mapped).then(() => undefined));
+      }
+    }
+    return NextResponse.json({ ok: true, event_id: eventId });
+  }
+
   const segments = uid
     ? await resolveServerSegments(uid)
     : sanitizeSegments(body.segments);
-  const properties = sanitizeProperties(body.properties);
   const event = {
     event_name: eventName,
     user_id: uid,
@@ -346,8 +367,6 @@ export async function POST(request: NextRequest) {
     properties,
     timestamp: Math.floor(Date.now() / 1000),
   };
-
-  const eventId = randomUUID();
 
   await Promise.allSettled([
     captureJourney(request, eventName, properties.event_id, uid, undefined, {

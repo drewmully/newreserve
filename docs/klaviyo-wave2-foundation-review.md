@@ -9,7 +9,7 @@ Status: review branch only. No production merge, database migration, manual cron
 - Completed orders remain a descriptive count. They are not certified completed billing cycles; the user's two-cycle VIP rule is not activated from that count.
 - Existing `mully_wave1_*` launch holds are untouched. New metadata describes verification; it does not release drafts.
 - Subscription webhook writes `raw_payload`, matching the live Supabase table, and rejects invalid JSON objects. HMAC verification and duplicate handling remain in place.
-- The existing outfit-builder Reserve CTA is added to the analytics allowlist. It still needs known visitor identity and the existing site-event feature flag before Klaviyo receives anything.
+- The existing outfit-builder Reserve CTA has a separate Klaviyo-only lane, enabled only by the existing site-event flag and private key. It is not added to the legacy/ad-platform allowlist. Known identity, authentication, bot filtering, rate limiting and explicit GPC/DNT exclusions apply; legacy dispatch, journey capture and AI sales are skipped.
 - A pure order classifier recognizes known membership variants/SKUs, selling plans, mixed baskets and renewal-source orders. It rejects missing/test/unpaid/refunded/ambiguous snapshots.
 - A pure delivery matcher uses order ID, fulfillment ID, latest fulfillment state, line IDs and exact shipping quantities. It never joins by email or treats fulfillment creation as delivery.
 - A new authorized read-only `/api/admin/cron/klaviyo-order-audit` endpoint reports aggregate seven-day coverage and candidate classifications. It has no schedule or dispatch path and never returns customer identity.
@@ -27,7 +27,7 @@ The inbound backbone had 214 paid-order events, 81 cancellations and 1 pause in 
 1. Review code and tests. Review the optional schema-alignment migration only for older environments. Production already has `raw_payload`; no production DDL is needed for the observed mismatch.
 2. Merge/deploy only after owner approval. Existing enabled membership/site-event flags mean those paths change on deployment; no new flag flip is needed.
 3. Confirm the next normal member sync accepts null clearing and the new verification properties in Klaviyo. Inspect small sanitized samples and the completed bulk-job receipt. Do not use a manual secret-backed cron run without approval.
-4. After approval, use an internal Reserve-intent fixture or a genuine identified-site test. Confirm the exact event and payload arrive; do not confuse a synthetic fixture with production coverage.
+4. Use the website's private-key API event source for Reserve verification, not the OAuth connector's same-name metric. The approved backfill fixture was recorded on October 8 with flow triggering disabled, but the connector created metric `VhyZP6` under its own integration. That metric must not trigger the website flow. Correct-source credential setup and a separately confirmed correction remain blocked; a synthetic fixture still does not establish production coverage.
 5. Run the read-only order audit using normal authorized operations. This endpoint cannot make a flow eligible.
 6. Before lifecycle activation, implement/verify the remaining gates below and rewire order-dependent flows to order-scoped eligibility events. Do not mass-set profile holds true.
 
@@ -48,8 +48,11 @@ Revert this PR to restore previous code, without changing draft email status or 
 
 ## Local validation
 
-- 92 targeted tests pass across membership/identity, order matching, read-only audit authorization, subscription webhooks, analytics route acceptance, signup sync and restock hooks.
+- 106 targeted tests pass across membership/identity, order matching, read-only audit authorization, subscription webhooks, analytics route acceptance, signup sync, restock hooks and the existing Reserve-producer analytics contract.
+- The initial CI run caught an overly broad allowlist change. The correction isolates Klaviyo and keeps the original withheld-event contract unchanged. Added regressions cover disabled flag/missing key, absent identity, privacy signals, authentication, bots, rate limiting and no non-Klaviyo dispatch. Full hosted CI must still pass on the corrected commit.
 - TypeScript `tsc --noEmit --incremental false` passes.
 - ESLint passes on the changed lifecycle modules, webhook, admin routes and dedicated tests.
 - `git diff --check` passes.
 - Tests use mocked transports and synthetic fixtures. They do not establish real webhook coverage, a live native contract, a real recovered cart or successful production profile-property clearing.
+
+OAuth-generated events and private-key events with the same name belong to different metrics, as documented in [Klaviyo's branded-events guide](https://developers.klaviyo.com/en/docs/understanding_branded_events). Do not substitute one for the other.
