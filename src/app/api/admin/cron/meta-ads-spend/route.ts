@@ -33,6 +33,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseService, withJobRun } from "@/app/api/_lib/supabaseService";
 import { postAdSpendToPostHog } from "@/app/api/admin/cron/_lib/postAdSpendToPostHog";
+import { runMetaSourceIngestion } from "@/lib/analytics/metaSourceIngestion";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -153,6 +154,23 @@ function extractPurchaseRevenue(
 }
 
 export async function GET(req: NextRequest) {
+  if (new URL(req.url).searchParams.has("source_only")) {
+    const result = await runMetaSourceIngestion(req, {
+      env: process.env, now: Date.now, request: fetch, runJob: withJobRun,
+      readJob: async id => {
+        const { data, error } = await getSupabaseService().from("job_runs")
+          .select("id,job_name,status,started_at").eq("id", id).single();
+        if (error || !data) throw new Error("meta_source_job_read");
+        return data;
+      },
+      register: async args => {
+        const { data, error } = await getSupabaseService().rpc("lean_meta_source_register", args);
+        if (error) throw new Error("meta_source_registration");
+        return data;
+      },
+    });
+    return NextResponse.json(result.body, { status: result.status });
+  }
   if (!isAuthorized(req)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
