@@ -98,7 +98,7 @@ export async function pullTrafficPosthog(from: string, until: string, env: NodeJ
       const response = await request("https://us.posthog.com/api/projects/353503/query/", {
         method: "POST", redirect: "error", signal: controller.signal,
         headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ query: { kind: "HogQLQuery", query }, name: "traffic-filtered-utc-v1" }),
+        body: JSON.stringify({ query: { kind: "HogQLQuery", query }, name: "traffic-filtered-utc-v1", refresh: "force_blocking" }),
       });
       httpStatus = response.status;
       if (!response.body) throw failure(response.ok ? "body_missing" : "http_error", httpStatus);
@@ -134,7 +134,7 @@ export async function pullTrafficPosthog(from: string, until: string, env: NodeJ
       throw failure("provider_error", httpStatus, safe.type, safe.code);
     }
     if (parsed.is_cached === true) throw failure("cached_response", httpStatus);
-    if (parsed.hasMore !== undefined && parsed.hasMore !== false) throw failure("pagination", httpStatus);
+    if (parsed.hasMore !== undefined && parsed.hasMore !== null && parsed.hasMore !== false) throw failure("pagination", httpStatus);
     if (parsed.query_status && parsed.query_status.complete !== true) throw failure("query_incomplete", httpStatus);
     if (JSON.stringify(parsed.columns) !== JSON.stringify(columns)) throw failure("columns", httpStatus);
     if (!Array.isArray(parsed.results) || parsed.results.length > days.length) throw failure("results_shape", httpStatus);
