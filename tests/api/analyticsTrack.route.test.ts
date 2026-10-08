@@ -290,5 +290,18 @@ describe("POST /api/analytics/track", () => {
       await post({ event_name: "page_view", klaviyo_kx: "abcDEF123_kx" });
       expect(sendSiteEventMock).not.toHaveBeenCalled();
     });
+
+    it("accepts the existing outfit-builder CTA and preserves its product slugs", async () => {
+      const res = await post({
+        event_name: "shop_outfit_reserve_clicked", klaviyo_kx: "abcDEF123_kx",
+        properties: { source: "shop_guided_outfit", products: ["one-polo", "two-shorts"] },
+      });
+      expect(res.status).toBe(200);
+      expect(sendSiteEventMock).toHaveBeenCalledTimes(1);
+      expect(sendSiteEventMock.mock.calls[0][1]).toMatchObject({
+        metric: "Mully Reserve Intent",
+        properties: { IntentSource: "shop_outfit_reserve_clicked", Products: ["one-polo", "two-shorts"] },
+      });
+    });
   });
 });

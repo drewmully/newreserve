@@ -53,6 +53,8 @@ const VALID_EVENTS = new Set([
   "proshop_product_viewed",
   "proshop_brand_filter_changed",
   "proshop_quick_add_clicked",
+  // Existing outfit-builder CTA; previously rejected before Klaviyo mapping.
+  "shop_outfit_reserve_clicked",
   // Post-Loop-checkout hand-off CTA — measures whether new members
   // actually take the bridge from /home (or the first-box drawer) into
   // the Pro Shop. Critical for activation.

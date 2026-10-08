@@ -165,10 +165,10 @@ describe("sendSiteEventToKlaviyo", () => {
 
 describe("buildMemberProfiles", () => {
   const loop = [
-    { email: "A@x.com", status: "inactive", sku: "RES-MEM", completed_orders: 3, next_billing_at: null, last_payment_status: "SUCCESS", last_loop_order_at: "2026-01-01T00:00:00Z" },
-    { email: "a@x.com", status: "active", sku: "RES-MEM", completed_orders: 2, next_billing_at: "2026-11-01T00:00:00Z", last_payment_status: "SUCCESS", last_loop_order_at: "2026-08-01T00:00:00Z" },
-    { email: "b@x.com", status: "paused", sku: "RES-ACC", completed_orders: 5, next_billing_at: "2026-12-01T00:00:00Z", last_payment_status: null, last_loop_order_at: null },
-    { email: "c@x.com", status: "inactive", sku: "BCK-9", completed_orders: 1, next_billing_at: null, last_payment_status: "FAILED", last_loop_order_at: null },
+    { loop_subscription_id: "1", synced_at: new Date(NOW).toISOString(), email: "A@x.com", status: "inactive", sku: "RES-MEM", completed_orders: 3, next_billing_at: null, last_payment_status: "SUCCESS", last_loop_order_at: "2026-01-01T00:00:00Z" },
+    { loop_subscription_id: "2", synced_at: new Date(NOW).toISOString(), email: "a@x.com", status: "active", sku: "RES-MEM", completed_orders: 2, next_billing_at: "2026-11-01T00:00:00Z", last_payment_status: "SUCCESS", last_loop_order_at: "2026-08-01T00:00:00Z" },
+    { loop_subscription_id: "3", synced_at: new Date(NOW).toISOString(), email: "b@x.com", status: "paused", sku: "RES-ACC", completed_orders: 5, next_billing_at: "2026-12-01T00:00:00Z", last_payment_status: null, last_loop_order_at: null },
+    { loop_subscription_id: "4", synced_at: new Date(NOW).toISOString(), email: "c@x.com", status: "inactive", sku: "BCK-9", completed_orders: 1, next_billing_at: null, last_payment_status: "FAILED", last_loop_order_at: null },
   ];
   const subs = [
     { email: "a@x.com", status: "active", acquired_at: "2025-03-01T00:00:00Z", churned_at: null, plan_code: "reserve_member", updated_at: "2026-10-07T00:00:00Z" },
@@ -184,17 +184,57 @@ describe("buildMemberProfiles", () => {
       mully_member_since: "2025-03-01T00:00:00.000Z", mully_member_next_billing_at: "2026-11-01T00:00:00.000Z",
       mully_member_last_order_at: "2026-08-01T00:00:00.000Z",
     });
-    expect(a.properties.mully_member_cancelled_at).toBeUndefined();
+    expect(a.properties.mully_member_cancelled_at).toBeNull();
+    expect(a.properties.mully_member_status_verified).toBe(true);
     const c = out.find((p) => p.email === "c@x.com")!;
     expect(c.properties).toMatchObject({ mully_member_status: "cancelled", mully_member_cancelled_at: "2026-09-30T00:00:00.000Z" });
-    expect(c.properties.mully_member_next_billing_at).toBeUndefined();
+    expect(c.properties.mully_member_next_billing_at).toBeNull();
+    expect(c.properties.mully_member_status_verified).toBe(false);
     expect(countByStatus(out)).toEqual({ active: 1, paused: 1, cancelled: 1 });
   });
 
   it("adds historical cancellations only when asked", () => {
     expect(buildMemberProfiles(loop, subs).some((p) => p.email === "old@x.com")).toBe(false);
     const full = buildMemberProfiles(loop, subs, { cancelledHistory: () => true });
-    expect(full.find((p) => p.email === "old@x.com")!.properties).toMatchObject({ mully_member_status: "cancelled" });
+    expect(full.find((p) => p.email === "old@x.com")!.properties).toMatchObject({ mully_member_status: "unknown", mully_member_status_verified: false });
+  });
+
+  it("deduplicates contracts and keeps source freshness distinct from push time", () => {
+    const rows = [loop[1], { ...loop[1], completed_orders: 99, synced_at: "2026-01-01T00:00:00Z" }];
+    const [p] = buildMemberProfiles(rows, [], { now: new Date(NOW) });
+    expect(p.properties.mully_member_completed_orders).toBe(2);
+    expect(p.properties.mully_member_billing_cycles_verified).toBe(false);
+    const [stale] = buildMemberProfiles([rows[1]], [], { now: new Date(NOW) });
+    expect(stale.properties).toMatchObject({
+      mully_member_status: "unknown", mully_member_status_verified: false,
+      mully_member_next_billing_at: null, mully_member_source_fresh: false,
+      mully_member_source_synced_at: "2026-01-01T00:00:00.000Z",
+      mully_member_synced_at: new Date(NOW).toISOString(),
+    });
+  });
+
+  it.each([null, "pending", "past_due", "nonsense"])("does not turn an unknown status into cancellation: %s", status => {
+    const [p] = buildMemberProfiles([{ ...loop[1], status }], [], { now: new Date(NOW) });
+    expect(p.properties.mully_member_status).toBe("unknown");
+    expect(p.properties.mully_member_status_verified).toBe(false);
+  });
+
+  it("fails closed on contract/email conflicts, missing IDs and future timestamps", () => {
+    const result = buildMemberProfiles([loop[1], { ...loop[1], email: "other@x.com" }], [], { now: new Date(NOW) });
+    expect(result).toHaveLength(2);
+    for (const p of result) expect(p.properties).toMatchObject({
+      mully_member_status: "unknown", mully_member_status_verified: false,
+      mully_member_verification_reason: "contract_identity_conflict",
+    });
+    for (const change of [{ loop_subscription_id: null }, { synced_at: "2028-01-01T00:00:00Z" }]) {
+      const [p] = buildMemberProfiles([{ ...loop[1], ...change }], [], { now: new Date(NOW) });
+      expect(p.properties.mully_member_status_verified).toBe(false);
+    }
+  });
+
+  it("never writes any Wave 1 launch-hold property or consent", () => {
+    const profiles = buildMemberProfiles(loop, subs, { now: new Date(NOW), cancelledHistory: () => true });
+    for (const p of profiles) expect(Object.keys(p.properties).every(k => k.startsWith("mully_member_"))).toBe(true);
   });
 });
 

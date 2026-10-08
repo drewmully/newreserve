@@ -26,8 +26,8 @@ import {
 
 /**
  * Reserve (membership) intent. `checkout_clicked` counts only for plan
- * checkouts, never the shop cart. `shop_outfit_reserve_clicked` is listed for when the track
- * route starts accepting it; today that event is deliberately withheld there.
+ * checkouts, never the shop cart. `shop_outfit_reserve_clicked` is accepted by
+ * the track route and is emitted by the existing outfit-builder CTA.
  */
 export const RESERVE_INTENT_EVENTS = new Set([
   "checkout_clicked",
