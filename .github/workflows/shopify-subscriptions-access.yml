@@ -1,0 +1,29 @@
+name: Shopify subscription access diagnostic
+
+on:
+  pull_request:
+    paths:
+      - "scripts/diagnose-shopify-subscriptions*"
+      - ".github/workflows/shopify-subscriptions-access.yml"
+      - "package.json"
+  push:
+    branches: [main]
+    paths:
+      - "scripts/diagnose-shopify-subscriptions*"
+      - ".github/workflows/shopify-subscriptions-access.yml"
+      - "package.json"
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostic-safety:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node --test scripts/diagnose-shopify-subscriptions.test.cjs
+      - name: Check uncredentialed default is a no-op
+        run: node scripts/diagnose-shopify-subscriptions.cjs
