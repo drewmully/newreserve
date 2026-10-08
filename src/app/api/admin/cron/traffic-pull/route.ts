@@ -26,7 +26,8 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseService, withJobRun } from "@/app/api/_lib/supabaseService";
-import { pullTrafficPosthog, trafficWindow } from "@/lib/analytics/trafficSourcePull";
+import { pullTrafficPosthog, trafficPosthogDiagnostic, trafficWindow } from "@/lib/analytics/trafficSourcePull";
+import type { TrafficPosthogDiagnostic } from "@/lib/analytics/trafficSourcePull";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -145,6 +146,7 @@ export async function GET(req: NextRequest) {
     window = trafficWindow(Date.now(), url.searchParams.get("days"));
   } catch { return NextResponse.json({ error: "invalid_window" }, { status: 400 }); }
 
+  let posthogDiagnostic: TrafficPosthogDiagnostic | undefined;
   const result = await withJobRun("traffic-pull", async ({ setMeta, bumpRows }) => {
     const meta: Record<string, unknown> = { range: [window.from, window.through], timezone: "UTC",
       posthog_definition: "traffic-filtered-utc-v1", purchases_basis: "recorded_events_not_paid_orders" };
@@ -157,8 +159,10 @@ export async function GET(req: NextRequest) {
       sourceFailed = true; log("ga4_error", "source_unavailable");
       return [] as FlatRow[];
     });
-    const ph = await pullTrafficPosthog(window.from, window.until, process.env).catch(() => {
+    const ph = await pullTrafficPosthog(window.from, window.until, process.env).catch((error: unknown) => {
       sourceFailed = true; log("posthog_error", "source_unavailable");
+      posthogDiagnostic = trafficPosthogDiagnostic(error);
+      log("posthog_diagnostic", posthogDiagnostic);
       return [] as FlatRow[];
     });
 
@@ -179,5 +183,6 @@ export async function GET(req: NextRequest) {
     return { ga4_rows: ga4.length, posthog_rows: ph.length };
   });
 
-  return NextResponse.json(result, { status: result.ok ? 200 : 503, headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json({ ...result, ...(posthogDiagnostic ? { posthog_diagnostic: posthogDiagnostic } : {}) },
+    { status: result.ok ? 200 : 503, headers: { "Cache-Control": "no-store" } });
 }
