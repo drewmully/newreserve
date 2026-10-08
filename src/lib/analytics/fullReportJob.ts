@@ -14,6 +14,7 @@ import { prepareFreshGoogleSpendBuild, guardFreshGoogleSpendReports,
 import { prepareMultiProviderSpendBuild, type MultiProviderSpendInput } from "./multiProviderSpendInput";
 import { prepareGoogleDeliveryReport } from "./googleDeliveryReport";
 import type { NativeSpendWindowInput, NativeSpendWindowBinding } from "./nativeSpendWindowInput";
+import type { SourceSessionReportBinding, SourceSessionReportInputV1 } from "./sourceSessionProducer";
 
 /** Evidence can narrow observed coverage; it cannot extend a source read.
  * This is deliberately conservative at the NY calendar-day edges.
@@ -65,6 +66,19 @@ export async function runFullReportJob(options: {
     Date.parse(policy.asOf) > Date.parse(options.clock?.() ?? new Date().toISOString()))
     return { state: "not_due" };
   let evidence = sourceObject(input.evidence) as FullBuildEvidence;
+  const sourceSessionReport = Object.hasOwn(input, "sourceSessionReport") || Object.hasOwn(input, "sourceSessionReportBinding");
+  if (sourceSessionReport) {
+    if (Object.hasOwn(policy, "sourceSessionReport") || Object.hasOwn(evidence, "sourceSessionReport"))
+      throw new Error("source_session_report_duplicate_input");
+    const packet = sourceObject(input.sourceSessionReport) as SourceSessionReportInputV1;
+    const binding = sourceObject(input.sourceSessionReportBinding) as SourceSessionReportBinding;
+    if (binding.projectRef !== options.projectRef || binding.runId !== options.runId || binding.shop !== input.shop ||
+      binding.digest !== packet.digest || binding.asOf !== policy.asOf ||
+      binding.mode === "entry_cohort" && ["nativeSpendWindow", "freshGoogleSpend", "multiProviderSpend"].some(k => Object.hasOwn(input, k)))
+      throw new Error("source_session_report_runtime_scope");
+    policy = { ...policy, sourceSessionReport: binding };
+    evidence = { ...evidence, sourceSessionReport: packet };
+  }
   // Only the cycle-bound SQL input wrapper supplies these immutable sources.
   // Do not invent a generic whole-table reconciliation or mutate stored policy.
   if (Object.hasOwn(input, "nativeSpendWindow") || Object.hasOwn(input, "nativeSpendWindowBinding")) {
@@ -85,14 +99,14 @@ export async function runFullReportJob(options: {
   verifyDeferredReplacements(deferredOrders(input.deferredOrders), evidence, sourceString(input.shop));
   const mode = policy.behaviorMode ?? "required";
   if (!["required", "excluded"].includes(mode)) throw new Error("invalid_behavior_mode");
-  if (mode === "required") validateBehaviorSource(behavior);
-  if (mode === "required" && (behavior.project !== policy.project || Date.parse(behavior.until) > Date.parse(policy.asOf) ||
+  if (!sourceSessionReport && mode === "required") validateBehaviorSource(behavior);
+  if (!sourceSessionReport && mode === "required" && (behavior.project !== policy.project || Date.parse(behavior.until) > Date.parse(policy.asOf) ||
       Object.values(policy.stages).some(f => !Object.hasOwn(behavior.families, f)) ||
       Object.keys(behavior.families).some(f => !Object.values(policy.stages).includes(f))))
     throw new Error("full_behavior_policy_mismatch");
   if (mode === "excluded" && Object.hasOwn(behavior, "journeyPermissionSource"))
     throw new Error("excluded_journey_permission_source");
-  if (mode === "required") validateJourneyPermissionSource(behavior, {
+  if (!sourceSessionReport && mode === "required") validateJourneyPermissionSource(behavior, {
     projectRef: options.projectRef, shop: sourceString(input.shop), mappingVersion: policy.mappingVersion,
   }, evidence);
   const lease = { ...args, p_token: randomUUID() };
@@ -117,18 +131,18 @@ export async function runFullReportJob(options: {
       fromDate: sourceString(input.fromDate), throughDate: sourceString(input.throughDate), asOf: policy.asOf,
     }) : undefined;
     const reportBase = freshSpend?.base ?? base, reportEvidence = freshSpend?.evidence ?? evidence;
-    const behaviorInput = mode === "excluded" ? { evidence: reportEvidence, assertFresh: () => {} } : await prepareProductionBehaviorEvidence({
+    const behaviorInput = sourceSessionReport || mode === "excluded" ? { evidence: reportEvidence, assertFresh: () => {} } : await prepareProductionBehaviorEvidence({
       behavior, evidence: reportEvidence, projectRef: options.projectRef, shop: sourceString(input.shop),
       mappingVersion: policy.mappingVersion, readKey: options.journeyPermissionReadKey,
       sourceReadApproved: options.journeyPermissionReadApproved, request: options.request, clock: options.clock,
     });
-    const events = mode === "excluded" ? [] :
+    const events = sourceSessionReport || mode === "excluded" ? [] :
       await readPosthogBehavior(behavior, options.posthogKey, options.request);
     behaviorInput.assertFresh();
     result = buildFullReports({ base: reportBase,
       publication: sourceString(input.publication), shop: sourceString(input.shop),
       fromDate: sourceString(input.fromDate), throughDate: sourceString(input.throughDate),
-      policy, evidence: mode === "excluded" ? behaviorInput.evidence :
+      policy, evidence: sourceSessionReport || mode === "excluded" ? behaviorInput.evidence :
         boundBehaviorEvidence(behaviorInput.evidence, behavior, policy, reportBase), events });
     if (freshSpend) guardFreshGoogleSpendReports(result.reports, freshSpend.storeRatioAdmission);
     if (Object.hasOwn(policy, "googleDelivery")) {
@@ -155,5 +169,6 @@ export async function runFullReportJob(options: {
   });
   if (typeof done !== "boolean") throw new Error("invalid_full_finish");
   return { state: done ? "complete" : "changed", certification: "unverified",
-    reports: Object.fromEntries(Object.entries(result.reports).map(([name, rows]) => [name, rows.length])) };
+    reports: Object.fromEntries(Object.entries(result.reports).map(([name, rows]) => [name, rows.length])),
+    ...(done && result.visitorConversion ? { visitorConversion: result.visitorConversion } : {}) };
 }
