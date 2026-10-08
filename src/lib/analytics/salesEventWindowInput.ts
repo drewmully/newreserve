@@ -38,12 +38,15 @@ export type SalesEventWindowInput = {
   sources: SalesEventWindowSource[];
   /** Enumerated IDs/revisions remain metadata. They are NOT financial exclusions. */
   metadata: RetainedEventJson;
+  /** Actual native shop query when a connector omits its currency hint. */
+  shopMetadata?: RetainedEventJson & { sourceType: "native_shopify"; apiVersion: "2026-07"; query: string };
   businessPolicy: Pick<PipelinePolicy, "decision" | "productClasses" |
     "financialApprovalRef" | "saleClock" | "refundClock">;
   /** Selected-order conclusions become daily only after paid-window composition. */
   customers?: { packetJson: string; binding: ScopedCustomerPurchaseBinding };
 };
 export type SalesEventWindowBinding = { version: 1; digest: string };
+export const SALES_EVENT_SHOP_QUERY = "query SalesEventShop { shop { myshopifyDomain currencyCode ianaTimezone } }";
 const zero = BigInt(0);
 const columns = ["order_id", "second", "is_sales_reversal", "orders", "quantity_ordered", "reversed_quantity",
   "gross_sales", "discounts", "sales_reversals", "net_sales", "shipping_charges", "taxes", "duties",
@@ -108,7 +111,7 @@ type EventSummary = { identity: string; orderId: string; date: string; reversal:
 export function prepareSalesEventWindow(input: SalesEventWindowInput, context: {
   publication: string; projectRef: string; shop: string; fromDate: string; throughDate: string; asOf: string;
 }) {
-  keys(input, ["version", "scope", "digest", "locator", "paymentControls", "sources", "metadata", "businessPolicy", "customers"],
+  keys(input, ["version", "scope", "digest", "locator", "paymentControls", "sources", "metadata", "businessPolicy", "customers", "shopMetadata"],
     ["version", "scope", "digest", "locator", "paymentControls", "sources", "metadata", "businessPolicy"]);
   keys(input.scope, ["projectRef", "shop", "fromDate", "throughDate", "sourceTimezone", "sourceCurrency"]);
   const scope = input.scope, dates = reportDates(scope.fromDate, scope.throughDate);
@@ -136,9 +139,26 @@ export function prepareSalesEventWindow(input: SalesEventWindowInput, context: {
   const envelope = sourceObject(receipt.result); providerComplete(envelope);
   const locator = sourceObject(envelope.structured_content); providerComplete(locator);
   const query = salesEventLocatorQuery(scope.fromDate, scope.throughDate);
+  let nativeShopBound = false;
+  if (input.shopMetadata) {
+    const m = input.shopMetadata;
+    keys(m, ["json", "sha256", "evidenceRef", "startedAt", "finishedAt", "sourceType", "apiVersion", "query"]);
+    if (m.sourceType !== "native_shopify" || m.apiVersion !== "2026-07" || m.query !== SALES_EVENT_SHOP_QUERY)
+      refuse("shop_metadata_provenance");
+    const body = sourceObject(retained(m, context.asOf)); providerComplete(body);
+    const shop = sourceObject(sourceObject(body.data).shop);
+    keys(shop, ["myshopifyDomain", "currencyCode", "ianaTimezone"]);
+    if (shop.myshopifyDomain !== scope.shop || shop.currencyCode !== scope.sourceCurrency || shop.ianaTimezone !== scope.sourceTimezone)
+      refuse("shop_metadata_scope");
+    nativeShopBound = true;
+  }
+  // The connector may remove the recipe's single final newline. Nothing else
+  // is normalized and both raw query strings remain in the retained envelope.
+  const sameQuery = (v: unknown) => v === query || v === query.slice(0, -1);
+  const hint = Object.hasOwn(locator, "chartHint") ? sourceObject(locator.chartHint).currencyCode : undefined;
   if (receipt.sourceType !== "shopify_connector" || receipt.startedAt !== input.locator.startedAt ||
-      receipt.finishedAt !== input.locator.finishedAt || receipt.query !== query || locator.query !== query ||
-      locator.shopDomain !== scope.shop || sourceObject(locator.chartHint).currencyCode !== "USD")
+      receipt.finishedAt !== input.locator.finishedAt || !sameQuery(receipt.query) || !sameQuery(locator.query) ||
+      locator.shopDomain !== scope.shop || (hint === undefined ? !nativeShopBound : hint !== "USD"))
     refuse("locator_scope");
   const declared = sourceArray(locator.columns).map(sourceObject), rawRows = sourceArray(locator.rows);
   if (declared.length !== columns.length || declared.some((c, i) => c.name !== columns[i] || c.dataType !== types[i]) ||
@@ -376,9 +396,11 @@ export function prepareSalesEventWindow(input: SalesEventWindowInput, context: {
         id: m.id, createdAt: m.createdAt, updatedAt: m.updatedAt, state: "unprocessed_metadata" as const
       })), financialExclusionsClaimed: false, completeOriginalPopulation: false },
     oldestCaptureAt: new Date(Math.min(Date.parse(input.locator.startedAt), Date.parse(input.metadata.startedAt),
+      ...(input.shopMetadata ? [Date.parse(input.shopMetadata.startedAt)] : []),
       Date.parse(input.paymentControls.startedAt), ...(input.customers ? [Date.parse(input.customers.binding.startedAt)] : []),
       ...input.sources.flatMap(s => [Date.parse(s.source.startedAt), ...(s.agreements ? [Date.parse(s.agreements.startedAt)] : [])]))).toISOString(),
     latestCaptureAt: new Date(Math.max(Date.parse(input.locator.finishedAt), Date.parse(input.metadata.finishedAt),
+      ...(input.shopMetadata ? [Date.parse(input.shopMetadata.finishedAt)] : []),
       Date.parse(input.paymentControls.finishedAt), ...(input.customers ? [Date.parse(input.customers.binding.capturedAt)] : []),
       ...input.sources.flatMap(s => [Date.parse(s.source.finishedAt), ...(s.agreements ? [Date.parse(s.agreements.finishedAt)] : [])]))).toISOString()
   };

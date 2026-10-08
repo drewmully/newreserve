@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { readCustomerScopedPurchases, CUSTOMER_PURCHASE_ACCESS_QUERY } from "./customerScopedPurchaseSource";
 import { compileCustomerCyclePacket, type CustomerSourceCycle, type CustomerCycleIdentityReceipt } from "./customerScopedPurchasePacket";
+import { compileCustomerOperationPacket, validateCustomerSourceOperation, type CustomerSourceOperation } from "./customerScopedPurchaseOperation";
 import { SCOPED_CUSTOMER_DEFINITION, SCOPED_CUSTOMER_BUSINESS_EVIDENCE } from "./customerScopedPurchaseConsumer";
 import { prepareSalesEventWindow, type SalesEventWindowInput } from "./salesEventWindowInput";
 import { sourceArray, sourceObject, sourceString, shopifyId } from "./shopifySource";
@@ -12,20 +13,24 @@ const hash = (v: string | Buffer) => createHash("sha256").update(v).digest("hex"
  * No retained anchors: all documents are freshly read and revisions compared.
  */
 export async function captureSalesEventCustomers(options: {
-  source: SalesEventWindowInput; cycle: CustomerSourceCycle; accessToken: string;
+  source: SalesEventWindowInput; accessToken: string;
   fetcher?: typeof fetch; now?: () => string;
-}) {
-  const clock = options.now ?? (() => new Date().toISOString()), began = clock(), c = options.cycle;
+} & ({ cycle: CustomerSourceCycle; operation?: never } | { operation: CustomerSourceOperation; cycle?: never })) {
+  const clock = options.now ?? (() => new Date().toISOString()), began = clock();
   let requests = 0, responseBytes = 0, largestResponseBytes = 0;
   let identity: CustomerCycleIdentityReceipt | null = null, stage = "scope";
   try {
+    if (Object.hasOwn(options, "operation") && Object.hasOwn(options, "cycle")) throw Error();
+    if (Object.hasOwn(options, "operation")) validateCustomerSourceOperation(options.operation!);
+    const c = options.operation ?? options.cycle;
+    const captureId = options.operation ? options.operation.operationId : options.cycle.cycleId;
     if (c.maxRequests !== 65 || c.maxResponseBytes !== 1048576 || c.maxTotalBytes !== 16777216 || c.maxActiveMs !== 120000 ||
         c.projectRef !== options.source.scope.projectRef || c.shop !== options.source.scope.shop ||
         c.reportDate !== options.source.scope.fromDate || c.reportDate !== options.source.scope.throughDate ||
         Date.parse(began) < Date.parse(c.startedAt) || Date.parse(began) >= Date.parse(c.deadline) ||
         Date.parse(c.deadline) - Date.parse(c.startedAt) > 300000 || !options.accessToken.trim()) throw Error();
     const prepared = prepareSalesEventWindow(options.source, { ...options.source.scope,
-      publication: `private:${c.cycleId}`, asOf: began });
+      publication: `private:${captureId}`, asOf: began });
     const originals = prepared.paidWindowProof.originalOrderGids;
     if (!originals.length) return { state: "not_required" as const, requests: 0 };
     const members = new Map<string, string[]>();
@@ -86,9 +91,12 @@ export async function captureSalesEventCustomers(options: {
       if (!actual || evidenceDigest(actual.document) !== evidenceDigest(row.source.commerce)) throw Error();
     }
     stage = "packet";
-    const customers = compileCustomerCyclePacket({ source, cycle: c, identityReceipt: identity,
+    const packetInput = { source, identityReceipt: identity,
       sharedUsage: { requests, responseBytes, largestResponseBytes, activeMs: Date.parse(clock()) - Date.parse(began) },
-      definition: { definition: SCOPED_CUSTOMER_DEFINITION, businessEvidence: SCOPED_CUSTOMER_BUSINESS_EVIDENCE } });
+      definition: { definition: SCOPED_CUSTOMER_DEFINITION, businessEvidence: SCOPED_CUSTOMER_BUSINESS_EVIDENCE } as const };
+    const customers = options.operation
+      ? compileCustomerOperationPacket({ ...packetInput, operation: options.operation })
+      : compileCustomerCyclePacket({ ...packetInput, cycle: options.cycle });
     const result = { state: "source_complete" as const, customers, startedAt: began, finishedAt: clock(),
       requests, responseBytes, largestResponseBytes, sourceOnly: true, enabled: false, registered: false };
     if (JSON.stringify(result).includes(options.accessToken)) throw Error();
