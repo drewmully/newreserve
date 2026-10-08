@@ -19,6 +19,9 @@ import { admitSalesEventWindow, type SalesEventWindowInput, type SalesEventWindo
 import { prepareSessionEntries, mapEntryObservations, mapEntryCheckoutEvidence, deriveEntrySessions,
   sessionEntryDayCount, type SessionEntryPolicy, type SourceSessionEntryInput } from "./sessionEntryInput";
 import { admitNativeSpendWindow, type NativeSpendWindowBinding, type NativeSpendWindowInput } from "./nativeSpendWindowInput";
+import { prepareSourceSessionReportBuild, type SourceSessionReportBinding,
+  type SourceSessionReportInputV1 } from "./sourceSessionProducer";
+import { summarizeSourceSessionConversion } from "./sourceSessionConversionInput";
 
 export type FullBuildPolicy = {
   definition: string; mappingVersion: string; sessionVersion: string; funnelVersion: string;
@@ -35,6 +38,8 @@ export type FullBuildPolicy = {
   salesEventWindow?: SalesEventWindowBinding;
   sessionEntryPolicy?: SessionEntryPolicy;
   nativeSpendWindow?: NativeSpendWindowBinding;
+  /** Named immutable sidecar. Never an owner-stored general behavior gate. */
+  sourceSessionReport?: SourceSessionReportBinding;
 };
 /** Owner-supplied evidence, never arbitrary "all gates true" from an HTTP caller.
  * Current permission/removals must come from the analytics consent authority,
@@ -70,6 +75,7 @@ export type FullBuildEvidence = {
   salesEventWindow?: SalesEventWindowInput;
   sessionEntries?: SourceSessionEntryInput;
   nativeSpendWindow?: NativeSpendWindowInput;
+  sourceSessionReport?: SourceSessionReportInputV1;
 };
 const gateTables: Record<keyof Gates, string[]> = {
   ledger: ["sales_ledger"], cash: ["payments"], orders: ["orders", "order_items"],
@@ -99,7 +105,23 @@ export function buildFullReports(input: {
   base: Candidate; publication: string; shop: string; fromDate: string; throughDate: string;
   policy: FullBuildPolicy; evidence: FullBuildEvidence; events: ObservedEvent[];
 }) {
+  const sourcePolicy = Object.hasOwn(input.policy, "sourceSessionReport");
+  const sourceEvidence = Object.hasOwn(input.evidence, "sourceSessionReport");
+  if (sourcePolicy !== sourceEvidence || sourcePolicy &&
+      (!input.policy.sourceSessionReport || !input.evidence.sourceSessionReport))
+    throw new Error("source_session_report_pair_required");
+  // Recompute correspondence here, not just in the job caller. Direct builder
+  // callers cannot replace source membership with a precomputed count or gate.
+  const sourceReport = sourcePolicy ? prepareSourceSessionReportBuild(input.evidence.sourceSessionReport!, {
+    binding: input.policy.sourceSessionReport!, publication: input.publication, shop: input.shop,
+    fromDate: input.fromDate, throughDate: input.throughDate, policy: input.policy,
+    evidence: input.evidence, events: input.events,
+  }) : null;
+  if (sourceReport) input = { ...input, policy: sourceReport.policy, evidence: sourceReport.evidence, events: sourceReport.events };
   const { policy: p, publication: pub, shop } = input;
+  const cohortOnly = p.sourceSessionReport?.mode === "entry_cohort";
+  if (cohortOnly && (p.salesEventWindow || p.nativeSpendWindow || p.customerGeneration || p.cohorts.length))
+    throw new Error("source_session_cohort_financial_scope");
   const conversionWindowDays = sessionConversionWindowDays(p.conversionWindowDays);
   const mode = p.behaviorMode ?? "required";
   if (!["required", "excluded"].includes(mode)) throw new Error("invalid_behavior_mode");
@@ -252,6 +274,7 @@ export function buildFullReports(input: {
   const commerceComplete = proofReady("orders") && proofReady("order_items") &&
     !!e.externalControls.event_order_diagnostics?.passed && !!e.externalControls.event_order_diagnostics.evidenceRef;
   facts.sessions = finalizeSessionConversions(facts.sessions, facts.orders, commerceComplete, conversionWindowDays);
+  sourceReport?.entryAdmission.assertFinalSessions(facts.sessions);
   const attribution = unique(e.attributionCoverage, v => v.orderId);
   const campaigns = entries ? new Map<string, CampaignContext>() :
     observedCampaigns(observations, p.project, p.sessionVersion, e.campaigns);
@@ -358,7 +381,8 @@ export function buildFullReports(input: {
     if (entries) {
       const admitted = nativeReady && proofReady("sessions") && coverage.get(date)?.evidenceRef &&
         coverage.get(date)?.gates.behavior === true;
-      const count = admitted ? sessionEntryDayCount(entries, date) : null;
+      const count = sourceReport ? sourceReport.entryAdmission.count(date) :
+        admitted ? sessionEntryDayCount(entries, date) : null;
       const all = funnel.find(row => row.stage_id === "all_sessions")!;
       all.measured_sessions = count; all.stage_reached_sessions = count;
       Object.assign(all.readiness as Record<string, string>, {
@@ -400,14 +424,37 @@ export function buildFullReports(input: {
       .map(([k, v]) => [k, v === "ready" ? "observed_unverified" : v]));
   const sessionEntryLineage = entries ? { ...entries.lineage,
     unmappedActions: entryObservations!.unmappedActions, unmappedCheckout: entryCheckout!.unmappedCheckout } : null;
+  const sourceReportLineage = sourceReport ? {
+    digest: sourceReport.entryAdmission.digest, ref: sourceReport.entryAdmission.ref,
+    accounting: sourceReport.entryAdmission.accounting, mode: p.sourceSessionReport!.mode,
+  } : null;
   const manifest = { nativeEvents: input.events.length, logicalEvents: logical.length,
     // Keep the existing five-field SQL manifest. Its digest now binds opt-in
     // source-entry lineage as well as logical actions; legacy bytes stay stable.
-    digest: createHash("sha256").update(JSON.stringify(sessionEntryLineage ? { logical, sessionEntryLineage } : logical)).digest("hex"), evidenceRef: e.ref,
+    digest: createHash("sha256").update(JSON.stringify(sourceReportLineage
+      ? { logical, sessionEntryLineage, sourceReportLineage }
+      : sessionEntryLineage ? { logical, sessionEntryLineage } : logical)).digest("hex"), evidenceRef: e.ref,
     gates: dates.map(date => ({ date, gates: scope(date).gates })) };
+  // This is a readout, not input to certification or a source permission gate.
+  // Excluded Google-only builds retain their previous output shape.
+  const visitorConversion = mode === "required" ? summarizeSourceSessionConversion({
+    publication: pub, fromDate: input.fromDate, throughDate: input.throughDate, asOf: p.asOf,
+    conversionWindowDays, sessions: facts.sessions, orders: facts.orders, funnel: reports.funnel_daily,
+    source: entries ? "native_entry" : "legacy_action_session",
+    entryAccounting: sourceReport?.entryAdmission.accounting,
+  }) : undefined;
+  if (cohortOnly) {
+    // The authentic completed base remains an input dependency. Its financial
+    // facts and unavailable financial scaffolding are not a B5 publication.
+    for (const table of Object.keys(facts)) if (table !== "sessions") facts[table] = [];
+    for (const table of Object.keys(reports)) if (table !== "funnel_daily") reports[table] = [];
+    if (facts.sessions.some(row => row.customer_id !== null || row.converted_session !== null))
+      throw new Error("source_session_cohort_customer_or_conversion");
+  }
   if (Object.values(reports).some(rows => rows.length > 20000) ||
       Buffer.byteLength(JSON.stringify({ facts, reports, manifest })) > 16000000) throw new Error("full_output_budget");
-  return { facts, reports, manifest, ...(sessionEntryLineage ? { sessionEntryLineage } : {}) };
+  return { facts, reports, manifest, ...(sessionEntryLineage ? { sessionEntryLineage } : {}),
+    ...(visitorConversion ? { visitorConversion } : {}) };
 }
 
 export function withoutBehaviorEvidence(evidence: FullBuildEvidence): FullBuildEvidence {
