@@ -33,6 +33,9 @@ afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 it("uses the manual page_view event, fixed six predicates and half-open UTC bounds", () => {
   const query = trafficPosthogQuery("2026-10-07", "2026-10-08", env());
   expect(query).toContain("event = 'page_view'"); expect(query).not.toContain("$pageview");
+  expect(query).toContain("SELECT toString(toDate(toTimeZone(timestamp, 'UTC'))) AS day");
+  expect(query).not.toContain("toDate(timestamp, 'UTC')");
+  expect(query).toContain("timestamp >= toDateTime('2026-10-07 00:00:00', 'UTC')");
   expect(query).toContain("timestamp < toDateTime('2026-10-08 00:00:00', 'UTC')");
   expect(query.match(/positionCaseInsensitive/g)).toHaveLength(5);
   expect(query).toContain("JSONType(properties, '$host')");

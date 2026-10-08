@@ -69,7 +69,7 @@ export function trafficPosthogQuery(from: string, until: string, env: NodeJS.Pro
   ...rules.negativeEmailValues.map(value => `if(isNull(person.properties.email), true,
     if(JSONType(person.properties, 'email') = 'String',
       positionCaseInsensitive(toString(person.properties.email), '${value}') = 0, NULL))`)];
-  return `SELECT toString(toDate(timestamp, 'UTC')) AS day,
+  return `SELECT toString(toDate(toTimeZone(timestamp, 'UTC'))) AS day,
     uniqExactIf(distinct_id, event = 'page_view') AS visitors,
     countIf(event = 'account_created') AS accounts_created,
     countIf(event = 'purchase') AS purchases
