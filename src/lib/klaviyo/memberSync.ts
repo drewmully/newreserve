@@ -109,12 +109,19 @@ export function buildMemberProfiles(
   }
 
   const identities = new Map<string, Set<string>>();
+  const sourceStates = new Map<string, { at: string; states: Set<MemberStatus> }>();
   for (const row of loopRows) {
     const email = normalize(row.email);
     if (!email || !row.loop_subscription_id) continue;
     const emails = identities.get(row.loop_subscription_id) ?? new Set<string>();
     emails.add(email);
     identities.set(row.loop_subscription_id, emails);
+    const at = iso(row.synced_at);
+    if (at) {
+      const previous = sourceStates.get(row.loop_subscription_id);
+      if (!previous || at > previous.at) sourceStates.set(row.loop_subscription_id, { at, states: new Set([loopStatus(row.status)]) });
+      else if (at === previous.at) previous.states.add(loopStatus(row.status));
+    }
   }
   const conflictedEmails = new Set<string>();
   for (const emails of identities.values()) if (emails.size > 1) {
@@ -142,7 +149,10 @@ export function buildMemberProfiles(
     const active = rows.find(r => r.loop_subscription_id && fresh(r) && loopStatus(r.status) === "active");
     const ranked = [...rows].sort((a, b) => RANK[loopStatus(b.status)] - RANK[loopStatus(a.status)]);
     const best = active ?? ranked[0];
-    const conflict = conflictedEmails.has(email);
+    const stateConflict = rows.some(r => r.loop_subscription_id &&
+      (sourceStates.get(r.loop_subscription_id)?.states.size ?? 0) > 1);
+    const identityConflict = conflictedEmails.has(email);
+    const conflict = identityConflict || stateConflict;
     const status: MemberStatus = conflict ? "unknown" : active ? "active" : uncertain ? "unknown" : loopStatus(best.status);
     const verified = !conflict && !!active;
     const completed = rows.reduce((n, r) => n + Math.max(0, Math.floor(Number(r.completed_orders) || 0)), 0);
@@ -161,7 +171,8 @@ export function buildMemberProfiles(
         mully_member_source_synced_at: iso(best.synced_at) ?? null,
         mully_member_source_fresh: fresh(best) && !conflict,
         mully_member_status_verified: verified,
-        mully_member_verification_reason: conflict ? "contract_identity_conflict" :
+        mully_member_verification_reason: identityConflict ? "contract_identity_conflict" :
+          stateConflict ? "conflicting_contract_snapshot" :
           verified ? "fresh_active_loop_contract" : uncertain ? "stale_or_unknown_loop_contract" : "native_contract_coverage_unverified",
         // Orders can be free/replacements. Never advertise this as VIP status.
         mully_member_billing_cycles_verified: false,

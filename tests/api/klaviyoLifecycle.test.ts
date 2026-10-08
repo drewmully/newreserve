@@ -236,6 +236,18 @@ describe("buildMemberProfiles", () => {
     const profiles = buildMemberProfiles(loop, subs, { now: new Date(NOW), cancelledHistory: () => true });
     for (const p of profiles) expect(Object.keys(p.properties).every(k => k.startsWith("mully_member_"))).toBe(true);
   });
+  it("holds conflicting latest source statuses instead of picking lexical active", () => {
+    const first=loop[1], contradictory={...first,status:"inactive"};
+    for(const rows of [[first,contradictory],[contradictory,first]]) {
+      expect(buildMemberProfiles(rows,[],{now:new Date(NOW)})[0].properties).toMatchObject({
+        mully_member_status:"unknown",mully_member_status_verified:false,
+        mully_member_source_fresh:false,mully_member_verification_reason:"conflicting_contract_snapshot",
+      });
+    }
+    const newer={...first,synced_at:new Date(NOW+60_000).toISOString()};
+    expect(buildMemberProfiles([first,contradictory,newer],[],{now:new Date(NOW+60_000)})[0]
+      .properties.mully_member_status_verified).toBe(true);
+  });
 });
 
 describe("decideRestock", () => {

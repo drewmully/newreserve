@@ -10,11 +10,12 @@ import { resolveMemberTierFromVariantId } from "@/lib/membershipConfig";
 
 type Bag = Record<string, unknown>;
 const bag = (v: unknown): Bag => v !== null && typeof v === "object" && !Array.isArray(v) ? v as Bag : {};
-export function shopifyId(v: unknown): string | null {
+export function shopifyId(v: unknown, resource?: string): string | null {
   if (typeof v === "number") return Number.isSafeInteger(v) && v > 0 ? String(v) : null;
   if (typeof v !== "string") return null;
-  const match = v.trim().match(/^(?:gid:\/\/shopify\/[A-Za-z]+\/)?([1-9]\d*)$/);
-  return match?.[1] ?? null;
+  const match = v.trim().match(/^(?:gid:\/\/shopify\/([A-Za-z]+)\/)?([1-9]\d*)$/);
+  if (!match || (resource && match[1] && match[1] !== resource)) return null;
+  return match[2];
 }
 const count = (v: unknown) => typeof v === "number" && Number.isSafeInteger(v) && v > 0 ? v : null;
 const subscriptionSkus = new Set(["RES-MEM", "RES-ACC", "BCK-9"]);
@@ -29,12 +30,13 @@ export interface OrderMatch {
 
 export function classifyPaidOrder(value: unknown): OrderMatch {
   const order = bag(value);
-  const orderId = shopifyId(order.id);
+  const orderId = shopifyId(order.id, "Order");
   const hold = (reason: string, kind: OrderKind = "unknown"): OrderMatch =>
     ({ orderId, kind, paidCandidate: false, reason, shippingLines: [] });
   if (!orderId) return hold("missing_order_id");
   if (order.test !== false) return hold("test_status_unverified");
   if (order.cancelled_at) return hold("cancelled");
+  if (order.cancelled_at !== null) return hold("cancel_state_unverified");
   if (order.financial_status !== "paid") return hold("not_fully_paid");
   if (!Number.isFinite(Number(order.total_price)) || Number(order.total_price) <= 0) return hold("no_positive_payment");
   if (!Array.isArray(order.refunds)) return hold("refund_state_unverified");
@@ -49,17 +51,24 @@ export function classifyPaidOrder(value: unknown): OrderMatch {
   const shippingLines: OrderMatch["shippingLines"] = [];
   const lineIds = new Set<string>();
   for (const raw of order.line_items) {
-    const line = bag(raw), id = shopifyId(line.id), quantity = count(line.quantity);
+    const line = bag(raw), id = shopifyId(line.id, "LineItem"), quantity = count(line.quantity);
     if (!id || !quantity || lineIds.has(id)) return hold("invalid_or_duplicate_line");
     lineIds.add(id);
     if (line.gift_card === true) return hold("gift_card_requires_separate_handling");
     const allocation = bag(line.selling_plan_allocation);
-    const hasSubscription = !!resolveMemberTierFromVariantId(line.variant_id) ||
+    const variantId = shopifyId(line.variant_id, "ProductVariant");
+    if (line.variant_id != null && !variantId) return hold("variant_identity_unverified");
+    const planValues = [line.selling_plan_id, allocation.selling_plan_id, bag(allocation.selling_plan).id];
+    if (planValues.some(v => v != null && !shopifyId(v, "SellingPlan")) ||
+      (line.selling_plan_allocation != null && !planValues.some(v => shopifyId(v, "SellingPlan")))) {
+      return hold("selling_plan_unverified");
+    }
+    const hasSubscription = !!resolveMemberTierFromVariantId(variantId) ||
       subscriptionSkus.has(String(line.sku ?? "").trim().toUpperCase()) ||
-      !!shopifyId(line.selling_plan_id) || !!shopifyId(allocation.selling_plan_id) ||
-      !!shopifyId(bag(allocation.selling_plan).id);
+      !!shopifyId(line.selling_plan_id, "SellingPlan") || !!shopifyId(allocation.selling_plan_id, "SellingPlan") ||
+      !!shopifyId(bag(allocation.selling_plan).id, "SellingPlan");
     if (hasSubscription || recurring) subscription++;
-    else if (shopSource && shopifyId(line.variant_id)) shop++;
+    else if (shopSource && variantId) shop++;
     else return hold("unclassified_line");
     if (line.requires_shipping === true) shippingLines.push({ id, quantity });
     else if (line.requires_shipping !== false) return hold("shipping_requirement_unverified");
@@ -92,8 +101,8 @@ export function matchOrderDelivery(orderValue: unknown, fulfillmentValues: unkno
   const shipments = new Map<string, Bag>();
   for (const value of fulfillmentValues) {
     const f = bag(value);
-    if (shopifyId(f.order_id) !== order.orderId) continue; // Never match by email.
-    const id = shopifyId(f.id);
+    if (shopifyId(f.order_id, "Order") !== order.orderId) continue; // Never match by email.
+    const id = shopifyId(f.id, "Fulfillment");
     const time = Date.parse(String(f.updated_at ?? ""));
     if (!id || !Number.isFinite(time)) return result(false, "unidentified_fulfillment");
     const previous = shipments.get(id);
@@ -111,7 +120,7 @@ export function matchOrderDelivery(orderValue: unknown, fulfillmentValues: unkno
     if (!Array.isArray(f.line_items) || !f.line_items.length) return result(false, "missing_fulfillment_lines");
     const seen = new Set<string>();
     for (const value of f.line_items) {
-      const line = bag(value), lineId = shopifyId(line.id), quantity = count(line.quantity);
+      const line = bag(value), lineId = shopifyId(line.id, "LineItem"), quantity = count(line.quantity);
       if (!lineId || !quantity || seen.has(lineId) || !wanted.has(lineId)) return result(false, "fulfillment_line_mismatch");
       seen.add(lineId);
       quantities.set(lineId, (quantities.get(lineId) ?? 0) + quantity);

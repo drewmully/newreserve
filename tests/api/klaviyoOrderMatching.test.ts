@@ -11,6 +11,8 @@ describe("order-scoped lifecycle audit", () => {
     expect(shopifyId("gid://shopify/Order/9007199254740993")).toBe("9007199254740993");
     expect(shopifyId(9007199254740993)).toBeNull();
     expect(shopifyId("10oops")).toBeNull();
+    expect(shopifyId("gid://shopify/Customer/10", "Order")).toBeNull();
+    expect(shopifyId("gid://shopify/Order/10", "Order")).toBe("10");
   });
   it("classifies real headless shop sources without assuming all sources are shop", () => {
     expect(classifyPaidOrder(order)).toMatchObject({ kind: "shop", paidCandidate: true });
@@ -32,10 +34,17 @@ describe("order-scoped lifecycle audit", () => {
   });
   it.each([
     { cancelled_at: "2026-10-08" }, { financial_status: "partially_refunded" }, { refunds: [{}] },
-    { total_price: "0" }, { test: true }, { test: undefined }, { refunds: undefined },
+    { total_price: "0" }, { test: true }, { test: undefined }, { refunds: undefined }, { cancelled_at: undefined },
     { line_items: [] }, { line_items: [line, line] }, { line_items: [{ ...line, quantity: 0 }] },
   ])("holds unsafe or incomplete paid snapshots: %j", change => {
     expect(classifyPaidOrder({ ...order, ...change }).paidCandidate).toBe(false);
+  });
+  it("does not turn malformed subscription markers into one-time shop purchases", () => {
+    for(const change of [{selling_plan_id:"bad"},{selling_plan_id:"gid://shopify/Order/22"},
+      {selling_plan_allocation:{}},{selling_plan_allocation:"bad"},
+      {variant_id:"gid://shopify/SellingPlan/50408581267648"}]) {
+      expect(classifyPaidOrder({...order,line_items:[{...line,...change}]}).paidCandidate).toBe(false);
+    }
   });
   it("requires carrier delivered, not fulfilled/in-transit/created", () => {
     for (const shipment_status of [undefined, "in_transit", "confirmed"]) {
@@ -46,6 +55,10 @@ describe("order-scoped lifecycle audit", () => {
   it("never substitutes another order, even with the same customer", () => {
     expect(matchOrderDelivery(order, [{ ...shipment, order_id: 11 }]).complete).toBe(false);
     expect(matchOrderDelivery({ ...order, id: 11 }, [shipment]).complete).toBe(false);
+    expect(classifyPaidOrder({ ...order, id: "gid://shopify/Customer/10" }).paidCandidate).toBe(false);
+    expect(matchOrderDelivery(order, [{ ...shipment, order_id: "gid://shopify/Customer/10" }]).complete).toBe(false);
+    expect(matchOrderDelivery(order, [{ ...shipment, id: "gid://shopify/Order/501" }]).complete).toBe(false);
+    expect(matchOrderDelivery(order, [{ ...shipment, line_items: [{ id: "gid://shopify/Order/101", quantity: 2 }] }]).complete).toBe(false);
   });
   it("dedupes fulfillment IDs and requires every ordered quantity", () => {
     const partial = { ...shipment, line_items: [{ id: 101, quantity: 1 }] };
