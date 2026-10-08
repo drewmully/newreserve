@@ -7,6 +7,32 @@ import { runGoogleStandingPipeline } from "@/lib/analytics/googleStandingOperati
 import { googleStandingBinding } from "@/lib/analytics/googleStandingBinding";
 export const runtime = "nodejs";
 export const maxDuration = 90;
+
+// Same bounded empty-stream check used by customerHistoryRuntime. The Next
+// Node adapter represents even a zero-byte network POST as a body stream.
+async function hasEmptyBody(req: Request): Promise<boolean> {
+  if (req.signal.aborted) return false;
+  if (req.body === null) return true;
+  if (req.body.locked || req.bodyUsed) return false;
+  const reader = req.body.getReader();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let stop: () => void = () => {};
+  const stopped = new Promise<false>(resolve => {
+    stop = () => resolve(false);
+    timer = setTimeout(stop, 1000);
+    req.signal.addEventListener("abort", stop, { once: true });
+    if (req.signal.aborted) stop();
+  });
+  try {
+    return await Promise.race([reader.read().then(({ done, value }) =>
+      done === true && (value === undefined || value.byteLength === 0), () => false), stopped]);
+  } finally {
+    clearTimeout(timer);
+    req.signal.removeEventListener("abort", stop);
+    void reader.cancel().catch(() => {});
+  }
+}
+
 export async function POST(req: NextRequest) {
   if (process.env.LEAN_ANALYTICS_FULL_ENABLED !== "true") return new NextResponse(null, { status: 404 });
   const secret = process.env.LEAN_ANALYTICS_FULL_SECRET ?? "";
@@ -14,7 +40,9 @@ export async function POST(req: NextRequest) {
   const expected = Buffer.from(`Bearer ${secret}`), supplied = Buffer.from(req.headers.get("authorization") ?? "");
   if (expected.length !== supplied.length || !timingSafeEqual(expected, supplied))
     return new NextResponse(null, { status: 401 });
-  if (req.nextUrl.search || req.body !== null) return new NextResponse(null, { status: 400 });
+  if (req.nextUrl.search || req.headers.has("transfer-encoding") ||
+      req.headers.has("content-length") && req.headers.get("content-length") !== "0" ||
+      !await hasEmptyBody(req)) return new NextResponse(null, { status: 400 });
   try {
     const input = {
       client: getAnalyticsSupabase(), projectRef: process.env.LEAN_ANALYTICS_PIPELINE_PROJECT_REF ?? "",
