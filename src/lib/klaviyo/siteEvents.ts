@@ -23,6 +23,7 @@ import {
   SITE_URL,
   VIEW_DEDUPE_MINUTES,
 } from "./lifecycleConfig";
+import { buildRecoveryUrl, recoveryLinksEnabled } from "@/lib/lifecycle/recovery";
 
 /**
  * Reserve (membership) intent. `checkout_clicked` counts only for plan
@@ -155,6 +156,8 @@ export function mapSiteEvent(
         AddedItemURL: productUrl(handle),
         AddedItemImageURL: safeUrl(fields.image_url, ALLOWED_IMAGE_HOSTS),
         CheckoutURL: safeUrl(fields.checkout_url, ALLOWED_LINK_HOSTS),
+        // First-party link that checks the cart is still live (off by default).
+        RecoveryURL: recoveryLinksEnabled() ? buildRecoveryUrl(safeUrl(fields.checkout_url, ALLOWED_LINK_HOSTS), handle) : undefined,
         CartTotal: cartTotal,
         CartItemCount: num(fields.cart_item_count),
         ItemNames: itemNames && itemNames.length ? itemNames : undefined,
