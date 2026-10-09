@@ -16,6 +16,7 @@
 import { Suspense, useEffect, useRef } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import { trackEvent } from "@/lib/tracking";
+import { captureAttributionFromUrl } from "@/lib/attribution";
 
 function AnalyticsTrackerInner() {
   const pathname = usePathname();
@@ -30,6 +31,11 @@ function AnalyticsTrackerInner() {
     // Dedupe — React StrictMode + double-mount can fire twice on the same path.
     if (lastTracked.current === fullPath) return;
     lastTracked.current = fullPath;
+
+    // Persist utm_*/gclid/fbclid on every route, not just /lp/* pages, so
+    // shop and product-page landings (e.g. Meta ads to /shop/{handle} or
+    // /#outfit) keep attribution through to the Shopify cart and later events.
+    captureAttributionFromUrl();
 
     // Fire-and-forget. trackEvent already handles its own errors.
     void trackEvent("page_view", {

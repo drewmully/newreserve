@@ -29,6 +29,7 @@ import {
   type ShopifyCart,
 } from "@/lib/shopify";
 import { buildCheckoutOriginAttributes } from "@/lib/shopifyCheckoutOrigin";
+import { attributionToCartAttributes, getStoredAttribution } from "@/lib/attribution";
 import { readShopReward, rewardCodes } from "@/lib/shopRewards";
 import { useShopBenefit } from "./useShopBenefit";
 import { useShopifySubscriptions, type ShopifySubscription, type ShopifySubscriptionState } from "./useShopifySubscriptions";
@@ -67,8 +68,23 @@ function getProjectReturnUrl(path = ""): string {
   return `${window.location.origin}${path}`;
 }
 
+/**
+ * Shop cart attributes: checkout origin plus stored ad attribution
+ * (utm_*, gclid, fbclid, fbp/fbc, ga_client_id, mully_anon_id).
+ *
+ * The membership checkout already forwards attribution; the one-time shop
+ * cart did not, so shop orders reached Shopify with only origin attributes
+ * and the orders-paid webhook had no click IDs for Meta CAPI / Google Ads.
+ * cartAttributesUpdate replaces the full set, so always send everything.
+ */
 function getProjectCartAttributes() {
-  return buildCheckoutOriginAttributes(getProjectReturnUrl());
+  const origin = buildCheckoutOriginAttributes(getProjectReturnUrl());
+  const attribution =
+    typeof window === "undefined"
+      ? []
+      : attributionToCartAttributes(getStoredAttribution());
+  const originKeys = new Set(origin.map((a) => a.key));
+  return [...origin, ...attribution.filter((a) => !originKeys.has(a.key))];
 }
 
 /* ═══════════════════════════════════════════
@@ -880,6 +896,13 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
       let result = before
         ? await cartLinesAdd(before.id, lines)
         : await cartCreate(lines, undefined, getProjectCartAttributes());
+      if (before) {
+        try {
+          result = await cartAttributesUpdate(result.id, getProjectCartAttributes());
+        } catch (err) {
+          console.error("[Cart] origin attribute sync failed:", err);
+        }
+      }
       syncFromShopifyCart(result);
       persistCartIdLocally(user?.uid ?? null, result.id);
       if (user?.uid) void persistCartId(user.uid, result.id);
