@@ -1,5 +1,6 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
+import { EstShipDate } from "./EstShipDate";
 import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type { ShopifyProduct } from "@/lib/shopify";
@@ -152,7 +153,7 @@ export function ShopOutfitBuilder({products,byCategory}:{products:ShopifyProduct
               onClick={()=>step===0?go(1):step===1?go(2):add()}>
               {busy?mode==="reserve"?"Opening checkout…":"Adding…":step===0?"Choose my sizes →":step===1?"Review my outfit →":mode==="reserve"?`Subscribe for ${money(RESERVE_OUTFIT_PRICE)} / season →`:unavailable?"Selected sizes sold out":"Add outfit to bag"}
             </button>
-            {step===2&&<p>{variants.some(v=>v?.currentlyNotInStock)?"Preorder · First shipment ships in about 2 weeks.":"No subscription unless you choose Reserve."}</p>}
+            {step===2&&<p>{variants.some(v=>v?.currentlyNotInStock)?<>Restocking · First shipment est. ships <EstShipDate />.</>:"No subscription unless you choose Reserve."}</p>}
           </div>
         </div>
       </div>}

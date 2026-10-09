@@ -25,6 +25,7 @@ import { BreadcrumbTrail } from "./pdp/BreadcrumbTrail";
 import { ProofChip } from "./pdp/ProofChip";
 import { PromoPill } from "./pdp/PromoPill";
 import { PdpVariantGrid } from "./pdp/PdpVariantGrid";
+import { EstShipDate } from "./EstShipDate";
 import { BuyBoxAction } from "./pdp/BuyBoxAction";
 import { PdpAccordion } from "./pdp/PdpAccordion";
 import { WaysToWear } from "./pdp/WaysToWear";
@@ -326,7 +327,9 @@ export function ShopPDPClient({
           {/* Trust strip */}
           <div className="mt-6 grid grid-cols-3 gap-0 border border-charcoal/10 bg-cream/50 text-center">
             {[
-              { k: "Mully Fulfillment", v: "Shipping at checkout" },
+              selectedVariant?.currentlyNotInStock && !unavailable
+                ? { k: "Restocking", v: <>Est. ships <EstShipDate weeks={product.preOrderEtaWeeks} /></> }
+                : { k: "Mully Fulfillment", v: "Shipping at checkout" },
               { k: "Free Returns", v: "Within 30 days" },
               { k: "Real Support", v: "Real people" },
             ].map((item, i) => (
