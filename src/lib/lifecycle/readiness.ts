@@ -62,6 +62,8 @@ export interface ReadinessInput {
   consent: { subscribed: boolean; marketable: boolean; internal: boolean } | null;
 }
 
+export const SIZE_REMINDER_ENABLED = false as boolean;
+
 export type ProfileProps = Record<string, string | number | boolean | null>;
 
 export function computeReadiness(input: ReadinessInput, config: ReadinessConfig, now = new Date()): { properties: ProfileProps; holds: string[] } {
@@ -111,7 +113,9 @@ export function computeReadiness(input: ReadinessInput, config: ReadinessConfig,
     mully_wave1_cancel_reason_unknown: cancelled,
     mully_wave1_service_clear: serviceClear,
     mully_wave1_review_owner_clear: reviewOwnerClear,
-    mully_wave1_setup_incomplete: member && prefsKnown && input.preferences!.hasTopAndBottomSize === false,
+    // Size reminder (member email M2) is skipped for this launch pass per Drew,
+    // Oct 9, 2026. Always false, so M2 never sends. Re-enable deliberately.
+    mully_wave1_setup_incomplete: SIZE_REMINDER_ENABLED && member && prefsKnown && input.preferences!.hasTopAndBottomSize === false,
     mully_wave1_reward_verified: input.reward.verified,
     // Only overwrite the code when verified; clear it otherwise so templates never show a spent code.
     mully_reward_code: input.reward.verified ? input.reward.code : null,

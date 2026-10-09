@@ -79,7 +79,7 @@ describe("readiness", () => {
     const m = base({ membership: membership({ activeVerified: true }), preferences: { readOk: true, hasTopAndBottomSize: false } });
     const p = computeReadiness(m, on("member_start,reserve"), now).properties;
     expect(p.mully_wave1_paid_start_ready).toBe(true);
-    expect(p.mully_wave1_setup_incomplete).toBe(true);
+    expect(p.mully_wave1_setup_incomplete).toBe(false); // Size reminder skipped this pass.
     expect(p.mully_wave2_reserve_ready).toBe(false); // Members never get Reserve intent.
     expect(computeReadiness({ ...m, preferences: null }, on("member_start"), now).properties.mully_wave1_setup_incomplete).toBe(false);
   });
