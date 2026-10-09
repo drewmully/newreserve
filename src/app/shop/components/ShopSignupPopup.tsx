@@ -8,13 +8,24 @@ import { saveShopReward, type ShopReward } from "@/lib/shopRewards";
 import "./shop-signup.css";
 
 const STORAGE = "mully_shop_signup_v1";
+/** Session flag: the visitor has started buying (outfit builder, sizes, bag). */
+export const PURCHASE_INTENT_KEY = "mully_purchase_intent_v1";
+/** Areas where a tap means the visitor is shopping, not browsing. */
+const PURCHASE_INTENT_SELECTOR = "#outfit, [data-purchase-intent]";
+function hasPurchaseIntent() {
+  try { return sessionStorage.getItem(PURCHASE_INTENT_KEY) === "1"; } catch { return false; }
+}
+function markPurchaseIntent() {
+  try { sessionStorage.setItem(PURCHASE_INTENT_KEY, "1"); } catch { /* storage unavailable */ }
+}
 type Step = "interest" | "email" | "sms" | "done";
 export function ShopSignupPopup() {
   const pathname = usePathname();
-  const { cartOpen } = useMembership();
+  const { cartOpen, cartCount } = useMembership();
   const dialog = useRef<HTMLDialogElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
   const cartOpenRef = useRef(cartOpen);
+  const cartCountRef = useRef(cartCount);
   const fired = useRef(false);
   const [step, setStep] = useState<Step>("interest");
   const [interest, setInterest] = useState("");
@@ -24,6 +35,7 @@ export function ShopSignupPopup() {
   const [open, setOpen] = useState(false);
   const [reward, setReward] = useState<ShopReward | null>(null);
   cartOpenRef.current = cartOpen;
+  cartCountRef.current = cartCount;
 
   function remember(days: number) {
     try { localStorage.setItem(STORAGE, String(Date.now() + days * 86400_000)); } catch { /* private browsing */ }
@@ -38,16 +50,20 @@ export function ShopSignupPopup() {
     let interacted = false;
     let dismissedUntil = 0;
     try { dismissedUntil = Number(localStorage.getItem(STORAGE)) || 0; } catch { /* storage unavailable */ }
-    function blocked() {
+    function blocked(manual = false) {
       const active = document.activeElement;
       const gate = document.getElementById("shop-gate-title");
-      return cartOpenRef.current || document.visibilityState !== "visible" ||
+      // Hold the popup for anyone clearly buying: an item in the bag, or any
+      // tap/focus inside the outfit builder this session (sizes, review, add).
+      // Explicit "sign up" clicks still open it.
+      return cartOpenRef.current || (!manual && (cartCountRef.current > 0 || hasPurchaseIntent())) ||
+        document.visibilityState !== "visible" ||
         Boolean(gate) || Boolean(document.querySelector("dialog[open]")) ||
         document.body.dataset.shopBuilderInView === "true" ||
         Boolean(active?.matches("input,textarea,select,[contenteditable=true]"));
     }
     function show(manual = false) {
-      if ((!manual && (fired.current || Date.now() < dismissedUntil)) || blocked()) return;
+      if ((!manual && (fired.current || Date.now() < dismissedUntil)) || blocked(manual)) return;
       fired.current = true;
       previousFocus.current = document.activeElement as HTMLElement;
       setOpen(true);
@@ -58,7 +74,11 @@ export function ShopSignupPopup() {
       const travel = document.documentElement.scrollHeight - innerHeight;
       if (Date.now() - started >= 15_000 && travel > 0 && scrollY / travel >= .3) show();
     }
-    function interaction() { interacted = true; }
+    function interaction(event?: Event) {
+      interacted = true;
+      const target = event?.target;
+      if (target instanceof Element && target.closest(PURCHASE_INTENT_SELECTOR)) markPurchaseIntent();
+    }
     function exit(event: MouseEvent) {
       if (event.clientY <= 0 && matchMedia("(pointer:fine)").matches && Date.now() - started >= 15_000 && interacted) show();
     }
@@ -70,12 +90,14 @@ export function ShopSignupPopup() {
     }, 3000);
     window.addEventListener("scroll", scroll, { passive: true });
     window.addEventListener("pointerdown", interaction, { passive: true });
+    document.addEventListener("focusin", interaction);
     document.addEventListener("mouseout", exit);
     window.addEventListener("mully:open-signup", manual);
     return () => {
       clearInterval(timer);
       window.removeEventListener("scroll", scroll);
       window.removeEventListener("pointerdown", interaction);
+      document.removeEventListener("focusin", interaction);
       document.removeEventListener("mouseout", exit);
       window.removeEventListener("mully:open-signup", manual);
     };

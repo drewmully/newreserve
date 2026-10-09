@@ -93,7 +93,7 @@
       "schedule": "45 11 * * *"
     },
     {
-      "path": "/api/admin/cron/meta-ads-spend",
+      "path": "/api/admin/cron/meta-ads-spend?source_only=1",
       "schedule": "50 11 * * *"
     },
     {

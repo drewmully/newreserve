@@ -1,6 +1,7 @@
 "use client";
 /* eslint-disable @next/next/no-img-element */
 /* eslint-disable @next/next/no-html-link-for-pages */
+import { EstShipDate } from "./EstShipDate";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import type { ShopifyProduct } from "@/lib/shopify";
@@ -35,7 +36,7 @@ function ProductCard({ product: p, onQuick }: { product: ShopifyProduct; onQuick
       <p className="card__brand">{p.brand}</p>
       <a className="card__name" href={`/shop/${p.slug}`} title={p.name}>{shopProductLabel(p)}</a>
       <div className="card__row"><span className="card__price">{hasShopDiscount && <del>{money(p.price)} </del>}{money(hasShopDiscount ? p.reservePrice : p.price)}</span>{!available && <span className="shop-stock">Unavailable</span>}</div>
-      {p.variants.some(v => v.currentlyNotInStock) && <p className="shop-stock">Preorder · About {p.preOrderEtaWeeks || 2} weeks</p>}
+      {p.variants.some(v => v.currentlyNotInStock) && <p className="shop-stock">Restocking · Ships <EstShipDate weeks={p.preOrderEtaWeeks} /></p>}
     </div>
   </article>;
 }
@@ -172,7 +173,7 @@ export function ShopLanding({ products, editProducts = products, productsByCateg
             <div className="faq">
               <details><summary>Do I need a subscription to shop?<i /></summary><div><p>No. Shop individual products whenever you like. Mully Reserve is an optional quarterly service.</p></div></details>
               <details><summary>How do I choose my size?<i /></summary><div><p>Use the brand-specific size chart on each product page or the builder’s Size &amp; fit guide. Choose a size for each piece before adding it to your bag.</p></div></details>
-              <details><summary>When will my order ship?<i /></summary><div><p>Preorder pieces ship in about 2 weeks. Check each product for current availability. Shipping options, costs, and taxes are confirmed at checkout.</p></div></details>
+              <details><summary>When will my order ship?<i /></summary><div><p>Restocking pieces ship in about 2 weeks. Check each product for current availability. Shipping options, costs, and taxes are confirmed at checkout.</p></div></details>
               <details><summary>What if the fit is wrong?<i /></summary><div><p>See our <a href="/policies/refund">return policy</a> for the 30-day return window and conditions, or <a href="/returns">start a return</a>.</p></div></details>
               <details><summary>How does the shop offer work?<i /></summary><div><p>Buy two or more eligible one-time pieces for 15% off one lowest-priced item. Review your bag for the applied discount and final total. This offer does not stack with Reserve.</p></div></details>
             </div>
@@ -194,7 +195,7 @@ export function ShopLanding({ products, editProducts = products, productsByCateg
                 <p className="shop-quick__brand">{quick.brand}</p>
                 <p className="shop-quick__price">{money(hasShopDiscount ? (activeVariant?.reservePrice ?? quick.reservePrice) : (activeVariant?.price ?? quick.price))}{hasShopDiscount && <small> · Active subscriber, 15% off</small>}</p>
                 {!quick.variants.some(v => v.availableForSale) && <p className="shop-quick__stock" role="status">Currently unavailable</p>}
-                {activeVariant?.currentlyNotInStock && <p className="shop-quick__stock">Preorder · Ships in about {quick.preOrderEtaWeeks || 2} weeks</p>}
+                {activeVariant?.currentlyNotInStock && <p className="shop-quick__stock">Restocking · Est. ships <EstShipDate weeks={quick.preOrderEtaWeeks} /></p>}
                 {styledLook && <p className="shop-quick__note">Styled illustration. Product photos show the actual item; fit may differ.</p>}
               </div>
             </div>

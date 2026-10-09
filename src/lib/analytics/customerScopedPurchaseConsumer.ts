@@ -7,6 +7,8 @@ import { CUSTOMER_PURCHASE_SCHEMA, CUSTOMER_PURCHASE_COUNT_QUERY,
   CUSTOMER_PURCHASE_PAGE_QUERY, type CustomerPurchaseObservation, type CustomerPurchaseHeader } from "./customerScopedPurchaseSource";
 import { CUSTOMER_CYCLE_PACKET_KIND, validateCustomerCyclePacket,
   type CustomerCyclePacket, type CustomerSourceCycle } from "./customerScopedPurchasePacket";
+import { CUSTOMER_OPERATION_PACKET_KIND, validateCustomerOperationPacket,
+  type CustomerOperationPacket, type CustomerSourceOperation } from "./customerScopedPurchaseOperation";
 
 export const SCOPED_CUSTOMER_DEFINITION = "current-observable-shopify-merchandise-first-purchase-v1";
 /** Existing business classification evidence, not renewed processing authority. */
@@ -22,6 +24,8 @@ export type ScopedCustomerPurchaseBinding = {
   businessEvidence: typeof SCOPED_CUSTOMER_BUSINESS_EVIDENCE;
   /** Separate default-off fresh-cycle provenance; absent for the original pair. */
   cycle?: CustomerSourceCycle;
+  /** A separately approved finite read, not a cycle grant. Mutually exclusive. */
+  operation?: CustomerSourceOperation;
 };
 /** Derive from the event-window's retained commerce source, not an identity flag. */
 export type ScopedCustomerPurchaseTarget = {
@@ -61,7 +65,7 @@ type OriginalPacket = {
   sourceOnly: true; productionAdmission: false; customerOwnershipAccepted: false;
   financialMappingApproved: false; certified: false; registered: false; enabled: false;
 };
-type Packet = OriginalPacket | CustomerCyclePacket;
+type Packet = OriginalPacket | CustomerCyclePacket | CustomerOperationPacket;
 const bundle = "f86edbdd17b8c30b5baf0659171ac869e23f2b4a73f3660b4db7267a6b393f20";
 const sha = (s: string) => createHash("sha256").update(s).digest("hex");
 const hash = (v: unknown) => typeof v === "string" && /^[a-f0-9]{64}$/.test(v);
@@ -159,9 +163,11 @@ export function consumeScopedCustomerPurchases(input: {
 }): ScopedCustomerPurchaseResult {
   const b = input.binding;
   const freshCycle = Object.hasOwn(b, "cycle");
+  const oneOperation = Object.hasOwn(b, "operation"), freshSource = freshCycle || oneOperation;
+  if (freshCycle && oneOperation) fail("ambiguous_capture_authority");
   exact(b, ["version", "packetSha256", "sourceDigest", "bindingSha256", "identitySha256", "projectRef", "shop",
     "authorizationRef", "appId", "installationId", "startedAt", "capturedAt", "definition", "businessEvidence",
-    ...(freshCycle ? ["cycle"] : [])]);
+    ...(freshCycle ? ["cycle"] : []), ...(oneOperation ? ["operation"] : [])]);
   if (typeof input.packetJson !== "string" || Buffer.byteLength(input.packetJson) > 16777216 ||
       b.version !== 1 || ![b.packetSha256, b.sourceDigest, b.bindingSha256, b.identitySha256].every(hash) ||
       sha(input.packetJson) !== b.packetSha256 || b.projectRef !== "xnfjdbpjuaezxjgargto" ||
@@ -170,7 +176,11 @@ export function consumeScopedCustomerPurchases(input: {
       typeof b.authorizationRef !== "string" || !b.authorizationRef.trim() || b.authorizationRef.length > 512)
     fail("binding");
   const packet = JSON.parse(input.packetJson) as Packet, s = packet.source;
-  if (freshCycle) {
+  if (oneOperation) {
+    if (packet.kind !== CUSTOMER_OPERATION_PACKET_KIND || !b.operation ||
+        packet.bindingSha256 !== b.bindingSha256 || packet.identitySha256 !== b.identitySha256) fail("operation_binding");
+    validateCustomerOperationPacket(packet, b.operation);
+  } else if (freshCycle) {
     if (packet.kind !== CUSTOMER_CYCLE_PACKET_KIND || !b.cycle ||
         packet.bindingSha256 !== b.bindingSha256 || packet.identitySha256 !== b.identitySha256) fail("fresh_cycle_binding");
     validateCustomerCyclePacket(packet, b.cycle);
@@ -189,7 +199,7 @@ export function consumeScopedCustomerPurchases(input: {
     "productionAdmission", "digest"]);
   exact(s.scope, ["projectRef", "shop", "authorizationRef", "appId", "installationId", "expiresAt",
     "members", "maxRequests", "maxBytes"]);
-  exact(packet.sharedUsage, ["requests", "responseBytes", "activeMs", ...(freshCycle ? ["largestResponseBytes"] : [])]);
+  exact(packet.sharedUsage, ["requests", "responseBytes", "activeMs", ...(freshSource ? ["largestResponseBytes"] : [])]);
   const { digest, ...body } = s;
   if (s.schemaVersion !== CUSTOMER_PURCHASE_SCHEMA || digest !== b.sourceDigest || evidenceDigest(body) !== digest ||
       s.coverage !== "current_shopify_customer_membership" || s.pagination !== "exhausted_and_rechecked" ||
@@ -205,10 +215,10 @@ export function consumeScopedCustomerPurchases(input: {
     fail("source_binding");
   if (!Number.isSafeInteger(s.requests) || s.requests < 1 || s.requests > 64 ||
       !Number.isSafeInteger(s.responseBytes) || s.responseBytes < 1 ||
-      (freshCycle ? packet.sharedUsage.requests < s.requests : packet.sharedUsage.requests !== s.requests + 1) ||
+      (freshSource ? packet.sharedUsage.requests < s.requests : packet.sharedUsage.requests !== s.requests + 1) ||
       packet.sharedUsage.requests > 65 ||
       !Number.isSafeInteger(packet.sharedUsage.responseBytes) ||
-      (freshCycle ? packet.sharedUsage.responseBytes < s.responseBytes : packet.sharedUsage.responseBytes <= s.responseBytes) ||
+      (freshSource ? packet.sharedUsage.responseBytes < s.responseBytes : packet.sharedUsage.responseBytes <= s.responseBytes) ||
       packet.sharedUsage.responseBytes > 16777216 || !Number.isSafeInteger(packet.sharedUsage.activeMs) ||
       packet.sharedUsage.activeMs < 0 || packet.sharedUsage.activeMs >= 120000 ||
       Date.parse(s.capturedAt) - Date.parse(s.startedAt) > packet.sharedUsage.activeMs ||
