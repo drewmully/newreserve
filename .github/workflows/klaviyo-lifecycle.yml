@@ -4,6 +4,11 @@ on:
   pull_request:
     paths:
       - "src/lib/klaviyo/**"
+      - "src/lib/lifecycle/**"
+      - "src/app/api/lifecycle/**"
+      - "src/app/api/admin/cron/lifecycle-*/**"
+      - "tests/api/lifecycle*.test.ts"
+      - "migrations/20261009_lifecycle_native_events_and_outbox.sql"
       - "src/lib/membershipConfig.ts"
       - "src/app/api/admin/cron/klaviyo-*/**"
       - "src/app/api/subscription/webhook/**"
@@ -33,6 +38,7 @@ jobs:
         run: >-
           npm test -- --project api
           tests/api/klaviyoEligibility.test.ts
+          tests/api/lifecycleSources.test.ts
           tests/api/klaviyoOrderMatching.test.ts
           tests/api/klaviyoOrderAudit.route.test.ts
           tests/api/klaviyoLifecycle.test.ts
@@ -49,6 +55,10 @@ jobs:
           src/lib/klaviyo/eligibility.ts
           src/lib/klaviyo/orderMatching.ts
           src/lib/klaviyo/memberSync.ts
+          src/lib/lifecycle
+          src/app/api/lifecycle
+          src/app/api/admin/cron/lifecycle-dispatch
+          tests/api/lifecycleSources.test.ts
           tests/api/klaviyoEligibility.test.ts
           tests/api/klaviyoOrderMatching.test.ts
           tests/api/klaviyoLifecycle.test.ts
