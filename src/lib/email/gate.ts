@@ -520,10 +520,23 @@ async function settleSend(
  * denied or already claimed elsewhere. Provider errors are settled as
  * `failed` and rethrown so existing callers keep their error handling.
  */
+/**
+ * Kill switch for every non-transactional Resend send (lifecycle sequences,
+ * nudges, digests and campaigns). Marketing email now runs in Klaviyo.
+ * Transactional mail (login links, returns, receipts) is never affected.
+ */
+export function resendMarketingDisabled(): boolean {
+  return process.env.RESEND_MARKETING_DISABLED === "true";
+}
+
 export async function gatedSend(
   req: GateRequest,
   send: () => Promise<string | null>
 ): Promise<string | null> {
+  if (req.sendClass !== "transactional" && resendMarketingDisabled()) {
+    console.warn(`[email/gate] RESEND_MARKETING_DISABLED: skipped ${req.sendClass} send (${req.flow ?? req.category ?? "unknown"})`);
+    return null;
+  }
   const { decision, ctx } = await evaluate(req);
 
   if (!decision.allowed) {
