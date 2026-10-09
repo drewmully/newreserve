@@ -102,6 +102,34 @@ Klaviyo metrics the draft flows will be rewired to (created on first real event,
 - Product reviews: **Junip** sends review requests. Klaviyo delivery emails must not ask for
   reviews.
 - Swing Box: ignored. Its plan stays unregistered, so its orders never enter lifecycle email.
+- Size reminder (member email M2): skipped for this launch pass. `SIZE_REMINDER_ENABLED` in
+  `src/lib/lifecycle/readiness.ts` is `false`, so `mully_wave1_setup_incomplete` is always false.
+- Nonmember proof: an email with no Shopify customer, or a customer whose complete order
+  history has zero subscription orders (Loop, Recharge or native) and no contract rows, is a
+  verified nonmember. Gap: a contract created by hand in Shopify admin with no order.
+
+## Readiness profile properties
+
+`src/lib/lifecycle/readiness*.ts` writes the `mully_wave1_*` / `mully_wave2_*` properties
+the draft flows and campaign segments filter on. Evidence properties (member, nonmember,
+cancelled, support pause, earned reward) are facts. Program `*_ready` flags are true only for
+programs listed in `LIFECYCLE_READINESS_PROGRAMS`, with sendable consent and every
+prerequisite verified. Any unreadable source holds. Sunset is never enabled.
+
+- Batch: `GET /api/admin/cron/lifecycle-readiness?offset=0&limit=50` (cron auth, not
+  scheduled). Returns counts and hold codes only.
+- Signup: refreshed inline before the "Mully Site Signup" event, so the immediate welcome
+  sees current flags.
+- Earned reward: only the highest earned code (SMS MULLYTEXT15 15%, email MULLYEDIT10 10%),
+  only if unused by that email and active in Shopify. A spent 15% never falls back to 10%.
+
+## Cart recovery links
+
+Added to Cart events carry `RecoveryURL` (`https://www.mymully.com/cart/recover?c=&k=&p=`).
+`/cart/recover` checks the Storefront cart: live and non-empty goes to its checkout URL
+without tracking parameters, otherwise the product page, otherwise shop-all. Cart emails
+CA1/CA2 (flow `TEqdeg`) show "Return to your cart" when the link exists and "View the item"
+otherwise.
 
 ## Switches (all unset today)
 
@@ -110,12 +138,18 @@ Klaviyo metrics the draft flows will be rewired to (created on first real event,
 | `LIFECYCLE_NATIVE_FLOW_INGEST_ENABLED=true` | Flow intake accepts and stores events |
 | `LIFECYCLE_FLOW_SHARED_SECRET` | Required for intake; 32+ chars |
 | `LIFECYCLE_DISPATCH_ENABLED=true` + `LIFECYCLE_DISPATCH_PROGRAMS=…` | Dispatcher may send for listed programs |
+| `LIFECYCLE_READINESS_WRITE_ENABLED=true` | Readiness writer runs (batch route and signup) |
+| `LIFECYCLE_READINESS_PROGRAMS=welcome,browse,…` | Programs whose `*_ready` flag may be true |
+| `LIFECYCLE_RECOVERY_LINKS_ENABLED=true` | Cart events carry `RecoveryURL`; `/cart/recover` reads carts |
 
 ## Known limits
 
 - Contracts created outside checkout (manual or imported) have no origin order. They still
   appear in the daily snapshot, so they are covered once the snapshot is live.
 - Loop coverage from the `loop_subscriptions` mirror proves contracts that exist. An empty
-  result is not proof of nonmembership and holds.
+  result alone is not proof of nonmembership and holds; only the complete-order-history rule
+  above upgrades it.
+- Shopify cart recovery depends on Shopify keeping the cart; expired carts fall back to the
+  product page.
 - Unknown selling plans on any historical first order hold that customer's history until the
   plan's owner is verified and registered.
