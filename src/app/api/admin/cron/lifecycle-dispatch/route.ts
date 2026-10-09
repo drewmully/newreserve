@@ -27,7 +27,7 @@ export async function GET(req: Request) {
       repo: supabaseOutboxRepo(),
       recheck: (row) => recheckOutboxRow(row, { consent: readKlaviyoConsent }),
       send: async (body) => {
-        try { await klaviyoRequest("/events/", { method: "POST", body }); }
+        try { await klaviyoRequest("/api/events/", { method: "POST", body }); }
         catch (err) {
           const code = err instanceof KlaviyoError ? err.code : "unexpected";
           // Ambiguous failures retry safely: Klaviyo dedupes on unique_id.
