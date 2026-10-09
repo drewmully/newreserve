@@ -1,7 +1,7 @@
 /**
  * GET /api/admin/cron/lifecycle-dispatch
  *
- * Drains the lifecycle outbox. NOT scheduled in vercel.json. With
+ * Drains the lifecycle outbox. Scheduled every 15 minutes in vercel.json. With
  * LIFECYCLE_DISPATCH_ENABLED unset (the default) it claims nothing, changes
  * nothing and returns { enabled: false }. Even when enabled, every row is
  * freshly rechecked and only allowlisted programs can send. No PII returned.

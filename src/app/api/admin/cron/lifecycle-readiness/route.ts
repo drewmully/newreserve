@@ -30,10 +30,15 @@ export async function GET(req: Request) {
   let candidates: string[];
   try { candidates = await readinessCandidates(); }
   catch { return NextResponse.json({ ok: false, error: "candidates_failed" }, { status: 500 }); }
-  const batch = candidates.slice(offset, offset + limit);
+  // ?all=1 (the daily cron) walks every remaining candidate inside a time
+  // budget and reports nextOffset if it ran out of time.
+  const all = url.searchParams.get("all") === "1";
+  const started = Date.now();
+  const batch = all ? candidates.slice(offset) : candidates.slice(offset, offset + limit);
   const summary = { ok: true, enabled: true, programs: [...config.programs].sort(), total: candidates.length, offset,
     processed: 0, written: 0, failed: 0, ready: {} as Record<string, number>, holds: {} as Record<string, number> };
   for (const email of batch) {
+    if (all && Date.now() - started > 270_000) break;
     summary.processed++;
     try {
       const evidence = await readReadinessEvidence(email);
@@ -44,5 +49,5 @@ export async function GET(req: Request) {
       for (const h of holds) { const code = h.split(":").slice(0, 2).join(":"); summary.holds[code] = (summary.holds[code] ?? 0) + 1; }
     } catch { summary.failed++; }
   }
-  return NextResponse.json({ ...summary, nextOffset: offset + batch.length < candidates.length ? offset + batch.length : null });
+  return NextResponse.json({ ...summary, nextOffset: offset + summary.processed < candidates.length ? offset + summary.processed : null });
 }
