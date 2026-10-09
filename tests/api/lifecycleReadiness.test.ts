@@ -115,3 +115,13 @@ describe("cart recovery links", () => {
     expect(recoveryRedirect(new URLSearchParams("p=../../x"), null)).toBe("https://www.mymully.com/shop/collection/shop-all");
   });
 });
+
+describe("Klaviyo request paths", () => {
+  it("every klaviyoRequest path starts with /api/", async () => {
+    const { execSync } = await import("node:child_process");
+    const out = execSync(`grep -rhoE "klaviyoRequest(<[^>]*>)?\\\\(\\\\s*[\\\`\\"'][^\\\`\\"']*" src || true`, { encoding: "utf8" });
+    const paths = out.split("\n").filter(Boolean).map((l) => l.replace(/^.*\(\s*[`"']/, ""));
+    expect(paths.length).toBeGreaterThan(5);
+    expect(paths.filter((p) => !p.startsWith("/api/"))).toEqual([]);
+  });
+});
