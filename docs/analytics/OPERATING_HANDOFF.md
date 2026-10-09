@@ -1,158 +1,210 @@
-# Reporting operations and metric availability
+# Reporting handoff and operating limits
 
-Operational handoff for the October 8, 2026 release. This document distinguishes source ingestion, calculated reports, destination delivery and metric coverage. A successful step does not establish the next one.
+Import baseline updated October 8, 2026 at 21:34 UTC. Handoff updated October 9 at 00:31 UTC after actual saved-dashboard execution and the basic native-session query. All clocks below are UTC.
 
-The immediate handoff is supported reporting with explicit unavailable metrics. Cash completeness, complete customer history and measured sessions must not be inferred from working Google or observed sales reports. F1 reporting delivery and F2 sales/customer coverage take priority over further operational refinements.
+**Two distinct outputs are ready.** Saved Google/Meta marketing has a finite reporting feed over saved records. The October 7 sales/customer report is an accepted fixed snapshot whose temporary imports are paused. Ordinary observed-sales processing remains unchanged. The Google configuration is unchanged, but its current operational hold is recorded below.
 
-## What is established
+This is not a claim that all 21 workbook metrics are complete or recurring.
 
-| Flow | Established outcome | Boundary |
-| --- | --- | --- |
-| Google | Genuine source capture, saved report and natural PostHog import accepted. Parent confirmed scheduled 18:45 and 19:15 UTC runs accepted. The actual 19:50:02 database projection records cycle `7501ec9b-bd31-4569-bd8c-cde8869cf4b7` accepted at 19:41:31 UTC for October 7. | One Google account, not all advertising or all 21 metrics. Its retained commerce baseline is not fresh commerce evidence. A past acceptance is not proof of current freshness. |
-| Observed Shopify sales/product | Scoped live reporting has reached PostHog. Existing webhook processing and ordinary processing continue. | Observed population only. Queue health and a current snapshot do not establish whole-store history or complete-period reconciliation. |
-| Meta | Genuine October 7 source packet saved, including independently verified no activity. Daily source ingestion is deployed. | Source registration is not combined-report or PostHog acceptance. The saved disabled generation must enter an approved report explicitly. Ads remain off. |
-| Website events | Genuine page-view, account-created and purchase-event aggregates saved after the ingestion repair. | Event counts do not establish measured sessions, analytics eligibility, session-to-paid-order linkage or attribution. |
-| Selected full workbook | The fixed delivery route and six-resource comparator exist. At 19:50:02 UTC, delivery was off and authorization revision 5 was disabled and expired on October 1. The 19:53:32 destination read still showed only the paused September 25 sample's two schemas, not the six-resource workbook. | There is no current combined-workbook serving or destination acceptance in these readbacks. F1 must bind its new real report and actual destination evidence. Do not reuse Google-only acceptance. |
+## Option A operating update
 
-The October 9 read-only Meta and website refresh check already exists. Do not add another check, invoke either daily source route or consume another daily attempt to demonstrate recurrence.
+The user selected a scoped dashboard and basic PostHog operations. The parent ran the three exact frozen read-only queries at **2026-10-09T00:25:44Z**. All passed natively:
 
-The same actual readback recorded zero sales-event grants and zero Meta workbook bridges. The October 7 Meta generation `meta_ingest_b921826b-b76b-41fd-9076-dc4c2cc442f1` remained disabled with packet hash `0b647fa4350cf03fa8a2778a6a40c361b59437754d923b647329aa76d8b50e40`. This is genuine saved source evidence, not an active combined-report pipeline.
+- Marketing returned the expected two historical provider rows and original clocks. Google was USD 2.425689 with 10 clicks and 39 impressions. Meta was verified-empty USD 0.000000 with unknown clicks/impressions retained as NULL.
+- Sales returned `accepted_fixed_snapshot`, USD 250, one eligible order and zero new customers.
+- Product returned `RES-MEM`, one unit and USD 250. Native PostHog accepted the exact readiness-JSON byte check.
 
-F1 now owns a separate saved-marketing output that can use already ingested records without changing the Google loop. Its implementation and destination receipt remain pending in this snapshot. The disabled historical workbook authorization is not a prerequisite for that independent output. Do not turn workbook bootstrap into a serial gate for supported marketing delivery.
+These are query results over already-imported rows. They are not new provider captures, proof of a fresh feed or evidence of resumed sales imports. The fixed October 7 sales snapshot remains readable after its serving window expires.
 
-At 20:00 UTC the parent confirmed five Shopify recovery records completed and independently verified, with the original failed records unchanged. The October 7 sales and payment locators returned one order and one successful sale, with USD 250 gross and net. These are coverage progress, not yet native population/compiler/customer acceptance. F2 owns the remaining proof and any resulting metric promotion.
+The [scoped reporting dashboard](https://us.posthog.com/project/353503/dashboard/2188727) now exists. Its saved queries ran successfully at 00:30:27–29 UTC, after exact query-byte and tile-ID binding checks. The actual dashboard was opened in Comet. These are retained historical reports, not a newly commissioned live commerce feed.
 
-Cash classification has progressed separately. An unresolved cash item and missing PayPal lifecycle coverage remain. Neither blocks the supported marketing or sales handoff.
+- [Marketing by provider](https://us.posthog.com/project/353503/insights/J86zCTFH).
+- [October 7 sales](https://us.posthog.com/project/353503/insights/Na7jKQsb).
+- [October 7 products](https://us.posthog.com/project/353503/insights/2CVtyaN4).
+
+The basic session adapter is implemented in this change, but not yet released or verified writing to Supabase. Its one native acceptance query returned 85 included SDK-native session starts, one excluded and zero unknown for October 7 UTC at 00:29:21 UTC. It uses the existing six exclusions and returns aggregates only. The existing daily 12:30 UTC `traffic-pull` cron becomes its caller on release. No new service, tracking SDK or Computer schedule is required. This is separate from workbook measured sessions and does not establish purchase conversion. See [the traffic operator instructions](TRAFFIC_SOURCE_PULL.md).
+
+Albert remains the interim commissioning contact. MyMully must name its operating owner and backup at handoff; neither has been assigned by this change. The repository instructions and direct source links are the operating reference, not the commissioning conversation.
+
+The frozen consumer reads provider rows separately, preserves original capture/control/evaluation clocks and withholds provider/status mismatches. The sales and product tiles are two views of the same fixed snapshot. Do not add them together. Cross-feed totals, MER, nCAC, ROAS, cash, customer recurrence and backfill are outside this dashboard's scope. A missing or failed query is unavailable, not zero.
+
+### Current Google hold and team repair procedure
+
+At 00:25:16 UTC, a metadata-only check found one changed Shopify client-ID environment record while all three dedicated Google capability metadata pins still matched. This explains the present whole-inventory preflight mismatch. The exact lost response from the earlier held invocation was not reconstructed. No credential value was read and the hold remains unchanged.
+
+1. Preserve the held receipt, complete journal, active owner and original slot/attempt counters. Do not replay the held invocation, discard its marker or create another automation.
+2. The authorized operator compares the current safe metadata inventory with the approved inventory. Confirm the exact changed record and intended owner change, and recheck the three dedicated Google key IDs/versions without exporting secret values.
+3. Reconcile the actual existing cycle/run and durable receipts before deciding whether any action started. Unchanged Google capability pins alone do not prove that no capture, claim or import occurred.
+4. Do not edit the frozen reader or silently replace its approved inventory hash. A separate prospective reader candidate narrows metadata comparison to the three required capabilities, still requires a complete inventory and exact credential-value hashes, and refuses the original version-1 authorization. It needs explicit approval of that new policy and a matching prospective binding. No such approval, binding or live installation is claimed here.
+5. Preserve the held invocation and reconcile its terminal state under the existing procedure. Do not replay it, reuse a consumed ordinal or recapture its cycle. Any approved future invocation must use a future original slot and the original exclusive October 21 23:15 UTC expiry, without resetting the spent allowance. A reader patch is not a recovery receipt.
+6. Close the incident only after the actual authorized run outcome and independent required readback. Record the incident, binding revision and result in the team runbook. No schedule or grant change is part of this repair.
+
+### Failure, expiry and recovery routing
+
+The existing Google task's source-conversation route remains the only established task-notification route in this handoff. Its `not_automation_run` context/suppression problem remains unresolved. A successful data run is not proof that a notification was delivered.
+
+There is **no approved marketing alert audience and no configured marketing alert**. Leave that alert uncreated. A four-call metadata/documentation check confirmed native SQL insight alerts support a selected numeric column, explicit first/last/any-row evaluation and absolute thresholds through `HogQLAlertConfig`. Thus a small native status insight can report a missing/mismatched import, age of the imported evaluation timestamp or the fixed expiry without a polling service. It is not appropriate to alert on an old provider capture clock merely because this feed intentionally reports historical evidence.
+
+Email delivery requires at least one actual subscribed PostHog user ID. Slack delivery additionally requires an existing connected workspace and exact channel ID through `alert-destinations-create`. The owner must choose the audience and cadence once. Current schema permits hourly/daily/weekly/monthly checks; fifteen-minute and real-time cadences have plan requirements that have not been checked here. Native automatic recovery delivery and an exact queryable warehouse-job failure field were **not** established by the bounded check. Do not promise either or guess a job-table field. PostHog also documents [warehouse signals](https://posthog.com/docs/data-warehouse/surfaces/desktop), but no project-specific signal configuration or notification was inspected.
+
+Until such delivery is actually verified, use the source pages and this runbook:
+
+- F1 failure means a failed/missing expected resource job or incompatible rows/status. Mark the affected presentation unavailable and escalate to Albert, the interim scope owner. Do not force imports or capture providers.
+- F1 expiry is October 21 at 23:15. End the expectation of new imports; retain historical rows and their clocks. Renewal needs an owner decision, not an automatic extension.
+- F1 recovery needs actual completed resource jobs and consistent rows/status. A source-level `Running` label is insufficient.
+- F2's paused imports and expired HTTP window are intentional, not a recurring failure. Its retained rows remain an October 7 snapshot.
+- `monitor-refresh.mjs` and `/api/analytics/ingest/health` remain existing opt-in DB/Google mechanisms. They do not prove PostHog import health and must not be described as a commissioned F1 watchdog.
+
+## Open the results
+
+| Output | Where | What is established | Operating state |
+| --- | --- | --- | --- |
+| Saved marketing | [PostHog marketing source](https://us.posthog.com/project/353503/data-management/sources/01a0d9ea-e2b5-0000-8057-75c5ef5e44ef/schemas), resources `marketing_daily`, `marketing_totals`, `report_status` | October 7 Google spend USD 2.425689 and independently verified empty Meta spend USD 0.000000. Complete 2/1/1 destination rows matched. | Latest-saved reporting, six-hour import cadence, finite scope ending October 21 at 23:15. Historical/uncertified labels remain. |
+| Selected October 7 sales/customer snapshot | [PostHog selected-sales source](https://us.posthog.com/project/353503/data-management/sources/01a0d9ea-e2b9-0000-381e-e68fc47de66a/schemas), `store_daily`, `product_daily`, `report_status` | USD 250 gross/net/total, one eligible order, AOV USD 250, one unit, zero new customers. Complete 1/1/5 destination rows matched. | Fixed accepted snapshot. All six source schemas were confirmed paused at 21:30:38; the original six-hour frequencies were restored. Rows remain available. |
+| Dedicated Google report | Existing dedicated source `01a11885-6014-0000-3d6e-a4b9da2f0f54`, resource `google_account_daily` | Repeated real capture, report and natural-import acceptance. The retained import baseline includes acceptance at 21:14:25 on October 8. | Existing sole-owner configuration retains its original October 21 expiry and budgets. Currently held as described above. This document does not dispatch it. |
+| Ordinary observed Shopify sales/product | Existing source `01a0f3c6-8758-0000-378b-d15c40a96f3a`, route `/api/analytics/reports/observed-current` | Working observed-population reporting and ordinary processing. Five isolated recovery records completed; original failure records were preserved. | Unchanged. It is not complete-store history. Its existing `new_customers` value remains null. |
+
+F1's marketing source is not the selected-sales source. Neither replaces ordinary observed sales or dedicated Google. Meta and website source ingestion remain separate from these reporting imports. Their October 9 read-only refresh verification is already scheduled; do not create another check or invoke another daily capture.
 
 ## The 21 metrics
 
-This is the honest baseline before the new F1/F2 receipt is attached. A metric can be usable for a named scope without being complete for the store. A missing or withheld metric is unavailable, never zero.
+The sales figures below refer only to the accepted October 7 current-observable Shopify scope. A ready value in that scope does not certify earlier history, another day or the whole business. Null/withheld metrics remain unavailable, not zero.
 
-| # | Metric | Currently supported scope | Still required for the wider claim |
+| # | Metric | Usable result and scope | Limit |
 | --- | --- | --- | --- |
-| 1 | Gross merchandise sales | Observed Shopify population | Complete-period order population and reconciliation |
-| 2 | Discounts | Observed Shopify population | Complete order and discount coverage |
-| 3 | Refunds | Observed supported refund population | Complete refund coverage and unresolved cases |
-| 4 | Net merchandise sales | Observed Shopify population | Complete reconciled gross, discounts and refunds |
-| 5 | Total sales | Observed Shopify population | Complete supported components and coverage |
-| 6 | Eligible orders | Observed supported orders | Complete eligible population, including exception disposition |
-| 7 | Average order value | Scoped sales divided by scoped eligible orders | Matching complete numerator and denominator |
-| 8 | Units | Observed supported product lines | Complete line population and reconciled order-size treatment |
-| 9 | Advertising spend | Verified dedicated Google account | F1's independent saved Meta inclusion, compatible day/account scope and combined destination comparison |
-| 10 | CTR | Verified dedicated Google account | Do not present as combined-channel CTR without compatible native definitions and coverage |
-| 11 | CPC | Verified dedicated Google account | Do not present as combined-channel CPC without compatible native definitions and coverage |
-| 12 | CPM | Verified dedicated Google account | Do not present as combined-channel CPM without compatible native definitions and coverage |
-| 13 | New-customer acquisition cost | Unavailable as a complete-store metric | Compatible accepted spend, complete new-customer population and approved definition |
-| 14 | Marketing efficiency ratio | Unavailable as a complete-store metric | Compatible accepted sales and all required spend scope |
-| 15 | First-party ROAS | Unavailable | Genuine eligible identity, attribution, purchase and spend inputs |
-| 16 | Measured sessions | Unavailable | Genuine session eligibility, permission and complete behavior coverage |
-| 17 | Session conversion | Unavailable | Eligible mature sessions and verified session-to-paid-order linkage |
-| 18 | New customers | Complete-store result unavailable | F2's explicit historical/customer coverage and first eligible purchase evidence |
-| 19 | Repeat purchase | Complete-cohort result unavailable | F2's complete relevant cohort history, maturity and repeat-purchase evidence |
-| 20 | Revenue LTV | Complete-cohort result unavailable | F2's complete relevant purchase/refund history and observation window |
-| 21 | Collected cash | Unavailable as complete cash | Complete payment, refund and adjustment lifecycle, including missing merchant records |
+| 1 | Gross merchandise sales | USD 250.000000 in the selected October 7 snapshot | Fixed accepted scope, not complete history |
+| 2 | Discounts | USD 0.000000 in that snapshot | Verified zero for that scope only |
+| 3 | Refunds | USD 0.000000 in that snapshot | Not complete payment/refund lifecycle coverage |
+| 4 | Net merchandise sales | USD 250.000000 in that snapshot | Fixed accepted scope |
+| 5 | Total sales | USD 250.000000 in that snapshot | Sales, not collected cash |
+| 6 | Eligible orders | 1 in that snapshot | No wider-period count inferred |
+| 7 | Average order value | USD 250.000000 in that snapshot | Uses the matching one-order denominator |
+| 8 | Units | 1.000000, product bucket `RES-MEM` | Fixed accepted product population |
+| 9 | Advertising spend | Dedicated Google report; also USD 2.425689 selected Google/Meta saved-account total for October 7 | Saved marketing retains `historical_snapshot`, `is_stale=true`, `certified=false`, incomplete-marketing-inventory labels |
+| 10 | CTR | Supported by the separate verified Google account report | Not combined-channel CTR |
+| 11 | CPC | Supported by the separate verified Google account report | Not combined-channel CPC |
+| 12 | CPM | Supported by the separate verified Google account report | Not combined-channel CPM |
+| 13 | New-customer acquisition cost | Unavailable/withheld | No accepted combined sales/customer/spend calculation |
+| 14 | Marketing efficiency ratio | Unavailable/withheld | Do not divide the two independently scoped feeds and call it an accepted metric |
+| 15 | First-party ROAS | Unavailable | Genuine eligible attribution/purchase inputs remain required |
+| 16 | Measured sessions | Unavailable | Event aggregates alone do not establish eligible measured sessions |
+| 17 | Session conversion | Unavailable | Requires mature eligible sessions and verified paid-order linkage |
+| 18 | New customers | 0 in the selected October 7 snapshot | A prior-purchase witness supports returning status; exact first purchase and complete customer history remain unknown |
+| 19 | Repeat purchase | Complete-cohort metric unavailable | One returning customer is not a cohort repeat-purchase rate |
+| 20 | Revenue LTV | Unavailable | Complete relevant cohort/purchase/refund history and observation window remain required |
+| 21 | Collected cash | Unavailable as complete cash | Merchant payment/refund/adjustment lifecycle, including PayPal coverage, remains incomplete |
 
-For any newly delivered F1/F2 scope, replace the relevant baseline entry only after retaining its exact population, dates, definition, source evidence, report publication and destination comparison. A scoped customer result does not silently upgrade the complete-store rows above. Preserve the per-metric `readiness` returned by the report.
+The new-customer decision used 13 current-member orders and a July 11 prior-purchase witness. The private returning count is one; no new public returning-customer field was added. The public selected-store field `new_customers="0"` and its `ready` label were preserved in PostHog.
 
-## Existing visibility, not a new monitor
+## What “fresh” means for each output
 
-Three current contracts already separate availability from freshness:
+### Marketing: recurring access to saved records
 
-- `src/lib/analytics/observedDeliveryConsumer.ts` validates observed sales/product/status generations, counts, time limits and queue state.
-- `src/lib/analytics/productionWorkbookDelivery.ts` validates the selected full-build resource and per-metric readiness contract.
-- `/api/analytics/ingest/health` reports configured database checks and the separately enabled Google standing check. It does not query PostHog and explicitly does not establish full-workbook destination delivery.
+`/api/analytics/reports/marketing` selects already-ingested Google captures and Meta packets for its approved closed-New-York-day window. A read does not capture a provider, move a capture clock, enable a P6 packet or renew Google authority.
 
-Do not enable another monitor, alert webhook or scheduler from this document. The existing `scripts/analytics/monitor-refresh.mjs` is an opt-in transport, not proof that an alert destination or recurring monitor is active.
+- `source_captured_at`, `control_captured_at` and `source_sha256` identify the original evidence.
+- `evaluated_at` is the reporting request's evaluation time, not source time.
+- `source_age_seconds` uses that row's evaluation clock and the older original capture/control clock. Recompute using the frozen implementation when checking a row, not against the clock of a later GET.
+- `report_status.google_state` and `meta_state` are `historical_snapshot` or `unavailable`. Missing provider data is not zero. The selected-account total is null with `withheld_missing_provider` unless both same-day inputs validate.
+- The initial feed excludes sales. `sales_state=unavailable`, `complete_sales_window=false`, `cross_source_ratios=withheld` remain visible.
 
-### Observed sales/product
+A completed six-hour import means PostHog refreshed saved reporting. It does not make old source evidence live, certify every marketing account or establish an atomic cross-resource snapshot. Keep all historical, stale and uncertified fields intact.
 
-Source `01a0f3c6-8758-0000-378b-d15c40a96f3a` belongs to `/api/analytics/reports/observed-current`, not the full workbook. The existing contract has store, product and status resources plus empty unavailable domains.
+The first natural delivery was accepted at **20:45:32.628**, after jobs completed at 20:41:56 through 20:41:57. Whole-table keys/values, typed SQL nulls, source hashes/clocks and scope flags matched; the parent also verified the post-import database scope. No source recapture or forced import occurred. This proves that delivery, not every future scheduled refresh.
 
-`report_status` exposes `operational_state`, `checked_at`, `valid_until`, `last_processed_at`, `source_observed_revision_at`, head counts and pending/leased/expired/dead work. The status expires no later than 30 minutes after its read. Actual import completion comes from PostHog job evidence, not `checked_at`.
+For a later read, show the actual last completed job per resource, the row's evaluation time and both original source clocks. If a resource has a failed/running/missing job or an unexpected publication/keyset, do not label the cross-resource result current. A six-hour configuration is not evidence that its next invocation succeeded.
 
-`idle` means the bounded queue observation has no known pending/failing work. It does not prove webhook liveness. `producer_liveness=not_proven`, `report_scope=webhook_observed_only`, `certified=false`, `complete_window=false` and observed readiness remain intact.
+The database read scope expires at **2026-10-21T23:15:00Z**. Future reads must fail closed at expiry. Old imported rows remain historical records, not evidence of renewed authority. No separate new marketing alert integration was installed or verified.
 
-The existing consumer returns visible `mixed`, `stale`, `pending`, `failed`, `disabled` or `invalid` states and withholds current totals. A deliberately labeled partial observed snapshot may remain useful while incomplete. Do not turn it into a complete or certified total.
+### Selected sales: retained snapshot, no continuing refresh
 
-Raw PostHog table previews do not automatically run this consumer. A consuming query or dashboard must apply these gates before claiming a jointly current result. A dashboard that does not apply them is an operational rough edge, not evidence that the data is fresh.
+The accepted publication is:
 
-### Selected full workbook
+`full:f2_sales_20261007_a0484d0e-a0aa-46bd-8862-4e9e4b5e8fef`
 
-The code reserves source `01a0d9ea-e2b9-0000-381e-e68fc47de66a` for a separately approved replacement of the old sample source, with runtime path `/api/analytics/reports/workbook`. Actual configuration had not made that transition as of October 8 at 19:53:32 UTC.
+Its report date is October 7 and its `as_of_at` is `2026-10-08T20:15:10.771Z`. Base/full jobs completed at 20:27:51; independent database readback at 20:27:55 confirmed full result hash `0c405af51ed7ad3f35edb0886de0c6c3`, one attempt and no lease.
 
-The actual source still had prefix `mymully_sample_sales_20260925` and saved manifest SHA `79cfe02c138521cba9733e0fe174e9d4b760969984884f2f090a30fefffc43e0`, not workbook manifest `ede0c179ef4a9f1b28625691823cb8410ae54fdce2af341de915f4a0593df6f3`. Only `store_daily` and `product_daily` schemas existed. Both had `should_sync=false`, full-refresh type, six-hour frequency and last sync on September 25. Source-level `status=Running` did not mean these tables were refreshing. Their absence of errors did not establish freshness.
+The user explicitly approved replacing the two archived old sample tables at 21:02. The parent used the unchanged six-resource manifest `ede0c179ef4a9f1b28625691823cb8410ae54fdce2af341de915f4a0593df6f3`, selected only store/product and temporarily enabled only store/product/status imports. Unselected acquisition/cohort/funnel domains stayed empty with `not_selected` and per-metric status `unavailable`.
 
-The code's six-resource contract is `store_daily`, `product_daily`, `acquisition_daily`, `customer_cohorts`, `funnel_daily` and `report_status`. Do not invent schema/table IDs for the four absent resources. The contract's status contains the publication, dates, definition/model/funnel versions, resource selection, counts, staleness and per-metric readiness. `atomic_resource_refresh=false` is intentional. Independently refreshed tables can temporarily contain different publications.
+Natural imports completed as follows:
 
-The route's owner authorization is finite, revision-bound and at most one hour. A selected row or HTTP 200 is not a recurring source producer or a natural-import acceptance. An expired route must fail closed; never select an old publication as fallback.
+| Resource | Rows | Schema ID | Natural job ID | Completed |
+| --- | --- | --- | --- | --- |
+| `store_daily` | 1 | `01a0d9ea-e303-0000-c381-1ac517072243` | `01a11d60-69ba-0000-fe65-4cffa71f2a7b` | 21:17:05.791370 |
+| `product_daily` | 1 | `01a0d9ea-e306-0000-7a49-08ed388766e0` | `01a11d64-fd9b-0000-1c24-2aa178e0719a` | 21:22:13.691747 |
+| `report_status` | 5 | `01a11d56-345d-0000-b030-da9825da6ebe` | `01a11d57-9fc8-0000-86a5-8f5694ea5f5f` | 21:07:28.603576 |
 
-At the retained 19:50:02 UTC check, the exact predecessor was `full:sales-checkpoint:20260930:20261001:full-two-orders-02`, selected for store and product only. Its authorization had expired at `2026-10-01T22:05:00Z`. New serving authority must preserve and compare the real predecessor and revision; do not reuse that expired serving window or strip the colons from the existing ID. This document does not supply the owner replacement transaction.
+The independent retained-evidence comparison passed all **110 source fields, 60 readiness members, 10 contract SQL nulls and 12 inherited legacy SQL nulls**. The complete 1/1/5 tables had no old or extra rows. Typed schema and job identities/counts/times matched. The source body passed the unchanged `validProductionWorkbookPayload`.
 
-The private controller already has a reviewed colon-preserving successor. `sales-event-cycle-delivery.mjs` SHA `04f6ded88ae791962576b93d888ddbbd2ea764e6a3d88808d862c90790b01552` accepts the exact predecessor spelling. The historical `5d527b1...` file does not. Use the already-reviewed successor if an old package is loaded; no new parser change is needed. Its historical runtime bundle pins do not establish compatibility with a later production bundle or supply fresh serving authority.
+The parent then confirmed authorization revision 6, the selected publication/result and finite window in the post-import database readback. At **21:30:38**, all six schemas were confirmed paused and their original six-hour frequencies restored. The three accepted rows/resources remain retained; no database renewal or deletion occurred. The finite HTTP window still ends at **2026-10-08T21:59:29Z**.
 
-## Precise live acceptance check
+After that window, do not treat an unavailable HTTP endpoint as a failed recurring sales job. This was intentionally a one-time, bounded snapshot delivery. Equally, do not present its retained October 7 rows as today's sales. A future sales/customer refresh needs its own approved source/report scope and serving operation. Do not silently re-enable imports or extend the window.
 
-The parent/F1 operator owns destination verification. Reuse already captured evidence rather than performing duplicate reads. For the separate saved-marketing output, use F1's frozen route, exact resource contract and approved comparator. Do not substitute the six-resource workbook validator, borrow the Google destination, or require an unrelated workbook authorization. Verify actual source identity, complete natural-import jobs/rows, metric scope/readiness and current freshness under that exact contract.
+The existing six-resource comparator requires evidence for all six resources. It was not weakened or called a full-six acceptance. This result is explicitly three-of-six scoped delivery. The source's five status rows correctly describe the unavailable domains.
 
-The sequence below applies only after an explicitly approved six-resource workbook setup exists. It cannot run against the currently paused two-schema sample source. It is not a requirement that F1 choose that route. Leave ordinary observed sales and the dedicated Google source untouched.
+### Ordinary observed sales: fresh snapshot is not complete coverage
 
-1. Retain the actual selected publication and source response from `/api/analytics/reports/workbook`, including all six arrays and unchanged nulls/readiness. Bind the actual source, manifest, schema IDs, table IDs, primary keys and full-refresh configuration. Do not guess an absent table ID.
-2. Let the existing natural import run. Do not invoke a forced import or recapture Google/Meta while waiting.
-3. Read jobs for the actual source ID using `schemas` as an array of schema **names**, not UUIDs. Verify each returned job's schema ID and name against the actual metadata. A successful job alone is insufficient.
-4. Retain a complete, unfiltered read of every bound destination table, its exact row count, completion evidence and native job binding. The whole table must match the expected keys and values. Old generations and extra rows fail; a sample or first page cannot pass.
-5. Require coherent publication, scope and readiness across all six resources. Retain the actual privacy/removal and selection validity readback after the table reads. Never create missing domain rows to make the resources look complete.
-6. Run the existing offline comparator against that actual packet:
+The existing observed consumer in `src/lib/analytics/observedDeliveryConsumer.ts` checks generation, row counts, queue state and time limits. Its status expires no later than 30 minutes after the read. `snapshot_checked_at` and status `checked_at` are database observation clocks, not PostHog import-completion clocks.
 
-   ```sh
-   node scripts/analytics/accept-workbook-runtime-reports.mjs \
-     /private/actual-workbook-evidence.json /private/new-validation-directory
-   ```
+Before showing a jointly current total, require the actual complete store/product/status rows, matching generation/counts, `operational_state=idle`, unexpired `valid_until` and recent metric snapshots. An empty metric table also needs its actual recent import receipt. Mixed, stale, pending, failed, disabled or invalid inputs must withhold the current-total claim.
 
-7. Record the comparator receipt alongside the original authenticated source/job/table/privacy evidence. `offline_workbook_match` means supplied-packet equality. The comparator intentionally retains `liveDeliveryVerified=false`, `metricAcceptance=false` and `atomicCrossResourceRefresh=false`. The parent's live claim must be supported by the actual evidence, not by changing those flags.
-8. Publish only metrics whose real source scope and readiness support the claim. Keep unsupported cash, sessions, attribution and complete-store/cohort metrics visibly unavailable.
+`idle` is queue health, not webhook-liveness proof. Keep `producer_liveness=not_proven`, `report_scope=webhook_observed_only`, `certified=false`, `complete_window=false` and existing readiness. A clearly labeled partial snapshot remains useful; it is not complete history.
 
-For observed sales, use the separate observed consumer and its actual three-resource evidence. Do not relabel an observed-current response as workbook evidence or change a recorded response path to satisfy either comparator.
+Raw PostHog previews do not run the TypeScript consumer automatically. Dashboard enforcement of these gates has not been independently established here. Until verified, use the explicit status fields and avoid an unqualified “current” badge.
 
-## Google operating boundary
+### Dedicated Google: existing finite owner only
 
-Existing automation `ed438f4b-01b9-4052-a224-6f5b1006726a` remains the sole owner. Its grant is `google_auto_202610081734` revision 1 and standing policy `google_policy_202610081734` revision 1. The original 635-slot allowance includes already spent slots. It ends exclusively on October 21 at 23:15 UTC.
+Automation `ed438f4b-01b9-4052-a224-6f5b1006726a` remains the sole owner of grant `google_auto_202610081734` revision 1 and policy `google_policy_202610081734` revision 1. Its original 635-slot allowance includes spent slots and ends exclusively on October 21 at 23:15. The fixed journal root remains `/home/user/workspace/google-restart-first-wake`.
 
-The fixed root is `/home/user/workspace/google-restart-first-wake`. Retain all grant, capture, cycle, credential, attempt and closure records. The completed October 8 owner recovery and original held attempts remain historical evidence. No root rotation, replay, grant renewal, new scheduler or extra capture is authorized here.
+Existing bounds remain 30-minute starts, 15-minute natural import, at most three ordered nine-minute wakes within one hour, one native capture per run, 60 app calls, 15 connector reads, 12 full advances and 12 Vercel GETs. Per-wake caps remain 30 app calls, five connector reads, ten advances and four Vercel GETs. Meta is off in this flow.
 
-Existing limits remain 30-minute starts, 15-minute natural import, at most three ordered nine-minute wakes within one hour, one native capture per run, 60 app calls, 15 connector reads, 12 full advances and 12 Vercel GETs. Each wake retains 30 app calls, five connector reads, ten advances and four Vercel GETs. Meta remains off in this flow.
+Retain reader `36e60402...`, immutable grant/capture/attempt records, active owner and accepted closures. Never rotate the journal, replay a held attempt, create a replacement scheduler, renew authority or add capture calls from this handoff.
 
-Reader `36e60402...` keeps Vercel transport for its four verified reads, then removes only `HTTPS_PROXY` and `VERCEL_TOKEN` from the Node child. The unchanged connector uses normal ambient authorization. Do not revert to the historical proxy-inheriting reader or put capabilities in artifacts.
+The existing health route can report Google policy, selection and stored-import freshness. It does not make live PostHog queries and deliberately retains `posthogReadbackVerified=false`. For actual destination acceptance use the saved observer receipt and its current selection/import binding, not a database “healthy” response alone.
 
-The durable task procedure, actual automation receipt and current owner pointer remain authoritative. This document does not replace them.
+## Operator checks and stop rules
 
-## Failure, stop and escalation
+Computer owns approved routine operation, evidence collection and incident follow-through. Albert owns scope and operating-period decisions. Drew owns advertising activation and actual email sending. No ad or email action is authorized here.
 
-| Condition | Operator response |
+| Check | Exact interpretation and response |
 | --- | --- |
-| Wrong, missing or mixed publication; stale status; extra/missing rows | Withhold the current claim. Keep raw receipts and exact hashes. Identify the failing resource; do not hide the mismatch with a filtered query. |
-| Source `not_selected`, metric `withheld`, incomplete population | Show unavailable or the explicitly qualified scope. Do not coerce null to zero or extend coverage labels. |
-| Failed/ambiguous capture, observation, dispatch or credential reservation | Preserve the active owner and journal. No blind retry, lease reset, fourth wake or new run to finish the old cycle. |
-| A PostHog job has not naturally completed | Wait within the original bound run/authorization. Expiry stops the claim; it does not authorize a forced import. |
-| Current automation identity becomes ambiguous after wait/messages | Keep the known owner and run receipt. Do not claim `suppress-run-notification` succeeded after `not_automation_run`. Escalate the platform limitation; do not invent another continuation task. |
-| Google expiry is within 24 hours | Notify Albert in the source conversation under the existing task rule. Do not renew the original end automatically. |
-| Meta or website daily attempt fails or is ambiguous | Keep the consumed job record. Use the already scheduled read-only follow-up; no second daily source attempt. |
-| Privacy/removal or unauthorized exposure | Stop presenting affected data and escalate immediately. Source pause or reader revocation does not prove downstream deletion. |
+| Natural job | Verify actual source ID, schema **name and ID**, full-refresh type, completed status, row count and times. Job filtering uses an array of schema names. An error-free source summary or `Running` source status alone is not fresh data. |
+| Destination rows | Compare complete unfiltered keysets and all values/nulls/readiness. Do not filter out stale generations or use a sampled first page to obtain a match. |
+| Publication/scope | Preserve exact IDs, report dates, definition, account scope and nulls. A provider's verified-empty spend does not invent zero clicks, sales or customers. |
+| SQL nulls | Preserve actual nulls, supported by typed evidence. A formatted `"(null)"` marker alone is insufficient. The two accepted comparisons include separate SQL-null checks. |
+| Pending natural import | Wait only within the original bound window. No forced import or provider recapture to make an acceptance deadline pass. |
+| Failed/ambiguous action | Preserve active owner, lease/attempt evidence and complete journal. No blind retry, lease reset, fourth wake or new run to finish an old cycle. |
+| Expiry | Marketing/Google end October 21 at 23:15; F2 serving ends October 8 at 21:59:29 and imports are already paused. Do not renew or remove rows automatically. |
+| Stop | Parent-only guarded disable/pause with exact current revision/hash and before/after readback. Stopping future reads does not retract in-flight responses or delete imported rows. |
+| Privacy/removal | Withhold affected presentation and escalate. A paused source or denied reader is not proof of downstream deletion. |
 
-Computer owns approved implementation, evidence collection, routine fixes and the handoff. Albert owns scope/operating decisions. Drew owns actual advertising activation and email sending. Failure, recovery and expiry notifications go to the existing source conversation, not to newly invented recipients.
+Any future approved serving replacement must compare the actual predecessor and current controls. Do not reuse bootstrap/global-absence SQL. The existing historical colon-bearing publication IDs are valid; the reviewed private delivery module `04f6ded8...` preserves them.
 
-Actual stop writes remain parent-owned and separately scoped. Existing Google stop controls, observed delivery disable/pause controls and workbook authorization disablement must use their current revision/hash guards. Do not reuse bootstrap/global-absence SQL against an existing control. Stopping future reads does not retract in-flight responses or imported rows.
+The existing Google task sends failures, actual recovery and expiry-within-24-hours notifications to the source conversation and suppresses healthy routine output. A platform limitation has caused `pplx automation current` context to disappear after waits/human messages, with suppression returning `not_automation_run`. The parent logged it. Preserve the known run and actual receipt; never claim suppression succeeded, abandon its owner, or recreate the automation to work around it. This notification/context issue remains unresolved.
 
-## Evidence required in the final handoff
+## Remaining blockers, without holding back the accepted results
 
-Retain one compact record for each accepted scope:
+| Type | Remaining item | Owner and next boundary |
+| --- | --- | --- |
+| Technical | Recurring F2 sales/customer refresh is not implemented or activated by the one-time snapshot | Computer can prepare the smallest existing-path successor after a separate operating decision. Do not repurpose the Google grant or reopen paused schemas automatically. |
+| Technical | Historical dashboard gates are verified; a separate marketing failure/expiry alert is not configured | Native SQL alerts are supported. Choose an actual MyMully audience and cadence, then verify delivery. No new monitoring framework is needed. |
+| Release | Basic native-session adapter passed one actual aggregate query but is not released | Release the reviewed change, verify one route/job and the corresponding `traffic_pulls` row, then inspect the existing next natural cron. Do not call the native query proof a Supabase write or recurrence receipt. |
+| Technical | Ads collection remains tied to closed-day and one-shot job constraints | Follow [the application-owned ads plan](APPLICATION_MARKETING_INGESTION.md). A faster cron alone does not fix those constraints. The replacement workers and cutover are not implemented by this change. |
+| Platform | Automation context/suppression can become ambiguous | Existing diagnostic and parent escalation. No schedule/grant changes or new continuation automation. |
+| Verification | First scheduled daily Meta and website source refresh | Existing October 9 read-only check. Do not duplicate it or prematurely claim the future job passed. |
+| Data | Whole-store history and wider customer/cohort coverage | F2's exact prior witness establishes this returning decision, not complete history, repeat rate or LTV. Retain missing coverage as unavailable. |
+| Data/policy | Measured sessions, session conversion and attribution | Require eligible permission/session/order-linkage evidence and the approved definitions; raw event counts do not substitute. |
+| Data/access | Complete collected cash | F3 continues independently on payment/refund/adjustment lifecycle and missing merchant/PayPal evidence. Sales are not cash. |
+| Business | Operation beyond October 21 or a new recurring F2 scope | Albert decides the finite period, budgets and supported scope. No automatic extension is implied. |
 
-- Actual source dates, population/account scope and source-capture reference.
-- Completed report ID, publication, definition and per-metric availability.
-- Actual source/schema/table IDs, natural import job IDs and completion clocks.
-- Complete comparison receipt and source/table evidence hashes.
-- Current selection/freshness expiry, next authorized refresh and owner.
-- Unavailable metrics and their precise remaining data or authority requirement.
+## Evidence ledger
 
-This handoff does not certify all 21 metrics, whole-store history, combined advertising, cash completeness, a new alert integration or an unverified dashboard. F1/F2 may establish narrower useful scopes independently without waiting for F3/F4 completion or reviving the historical workbook authorization.
+- F1 actual natural-import acceptance, verified `2026-10-08T20:45:32.628Z`, receipt SHA256 `46c14ca7c2903ec2bb74bbe44e9d61f50a4ccd886476e9ecc33123f76715ae07`. Saved manifest `2ab5dcb54633191825fc07deff3581f64effee6410cd7f4b025b386c980c632e`. Complete 2/1/1 tables, typed nulls and post-import scope/hash readback.
+- F2 actual HTTP body SHA256 `7b74a02a7e27fc548f86ef7e123661c9d1f3432969bfcc920e26802140f52b6f`.
+- F2 independent comparison `F2-comparison.json`, SHA256 `7f4cdf3aed72dc7f737e2942bb883a8d14f0bd97093096374ba09abaf3649122`. Exact-input reproducer `compare-f2-actual.cjs`, SHA256 `1a3f335adbbf36011bfdc04abe600a87730dabf0ef820745d201f90e308ba65d`. It calls no providers and records no full-six, whole-history or atomic-refresh claim.
+- Parent's post-import F2 database confirmation at 21:27 and exact pause/frequency-restoration readback at 21:30:38. All six input hashes matched the independent comparison; no database renewal or deletion.
+- Existing Google automation procedure, owner journal and actual accepted observer receipts remain the authority for that independent flow.
+
+Keep original raw receipts alongside comparisons. File hashes preserve identity; they do not independently authenticate the provider. No new source read, credential operation, provider write, deployment or schedule change was made by the F4 worker.
 
 Produced by [Teammate](https://www.perplexity.ai/teammate/d456bdc1-cf8c-4a32-9670-4a43713e0921/936182bf-b388-5b9a-8406-c6f7ea2a9eb6).

@@ -2,7 +2,8 @@ import { createHash } from "node:crypto";
 import { nativeEntryFilterSha256, nativeFilterRules } from "./journeyNativeFilterConfig";
 
 export type TrafficRow = { pull_date: string; source: string; metric: string; value: number; raw?: unknown };
-const dayMs = 86400000, columns = ["day", "visitors", "accounts_created", "purchases"];
+const dayMs = 86400000, eventColumns = ["day", "visitors", "accounts_created", "purchases"];
+const nativeColumns = ["day", "native_sessions", "excluded_native_sessions", "unknown_native_sessions"];
 const hash = (value: string | Buffer) => createHash("sha256").update(value).digest("hex");
 export type TrafficPosthogDiagnostic = {
   reason: "configuration" | "window_invalid" | "window_open" | "transport" | "timeout" |
@@ -60,15 +61,18 @@ function dates(from: string, until: string) {
 }
 /** Same fixed six-rule configuration and conservative unknown-value semantics
  * as the native reader. No filter values or person properties leave the query. */
-export function trafficPosthogQuery(from: string, until: string, env: NodeJS.ProcessEnv) {
-  dates(from, until);
+function trafficFilters(env: NodeJS.ProcessEnv) {
   const rules = nativeFilterRules(env);
   if (!rules) throw failure("configuration");
-  const filters = [`if(isNull(properties.$host) OR JSONType(properties, '$host') != 'String', NULL,
+  return [`if(isNull(properties.$host) OR JSONType(properties, '$host') != 'String', NULL,
     NOT match(toString(properties.$host), '${rules.hostRegex.replace(/\\/g, "\\\\")}'))`,
   ...rules.negativeEmailValues.map(value => `if(isNull(person.properties.email), true,
     if(JSONType(person.properties, 'email') = 'String',
       positionCaseInsensitive(toString(person.properties.email), '${value}') = 0, NULL))`)];
+}
+export function trafficPosthogQuery(from: string, until: string, env: NodeJS.ProcessEnv) {
+  dates(from, until);
+  const filters = trafficFilters(env);
   return `SELECT toString(toDate(toTimeZone(timestamp, 'UTC'))) AS day,
     uniqExactIf(distinct_id, event = 'page_view') AS visitors,
     countIf(event = 'account_created') AS accounts_created,
@@ -81,15 +85,56 @@ export function trafficPosthogQuery(from: string, until: string, env: NodeJS.Pro
     GROUP BY day ORDER BY day LIMIT 15`;
 }
 
+/** Existing SDK-native starts only. The custom session-... event namespace is
+ * never treated as an SDK UUID. Entry ambiguity stays an aggregate unknown;
+ * these classifications concern source filters, not v3 visitor permission. */
+export function trafficNativeSessionsQuery(from: string, until: string, env: NodeJS.ProcessEnv) {
+  dates(from, until);
+  const filters = trafficFilters(env);
+  const passed = filters.map((_, i) => `e.f${i} = true`).join(" AND ");
+  const rejected = filters.map((_, i) => `e.f${i} = false`).join(" OR ");
+  const eligible = "native_id_valid AND entry_matches = 1 AND passed_entries = 1";
+  const excluded = "native_id_valid AND entry_matches = 1 AND rejected_entries = 1";
+  return `SELECT toString(toDate(toTimeZone(started_at, 'UTC'))) AS day,
+    countIf(${eligible}) AS native_sessions,
+    countIf(${excluded}) AS excluded_native_sessions,
+    count() - countIf(${eligible}) - countIf(${excluded}) AS unknown_native_sessions
+    FROM (SELECT s.session_id, s.$start_timestamp AS started_at,
+      match(toString(s.session_id), '^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$') AS native_id_valid,
+      countIf(e.$session_id = s.session_id AND e.timestamp = s.$start_timestamp) AS entry_matches,
+      countIf(e.$session_id = s.session_id AND e.timestamp = s.$start_timestamp AND ${passed}) AS passed_entries,
+      countIf(e.$session_id = s.session_id AND e.timestamp = s.$start_timestamp AND (${rejected})) AS rejected_entries
+      FROM sessions s LEFT JOIN (SELECT $session_id, timestamp,
+        ${filters.map((f, i) => `${f} AS f${i}`).join(",\n        ")}
+        FROM events WHERE timestamp >= toDateTime('${from} 00:00:00', 'UTC')
+          AND timestamp < toDateTime('${until} 00:00:00', 'UTC')) e
+        ON e.$session_id = s.session_id AND e.timestamp = s.$start_timestamp
+      WHERE s.$start_timestamp >= toDateTime('${from} 00:00:00', 'UTC')
+        AND s.$start_timestamp < toDateTime('${until} 00:00:00', 'UTC')
+      GROUP BY s.session_id, s.$start_timestamp)
+    GROUP BY day ORDER BY day LIMIT 15`;
+}
+
 /** One bounded provider request. An absent day becomes observed zero only after
  * a complete, correctly shaped response, never on missing credentials or errors. */
-export async function pullTrafficPosthog(from: string, until: string, env: NodeJS.ProcessEnv,
+export function pullTrafficPosthog(from: string, until: string, env: NodeJS.ProcessEnv,
   request: typeof fetch = fetch, now: () => number = Date.now): Promise<TrafficRow[]> {
+  return pullTrafficAggregate("events", from, until, env, request, now);
+}
+export function pullTrafficNativeSessions(from: string, until: string, env: NodeJS.ProcessEnv,
+  request: typeof fetch = fetch, now: () => number = Date.now): Promise<TrafficRow[]> {
+  return pullTrafficAggregate("native_sessions", from, until, env, request, now);
+}
+async function pullTrafficAggregate(kind: "events" | "native_sessions", from: string, until: string,
+  env: NodeJS.ProcessEnv, request: typeof fetch, now: () => number): Promise<TrafficRow[]> {
+  const columns = kind === "events" ? eventColumns : nativeColumns;
+  const queryFor = kind === "events" ? trafficPosthogQuery : trafficNativeSessionsQuery;
+  const version = kind === "events" ? "traffic-filtered-utc-v1" : "traffic-native-sessions-utc-v1";
   if (typeof window !== "undefined" || env.LEAN_POSTHOG_PROJECT_ID !== "353503" || !env.LEAN_POSTHOG_QUERY_READ_KEY?.trim())
     throw failure("configuration");
   const days = dates(from, until), started = now(), key = env.LEAN_POSTHOG_QUERY_READ_KEY;
   if (Date.parse(`${until}T00:00:00Z`) > started) throw failure("window_open");
-  const query = trafficPosthogQuery(from, until, env), controller = new AbortController();
+  const query = queryFor(from, until, env), controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   let httpStatus: number | null = null, timedOut = false;
   let stage: "transport" | "body_read" | "unclassified" = "transport";
@@ -98,7 +143,7 @@ export async function pullTrafficPosthog(from: string, until: string, env: NodeJ
       const response = await request("https://us.posthog.com/api/projects/353503/query/", {
         method: "POST", redirect: "error", signal: controller.signal,
         headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ query: { kind: "HogQLQuery", query }, name: "traffic-filtered-utc-v1", refresh: "force_blocking" }),
+        body: JSON.stringify({ query: { kind: "HogQLQuery", query }, name: version, refresh: "force_blocking" }),
       });
       httpStatus = response.status;
       if (!response.body) throw failure(response.ok ? "body_missing" : "http_error", httpStatus);
@@ -140,19 +185,30 @@ export async function pullTrafficPosthog(from: string, until: string, env: NodeJ
     if (!Array.isArray(parsed.results) || parsed.results.length > days.length) throw failure("results_shape", httpStatus);
     if (now() - started >= 10000) throw failure("timeout", httpStatus);
     if (env.LEAN_POSTHOG_QUERY_READ_KEY !== key || env.LEAN_POSTHOG_PROJECT_ID !== "353503" ||
-      trafficPosthogQuery(from, until, env) !== query) throw failure("configuration_changed", httpStatus);
+      queryFor(from, until, env) !== query) throw failure("configuration_changed", httpStatus);
     const rows = new Map<string, number[]>();
     for (const row of parsed.results) {
       if (!Array.isArray(row) || row.length !== 4 || !days.includes(row[0]) || rows.has(row[0]) ||
         row.slice(1).some((v: unknown) => typeof v !== "number" || !Number.isSafeInteger(v) || v < 0)) throw failure("row_shape", httpStatus);
       rows.set(row[0], row.slice(1));
     }
-    const provenance = { version: "traffic-filtered-utc-v1", timezone: "UTC", from, until,
+    const provenance = { version, timezone: "UTC", from, until,
       capturedAt: new Date(now()).toISOString(), querySha256: hash(query), responseSha256: hash(raw),
-      filterSha256: nativeEntryFilterSha256, filterAdmission: "six_known_true", outcome: "observed_unverified",
-      visitorsBasis: "distinct_ids_on_page_view", purchasesBasis: "recorded_purchase_events_not_paid_orders" };
+      filterSha256: nativeEntryFilterSha256, filterAdmission: "six_known_true", outcome: "observed_unverified" };
+    if (kind === "native_sessions") return days.map(date => {
+      const [included, excluded, unknown] = rows.get(date) ?? [0, 0, 0];
+      const inventory = included + excluded + unknown;
+      if (!Number.isSafeInteger(inventory)) throw failure("row_shape", httpStatus);
+      return { pull_date: date, source: "posthog", metric: "native_sessions", value: included,
+        raw: { ...provenance, nativeSessionsBasis: "sdk_uuid_starts_with_one_six_filter_true_entry",
+          classification: unknown === 0 ? "complete_source_filter_classification" : "partial_source_filter_classification",
+          nativeInventory: inventory, excludedNativeSessions: excluded, unknownNativeSessions: unknown,
+          permissionBasis: "existing_source_aggregate_not_v3_permission", provesMeasuredSessions: false } };
+    });
+    const eventProvenance = { ...provenance, visitorsBasis: "distinct_ids_on_page_view",
+      purchasesBasis: "recorded_purchase_events_not_paid_orders" };
     return days.flatMap(date => columns.slice(1).map((metric, i) => ({ pull_date: date, source: "posthog",
-      metric, value: rows.get(date)?.[i] ?? 0, raw: provenance })));
+      metric, value: rows.get(date)?.[i] ?? 0, raw: eventProvenance })));
   } catch (error) {
     if (timedOut) throw failure("timeout", httpStatus);
     if (error instanceof Error && failures.has(error)) throw error;

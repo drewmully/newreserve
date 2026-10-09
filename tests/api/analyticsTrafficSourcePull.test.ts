@@ -1,6 +1,7 @@
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
-import { pullTrafficPosthog, trafficPosthogDiagnostic, trafficPosthogQuery, trafficWindow } from "@/lib/analytics/trafficSourcePull";
+import { pullTrafficNativeSessions, pullTrafficPosthog, trafficNativeSessionsQuery, trafficPosthogDiagnostic,
+  trafficPosthogQuery, trafficWindow } from "@/lib/analytics/trafficSourcePull";
 import { GET } from "@/app/api/admin/cron/traffic-pull/route";
 
 const port = vi.hoisted(() => ({ writes: [] as unknown[], meta: {} as Record<string, unknown>, status: "", rows: 0 }));
@@ -26,7 +27,12 @@ const now = Date.parse("2026-10-08T17:00:00Z"), columns = ["day", "visitors", "a
 const env = () => ({ NODE_ENV: "test" as const, LEAN_POSTHOG_PROJECT_ID: "353503",
   LEAN_POSTHOG_QUERY_READ_KEY: "synthetic-read-secret", LEAN_POSTHOG_TEST_ACCOUNT_FILTERS: "synthetic-fixed-config" });
 const response = (results: unknown[] = [["2026-10-07", 12, 0, 2]]) => Response.json({ columns, results });
+const nativeColumns = ["day", "native_sessions", "excluded_native_sessions", "unknown_native_sessions"];
+const nativeResponse = (results: unknown[] = [["2026-10-07", 9, 2, 1]]) => Response.json({ columns: nativeColumns, results });
+const sourceResponse: typeof fetch = async (_url, options) =>
+  JSON.parse(options?.body as string).name === "traffic-native-sessions-utc-v1" ? nativeResponse() : response();
 const read = (request: typeof fetch) => pullTrafficPosthog("2026-10-07", "2026-10-08", env(), request, () => now);
+const readNative = (request: typeof fetch) => pullTrafficNativeSessions("2026-10-07", "2026-10-08", env(), request, () => now);
 beforeEach(() => { port.writes = []; port.meta = {}; port.status = ""; port.rows = 0; });
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
@@ -113,11 +119,13 @@ function request(query = "?days=1", headers: Record<string, string> = { authoriz
 }
 function routeEnv() { Object.assign(process.env, env(), { CRON_SECRET: "operator-secret" }); vi.spyOn(Date, "now").mockReturnValue(now); }
 it("writes through the existing table and reports successful source rows", async () => {
-  routeEnv(); vi.stubGlobal("fetch", vi.fn(async () => response()));
+  routeEnv(); const fetcher = vi.fn(sourceResponse); vi.stubGlobal("fetch", fetcher);
   const result = await GET(request());
-  expect(result.status).toBe(200); expect(port.status).toBe("ok"); expect(port.rows).toBe(3);
+  expect(result.status).toBe(200); expect(port.status).toBe("ok"); expect(port.rows).toBe(4);
   expect(port.writes[0]).toMatchObject({ table: "traffic_pulls", options: { onConflict: "pull_date,source,metric" } });
-  expect(port.meta).toMatchObject({ range: ["2026-10-07", "2026-10-07"], timezone: "UTC", ga4_rows: 0, posthog_rows: 3 });
+  expect(port.meta).toMatchObject({ range: ["2026-10-07", "2026-10-07"], timezone: "UTC", ga4_rows: 0,
+    posthog_rows: 3, posthog_native_rows: 1, native_sessions_definition: "traffic-native-sessions-utc-v1" });
+  expect(fetcher).toHaveBeenCalledTimes(2);
 });
 it("records provider failure as error/503, not an ok empty source", async () => {
   routeEnv(); vi.stubGlobal("fetch", vi.fn(async () => new Response("sensitive", { status: 503 })));
@@ -138,7 +146,7 @@ it.each([
   const diagnostic = { reason: "http_error", httpStatus: status, providerType: type, providerCode: code };
   expect(result.status).toBe(503); expect(body.posthog_diagnostic).toEqual(diagnostic);
   expect(port.meta.posthog_diagnostic).toEqual(diagnostic); expect(port.status).toBe("error");
-  expect(port.writes).toEqual([]); expect(port.rows).toBe(0); expect(fetcher).toHaveBeenCalledTimes(1);
+  expect(port.writes).toEqual([]); expect(port.rows).toBe(0); expect(fetcher).toHaveBeenCalledTimes(2);
   expect(JSON.stringify([body, port.meta])).not.toMatch(/synthetic-private|one\.invalid|synthetic-read-secret|authorization|query/);
 });
 it("does not reflect unknown provider type/code, exception messages or forged diagnostics", async () => {
@@ -195,10 +203,11 @@ it("keeps the ten-second bound on a stalled HTTP error body, no retry", async ()
 });
 it("preserves valid PostHog ingestion while reporting a GA4 failure", async () => {
   routeEnv(); process.env.GA_PROPERTY_ID = "synthetic"; process.env.GOOGLE_SERVICE_ACCOUNT_JSON_BASE64 = "invalid";
-  vi.stubGlobal("fetch", vi.fn(async () => response()));
+  vi.stubGlobal("fetch", vi.fn(sourceResponse));
   const result = await GET(request());
-  expect(result.status).toBe(503); expect(port.rows).toBe(3); expect(port.writes).toHaveLength(1);
+  expect(result.status).toBe(503); expect(port.rows).toBe(4); expect(port.writes).toHaveLength(1);
   expect(port.meta.ga4_error).toBe("source_unavailable"); expect(port.meta.posthog_rows).toBe(3);
+  expect(port.meta.posthog_native_rows).toBe(1);
 });
 it("rejects user-agent spoofing and unbounded request parameters before source calls", async () => {
   routeEnv(); const fetcher = vi.fn(async () => response()); vi.stubGlobal("fetch", fetcher);
@@ -207,4 +216,78 @@ it("rejects user-agent spoofing and unbounded request parameters before source c
   expect((await GET(request("?days=1&days=2"))).status).toBe(400);
   expect((await GET(request("?sql=anything"))).status).toBe(400);
   expect(fetcher).not.toHaveBeenCalled();
+});
+
+it("counts existing SDK-native starts with exact entry relations, not custom IDs or customer joins", () => {
+  const query = trafficNativeSessionsQuery("2026-10-07", "2026-10-08", env());
+  expect(query).toContain("FROM sessions s LEFT JOIN");
+  expect(query).toContain("ON e.$session_id = s.session_id AND e.timestamp = s.$start_timestamp");
+  expect(query).toContain("native_id_valid AND entry_matches = 1 AND passed_entries = 1");
+  expect(query).toContain("AS unknown_native_sessions");
+  expect(query).toContain("toDate(toTimeZone(started_at, 'UTC'))");
+  expect(query).toContain("s.$start_timestamp >= toDateTime('2026-10-07 00:00:00', 'UTC')");
+  expect(query).toContain("s.$start_timestamp < toDateTime('2026-10-08 00:00:00', 'UTC')");
+  expect(query).toContain("^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{4}-[a-fA-F0-9]{12}$");
+  expect(query.match(/positionCaseInsensitive/g)).toHaveLength(5);
+  expect(query).toContain("e.f0 = true AND e.f1 = true AND e.f2 = true AND e.f3 = true AND e.f4 = true AND e.f5 = true");
+  expect(query).toContain("e.f0 = false OR e.f1 = false OR e.f2 = false OR e.f3 = false OR e.f4 = false OR e.f5 = false");
+  expect(query).not.toMatch(/customer|permission|cart|paid_at|event =/);
+  expect(query).toMatch(/GROUP BY day ORDER BY day LIMIT 15$/);
+});
+it("retains native filter unknowns separately, exports no identifiers and requests fresh data once", async () => {
+  const fetcher = vi.fn<typeof fetch>(async () => nativeResponse());
+  const rows = await readNative(fetcher);
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  expect(JSON.parse(fetcher.mock.calls[0][1]?.body as string)).toEqual({
+    query: { kind: "HogQLQuery", query: trafficNativeSessionsQuery("2026-10-07", "2026-10-08", env()) },
+    name: "traffic-native-sessions-utc-v1", refresh: "force_blocking",
+  });
+  expect(rows).toHaveLength(1);
+  expect(rows[0]).toMatchObject({ pull_date: "2026-10-07", source: "posthog", metric: "native_sessions", value: 9,
+    raw: { version: "traffic-native-sessions-utc-v1", classification: "partial_source_filter_classification",
+      nativeInventory: 12, excludedNativeSessions: 2, unknownNativeSessions: 1, provesMeasuredSessions: false } });
+  expect(JSON.stringify(rows)).not.toMatch(/one\.invalid|synthetic-read-secret|person\.properties|session_id/);
+});
+it("distinguishes an exhausted empty native inventory from zero included with unknown entries", async () => {
+  const empty = await readNative(async () => nativeResponse([]));
+  expect(empty[0]).toMatchObject({ value: 0, raw: { nativeInventory: 0, unknownNativeSessions: 0,
+    classification: "complete_source_filter_classification" } });
+  const unknown = await readNative(async () => nativeResponse([["2026-10-07", 0, 0, 4]]));
+  expect(unknown[0]).toMatchObject({ value: 0, raw: { nativeInventory: 4, unknownNativeSessions: 4,
+    classification: "partial_source_filter_classification" } });
+});
+it.each([
+  { results: [["2026-10-07", 2, -1, 0]] }, { results: [["2026-10-07", 2, 0, "1"]] },
+  { results: [["2026-10-07", Number.MAX_SAFE_INTEGER, 1, 0]] }, { results: [["2026-10-08", 2, 0, 0]] },
+])("refuses malformed native count partitions instead of storing zero: %j", ({ results }) =>
+  expect(readNative(async () => nativeResponse(results))).rejects.toThrow("traffic_posthog_unavailable"));
+it("keeps native nullable pagination and freshness checks in the existing strict reader", async () => {
+  const rows = await readNative(async () => Response.json({ columns: nativeColumns,
+    results: [["2026-10-07", 3, 1, 0]], hasMore: null, query_status: null, is_cached: false }));
+  expect(rows[0]).toMatchObject({ value: 3, raw: { classification: "complete_source_filter_classification" } });
+  await expect(readNative(async () => Response.json({ columns: nativeColumns, results: [], is_cached: true })))
+    .rejects.toThrow("traffic_posthog_unavailable");
+});
+it("persists the original three metrics when native source fails and exposes only safe native diagnostics", async () => {
+  routeEnv(); vi.stubGlobal("fetch", vi.fn<typeof fetch>(async (_url, options) =>
+    JSON.parse(options?.body as string).name === "traffic-native-sessions-utc-v1"
+      ? Response.json({ type: "validation_error", code: "invalid_input", detail: "synthetic-private" }, { status: 400 })
+      : response()));
+  const result = await GET(request()), body = await result.json();
+  expect(result.status).toBe(503); expect(port.rows).toBe(3);
+  expect(port.meta).toMatchObject({ posthog_rows: 3, posthog_native_rows: 0, posthog_native_error: "source_unavailable" });
+  expect(body.posthog_native_diagnostic).toEqual({ reason: "http_error", httpStatus: 400,
+    providerType: "validation_error", providerCode: "invalid_input" });
+  expect(JSON.stringify([port.writes, port.meta, body])).not.toContain("synthetic-private");
+  expect((port.writes[0] as { rows: { metric: string }[] }).rows.map(r => r.metric))
+    .toEqual(["visitors", "accounts_created", "purchases"]);
+});
+it("persists a valid native aggregate even when the separate event query fails", async () => {
+  routeEnv(); vi.stubGlobal("fetch", vi.fn<typeof fetch>(async (_url, options) =>
+    JSON.parse(options?.body as string).name === "traffic-native-sessions-utc-v1"
+      ? nativeResponse() : new Response(null, { status: 503 })));
+  const result = await GET(request());
+  expect(result.status).toBe(503); expect(port.rows).toBe(1);
+  expect(port.meta).toMatchObject({ posthog_rows: 0, posthog_native_rows: 1 });
+  expect((port.writes[0] as { rows: { metric: string }[] }).rows.map(r => r.metric)).toEqual(["native_sessions"]);
 });
