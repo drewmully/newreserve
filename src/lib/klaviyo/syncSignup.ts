@@ -140,6 +140,13 @@ export async function syncSignupToKlaviyo(input: SignupSyncInput): Promise<Signu
       });
     }
 
+    // 2b. Readiness flags before the event, so the immediate welcome sees them.
+    // Off unless LIFECYCLE_READINESS_WRITE_ENABLED=true; never blocks the sync.
+    if (!input.historical && process.env.LIFECYCLE_READINESS_WRITE_ENABLED === "true") {
+      const { refreshReadinessForSignup } = await import("@/lib/lifecycle/readinessSources");
+      await refreshReadinessForSignup(input.email, wantEmail);
+    }
+
     // 3. Signup event (idempotent via unique_id).
     await klaviyoRequest("/api/events", {
       body: {

@@ -119,6 +119,8 @@ export interface CustomerOrderHistory {
   holds: string[];
   orders: AdminOrder[];
   subscriptionOrders: SubscriptionOrderFact[];
+  /** Orders of ANY status that were Loop, Recharge or native subscription orders. */
+  subscriptionSignalCount: number;
   history: OrderHistoryEvidence;
 }
 
@@ -139,6 +141,7 @@ export function deriveCustomerHistory(customer: string, nodes: unknown[], readCo
   const subscriptionOrders: SubscriptionOrderFact[] = [];
   const legacyPaid: Array<{ orderId: string; paidAt: string }> = [];
   const seen = new Set<string>();
+  let signals = 0;
   for (const order of orders) {
     if (!order.orderId || order.customerId !== customerId) { holds.push("order_identity_mismatch"); continue; }
     if (seen.has(order.orderId)) { holds.push("duplicate_order"); continue; }
@@ -153,6 +156,7 @@ export function deriveCustomerHistory(customer: string, nodes: unknown[], readCo
     });
     if (decision.kind === "hold") { holds.push(decision.reason); continue; }
     if (decision.kind === "one_time") continue;
+    signals++;
     if (decision.kind === "legacy_subscription") {
       const r = order.raw;
       if (r.test === false && r.cancelledAt === null && ["PAID", "PARTIALLY_REFUNDED"].includes(String(r.displayFinancialStatus)) &&
@@ -186,6 +190,7 @@ export function deriveCustomerHistory(customer: string, nodes: unknown[], readCo
   const complete = uniqueHolds.length === 0;
   return {
     customerId: customerId ?? "", checkedAt, complete, holds: uniqueHolds, orders, subscriptionOrders,
+    subscriptionSignalCount: signals,
     history: {
       customerId: customerId ?? "", complete, checkedAt,
       firstPaidMemberOrderId: firstPaid?.orderId ?? null,
