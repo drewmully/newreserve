@@ -76,6 +76,53 @@ describe("application marketing source jobs", () => {
     const g = fixture();
     expect((await refreshMarketingSource("google_ads", "primary", g.r)).body.state).toBe("complete");
   });
+  it.each([
+    { status: 503, header: "7200", body: { error: { message: "private" } }, code: "provider_unavailable", delay: 7200 },
+    { status: 503, header: "Thu, 08 Oct 2026 19:00:00 GMT", body: {}, code: "provider_unavailable", delay: 7200 },
+    { status: 429, header: "9".repeat(400), body: {}, code: "rate_limit_manual", delay: 0 },
+    { status: 400, header: null, body: { error: { code: 4, message: "private" } }, code: "rate_limited", delay: 3600 },
+    { status: 403, header: "7200", body: { error: { code: 17, message: "private" } }, code: "rate_limited", delay: 7200 },
+    { status: 400, header: null, body: { error: { code: 341, message: "rate limit private" } }, code: "schema_changed", delay: 0 },
+  ])("bounded transient/header/provider classification %#", async ({ status, header, body, code, delay }) => {
+    const f = fixture("meta_ads");
+    f.r.request = vi.fn(async () => Response.json(body, { status,
+      headers: header === null ? {} : { "Retry-After": header } }));
+    const result = await refreshMarketingSource("meta_ads", "primary", f.r);
+    expect(result.status).toBe(503);
+    expect(f.calls.at(-1)).toMatchObject({ name: "lean_marketing_source_fail",
+      args: { p_code: code, p_retry_seconds: delay } });
+    expect(f.r.request).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(result) + JSON.stringify(f.calls)).not.toContain("private");
+  });
+  it.each(["RESOURCE_EXHAUSTED", "RESOURCE_TEMPORARILY_EXHAUSTED", "UNKNOWN_RESOURCE_EXHAUSTED"])(
+    "maps only exact documented Google quota enum %s on the Ads endpoint", async quotaError => {
+      const f = fixture(), original = f.r.request;
+      f.r.request = vi.fn(async (url, init) => String(url).includes("oauth2.googleapis.com") ?
+        original(url, init) : Response.json({ error: { details: [{ errors: [
+          { errorCode: { quotaError }, message: "private" },
+        ] }] } }, { status: 400 }));
+      await refreshMarketingSource("google_ads", "primary", f.r);
+      expect(f.calls.at(-1)?.args).toMatchObject({ p_code: quotaError.startsWith("UNKNOWN") ? "schema_changed" : "rate_limited",
+        p_retry_seconds: quotaError.startsWith("UNKNOWN") ? 0 : 3600 });
+      expect(f.r.request).toHaveBeenCalledTimes(2);
+      expect(JSON.stringify(f.calls)).not.toContain("private");
+    });
+  it("oversized error bodies remain unparsed and cannot inject a throttle code", async () => {
+    const f = fixture("meta_ads");
+    f.r.request = vi.fn(async () => Response.json({ error: { code: 4, message: "x".repeat(17000) } }, { status: 400 }));
+    await refreshMarketingSource("meta_ads", "primary", f.r);
+    expect(f.calls.at(-1)?.args.p_code).toBe("schema_changed");
+    expect(f.r.request).toHaveBeenCalledTimes(1);
+  });
+  it("a body budget failure cannot shorten an already received Retry-After", async () => {
+    const f = fixture("meta_ads");
+    f.r.request = vi.fn(async () => new Response("x".repeat(1000001), {
+      status: 503, headers: { "Retry-After": "7200" },
+    }));
+    await refreshMarketingSource("meta_ads", "primary", f.r);
+    expect(f.calls.at(-1)?.args).toMatchObject({ p_code: "incomplete_pages", p_retry_seconds: 7200 });
+    expect(f.r.request).toHaveBeenCalledTimes(1);
+  });
   it.each(["lost", "unknown"] as const)("commit %s only reads the same job, with no recapture or second commit", async commit => {
     const f = fixture("meta_ads", { commit }), result = await refreshMarketingSource("meta_ads", "primary", f.r);
     expect(result.body.state).toBe(commit === "lost" ? "complete" : "held");

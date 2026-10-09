@@ -25,6 +25,32 @@ const object = (v: unknown): Row => {
 };
 const iso = (n: number) => new Date(n).toISOString();
 const hash = (b: Uint8Array) => createHash("sha256").update(b).digest("hex");
+function retryAfter(value: string | null, now: number): number | "manual" | null {
+  if (value === null) return null;
+  const text = value.trim();
+  // Never turn numeric overflow into an earlier fallback retry.
+  if (text.length > 128) return "manual";
+  if (/^\d+$/.test(text)) {
+    const n = BigInt(text);
+    return n > BigInt(86400) ? "manual" : Number(n);
+  }
+  const seconds = Math.ceil((Date.parse(text) - now) / 1000);
+  if (!Number.isFinite(seconds)) return null;
+  return seconds > 86400 ? "manual" : Math.max(0, seconds);
+}
+function providerThrottle(value: unknown, google: boolean, oauth: boolean): boolean {
+  const row = (v: unknown): Row | null => v && typeof v === "object" && !Array.isArray(v) ? v as Row : null;
+  const error = row(row(value)?.error);
+  if (!error) return false;
+  if (!google) return error.code === 4 || error.code === 17;
+  if (oauth) return false;
+  if (error.status === "RESOURCE_EXHAUSTED") return true;
+  const quota = new Set(["RESOURCE_EXHAUSTED", "RESOURCE_TEMPORARILY_EXHAUSTED"]);
+  return Array.isArray(error.details) && error.details.some(detail => {
+    const errors = row(detail)?.errors;
+    return Array.isArray(errors) && errors.some(item => quota.has(String(row(row(item)?.errorCode)?.quotaError)));
+  });
+}
 
 function googleProjection(raw: unknown, query: string) {
   const b = object(raw);
@@ -74,18 +100,39 @@ export async function captureMarketingSource(c: MarketingClaim, r: CaptureRuntim
       const response = await Promise.race([r.request(url.href, { ...init, redirect: "error",
         signal: controller.signal, cache: "no-store" }), timed]);
       if (!response.ok) {
-        void response.body?.cancel().catch(() => {});
-        if (response.status === 429) {
-          const value = response.headers.get("retry-after") ?? "";
-          const seconds = /^\d+$/.test(value) ? Number(value) :
-            Math.ceil((Date.parse(value) - r.now()) / 1000);
-          // A longer provider deferral is retained up to one day; no earlier retry.
-          if (Number.isFinite(seconds) && seconds > 86400) return fail("rate_limit_manual");
-          throw new MarketingSourceError("rate_limited",
-            Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : 3600);
+        const delay = retryAfter(response.headers.get("retry-after"), r.now());
+        if (delay === "manual") {
+          void response.body?.cancel().catch(() => {});
+          return fail("rate_limit_manual");
         }
-        if ([401, 403].includes(response.status)) return fail("authentication_denied");
-        return fail(response.status >= 500 ? "provider_unavailable" : "schema_changed");
+        const reader = response.body?.getReader();
+        let nativeError: unknown = null;
+        if (reader) {
+          const chunks: Uint8Array[] = []; let size = 0, complete = false;
+          try {
+            for (;;) {
+              const part = await Promise.race([reader.read(), timed]);
+              if (part.done) { complete = true; break; }
+              size += part.value.length; bytes += part.value.length;
+              if (bytes > 8388608 || size > (google ? 8388608 : 1000000))
+                throw new MarketingSourceError("incomplete_pages", delay ?? 0);
+              if (size > 16384) break; // No error-message/body retention.
+              chunks.push(part.value);
+            }
+            if (complete) {
+              try { nativeError = JSON.parse(Buffer.concat(chunks).toString("utf8")); } catch { /* Unknown stays unmapped. */ }
+            }
+          } catch (e) {
+            if (e instanceof MarketingSourceError && e.category !== "timeout") throw e;
+            // An unreadable error body cannot shorten an already received
+            // Retry-After. Retain header/status classification below.
+          } finally { void reader.cancel().catch(() => {}); reader.releaseLock(); }
+        }
+        const throttled = response.status === 429 || providerThrottle(nativeError, google, oauth);
+        if (throttled) throw new MarketingSourceError("rate_limited", typeof delay === "number" ? delay : 3600);
+        if ([401, 403].includes(response.status)) throw new MarketingSourceError("authentication_denied", delay ?? 0);
+        throw new MarketingSourceError(response.status >= 500 ? "provider_unavailable" : "schema_changed",
+          delay ?? 0);
       }
       const reader = response.body?.getReader(); if (!reader) return fail();
       const chunks: Uint8Array[] = []; let size = 0;

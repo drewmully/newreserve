@@ -130,7 +130,9 @@ jobs:
               --exclude tests/api/analyticsLeanHistoryBridge.test.ts
           done
       - name: Verify application marketing jobs with real SQL and fake native sources
-        run: TZ=UTC node --max-old-space-size=256 tests/analytics/marketing-source-jobs-sql.cjs
+        run: |
+          TZ=UTC node --max-old-space-size=256 tests/analytics/marketing-source-jobs-sql.cjs
+          TZ=UTC node --max-old-space-size=256 tests/analytics/marketing-source-jobs-sql.cjs --expiry-only
       - run: npx tsc --project tsconfig.analytics.json
       - name: Verify schema-only release ACLs without concurrent database resets
         env:

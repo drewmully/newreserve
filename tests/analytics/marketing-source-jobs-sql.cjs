@@ -98,6 +98,56 @@ async function transaction(fn) { await db.exec("begin"); try { await fn(); } fin
       return rpc(name, args);
     } };
   }
+  if (process.argv.includes("--expiry-only")) {
+    await check("source expiry is null/off by default and rejects null or infinite enabled authority", async () => {
+      assert((await q("select * from lean_private.marketing_source_settings")).every(s => !s.enabled && s.source_expires_at === null));
+      await assert.rejects(() => db.exec("update lean_private.marketing_source_settings set enabled=true"), /check constraint/);
+      await assert.rejects(() => db.exec("update lean_private.marketing_source_settings set enabled=true,source_expires_at='infinity'"), /check constraint/);
+    });
+    await check("expired and under-90-second scopes refuse new claims without jobs or provider HTTP", async () => {
+      for (const interval of ["-1 second", "89 seconds"]) {
+        await q("update lean_private.marketing_source_settings set enabled=true,source_expires_at=clock_timestamp()+$1::interval", [interval]);
+        assert.equal((await claim("google_ads")).state, "disabled");
+        assert.equal((await claim("meta_ads")).state, "disabled");
+      }
+      assert.equal((await q("select count(*)::int n from public.job_runs"))[0].n, 0);
+    });
+    await check("provider expiry before or during final writes refuses commit and rolls everything back", async () => {
+      await db.exec("update lean_private.marketing_source_settings set enabled=true,source_expires_at=clock_timestamp()+interval '1 day'");
+      const c = await claim("google_ads", "primary", repair), native = nativeMarketing();
+      assert.equal(c.state, "claimed");
+      assert.equal(Date.parse(c.deadline) - Date.parse(c.startedAt), 90000);
+      const captured = await captureMarketingSource(c, { env: marketingEnv, now: Date.now, request: native.request });
+      const args = { p_job: c.jobId, p_token: c.token, p_packet: captured.packet,
+        p_receipts: captured.receipts, p_digest: evidenceDigest(captured) };
+      await db.exec("update lean_private.marketing_source_settings set source_expires_at=clock_timestamp()-interval '1 second' where provider='google_ads'");
+      await assert.rejects(() => rpc("lean_marketing_source_commit", args), /commit scope/);
+      await db.exec(`update lean_private.marketing_source_settings set source_expires_at=clock_timestamp()+interval '1 second',
+        retry_after=clock_timestamp()+interval '1 hour' where provider='google_ads';
+        create function public.fixture_marketing_scope_delay() returns trigger language plpgsql as $$
+        declare until_at timestamptz;
+        begin
+          if new.status='ok' then
+            select source_expires_at into until_at from lean_private.marketing_source_settings where provider='google_ads';
+            perform pg_sleep(greatest(0,extract(epoch from until_at-clock_timestamp()))+0.05);
+          end if;
+          return new;
+        end $$;
+        create trigger fixture_marketing_scope_delay before update on public.job_runs
+          for each row execute function public.fixture_marketing_scope_delay();`);
+      const before = (await q("select retry_after,source_expires_at from lean_private.marketing_source_settings where provider='google_ads'"))[0];
+      await assert.rejects(() => rpc("lean_marketing_source_commit", args), /commit expiry/);
+      assert.deepEqual((await q("select retry_after,source_expires_at from lean_private.marketing_source_settings where provider='google_ads'"))[0], before);
+      assert.deepEqual((await q("select state,packet,receipts from lean_private.marketing_source_jobs where job_id=$1", [c.jobId]))[0],
+        { state: "running", packet: null, receipts: null });
+      assert.equal((await q("select status from public.job_runs where id=$1", [c.jobId]))[0].status, "running");
+      assert.equal(native.calls.length, 7);
+      const health = await rpc("lean_marketing_source_health", {});
+      assert(health.every(s => typeof s.sourceExpiresAt === "string"));
+    });
+    console.log(`${checks} focused source-expiry SQL groups passed`);
+    return;
+  }
   await check("migration is default-off with owner-only tables/helpers, service-only frontdoors", async () => {
     assert.equal((await claim("google_ads")).state, "disabled");
     assert.equal((await claim("meta_ads")).state, "disabled"); assert.equal(await savedRead(), null);
@@ -108,7 +158,7 @@ async function transaction(fn) { await db.exec("begin"); try { await fn(); } fin
     assert.equal((await q("select has_table_privilege('service_role','lean_private.marketing_source_jobs','select') v"))[0].v, false);
     assert.equal((await q("select has_function_privilege('service_role','public.lean_saved_marketing_read_before_app_sources(text)','execute') v"))[0].v, false);
   });
-  await db.exec("update lean_private.marketing_source_settings set enabled=true");
+  await db.exec("update lean_private.marketing_source_settings set enabled=true,source_expires_at=clock_timestamp()+interval '1 day'");
   await check("positive fixture chooses closed Pacific windows before LA midnight and around DST", async () => {
     for (const at of ["2026-10-09T04:30:00Z", "2026-11-04T04:30:00Z", "2026-03-10T04:30:00Z"]) {
       const chosen = safeMetaDay(Date.parse(at)), w = metaHourlyWindow(chosen.date);

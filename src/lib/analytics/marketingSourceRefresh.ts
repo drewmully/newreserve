@@ -120,7 +120,7 @@ export async function marketingAdmin(request: Request,
     if (request.method === "GET") {
       const result = await r.rpc("lean_marketing_source_health", {});
       if (!Array.isArray(result) || result.length !== 2) throw new Error("health");
-      const keys = ["provider", "enabled", "reportEnabled", "blockedCode", "retryAfter",
+      const keys = ["provider", "enabled", "reportEnabled", "sourceExpiresAt", "blockedCode", "retryAfter",
         "lastAttempt", "lastState", "lastCode", "lastSuccess", "lastSuccessDate", "lastSuccessHash",
         "lastCaptureAt", "lastControlAt", "downstreamImport"];
       if (result.some(v => !object(v) || Object.keys(v).some(k => !keys.includes(k)) ||

@@ -25,11 +25,13 @@ create table lean_private.marketing_source_settings (
   provider text primary key check(provider in ('google_ads','meta_ads')),
   enabled boolean not null default false,
   report_enabled boolean not null default false,
+  source_expires_at timestamptz,
   retry_after timestamptz,
   blocked_code text,
   admin_actor text,
   admin_reason text,
-  admin_at timestamptz
+  admin_at timestamptz,
+  check(not enabled or (source_expires_at is not null and isfinite(source_expires_at)))
 );
 insert into lean_private.marketing_source_settings(provider) values('google_ads'),('meta_ads');
 create table lean_private.marketing_source_jobs (
@@ -99,6 +101,10 @@ begin
   select * into strict s from lean_private.marketing_source_settings where provider=p_provider for update;
   if not s.enabled then return jsonb_build_object('state','disabled'); end if;
   t:=date_trunc('milliseconds',clock_timestamp());
+  -- Admission must leave the whole unchanged 90-second job lease inside the
+  -- owner-bound source window. Expiry never extends or recycles an old lease.
+  if s.source_expires_at is null or clock_timestamp()+interval '90 seconds'>s.source_expires_at
+    then return jsonb_build_object('state','disabled'); end if;
   today:=(t at time zone 'America/New_York')::date;
   if repair then
     if p_date !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' or p_date::date::text<>p_date or
@@ -205,6 +211,7 @@ end $$;
 create function public.lean_marketing_source_health()
 returns jsonb language sql stable security definer set search_path=pg_catalog as $$
   select jsonb_agg(jsonb_build_object('provider',s.provider,'enabled',s.enabled,'reportEnabled',s.report_enabled,
+    'sourceExpiresAt',s.source_expires_at,
     'blockedCode',s.blocked_code,'retryAfter',s.retry_after,
     'lastAttempt',recent.started_at,'lastState',recent.state,'lastCode',recent.code,
     'lastSuccess',g.finished_at,'lastSuccessDate',g.report_date,'lastSuccessHash',g.packet_hash,
@@ -512,7 +519,7 @@ begin
     return public.lean_marketing_source_read(p_job,p_token);
   end if;
   t:=clock_timestamp();
-  if not s.enabled or j.state<>'running' or t>=j.deadline or
+  if not s.enabled or s.source_expires_at is null or t>=s.source_expires_at or j.state<>'running' or t>=j.deadline or
     (p_packet->>'asOf')::timestamptz is null or (p_packet->>'asOf')::timestamptz not between j.started_at and t or
     p_packet-array['kind','asOf',case when provider_name='google_ads' then 'google' else 'meta' end]<>'{}'
     then raise exception 'marketing source commit scope'; end if;
@@ -529,7 +536,8 @@ begin
       meta_row.packet_hash is distinct from encode(sha256(convert_to(meta_row.packet::text,'UTF8')),'hex')
       then raise exception 'marketing Meta persistence'; end if;
   end if;
-  if clock_timestamp()>=j.deadline then raise exception 'marketing source commit expiry'; end if;
+  if clock_timestamp()>=j.deadline or clock_timestamp()>=s.source_expires_at
+    then raise exception 'marketing source commit expiry'; end if;
   update lean_private.marketing_source_jobs set state='complete',packet=p_packet,receipts=p_receipts,digest=p_digest,
     packet_hash=encode(sha256(convert_to(p_packet::text,'UTF8')),'hex'),finished_at=clock_timestamp()
     where job_id=p_job;
@@ -538,7 +546,8 @@ begin
   update lean_private.marketing_source_settings set retry_after=null,blocked_code=null where provider=provider_name;
   -- A row lock or trigger in any final write can outlast the admission check.
   -- Refuse after every write so the whole registration transaction rolls back.
-  if clock_timestamp()>=j.deadline then raise exception 'marketing source commit expiry'; end if;
+  if clock_timestamp()>=j.deadline or clock_timestamp()>=s.source_expires_at
+    then raise exception 'marketing source commit expiry'; end if;
   return public.lean_marketing_source_read(p_job,p_token);
 end $$;
 

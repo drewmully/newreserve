@@ -27,6 +27,10 @@ credentials, SQL, grant IDs, or source rows.
 All workers require Production/main. The server requires the fixed Supabase URL
 and existing service-role key. Both provider settings rows start with
 `enabled=false` and `report_enabled=false`. Neither HTTP route can enable them.
+`source_expires_at` starts null. An owner must bind a finite source expiry before
+enabling acquisition. Claims require at least 90 seconds remaining; commits check
+both the job deadline and source expiry before and after final writes. The
+overnight cutover uses the exclusive boundary `2026-10-21T23:15:00Z`.
 
 Old `google-ads-spend`, `meta-ads-spend?source_only=1`, traffic and other cron
 entries stay unchanged. The automatic Google grant, cycle, observer, holds and
@@ -103,9 +107,16 @@ that the full raw HTTP body was archived.
 
 There is no provider retry within an invocation. Transient errors record a
 provider-wide retry time of at least 15 minutes. A numeric or HTTP-date
-`Retry-After` up to one day extends that time and applies to admin retries too.
+`Retry-After` up to one day extends that time on throttling and transient 5xx
+responses, and applies to admin retries too.
 A larger deferral sets `rate_limit_manual`; the admin retry endpoint cannot
 clear it. The operator must investigate before an owner changes that setting.
+Oversized numeric deferrals also hold rather than overflowing to a shorter retry.
+An error body is read only within the existing deadline and aggregate byte
+budget, with a 16 KiB parsing ceiling. Only exact Meta error codes 4/17 and
+documented Google quota enums/canonical status classify non-429 throttling.
+Unknown messages are not searched or retained. A quota/overload classification
+does not prove exhaustion of a daily quota or explain a historical failure.
 
 Missing credentials, authentication failures, schema changes, incomplete pages
 and control mismatches stop scheduled attempts for that provider. Admin retry
@@ -143,7 +154,9 @@ The existing marketing resources, null ratios and historical snapshot meanings
 stay unchanged. This change does not expand the current consumer's lookback,
 expiry, audience or disabled-P6 opt-in. A one-day reader still serves one day
 even though correction jobs retain older revised snapshots. Consumer expiry
-still closes reporting; it does not stop the separate source jobs.
+still closes reporting. The independently bound source expiry stops source jobs;
+the overnight cutover binds both to the same exclusive Oct21 boundary. Pausing or
+expiring acquisition does not delete retained historical data.
 
 The current PostHog refresh schedule is unchanged. Source success is not import
 acceptance. Admin health always reports `downstreamImport: "not_observed"`.
@@ -156,7 +169,7 @@ Use a current Firebase admin ID token with the mounted admin route. Never put
 provider, service-role, cron or reporting tokens in a browser.
 
 Health returns enabled/report-enabled state, latest attempt state and safe error
-code, blocked category, retry time, last successful report date/hash, original
+code, blocked category, retry time, source expiry, last successful report date/hash, original
 source/control clocks, and downstream status. It does not return receipt bodies,
 lease tokens, raw `job_runs.error`, or provider error strings.
 
