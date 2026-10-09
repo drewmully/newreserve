@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { nativeEntryFilterSha256, nativeFilterRules } from "./journeyNativeFilterConfig";
 
 export type TrafficRow = { pull_date: string; source: string; metric: string; value: number; raw?: unknown };
-const dayMs = 86400000, eventColumns = ["day", "visitors", "accounts_created", "purchases"];
+const dayMs = 86400000, eventColumns = ["day", "visitors", "accounts_created", "purchases", "page_views", "add_to_cart_events"];
 const nativeColumns = ["day", "native_sessions", "excluded_native_sessions", "unknown_native_sessions"];
 const hash = (value: string | Buffer) => createHash("sha256").update(value).digest("hex");
 export type TrafficPosthogDiagnostic = {
@@ -76,11 +76,13 @@ export function trafficPosthogQuery(from: string, until: string, env: NodeJS.Pro
   return `SELECT toString(toDate(toTimeZone(timestamp, 'UTC'))) AS day,
     uniqExactIf(distinct_id, event = 'page_view') AS visitors,
     countIf(event = 'account_created') AS accounts_created,
-    countIf(event = 'purchase') AS purchases
+    countIf(event = 'purchase') AS purchases,
+    countIf(event = 'page_view') AS page_views,
+    countIf(event = 'add_to_cart') AS add_to_cart_events
     FROM events
     WHERE timestamp >= toDateTime('${from} 00:00:00', 'UTC')
       AND timestamp < toDateTime('${until} 00:00:00', 'UTC')
-      AND event IN ('page_view', 'account_created', 'purchase')
+      AND event IN ('page_view', 'account_created', 'purchase', 'add_to_cart')
       AND ${filters.map(f => `(${f}) = true`).join("\n      AND ")}
     GROUP BY day ORDER BY day LIMIT 15`;
 }
@@ -129,7 +131,7 @@ async function pullTrafficAggregate(kind: "events" | "native_sessions", from: st
   env: NodeJS.ProcessEnv, request: typeof fetch, now: () => number): Promise<TrafficRow[]> {
   const columns = kind === "events" ? eventColumns : nativeColumns;
   const queryFor = kind === "events" ? trafficPosthogQuery : trafficNativeSessionsQuery;
-  const version = kind === "events" ? "traffic-filtered-utc-v1" : "traffic-native-sessions-utc-v1";
+  const version = kind === "events" ? "traffic-filtered-utc-v2" : "traffic-native-sessions-utc-v1";
   if (typeof window !== "undefined" || env.LEAN_POSTHOG_PROJECT_ID !== "353503" || !env.LEAN_POSTHOG_QUERY_READ_KEY?.trim())
     throw failure("configuration");
   const days = dates(from, until), started = now(), key = env.LEAN_POSTHOG_QUERY_READ_KEY;
@@ -188,7 +190,7 @@ async function pullTrafficAggregate(kind: "events" | "native_sessions", from: st
       queryFor(from, until, env) !== query) throw failure("configuration_changed", httpStatus);
     const rows = new Map<string, number[]>();
     for (const row of parsed.results) {
-      if (!Array.isArray(row) || row.length !== 4 || !days.includes(row[0]) || rows.has(row[0]) ||
+      if (!Array.isArray(row) || row.length !== columns.length || !days.includes(row[0]) || rows.has(row[0]) ||
         row.slice(1).some((v: unknown) => typeof v !== "number" || !Number.isSafeInteger(v) || v < 0)) throw failure("row_shape", httpStatus);
       rows.set(row[0], row.slice(1));
     }
@@ -206,7 +208,9 @@ async function pullTrafficAggregate(kind: "events" | "native_sessions", from: st
           permissionBasis: "existing_source_aggregate_not_v3_permission", provesMeasuredSessions: false } };
     });
     const eventProvenance = { ...provenance, visitorsBasis: "distinct_ids_on_page_view",
-      purchasesBasis: "recorded_purchase_events_not_paid_orders" };
+      purchasesBasis: "recorded_purchase_events_not_paid_orders",
+      pageViewsBasis: "recorded_page_view_events_not_unique_pages",
+      addToCartBasis: "recorded_add_to_cart_events_not_carts_or_units" };
     return days.flatMap(date => columns.slice(1).map((metric, i) => ({ pull_date: date, source: "posthog",
       metric, value: rows.get(date)?.[i] ?? 0, raw: eventProvenance })));
   } catch (error) {
