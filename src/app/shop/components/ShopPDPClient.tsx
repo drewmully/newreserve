@@ -190,8 +190,8 @@ export function ShopPDPClient({
       </div>
 
       {/* Top: gallery + buy box */}
-      <div className="grid gap-10 md:grid-cols-2 md:gap-14 lg:gap-20">
-        <div>
+      <div className="grid grid-cols-1 gap-10 md:grid-cols-2 md:gap-14 lg:gap-20">
+        <div className="min-w-0">
           <ProductImageGallery
             key={galleryKey}
             images={orderedImages}
@@ -199,7 +199,7 @@ export function ShopPDPClient({
           />
         </div>
 
-        <div className="flex flex-col">
+        <div className="flex min-w-0 flex-col">
           <span className="mb-3 inline-flex w-fit text-[11px] font-mono uppercase tracking-[0.24em] text-charcoal/60">
             {product.brand}
           </span>

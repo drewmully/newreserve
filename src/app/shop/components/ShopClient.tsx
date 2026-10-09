@@ -604,12 +604,12 @@ export function ProductImageGallery({ images, name }: { images: string[]; name: 
 
       {/* Thumbnails */}
       {images.length > 1 && (
-        <div className="flex gap-2">
+        <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {images.map((img, i) => (
             <button
               key={i}
               onClick={() => setActiveIndex(i)}
-              className={`w-16 h-20 md:w-20 md:h-24 rounded overflow-hidden border-2 transition-all duration-200 cursor-pointer ${
+              className={`shrink-0 w-16 h-20 md:w-20 md:h-24 rounded overflow-hidden border-2 transition-all duration-200 cursor-pointer ${
                 activeIndex === i
                   ? "border-forest"
                   : "border-transparent opacity-60 hover:opacity-100"

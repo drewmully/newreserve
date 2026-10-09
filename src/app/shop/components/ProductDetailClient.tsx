@@ -104,9 +104,9 @@ export function ProductDetailClient({
   const galleryKey = colorOption ? selection[colorOption.name] ?? "default" : "default";
 
   return (
-    <div className="grid md:grid-cols-2 gap-8 md:gap-14 lg:gap-20">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-14 lg:gap-20">
       {/* Left - Images */}
-      <div>
+      <div className="min-w-0">
         <ProductImageGallery
           key={galleryKey}
           images={orderedImages}
