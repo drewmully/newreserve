@@ -24,7 +24,7 @@ interface Props {
  * PDP primary CTA.
  *
  * Available → "Add to cart" (solid accent button).
- * Available with currentlyNotInStock → enabled preorder with shipping estimate.
+ * Available with currentlyNotInStock → enabled "Order Now"; the restock ship date shows in the trust strip.
  * Unavailable (DENY or invalid combination) → disabled, never a fake preorder.
  *
  * The "Add to cart" ↔ "Pre-order" swap runs client-side based on the current
@@ -37,7 +37,6 @@ export function BuyBoxAction({
   isUnavailable,
   isPreorder = false,
   busy = false,
-  preOrderEtaWeeks,
   accent,
   productSlug,
   productName,
@@ -45,8 +44,6 @@ export function BuyBoxAction({
   selectedSize,
 }: Props) {
   const [notifyOpen, setNotifyOpen] = useState(false);
-  const weeks = preOrderEtaWeeks && preOrderEtaWeeks > 0 ? preOrderEtaWeeks : 2;
-
   if (isUnavailable || isPreorder) {
     return (
       <div>
@@ -57,11 +54,13 @@ export function BuyBoxAction({
           style={{ backgroundColor: accent }}
         >
           <span className="text-[11px] font-mono uppercase tracking-[0.28em]">
-            {busy ? "Adding…" : isUnavailable ? "Unavailable" : added ? "Preorder added" : "Preorder"}
+            {busy ? "Adding…" : isUnavailable ? "Unavailable" : added ? "Added to cart" : "Order Now"}
           </span>
-          <span className="mt-1 text-[10px] font-mono uppercase tracking-[0.2em] opacity-80">
-            {isUnavailable ? "Choose another available option" : `Ships in about ${weeks} weeks`}
-          </span>
+          {isUnavailable && (
+            <span className="mt-1 text-[10px] font-mono uppercase tracking-[0.2em] opacity-80">
+              Choose another available option
+            </span>
+          )}
         </button>
         {!notifyOpen ? (
           <div className="mt-3 flex justify-center">
