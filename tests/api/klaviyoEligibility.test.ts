@@ -125,6 +125,7 @@ describe("service coverage", () => {
     for(const change of [{complete:false},{allChannels:false},{checkedAt:ago(16)},{customerId:"101"},{unresolvedCount:1},{unresolvedCount:-1}])
       expect(verifyServiceClear("100",{...service,...change},now).clear).toBe(false);
     expect(verifyServiceClear("100",{...service,reviewOwner:"other"},now)).toMatchObject({clear:true,reviewOwnerClear:false});
+    expect(verifyServiceClear("100",{...service,reviewOwner:"junip"},now)).toMatchObject({clear:true,reviewOwnerClear:true,klaviyoMayAskForReview:false});
   });
 });
 

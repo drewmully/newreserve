@@ -177,7 +177,9 @@ export interface ServiceEvidence {
   allChannels: boolean;
   checkedAt: string;
   unresolvedCount: number; // Includes snoozed and unresolved archived cases.
-  reviewOwner: "klaviyo" | "other" | "unknown";
+  /** Who sends product-review requests. Junip owns them as of Oct 9, 2026,
+   * so Klaviyo delivery emails must not ask for reviews. */
+  reviewOwner: "klaviyo" | "junip" | "other" | "unknown";
 }
 export function verifyServiceClear(customerId: string, service: ServiceEvidence, now = new Date()) {
   const holds: string[] = [];
@@ -187,7 +189,10 @@ export function verifyServiceClear(customerId: string, service: ServiceEvidence,
     !fresh(service.checkedAt, now, 15 * 60_000)) holds.push("service_coverage_unverified");
   if (!Number.isSafeInteger(service.unresolvedCount) || service.unresolvedCount < 0) holds.push("service_count_unverified");
   else if (service.unresolvedCount > 0) holds.push("unresolved_service_issue");
-  return { clear: holds.length === 0, reviewOwnerClear: holds.length === 0 && service.reviewOwner === "klaviyo", holds };
+  // Delivery programs need a KNOWN review owner, so two systems never both ask.
+  const ownerKnown = service.reviewOwner === "klaviyo" || service.reviewOwner === "junip";
+  return { clear: holds.length === 0, reviewOwnerClear: holds.length === 0 && ownerKnown,
+    klaviyoMayAskForReview: holds.length === 0 && service.reviewOwner === "klaviyo", holds };
 }
 
 export type OrderLifecycle = "shop_purchase" | "shop_delivery" | "member_start" | "member_first_delivery";

@@ -93,14 +93,22 @@ Klaviyo metrics the draft flows will be rewired to (created on first real event,
 `Mully Lifecycle Shop Purchase Verified`, `… Shop Delivery Verified`,
 `… Member Start Verified`, `… Member First Delivery Verified`.
 
+## Business rules (Drew, October 9, 2026)
+
+- Support pause: only an **open Intercom** thread with an Intercom message in the **last 14
+  days** pauses lifecycle email for that customer. Gmail, Resend and SendBlue do not. At
+  the time of the decision, this paused 77 customers, compared with 907 under the old
+  any-open-thread rule.
+- Product reviews: **Junip** sends review requests. Klaviyo delivery emails must not ask for
+  reviews.
+- Swing Box: ignored. Its plan stays unregistered, so its orders never enter lifecycle email.
+
 ## Switches (all unset today)
 
 | Variable | Effect when set |
 | --- | --- |
 | `LIFECYCLE_NATIVE_FLOW_INGEST_ENABLED=true` | Flow intake accepts and stores events |
 | `LIFECYCLE_FLOW_SHARED_SECRET` | Required for intake; 32+ chars |
-| `LIFECYCLE_SERVICE_CHANNELS_CONFIRMED=true` | Support inbox (Gmail, Intercom, Resend) is the complete set of channels |
-| `LIFECYCLE_REVIEW_OWNER=klaviyo` | Klaviyo owns review requests (needed for delivery programs) |
 | `LIFECYCLE_DISPATCH_ENABLED=true` + `LIFECYCLE_DISPATCH_PROGRAMS=…` | Dispatcher may send for listed programs |
 
 ## Known limits

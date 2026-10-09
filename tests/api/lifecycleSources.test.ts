@@ -259,3 +259,40 @@ describe("Flow intake route", () => {
     expect(await res.json()).toEqual({ ok: true, enabled: false });
   });
 });
+
+describe("support clearance (Intercom only, 14 days)", () => {
+  type Res = { data: unknown[] | null; error: unknown };
+  const fakeSb = (threads: Res, heartbeat: Res, recent: Res, calls: string[] = []) => ({
+    from(table: string) {
+      const filters: string[] = [];
+      const q: Record<string, unknown> = {};
+      const chain = new Proxy(q, { get(_t, prop: string) {
+        if (prop === "then") {
+          const res = table === "hub_thread" ? threads : filters.includes("in:thread_id") ? recent : heartbeat;
+          calls.push(`${table}|${filters.join(",")}`);
+          return (resolve: (v: Res) => void) => resolve(res);
+        }
+        return (...args: unknown[]) => { filters.push(`${prop}:${String(args[0])}${args[1] !== undefined && typeof args[1] !== "object" ? "=" + String(args[1]) : ""}`); return chain; };
+      } });
+      return chain;
+    },
+  });
+  const fresh = { data: [{ created_at: ago(1) }], error: null };
+  it("pauses only for open threads with a recent Intercom message", async () => {
+    const { readServiceEvidence } = await import("@/lib/lifecycle/sources");
+    const calls: string[] = [];
+    const sb = fakeSb({ data: [{ id: 1 }, { id: 2 }], error: null }, fresh, { data: [{ thread_id: 2 }, { thread_id: 2 }], error: null }, calls);
+    const ev = await readServiceEvidence(sb as never, "100", now);
+    expect(ev).toMatchObject({ complete: true, allChannels: true, unresolvedCount: 1, reviewOwner: "junip" });
+    const msgCall = calls.find((c) => c.includes("in:thread_id"))!;
+    expect(msgCall).toContain("eq:channel=intercom");
+    expect(msgCall).toContain(`gte:sent_at=${ago(24 * 14)}`);
+  });
+  it("is clear with no open threads, and fails closed when the Intercom mirror is stale or errors", async () => {
+    const { readServiceEvidence } = await import("@/lib/lifecycle/sources");
+    expect(await readServiceEvidence(fakeSb({ data: [], error: null }, fresh, { data: [], error: null }) as never, "100", now))
+      .toMatchObject({ complete: true, unresolvedCount: 0 });
+    expect((await readServiceEvidence(fakeSb({ data: [], error: null }, { data: [{ created_at: ago(30) }], error: null }, { data: [], error: null }) as never, "100", now)).complete).toBe(false);
+    expect((await readServiceEvidence(fakeSb({ data: null, error: { m: 1 } }, fresh, { data: [], error: null }) as never, "100", now)).complete).toBe(false);
+  });
+});

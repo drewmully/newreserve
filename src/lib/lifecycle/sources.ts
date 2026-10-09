@@ -14,27 +14,38 @@ import type { OutboxRepo, OutboxRow, Recheck, Finish } from "./dispatch";
 
 type Sb = ReturnType<typeof getSupabaseService>;
 
-/** Support-inbox clearance. Channels are only "all" once Drew confirms the list. */
-export async function readServiceEvidence(sb: Sb, customerId: string, now = new Date(),
-  env: Record<string, string | undefined> = process.env): Promise<ServiceEvidence> {
+/**
+ * Support clearance, per Drew (Oct 9, 2026): only Intercom counts, and only an
+ * OPEN thread with an Intercom message in the last 14 days pauses lifecycle
+ * email. Gmail, Resend and SendBlue do not pause anything. Review requests
+ * are owned by Junip, so Klaviyo delivery emails must not ask for reviews.
+ */
+export const SERVICE_WINDOW_DAYS = 14;
+export const REVIEW_OWNER = "junip" as const;
+
+export async function readServiceEvidence(sb: Sb, customerId: string, now = new Date()): Promise<ServiceEvidence> {
   const id = shopifyId(customerId, "Customer");
-  const base: ServiceEvidence = { customerId: id ?? "", complete: false, allChannels: false,
-    checkedAt: now.toISOString(), unresolvedCount: -1, reviewOwner: "unknown" };
+  const base: ServiceEvidence = { customerId: id ?? "", complete: false, allChannels: true,
+    checkedAt: now.toISOString(), unresolvedCount: -1, reviewOwner: REVIEW_OWNER };
   if (!id) return base;
+  const since = new Date(now.getTime() - SERVICE_WINDOW_DAYS * 86_400_000).toISOString();
   const [threads, heartbeat] = await Promise.all([
-    // Unresolved = anything not closed, including snoozed and archived-but-open.
-    sb.from("hub_thread").select("id", { count: "exact", head: true }).eq("customer_id", id).neq("status", "closed"),
-    sb.from("hub_message").select("created_at").order("created_at", { ascending: false }).limit(1),
+    sb.from("hub_thread").select("id").eq("customer_id", id).neq("status", "closed").limit(1000),
+    // Mirror health: the Intercom sync must have delivered something in 24h.
+    sb.from("hub_message").select("created_at").eq("channel", "intercom").order("created_at", { ascending: false }).limit(1),
   ]);
   const newest = Date.parse(String((heartbeat.data?.[0] as { created_at?: string } | undefined)?.created_at ?? ""));
   const mirrorFresh = Number.isFinite(newest) && now.getTime() - newest <= 24 * 3_600_000;
-  return {
-    ...base,
-    complete: !threads.error && typeof threads.count === "number" && !heartbeat.error && mirrorFresh,
-    allChannels: env.LIFECYCLE_SERVICE_CHANNELS_CONFIRMED === "true",
-    unresolvedCount: typeof threads.count === "number" ? threads.count : -1,
-    reviewOwner: env.LIFECYCLE_REVIEW_OWNER === "klaviyo" ? "klaviyo" : "unknown",
-  };
+  if (threads.error || heartbeat.error || !mirrorFresh || (threads.data?.length ?? 0) >= 1000) return base;
+  const ids = (threads.data ?? []).map((t) => (t as { id: number }).id);
+  let unresolved = 0;
+  if (ids.length) {
+    const recent = await sb.from("hub_message").select("thread_id").in("thread_id", ids)
+      .eq("channel", "intercom").gte("sent_at", since).limit(1000);
+    if (recent.error) return base;
+    unresolved = new Set((recent.data ?? []).map((m) => (m as { thread_id: number }).thread_id)).size;
+  }
+  return { ...base, complete: true, unresolvedCount: unresolved };
 }
 
 /** Loop contract evidence from the Loop mirror. Coverage needs a fresh sync. */
