@@ -6,6 +6,7 @@ import type { AnalyticsRpcClient } from "./rpcStore";
 import { pipelineRpc, validatePipelineTarget } from "./shopifyPipeline";
 import { prepareFreshGoogleSpend } from "./googleSpendRegistration";
 import type { FreshGoogleSpendReportInput } from "./googleSpendReportInput";
+import { summarizeCustomerPurchases } from "./customerPurchaseReporting";
 
 export function bindSalesEventWindow(value: Omit<SalesEventWindowInput, "digest">): SalesEventWindowInput {
   return { ...structuredClone(value), digest: evidenceDigest(value) };
@@ -45,6 +46,7 @@ export function prepareSalesEventWindowReport(input: {
       latestCaptureAt: prepared.latestCaptureAt, metadata: prepared.metadataDisposition,
       paidWindowProof: prepared.paidWindowProof, scopedCustomers: prepared.scopedCustomers,
       composedDailyCustomers: Object.fromEntries(prepared.customerCounts),
+      customerReport: summarizeCustomerPurchases(prepared),
       customerCompositionScope: "complete_paid_window_plus_selected_current_observable_shopify_history" },
     status: "private_event_window_candidate" as const, certified: false,
     operatingAuthority: null, fullStoreFinancialPopulation: false, sourceReads: 0 };
@@ -99,6 +101,7 @@ export function prepareSalesEventWindowRegistration(input: {
     latestCaptureAt: candidate.sourceBinding.latestCaptureAt };
   if (Buffer.byteLength(JSON.stringify(payload)) > 8000000) throw new Error("sales_event_window_registration_budget");
   return { state: "prepared_disabled" as const, enabled: false, registered: false, metricAcceptance: false,
+    customerReport: candidate.sourceBinding.customerReport,
     registration: { rpc: "lean_sales_event_window_register", args: { p_scope: payload } } };
 }
 

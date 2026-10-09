@@ -6,23 +6,31 @@
  *   - PostHog (insights / events query API)         source='posthog'
  *
  * Metrics:
- *   visitors          → GA4 `activeUsers`, PostHog `pageview` distinct users
+ *   visitors          → GA4 `activeUsers`, PostHog `page_view` distinct IDs
  *   accounts_created  → GA4 event `account_created` (Drew can rename via env), PostHog event `account_created`
  *   purchases         → GA4 event `purchase`, PostHog event `purchase`
+ *   page_views        → PostHog recorded `page_view` events, not unique pages
+ *   add_to_cart_events → PostHog recorded `add_to_cart` events, not carts or units
+ *   native_sessions   → PostHog SDK starts with one known-filtered native entry
  *
  * Idempotent on (pull_date, source, metric).
  *
  * GA4 requires: GA_PROPERTY_ID + GOOGLE_SERVICE_ACCOUNT_JSON_BASE64
  *               (with Analytics Data Viewer role on the property)
- * PostHog requires: POSTHOG_PROJECT_ID, POSTHOG_PERSONAL_API_KEY
- *                   (POSTHOG_PROJECT_API_KEY is for ingestion, not for queries)
+ * PostHog requires the existing dedicated LEAN query key/project and private
+ * LEAN_POSTHOG_TEST_ACCOUNT_FILTERS. Six reviewed predicates apply server-side.
  *
- * Both sources soft-skip with reason when their creds are missing.
- * Default window: last 14 days.
+ * GA4 remains optional when unconfigured. Provider errors fail this job after
+ * retaining the other source's valid rows; they never overwrite failures as zero.
+ * Default window: last 14 closed UTC days. Purchase counts are recorded events,
+ * not independently verified paid orders, conversions or receipt evidence.
  */
 
+import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseService, withJobRun } from "@/app/api/_lib/supabaseService";
+import { pullTrafficNativeSessions, pullTrafficPosthog, trafficPosthogDiagnostic, trafficWindow } from "@/lib/analytics/trafficSourcePull";
+import type { TrafficPosthogDiagnostic } from "@/lib/analytics/trafficSourcePull";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -30,8 +38,8 @@ export const maxDuration = 120;
 function isAuthorized(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
   if (!secret) return false;
-  if (req.headers.get("authorization") === `Bearer ${secret}`) return true;
-  return (req.headers.get("user-agent") || "").includes("vercel-cron");
+  const expected = Buffer.from(`Bearer ${secret}`), supplied = Buffer.from(req.headers.get("authorization") ?? "");
+  return expected.length === supplied.length && timingSafeEqual(expected, supplied);
 }
 
 async function mintGoogleToken(scope: string): Promise<string | null> {
@@ -128,107 +136,68 @@ async function pullGA4(startISO: string, endISO: string, log: (k: string, v: unk
   return rows;
 }
 
-async function pullPostHog(startISO: string, endISO: string, log: (k: string, v: unknown) => void): Promise<FlatRow[]> {
-  const projectId = process.env.POSTHOG_PROJECT_ID;
-  const apiKey = process.env.POSTHOG_PERSONAL_API_KEY;
-  const host = process.env.POSTHOG_HOST || "https://us.posthog.com";
-  if (!projectId || !apiKey) {
-    log("posthog_skipped", "missing POSTHOG_PROJECT_ID or POSTHOG_PERSONAL_API_KEY");
-    return [];
-  }
-
-  async function runHogQL(query: string): Promise<Array<[string, number]>> {
-    const r = await fetch(`${host}/api/projects/${projectId}/query/`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ query: { kind: "HogQLQuery", query } }),
-    });
-    if (!r.ok) throw new Error(`posthog: ${r.status} ${await r.text()}`);
-    const j = (await r.json()) as { results?: Array<[string, number]> };
-    return (j.results || []).map(([d, v]) => {
-      // results come as [day, count]; day might be ISO or date string
-      const ds = typeof d === "string" ? d.slice(0, 10) : "";
-      return [ds, Number(v || 0)];
-    });
-  }
-
-  const visitorsQ = `
-    SELECT toString(toDate(timestamp)) AS day, count(DISTINCT distinct_id) AS v
-    FROM events
-    WHERE event = '$pageview'
-      AND timestamp >= toDateTime('${startISO} 00:00:00')
-      AND timestamp <= toDateTime('${endISO} 23:59:59')
-    GROUP BY day
-    ORDER BY day
-  `;
-  const accountsQ = `
-    SELECT toString(toDate(timestamp)) AS day, count() AS v
-    FROM events
-    WHERE event = 'account_created'
-      AND timestamp >= toDateTime('${startISO} 00:00:00')
-      AND timestamp <= toDateTime('${endISO} 23:59:59')
-    GROUP BY day
-    ORDER BY day
-  `;
-  const purchasesQ = `
-    SELECT toString(toDate(timestamp)) AS day, count() AS v
-    FROM events
-    WHERE event = 'purchase'
-      AND timestamp >= toDateTime('${startISO} 00:00:00')
-      AND timestamp <= toDateTime('${endISO} 23:59:59')
-    GROUP BY day
-    ORDER BY day
-  `;
-
-  const rows: FlatRow[] = [];
-  for (const [d, v] of await runHogQL(visitorsQ)) rows.push({ pull_date: d, source: "posthog", metric: "visitors", value: v });
-  for (const [d, v] of await runHogQL(accountsQ)) rows.push({ pull_date: d, source: "posthog", metric: "accounts_created", value: v });
-  for (const [d, v] of await runHogQL(purchasesQ)) rows.push({ pull_date: d, source: "posthog", metric: "purchases", value: v });
-  return rows;
-}
-
 export async function GET(req: NextRequest) {
   if (!isAuthorized(req)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
   const url = new URL(req.url);
-  const days = Number(url.searchParams.get("days") || "14");
-  const end = new Date();
-  const start = new Date();
-  start.setUTCDate(end.getUTCDate() - days);
-  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  let window: ReturnType<typeof trafficWindow>;
+  try {
+    if ([...url.searchParams.keys()].some(k => k !== "days") || url.searchParams.getAll("days").length > 1)
+      throw new Error("query");
+    window = trafficWindow(Date.now(), url.searchParams.get("days"));
+  } catch { return NextResponse.json({ error: "invalid_window" }, { status: 400 }); }
 
+  let posthogDiagnostic: TrafficPosthogDiagnostic | undefined;
+  let nativeDiagnostic: TrafficPosthogDiagnostic | undefined;
   const result = await withJobRun("traffic-pull", async ({ setMeta, bumpRows }) => {
-    const meta: Record<string, unknown> = { range: [fmt(start), fmt(end)] };
+    const meta: Record<string, unknown> = { range: [window.from, window.through], timezone: "UTC",
+      posthog_definition: "traffic-filtered-utc-v2", purchases_basis: "recorded_events_not_paid_orders",
+      native_sessions_definition: "traffic-native-sessions-utc-v1" };
+    let sourceFailed = false;
     const log = (k: string, v: unknown) => {
       meta[k] = v;
     };
 
-    const ga4 = await pullGA4(fmt(start), fmt(end), log).catch((e) => {
-      log("ga4_error", e instanceof Error ? e.message : String(e));
+    const ga4 = await pullGA4(window.from, window.through, log).catch(() => {
+      sourceFailed = true; log("ga4_error", "source_unavailable");
       return [] as FlatRow[];
     });
-    const ph = await pullPostHog(fmt(start), fmt(end), log).catch((e) => {
-      log("posthog_error", e instanceof Error ? e.message : String(e));
+    const ph = await pullTrafficPosthog(window.from, window.until, process.env).catch((error: unknown) => {
+      sourceFailed = true; log("posthog_error", "source_unavailable");
+      posthogDiagnostic = trafficPosthogDiagnostic(error);
+      log("posthog_diagnostic", posthogDiagnostic);
+      return [] as FlatRow[];
+    });
+    // Independent aggregate read. A native schema/provider failure must not
+    // discard the independently valid event metrics, or write a false zero.
+    const native = await pullTrafficNativeSessions(window.from, window.until, process.env).catch((error: unknown) => {
+      sourceFailed = true; log("posthog_native_error", "source_unavailable");
+      nativeDiagnostic = trafficPosthogDiagnostic(error);
+      log("posthog_native_diagnostic", nativeDiagnostic);
       return [] as FlatRow[];
     });
 
-    const all = [...ga4, ...ph].filter((r) => r.pull_date && Number.isFinite(r.value));
+    const all = [...ga4, ...ph, ...native].filter((r) => r.pull_date && Number.isFinite(r.value));
     if (all.length > 0) {
       const svc = getSupabaseService();
       const { error } = await svc
         .from("traffic_pulls")
         .upsert(all, { onConflict: "pull_date,source,metric" });
-      if (error) throw new Error(`traffic upsert: ${error.message}`);
+      if (error) throw new Error("traffic_upsert_unavailable");
     }
 
     bumpRows(all.length, all.length);
     meta.ga4_rows = ga4.length;
     meta.posthog_rows = ph.length;
+    meta.posthog_native_rows = native.length;
     setMeta(meta);
-    return { ga4_rows: ga4.length, posthog_rows: ph.length };
+    if (sourceFailed) throw new Error("traffic_pull_source_unavailable");
+    return { ga4_rows: ga4.length, posthog_rows: ph.length, posthog_native_rows: native.length };
   });
 
-  return NextResponse.json(result);
+  return NextResponse.json({ ...result, ...(posthogDiagnostic ? { posthog_diagnostic: posthogDiagnostic } : {}),
+    ...(nativeDiagnostic ? { posthog_native_diagnostic: nativeDiagnostic } : {}) },
+    { status: result.ok ? 200 : 503, headers: { "Cache-Control": "no-store" } });
 }
