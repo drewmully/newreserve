@@ -9,6 +9,8 @@
  *   visitors          → GA4 `activeUsers`, PostHog `page_view` distinct IDs
  *   accounts_created  → GA4 event `account_created` (Drew can rename via env), PostHog event `account_created`
  *   purchases         → GA4 event `purchase`, PostHog event `purchase`
+ *   page_views        → PostHog recorded `page_view` events, not unique pages
+ *   add_to_cart_events → PostHog recorded `add_to_cart` events, not carts or units
  *   native_sessions   → PostHog SDK starts with one known-filtered native entry
  *
  * Idempotent on (pull_date, source, metric).
@@ -151,7 +153,7 @@ export async function GET(req: NextRequest) {
   let nativeDiagnostic: TrafficPosthogDiagnostic | undefined;
   const result = await withJobRun("traffic-pull", async ({ setMeta, bumpRows }) => {
     const meta: Record<string, unknown> = { range: [window.from, window.through], timezone: "UTC",
-      posthog_definition: "traffic-filtered-utc-v1", purchases_basis: "recorded_events_not_paid_orders",
+      posthog_definition: "traffic-filtered-utc-v2", purchases_basis: "recorded_events_not_paid_orders",
       native_sessions_definition: "traffic-native-sessions-utc-v1" };
     let sourceFailed = false;
     const log = (k: string, v: unknown) => {
@@ -169,7 +171,7 @@ export async function GET(req: NextRequest) {
       return [] as FlatRow[];
     });
     // Independent aggregate read. A native schema/provider failure must not
-    // discard the already working three event metrics, or write a false zero.
+    // discard the independently valid event metrics, or write a false zero.
     const native = await pullTrafficNativeSessions(window.from, window.until, process.env).catch((error: unknown) => {
       sourceFailed = true; log("posthog_native_error", "source_unavailable");
       nativeDiagnostic = trafficPosthogDiagnostic(error);
