@@ -29,10 +29,22 @@ contract event. Anything else is a hold. Absence is never treated as nonmembersh
 | 3671163072 Style game | Loop | Loop pause/cancel routes |
 | 2609479872 Deliver Every 3 Months | Loop | Loop app (5284869) renewals |
 | 6627721408 The Seasonal Edit | Shopify Subscriptions | Native rollout doc, one refunded test order |
-| 3654713536 Swing Box | **Unverified** | Held until confirmed |
+| 2609447104, 2614526144, 2614558912, 2620522688, 2669215936, 2669281472, 2700312768, 2700345536, 2700378304, 2819883200, 2839904448, 2871132352, 2902098112, 2989392064, 2989424832, 3004891328, 3004924096, 3004956864 (legacy) | Loop | Created Loop-app renewals among all 4,000 renewals Oct 16 2025 to Oct 9 2026 |
+| 3654713536 Swing Box, 3259433152 Deliver every year | **Unverified** | Held until confirmed |
 
-Renewals (`subscription_contract_checkout_one`) created by app 5284869 are Loop regardless of
-plan. A non-Loop renewal counts as native only when every plan on it is a native plan.
+Renewals (`subscription_contract_checkout_one`, and `subscription_contract` used by Loop until
+September 2025) created by app 5284869 are Loop regardless of plan, including deleted plans.
+A non-Loop renewal counts as native only when every plan on it is a native plan.
+
+Recharge Subscriptions (app 294517) ran subscriptions from 2021 to March 2025. Its orders, and
+pre-March 2025 orders whose plan was since deleted, are **legacy membership**: they make a
+returning member "not first-time" (new-member programs hold) but never count as a paid cycle
+on a current contract.
+
+Read-only baseline (October 9, 2026, 48 sampled customers: 29 active Loop members, 19 recent
+buyers, full live Shopify histories): every history read completely and none held. 26 of 29
+active members have two or more qualifying Loop cycles. Before the Recharge and deleted-plan
+rules, 16 of 29 active members would have been wrongly held.
 
 ## Shopify Flow workflows (to import at activation, not now)
 

@@ -10,7 +10,7 @@
  */
 import { classifyPaidOrder, matchOrderDelivery, shopifyId } from "@/lib/klaviyo/orderMatching";
 import type { OrderHistoryEvidence, PaidCycleEvidence } from "@/lib/klaviyo/eligibility";
-import { decideOrderProvider, type SubscriptionProvider } from "./sellingPlans";
+import { decideOrderProvider, RENEWAL_SOURCE_NAME, UNIDENTIFIED_PLAN, type SubscriptionProvider } from "./sellingPlans";
 
 export const ORDER_HISTORY_QUERY = `query MullyLifecycleOrderHistory($query: String!, $after: String) {
   orders(first: 50, after: $after, sortKey: CREATED_AT, query: $query) {
@@ -79,7 +79,9 @@ export function normalizeAdminOrder(node: unknown): AdminOrder {
       return {
         id: l.id, quantity: l.quantity, sku: l.sku, requires_shipping: l.requiresShipping,
         gift_card: l.isGiftCard, variant_id: bag(l.variant).id ?? null,
-        selling_plan_id: bag(l.sellingPlan).sellingPlanId ?? null,
+        // A plan object without an ID (deleted plan) must never look like a
+        // one-time line; the sentinel makes both matchers hold the order.
+        selling_plan_id: l.sellingPlan == null ? null : bag(l.sellingPlan).sellingPlanId ?? UNIDENTIFIED_PLAN,
       };
     }),
   };
@@ -135,6 +137,7 @@ export function deriveCustomerHistory(customer: string, nodes: unknown[], readCo
   if (!readComplete) holds.push("order_history_read_incomplete");
   const orders = nodes.map(normalizeAdminOrder);
   const subscriptionOrders: SubscriptionOrderFact[] = [];
+  const legacyPaid: Array<{ orderId: string; paidAt: string }> = [];
   const seen = new Set<string>();
   for (const order of orders) {
     if (!order.orderId || order.customerId !== customerId) { holds.push("order_identity_mismatch"); continue; }
@@ -146,21 +149,39 @@ export function deriveCustomerHistory(customer: string, nodes: unknown[], readCo
       sourceName: typeof order.raw.sourceName === "string" ? order.raw.sourceName : null,
       appId: typeof bag(order.raw.app).id === "string" ? (bag(order.raw.app).id as string) : null,
       sellingPlanIds: lines.map((l) => (typeof l.selling_plan_id === "string" ? l.selling_plan_id : null)),
+      createdAt: typeof order.raw.createdAt === "string" ? order.raw.createdAt : null,
     });
     if (decision.kind === "hold") { holds.push(decision.reason); continue; }
     if (decision.kind === "one_time") continue;
-    const match = classifyPaidOrder(order.classifierOrder);
+    if (decision.kind === "legacy_subscription") {
+      const r = order.raw;
+      if (r.test === false && r.cancelledAt === null && ["PAID", "PARTIALLY_REFUNDED"].includes(String(r.displayFinancialStatus)) &&
+        order.processedAt) legacyPaid.push({ orderId: order.orderId, paidAt: order.processedAt });
+      continue;
+    }
+    // The Loop app created this renewal, so a deleted-plan line is still a
+    // subscription line. Classify a copy that says so explicitly.
+    const classifierOrder = decision.renewal && decision.provider === "loop"
+      ? { ...order.classifierOrder, source_name: RENEWAL_SOURCE_NAME,
+        line_items: lines.map((l) => (l.selling_plan_id === UNIDENTIFIED_PLAN ? { ...l, selling_plan_id: null } : l)) }
+      : order.classifierOrder;
+    const match = classifyPaidOrder(classifierOrder);
     const amount = minor(order.classifierOrder.total_price);
     const qualifies = match.paidCandidate && match.kind === "subscription" && amount !== null && amount > 0 &&
       order.processedAt !== null && Number.isFinite(Date.parse(order.processedAt));
     subscriptionOrders.push({
       orderId: order.orderId, provider: decision.provider, renewal: decision.renewal,
       paidAt: order.processedAt ?? "", paidAmountMinor: amount ?? 0, qualifiesAsPaidCycle: qualifies,
-      delivered: qualifies && matchOrderDelivery(order.classifierOrder, order.classifierFulfillments).complete,
+      delivered: qualifies && matchOrderDelivery(classifierOrder, order.classifierFulfillments).complete,
     });
   }
   const byTime = [...subscriptionOrders].sort((a, b) => Date.parse(a.paidAt) - Date.parse(b.paidAt) || a.orderId.localeCompare(b.orderId));
-  const firstPaid = byTime.find((o) => o.qualifiesAsPaidCycle) ?? null;
+  const firstCurrent = byTime.find((o) => o.qualifiesAsPaidCycle) ?? null;
+  const firstLegacy = [...legacyPaid].sort((a, b) => Date.parse(a.paidAt) - Date.parse(b.paidAt))[0] ?? null;
+  // A returning Recharge-era member is not a first-time member: the legacy
+  // order becomes the first member order, so new-member programs hold.
+  const legacyFirst = firstLegacy && (!firstCurrent || Date.parse(firstLegacy.paidAt) < Date.parse(firstCurrent.paidAt));
+  const firstPaid = legacyFirst ? { orderId: firstLegacy!.orderId, delivered: false } : firstCurrent;
   const uniqueHolds = [...new Set(holds)].sort();
   const complete = uniqueHolds.length === 0;
   return {

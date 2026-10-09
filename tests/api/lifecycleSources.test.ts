@@ -50,6 +50,37 @@ describe("order history", () => {
     expect(t.complete).toBe(false);
     expect(t.holds).toContain("order_connection_truncated");
   });
+  it("holds first orders whose selling plan was deleted instead of treating them as shop orders", () => {
+    const h = deriveCustomerHistory("100", [order(11, { lineItems: { nodes: [line(11, null, { sellingPlan: { sellingPlanId: null } })], pageInfo: { hasNextPage: false } } })], true, now.toISOString());
+    expect(h.complete).toBe(false);
+    expect(h.holds).toContain("unknown_selling_plan");
+  });
+  it("treats Recharge-era orders as past membership but never as current cycles", () => {
+    const recharge = order(12, { createdAt: "2024-05-01T00:00:00Z", processedAt: "2024-05-01T00:00:00Z", sourceName: "subscription_contract",
+      app: { id: "gid://shopify/App/294517" }, lineItems: { nodes: [line(12, null, { sellingPlan: { sellingPlanId: null } })], pageInfo: { hasNextPage: false } } });
+    const h = deriveCustomerHistory("100", [recharge, order(13)], true, now.toISOString());
+    expect(h.complete).toBe(true);
+    expect(h.history.firstPaidMemberOrderId).toBe("12");
+    expect(h.history.firstDeliveredMemberOrderId).toBeNull();
+    expect(paidCyclesFor(h, "shopify_native", () => "55").cycles.map((c) => c.orderId)).toEqual(["13"]);
+  });
+  it("keeps pre-cutover deleted plans legacy but holds unknown live plans and post-cutover deletions", () => {
+    const base = { sourceName: "web", appId: "580111" };
+    expect(decideOrderProvider({ ...base, sellingPlanIds: ["unidentified_plan"], createdAt: "2024-01-01T00:00:00Z" }).kind).toBe("legacy_subscription");
+    expect(decideOrderProvider({ ...base, sellingPlanIds: ["unidentified_plan"], createdAt: "2025-06-01T00:00:00Z" }).kind).toBe("hold");
+    expect(decideOrderProvider({ ...base, sellingPlanIds: ["3654713536"], createdAt: "2024-01-01T00:00:00Z" }).kind).toBe("hold");
+  });
+  it("counts Loop renewals with deleted plans and the older subscription_contract source", () => {
+    const r = order(14, { sourceName: "subscription_contract", app: { id: "gid://shopify/App/5284869" },
+      lineItems: { nodes: [line(14, null, { sellingPlan: { sellingPlanId: null } })], pageInfo: { hasNextPage: false } } });
+    const h = deriveCustomerHistory("100", [r], true, now.toISOString());
+    expect(h.complete).toBe(true);
+    expect(h.subscriptionOrders[0]).toMatchObject({ provider: "loop", renewal: true, qualifiesAsPaidCycle: true });
+  });
+  it("registers renewal-proven legacy Loop plans", () => {
+    for (const p of ["2609447104", "2700312768", "2902098112", "3004956864"]) expect(sellingPlanProvider(p)).toBe("loop");
+    expect(sellingPlanProvider("3259433152")).toBeNull();
+  });
   it("first delivery must be the first paid order itself", () => {
     const delivered = { fulfillments: [{ id: "gid://shopify/Fulfillment/9", status: "SUCCESS", displayStatus: "DELIVERED", updatedAt: ago(1),
       fulfillmentLineItems: { nodes: [{ quantity: 1, lineItem: { id: "gid://shopify/LineItem/5" } }], pageInfo: { hasNextPage: false } } }] };
