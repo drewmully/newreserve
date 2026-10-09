@@ -167,3 +167,31 @@ export async function captureGoogleIndependentControls(input: Omit<GoogleCheckIn
     accountResponse: control,
   };
 }
+
+/** App-owned closed-day cost control. The automatic-cycle adapter above stays
+ * unchanged. Complete empty campaign/customer queries can verify zero cost,
+ * but never manufacture delivery counts from the absence of campaign rows. */
+export async function captureGoogleSourceControls(input: Omit<GoogleCheckInput, "now">) {
+  if (input.scope.includeDeliveryMetrics !== true || input.scope.fromDate !== input.scope.throughDate)
+    throw new Error("google_control_capture_scope");
+  const startedAt = new Date().toISOString();
+  const { summary, bases, control } = await executeGoogleSpendCheck(input);
+  if (bases.length !== 1) throw new Error("google_control_capture_unverified");
+  const base = bases[0], empty = base.verifiedEmpty && base.rows.length === 0;
+  const values = (control.results ?? []) as Record<string, unknown>[];
+  const emptyControl = values.length === 0 || values.length === 1 &&
+    sourceObject(values[0].segments).date === input.scope.fromDate &&
+    ["costMicros", "clicks", "impressions"].every(k =>
+      sourceObject(values[0].metrics)[k] === undefined || sourceObject(values[0].metrics)[k] === "0") &&
+    sourceObject(values[0].metrics).costMicros === "0";
+  if (empty ? !emptyControl : summary.state !== "sample_amounts_match" ||
+    summary.delivery?.state !== "sample_delivery_match")
+    throw new Error("google_control_capture_unverified");
+  return { startedAt, completedAt: new Date().toISOString(), accountId: summary.accountId,
+    date: input.scope.fromDate, currency: summary.currency, timezone: summary.timezone,
+    verifiedEmpty: empty, totalCostMicros: empty ? "0" : summary.rows[0].controlMicros!,
+    clicks: empty ? null : summary.delivery!.rows[0].controlClicks!,
+    impressions: empty ? null : summary.delivery!.rows[0].controlImpressions!,
+    campaigns: base.rows.map(row => ({ id: row.campaignId, costMicros: row.costMicros,
+      clicks: row.clicks ?? null, impressions: row.impressions ?? null })) };
+}
