@@ -162,7 +162,7 @@ export async function captureMarketingSource(c: MarketingClaim, r: CaptureRuntim
   try {
     const ref = `app-marketing-job:${c.jobId}`;
     if (c.provider === "meta_ads") {
-      const token = r.env.META_MARKETING_API_TOKEN ?? "";
+      const token = (r.env.META_MARKETING_API_TOKEN ?? "").trim();
       if (!/^[!-~]{1,4096}$/.test(token) ||
         !["2796962933960445", "act_2796962933960445"].includes((r.env.META_AD_ACCOUNT_ID ?? "").trim()))
         return fail("configuration_missing");

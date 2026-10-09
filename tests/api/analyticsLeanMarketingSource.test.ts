@@ -34,6 +34,30 @@ function fixture(provider: MarketingProvider = "google_ads", options: { empty?: 
   return { c, r, calls, native, saved: () => saved };
 }
 describe("application marketing source jobs", () => {
+  it.each(["synthetic-meta-token", " \tsynthetic-meta-token\r\n"])(
+    "accepts only outer Meta token whitespace without changing valid bytes %#", async token => {
+      const f = fixture("meta_ads"), original = f.r.request;
+      f.r.env = { ...marketingEnv, META_MARKETING_API_TOKEN: token };
+      f.r.request = vi.fn(async (url, init) => {
+        expect(new Headers(init?.headers).get("authorization")).toBe("Bearer synthetic-meta-token");
+        return original(url, init);
+      });
+      expect((await refreshMarketingSource("meta_ads", "primary", f.r)).body.state).toBe("complete");
+      expect(f.native.calls).toHaveLength(3);
+      expect(f.calls.map(c => c.name)).toEqual(["lean_marketing_source_claim", "lean_marketing_source_commit"]);
+      expect(JSON.stringify(f.calls)).not.toContain("synthetic-meta-token");
+    });
+  it.each(["", " \r\n\t", "synthetic meta-token", "synthetic\nmeta-token", "synthetic\u0000meta-token",
+    " \t" + "x".repeat(4097) + "\r\n"])(
+    "refuses invalid normalized Meta token %# before provider HTTP", async token => {
+      const f = fixture("meta_ads");
+      f.r.env = { ...marketingEnv, META_MARKETING_API_TOKEN: token };
+      expect(await refreshMarketingSource("meta_ads", "primary", f.r)).toMatchObject({
+        status: 503, body: { state: "failed", code: "configuration_missing" },
+      });
+      expect(f.native.calls).toHaveLength(0);
+      expect(f.calls.map(c => c.name)).toEqual(["lean_marketing_source_claim", "lean_marketing_source_fail"]);
+    });
   it.each(["google_ads", "meta_ads"] as const)("captures and registers %s once without old cycles or credentials in receipts", async provider => {
     const f = fixture(provider), result = await refreshMarketingSource(provider, "primary", f.r);
     expect(result).toMatchObject({ status: 200, body: { state: "complete", downstreamImport: "not_observed" } });
