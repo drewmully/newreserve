@@ -6,7 +6,7 @@
  * old "Active Subscribers" segment relied on Shopify tags that go stale; these
  * properties replace that test with live data:
  *
- *   mully_member_status            active | paused | cancelled
+ *   mully_member_status            active | paused | cancelled | unknown
  *   mully_member_plan              reserve_member | reserve_access | back9_legacy | other
  *   mully_member_since             ISO date (first acquisition)
  *   mully_member_cancelled_at      ISO date (cancelled only)
@@ -16,12 +16,18 @@
  *   mully_member_last_order_at     ISO date of the last Loop order
  *   mully_member_synced_at         ISO timestamp of this sync
  *
+ * Source freshness is separate from delivery time. Fresh active Loop contracts
+ * establish positive membership, but absence/cancellation in Loop does not prove
+ * absence of a native Shopify contract. No Wave 1 launch holds are changed here.
+ * Completed orders are NOT certified completed billing cycles / VIP eligibility.
  * Properties only: this never subscribes, unsubscribes or suppresses anyone.
  */
 
 import { klaviyoRequest, KlaviyoError } from "./client";
 
 export interface LoopRow {
+  loop_subscription_id?: string | null;
+  synced_at?: string | null;
   email: string | null;
   status: string | null;
   sku: string | null;
@@ -32,6 +38,7 @@ export interface LoopRow {
 }
 
 export interface SubscriberRow {
+  updated_at?: string | null;
   email: string | null;
   status: string | null;
   acquired_at: string | null;
@@ -39,11 +46,11 @@ export interface SubscriberRow {
   plan_code: string | null;
 }
 
-export type MemberStatus = "active" | "paused" | "cancelled";
+export type MemberStatus = "active" | "paused" | "cancelled" | "unknown";
 
 export interface MemberProfile {
   email: string;
-  properties: Record<string, string | number>;
+  properties: Record<string, string | number | boolean | null>;
 }
 
 const SKU_PLAN: Record<string, string> = {
@@ -52,13 +59,14 @@ const SKU_PLAN: Record<string, string> = {
   "BCK-9": "back9_legacy",
 };
 
-const RANK: Record<MemberStatus, number> = { active: 3, paused: 2, cancelled: 1 };
+const RANK: Record<MemberStatus, number> = { active: 3, paused: 2, cancelled: 1, unknown: 0 };
 
 function loopStatus(value: string | null): MemberStatus {
-  const s = (value ?? "").toLowerCase();
+  const s = (value ?? "").trim().toLowerCase();
   if (s === "active") return "active";
   if (s === "paused") return "paused";
-  return "cancelled";
+  if (["inactive", "cancelled", "canceled", "expired"].includes(s)) return "cancelled";
+  return "unknown";
 }
 
 const iso = (v: string | null | undefined) => {
@@ -73,66 +81,103 @@ const normalize = (email: string | null) => {
 };
 
 /**
- * Collapse rows to one profile per email. Loop rows win; subscriber rows
- * only add dates, or mark someone cancelled who no longer has a Loop row
- * (when `cancelledHistory` is given).
+ * Collapse contracts by ID before email, newest source snapshot first.
+ * Unknown/stale negative evidence cannot certify non-membership. Historical
+ * subscriber-only records are emitted as unknown to clear old active fields.
  */
 export function buildMemberProfiles(
   loopRows: LoopRow[],
   subscriberRows: SubscriberRow[],
   opts: {
     now?: Date;
-    /** Also emit "cancelled" for subscriber rows with no Loop row that pass this test. */
+    /** Also emit unverified historical records with no Loop row that pass this test. */
     cancelledHistory?: (row: SubscriberRow & { updated_at?: string | null }) => boolean;
   } = {},
 ): MemberProfile[] {
-  const syncedAt = (opts.now ?? new Date()).toISOString();
+  const now = opts.now ?? new Date();
+  const syncedAt = now.toISOString();
+  const fresh = (row: LoopRow) => {
+    const age = now.getTime() - Date.parse(row.synced_at ?? "");
+    return Number.isFinite(age) && age >= -5 * 60_000 && age <= 48 * 60 * 60_000;
+  };
   const subs = new Map<string, SubscriberRow>();
-  for (const row of subscriberRows) {
+  for (const row of [...subscriberRows].sort((a, b) =>
+    (iso(b.updated_at) ?? "").localeCompare(iso(a.updated_at) ?? "") ||
+    JSON.stringify(a).localeCompare(JSON.stringify(b)))) {
     const email = normalize(row.email);
     if (email && !subs.has(email)) subs.set(email, row);
   }
 
-  type Acc = { status: MemberStatus; best: LoopRow; completed: number; lastOrder?: string };
-  const byEmail = new Map<string, Acc>();
+  const identities = new Map<string, Set<string>>();
+  const sourceStates = new Map<string, { at: string; states: Set<MemberStatus> }>();
   for (const row of loopRows) {
     const email = normalize(row.email);
+    if (!email || !row.loop_subscription_id) continue;
+    const emails = identities.get(row.loop_subscription_id) ?? new Set<string>();
+    emails.add(email);
+    identities.set(row.loop_subscription_id, emails);
+    const at = iso(row.synced_at);
+    if (at) {
+      const previous = sourceStates.get(row.loop_subscription_id);
+      if (!previous || at > previous.at) sourceStates.set(row.loop_subscription_id, { at, states: new Set([loopStatus(row.status)]) });
+      else if (at === previous.at) previous.states.add(loopStatus(row.status));
+    }
+  }
+  const conflictedEmails = new Set<string>();
+  for (const emails of identities.values()) if (emails.size > 1) {
+    for (const email of emails) conflictedEmails.add(email);
+  }
+  const contracts = new Set<string>();
+  const byEmail = new Map<string, LoopRow[]>();
+  const sorted = [...loopRows].sort((a, b) =>
+    (iso(b.synced_at) ?? "").localeCompare(iso(a.synced_at) ?? "") ||
+    JSON.stringify(a).localeCompare(JSON.stringify(b)));
+  for (const row of sorted) {
+    const email = normalize(row.email);
     if (!email) continue;
-    const status = loopStatus(row.status);
-    const completed = Math.max(0, Number(row.completed_orders) || 0);
-    const lastOrder = iso(row.last_loop_order_at);
-    const prev = byEmail.get(email);
-    if (!prev) {
-      byEmail.set(email, { status, best: row, completed, lastOrder });
-      continue;
-    }
-    if (RANK[status] > RANK[prev.status]) {
-      prev.status = status;
-      prev.best = row;
-    }
-    prev.completed += completed;
-    if (lastOrder && (!prev.lastOrder || lastOrder > prev.lastOrder)) prev.lastOrder = lastOrder;
+    // Include every conflicted identity, but never let it verify membership.
+    const key = row.loop_subscription_id ? `${row.loop_subscription_id}:${email}` : null;
+    if (key && contracts.has(key)) continue;
+    if (key) contracts.add(key);
+    byEmail.set(email, [...(byEmail.get(email) ?? []), row]);
   }
 
   const out: MemberProfile[] = [];
-  const clean = (o: Record<string, string | number | undefined>) =>
-    Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Record<string, string | number>;
-
-  for (const [email, acc] of byEmail) {
+  for (const [email, rows] of byEmail) {
     const sub = subs.get(email);
+    const uncertain = rows.some(r => !r.loop_subscription_id || !fresh(r) || loopStatus(r.status) === "unknown");
+    const active = rows.find(r => r.loop_subscription_id && fresh(r) && loopStatus(r.status) === "active");
+    const ranked = [...rows].sort((a, b) => RANK[loopStatus(b.status)] - RANK[loopStatus(a.status)]);
+    const best = active ?? ranked[0];
+    const stateConflict = rows.some(r => r.loop_subscription_id &&
+      (sourceStates.get(r.loop_subscription_id)?.states.size ?? 0) > 1);
+    const identityConflict = conflictedEmails.has(email);
+    const conflict = identityConflict || stateConflict;
+    const status: MemberStatus = conflict ? "unknown" : active ? "active" : uncertain ? "unknown" : loopStatus(best.status);
+    const verified = !conflict && !!active;
+    const completed = rows.reduce((n, r) => n + Math.max(0, Math.floor(Number(r.completed_orders) || 0)), 0);
+    const lastOrder = rows.map(r => iso(r.last_loop_order_at)).filter(Boolean).sort().at(-1);
     out.push({
       email,
-      properties: clean({
-        mully_member_status: acc.status,
-        mully_member_plan: SKU_PLAN[acc.best.sku ?? ""] ?? sub?.plan_code ?? "other",
-        mully_member_since: iso(sub?.acquired_at),
-        mully_member_cancelled_at: acc.status === "cancelled" ? iso(sub?.churned_at) : undefined,
-        mully_member_completed_orders: acc.completed,
-        mully_member_next_billing_at: acc.status === "active" ? iso(acc.best.next_billing_at) : undefined,
-        mully_member_payment_status: acc.best.last_payment_status ?? undefined,
-        mully_member_last_order_at: acc.lastOrder,
+      properties: {
+        mully_member_status: status,
+        mully_member_plan: SKU_PLAN[best.sku ?? ""] ?? sub?.plan_code ?? "other",
+        mully_member_since: iso(sub?.acquired_at) ?? null,
+        mully_member_cancelled_at: status === "cancelled" ? iso(sub?.churned_at) ?? null : null,
+        mully_member_completed_orders: completed,
+        mully_member_next_billing_at: verified ? iso(best.next_billing_at) ?? null : null,
+        mully_member_payment_status: fresh(best) && !conflict ? best.last_payment_status : null,
+        mully_member_last_order_at: lastOrder ?? null,
+        mully_member_source_synced_at: iso(best.synced_at) ?? null,
+        mully_member_source_fresh: fresh(best) && !conflict,
+        mully_member_status_verified: verified,
+        mully_member_verification_reason: identityConflict ? "contract_identity_conflict" :
+          stateConflict ? "conflicting_contract_snapshot" :
+          verified ? "fresh_active_loop_contract" : uncertain ? "stale_or_unknown_loop_contract" : "native_contract_coverage_unverified",
+        // Orders can be free/replacements. Never advertise this as VIP status.
+        mully_member_billing_cycles_verified: false,
         mully_member_synced_at: syncedAt,
-      }),
+      },
     });
   }
 
@@ -142,13 +187,22 @@ export function buildMemberProfiles(
       if ((sub.status ?? "").toLowerCase() !== "inactive" || !sub.churned_at) continue;
       out.push({
         email,
-        properties: clean({
-          mully_member_status: "cancelled",
-          mully_member_plan: sub.plan_code ?? undefined,
-          mully_member_since: iso(sub.acquired_at),
-          mully_member_cancelled_at: iso(sub.churned_at),
+        properties: {
+          mully_member_status: "unknown",
+          mully_member_plan: sub.plan_code ?? null,
+          mully_member_since: iso(sub.acquired_at) ?? null,
+          mully_member_cancelled_at: null,
+          mully_member_completed_orders: null,
+          mully_member_next_billing_at: null,
+          mully_member_payment_status: null,
+          mully_member_last_order_at: null,
+          mully_member_source_synced_at: null,
+          mully_member_source_fresh: false,
+          mully_member_status_verified: false,
+          mully_member_verification_reason: "historical_subscriber_only",
+          mully_member_billing_cycles_verified: false,
           mully_member_synced_at: syncedAt,
-        }),
+        },
       });
     }
   }

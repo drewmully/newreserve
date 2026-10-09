@@ -1,0 +1,54 @@
+name: Klaviyo lifecycle safeguards
+
+on:
+  pull_request:
+    paths:
+      - "src/lib/klaviyo/**"
+      - "src/lib/membershipConfig.ts"
+      - "src/app/api/admin/cron/klaviyo-*/**"
+      - "src/app/api/subscription/webhook/**"
+      - "src/app/api/analytics/track/**"
+      - "tests/api/klaviyo*.test.ts"
+      - "tests/api/subscriptionWebhook.route.test.ts"
+      - "tests/api/analyticsTrack.route.test.ts"
+      - ".github/workflows/klaviyo-lifecycle.yml"
+      - "package.json"
+      - "package-lock.json"
+
+permissions:
+  contents: read
+
+jobs:
+  safeguards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Lifecycle and existing analytics contract tests
+        run: >-
+          npm test -- --project api
+          tests/api/klaviyoEligibility.test.ts
+          tests/api/klaviyoOrderMatching.test.ts
+          tests/api/klaviyoOrderAudit.route.test.ts
+          tests/api/klaviyoLifecycle.test.ts
+          tests/api/klaviyoSignupSync.test.ts
+          tests/api/klaviyoRouteHooks.test.ts
+          tests/api/subscriptionWebhook.route.test.ts
+          tests/api/analyticsTrack.route.test.ts
+          tests/api/analyticsLeanReserveProducerBinding.test.ts
+      - name: Type check
+        run: npx tsc --noEmit --incremental false
+      - name: Safeguard lint
+        run: >-
+          npx eslint
+          src/lib/klaviyo/eligibility.ts
+          src/lib/klaviyo/orderMatching.ts
+          src/lib/klaviyo/memberSync.ts
+          tests/api/klaviyoEligibility.test.ts
+          tests/api/klaviyoOrderMatching.test.ts
+          tests/api/klaviyoLifecycle.test.ts

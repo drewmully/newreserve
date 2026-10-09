@@ -31,7 +31,6 @@ export const dynamic = "force-dynamic";
 const HMAC_HEADER = "x-shopify-hmac-sha256";
 const TOPIC_HEADER = "x-shopify-topic";
 const WEBHOOK_ID_HEADER = "x-shopify-webhook-id";
-const SHOP_DOMAIN_HEADER = "x-shopify-shop-domain";
 
 interface HeaderBag {
   get(name: string): string | null;
@@ -80,7 +79,6 @@ export async function POST(request: NextRequest) {
 
   const topic = request.headers.get(TOPIC_HEADER);
   const webhookId = request.headers.get(WEBHOOK_ID_HEADER);
-  const shopDomain = request.headers.get(SHOP_DOMAIN_HEADER);
 
   if (!isSupportedTopic(topic)) {
     // Verified but not something this route handles. Return 200 so Shopify
@@ -93,7 +91,10 @@ export async function POST(request: NextRequest) {
   try {
     payload = rawBody ? JSON.parse(rawBody) : null;
   } catch {
-    payload = null;
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
   // Deterministic id when Shopify does not send X-Shopify-Webhook-Id (unlikely
@@ -110,9 +111,10 @@ export async function POST(request: NextRequest) {
     const { error } = await supabase.from("subscription_events").insert({
       source_event_id: sourceEventId,
       topic,
-      shop_domain: shopDomain,
-      payload,
-      raw_body_bytes: Buffer.byteLength(rawBody, "utf8"),
+      // The deployed schema uses raw_payload, not the historical migration's
+      // payload/shop_domain/raw_body_bytes columns. Persist first; processing
+      // and native contract reconciliation remain separate launch gates.
+      raw_payload: payload,
       received_at: new Date().toISOString(),
     });
 

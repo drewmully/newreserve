@@ -93,11 +93,18 @@ describe("/api/subscription/webhook", () => {
     expect(inserted).toMatchObject({
       source_event_id: "wh_1",
       topic: "subscription_contracts/create",
-      shop_domain: "mullybox-store.myshopify.com",
-      payload: { id: 12345, status: "ACTIVE" },
+      raw_payload: { id: 12345, status: "ACTIVE" },
     });
     expect(typeof inserted.received_at).toBe("string");
-    expect(typeof inserted.raw_body_bytes).toBe("number");
+    expect(inserted).not.toHaveProperty("payload");
+    expect(inserted).not.toHaveProperty("shop_domain");
+    expect(inserted).not.toHaveProperty("raw_body_bytes");
+  });
+
+  it.each(["{", "null", "[]", ""])("rejects invalid JSON objects without ACKing or persisting: %s", async body => {
+    const { POST } = await loadRoute();
+    expect((await POST(makeRequest(body))).status).toBe(400);
+    expect(insertMock).not.toHaveBeenCalled();
   });
 
   it("returns duplicate:true on Postgres unique violation without a second row", async () => {

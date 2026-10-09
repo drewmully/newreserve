@@ -10,6 +10,7 @@ const aggregateSegmentActivityMock = vi.fn();
 const recordAISalesSignalMock = vi.fn();
 const checkRateLimitMock = vi.fn();
 const sendSiteEventMock = vi.fn();
+const captureJourneyMock = vi.fn();
 const afterCallbacks: Array<() => unknown> = [];
 
 vi.mock("next/server", async (importOriginal) => ({
@@ -20,6 +21,10 @@ vi.mock("next/server", async (importOriginal) => ({
 vi.mock("@/lib/klaviyo/siteEvents", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/klaviyo/siteEvents")>()),
   sendSiteEventToKlaviyo: sendSiteEventMock,
+}));
+
+vi.mock("@/lib/analytics/journeyRuntime", () => ({
+  captureJourney: captureJourneyMock,
 }));
 
 vi.mock("@/lib/firebase-admin", () => ({
@@ -80,6 +85,8 @@ async function loadRoute() {
 
 describe("POST /api/analytics/track", () => {
   beforeEach(() => {
+    vi.unstubAllEnvs();
+    captureJourneyMock.mockReset().mockResolvedValue(undefined);
     verifyIdTokenMock.mockReset().mockResolvedValue({ uid: "uid_123" });
     getUserDocMock.mockReset().mockResolvedValue({
       exists: true,
@@ -289,6 +296,61 @@ describe("POST /api/analytics/track", () => {
     it("ignores events that are not mirrored", async () => {
       await post({ event_name: "page_view", klaviyo_kx: "abcDEF123_kx" });
       expect(sendSiteEventMock).not.toHaveBeenCalled();
+    });
+
+    const outfit = {
+      event_name: "shop_outfit_reserve_clicked", klaviyo_kx: "abcDEF123_kx",
+      properties: { source: "shop_guided_outfit", products: ["one-polo", "two-shorts"] },
+    };
+    function expectNoOtherDispatch() {
+      expect(captureJourneyMock).not.toHaveBeenCalled();
+      expect(dispatchAnalyticsEventMock).not.toHaveBeenCalled();
+      expect(persistAnalyticsEventMock).not.toHaveBeenCalled();
+      expect(aggregateKpiDailyMock).not.toHaveBeenCalled();
+      expect(aggregateSegmentActivityMock).not.toHaveBeenCalled();
+      expect(recordAISalesSignalMock).not.toHaveBeenCalled();
+    }
+
+    it("accepts the outfit CTA in the Klaviyo-only lane and preserves its product slugs", async () => {
+      const res = await post(outfit);
+      expect(res.status).toBe(200);
+      expect(sendSiteEventMock).toHaveBeenCalledTimes(1);
+      expect(sendSiteEventMock.mock.calls[0][1]).toMatchObject({
+        metric: "Mully Reserve Intent",
+        properties: { IntentSource: "shop_outfit_reserve_clicked", Products: ["one-polo", "two-shorts"] },
+      });
+      expectNoOtherDispatch();
+    });
+
+    it.each([
+      ["KLAVIYO_SITE_EVENTS_ENABLED", "false"],
+      ["KLAVIYO_PRIVATE_API_KEY", ""],
+    ])("keeps the outfit CTA withheld when %s disables its lane", async (name, value) => {
+      vi.stubEnv(name, value);
+      expect((await post(outfit)).status).toBe(400);
+      expect(sendSiteEventMock).not.toHaveBeenCalled();
+      expectNoOtherDispatch();
+    });
+
+    it("does not identify an outfit visitor from arbitrary body email", async () => {
+      expect((await post({ ...outfit, klaviyo_kx: undefined, email: "victim@example.com" })).status).toBe(200);
+      expect(sendSiteEventMock).not.toHaveBeenCalled();
+      expectNoOtherDispatch();
+    });
+
+    it.each<Record<string, string>>([{ "sec-gpc": "1" }, { dnt: "1" }])("honors explicit privacy signals for the outfit lane: %j", async headers => {
+      expect((await post(outfit, headers)).status).toBe(200);
+      expect(sendSiteEventMock).not.toHaveBeenCalled();
+      expectNoOtherDispatch();
+    });
+
+    it("keeps authentication, bot and rate-limit safeguards before the outfit lane", async () => {
+      expect((await post({ ...outfit, user_id: "uid_123" })).status).toBe(401);
+      expect((await post(outfit, { "user-agent": "Googlebot" })).status).toBe(200);
+      checkRateLimitMock.mockReturnValue({ allowed: false, retryAfterSeconds: 60 });
+      expect((await post(outfit)).status).toBe(429);
+      expect(sendSiteEventMock).not.toHaveBeenCalled();
+      expectNoOtherDispatch();
     });
   });
 });

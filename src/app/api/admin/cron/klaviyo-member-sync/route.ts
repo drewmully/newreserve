@@ -5,7 +5,7 @@
  * Supabase onto Klaviyo profile properties (see src/lib/klaviyo/memberSync.ts).
  *
  *   ?dry=1   counts only, nothing sent to Klaviyo
- *   ?full=1  also marks every historical cancelled subscriber (one-time backfill)
+ *   ?full=1  also emits unverified historical records (not launch eligibility)
  *
  * Auth: Bearer CRON_SECRET. Off unless KLAVIYO_MEMBER_SYNC_ENABLED=true.
  * Returns counts only; never emails.
@@ -30,11 +30,11 @@ export const maxDuration = 120;
 const PAGE = 1000;
 const RECENT_MS = 3 * 24 * 60 * 60 * 1000;
 
-async function readAll<T>(table: string, columns: string, apply?: (q: any) => any): Promise<T[]> { // eslint-disable-line @typescript-eslint/no-explicit-any
+async function readAll<T>(table: string, columns: string, primaryKey: string, apply?: (q: any) => any): Promise<T[]> { // eslint-disable-line @typescript-eslint/no-explicit-any
   const sb = getSupabaseService();
   const rows: T[] = [];
   for (let from = 0; ; from += PAGE) {
-    let q = sb.from(table).select(columns).order("email", { ascending: true }).range(from, from + PAGE - 1);
+    let q = sb.from(table).select(columns).order(primaryKey, { ascending: true }).range(from, from + PAGE - 1);
     if (apply) q = apply(q);
     const { data, error } = await q;
     if (error) throw new Error(`read_${table}_failed`);
@@ -57,11 +57,13 @@ export async function GET(req: Request) {
     const [loopRows, subscriberRows] = await Promise.all([
       readAll<LoopRow>(
         "loop_subscriptions",
-        "email,status,sku,completed_orders,next_billing_at,last_payment_status,last_loop_order_at",
+        "loop_subscription_id,synced_at,email,status,sku,completed_orders,next_billing_at,last_payment_status,last_loop_order_at",
+        "loop_subscription_id",
       ),
       readAll<SubscriberRow & { updated_at: string | null }>(
         "subscribers",
         "email,status,acquired_at,churned_at,plan_code,updated_at",
+        "id",
         (q) => q.neq("status", "never"),
       ),
     ]);
