@@ -9,6 +9,7 @@
  *   visitors          → GA4 `activeUsers`, PostHog `page_view` distinct IDs
  *   accounts_created  → GA4 event `account_created` (Drew can rename via env), PostHog event `account_created`
  *   purchases         → GA4 event `purchase`, PostHog event `purchase`
+ *   native_sessions   → PostHog SDK starts with one known-filtered native entry
  *
  * Idempotent on (pull_date, source, metric).
  *
@@ -26,7 +27,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseService, withJobRun } from "@/app/api/_lib/supabaseService";
-import { pullTrafficPosthog, trafficPosthogDiagnostic, trafficWindow } from "@/lib/analytics/trafficSourcePull";
+import { pullTrafficNativeSessions, pullTrafficPosthog, trafficPosthogDiagnostic, trafficWindow } from "@/lib/analytics/trafficSourcePull";
 import type { TrafficPosthogDiagnostic } from "@/lib/analytics/trafficSourcePull";
 
 export const runtime = "nodejs";
@@ -147,9 +148,11 @@ export async function GET(req: NextRequest) {
   } catch { return NextResponse.json({ error: "invalid_window" }, { status: 400 }); }
 
   let posthogDiagnostic: TrafficPosthogDiagnostic | undefined;
+  let nativeDiagnostic: TrafficPosthogDiagnostic | undefined;
   const result = await withJobRun("traffic-pull", async ({ setMeta, bumpRows }) => {
     const meta: Record<string, unknown> = { range: [window.from, window.through], timezone: "UTC",
-      posthog_definition: "traffic-filtered-utc-v1", purchases_basis: "recorded_events_not_paid_orders" };
+      posthog_definition: "traffic-filtered-utc-v1", purchases_basis: "recorded_events_not_paid_orders",
+      native_sessions_definition: "traffic-native-sessions-utc-v1" };
     let sourceFailed = false;
     const log = (k: string, v: unknown) => {
       meta[k] = v;
@@ -165,8 +168,16 @@ export async function GET(req: NextRequest) {
       log("posthog_diagnostic", posthogDiagnostic);
       return [] as FlatRow[];
     });
+    // Independent aggregate read. A native schema/provider failure must not
+    // discard the already working three event metrics, or write a false zero.
+    const native = await pullTrafficNativeSessions(window.from, window.until, process.env).catch((error: unknown) => {
+      sourceFailed = true; log("posthog_native_error", "source_unavailable");
+      nativeDiagnostic = trafficPosthogDiagnostic(error);
+      log("posthog_native_diagnostic", nativeDiagnostic);
+      return [] as FlatRow[];
+    });
 
-    const all = [...ga4, ...ph].filter((r) => r.pull_date && Number.isFinite(r.value));
+    const all = [...ga4, ...ph, ...native].filter((r) => r.pull_date && Number.isFinite(r.value));
     if (all.length > 0) {
       const svc = getSupabaseService();
       const { error } = await svc
@@ -178,11 +189,13 @@ export async function GET(req: NextRequest) {
     bumpRows(all.length, all.length);
     meta.ga4_rows = ga4.length;
     meta.posthog_rows = ph.length;
+    meta.posthog_native_rows = native.length;
     setMeta(meta);
     if (sourceFailed) throw new Error("traffic_pull_source_unavailable");
-    return { ga4_rows: ga4.length, posthog_rows: ph.length };
+    return { ga4_rows: ga4.length, posthog_rows: ph.length, posthog_native_rows: native.length };
   });
 
-  return NextResponse.json({ ...result, ...(posthogDiagnostic ? { posthog_diagnostic: posthogDiagnostic } : {}) },
+  return NextResponse.json({ ...result, ...(posthogDiagnostic ? { posthog_diagnostic: posthogDiagnostic } : {}),
+    ...(nativeDiagnostic ? { posthog_native_diagnostic: nativeDiagnostic } : {}) },
     { status: result.ok ? 200 : 503, headers: { "Cache-Control": "no-store" } });
 }
