@@ -81,7 +81,8 @@ function projectResponse(raw: unknown, campaign: boolean | null) {
   }) };
 }
 
-async function capture(r: MetaSourceRuntime, date: string, startedAt: string, token: string) {
+export async function captureMetaSourceReceipts(r: Pick<MetaSourceRuntime, "now" | "request">,
+  date: string, startedAt: string, token: string) {
   const window = metaHourlyWindow(date), began = r.now();
   const deadline = Math.min(began + 55000, Date.parse(startedAt) + 90000);
   const queryClose = Math.max(...window.providerHours.values()) + 3600000;
@@ -164,7 +165,7 @@ export async function runMetaSourceIngestion(request: Request, r: MetaSourceRunt
           saved.id === job.runId && saved.job_name === name && saved.status === "running" &&
           Number.isFinite(Date.parse(saved.started_at)) && Date.parse(saved.started_at) <= r.now() &&
           r.now() < Date.parse(saved.started_at) + 90000);
-        const receipts = await capture(r, date, saved.started_at, token);
+        const receipts = await captureMetaSourceReceipts(r, date, saved.started_at, token);
         const asOf = new Date(r.now()).toISOString(), ref = `meta-source-job:${job.runId}`;
         const packet = metaHourlyPacketFromCaptures({
           projectRef: "xnfjdbpjuaezxjgargto", shop: "mullybox-store.myshopify.com",

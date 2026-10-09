@@ -1,218 +1,255 @@
-# Application-owned ads ingestion
+# Application-owned Google and Meta refresh
 
-Recommendation against main `dcd796839eae56b95874e883b20cc91d42770c0f`.
-This is a concrete implementation plan, not a deployed service or an activation
-request. No provider, database, credential or schedule operation was performed.
+Implemented against `31e1707c241f3119ddf5c0befec7efcaf342db2a`. This change is
+default-disabled and unscheduled. It does not activate a provider, change a
+credential, repair an old Google hold, or change a PostHog source.
 
-## Decision
+## What runs
 
-Move source acquisition into the existing application cron routes and
-`public.job_runs`. Keep PostHog a downstream reader. A failed PostHog import
-must not stop new Google or Meta source snapshots.
+Two independent application workers collect validated closed-day source data.
+They write `public.job_runs` and immutable revisions in
+`lean_private.marketing_source_jobs`. Meta also writes the existing disabled P6
+packet store. PostHog reads saved sources independently of acquisition.
 
-## Fix the current reader separately
+The fixed scopes are Google account `4335795219`, manager `9552995078`, and Meta
+account `2796962933960445`. The project is `xnfjdbpjuaezxjgargto`, shop
+`mullybox-store.myshopify.com`. Routes cannot accept other accounts, URLs,
+credentials, SQL, grant IDs, or source rows.
 
-The parent's Oct8 metadata-only diagnosis found a present preflight mismatch:
-only `SHOPIFY_SUBSCRIPTIONS_APP_CLIENT_ID.updatedAt` changed, from
-`1788106447316` to `1791498210160`; its ID remained `RC9PAKXcDDlbI2P4`.
-All three approved Google capability metadata pins remained unchanged. This
-explains the current whole-inventory mismatch, not the exact response that
-caused an earlier held wake.
+| Mounted route | Authentication | Work |
+| --- | --- | --- |
+| `GET /api/admin/cron/marketing-source/google?lane=primary` | Exact existing `CRON_SECRET` bearer | One due Google D-1 hourly slot |
+| `GET /api/admin/cron/marketing-source/meta?lane=primary` | Same strict cron authentication | One due Meta D-1 hourly slot after its Pacific query closes |
+| Same provider paths with `?lane=correction` | Same | One due date among D-7 through D-2, each at most once successfully per NY day |
+| `GET /api/admin/marketing-sources` | Existing Firebase `requireAdmin`, revoked-token check and admin allowlist | Safe source health, no provider call |
+| `POST /api/admin/marketing-sources` | Same admin authentication | Bounded retry or pause for one provider |
 
-The prospective credential reader should still list the complete Production
-inventory, verify the exact project/team and refuse duplicate or missing target
-keys. It should compare metadata and value hashes for its three approved
-capabilities, not a digest of unrelated project environment entries. Retain the
-fixed origin, production target, exact environment IDs/versions, source/grant/
-policy checks, four-GET-per-wake budget, RAM-only handling and child-code hashes.
-Runtime scope checks remain required; dropping the whole-inventory digest must
-not permit a different grant, account, source, project or child program.
+All workers require Production/main. The server requires the fixed Supabase URL
+and existing service-role key. Both provider settings rows start with
+`enabled=false` and `report_enabled=false`. Neither HTTP route can enable them.
+`source_expires_at` starts null. An owner must bind a finite source expiry before
+enabling acquisition. Claims require at least 90 seconds remaining; commits check
+both the job deadline and source expiry before and after final writes. The
+overnight cutover uses the exclusive boundary `2026-10-21T23:15:00Z`.
 
-This is a revised reader and authorization binding for prospective work. Do not
-edit an old intent or held receipt, clear its lock, replay its capture, or pretend
-the existing held run was repaired. The parent owns its separate disposition.
+Old `google-ads-spend`, `meta-ads-spend?source_only=1`, traffic and other cron
+entries stay unchanged. The automatic Google grant, cycle, observer, holds and
+Computer credential reader are not used or modified.
 
-## Acquisition cadence
+## Due work and limits
 
-Start with **hourly source polling**, independently for each provider, and
-repeated reconciliation of closed days. Thirty-minute polling can be a later
-bounded setting after observing actual provider responses and job duration.
-Neither interval promises that the provider has produced new data.
+Primary and correction are separate lanes. An hourly primary invocation cannot
+also complete six correction dates. A later schedule should invoke primary
+hourly and correction at least six times per day for each provider. Separate
+hourly correction invocations are a simple option. Failed correction jobs can
+consume additional invocations; the schedule is not a completion guarantee.
 
-Intraday performance needs a separate, explicitly provisional report. Changing a
-cron expression cannot safely turn the existing closed-day report into one.
-Do not call a reconciled closed day permanently final; later snapshots can revise
-it. Keep original source timestamps and revision history.
+The database consumes one provider/date/slot attempt before HTTP. It serializes
+claims per provider but does not make Google wait for Meta. Each slot allows
+at most two attempts, including admin retries. The current invocation captures
+only one date. No unbounded catch-up loop runs inside a function.
 
-## What actually blocks this today
+| Bound | Google | Meta |
+| --- | --- | --- |
+| Native access | v25 fixed service-account reader | v25 fixed Graph reader |
+| Requests per capture | Seven POSTs: two token exchanges, two metadata reads, two independent campaign reads, one customer control | Three GETs: metadata, account hours, campaign hours |
+| Duration | 60 seconds | 55 seconds |
+| Per-response timeout | 15 seconds | 15 seconds |
+| Aggregate native body limit | 8 MiB | 8 MiB, with 1,000,000 bytes per response |
+| Pagination | One complete campaign page, up to 10,000 rows per pass | Complete EOF, up to 48 account hours and 1,000 campaign hours |
+| Job deadline | 90 seconds, including registration | Same |
+| SQL RPC transport | 10 seconds and 8 MiB per response | Same |
 
-| Current code | Consequence |
+Exceeding a bound refuses the snapshot. It does not silently paginate, truncate,
+retry HTTP, switch credentials or fall back to legacy ingestion.
+
+The correction range is D-2 through D-7. Admin retry also stays within the last
+seven closed NY days. This is a bounded product choice, not a promise that
+providers stop revising data after seven days. Older corrections need a separate
+implementation/operating decision.
+
+The NY day must be closed. Meta also waits for both queried Pacific dates to
+close. Existing ambiguous DST-window rejection stays in place. No intraday
+report is produced. A recent API response does not guarantee newly updated
+provider metrics.
+
+## Registration and revisions
+
+Google uses the existing native reader and independent controls. A new
+empty-cost adapter accepts complete, genuinely empty campaign/customer
+responses, but leaves clicks and impressions null. The old automatic-cycle
+control export still rejects empty campaign evidence as before.
+
+The SQL registrar checks its own running job, account/date, capture clocks,
+native request URLs, queries, response counts, byte bounds and correspondence
+between native projections and the submitted packet. Meta reuses the released
+daily validator's receipt-to-packet checks with the new job's date and identity.
+The old daily registrar is unchanged.
+
+Successful Google records use the explicit `app_google_v1` kind. Their evidence
+names the real `marketing_source_jobs` row, not a fabricated automatic cycle or
+spend registration. A local validation copy adapts the derived manifest ID to
+the existing Google report validators; it is never stored as a spend-job claim.
+Successful Meta records use `app_meta_v1` and generation
+`meta_ingest_app_<job_id>`. P6 rows remain disabled.
+
+Completed application records are immutable, including their receipts and
+hashes. A later successful revision may increase or decrease spend. A failed
+revision cannot replace the last good one. This migration does not delete
+historical data or introduce a retention purge. Operators must monitor storage;
+the seven-day work/read range is not a seven-day retention policy.
+
+OAuth response bodies and assertions are never retained. Receipts contain safe
+native projections, original clocks, body hashes and byte counts, not a claim
+that the full raw HTTP body was archived.
+
+## Commit ambiguity and retry
+
+There is no provider retry within an invocation. Transient errors record a
+provider-wide retry time of at least 15 minutes. A numeric or HTTP-date
+`Retry-After` up to one day extends that time on throttling and transient 5xx
+responses, and applies to admin retries too.
+A larger deferral sets `rate_limit_manual`; the admin retry endpoint cannot
+clear it. The operator must investigate before an owner changes that setting.
+Oversized numeric deferrals also hold rather than overflowing to a shorter retry.
+An error body is read only within the existing deadline and aggregate byte
+budget, with a 16 KiB parsing ceiling. Only exact Meta error codes 4/17 and
+documented Google quota enums/canonical status classify non-429 throttling.
+Unknown messages are not searched or retained. A quota/overload classification
+does not prove exhaustion of a daily quota or explain a historical failure.
+
+Missing credentials, authentication failures, schema changes, incomplete pages
+and control mismatches stop scheduled attempts for that provider. Admin retry
+records a UID and a short reason after the operator fixes the cause. It still
+obeys enabled state, date limits, rate limits, active leases and slot budgets.
+
+If commit transport fails, the worker reads the same job once and compares the
+exact packet and digest. A matching committed row means success. Otherwise it
+holds that consumed source attempt, returns HTTP503 and never recaptures in the
+same invocation. A later scheduled claim also holds an expired running attempt.
+
+For an expired packet-absent application attempt, explicit admin retry locks the
+provider, verifies that the packet still does not exist, records
+`admin_confirmed_no_commit` on the original row, and only then considers another
+bounded attempt. It neither deletes the row nor reuses its token. This action
+has no authority over an automatic Google hold or journal.
+
+Pause prevents later claims and commits once the provider lock is acquired.
+It does not erase saved reports or claim to cancel a network request already in
+flight. Function and lease deadlines bound that in-flight work.
+
+## Saved reporting
+
+The forward wrapper around `lean_saved_marketing_read(text)` first delegates
+the existing bearer and finite consumer scope. No new bearer or Vercel
+environment variable is added. The prior function remains owner-only.
+
+With `report_enabled=true` for a provider, the wrapper compares the latest
+successful application capture with the legacy source and uses the newer
+original capture clock. With application reporting off or no successful app
+revision, the legacy behavior remains. All stored hashes are checked. A
+malformed selected source fails closed rather than silently becoming zero.
+
+The existing marketing resources, null ratios and historical snapshot meanings
+stay unchanged. This change does not expand the current consumer's lookback,
+expiry, audience or disabled-P6 opt-in. A one-day reader still serves one day
+even though correction jobs retain older revised snapshots. Consumer expiry
+still closes reporting. The independently bound source expiry stops source jobs;
+the overnight cutover binds both to the same exclusive Oct21 boundary. Pausing or
+expiring acquisition does not delete retained historical data.
+
+The current PostHog refresh schedule is unchanged. Source success is not import
+acceptance. Admin health always reports `downstreamImport: "not_observed"`.
+Actual downstream freshness requires the destination's jobs and whole-table
+readback. No alert, email or delivery observer is added.
+
+## MyMully diagnosis and repair
+
+Use a current Firebase admin ID token with the mounted admin route. Never put
+provider, service-role, cron or reporting tokens in a browser.
+
+Health returns enabled/report-enabled state, latest attempt state and safe error
+code, blocked category, retry time, source expiry, last successful report date/hash, original
+source/control clocks, and downstream status. It does not return receipt bodies,
+lease tokens, raw `job_runs.error`, or provider error strings.
+
+Example request bodies, sent through the existing authenticated admin session:
+
+```json
+{"action":"pause","provider":"meta","reason":"investigating account access"}
+```
+
+```json
+{"action":"retry","provider":"google","date":"2026-10-07","reason":"credential rotation verified"}
+```
+
+Use an actually eligible date; the example is not a standing instruction to
+recapture Oct7. Reasons allow 3 to 120 ASCII letters, digits, spaces, underscores,
+dots and hyphens. Do not include secrets or customer data.
+
+| Safe category | Operator action |
 | --- | --- |
-| `metaSourceIngestion.ts:156-175` names one job and one generation per yesterday's NY date. `meta_source_ingestion.review.sql:23-48` makes that name unique and checks the same fixed date. | An hourly schedule alone would return duplicate-attempt failures. A failed attempt can also consume that date. Later revisions cannot be stored under a new generation. |
-| `metaSourceIngestion.ts:84-88` waits for the complete two-day Pacific query window. The hourly normalizer rejects open windows and ambiguous DST days. | This is correctly bounded closed-day ingestion, not intraday performance. It cannot be advertised as such. |
-| `google-ads-spend/route.ts:29-33,36-61,96-132,145-169` uses a user-agent authorization fallback, OAuth-only credentials, v17, rounded cents, a PostHog event mirror and HTTP200 for a failed `withJobRun` result. | Do not merely increase this old cron's frequency or switch its API-version string. It is not the validated source/report path. |
-| `googleSpendSource.ts:20-66,69-153` already supports the v25 reader, service-account or refresh-token authentication, exact micros, account checks and bounded pagination. `googleSpendCheck.ts:150-169` captures independent controls. | Reuse these readers. Do not move service credentials or native API calls back into Computer. |
-| `googleAutomaticCapture.ts:75-125` wraps those readers in automatic-cycle policy and report construction. `saved_marketing_report.review.sql:37-49` reads only accepted Google cycles and a narrow set of Meta ingestion generations. | App-owned source ingestion needs its own job-backed saved input, not a fabricated automatic-cycle claim. Source availability must be separate from destination import acceptance. |
-| `googleSpendCheck.ts:150-158` requires a nonempty Google campaign set and matched delivery counts. | A genuinely empty Google cost day needs a tested empty-cost/control case. Do not invent zero clicks or impressions from absent rows. |
-| `supabaseService.ts:57-140` records job starts before work and records failures, but preserves arbitrary caller error text. `/api/admin/cron-logs` reads Firestore, not these Supabase jobs. | Reuse the durable job log, add safe structured outcomes, and expose those jobs to the existing MyMully admin identity. The current cron-log screen is not ads-source health. |
+| `configuration_missing` | Check the application-owned environment keys below. No fallback is attempted. |
+| `authentication_denied` | Check provider account membership and credential validity; rotate using normal secret management, then request one bounded retry. |
+| `rate_limited` | Wait until `retryAfter`. Retry cannot bypass it. |
+| `rate_limit_manual` | Investigate the longer provider deferral before an owner changes the blocked setting. |
+| `provider_unavailable`, `timeout` | Wait for the retry time. Last good source remains reportable. |
+| `schema_changed`, `incomplete_pages`, `control_mismatch` | Inspect code/provider changes privately. Do not raise bounds or suppress controls just to make the job pass. |
+| `unsupported_window` | Preserve the DST/closed-window refusal; this implementation does not make up a converted daily amount. |
+| `commit_unconfirmed` | Inspect the same job readback first. Use admin retry only for an expired packet-absent application attempt. |
 
-These are verified code gaps. No new live access check was made, so this plan does
-not claim that any credential is missing, expired, or lacks account access.
+Google uses existing generic `GOOGLE_ADS_SERVICE_ACCOUNT_JSON_BASE64`,
+`GOOGLE_ADS_IMPERSONATE_EMAIL` and `GOOGLE_ADS_DEVELOPER_TOKEN`. Meta uses
+`META_MARKETING_API_TOKEN` and the fixed `META_AD_ACCOUNT_ID`. Supabase uses
+`SUPABASE_URL` or `NEXT_PUBLIC_SUPABASE_URL`, plus `SUPABASE_SERVICE_ROLE_KEY`.
+No new key is introduced. Provider permissions should permit the listed read
+operations only; this code contains no campaign/ad/audience mutation endpoint.
+Credential validity and effective provider access were not tested by this local
+implementation.
 
-## Smallest implementation
+Rotating a credential that a separate active Computer authorization pins can
+invalidate that authorization. Coordinate its prospective replacement rather
+than modifying an old authorization, receipt or held lock. The separately
+prepared capability-pinned Computer reader is not installed by this change.
 
-Use two independent source workers behind the existing Google and Meta cron
-routes. Each invocation processes one bounded provider/date job, then exits.
-No standing full-build operation, workbook, sales controller, source export
-observer or Computer task is in this path.
+## Later cutover
 
-Keep two fixed provider settings rows, initially disabled. Their allowed cadence,
-lookback and per-attempt bounds are checked before job reservation or HTTP. An
-authorized MyMully admin can pause them and see their scope; activation remains
-an explicit operating change. This replaces session-owned execution, not the
-existing Google grant or its held cycle.
+These are operating steps, not actions performed by the patch:
 
-1. **Reserve work in `job_runs`.** A unique provider/account/date/UTC-slot name
-   consumes that attempt before HTTP. A slot permits one attempt, not an unlimited
-   retry loop. Preserve old daily names and old held-cycle records unchanged.
-2. **Capture and validate.** Google reuses the v25 readers and independent cost
-   controls. Meta reuses the three-GET hourly reader and the independent
-   campaign/account reconciliation. Preserve existing byte, page and deadline
-   bounds initially. Providers run in separate invocations so their deadlines do
-   not compete inside one 120-second function.
-3. **Commit one immutable revision.** Meta gets a new generation per successful
-   job, not an overwrite of `meta_ingest_daily_<date>`. Google gets a small
-   job-backed snapshot record containing its original base, independent controls,
-   capture metadata and packet hash. Do not insert it into `google_auto_cycles`.
-   Registration verifies the running job, fixed account/date, actual receipt
-   correspondence and once-only commit, as the Meta wrapper already does.
-4. **Read latest successful source revisions.** Extend the existing saved
-   marketing reader to these explicitly enabled app-owned records. Retain its
-   historical Google-cycle fallback without changing any cycle or grant.
-   Do not require PostHog's observer to accept the source before it is reportable.
-5. **Export independently.** Keep the current aggregate route and full-refresh
-   PostHog resources for closed days. A shorter acquisition cadence does not make
-   the current six-hour PostHog refresh faster. Change that setting separately,
-   if desired, after checking actual supported scheduling and import duration.
+1. Install this one forward migration in the normal provider-owned transaction,
+   omitting only its outer `BEGIN`/`COMMIT` if the migration tool owns the
+   transaction. Verify both settings rows off, new table/helper ACLs, exact
+   function bodies, and the unchanged legacy reader behavior.
+2. Release the mounted code while it remains off and unscheduled.
+3. Confirm existing application credentials and fixed accounts through the
+   approved secret-management path. Authorize the provider settings and actual
+   first closed-day source canary separately.
+4. Enable one provider's source setting, run its new primary path once, and
+   verify its `job_runs`, immutable packet, receipts/digest and disabled P6 row
+   where applicable. Repeat independently for the other provider.
+5. Enable application source admission with `report_enabled` only within the
+   existing or explicitly renewed finite marketing consumer scope. Read the
+   fixed report route, then verify a natural downstream import separately.
+6. Add the explicit primary and correction schedule paths above. Disable old
+   overlapping acquisition schedules only as part of that approved cutover.
+   Do not edit the unrelated traffic schedule or old Google cycle history.
 
-Suggested first due-work policy: refresh D-1 hourly after its source window is
-closed; revisit D-2 through D-7 in bounded daily correction jobs. Process one job
-per invocation rather than adding an unbounded seven-day loop. This seven-day
-window is a product choice, not a guarantee that all later adjustments fit it.
-An admin can request an older bounded correction through the same worker.
+No hourly schedule, source activation, database migration, production canary or
+destination reconfiguration is part of the local implementation's proof.
 
-### Exact files to change in the implementation pass
+## Focused checks
 
-| Change | Files |
-| --- | --- |
-| Strict source-only Google branch, leave legacy mirrors out of the new path | `src/app/api/admin/cron/google-ads-spend/route.ts`; new `src/lib/analytics/googleSourceIngestion.ts` |
-| Slot/date planning and revision IDs for the existing Meta worker | `src/lib/analytics/metaSourceIngestion.ts`; its existing cron route only for wiring |
-| Two disabled provider settings, once-only slot claim, verified registration, bounded retry metadata and independent Google snapshots | One new forward SQL migration, e.g. `sql/analytics/marketing_source_jobs.review.sql`. Reuse `job_runs` and the existing Meta packet store; do not replay earlier migrations. |
-| Admit the new source records without borrowing Google import authority | A new forward replacement of `lean_saved_marketing_read(text)` in that migration. Preserve bearer/source audience, finite scope, hashes, privacy and current account constraints. |
-| MyMully health and bounded retry actions | New `src/app/api/admin/marketing-sources/route.ts`, using existing `requireAdmin`; small safe projection/parser beside the source workers |
-| Schedule | Only the Google and Meta entries in `vercel.json`, coordinated with the parent. No traffic entry changes. |
-| Proof | Focused worker, SQL idempotency and authenticated-admin tests; one fake-source application-to-registration test per provider, then an explicitly authorized production canary |
+`analyticsLeanMarketingSource.test.ts` exercises both fake-native captures,
+registration calls, no-HTTP skips, failures, rate-limit metadata, ambiguous
+commit readback, auth/secrecy and genuine empty Google semantics.
+`analyticsLeanMarketingSourceRoutes.test.ts` checks the mounted route guards.
+A dedicated CI step runs `tests/analytics/marketing-source-jobs-sql.cjs`
+separately from Vitest to bound memory. It applies the actual new
+migration to PGlite, uses the released P6 registrar and legacy reporting reader,
+and drives the new worker through real claim/commit/read functions.
 
-This is not a one-line cadence patch. Implementing only a generic planner or an
-unmounted helper would not meet the app-owned operating requirement, so no such
-runtime patch is included in this preparation.
-
-## Provisional intraday reporting
-
-After the source workers are independent, add an explicit `provisional` mode
-rather than weakening existing closed-day guards.
-
-- Reuse provider transport, parsing and pagination code. Keep separate validation
-  of `window_start`, `window_end`, account timezone, capture time and completeness.
-- Google account-local day is NY; Meta account-local day is Pacific. Preserve
-  those clocks. Do not add mismatched local-day totals or prorate a daily amount.
-  A combined partial NY window needs corresponding complete hourly buckets from
-  both sources. Otherwise show separate provider values only.
-- Put provisional rows in separate report resources. Leave the accepted
-  `marketing_daily`/`marketing_totals` closed-day meaning unchanged.
-- Track source capture time, reported period, latest successful revision and
-  latest failed attempt independently. A fresh request does not prove fresh
-  provider data. Missing, incomplete, zero and stale are different states.
-- A new revision may go down as well as up. Keep its predecessor and amount delta.
-  Supersede only after validation; retain the last successful snapshot on failure.
-- Do not infer conversions, attribution, ROAS or customer counts from spend.
-  Provider freshness and late-revision claims require the parent's official
-  documentation research; no latency or cost promise is made here.
-
-## MyMully owns diagnosis and repair
-
-Use the current Firebase admin allowlist via `requireAdmin`. Do not expose cron,
-provider, service-role or reporting bearer secrets in a browser.
-
-The authenticated health response should report, per fixed account: configured
-mode, last scheduled attempt, last successful source capture, report date/window,
-last successful packet hash, consecutive failures, safe failure category,
-next eligible retry, source age and downstream import status separately.
-Never return raw `job_runs.error`, receipt bodies, token values or arbitrary
-provider error messages.
-
-Use stable categories such as `configuration_missing`, `authentication_denied`,
-`rate_limited`, `provider_unavailable`, `timeout`, `incomplete_pages`,
-`schema_changed`, `control_mismatch`, and `commit_unconfirmed`. Record the failed
-stage before collapsing its public message. Meta currently collapses all capture
-failures to `meta_source_refused`, which is safe but not sufficient for repair.
-
-For 429, timeouts and temporary server failures, persist a bounded next eligible
-attempt and honor provider retry metadata when supplied. Do not hot-loop. For
-authentication or schema failures, stop automatic retries and show the exact
-nonsecret action MyMully must take. An uncertain database commit is resolved by
-reading the job/generation first, not by capturing again.
-
-The admin repair action chooses an approved provider/date, records the admin UID
-and reason, and requests the same worker within its limits. It cannot delete a
-failed attempt, clear an unrelated hold, choose arbitrary URLs/accounts/SQL, or
-turn on ads. This removes Computer from routine diagnosis and repair.
-
-Credentials stay in MyMully's server-side configuration. Prefer its existing
-service-account Google path and fixed account/manager binding over a new personal
-refresh-token dependency. Meta's source worker already uses the application
-Marketing API token. The application must validate required configuration and
-account metadata without returning secret material. Credential renewal or
-revocation still requires an authorized MyMully owner; it cannot be silently
-repaired by retries.
-
-Code must allow only OAuth token exchange, fixed Google read-only GAQL search and
-Meta account/Insights GETs. Google code currently requests the `adwords` scope,
-so that scope string alone is not proof of read-only account privileges. MyMully
-must give the principal the least required account access and verify the actual
-Meta token permissions. No campaign/ad/budget/audience/email mutation is needed.
-
-## Acceptance and untouched work
-
-Tests must prove duplicate slots do no HTTP, a failed slot does not consume the
-entire future day, ambiguous commit reads before retry, revisions retain original
-clocks, mismatched controls never supersede a good snapshot, and admin responses
-cannot reflect secrets. Existing closed-day tests must still reject intraday
-input; separate tests admit only the new provisional contract.
-
-First prove source persistence without a PostHog read. Then prove the report reads
-that saved revision while destination refresh is paused. Finally observe one
-natural downstream import. Those are separate outcomes, not a multi-step
-Computer-controlled capture lease.
-
-Stage the work in this order:
-
-1. Review the narrow credential-reader pin change and bind a fresh prospective
-   invocation. This removes unrelated environment churn as a new failure cause;
-   it does not resume the old hold.
-2. Ship the two app-owned source workers, registration migration and admin health
-   route disabled. Do not alter traffic, current Google grants or Computer task
-   history. No schedule increase yet.
-3. Run one authorized source-only canary per provider and verify saved packet
-   correspondence and job outcome, without requiring a PostHog observer.
-4. Enable the bounded hourly schedules and correction policy after those checks.
-   Retire the old Computer-owned acquisition schedule through the parent's
-   explicit cutover, without deleting its evidence.
-5. Adjust downstream PostHog refresh independently and verify a natural import.
-   Add provisional intraday resources only after their separate window/control
-   contract passes. Do not describe either change as webhook-like freshness.
-
-The existing held Google cycle, grants, accepted snapshots, current delivery
-scope and all ordinary production sources remain untouched. Any cutover of the
-Computer-driven schedule or extension beyond the current finite delivery expiry
-is a later explicit operating change, not part of this offline plan.
+The SQL fixture demonstrates ACL/default-off behavior, independent storage,
+immutable/idempotent commits, finite consumer scope, real report normalization,
+nonstarving correction selection, expired ambiguity, retry limits and last-good
+preservation. It does not prove native PostgreSQL concurrency, provider account
+access, installed credentials, deployment or destination imports.

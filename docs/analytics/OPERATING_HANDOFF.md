@@ -1,6 +1,6 @@
 # Reporting handoff and operating limits
 
-Import baseline updated October 8, 2026 at 21:34 UTC. Handoff updated October 9 at 00:31 UTC after actual saved-dashboard execution and the basic native-session query. All clocks below are UTC.
+Import baseline updated October 8, 2026 at 21:34 UTC. Handoff updated October 9 after the approved PR292 production release and independent traffic-row readback. All clocks below are UTC.
 
 **Two distinct outputs are ready.** Saved Google/Meta marketing has a finite reporting feed over saved records. The October 7 sales/customer report is an accepted fixed snapshot whose temporary imports are paused. Ordinary observed-sales processing remains unchanged. The Google configuration is unchanged, but its current operational hold is recorded below.
 
@@ -22,7 +22,9 @@ The [scoped reporting dashboard](https://us.posthog.com/project/353503/dashboard
 - [October 7 sales](https://us.posthog.com/project/353503/insights/Na7jKQsb).
 - [October 7 products](https://us.posthog.com/project/353503/insights/2CVtyaN4).
 
-The basic session adapter is implemented in this change, but not yet released or verified writing to Supabase. Its one native acceptance query returned 85 included SDK-native session starts, one excluded and zero unknown for October 7 UTC at 00:29:21 UTC. It uses the existing six exclusions and returns aggregates only. The existing daily 12:30 UTC `traffic-pull` cron becomes its caller on release. No new service, tracking SDK or Computer schedule is required. This is separate from workbook measured sessions and does not establish purchase conversion. See [the traffic operator instructions](TRAFFIC_SOURCE_PULL.md).
+The basic session adapter was released in [PR292](https://github.com/drewmully/newreserve/pull/292), merge `31e1707c241f3119ddf5c0befec7efcaf342db2a`. One approved production invocation completed as traffic job 1997 at October 9 00:58:17 UTC. Independent Supabase readback matched all four October 8 UTC rows, query/filter hashes, report window and capture times: 397 page-view distinct IDs, 252 included native-session starts, zero `account_created` events and zero `purchase` events. Native provenance retained 11 excluded starts and zero unknown. These are recorded website measures, not unique people or Shopify paid-order counts.
+
+The unchanged daily 12:30 UTC `traffic-pull` application cron owns subsequent refreshes. Its next natural execution has not yet been observed in this receipt. No new service, tracking SDK or Computer schedule is required. Basic native sessions remain separate from workbook measured sessions and do not establish paid conversion. See [the traffic operator instructions](TRAFFIC_SOURCE_PULL.md) and the PR292 release addendum for acceptance details.
 
 Albert remains the interim commissioning contact. MyMully must name its operating owner and backup at handoff; neither has been assigned by this change. The repository instructions and direct source links are the operating reference, not the commissioning conversation.
 
@@ -43,7 +45,7 @@ At 00:25:16 UTC, a metadata-only check found one changed Shopify client-ID envir
 
 The existing Google task's source-conversation route remains the only established task-notification route in this handoff. Its `not_automation_run` context/suppression problem remains unresolved. A successful data run is not proof that a notification was delivered.
 
-There is **no approved marketing alert audience and no configured marketing alert**. Leave that alert uncreated. A four-call metadata/documentation check confirmed native SQL insight alerts support a selected numeric column, explicit first/last/any-row evaluation and absolute thresholds through `HogQLAlertConfig`. Thus a small native status insight can report a missing/mismatched import, age of the imported evaluation timestamp or the fixed expiry without a polling service. It is not appropriate to alert on an old provider capture clock merely because this feed intentionally reports historical evidence.
+Albert explicitly chose to leave marketing alerts unconfigured for the meeting on October 8 at 17:38 Pacific. There is **no approved marketing alert audience and no configured marketing alert**. Leave that alert uncreated. A four-call metadata/documentation check confirmed native SQL insight alerts support a selected numeric column, explicit first/last/any-row evaluation and absolute thresholds through `HogQLAlertConfig`. Thus a small native status insight can report a missing/mismatched import, age of the imported evaluation timestamp or the fixed expiry without a polling service. It is not appropriate to alert on an old provider capture clock merely because this feed intentionally reports historical evidence.
 
 Email delivery requires at least one actual subscribed PostHog user ID. Slack delivery additionally requires an existing connected workspace and exact channel ID through `alert-destinations-create`. The owner must choose the audience and cadence once. Current schema permits hourly/daily/weekly/monthly checks; fifteen-minute and real-time cadences have plan requirements that have not been checked here. Native automatic recovery delivery and an exact queryable warehouse-job failure field were **not** established by the bounded check. Do not promise either or guess a job-table field. PostHog also documents [warehouse signals](https://posthog.com/docs/data-warehouse/surfaces/desktop), but no project-specific signal configuration or notification was inspected.
 
@@ -54,6 +56,16 @@ Until such delivery is actually verified, use the source pages and this runbook:
 - F1 recovery needs actual completed resource jobs and consistent rows/status. A source-level `Running` label is insufficient.
 - F2's paused imports and expired HTTP window are intentional, not a recurring failure. Its retained rows remain an October 7 snapshot.
 - `monitor-refresh.mjs` and `/api/analytics/ingest/health` remain existing opt-in DB/Google mechanisms. They do not prove PostHog import health and must not be described as a commissioned F1 watchdog.
+
+## Application-owned ads implementation
+
+The new Google and Meta workers are implemented for review, not activated. Both source collection and admission to saved reporting default to off. The migration has not been applied, the code has not been released, and no new schedule or provider call has run. Existing Google grants, holds, journals and cron entries remain unchanged.
+
+The [application-owned refresh instructions](APPLICATION_MARKETING_INGESTION.md) describe the mounted routes, fixed accounts, request limits, migration and later cutover. Once separately commissioned, MyMully's application can collect closed-day data without a Computer observer controlling each capture. Primary work refreshes yesterday in hourly slots. A separate correction lane handles the preceding six days, with at least six invocations per provider per day needed to cover them. This is more frequent closed-day polling, not live intraday reporting.
+
+An authenticated MyMully administrator can inspect `GET /api/admin/marketing-sources` and request a bounded retry or pause through `POST` on that route. Health includes safe error categories, retry times and the last successful source clocks. It never claims PostHog import acceptance. Retries preserve prior attempts, obey rate limits and cannot clear an old automatic Google hold. No admin UI or alert delivery is included.
+
+The next operating decision is a scoped migration and disabled code release, followed by separately authorized source canaries and schedule cutover. Meta must remain off until that provider's activation is explicitly approved. The existing finite marketing consumer still expires on October 21 at 23:15 UTC; the new code does not renew it.
 
 ## Open the results
 
@@ -188,8 +200,8 @@ The existing Google task sends failures, actual recovery and expiry-within-24-ho
 | --- | --- | --- |
 | Technical | Recurring F2 sales/customer refresh is not implemented or activated by the one-time snapshot | Computer can prepare the smallest existing-path successor after a separate operating decision. Do not repurpose the Google grant or reopen paused schemas automatically. |
 | Technical | Historical dashboard gates are verified; a separate marketing failure/expiry alert is not configured | Native SQL alerts are supported. Choose an actual MyMully audience and cadence, then verify delivery. No new monitoring framework is needed. |
-| Release | Basic native-session adapter passed one actual aggregate query but is not released | Release the reviewed change, verify one route/job and the corresponding `traffic_pulls` row, then inspect the existing next natural cron. Do not call the native query proof a Supabase write or recurrence receipt. |
-| Technical | Ads collection remains tied to closed-day and one-shot job constraints | Follow [the application-owned ads plan](APPLICATION_MARKETING_INGESTION.md). A faster cron alone does not fix those constraints. The replacement workers and cutover are not implemented by this change. |
+| Verification | Basic native-session adapter released through PR292; one production route and four stored rows accepted | Inspect the existing next natural 12:30 UTC cron. The one-run acceptance is not proof of recurrence. |
+| Release/operation | Application-owned ads workers implemented, default-off and unscheduled | Follow [the application-owned refresh instructions](APPLICATION_MARKETING_INGESTION.md). Migration, disabled code release, source canaries and schedule cutover still require their scoped operating decisions. Intraday reporting is not included. |
 | Platform | Automation context/suppression can become ambiguous | Existing diagnostic and parent escalation. No schedule/grant changes or new continuation automation. |
 | Verification | First scheduled daily Meta and website source refresh | Existing October 9 read-only check. Do not duplicate it or prematurely claim the future job passed. |
 | Data | Whole-store history and wider customer/cohort coverage | F2's exact prior witness establishes this returning decision, not complete history, repeat rate or LTV. Retain missing coverage as unavailable. |
