@@ -20,6 +20,7 @@ import {
 import { reserve_abandon } from "@/lib/email/templates/reserve";
 import { sendPlainText } from "@/lib/email/resend";
 import { getLoopSubscriptionStatus } from "@/app/api/_lib/loopAdmin";
+import { resendMarketingDisabled } from "@/lib/email/gate";
 
 const BATCH_SIZE = 50;
 const ABANDON_NUDGE_STALE_MS = 24 * 60 * 60 * 1000;
@@ -108,6 +109,12 @@ function isAuthorized(req: NextRequest): boolean {
 export async function GET(req: NextRequest) {
   if (!isAuthorized(req)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Marketing email moved to Klaviyo. Leave sequences untouched (not advanced
+  // or burned) so they can resume only if the switch is removed.
+  if (resendMarketingDisabled()) {
+    return NextResponse.json({ ok: true, paused: "RESEND_MARKETING_DISABLED" });
   }
 
   const now = Timestamp.now();
