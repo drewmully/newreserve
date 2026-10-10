@@ -446,6 +446,28 @@ function getBrowserProperties(): Record<string, string | number | undefined> {
 }
 
 /**
+ * PostHog's own session ID for this browser, read without starting or
+ * extending a session. Business events are forwarded to PostHog server-side,
+ * so without this they carry only the app's per-tab session ID and never join
+ * PostHog's native sessions, funnels or replays.
+ *
+ * Returns undefined when the SDK is not loaded (missing key, blocked script)
+ * or the visitor has opted out of PostHog capture; callers fall back to the
+ * app session ID so existing session counts keep working.
+ */
+async function getPostHogSessionId(): Promise<string | undefined> {
+  try {
+    const { default: posthog } = await import("posthog-js");
+    if (!posthog.__loaded) return undefined;
+    if (posthog.has_opted_out_capturing()) return undefined;
+    const id = posthog.get_session_id();
+    return typeof id === "string" && id.length > 0 ? id : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Fire an analytics event.
  * Safe to call without awaiting — failures are swallowed.
  */
@@ -544,6 +566,7 @@ export async function trackEvent(
   const email = explicitEmail ?? currentUser?.email ?? undefined;
   const anonymous_id = getOrCreateAnonId();
   const session_id = getOrCreateSessionId();
+  const posthogSessionId = await getPostHogSessionId();
 
   try {
     const headers: Record<string, string> = {
@@ -568,7 +591,10 @@ export async function trackEvent(
       ...propertyLikeFields,
       anonymous_id,
       session_id,
-      $session_id: session_id,
+      // PostHog's native session when available, so server-forwarded events
+      // land in the same session as autocapture, page leave and replay.
+      $session_id: posthogSessionId ?? session_id,
+      session_id_source: posthogSessionId ? "posthog" : "app",
       event_id: eventId,
       ...getAttributionProperties(),
     };
