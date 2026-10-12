@@ -1,0 +1,11 @@
+# Mully Access one-click post-purchase offer.
+# Shows after payment, before the order status page, to non-members only.
+# Accepting adds the $15/mo Mully Access subscription with the first month
+# free. Offer and signing live in newreserve: /api/post-purchase/*.
+
+api_version = "2024-07"
+
+[[extensions]]
+type = "checkout_post_purchase"
+name = "mully-access-post-purchase"
+handle = "mully-access-post-purchase"

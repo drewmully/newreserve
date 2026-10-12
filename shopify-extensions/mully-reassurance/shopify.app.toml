@@ -2,6 +2,7 @@
 # After `shopify app dev` first run, the CLI will fill in `client_id` for you.
 # Keep this file checked in so re-deploys from any machine pick up the same app.
 
+client_id = "47d5739bdadce8acae4a9ee0962339d4"
 name = "Mully Internal Extensions"
 handle = "mully-internal-extensions"
 application_url = "https://www.mymully.com"

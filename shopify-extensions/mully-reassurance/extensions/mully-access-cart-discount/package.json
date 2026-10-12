@@ -1,0 +1,11 @@
+{
+  "name": "mully-access-cart-discount",
+  "private": true,
+  "version": "0.1.0",
+  "license": "UNLICENSED",
+  "type": "module",
+  "main": "src/index.js",
+  "dependencies": {
+    "@shopify/shopify_function": "^2.0.0"
+  }
+}
