@@ -22,6 +22,7 @@
 
 import crypto from "crypto";
 import { PostHog } from "posthog-node";
+import { uploadPurchaseConversion } from "@/app/api/_lib/googleAdsConversionUpload";
 
 export interface AnalyticsEvent {
   event_name: string;
@@ -430,6 +431,40 @@ const GOOGLE_ADS_LABEL_ENV: Record<string, string> = {
  * (cookieless / cross-device / Safari ITP / etc.).
  */
 async function fireGoogleAds(event: AnalyticsEvent): Promise<void> {
+  const props = event.properties ?? {};
+  const gclid = typeof props.gclid === "string" ? props.gclid : undefined;
+  const gbraid = typeof props.gbraid === "string" ? props.gbraid : undefined;
+  const wbraid = typeof props.wbraid === "string" ? props.wbraid : undefined;
+
+  // Subscription renewals are not new ad-driven sales. Without this guard a
+  // renewal inherits the member's original signup gclid (signup_utm
+  // fallback in orders-paid) and inflates Google ROAS.
+  if (event.event_name === "purchase" && props.is_subscription_recurring_order === true) {
+    return;
+  }
+
+  // Purchases with a Google click id go through the Ads API upload first
+  // (supports iOS wbraid/gbraid and real order value). On success we stop
+  // here so the legacy ping does not double count; on any failure we fall
+  // through to the legacy pixel, which is exactly today's behavior.
+  if (event.event_name === "purchase" && (gclid || gbraid || wbraid)) {
+    const result = await uploadPurchaseConversion({
+      gclid,
+      gbraid,
+      wbraid,
+      value: props.value as number | undefined,
+      currency: props.currency as string | undefined,
+      orderId:
+        (props.transaction_id as string | undefined) ??
+        (props.order_id as string | undefined),
+      timestamp: event.timestamp,
+    });
+    if (result.ok) return;
+    if (result.reason !== "no_upload_action") {
+      console.error(`[fireGoogleAds] purchase upload failed, using legacy pixel: ${result.reason}`);
+    }
+  }
+
   const conversionId = process.env.GOOGLE_ADS_CONVERSION_ID;
   if (!conversionId) return;
 
@@ -438,11 +473,6 @@ async function fireGoogleAds(event: AnalyticsEvent): Promise<void> {
 
   const label = process.env[labelEnvKey];
   if (!label) return;
-
-  const props = event.properties ?? {};
-  const gclid = typeof props.gclid === "string" ? props.gclid : undefined;
-  const gbraid = typeof props.gbraid === "string" ? props.gbraid : undefined;
-  const wbraid = typeof props.wbraid === "string" ? props.wbraid : undefined;
 
   const url = new URL(
     `https://www.googleadservices.com/pagead/conversion/${conversionId}/`
