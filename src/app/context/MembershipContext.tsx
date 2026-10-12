@@ -31,6 +31,7 @@ import {
 import { buildCheckoutOriginAttributes } from "@/lib/shopifyCheckoutOrigin";
 import { attributionToCartAttributes, getStoredAttribution } from "@/lib/attribution";
 import { readShopReward, rewardCodes } from "@/lib/shopRewards";
+import { BOGO15_CODE, nextBogoCodes } from "@/lib/cartPicks";
 import { useShopBenefit } from "./useShopBenefit";
 import { useShopifySubscriptions, type ShopifySubscription, type ShopifySubscriptionState } from "./useShopifySubscriptions";
 import { resolveMemberTierFromVariantId, resolveLegacyFromVariantId, getTierLabel } from "@/lib/membershipConfig";
@@ -230,6 +231,8 @@ interface MembershipContextValue {
   cartCount: number;
   cartTotal: number;
   cartOrderDiscount: number;
+  /** Discount codes on the Shopify cart, with Shopify's applicability verdict. */
+  cartDiscountCodes: Array<{ code: string; applicable: boolean }>;
 
   // Fit profile
   fitProfile: FitProfile;
@@ -384,6 +387,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
   const [cartLoading, setCartLoading] = useState(false);
   const [cartOfferNotice, setCartOfferNotice] = useState("");
   const [cartOrderDiscount, setCartOrderDiscount] = useState(0);
+  const [cartDiscountCodes, setCartDiscountCodes] = useState<Array<{ code: string; applicable: boolean }>>([]);
   const [cartOpen, setCartOpen] = useState(false);
   const batchInFlight = useRef(false);
 
@@ -455,6 +459,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
     setCartId(sc.id);
     setCartCheckoutUrl(sc.checkoutUrl);
     setCartOrderDiscount(sc.orderDiscountAmount ?? 0);
+    setCartDiscountCodes(sc.discountCodes ?? []);
     setCart(
       sc.lines.map((line) => ({
         slug: line.productSlug,
@@ -545,7 +550,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
     if (!result) throw new Error("Your bag expired. Please add your items again.");
     if (user?.email) result = await updateCartBuyerIdentity(id, { email: user.email });
     const reward = readShopReward();
-    if (reward) result = await cartDiscountCodesUpdate(id, rewardCodes((result.discountCodes ?? []).map(c => c.code), reward));
+    if (reward) result = await cartDiscountCodesUpdate(id, rewardCodes((result.discountCodes ?? []).map(c => c.code).filter(c => c.toUpperCase() !== BOGO15_CODE), reward));
     syncFromShopifyCart(result);
     return result;
   }, [user, syncFromShopifyCart]);
@@ -562,6 +567,28 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
     if (cartOpen) refresh();
     return () => window.removeEventListener("mully:shop-reward", refresh);
   }, [refreshShopCart, cartOpen]);
+
+  // BOGO15: put the code on the cart once it holds 2+ units and take it off
+  // below that. Skipped for subscribers and welcome-code holders, whose
+  // offers always beat 15% off one piece. Shopify still decides which items
+  // qualify. The attempt key stops a loop if Shopify ever drops the code.
+  const bogoAttemptRef = useRef("");
+  useEffect(() => {
+    const id = cartIdRef.current;
+    if (!id || cartLoading || batchInFlight.current) return;
+    const units = cart.reduce((n, item) => n + item.quantity, 0);
+    const next = nextBogoCodes(cartDiscountCodes.map(c => c.code), {
+      units,
+      suppressed: hasShopDiscount || Boolean(readShopReward()),
+    });
+    if (!next) return;
+    const attempt = `${id}:${units}:${next.join(",")}`;
+    if (bogoAttemptRef.current === attempt) return;
+    bogoAttemptRef.current = attempt;
+    void cartDiscountCodesUpdate(id, next)
+      .then(syncFromShopifyCart)
+      .catch(err => console.error("[Cart] BOGO15 sync failed; bag remains valid", err));
+  }, [cart, cartDiscountCodes, cartLoading, hasShopDiscount, syncFromShopifyCart]);
 
   const rehydrateCart = useCallback(
     async (uid: string | null, userEmail?: string | null) => {
@@ -835,6 +862,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
         setCartId(null);
         setCartCheckoutUrl(null);
         setCartOrderDiscount(0);
+        setCartDiscountCodes([]);
         setFitProfileState(EMPTY_FIT);
         setStoreCredit(null);
         setSubscriptions(null);
@@ -1308,6 +1336,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
         cartCount,
         cartTotal,
         cartOrderDiscount,
+        cartDiscountCodes,
 
         // Fit profile
         fitProfile,

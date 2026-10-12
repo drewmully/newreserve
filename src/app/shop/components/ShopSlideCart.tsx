@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useMembership } from "../../context/MembershipContext";
 import { trackEvent } from "@/lib/tracking";
+import { ShopCartBogoNudge } from "./ShopCartBogoNudge";
 
 /**
  * Shop-native cart drawer. Modeled on the V1 Sports storefront cart:
@@ -209,6 +210,7 @@ export function ShopSlideCart({ accent }: { accent: string }) {
                   </li>
                 ))}
               </ul>
+              <ShopCartBogoNudge accent={accent} />
             </div>
 
             {/* Footer */}
