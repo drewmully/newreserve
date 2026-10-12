@@ -18,6 +18,8 @@ import { MULLY_ACCESS_MONTHLY } from "@/lib/membershipConfig";
 import { isJoinOrder, quoteJoinRefund, type JoinRefundLine } from "@/lib/mullyAccess/joinRefund";
 
 const ALERT_TO = "drew@mullybox.com";
+/** Off: Mully Access savings are not issued as post-order refunds. */
+const AUTO_REFUND_ENABLED = false;
 
 interface OrderLike {
   id: number;
@@ -151,6 +153,9 @@ export async function handleMullyAccessPaidOrder(
     }
   }
 
+  // Join-order savings are applied at checkout or in the post-purchase
+  // changeset, never refunded after the fact.
+  if (!AUTO_REFUND_ENABLED) return;
   const lines = toLines(order);
   if (!isJoinOrder(lines, MULLY_ACCESS_MONTHLY.variantId) || isReserve) return;
 
