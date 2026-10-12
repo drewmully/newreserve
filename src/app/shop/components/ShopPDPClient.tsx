@@ -238,8 +238,9 @@ export function ShopPDPClient({
 
           <div className="my-8 border-t border-dashed border-charcoal/15" />
 
-          {/* Variant grid — always show, even if OOS or single color. */}
-          <div className="mb-6">
+          {/* Variant grid — always show, even if OOS or single color.
+              data-purchase-intent: picking a size holds the signup popup. */}
+          <div className="mb-6" data-purchase-intent>
             {sizeGuide && (
               <div className="mb-2 flex justify-end">
                 <button
@@ -308,6 +309,7 @@ export function ShopPDPClient({
             )}
           </div>
 
+          <div data-purchase-intent>
           <BuyBoxAction
             onAddToCart={handleAdd}
             added={added}
@@ -321,6 +323,7 @@ export function ShopPDPClient({
             variantId={displayVariant?.id}
             selectedSize={sizeSelected}
           />
+          </div>
           {addError && <p role="alert" className="mt-3 text-sm text-charcoal">{addError}</p>}
           {!sizeGuide && product.sizing && <p className="mt-4 text-sm text-charcoal/70">{product.sizing}</p>}
 

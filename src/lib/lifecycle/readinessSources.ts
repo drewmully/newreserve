@@ -143,9 +143,48 @@ export async function writeReadinessProperties(email: string, properties: Profil
   await klaviyoRequest("/api/profile-import", { body: { data: { type: "profile", attributes: { email, properties } } } });
 }
 
-/** Candidate emails: every Loop-mirror customer plus recent popup leads. Deduped, sorted. */
-export async function readinessCandidates(sb: Sb = getSupabaseService(), leadDays = 30): Promise<string[]> {
+/** Shopify "Checkout Started" metric in Klaviyo (the checkout recovery trigger). */
+export const CHECKOUT_STARTED_METRIC_ID = process.env.KLAVIYO_CHECKOUT_STARTED_METRIC_ID || "UA34PQ";
+
+type EventPage = {
+  data?: Array<{ relationships?: { profile?: { data?: { id?: string } } } }>;
+  included?: Array<{ type?: string; id?: string; attributes?: { email?: string | null } }>;
+  links?: { next?: string | null };
+};
+type KlaviyoGet = (path: string) => Promise<{ body: unknown }>;
+const defaultKlaviyoGet: KlaviyoGet = (path) => klaviyoRequest(path, { method: "GET" });
+
+/**
+ * Emails of everyone who started a Shopify checkout since `since`, from
+ * Klaviyo's own Checkout Started events (the same events the flow triggers
+ * on). Throws on any read error so callers never act on a partial list.
+ */
+export async function recentCheckoutEmails(since: Date, get: KlaviyoGet = defaultKlaviyoGet, maxPages = 20): Promise<string[]> {
+  const filter = `and(equals(metric_id,${JSON.stringify(CHECKOUT_STARTED_METRIC_ID)}),greater-or-equal(datetime,${since.toISOString()}))`;
+  let path: string | null = `/api/events/?filter=${encodeURIComponent(filter)}&include=profile&fields[profile]=email&fields[event]=datetime`;
   const emails = new Set<string>();
+  for (let page = 0; path && page < maxPages; page++) {
+    const res = await get(path);
+    const body = (res.body ?? {}) as EventPage;
+    const byId = new Map((body.included ?? []).filter((i) => i.type === "profile").map((i) => [i.id, i.attributes?.email ?? ""]));
+    for (const e of body.data ?? []) {
+      const email = String(byId.get(e.relationships?.profile?.data?.id) ?? "").trim().toLowerCase();
+      if (email) emails.add(email);
+    }
+    const next = body.links?.next;
+    path = next ? next.replace(/^https:\/\/a\.klaviyo\.com/, "") : null;
+    if (path && page === maxPages - 1) throw new Error("checkout_events_truncated");
+  }
+  return [...emails].filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)).sort();
+}
+
+/**
+ * Candidate emails: every Loop-mirror customer, recent popup leads, and
+ * recent checkout starters (first-time shoppers included). Deduped, sorted.
+ */
+export async function readinessCandidates(sb: Sb = getSupabaseService(), leadDays = 30, checkoutDays = 14): Promise<string[]> {
+  const emails = new Set<string>();
+  for (const e of await recentCheckoutEmails(new Date(Date.now() - checkoutDays * 86_400_000))) emails.add(e);
   for (let from = 0; ; from += 1000) {
     const { data, error } = await sb.from("loop_subscriptions").select("email").range(from, from + 999);
     if (error) throw new Error("candidates_loop_failed");

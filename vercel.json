@@ -167,6 +167,10 @@
     {
       "path": "/api/admin/cron/lifecycle-dispatch",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/admin/cron/lifecycle-checkout-readiness",
+      "schedule": "*/15 * * * *"
     }
   ]
 }
