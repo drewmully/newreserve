@@ -1,10 +1,9 @@
 /**
  * BOGO15 cart nudge: discount-code policy plus "pairs well with" picks.
  *
- * BOGO15 (Shopify code discount) = buy one item from the `shop-all`
- * collection (tag `shop`), get 15% off one more, once per order. Shopify
- * discounts the lower-priced qualifying item. It does not combine with
- * other product or order discounts.
+ * BOGO15 = buy one shop item, get 15% off one more. It runs as a Shopify
+ * automatic discount ("Buy 2, save 15% on one item") with a matching BOGO15
+ * code. Shopify discounts the lower-priced qualifying item.
  *
  * Picks cycle so every eligible piece gets exposure, while complements of
  * what is already in the bag rank first:
@@ -48,25 +47,21 @@ export interface PickFatigue {
   [slug: string]: { seen: number; clicked: number };
 }
 
-/* ── Discount-code policy ─────────────────────────────────────────────── */
+/* ── Offer detection ──────────────────────────────────────────────────── */
 
 /**
- * Returns the code list the cart should carry, or null when nothing should
- * change. BOGO15 is added only when the bag has 2+ units, the shopper has no
- * better offer (subscriber pricing or a welcome code, which always beat 15%
- * off one piece), and no other code is already on the cart.
+ * The 2+ item offer runs as a Shopify automatic discount titled
+ * "Buy 2, save 15% on one item"; the BOGO15 code is the same offer for
+ * shoppers who type it. Either one counts as BOGO15 being live on the bag.
  */
-export function nextBogoCodes(
-  existing: string[],
-  opts: { units: number; suppressed: boolean }
-): string[] | null {
-  const isBogo = (c: string) => c.trim().toUpperCase() === BOGO15_CODE;
-  const has = existing.some(isBogo);
-  const others = existing.filter((c) => !isBogo(c));
-  const want = !opts.suppressed && opts.units >= 2 && others.length === 0;
-  if (want && !has) return [...others, BOGO15_CODE];
-  if (!want && has) return others;
-  return null;
+export function isBogoDiscount(
+  labels: string[] = [],
+  codes: Array<{ code: string; applicable: boolean }> = []
+): boolean {
+  return (
+    labels.some((l) => /buy\s*2.*15%|bogo\s*15/i.test(l)) ||
+    codes.some((c) => c.applicable && c.code.toUpperCase() === BOGO15_CODE)
+  );
 }
 
 /** 15% of the lower-priced of the two pieces, rounded to cents. */

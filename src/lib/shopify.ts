@@ -216,6 +216,8 @@ export interface ShopifyCart {
   orderDiscountAmount?: number;
   currency: string;
   discountCodes?: Array<{ code: string; applicable: boolean }>;
+  /** Names of discounts that took money off (automatic titles or codes). */
+  discountLabels?: string[];
 }
 
 interface CollectionProductsGroup {
@@ -268,6 +270,7 @@ interface RawCartLine {
   id: string;
   quantity: number;
   cost?: { totalAmount: { amount: string } };
+  discountAllocations?: RawDiscountAllocation[];
   merchandise: {
     id: string;
     title?: string;
@@ -287,7 +290,20 @@ interface RawCart {
   cost: { totalAmount: { amount: string; currencyCode: string } };
   lines: { nodes: RawCartLine[] };
   discountCodes?: Array<{ code: string; applicable: boolean }>;
-  discountAllocations?: Array<{ discountedAmount: { amount: string } }>;
+  discountAllocations?: RawDiscountAllocation[];
+}
+
+interface RawDiscountAllocation {
+  discountedAmount: { amount: string };
+  title?: string;
+  code?: string;
+}
+
+/** Names of discounts that actually took money off, order and line level. */
+function discountLabels(raw: RawCart): string[] {
+  const all = [...(raw.discountAllocations ?? []), ...raw.lines.nodes.flatMap((l) => l.discountAllocations ?? [])];
+  const names = all.filter((a) => Number(a.discountedAmount.amount) > 0).map((a) => a.title || a.code || "").filter(Boolean);
+  return [...new Set(names)];
 }
 
 // ─── Mappers ──────────────────────────────────────────────────────────────────
@@ -364,6 +380,7 @@ function mapCart(raw: RawCart): ShopifyCart {
     orderDiscountAmount: (raw.discountAllocations ?? []).reduce((sum, d) => sum + Number(d.discountedAmount.amount), 0),
     currency: raw.cost.totalAmount.currencyCode,
     discountCodes: raw.discountCodes,
+    discountLabels: discountLabels(raw),
     lines: raw.lines.nodes.map((line) => {
       const retailPrice = parseFloat(line.merchandise.price.amount);
       return {
@@ -441,6 +458,7 @@ const CART_LINE_FIELDS = `
   id
   quantity
   cost { totalAmount { amount } }
+  discountAllocations { discountedAmount { amount } ... on CartAutomaticDiscountAllocation { title } ... on CartCodeDiscountAllocation { code } ... on CartCustomDiscountAllocation { title } }
   merchandise {
     ... on ProductVariant {
       id
@@ -460,7 +478,7 @@ const CART_FIELDS = `
   id
   checkoutUrl
   discountCodes { code applicable }
-  discountAllocations { discountedAmount { amount } }
+  discountAllocations { discountedAmount { amount } ... on CartAutomaticDiscountAllocation { title } ... on CartCodeDiscountAllocation { code } ... on CartCustomDiscountAllocation { title } }
   cost { totalAmount { amount currencyCode } }
   lines(first: 100) {
     nodes { ${CART_LINE_FIELDS} }

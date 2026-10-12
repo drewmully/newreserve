@@ -9,6 +9,7 @@ import { readShopReward } from "@/lib/shopRewards";
 import {
   BOGO15_CODE,
   bogoSavings,
+  isBogoDiscount,
   resolveVariant,
   selectCartPicks,
   type CartPickProduct,
@@ -51,7 +52,7 @@ function money(n: number): string {
 }
 
 export function ShopCartBogoNudge({ accent }: { accent: string }) {
-  const { cart, cartOpen, setCartOpen, cartDiscountCodes, hasShopDiscount, addItemsToCart, cartLoading } =
+  const { cart, cartOpen, setCartOpen, cartDiscountCodes, cartDiscountLabels, hasShopDiscount, addItemsToCart, cartLoading } =
     useMembership();
   const [catalog, setCatalog] = useState<CartPickProduct[]>([]);
   const [rotation, setRotation] = useState(0);
@@ -64,8 +65,8 @@ export function ShopCartBogoNudge({ accent }: { accent: string }) {
 
   const units = cart.reduce((n, i) => n + i.quantity, 0);
   const codes = cartDiscountCodes ?? [];
-  const bogo = codes.find((c) => c.code.toUpperCase() === BOGO15_CODE);
-  const otherCodes = codes.some((c) => c.code.toUpperCase() !== BOGO15_CODE);
+  const bogoLive = isBogoDiscount(cartDiscountLabels, codes);
+  const otherCodes = codes.some((c) => c.applicable && c.code.toUpperCase() !== BOGO15_CODE);
   const [hasReward, setHasReward] = useState(false);
   useEffect(() => { setHasReward(Boolean(readShopReward())); }, [cartOpen]);
   const suppressed = hasShopDiscount || hasReward || otherCodes;
@@ -111,14 +112,14 @@ export function ShopCartBogoNudge({ accent }: { accent: string }) {
 
   // 2+ pieces: confirm the offer is working instead of selling more.
   if (units >= 2) {
-    if (!bogo?.applicable) return null;
+    if (!bogoLive) return null;
     return (
       <div role="status" className="mt-4 flex items-center gap-3 border border-forest/25 bg-forest/5 px-4 py-3">
         <span className="shrink-0 rounded-full bg-forest px-2 py-1 text-[10px] font-mono uppercase tracking-[0.18em] text-white">
           {BOGO15_CODE}
         </span>
         <p className="text-[13px] leading-snug text-charcoal">
-          Applied. 15% off one piece is already in your total.
+          Applied. 15% off one piece is in your total.
         </p>
       </div>
     );

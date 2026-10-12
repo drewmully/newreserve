@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  BOGO15_CODE,
   bogoSavings,
-  nextBogoCodes,
+  isBogoDiscount,
   resolveVariant,
   selectCartPicks,
   toCartPickProduct,
@@ -39,22 +38,12 @@ const catalog = [
   src("jacket", ["shop-outerwear"], 148),
 ].map((p) => toCartPickProduct(p)!) as CartPickProduct[];
 
-describe("nextBogoCodes", () => {
-  it("adds BOGO15 at two units", () => {
-    expect(nextBogoCodes([], { units: 2, suppressed: false })).toEqual([BOGO15_CODE]);
-  });
-  it("leaves one unit alone and removes the code when the bag drops to one", () => {
-    expect(nextBogoCodes([], { units: 1, suppressed: false })).toBeNull();
-    expect(nextBogoCodes(["bogo15"], { units: 1, suppressed: false })).toEqual([]);
-  });
-  it("never adds alongside another code or for subscribers and reward holders", () => {
-    expect(nextBogoCodes(["MULLYEDIT10"], { units: 3, suppressed: false })).toBeNull();
-    expect(nextBogoCodes(["BOGO15", "MULLYTEXT15"], { units: 3, suppressed: false })).toEqual(["MULLYTEXT15"]);
-    expect(nextBogoCodes([], { units: 3, suppressed: true })).toBeNull();
-    expect(nextBogoCodes(["BOGO15"], { units: 3, suppressed: true })).toEqual([]);
-  });
-  it("is a no-op when already correct", () => {
-    expect(nextBogoCodes(["BOGO15"], { units: 2, suppressed: false })).toBeNull();
+describe("isBogoDiscount", () => {
+  it("detects the automatic discount or an applicable BOGO15 code", () => {
+    expect(isBogoDiscount(["Buy 2, save 15% on one item"], [])).toBe(true);
+    expect(isBogoDiscount([], [{ code: "bogo15", applicable: true }])).toBe(true);
+    expect(isBogoDiscount([], [{ code: "BOGO15", applicable: false }])).toBe(false);
+    expect(isBogoDiscount(["MULLYEDIT10"], [{ code: "MULLYEDIT10", applicable: true }])).toBe(false);
   });
 });
 
