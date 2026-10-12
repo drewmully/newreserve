@@ -3,8 +3,9 @@ name: Deploy Mully Internal Extensions
 # Ships the Shopify app extensions in shopify-extensions/mully-reassurance
 # (checkout reassurance, Mully Access post-purchase offer, Mully Access cart
 # discount) to the "Mully Internal Extensions" app. Manual trigger only.
-# Requires repo secret SHOPIFY_CLI_PARTNERS_TOKEN (Partner Dashboard >
-# Settings > CLI token).
+# Requires repo secret SHOPIFY_APP_AUTOMATION_TOKEN (Dev Dashboard >
+# Mully Internal Extensions > Settings > App Automation Token; max 6 months,
+# rotate before expiry).
 
 on:
   workflow_dispatch:
@@ -28,16 +29,16 @@ jobs:
       run:
         working-directory: shopify-extensions/mully-reassurance
     env:
-      SHOPIFY_CLI_PARTNERS_TOKEN: ${{ secrets.SHOPIFY_CLI_PARTNERS_TOKEN }}
+      SHOPIFY_APP_AUTOMATION_TOKEN: ${{ secrets.SHOPIFY_APP_AUTOMATION_TOKEN }}
       SHOPIFY_CLI_NO_ANALYTICS: "1"
       CLIENT_ID: 47d5739bdadce8acae4a9ee0962339d4
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - name: Check token
-        run: test -n "$SHOPIFY_CLI_PARTNERS_TOKEN" || { echo "Add the SHOPIFY_CLI_PARTNERS_TOKEN repo secret"; exit 1; }
+        run: test -n "$SHOPIFY_APP_AUTOMATION_TOKEN" || { echo "Add the SHOPIFY_APP_AUTOMATION_TOKEN repo secret"; exit 1; }
       - run: npm install --no-audit --no-fund
       - name: Fetch function schema
         run: npx shopify app function schema --path extensions/mully-access-cart-discount --client-id "$CLIENT_ID"
