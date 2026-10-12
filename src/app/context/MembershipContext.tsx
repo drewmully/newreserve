@@ -398,6 +398,9 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
   // stale-closure issues (no need to list them in useCallback deps).
   const cartRef = useRef<CartItem[]>([]);
   const cartIdRef = useRef<string | null>(null);
+  // Last origin/attribution attributes written per cart, so adds skip a
+  // redundant cartAttributesUpdate round trip (~0.5s) when nothing changed.
+  const syncedAttrsRef = useRef<{ cartId: string; sig: string } | null>(null);
   useEffect(() => {
     cartRef.current = cart;
   }, [cart]);
@@ -626,10 +629,9 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
 
           let hydratedCart = sc;
           try {
-            hydratedCart = await cartAttributesUpdate(
-              sc.id,
-              getProjectCartAttributes()
-            );
+            const hydrateAttrs = getProjectCartAttributes();
+            hydratedCart = await cartAttributesUpdate(sc.id, hydrateAttrs);
+            syncedAttrsRef.current = { cartId: hydratedCart.id, sig: JSON.stringify(hydrateAttrs) };
             syncFromShopifyCart(hydratedCart);
           } catch (err) {
             console.error("[Cart] origin attribute sync failed:", err);
@@ -902,15 +904,33 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
     }
     batchInFlight.current = true;
     setCartLoading(true);
+    // Show the bag immediately with the new pieces; Shopify's response
+    // replaces this optimistic state a moment later.
+    const beforeItems = cartRef.current;
+    setCart(prev => [...prev, ...items.map(item => ({ ...item, quantity: 1 }))]);
+    setCartOpen(true);
     try {
       const lines = items.map(item => ({ merchandiseId: item.variantId!, quantity: 1 }));
-      const before = cartIdRef.current ? await getCart(cartIdRef.current) : null;
-      let result = before
-        ? await cartLinesAdd(before.id, lines)
-        : await cartCreate(lines, undefined, getProjectCartAttributes());
-      if (before) {
+      const attrs = getProjectCartAttributes();
+      const attrSig = JSON.stringify(attrs);
+      let result: ShopifyCart | null = null;
+      let created = false;
+      if (cartIdRef.current) {
         try {
-          result = await cartAttributesUpdate(result.id, getProjectCartAttributes());
+          result = await cartLinesAdd(cartIdRef.current, lines);
+        } catch (err) {
+          // Expired or missing cart: fall through and start a new one.
+          console.error("[Cart] cartLinesAdd failed; creating a new cart", err);
+        }
+      }
+      if (!result) {
+        result = await cartCreate(lines, undefined, attrs);
+        created = true;
+        syncedAttrsRef.current = { cartId: result.id, sig: attrSig };
+      } else if (syncedAttrsRef.current?.cartId !== result.id || syncedAttrsRef.current.sig !== attrSig) {
+        try {
+          result = await cartAttributesUpdate(result.id, attrs);
+          syncedAttrsRef.current = { cartId: result.id, sig: attrSig };
         } catch (err) {
           console.error("[Cart] origin attribute sync failed:", err);
         }
@@ -932,21 +952,30 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
           setCartOfferNotice("We couldn't verify the offer. This bag shows Shopify's current price.");
         }
       }
-      await refreshShopCart().catch(() => setCartOfferNotice("Offers will be checked again before checkout."));
-      setCartOpen(true);
+      // Buyer identity and reward codes are re-applied at checkout
+      // (prepareShopCheckout); only a pending reward needs it now.
+      if (created || readShopReward()) {
+        void refreshShopCart().catch(() => setCartOfferNotice("Offers will be checked again before checkout."));
+      }
+      const finalCart = result;
       for (const item of items) void trackEvent("add_to_cart", {
         product_id: item.slug, variant_id: item.variantId, name: item.name,
         brand: item.brand, value: item.price, quantity: 1, user_id: user?.uid,
         variant_title: item.variantTitle, image_url: item.image,
-        ...cartSnapshot(result),
+        ...cartSnapshot(finalCart),
       });
       // Stock can change between browsing and mutation; show the actual bag.
       const complete = lines.every(line => {
-        const oldQty = before?.lines.filter(x => x.variantId === line.merchandiseId).reduce((n,x) => n+x.quantity,0) ?? 0;
-        const newQty = result.lines.filter(x => x.variantId === line.merchandiseId).reduce((n,x) => n+x.quantity,0);
+        const oldQty = created ? 0 : beforeItems.filter(x => x.variantId === line.merchandiseId).reduce((n,x) => n+x.quantity,0);
+        const newQty = finalCart.lines.filter(x => x.variantId === line.merchandiseId).reduce((n,x) => n+x.quantity,0);
         return newQty >= oldQty + lines.filter(x => x.merchandiseId === line.merchandiseId).length;
       });
       if (!complete) throw new Error("Some sizes changed availability. Review your bag before trying again.");
+    } catch (error) {
+      // Roll back the optimistic pieces if Shopify never confirmed them.
+      if (!cartIdRef.current) setCart(beforeItems);
+      else void getCart(cartIdRef.current).then(sc => { if (sc) syncFromShopifyCart(sc); else setCart(beforeItems); }).catch(() => setCart(beforeItems));
+      throw error;
     } finally {
       batchInFlight.current = false;
       setCartLoading(false);
@@ -992,16 +1021,21 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
               { merchandiseId: item.variantId, quantity: 1 },
             ]);
           }
-          try {
-            result = await cartAttributesUpdate(result.id, originAttributes);
-          } catch (err) {
-            console.error("[Cart] origin attribute sync failed:", err);
+          const sig = JSON.stringify(originAttributes);
+          if (syncedAttrsRef.current?.cartId !== result.id || syncedAttrsRef.current.sig !== sig) {
+            try {
+              result = await cartAttributesUpdate(result.id, originAttributes);
+              syncedAttrsRef.current = { cartId: result.id, sig };
+            } catch (err) {
+              console.error("[Cart] origin attribute sync failed:", err);
+            }
           }
         } else {
           // No cart yet — create one
           result = await cartCreate([
             { merchandiseId: item.variantId, quantity: 1 },
           ], undefined, originAttributes);
+          syncedAttrsRef.current = { cartId: result.id, sig: JSON.stringify(originAttributes) };
         }
 
         syncFromShopifyCart(result);
@@ -1011,7 +1045,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
         } else {
           persistCartIdLocally(null, result.id);
         }
-        await refreshShopCart();
+        if (!currentCartId || readShopReward()) void refreshShopCart().catch(() => {});
 
         void trackEvent("add_to_cart", {
           product_id: item.slug,
