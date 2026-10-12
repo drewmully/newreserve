@@ -6,6 +6,7 @@ vi.mock("@/lib/shopify", () => ({ getFirstSellingPlanId: mocks.plan }));
 import { signHs256, verifyHs256 } from "@/lib/postPurchase/jwt";
 import { POST as offer } from "@/app/api/post-purchase/offer/route";
 import { POST as sign } from "@/app/api/post-purchase/sign-changeset/route";
+import { POST as joined } from "@/app/api/post-purchase/joined/route";
 
 const SECRET = "test-secret";
 const shopifyToken = (referenceId = "ref-1") =>
@@ -49,5 +50,11 @@ describe("Mully Access post-purchase offer", () => {
     const claims = verifyHs256<{ iss: string; sub: string; changes: { type: string }[] }>(token, SECRET);
     expect(claims).toMatchObject({ iss: "client-id", sub: "ref-1" });
     expect(claims.changes[0].type).toBe("add_subscription");
+  });
+  it("tags the joining customer from the signed token", async () => {
+    mocks.graphql.mockResolvedValue({ tagsAdd: { userErrors: [] } });
+    expect((await joined(req("/api/post-purchase/joined", shopifyToken()))).status).toBe(200);
+    expect(mocks.graphql.mock.calls[0][1]).toEqual({ id: "gid://shopify/Customer/42", tags: ["mully-access"] });
+    expect((await joined(req("/api/post-purchase/joined", "bad.token.here"))).status).toBe(401);
   });
 });

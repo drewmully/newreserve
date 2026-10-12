@@ -73,6 +73,7 @@ function App() {
         return;
       }
       if (result.errors?.length) throw new Error(result.errors[0].code);
+      await post("/api/post-purchase/joined", inputData).catch(() => {});
       done();
     } catch {
       setError("We couldn't add Mully Access. Your order is all set.");
