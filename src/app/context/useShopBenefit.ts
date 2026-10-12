@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import type { User } from "firebase/auth";
 
 export function useShopBenefit(user: User | null, subscriptionRevision: unknown) {
-  const [state, setState] = useState<{ uid: string; eligible: boolean } | null>(null);
+  const [state, setState] = useState<{ uid: string; rate: number } | null>(null);
   useEffect(() => {
     let stopped = false;
     let generation = 0;
@@ -16,12 +16,13 @@ export function useShopBenefit(user: User | null, subscriptionRevision: unknown)
         const token = await user.getIdToken();
         const response = await fetch("/api/shop/member-benefit", { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
         const data = await response.json();
-        if (!stopped && current === generation) setState({ uid: user.uid, eligible: response.ok && data.eligible === true });
+        if (!stopped && current === generation) setState({ uid: user.uid, rate: response.ok && data.eligible === true && typeof data.rate === "number" && data.rate > 0 && data.rate < 1 ? data.rate : 0 });
       } catch { if (!stopped && current === generation) setState(null); }
     };
     void refresh();
     window.addEventListener("focus", refresh);
     return () => { stopped = true; window.removeEventListener("focus", refresh); };
   }, [user, subscriptionRevision]);
-  return Boolean(user && state?.uid === user.uid && state.eligible);
+  /** Member discount rate for this shopper (0 when none). */
+  return user && state?.uid === user.uid ? state.rate : 0;
 }

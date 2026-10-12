@@ -175,6 +175,8 @@ export interface ShopifyProductVariant {
 export interface CartLineInput {
   merchandiseId: string;
   quantity: number;
+  /** Subscription selling plan (e.g. Mully Access monthly). */
+  sellingPlanId?: string;
   attributes?: Array<{ key: string; value: string }>;
 }
 
@@ -558,6 +560,22 @@ export function mergeCollectionProductsBySlug(
   }
 
   return Array.from(bySlug.values());
+}
+
+/** First selling plan on a product, or null when none is published yet. */
+export async function getFirstSellingPlanId(handle: string): Promise<string | null> {
+  const data = await storefrontFetch<{
+    product: { sellingPlanGroups: { nodes: Array<{ sellingPlans: { nodes: Array<{ id: string }> } }> } } | null;
+  }>(
+    `query SellingPlan($handle: String!) {
+      product(handle: $handle) {
+        sellingPlanGroups(first: 5) { nodes { sellingPlans(first: 5) { nodes { id } } } }
+      }
+    }`,
+    { handle },
+    300,
+  );
+  return data.product?.sellingPlanGroups.nodes.flatMap(g => g.sellingPlans.nodes)[0]?.id ?? null;
 }
 
 // ─── Cart mutations ───────────────────────────────────────────────────────────

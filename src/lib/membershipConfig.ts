@@ -174,8 +174,24 @@ export const SHOPIFY_OUTFIT_SUBSCRIPTION = {
   provider: "shopify" as const,
 };
 
+/** Mully Access, the $15/month tier sold through Shopify Subscriptions.
+ * Its selling plan is created in the Shopify Subscriptions app and read at
+ * runtime from the Storefront API by product handle, so no plan id lives here. */
+export const MULLY_ACCESS_MONTHLY = {
+  tier: "access" as const,
+  label: "Mully Access",
+  productHandle: "mully-access",
+  variantId: 50477797081280,
+  merchandiseId: "gid://shopify/ProductVariant/50477797081280",
+  monthlyPrice: 15,
+  discountRate: 0.1,
+  customerTag: "mully-access",
+  joinOrderTag: "mully-access-join",
+};
+
 const VARIANT_TIER_MAP: Record<string, PaidMemberTier> = {
   [String(SHOPIFY_MEMBERSHIP_PLANS.access.variantId)]: "access",
+  [String(MULLY_ACCESS_MONTHLY.variantId)]: "access",
   [String(SHOPIFY_MEMBERSHIP_PLANS.member.variantId)]: "member",
   [String(SHOPIFY_OUTFIT_SUBSCRIPTION.variantId)]: "member",
 };

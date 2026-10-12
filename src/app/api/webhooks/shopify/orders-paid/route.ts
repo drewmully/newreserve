@@ -45,6 +45,7 @@ import {
 import { processSponsorship } from "@/app/api/_lib/sponsorship";
 import { getSupabaseService } from "@/app/api/_lib/supabaseService";
 import { provisionPaidMemberFromLoop } from "@/app/api/_lib/provisionPaidMember";
+import { handleMullyAccessPaidOrder, removeMullyAccessTag } from "@/app/api/_lib/mullyAccessJoin";
 import { shopifyGraphQL } from "@/app/api/_lib/shopifyAdmin";
 import {
   isStylegameOrder,
@@ -420,6 +421,8 @@ export async function POST(request: NextRequest) {
     console.error("[orders-paid] user lookup failed:", err);
   }
   const firebaseUid = purchaseUserDoc?.id;
+  // Tier before this order, read before tierUpdate overwrites it.
+  const priorTier = (purchaseUserDoc?.data()?.tier as string | undefined) ?? null;
   const purchaseDistinctId =
     firebaseUid ??
     email ??
@@ -628,6 +631,13 @@ export async function POST(request: NextRequest) {
     ? (async () => {
         const tier = resolveTierFromLineItems(order.line_items);
         const outfitMembership = outfitMembershipFromPaidOrder(order);
+        // Never downgrade a Reserve member who also buys Mully Access.
+        if (tier === "access" && (priorTier === "member" || priorTier === "black")) return;
+        // Upgrading to Reserve: drop the Access tag so the 15% segment applies.
+        if ((tier === "member" || tier === "black") && order.customer?.id) {
+          removeMullyAccessTag(order.customer.id).catch(err =>
+            console.error("[orders-paid] mully-access untag failed:", err));
+        }
         if (!tier || tier === "free") {
           // Fallback: even without a matching line item, Loop may already
           // consider this customer active. Provision only if so.
@@ -959,6 +969,9 @@ export async function POST(request: NextRequest) {
     persistAnalyticsEvent(eventId, event),
     aggregateKpiDaily(event),
     tierUpdate,
+    // Mully Access: tag the member and refund the join-order difference.
+    handleMullyAccessPaidOrder(order, { priorTier }).catch(err =>
+      console.error("[orders-paid] mully-access handling failed:", err)),
     giftPersist,
     foundingClaim,
     sponsorshipAttribution,
