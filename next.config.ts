@@ -29,6 +29,17 @@ const nextConfig: NextConfig = {
       ],
     };
   },
+  // Shopify-generated links (Google Shopping feed, Shop app, email product
+  // blocks) point at /products/<handle> and /collections/<handle>. The old
+  // theme forwards those to this domain, so send them to the headless pages.
+  async redirects() {
+    return [
+      { source: "/products/:handle", destination: "/shop/:handle", permanent: true },
+      { source: "/collections/all", destination: "/shop", permanent: true },
+      { source: "/collections/:handle/products/:product", destination: "/shop/:product", permanent: true },
+      { source: "/collections/:handle", destination: "/shop/collection/:handle", permanent: true },
+    ];
+  },
   async headers() {
     return [
       {
