@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { recoverShopifyPath } from "@/lib/shopifyPathRecovery";
 
 const MAINTENANCE_MODE = process.env.MAINTENANCE_MODE === "true";
 
@@ -60,6 +61,20 @@ export function middleware(request: NextRequest) {
     url.pathname = "/subscription";
     url.search = search;
     return NextResponse.redirect(url, 301);
+  }
+
+  // The Shopify redirect theme's custom rule "/ > /dashboard?tab=shop" is a
+  // prefix match, so every Shopify URL arrives here mangled, for example
+  // /dashboard?tab=shopproducts/<handle>?variant=1. Recover the real path.
+  if (normalized === "/dashboard") {
+    const recovered = recoverShopifyPath(request.nextUrl.searchParams.get("tab"));
+    if (recovered) {
+      const url = request.nextUrl.clone();
+      url.pathname = recovered.pathname;
+      url.searchParams.delete("tab");
+      recovered.params.forEach((value, key) => url.searchParams.set(key, value));
+      return NextResponse.redirect(url, 301);
+    }
   }
 
   // Keep old bookmarks functional, but retire the dashboard entry points.
