@@ -58,8 +58,11 @@ export interface ReadinessInput {
   /** Size preferences from a fresh read; null when unreadable. */
   preferences: { readOk: boolean; hasTopAndBottomSize: boolean } | null;
   reward: RewardDecision;
-  /** Explicit, current email marketing consent. Internal addresses are never ready. */
-  consent: { subscribed: boolean; marketable: boolean; internal: boolean } | null;
+  /**
+   * Explicit, current email marketing consent. Internal addresses are never ready.
+   * `contactable` (never unsubscribed, deliverable) admits checkout recovery only.
+   */
+  consent: { subscribed: boolean; marketable: boolean; internal: boolean; contactable?: boolean } | null;
 }
 
 export const SIZE_REMINDER_ENABLED = false as boolean;
@@ -88,6 +91,10 @@ export function computeReadiness(input: ReadinessInput, config: ReadinessConfig,
   const prefsKnown = input.preferences?.readOk === true;
   if (member && !prefsKnown) holds.push("preferences_unreadable");
   const sendable = input.consent?.subscribed === true && input.consent.marketable === true && input.consent.internal === false;
+  // Checkout recovery: a shopper who entered their email at checkout and never
+  // unsubscribed is eligible even without a marketing opt-in (Drew, Oct 12, 2026).
+  const checkoutContactable = sendable ||
+    (input.consent?.contactable === true && input.consent.marketable === true && input.consent.internal === false);
 
   // Program prerequisites beyond the flow's own filters. Every program also
   // needs consent and a non-internal profile.
@@ -122,7 +129,8 @@ export function computeReadiness(input: ReadinessInput, config: ReadinessConfig,
     mully_reward_percent: input.reward.verified ? input.reward.percent : null,
   };
   for (const [program, prop] of Object.entries(READINESS_PROGRAMS) as [ReadinessProgram, string][]) {
-    properties[prop] = config.enabled && config.programs.has(program) && sendable && prereq[program] &&
+    const reachable = program === "checkout" ? checkoutContactable : sendable;
+    properties[prop] = config.enabled && config.programs.has(program) && reachable && prereq[program] &&
       !holds.some((h) => h.startsWith("membership_unreadable") || h === "service_unreadable" || h === "consent_unreadable");
   }
   const uniqueHolds = [...new Set(holds)].sort();

@@ -18,6 +18,14 @@ function hasPurchaseIntent() {
 function markPurchaseIntent() {
   try { sessionStorage.setItem(PURCHASE_INTENT_KEY, "1"); } catch { /* storage unavailable */ }
 }
+/** Listing pages under /shop that are not product pages. */
+const NON_PRODUCT_SHOP_PATHS = new Set(["collection", "gifts", "new-arrivals"]);
+/** Where the popup may appear: the shop home and individual product pages. */
+export function popupPageKind(pathname: string | null): "home" | "product" | null {
+  if (pathname === "/" || pathname === "/shop") return "home";
+  const m = /^\/shop\/([^/]+)\/?$/.exec(pathname ?? "");
+  return m && !NON_PRODUCT_SHOP_PATHS.has(m[1]) ? "product" : null;
+}
 type Step = "interest" | "email" | "sms" | "done";
 export function ShopSignupPopup() {
   const pathname = usePathname();
@@ -45,7 +53,10 @@ export function ShopSignupPopup() {
     dialog.current?.close();
   }
   useEffect(() => {
-    if (pathname !== "/shop" && pathname !== "/") return;
+    const kind = popupPageKind(pathname);
+    if (!kind) return;
+    // Product pages wait a little longer so the visitor has seen the item first.
+    const minEngagedMs = kind === "product" ? 20_000 : 15_000;
     const started = Date.now();
     let interacted = false;
     let dismissedUntil = 0;
@@ -72,7 +83,7 @@ export function ShopSignupPopup() {
     function scroll() {
       interacted = true;
       const travel = document.documentElement.scrollHeight - innerHeight;
-      if (Date.now() - started >= 15_000 && travel > 0 && scrollY / travel >= .3) show();
+      if (Date.now() - started >= minEngagedMs && travel > 0 && scrollY / travel >= .3) show();
     }
     function interaction(event?: Event) {
       interacted = true;
@@ -80,7 +91,7 @@ export function ShopSignupPopup() {
       if (target instanceof Element && target.closest(PURCHASE_INTENT_SELECTOR)) markPurchaseIntent();
     }
     function exit(event: MouseEvent) {
-      if (event.clientY <= 0 && matchMedia("(pointer:fine)").matches && Date.now() - started >= 15_000 && interacted) show();
+      if (event.clientY <= 0 && matchMedia("(pointer:fine)").matches && Date.now() - started >= minEngagedMs && interacted) show();
     }
     function manual() { show(true); }
     // A timer alone never interrupts a passive visitor. Require interaction,
