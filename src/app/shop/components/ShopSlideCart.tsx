@@ -24,7 +24,13 @@ export function ShopSlideCart({ accent }: { accent: string }) {
     prepareShopCheckout,
     cartLoading,
     cartOfferNotice,
+    cartDiscountCodes = [],
+    hasShopDiscount,
   } = useMembership();
+  const appliedCode = cartDiscountCodes.find(c => c.applicable)?.code.toUpperCase();
+  const savingsLabel = appliedCode === "BOGO15" ? "Mully BOGO15 savings"
+    : appliedCode ? `Mully ${appliedCode} savings`
+    : hasShopDiscount ? "Mully member savings" : "Mully savings";
 
   const [checkoutPending, setCheckoutPending] = useState(false);
   const [checkoutError, setCheckoutError] = useState("");
@@ -216,8 +222,8 @@ export function ShopSlideCart({ accent }: { accent: string }) {
             {/* Footer */}
             <footer className="border-t border-charcoal/10 px-6 py-5">
               {cartOfferNotice && <p role="status" className="pb-3 text-xs text-charcoal/70">{cartOfferNotice}</p>}
-              {cartOrderDiscount > 0 && <p className="pb-3 text-xs text-forest">Order savings applied: ${cartOrderDiscount.toFixed(2)}</p>}
-              {cart.some(item => (item.retailPrice ?? item.price) > item.price) && <p className="pb-3 text-xs text-forest">Shopify savings applied: ${(cart.reduce((sum,item) => sum + ((item.retailPrice ?? item.price)-item.price)*item.quantity,0)).toFixed(2)}</p>}
+              {cartOrderDiscount > 0 && <p className="pb-3 text-xs text-forest">{savingsLabel}: ${cartOrderDiscount.toFixed(2)}</p>}
+              {cart.some(item => (item.retailPrice ?? item.price) > item.price) && <p className="pb-3 text-xs text-forest">{savingsLabel}: ${(cart.reduce((sum,item) => sum + ((item.retailPrice ?? item.price)-item.price)*item.quantity,0)).toFixed(2)}</p>}
               <div className="flex items-center justify-between pb-4">
                 <span className="text-[11px] font-mono uppercase tracking-[0.24em] text-charcoal/60">
                   Subtotal
