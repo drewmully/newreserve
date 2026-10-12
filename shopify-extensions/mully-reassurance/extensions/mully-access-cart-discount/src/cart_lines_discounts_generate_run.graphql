@@ -1,0 +1,14 @@
+query CartLinesInput {
+  cart {
+    lines {
+      id
+      merchandise {
+        __typename
+        ... on ProductVariant { id }
+      }
+    }
+  }
+  discount {
+    discountClasses
+  }
+}

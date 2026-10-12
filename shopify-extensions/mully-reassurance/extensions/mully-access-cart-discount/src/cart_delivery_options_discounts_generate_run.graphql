@@ -1,0 +1,14 @@
+query DeliveryInput {
+  cart {
+    lines {
+      merchandise {
+        __typename
+        ... on ProductVariant { id }
+      }
+    }
+    deliveryGroups { id }
+  }
+  discount {
+    discountClasses
+  }
+}

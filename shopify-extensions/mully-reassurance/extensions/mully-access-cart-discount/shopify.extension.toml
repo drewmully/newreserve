@@ -1,0 +1,26 @@
+# Mully Access cart rule: when the Mully Access membership is in the cart,
+# the rest of the order gets 10% off and shipping is free.
+# After deploy, activate with discountAutomaticAppCreate (functionHandle
+# "mully-access-cart-discount", discountClasses [ORDER, SHIPPING]).
+
+api_version = "2026-01"
+
+[[extensions]]
+name = "Mully Access cart discount"
+handle = "mully-access-cart-discount"
+type = "function"
+description = "10% off and free shipping when Mully Access is in the cart"
+
+  [[extensions.targeting]]
+  target = "cart.lines.discounts.generate.run"
+  input_query = "src/cart_lines_discounts_generate_run.graphql"
+  export = "cartLinesDiscountsGenerateRun"
+
+  [[extensions.targeting]]
+  target = "cart.delivery-options.discounts.generate.run"
+  input_query = "src/cart_delivery_options_discounts_generate_run.graphql"
+  export = "cartDeliveryOptionsDiscountsGenerateRun"
+
+  [extensions.build]
+  command = ""
+  path = "dist/function.wasm"
