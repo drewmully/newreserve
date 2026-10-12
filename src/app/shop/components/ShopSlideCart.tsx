@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useMembership } from "../../context/MembershipContext";
 import { trackEvent } from "@/lib/tracking";
 import { ShopCartBogoNudge } from "./ShopCartBogoNudge";
+import { ShopCartAccessOffer } from "./ShopCartAccessOffer";
 import { isBogoDiscount } from "@/lib/cartPicks";
 
 /**
@@ -219,6 +220,7 @@ export function ShopSlideCart({ accent }: { accent: string }) {
                 ))}
               </ul>
               <ShopCartBogoNudge accent={accent} />
+              <ShopCartAccessOffer accent={accent} />
             </div>
 
             {/* Footer */}

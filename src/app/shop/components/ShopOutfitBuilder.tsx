@@ -38,7 +38,7 @@ export function ShopOutfitBuilder({products,byCategory}:{products:ShopifyProduct
   const root=useRef<HTMLElement>(null);
   const customize=useRef<HTMLDialogElement>(null);
   const fit=useRef<HTMLDialogElement>(null);
-  const {addItemsToCart,email,hasShopDiscount}=useMembership();
+  const {addItemsToCart,email,hasShopDiscount,shopDiscountRate}=useMembership();
   const selected=choices.map((list,i)=>list[indices[i]]);
   const complete=selected.every(Boolean);
   const config=(p:ShopifyProduct)=>({...initialOptions(p),...selections[p.slug]});
@@ -47,7 +47,7 @@ export function ShopOutfitBuilder({products,byCategory}:{products:ShopifyProduct
   const unavailable=variants.some(v=>v&&!v.availableForSale);
   const estimate=outfitEstimate(selected.filter(Boolean).map((p,i)=>variants[i]?.price??p.price));
   if(hasShopDiscount){
-    estimate.savings=Math.round(estimate.subtotal*.15*100)/100;
+    estimate.savings=Math.round(estimate.subtotal*shopDiscountRate*100)/100;
     estimate.total=estimate.subtotal-estimate.savings;
   }
   const colors=(p:ShopifyProduct)=>Object.entries(config(p)).filter(([name])=>!isFit(name)).map(([,v])=>v).filter(v=>v!=="Default Title").join(" / ");
@@ -125,7 +125,7 @@ export function ShopOutfitBuilder({products,byCategory}:{products:ShopifyProduct
           <div className="guided-content">
             {step===0?<><p className="guided-kicker">Selected by Mully</p><h3>The look is ready.<br/>Make it yours.</h3>
               <p>Choose your sizes. Swap a piece only if you want to.</p>
-              <div className="guided-bundle-note"><strong>Buy the outfit. Save together.</strong><span>{hasShopDiscount?"Your active subscription saves 15% on every piece.":"15% off one piece with BOGO15. Applied in your bag."}</span></div>
+              <div className="guided-bundle-note"><strong>Buy the outfit. Save together.</strong><span>{hasShopDiscount?`Your membership saves ${Math.round(shopDiscountRate*100)}% on every piece.`:"15% off one piece with BOGO15. Applied in your bag."}</span></div>
             </>:step===1?<><div className="guided-panel-title"><h3>Make it your size.</h3><button onClick={()=>show(fit.current)}>Size &amp; fit ↗</button></div>
               {shared?<fieldset className="guided-shared-size"><legend>Top &amp; layer size</legend>
                 <div>{sharedSizes.map(value=><button key={value} aria-pressed={sharedValue===value} onClick={()=>{

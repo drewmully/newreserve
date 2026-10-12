@@ -339,7 +339,10 @@ function ProductTile({
   const hasSecondImage = Boolean(
     secondaryImage && secondaryImage !== primaryImage
   );
-  const pricing = resolveTieredPriceDisplay(product, isPaid);
+  const pricing = resolveTieredPriceDisplay(
+    { price: product.price, reservePrice: isPaid && ctx ? ctx.memberPrice(product.price) : product.reservePrice },
+    isPaid,
+  );
 
   return (
     <Link
@@ -802,7 +805,7 @@ function AddToCartButtonInner({
               price: resolveTieredPrice(
                 {
                   price: variant?.price ?? product.price,
-                  reservePrice: variant?.reservePrice ?? product.reservePrice,
+                  reservePrice: ctx.memberPrice(variant?.price ?? product.price),
                 },
                 isPaid
               ),
@@ -843,7 +846,10 @@ export function ProductPriceDisplay({
 }) {
   const ctx = useMembershipSafe();
   const isPaid = ctx?.hasShopDiscount ?? false;
-  const pricing = resolveTieredPriceDisplay({ price, reservePrice }, isPaid);
+  const pricing = resolveTieredPriceDisplay(
+    { price, reservePrice: isPaid && ctx ? ctx.memberPrice(price) : reservePrice },
+    isPaid,
+  );
 
   return (
     <div className="flex items-center gap-3">

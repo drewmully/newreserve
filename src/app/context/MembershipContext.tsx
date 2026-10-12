@@ -110,6 +110,8 @@ export interface CartItem {
   lineId?: string;
   /** Product thumbnail URL */
   image?: string;
+  /** Subscription selling plan for membership lines (Mully Access). */
+  sellingPlanId?: string;
 }
 
 /** Cart context for the Klaviyo "Mully Added to Cart" event (cart recovery). */
@@ -207,6 +209,10 @@ interface MembershipContextValue {
   // Tier
   tier: MemberTier;
   hasShopDiscount: boolean;
+  /** Member discount rate: 0.15 Reserve, 0.10 Mully Access, 0 otherwise. */
+  shopDiscountRate: number;
+  /** Price after this shopper's member discount (equals price when none). */
+  memberPrice: (price: number) => number;
   setTier: (tier: MemberTier) => void;
   tierLabel: string;
   isLegacy: boolean;
@@ -426,7 +432,12 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
   const [storeCredit, setStoreCredit] = useState<StoreCreditState | null>(null);
   const [subscriptions, setSubscriptions] = useState<SubscriptionsState | null>(null);
   const nativeSubscriptions = useShopifySubscriptions(user, Boolean(subscriptions?.shopify_outfit));
-  const hasShopDiscount = useShopBenefit(user, nativeSubscriptions.shopifySubscriptions.contracts);
+  const shopDiscountRate = useShopBenefit(user, nativeSubscriptions.shopifySubscriptions.contracts);
+  const hasShopDiscount = shopDiscountRate > 0;
+  const memberPrice = useCallback(
+    (price: number) => Math.round(price * (1 - shopDiscountRate) * 100) / 100,
+    [shopDiscountRate],
+  );
 
   // ── Fit profile ───────────────────────────────────────────────────────────
   const [fitProfile, setFitProfileState] = useState<FitProfile>(EMPTY_FIT);
@@ -910,7 +921,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
     setCart(prev => [...prev, ...items.map(item => ({ ...item, quantity: 1 }))]);
     setCartOpen(true);
     try {
-      const lines = items.map(item => ({ merchandiseId: item.variantId!, quantity: 1 }));
+      const lines = items.map(item => ({ merchandiseId: item.variantId!, quantity: 1, ...(item.sellingPlanId ? { sellingPlanId: item.sellingPlanId } : {}) }));
       const attrs = getProjectCartAttributes();
       const attrSig = JSON.stringify(attrs);
       let result: ShopifyCart | null = null;
@@ -1330,6 +1341,8 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
         // Tier
         tier,
         hasShopDiscount,
+        shopDiscountRate,
+        memberPrice,
         setTier,
         tierLabel: getTierLabel(tier, isLegacy, legacyPlan),
         isLegacy,

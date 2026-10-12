@@ -37,8 +37,8 @@ export function ShopProductCard({
   /** Optional accent hex used for the member-price highlight, per seasonal theme. */
   accent?: string;
 }) {
-  const { hasShopDiscount: isMember } = useMembership();
-  const displayPrice = isMember ? product.reservePrice : product.price;
+  const { hasShopDiscount: isMember, memberPrice } = useMembership();
+  const displayPrice = isMember ? memberPrice(product.price) : product.price;
   const [active, setActive] = useState(0);
 
   const swatch = product.swatches?.[active];
@@ -105,7 +105,7 @@ export function ShopProductCard({
           </p>
         )}
         <div className="shop-product-card__price">
-          {isMember && product.price !== product.reservePrice && (
+          {isMember && product.price !== displayPrice && (
             <span className="text-[11px] font-mono text-charcoal/40 line-through">
               {money(product.price)}
             </span>

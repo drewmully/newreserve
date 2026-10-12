@@ -65,7 +65,7 @@ export function ShopPDPClient({
   accent,
   relatedProducts = [],
 }: ShopPDPClientProps) {
-  const { addItemsToCart, hasShopDiscount } = useMembership();
+  const { addItemsToCart, hasShopDiscount, memberPrice } = useMembership();
   const [selection, setSelection] = useState<ProductVariantSelection>(() =>
     getInitialVariantSelection(product, initialSelection)
   );
@@ -101,7 +101,7 @@ export function ShopPDPClient({
 
   const displayVariant = selectedVariant ?? getDefaultProductVariant(product);
   const retailPrice = displayVariant?.price ?? product.price;
-  const price = hasShopDiscount ? (displayVariant?.reservePrice ?? product.reservePrice) : retailPrice;
+  const price = hasShopDiscount ? memberPrice(retailPrice) : retailPrice;
   const showStrikethrough =
     typeof retailPrice === "number" && retailPrice > price;
 
