@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { useMembership } from "../../context/MembershipContext";
 import { trackEvent } from "@/lib/tracking";
 import { ShopCartBogoNudge } from "./ShopCartBogoNudge";
+import { isBogoDiscount } from "@/lib/cartPicks";
 
 /**
  * Shop-native cart drawer. Modeled on the V1 Sports storefront cart:
@@ -25,10 +26,11 @@ export function ShopSlideCart({ accent }: { accent: string }) {
     cartLoading,
     cartOfferNotice,
     cartDiscountCodes = [],
+    cartDiscountLabels = [],
     hasShopDiscount,
   } = useMembership();
-  const appliedCode = cartDiscountCodes.find(c => c.applicable)?.code.toUpperCase();
-  const savingsLabel = appliedCode === "BOGO15" ? "Mully BOGO15 savings"
+  const appliedCode = cartDiscountCodes.find(c => c.applicable && c.code.toUpperCase() !== "BOGO15")?.code.toUpperCase();
+  const savingsLabel = isBogoDiscount(cartDiscountLabels, cartDiscountCodes) ? "Mully BOGO15 savings"
     : appliedCode ? `Mully ${appliedCode} savings`
     : hasShopDiscount ? "Mully member savings" : "Mully savings";
 
