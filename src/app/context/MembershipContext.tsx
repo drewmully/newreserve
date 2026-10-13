@@ -31,6 +31,7 @@ import {
 import { buildCheckoutOriginAttributes } from "@/lib/shopifyCheckoutOrigin";
 import { attributionToCartAttributes, getStoredAttribution } from "@/lib/attribution";
 import { readShopReward, rewardCodes } from "@/lib/shopRewards";
+import { readFirstOrderShipping, isFirstOrderShippingCode } from "@/lib/firstOrderShipping";
 import { BOGO15_CODE } from "@/lib/cartPicks";
 import { useShopBenefit } from "./useShopBenefit";
 import { useShopifySubscriptions, type ShopifySubscription, type ShopifySubscriptionState } from "./useShopifySubscriptions";
@@ -568,7 +569,13 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
     if (!result) throw new Error("Your bag expired. Please add your items again.");
     if (user?.email) result = await updateCartBuyerIdentity(id, { email: user.email });
     const reward = readShopReward();
-    if (reward) result = await cartDiscountCodesUpdate(id, rewardCodes((result.discountCodes ?? []).map(c => c.code).filter(c => c.toUpperCase() !== BOGO15_CODE), reward));
+    const firstShip = readFirstOrderShipping();
+    const current = (result.discountCodes ?? []).map(c => c.code);
+    if (reward || (firstShip && !current.some(c => c.toUpperCase() === firstShip.code))) {
+      const kept = current.filter(c => c.toUpperCase() !== BOGO15_CODE && !isFirstOrderShippingCode(c));
+      const codes = rewardCodes(kept, reward);
+      result = await cartDiscountCodesUpdate(id, firstShip ? [...codes, firstShip.code] : codes);
+    }
     syncFromShopifyCart(result);
     return result;
   }, [user, syncFromShopifyCart]);
