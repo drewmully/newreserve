@@ -76,6 +76,16 @@ async function readJson(res: Response): Promise<unknown> {
   }
 }
 
+/** JSON pointers of rejected fields (paths only, never values or detail text). */
+function errorPointers(body: unknown): string[] {
+  const errors = (body as { errors?: Array<{ source?: { pointer?: unknown } }> } | null)?.errors;
+  if (!Array.isArray(errors)) return [];
+  return errors
+    .map((e) => (typeof e?.source?.pointer === "string" ? e.source.pointer.replace(/[^\w/.-]/g, "") : ""))
+    .filter(Boolean)
+    .slice(0, 5);
+}
+
 function errorCodes(body: unknown): string[] {
   const errors = (body as { errors?: Array<{ code?: unknown }> } | null)?.errors;
   if (!Array.isArray(errors)) return [];
@@ -124,6 +134,11 @@ export async function klaviyoRequest<T = unknown>(
 
     const apiCodes = errorCodes(body);
     const code = classify(res.status, apiCodes);
+    if (res.status >= 400 && res.status < 500 && res.status !== 429) {
+      console.warn(
+        `[klaviyo] ${path.split("?")[0]} ${res.status} codes=${apiCodes.join(",") || "-"} at=${errorPointers(body).join(",") || "-"}`,
+      );
+    }
     const retryAfterMs = parseRetryAfter(res.headers.get("retry-after"));
     last = new KlaviyoError(code, res.status, { retryAfterMs, apiCodes });
     const retryable = code === "rate_limited" || code === "server_error";
