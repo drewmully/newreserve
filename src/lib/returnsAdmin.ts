@@ -117,7 +117,14 @@ export const ORDER_LOOKUP_QUERY = `query ReturnOrderLookup($q: String!) {
           nodes {
             id
             quantity
-            lineItem { id title variantTitle sku product { id } }
+            lineItem {
+              id
+              title
+              variantTitle
+              sku
+              product { id }
+              originalUnitPriceSet { shopMoney { amount } }
+            }
           }
         }
       }
@@ -139,10 +146,37 @@ export const VARIANT_SEARCH_QUERY = `query ReturnVariantSearch($q: String!) {
   }
 }`;
 
+export const PRODUCT_SEARCH_QUERY = `query ReturnProductSearch($q: String!) {
+  products(first: 12, query: $q, sortKey: RELEVANCE) {
+    nodes {
+      id
+      title
+      vendor
+      featuredMedia { preview { image { url } } }
+      variants(first: 50) {
+        nodes { id title sku price inventoryQuantity availableForSale }
+      }
+    }
+  }
+}`;
+
+// Shopify search syntax: every word must match the title, vendor, or SKU
+// ("rhone polo" → Rhone polos). Characters that break the syntax are dropped.
+export function toProductSearch(q: string): string {
+  const words = q
+    .replace(/[\\():"'*]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w && !/^(and|or|not)$/i.test(w))
+    .slice(0, 5);
+  return "status:active AND " + words.map((w) => `(title:*${w}* OR vendor:*${w}* OR sku:${w}*)`).join(" AND ");
+}
+
 export const PRODUCT_VARIANTS_QUERY = `query ReturnProductVariants($id: ID!) {
   product(id: $id) {
     id
     title
+    vendor
+    featuredMedia { preview { image { url } } }
     variants(first: 50) {
       nodes { id title sku price inventoryQuantity availableForSale }
     }
@@ -418,14 +452,18 @@ export async function fetchReturnOrders(
 
 export type DeclineReason = "FINAL_SALE" | "OTHER" | "RETURN_PERIOD_ENDED";
 
-export interface ExchangeSelection {
-  /** Return line (on the requested return) or fulfillment line (manual exchange). */
+/** An item the customer is sending back. */
+export interface ExchangeReturnItem {
   fulfillmentLineItemId: string;
   quantity: number;
   returnReason: string;
   customerNote?: string | null;
-  replacementVariantId: string;
-  replacementQuantity: number;
+}
+
+/** A product/size the customer is getting instead (slotted in by the admin). */
+export interface ExchangeOutItem {
+  variantId: string;
+  quantity: number;
 }
 
 type UserErrors = { field: string[] | null; message: string }[];
@@ -465,31 +503,42 @@ export async function declineReturn(
  * `returnCreate` with exchangeLineItems. So for a requested return we:
  *   1. decline the request silently (customer is not emailed), noting the
  *      replacement return so the audit trail stays readable, then
- *   2. create an OPEN return with the same items plus the exchange items.
- * If step 2 fails, the request is left declined and the error is surfaced
- * so the admin can retry from the Exchange requests tab.
+ *   2. create an OPEN return with the items coming back plus the items
+ *      slotted in to send out.
+ * What comes back and what goes out are independent lists: a returned
+ * quarterly box can be exchanged for two specific items, a polo for a
+ * different polo, and so on. Shopify prices exchange items at their
+ * current price and nets the difference against the returned value.
  */
-export function buildExchangeInput(orderId: string, selections: ExchangeSelection[]) {
-  if (!selections.length) throw new Error("Pick at least one item to exchange.");
+export function buildExchangeInput(
+  orderId: string,
+  returning: ExchangeReturnItem[],
+  sending: ExchangeOutItem[],
+) {
+  if (!returning.length) throw new Error("Pick at least one item the customer is sending back.");
+  if (!sending.length) throw new Error("Slot in at least one product to send the customer.");
+  const merged = new Map<string, number>();
+  for (const s of sending) merged.set(s.variantId, (merged.get(s.variantId) ?? 0) + s.quantity);
   return {
     orderId,
-    returnLineItems: selections.map((s) => ({
-      fulfillmentLineItemId: s.fulfillmentLineItemId,
-      quantity: s.quantity,
-      returnReason: s.returnReason || "OTHER",
-      customerNote: s.customerNote ?? undefined,
+    returnLineItems: returning.map((r) => ({
+      fulfillmentLineItemId: r.fulfillmentLineItemId,
+      quantity: r.quantity,
+      returnReason: !r.returnReason || r.returnReason === "UNKNOWN" ? "OTHER" : r.returnReason,
+      customerNote: r.customerNote ? r.customerNote.slice(0, 300) : undefined,
     })),
-    exchangeLineItems: selections.map((s) => ({
-      variantId: s.replacementVariantId,
-      quantity: s.replacementQuantity,
-    })),
+    exchangeLineItems: [...merged].map(([variantId, quantity]) => ({ variantId, quantity })),
   };
 }
 
-export async function createExchangeReturn(orderId: string, selections: ExchangeSelection[]) {
+export async function createExchangeReturn(
+  orderId: string,
+  returning: ExchangeReturnItem[],
+  sending: ExchangeOutItem[],
+) {
   const data = await adminGraphql<{
     returnCreate: { return: { id: string; name: string; status: string } | null; userErrors: UserErrors };
-  }>(CREATE_EXCHANGE_MUTATION, { returnInput: buildExchangeInput(orderId, selections) });
+  }>(CREATE_EXCHANGE_MUTATION, { returnInput: buildExchangeInput(orderId, returning, sending) });
   const err = firstError(data.returnCreate.userErrors);
   if (err) throw new ShopifyAdminError(err);
   return data.returnCreate.return;

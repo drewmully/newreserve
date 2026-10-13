@@ -5,6 +5,7 @@ import {
   fetchReturnOrders,
   normalizeOrders,
   sortQueue,
+  toProductSearch,
   type RawOrder,
 } from "@/lib/returnsAdmin";
 
@@ -128,20 +129,50 @@ describe("normalizeOrders + sortQueue", () => {
 });
 
 describe("buildExchangeInput", () => {
-  it("pairs each returned line with its replacement variant", () => {
-    expect(
-      buildExchangeInput("gid://shopify/Order/1", [
-        { fulfillmentLineItemId: "gid://shopify/FulfillmentLineItem/7", quantity: 1, returnReason: "SIZE_TOO_SMALL", customerNote: "Wrong size", replacementVariantId: "gid://shopify/ProductVariant/8", replacementQuantity: 1 },
-      ]),
-    ).toEqual({
+  const back = { fulfillmentLineItemId: "gid://shopify/FulfillmentLineItem/7", quantity: 1, returnReason: "SIZE_TOO_SMALL", customerNote: "Wrong size" };
+
+  it("sends back the returned line and ships the slotted product", () => {
+    expect(buildExchangeInput("gid://shopify/Order/1", [back], [{ variantId: "gid://shopify/ProductVariant/8", quantity: 1 }])).toEqual({
       orderId: "gid://shopify/Order/1",
       returnLineItems: [{ fulfillmentLineItemId: "gid://shopify/FulfillmentLineItem/7", quantity: 1, returnReason: "SIZE_TOO_SMALL", customerNote: "Wrong size" }],
       exchangeLineItems: [{ variantId: "gid://shopify/ProductVariant/8", quantity: 1 }],
     });
   });
 
-  it("refuses an empty exchange", () => {
-    expect(() => buildExchangeInput("gid://shopify/Order/1", [])).toThrow();
+  it("lets one returned box be exchanged for several different products", () => {
+    const input = buildExchangeInput(
+      "gid://shopify/Order/1",
+      [{ ...back, returnReason: "UNKNOWN", customerNote: null }],
+      [
+        { variantId: "gid://shopify/ProductVariant/polo-L", quantity: 1 },
+        { variantId: "gid://shopify/ProductVariant/pullover-L", quantity: 1 },
+        { variantId: "gid://shopify/ProductVariant/polo-L", quantity: 1 },
+      ],
+    );
+    expect(input.returnLineItems[0]).toMatchObject({ returnReason: "OTHER", customerNote: undefined });
+    expect(input.exchangeLineItems).toEqual([
+      { variantId: "gid://shopify/ProductVariant/polo-L", quantity: 2 },
+      { variantId: "gid://shopify/ProductVariant/pullover-L", quantity: 1 },
+    ]);
+  });
+
+  it("refuses an exchange with nothing coming back or nothing slotted in", () => {
+    expect(() => buildExchangeInput("gid://shopify/Order/1", [], [{ variantId: "v", quantity: 1 }])).toThrow(/sending back/);
+    expect(() => buildExchangeInput("gid://shopify/Order/1", [back], [])).toThrow(/Slot in/);
+  });
+});
+
+describe("toProductSearch", () => {
+  it("requires every word to match title, brand, or SKU among active products", () => {
+    expect(toProductSearch("rhone polo")).toBe(
+      "status:active AND (title:*rhone* OR vendor:*rhone* OR sku:rhone*) AND (title:*polo* OR vendor:*polo* OR sku:polo*)",
+    );
+  });
+
+  it("strips characters that would break Shopify search syntax", () => {
+    expect(toProductSearch('polo") OR (status:draft')).toBe(
+      "status:active AND (title:*polo* OR vendor:*polo* OR sku:polo*) AND (title:*status* OR vendor:*status* OR sku:status*) AND (title:*draft* OR vendor:*draft* OR sku:draft*)",
+    );
   });
 });
 

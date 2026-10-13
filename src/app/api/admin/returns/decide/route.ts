@@ -4,7 +4,9 @@
  * body:
  *   { action: "approve", returnId, notifyCustomer? }
  *   { action: "decline", returnId, declineReason, declineNote?, notifyCustomer? }
- *   { action: "exchange", orderId, returnId?, requestId?, selections[], notifyCustomer? }
+ *   { action: "exchange", orderId, returnId?, requestId?, returning[], sending[], notifyCustomer? }
+ *     returning — items coming back (fulfillment line + qty + reason)
+ *     sending   — products/sizes slotted in to ship out (variantId + qty)
  *
  * Every decision is written to Firestore `return_decisions` (who, what,
  * when, Shopify result) so the daily view has an audit trail.
@@ -16,10 +18,12 @@ import { requireAdmin } from "@/app/api/_lib/adminAuth";
 import { adminDb } from "@/lib/firebase-admin";
 import {
   approveReturn,
+  buildExchangeInput,
   createExchangeReturn,
   declineReturn,
   type DeclineReason,
-  type ExchangeSelection,
+  type ExchangeOutItem,
+  type ExchangeReturnItem,
 } from "@/lib/returnsAdmin";
 import { sendPlainText } from "@/lib/email/resend";
 
@@ -38,23 +42,21 @@ interface Body {
   declineReason?: DeclineReason;
   declineNote?: string;
   notifyCustomer?: boolean;
-  selections?: ExchangeSelection[];
+  returning?: ExchangeReturnItem[];
+  sending?: ExchangeOutItem[];
   exchangeSummary?: string;
 }
 
-function validSelections(s: unknown): s is ExchangeSelection[] {
-  return (
-    Array.isArray(s) &&
-    s.length > 0 &&
-    s.every(
-      (x) =>
-        x &&
-        typeof x.fulfillmentLineItemId === "string" &&
-        typeof x.replacementVariantId === "string" &&
-        Number.isInteger(x.quantity) && x.quantity > 0 &&
-        Number.isInteger(x.replacementQuantity) && x.replacementQuantity > 0,
-    )
-  );
+const posInt = (n: unknown) => Number.isInteger(n) && (n as number) > 0;
+
+function validReturning(r: unknown): r is ExchangeReturnItem[] {
+  return Array.isArray(r) && r.length > 0 &&
+    r.every((x) => x && typeof x.fulfillmentLineItemId === "string" && posInt(x.quantity));
+}
+
+function validSending(s: unknown): s is ExchangeOutItem[] {
+  return Array.isArray(s) && s.length > 0 &&
+    s.every((x) => x && typeof x.variantId === "string" && x.variantId.startsWith("gid://shopify/ProductVariant/") && posInt(x.quantity));
 }
 
 export async function POST(req: NextRequest) {
@@ -102,9 +104,14 @@ export async function POST(req: NextRequest) {
     }
 
     if (body.action === "exchange") {
-      if (!body.orderId || !validSelections(body.selections)) {
-        return NextResponse.json({ error: "orderId and at least one complete exchange selection are required" }, { status: 400 });
+      if (!body.orderId || !validReturning(body.returning) || !validSending(body.sending)) {
+        return NextResponse.json(
+          { error: "Pick what's coming back and slot in at least one product to send out." },
+          { status: 400 },
+        );
       }
+      // Validate the full Shopify input before touching the customer's request.
+      buildExchangeInput(body.orderId, body.returning, body.sending);
       // A customer's REQUESTED return can't take exchange items, so release
       // those items first (silent decline), then open the exchange return.
       if (body.returnId) {
@@ -117,13 +124,14 @@ export async function POST(req: NextRequest) {
       }
       let created;
       try {
-        created = await createExchangeReturn(body.orderId, body.selections);
+        created = await createExchangeReturn(body.orderId, body.returning, body.sending);
       } catch (err) {
         await adminDb.collection("return_decisions").add({
           ...log,
           action: "exchange_failed",
           error: (err as Error).message,
-          selections: body.selections,
+          returning: body.returning,
+          sending: body.sending,
         });
         throw new Error(
           `${(err as Error).message}${body.returnId ? " (the original request was released; retry the exchange from this order)" : ""}`,
@@ -154,7 +162,9 @@ export async function POST(req: NextRequest) {
 
       await adminDb.collection("return_decisions").add({
         ...log,
-        selections: body.selections,
+        returning: body.returning,
+        sending: body.sending,
+        exchangeSummary: body.exchangeSummary ?? null,
         exchangeReturnId: created?.id ?? null,
         exchangeReturnName: created?.name ?? null,
       });

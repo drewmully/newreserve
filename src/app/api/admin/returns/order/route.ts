@@ -10,7 +10,7 @@ import { adminGraphql, ORDER_LOOKUP_QUERY } from "@/lib/returnsAdmin";
 
 export const dynamic = "force-dynamic";
 
-type Fli = { id: string; quantity: number; lineItem: { id: string; title: string; variantTitle: string | null; sku: string | null; product: { id: string } | null } };
+type Fli = { id: string; quantity: number; lineItem: { id: string; title: string; variantTitle: string | null; sku: string | null; product: { id: string } | null; originalUnitPriceSet: { shopMoney: { amount: string } } } };
 
 export async function GET(req: NextRequest) {
   const guard = await requireAdmin(req);
@@ -38,6 +38,7 @@ export async function GET(req: NextRequest) {
             variantTitle: n.lineItem.variantTitle,
             sku: n.lineItem.sku,
             productId: n.lineItem.product?.id ?? null,
+            unitPrice: Number(n.lineItem.originalUnitPriceSet.shopMoney.amount),
           })),
         ),
       },

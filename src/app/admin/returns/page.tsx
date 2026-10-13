@@ -86,16 +86,6 @@ interface QueueResponse {
   truncated: boolean;
 }
 
-interface Variant {
-  id: string;
-  title: string;
-  sku: string | null;
-  price: string;
-  inventoryQuantity: number | null;
-  availableForSale: boolean;
-  productTitle: string;
-}
-
 type Tab = "decide" | "requests" | "open" | "disputes";
 type AdminFetch = (path: string, init?: RequestInit) => Promise<Response>;
 
@@ -143,7 +133,13 @@ async function readJson<T>(res: Response): Promise<T> {
   return data as T;
 }
 
-// ─── Exchange picker ──────────────────────────────────────────────────────────
+// ─── Exchange builder ─────────────────────────────────────────────────────────
+//
+// Two independent lists, matching how Shopify models an exchange:
+//   Coming back        — which of the customer's items are returned
+//   Sending to customer — the exact products/sizes slotted in to ship out
+// Anything in the catalog can be slotted in (same item in a new size, a
+// different product, or several items for one returned box).
 
 interface PickLine {
   key: string;
@@ -152,97 +148,124 @@ interface PickLine {
   title: string;
   variantTitle: string | null;
   quantity: number;
+  unitPrice: number;
   reason: string;
   customerNote: string | null;
 }
 
-function ReplacementPicker({
-  line,
-  adminFetch,
-  value,
-  onChange,
+interface CatalogVariant {
+  id: string;
+  title: string;
+  sku: string | null;
+  price: number;
+  inventoryQuantity: number | null;
+  availableForSale: boolean;
+}
+
+interface CatalogProduct {
+  id: string;
+  title: string;
+  vendor: string | null;
+  imageUrl: string | null;
+  variants: CatalogVariant[];
+}
+
+interface SlotItem {
+  variantId: string;
+  productTitle: string;
+  variantTitle: string;
+  imageUrl: string | null;
+  price: number;
+  stock: number | null;
+  qty: number;
+}
+
+interface ExchangeSubmit {
+  returning: { line: PickLine; qty: number }[];
+  sending: SlotItem[];
+  notify: boolean;
+  summary: string;
+}
+
+function exchangeSummary(returning: ExchangeSubmit["returning"], sending: SlotItem[]): string {
+  const back = returning
+    .map((r) => `${r.qty}× ${r.line.title}${r.line.variantTitle ? ` (${r.line.variantTitle})` : ""}`)
+    .join(", ");
+  const out = sending.map((s) => `${s.qty}× ${s.productTitle} (${s.variantTitle})`).join(", ");
+  return `Sending back: ${back}\nWe're sending you: ${out}`;
+}
+
+function SizeChips({
+  product,
+  onPick,
+  slottedIds,
 }: {
-  line: PickLine;
-  adminFetch: AdminFetch;
-  value: Variant | null;
-  onChange: (v: Variant | null) => void;
+  product: CatalogProduct;
+  onPick: (p: CatalogProduct, v: CatalogVariant) => void;
+  slottedIds: Set<string>;
 }) {
-  const [sameProduct, setSameProduct] = useState<Variant[]>([]);
-  const [search, setSearch] = useState("");
-  const [results, setResults] = useState<Variant[]>([]);
-  const [searching, setSearching] = useState(false);
-
-  useEffect(() => {
-    if (!line.productId) return;
-    let cancelled = false;
-    adminFetch(`/api/admin/returns/variants?productId=${encodeURIComponent(line.productId)}`)
-      .then((r) => readJson<{ variants: Variant[] }>(r))
-      .then((d) => !cancelled && setSameProduct(d.variants))
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, [adminFetch, line.productId]);
-
-  async function runSearch() {
-    if (search.trim().length < 2) return;
-    setSearching(true);
-    try {
-      const d = await readJson<{ variants: Variant[] }>(
-        await adminFetch(`/api/admin/returns/variants?q=${encodeURIComponent(search.trim())}`),
-      );
-      setResults(d.variants);
-    } finally {
-      setSearching(false);
-    }
-  }
-
-  const options = [...sameProduct, ...results.filter((r) => !sameProduct.some((s) => s.id === r.id))];
-
   return (
-    <div className="space-y-2">
-      <select
-        className="w-full border border-taupe/40 rounded px-2 py-1.5 text-sm bg-white"
-        value={value?.id ?? ""}
-        onChange={(e) => onChange(options.find((o) => o.id === e.target.value) ?? null)}
-      >
-        <option value="">Choose replacement…</option>
-        {sameProduct.length > 0 && (
-          <optgroup label={`Same product — ${sameProduct[0].productTitle}`}>
-            {sameProduct.map((v) => (
-              <option key={v.id} value={v.id} disabled={!v.availableForSale && (v.inventoryQuantity ?? 0) <= 0}>
-                {v.title} · {v.inventoryQuantity ?? "?"} in stock
-              </option>
-            ))}
-          </optgroup>
+    <div className="flex flex-wrap gap-1.5">
+      {product.variants.map((v) => {
+        const stock = v.inventoryQuantity ?? 0;
+        const sellable = v.availableForSale;
+        const on = slottedIds.has(v.id);
+        return (
+          <button
+            key={v.id}
+            type="button"
+            disabled={!sellable}
+            onClick={() => onPick(product, v)}
+            title={`${v.title} · ${money(v.price)} · ${stock} in stock${sellable ? "" : " · not for sale"}`}
+            className={`text-xs px-2.5 py-1 rounded border transition-colors ${
+              on
+                ? "bg-forest text-white border-forest"
+                : !sellable
+                  ? "border-taupe/20 text-charcoal/30 line-through cursor-not-allowed"
+                  : stock <= 0
+                    ? "border-amber-300 text-amber-800 hover:bg-amber-50"
+                    : "border-taupe/40 text-obsidian hover:border-forest hover:text-forest"
+            }`}
+          >
+            {v.title === "Default Title" ? "Add" : v.title}
+            {sellable && stock <= 0 && !on && <span className="ml-1 opacity-70">· 0</span>}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function ProductRow({
+  product,
+  onPick,
+  slottedIds,
+  label,
+}: {
+  product: CatalogProduct;
+  onPick: (p: CatalogProduct, v: CatalogVariant) => void;
+  slottedIds: Set<string>;
+  label?: string;
+}) {
+  const prices = product.variants.map((v) => v.price);
+  const lo = Math.min(...prices);
+  const hi = Math.max(...prices);
+  return (
+    <div className="flex gap-3 py-3 border-t border-taupe/15 first:border-t-0">
+      <div className="w-14 h-14 rounded bg-cream overflow-hidden shrink-0">
+        {product.imageUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={product.imageUrl} alt="" className="w-full h-full object-cover" />
         )}
-        {results.length > 0 && (
-          <optgroup label="Search results">
-            {results
-              .filter((r) => !sameProduct.some((s) => s.id === r.id))
-              .map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.productTitle} — {v.title} · {v.inventoryQuantity ?? "?"} in stock
-                </option>
-              ))}
-          </optgroup>
-        )}
-      </select>
-      <div className="flex gap-2">
-        <input
-          className="flex-1 border border-taupe/40 rounded px-2 py-1 text-sm"
-          placeholder="Search a different product or SKU"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && void runSearch()}
-        />
-        <button
-          type="button"
-          onClick={() => void runSearch()}
-          className="text-sm px-3 border border-taupe/40 rounded hover:bg-cream"
-        >
-          {searching ? "…" : "Search"}
-        </button>
+      </div>
+      <div className="min-w-0 flex-1">
+        {label && <p className="text-[11px] uppercase tracking-wide text-forest mb-0.5">{label}</p>}
+        <p className="text-sm text-obsidian truncate">{product.title}</p>
+        <p className="text-xs text-charcoal/50 mb-1.5">
+          {product.vendor ? `${product.vendor} · ` : ""}
+          {prices.length ? (lo === hi ? money(lo) : `${money(lo)}–${money(hi)}`) : ""}
+        </p>
+        <SizeChips product={product} onPick={onPick} slottedIds={slottedIds} />
       </div>
     </div>
   );
@@ -250,64 +273,264 @@ function ReplacementPicker({
 
 function ExchangePanel({
   lines,
+  customerAsk,
   adminFetch,
   busy,
   onSubmit,
   onCancel,
 }: {
   lines: PickLine[];
+  customerAsk?: string | null;
   adminFetch: AdminFetch;
   busy: boolean;
-  onSubmit: (picks: { line: PickLine; variant: Variant; qty: number }[], notify: boolean) => void;
+  onSubmit: (x: ExchangeSubmit) => void;
   onCancel: () => void;
 }) {
-  const [picks, setPicks] = useState<Record<string, { on: boolean; variant: Variant | null; qty: number }>>(() =>
-    Object.fromEntries(lines.map((l) => [l.key, { on: lines.length === 1, variant: null, qty: l.quantity }])),
+  const [back, setBack] = useState<Record<string, number>>(() =>
+    Object.fromEntries(lines.map((l) => [l.key, lines.length === 1 ? l.quantity : 0])),
   );
+  const [slot, setSlot] = useState<SlotItem[]>([]);
+  const [sameItems, setSameItems] = useState<CatalogProduct[]>([]);
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<CatalogProduct[] | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [notify, setNotify] = useState(true);
 
-  const chosen = lines
-    .filter((l) => picks[l.key]?.on)
-    .map((l) => ({ line: l, variant: picks[l.key].variant, qty: picks[l.key].qty }));
-  const ready = chosen.length > 0 && chosen.every((c) => c.variant);
+  // Pre-load the returned items' own products so a size swap is one click.
+  const productKey = [...new Set(lines.map((l) => l.productId).filter((x): x is string => !!x))].join(",");
+  useEffect(() => {
+    const ids = productKey ? productKey.split(",") : [];
+    if (!ids.length) return;
+    let cancelled = false;
+    Promise.all(
+      ids.map((id) =>
+        adminFetch(`/api/admin/returns/variants?productId=${encodeURIComponent(id)}`)
+          .then((r) => readJson<{ products: CatalogProduct[] }>(r))
+          .then((d) => d.products)
+          .catch(() => [] as CatalogProduct[]),
+      ),
+    ).then((all) => {
+      // Single-variant products (e.g. a quarterly box) aren't a useful "swap size" option.
+      if (!cancelled) setSameItems(all.flat().filter((p) => p.variants.length > 1));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [adminFetch, productKey]);
+
+  async function search() {
+    if (query.trim().length < 2) return;
+    setSearching(true);
+    setSearchError(null);
+    try {
+      const d = await readJson<{ products: CatalogProduct[] }>(
+        await adminFetch(`/api/admin/returns/variants?q=${encodeURIComponent(query.trim())}`),
+      );
+      setResults(d.products);
+    } catch (e) {
+      setSearchError((e as Error).message);
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  function addToSlot(p: CatalogProduct, v: CatalogVariant) {
+    setSlot((s) => {
+      const hit = s.find((x) => x.variantId === v.id);
+      if (hit) return s.map((x) => (x.variantId === v.id ? { ...x, qty: x.qty + 1 } : x));
+      return [
+        ...s,
+        {
+          variantId: v.id,
+          productTitle: p.title,
+          variantTitle: v.title === "Default Title" ? "One size" : v.title,
+          imageUrl: p.imageUrl,
+          price: v.price,
+          stock: v.inventoryQuantity,
+          qty: 1,
+        },
+      ];
+    });
+  }
+
+  const slottedIds = new Set(slot.map((s) => s.variantId));
+  const returning = lines.filter((l) => (back[l.key] ?? 0) > 0).map((l) => ({ line: l, qty: back[l.key] }));
+  const backValue = returning.reduce((s, r) => s + r.line.unitPrice * r.qty, 0);
+  const outValue = slot.reduce((s, x) => s + x.price * x.qty, 0);
+  const diff = outValue - backValue;
+  const ready = returning.length > 0 && slot.length > 0;
+  const lowStock = slot.filter((x) => (x.stock ?? 0) < x.qty);
 
   return (
-    <div className="mt-4 border-t border-taupe/20 pt-4 space-y-4">
-      <p className="text-xs text-charcoal/60">
-        Pick what the customer sends back and what ships to them. This opens an exchange return in Shopify.
-      </p>
-      {lines.map((l) => {
-        const p = picks[l.key];
-        return (
-          <div key={l.key} className="grid md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] gap-3 items-start">
-            <label className="flex items-start gap-2 text-sm">
-              <input
-                type="checkbox"
-                className="mt-1"
-                checked={p.on}
-                onChange={(e) => setPicks((s) => ({ ...s, [l.key]: { ...p, on: e.target.checked } }))}
-              />
-              <span>
-                <span className="text-obsidian">{l.title}</span>
-                {l.variantTitle && <span className="text-charcoal/60"> — {l.variantTitle}</span>}
-                <span className="block text-xs text-charcoal/50">Returning {l.quantity}</span>
-              </span>
-            </label>
-            {p.on && (
-              <ReplacementPicker
-                line={l}
-                adminFetch={adminFetch}
-                value={p.variant}
-                onChange={(v) => setPicks((s) => ({ ...s, [l.key]: { ...p, variant: v } }))}
-              />
-            )}
+    <div className="mt-4 border-t border-taupe/20 pt-4 space-y-5">
+      {customerAsk && (
+        <div className="text-sm bg-cream rounded px-3 py-2">
+          <span className="text-xs uppercase tracking-wide text-charcoal/50">Customer asked for</span>
+          <p className="text-obsidian whitespace-pre-wrap">{customerAsk}</p>
+        </div>
+      )}
+
+      <div className="grid md:grid-cols-2 gap-5">
+        {/* Coming back */}
+        <div>
+          <h3 className="text-xs uppercase tracking-wide text-charcoal/60 mb-2">Coming back</h3>
+          <div className="space-y-2">
+            {lines.map((l) => (
+              <label key={l.key} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={(back[l.key] ?? 0) > 0}
+                  onChange={(e) => setBack((b) => ({ ...b, [l.key]: e.target.checked ? l.quantity : 0 }))}
+                />
+                <span className="flex-1 min-w-0">
+                  <span className="text-obsidian">{l.title}</span>
+                  {l.variantTitle && <span className="text-charcoal/60"> — {l.variantTitle}</span>}
+                </span>
+                {l.quantity > 1 && (back[l.key] ?? 0) > 0 && (
+                  <select
+                    value={back[l.key]}
+                    onChange={(e) => setBack((b) => ({ ...b, [l.key]: Number(e.target.value) }))}
+                    className="border border-taupe/40 rounded px-1 py-0.5 text-xs bg-white"
+                  >
+                    {Array.from({ length: l.quantity }, (_, i) => i + 1).map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <span className="text-xs text-charcoal/50 w-16 text-right">{money(l.unitPrice * (back[l.key] || l.quantity))}</span>
+              </label>
+            ))}
           </div>
-        );
-      })}
+        </div>
+
+        {/* Sending out — the slot */}
+        <div>
+          <h3 className="text-xs uppercase tracking-wide text-charcoal/60 mb-2">Sending to customer</h3>
+          {slot.length === 0 ? (
+            <div className="border border-dashed border-taupe/50 rounded px-3 py-4 text-sm text-charcoal/50 text-center">
+              No product slotted in yet. Pick a size or search below.
+            </div>
+          ) : (
+            <ul className="space-y-2">
+              {slot.map((x) => (
+                <li key={x.variantId} className="flex items-center gap-2 text-sm border border-forest/30 bg-forest/5 rounded px-2 py-1.5">
+                  <div className="w-9 h-9 rounded bg-white overflow-hidden shrink-0">
+                    {x.imageUrl && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={x.imageUrl} alt="" className="w-full h-full object-cover" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-obsidian truncate">{x.productTitle}</p>
+                    <p className="text-xs text-charcoal/60">
+                      {x.variantTitle} · {money(x.price)}
+                      {(x.stock ?? 0) < x.qty && <span className="text-amber-800"> · {x.stock ?? 0} in stock</span>}
+                    </p>
+                  </div>
+                  <div className="flex items-center border border-taupe/40 rounded bg-white">
+                    <button
+                      type="button"
+                      aria-label="Decrease quantity"
+                      className="px-2 text-charcoal/60"
+                      onClick={() =>
+                        setSlot((s) => s.flatMap((y) => (y.variantId !== x.variantId ? [y] : y.qty > 1 ? [{ ...y, qty: y.qty - 1 }] : [])))
+                      }
+                    >
+                      −
+                    </button>
+                    <span className="px-1 text-xs w-5 text-center">{x.qty}</span>
+                    <button
+                      type="button"
+                      aria-label="Increase quantity"
+                      className="px-2 text-charcoal/60"
+                      onClick={() => setSlot((s) => s.map((y) => (y.variantId === x.variantId ? { ...y, qty: y.qty + 1 } : y)))}
+                    >
+                      +
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSlot((s) => s.filter((y) => y.variantId !== x.variantId))}
+                    className="text-xs text-charcoal/50 hover:text-red-700 px-1"
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+
+      {/* Catalog */}
+      <div className="rounded border border-taupe/25 px-3 py-2">
+        {sameItems.map((p) => (
+          <ProductRow key={p.id} product={p} onPick={addToSlot} slottedIds={slottedIds} label="Same item, different size" />
+        ))}
+        <div className={`flex gap-2 ${sameItems.length ? "pt-3 border-t border-taupe/15" : "py-1"}`}>
+          <input
+            className="flex-1 border border-taupe/40 rounded px-2 py-1.5 text-sm"
+            placeholder="Search products to slot in (name, brand, or SKU)"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void search();
+              }
+            }}
+          />
+          <button type="button" onClick={() => void search()} className="text-sm px-3 border border-taupe/40 rounded hover:bg-cream">
+            {searching ? "Searching…" : "Search"}
+          </button>
+        </div>
+        {searchError && <p className="text-xs text-red-700 mt-2">{searchError}</p>}
+        {results && results.length === 0 && <p className="text-xs text-charcoal/50 mt-2">No active products match.</p>}
+        {results && results.length > 0 && (
+          <div className="max-h-80 overflow-y-auto mt-1">
+            {results.map((p) => (
+              <ProductRow key={p.id} product={p} onPick={addToSlot} slottedIds={slottedIds} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Value + submit */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+        <span className="text-charcoal/60">
+          Coming back <span className="text-obsidian">{money(backValue)}</span>
+        </span>
+        <span className="text-charcoal/60">
+          Sending <span className="text-obsidian">{money(outValue)}</span>
+        </span>
+        {ready && (
+          <span className={Math.abs(diff) < 0.01 ? "text-forest" : diff > 0 ? "text-amber-800" : "text-charcoal/70"}>
+            {Math.abs(diff) < 0.01
+              ? "Even exchange"
+              : diff > 0
+                ? `Customer owes ${money(diff)}`
+                : `${money(-diff)} left to refund`}
+          </span>
+        )}
+      </div>
+      {ready && Math.abs(diff) >= 0.01 && (
+        <p className="text-xs text-charcoal/50 -mt-3">
+          Shopify settles the difference when the return is processed. You can refund or waive it from the order.
+        </p>
+      )}
+      {lowStock.length > 0 && (
+        <p className="text-xs text-amber-800 -mt-3">
+          Low or no stock on {lowStock.map((x) => `${x.productTitle} (${x.variantTitle})`).join(", ")}. Confirm with the warehouse before shipping.
+        </p>
+      )}
+
       <div className="flex flex-wrap items-center gap-4">
         <label className="flex items-center gap-2 text-sm text-charcoal/70">
           <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} />
-          Email the customer that the exchange is approved
+          Email the customer what&rsquo;s coming
         </label>
         <div className="ml-auto flex gap-2">
           <button type="button" onClick={onCancel} className="text-sm px-3 py-1.5 text-charcoal/60 hover:text-charcoal">
@@ -316,7 +539,7 @@ function ExchangePanel({
           <button
             type="button"
             disabled={!ready || busy}
-            onClick={() => onSubmit(chosen as { line: PickLine; variant: Variant; qty: number }[], notify)}
+            onClick={() => onSubmit({ returning, sending: slot, notify, summary: exchangeSummary(returning, slot) })}
             className="text-sm px-4 py-1.5 rounded bg-forest text-white disabled:opacity-40"
           >
             {busy ? "Creating…" : "Create exchange"}
@@ -325,6 +548,21 @@ function ExchangePanel({
       </div>
     </div>
   );
+}
+
+function exchangeBody(x: ExchangeSubmit, fallbackNote?: string | null) {
+  return {
+    action: "exchange",
+    notifyCustomer: x.notify,
+    exchangeSummary: x.summary,
+    returning: x.returning.map((r) => ({
+      fulfillmentLineItemId: r.line.fulfillmentLineItemId,
+      quantity: r.qty,
+      returnReason: r.line.reason,
+      customerNote: r.line.customerNote ?? fallbackNote ?? null,
+    })),
+    sending: x.sending.map((s) => ({ variantId: s.variantId, quantity: s.qty })),
+  };
 }
 
 // ─── Return request card ──────────────────────────────────────────────────────
@@ -383,6 +621,7 @@ function RequestCard({
       title: l.title,
       variantTitle: l.variantTitle,
       quantity: l.quantity,
+      unitPrice: l.unitPrice,
       reason: l.reason,
       customerNote: l.customerNote,
     }));
@@ -542,29 +781,11 @@ function RequestCard({
       {mode === "decide" && panel === "exchange" && (
         <ExchangePanel
           lines={pickLines}
+          customerAsk={item.lines.map((l) => l.customerNote).filter((n): n is string => !!n && !Object.values(REASON_LABELS).includes(n)).join("\n") || null}
           adminFetch={adminFetch}
           busy={busy}
           onCancel={() => setPanel("none")}
-          onSubmit={(picks, n) =>
-            void post(
-              {
-                action: "exchange",
-                notifyCustomer: n,
-                exchangeSummary: picks
-                  .map((p) => `${p.line.title}${p.line.variantTitle ? ` (${p.line.variantTitle})` : ""} → ${p.variant.productTitle} (${p.variant.title})`)
-                  .join("\n"),
-                selections: picks.map((p) => ({
-                  fulfillmentLineItemId: p.line.fulfillmentLineItemId,
-                  quantity: p.line.quantity,
-                  returnReason: p.line.reason === "UNKNOWN" ? "OTHER" : p.line.reason,
-                  customerNote: p.line.customerNote,
-                  replacementVariantId: p.variant.id,
-                  replacementQuantity: p.qty,
-                })),
-              },
-              `Exchange created for ${item.orderName}`,
-            )
-          }
+          onSubmit={(x) => void post(exchangeBody(x), `Exchange created for ${item.orderName}`)}
         />
       )}
 
@@ -594,7 +815,7 @@ function CustomerRequestCard({
     id: string;
     name: string;
     customerEmail: string | null;
-    lines: { fulfillmentLineItemId: string; quantity: number; title: string; variantTitle: string | null; productId: string | null }[];
+    lines: { fulfillmentLineItemId: string; quantity: number; title: string; variantTitle: string | null; productId: string | null; unitPrice: number }[];
   } | null>(null);
   const [panel, setPanel] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -629,7 +850,7 @@ function CustomerRequestCard({
     }
   }
 
-  async function submit(picks: { line: PickLine; variant: Variant; qty: number }[], notify: boolean) {
+  async function submit(x: ExchangeSubmit) {
     if (!order) return;
     setBusy(true);
     setError(null);
@@ -638,23 +859,11 @@ function CustomerRequestCard({
         await adminFetch("/api/admin/returns/decide", {
           method: "POST",
           body: JSON.stringify({
-            action: "exchange",
+            ...exchangeBody(x, req.message),
             orderId: order.id,
             orderName: order.name,
             requestId: req.id,
             customerEmail: req.customerEmail ?? order.customerEmail,
-            notifyCustomer: notify,
-            exchangeSummary: picks
-              .map((p) => `${p.line.title}${p.line.variantTitle ? ` (${p.line.variantTitle})` : ""} → ${p.variant.productTitle} (${p.variant.title})`)
-              .join("\n"),
-            selections: picks.map((p) => ({
-              fulfillmentLineItemId: p.line.fulfillmentLineItemId,
-              quantity: p.line.quantity,
-              returnReason: "OTHER",
-              customerNote: req.message.slice(0, 250),
-              replacementVariantId: p.variant.id,
-              replacementQuantity: p.qty,
-            })),
           }),
         }),
       );
@@ -717,13 +926,15 @@ function CustomerRequestCard({
             title: l.title,
             variantTitle: l.variantTitle,
             quantity: l.quantity,
+            unitPrice: l.unitPrice,
             reason: "OTHER",
             customerNote: null,
           }))}
+          customerAsk={req.message}
           adminFetch={adminFetch}
           busy={busy}
           onCancel={() => setPanel(false)}
-          onSubmit={(picks, n) => void submit(picks, n)}
+          onSubmit={(x) => void submit(x)}
         />
       )}
     </div>
