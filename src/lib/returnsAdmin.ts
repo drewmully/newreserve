@@ -154,7 +154,7 @@ export const PRODUCT_SEARCH_QUERY = `query ReturnProductSearch($q: String!) {
       vendor
       featuredMedia { preview { image { url } } }
       variants(first: 50) {
-        nodes { id title sku price inventoryQuantity availableForSale }
+        nodes { id title sku price inventoryQuantity availableForSale inventoryPolicy }
       }
     }
   }
@@ -178,7 +178,7 @@ export const PRODUCT_VARIANTS_QUERY = `query ReturnProductVariants($id: ID!) {
     vendor
     featuredMedia { preview { image { url } } }
     variants(first: 50) {
-      nodes { id title sku price inventoryQuantity availableForSale }
+      nodes { id title sku price inventoryQuantity availableForSale inventoryPolicy }
     }
   }
 }`;

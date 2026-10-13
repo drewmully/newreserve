@@ -110,7 +110,9 @@ const money = (n: number) => n.toLocaleString("en-US", { style: "currency", curr
 
 function shortDate(v: string | number | null): string {
   if (!v) return "—";
-  return new Date(v).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" });
+  const d = new Date(v);
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString("en-US", sameYear ? { month: "short", day: "numeric" } : { month: "short", day: "numeric", year: "numeric" });
 }
 
 function ageLabel(days: number): string {
@@ -160,6 +162,8 @@ interface CatalogVariant {
   price: number;
   inventoryQuantity: number | null;
   availableForSale: boolean;
+  /** CONTINUE = Shopify keeps selling at 0 on hand (most of the catalog). */
+  inventoryPolicy?: "DENY" | "CONTINUE";
 }
 
 interface CatalogProduct {
@@ -177,6 +181,7 @@ interface SlotItem {
   imageUrl: string | null;
   price: number;
   stock: number | null;
+  oversell: boolean;
   qty: number;
 }
 
@@ -195,6 +200,17 @@ function exchangeSummary(returning: ExchangeSubmit["returning"], sending: SlotIt
   return `Sending back: ${back}\nWe're sending you: ${out}`;
 }
 
+const SIZE_RE = /^(XXS|XS|S|M|L|XL|XXL|2XL|XXXL|3XL|4XL|OS|One Size|\d{1,2}(\.\d)?|\d{2}x\d{2})$/i;
+
+/** Split "Pure Black / L" or "S / Charcoal Gray" into { group: "Pure Black", size: "L" }. */
+function splitVariantTitle(title: string): { group: string; size: string } {
+  if (title === "Default Title") return { group: "", size: "Add" };
+  const parts = title.split(" / ").map((p) => p.trim());
+  const i = parts.findIndex((p) => SIZE_RE.test(p));
+  if (i === -1) return { group: parts.length > 1 ? parts.slice(0, -1).join(" / ") : "", size: parts[parts.length - 1] };
+  return { group: parts.filter((_, j) => j !== i).join(" / "), size: parts[i] };
+}
+
 function SizeChips({
   product,
   onPick,
@@ -204,34 +220,43 @@ function SizeChips({
   onPick: (p: CatalogProduct, v: CatalogVariant) => void;
   slottedIds: Set<string>;
 }) {
+  const groups = new Map<string, { v: CatalogVariant; size: string }[]>();
+  for (const v of product.variants) {
+    const { group, size } = splitVariantTitle(v.title);
+    if (!groups.has(group)) groups.set(group, []);
+    groups.get(group)!.push({ v, size });
+  }
   return (
-    <div className="flex flex-wrap gap-1.5">
-      {product.variants.map((v) => {
-        const stock = v.inventoryQuantity ?? 0;
-        const sellable = v.availableForSale;
-        const on = slottedIds.has(v.id);
-        return (
-          <button
-            key={v.id}
-            type="button"
-            disabled={!sellable}
-            onClick={() => onPick(product, v)}
-            title={`${v.title} · ${money(v.price)} · ${stock} in stock${sellable ? "" : " · not for sale"}`}
-            className={`text-xs px-2.5 py-1 rounded border transition-colors ${
-              on
-                ? "bg-forest text-white border-forest"
-                : !sellable
-                  ? "border-taupe/20 text-charcoal/30 line-through cursor-not-allowed"
-                  : stock <= 0
-                    ? "border-amber-300 text-amber-800 hover:bg-amber-50"
-                    : "border-taupe/40 text-obsidian hover:border-forest hover:text-forest"
-            }`}
-          >
-            {v.title === "Default Title" ? "Add" : v.title}
-            {sellable && stock <= 0 && !on && <span className="ml-1 opacity-70">· 0</span>}
-          </button>
-        );
-      })}
+    <div className="space-y-1.5">
+      {[...groups].map(([group, items]) => (
+        <div key={group || "_"} className="flex flex-wrap items-center gap-1.5">
+          {group && <span className="text-xs text-charcoal/60 w-full sm:w-auto sm:min-w-[96px]">{group}</span>}
+          {items.map(({ v, size }) => {
+            const stock = v.inventoryQuantity ?? 0;
+            const on = slottedIds.has(v.id);
+            const sellable = v.availableForSale;
+            return (
+              <button
+                key={v.id}
+                type="button"
+                disabled={!sellable}
+                onClick={() => onPick(product, v)}
+                title={`${v.title} · ${money(v.price)} · ${stock > 0 ? `${stock} on hand` : v.inventoryPolicy === "CONTINUE" ? "0 on hand, still selling" : "sold out"}`}
+                className={`text-xs min-w-[36px] px-2.5 py-1 rounded border transition-colors ${
+                  on
+                    ? "bg-forest text-white border-forest"
+                    : !sellable
+                      ? "border-taupe/20 text-charcoal/30 line-through cursor-not-allowed"
+                      : "border-taupe/40 text-obsidian hover:border-forest hover:text-forest"
+                }`}
+              >
+                {size}
+                {stock > 0 && !on && <span className="ml-1 text-charcoal/40">{stock}</span>}
+              </button>
+            );
+          })}
+        </div>
+      ))}
     </div>
   );
 }
@@ -348,6 +373,7 @@ function ExchangePanel({
           imageUrl: p.imageUrl,
           price: v.price,
           stock: v.inventoryQuantity,
+          oversell: v.inventoryPolicy === "CONTINUE",
           qty: 1,
         },
       ];
@@ -416,21 +442,23 @@ function ExchangePanel({
           ) : (
             <ul className="space-y-2">
               {slot.map((x) => (
-                <li key={x.variantId} className="flex items-center gap-2 text-sm border border-forest/30 bg-forest/5 rounded px-2 py-1.5">
+                <li key={x.variantId} className="flex flex-wrap items-center gap-2 text-sm border border-forest/30 bg-forest/5 rounded px-2 py-1.5">
                   <div className="w-9 h-9 rounded bg-white overflow-hidden shrink-0">
                     {x.imageUrl && (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={x.imageUrl} alt="" className="w-full h-full object-cover" />
                     )}
                   </div>
-                  <div className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-[140px]">
                     <p className="text-obsidian truncate">{x.productTitle}</p>
                     <p className="text-xs text-charcoal/60">
                       {x.variantTitle} · {money(x.price)}
-                      {(x.stock ?? 0) < x.qty && <span className="text-amber-800"> · {x.stock ?? 0} in stock</span>}
+                      {(x.stock ?? 0) < x.qty && (
+                        <span className="text-amber-800"> · {Math.max(0, x.stock ?? 0)} on hand</span>
+                      )}
                     </p>
                   </div>
-                  <div className="flex items-center border border-taupe/40 rounded bg-white">
+                  <div className="ml-auto flex items-center border border-taupe/40 rounded bg-white">
                     <button
                       type="button"
                       aria-label="Decrease quantity"
@@ -523,7 +551,10 @@ function ExchangePanel({
       )}
       {lowStock.length > 0 && (
         <p className="text-xs text-amber-800 -mt-3">
-          Low or no stock on {lowStock.map((x) => `${x.productTitle} (${x.variantTitle})`).join(", ")}. Confirm with the warehouse before shipping.
+          Not enough on hand for {lowStock.map((x) => `${x.productTitle} (${x.variantTitle})`).join(", ")}.
+          {lowStock.every((x) => x.oversell)
+            ? " Shopify will still allow it (overselling is on), so confirm it can ship."
+            : " Confirm with the warehouse before shipping."}
         </p>
       )}
 
@@ -930,7 +961,6 @@ function CustomerRequestCard({
             reason: "OTHER",
             customerNote: null,
           }))}
-          customerAsk={req.message}
           adminFetch={adminFetch}
           busy={busy}
           onCancel={() => setPanel(false)}

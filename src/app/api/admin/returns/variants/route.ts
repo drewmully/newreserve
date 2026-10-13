@@ -14,7 +14,7 @@ import { adminGraphql, PRODUCT_SEARCH_QUERY, PRODUCT_VARIANTS_QUERY, toProductSe
 
 export const dynamic = "force-dynamic";
 
-type V = { id: string; title: string; sku: string | null; price: string; inventoryQuantity: number | null; availableForSale: boolean };
+type V = { id: string; title: string; sku: string | null; price: string; inventoryQuantity: number | null; availableForSale: boolean; inventoryPolicy: "DENY" | "CONTINUE" };
 type P = {
   id: string;
   title: string;
