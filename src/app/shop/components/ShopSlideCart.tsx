@@ -6,7 +6,7 @@ import { useMembership } from "../../context/MembershipContext";
 import { trackEvent } from "@/lib/tracking";
 import { ShopCartBogoNudge } from "./ShopCartBogoNudge";
 import { isBogoDiscount } from "@/lib/cartPicks";
-import { claimFirstOrderShipping, readFirstOrderShipping } from "@/lib/firstOrderShipping";
+import { FIRST_ORDER_SHIPPING_MIN, firstOrderShippingRevealed, markFirstOrderShippingRevealed } from "@/lib/firstOrderShipping";
 
 /**
  * Shop-native cart drawer. Modeled on the V1 Sports storefront cart:
@@ -29,8 +29,6 @@ export function ShopSlideCart({ accent }: { accent: string }) {
     cartDiscountCodes = [],
     cartDiscountLabels = [],
     hasShopDiscount,
-    cartId,
-    email,
   } = useMembership();
   const appliedCode = cartDiscountCodes.find(c => c.applicable && c.code.toUpperCase() !== "BOGO15")?.code.toUpperCase();
   const savingsLabel = isBogoDiscount(cartDiscountLabels, cartDiscountCodes) ? "Mully BOGO15 savings"
@@ -41,8 +39,6 @@ export function ShopSlideCart({ accent }: { accent: string }) {
   const [checkoutError, setCheckoutError] = useState("");
   // First-order free shipping: revealed as a surprise on the way to checkout.
   const [surprise, setSurprise] = useState(false);
-  // cartOpen is false during SSR, so reading storage here never mismatches hydration.
-  const firstShip = cartOpen && typeof window !== "undefined" && !!readFirstOrderShipping();
 
   useEffect(() => {
     if (cartOpen) {
@@ -69,15 +65,14 @@ export function ShopSlideCart({ accent }: { accent: string }) {
     setCheckoutPending(true);
     setCheckoutError("");
     try {
-      if (!hasShopDiscount && cartId && !readFirstOrderShipping()) {
-        const offer = await claimFirstOrderShipping(cartId, email);
-        if (offer) {
-          setSurprise(true);
-          void trackEvent("first_order_shipping_revealed", { properties: { cart_total: cartTotal, source: "shop_cart" } });
-          await new Promise(r => setTimeout(r, 1900));
-        }
+      const checkoutUrl = prepareShopCheckout();
+      if (!hasShopDiscount && cartTotal >= FIRST_ORDER_SHIPPING_MIN && !firstOrderShippingRevealed()) {
+        markFirstOrderShippingRevealed();
+        setSurprise(true);
+        void trackEvent("first_order_shipping_revealed", { properties: { cart_total: cartTotal, source: "shop_cart" } });
+        await new Promise(r => setTimeout(r, 1600));
       }
-      window.location.assign(await prepareShopCheckout());
+      window.location.assign(await checkoutUrl);
     }
     catch { setCheckoutError("We couldn't refresh your checkout. Please try again."); setCheckoutPending(false); }
   }
@@ -244,10 +239,9 @@ export function ShopSlideCart({ accent }: { accent: string }) {
                 <div role="status" className="mb-4 border border-charcoal/10 bg-[#f3efe4] px-4 py-4 text-center">
                   <p className="text-[10px] font-mono uppercase tracking-[0.28em] text-charcoal/60">Surprise</p>
                   <p className="mt-1 font-serif text-xl text-charcoal">Your first order ships free.</p>
-                  <p className="mt-1 text-xs text-charcoal/70">Check out by midnight tonight.</p>
+                  <p className="mt-1 text-xs text-charcoal/70">Applied at checkout.</p>
                 </div>
               )}
-              {!surprise && firstShip && !hasShopDiscount && <p className="pb-3 text-xs text-forest">Free shipping on your first order · ends tonight</p>}
               {cartOfferNotice && <p role="status" className="pb-3 text-xs text-charcoal/70">{cartOfferNotice}</p>}
               {cartOrderDiscount > 0 && <p className="pb-3 text-xs text-forest">{savingsLabel}: ${cartOrderDiscount.toFixed(2)}</p>}
               {cart.some(item => (item.retailPrice ?? item.price) > item.price) && <p className="pb-3 text-xs text-forest">{savingsLabel}: ${(cart.reduce((sum,item) => sum + ((item.retailPrice ?? item.price)-item.price)*item.quantity,0)).toFixed(2)}</p>}
