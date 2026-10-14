@@ -29,8 +29,8 @@ function getApiVersion(): string {
   return process.env.SHOPIFY_ADMIN_API_VERSION ?? "2024-10";
 }
 
-function getGraphQLEndpoint(): string {
-  return `https://${getStoreDomain()}/admin/api/${getApiVersion()}/graphql.json`;
+function getGraphQLEndpoint(apiVersion?: string): string {
+  return `https://${getStoreDomain()}/admin/api/${apiVersion ?? getApiVersion()}/graphql.json`;
 }
 
 function getAdminHeaders(): Record<string, string> {
@@ -51,9 +51,10 @@ function getAdminHeaders(): Record<string, string> {
 
 export async function shopifyGraphQL<T>(
   query: string,
-  variables?: Record<string, unknown>
+  variables?: Record<string, unknown>,
+  opts?: { apiVersion?: string }
 ): Promise<T> {
-  const res = await fetch(getGraphQLEndpoint(), {
+  const res = await fetch(getGraphQLEndpoint(opts?.apiVersion), {
     method: "POST",
     headers: getAdminHeaders(),
     body: JSON.stringify({ query, variables }),
