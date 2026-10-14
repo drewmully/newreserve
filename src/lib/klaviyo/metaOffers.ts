@@ -36,6 +36,11 @@ export const META_OFFER_APP_TITLES = ["Facebook & Instagram"];
  * Fallback for codes whose Shopify event history has aged out: the shapes
  * Meta's app has used so far (IG-EMAIL-XXXXXXXX, FB-EMAIL-XXXXXXXX).
  */
+/**
+ * Customer.defaultEmailAddress needs Admin API 2025-04 or later; the shared
+ * client defaults to 2024-10, so this query pins a current version.
+ */
+export const META_OFFER_API_VERSION = "2026-07";
 export const META_OFFER_CODE_PATTERN = /^(IG|FB)-[A-Z]+-[A-Z0-9]{6,}$/;
 /** How far back each run looks. Idempotent, so overlap is harmless. */
 export const META_OFFER_LOOKBACK_HOURS = 7 * 24;
@@ -164,7 +169,7 @@ export const metaOfferDocId = (email: string) => createHash("sha256").update(ema
 type Gql = (q: string, v: Record<string, unknown>) => Promise<unknown>;
 
 /** Read recent Meta offer codes. Throws on read errors so a partial page is never acted on. */
-export async function readRecentMetaOffers(since: Date, gql: Gql = (q, v) => shopifyGraphQL(q, v), now = new Date(), maxPages = 20) {
+export async function readRecentMetaOffers(since: Date, gql: Gql = (q, v) => shopifyGraphQL(q, v, { apiVersion: META_OFFER_API_VERSION }), now = new Date(), maxPages = 20) {
   const out: MetaOfferSignup[] = [];
   let after: string | null = null;
   for (let page = 0; page < maxPages; page++) {

@@ -30,8 +30,9 @@ export async function GET(req: Request) {
   let metaOffers: CollectSummary | { error: string } | null = null;
   try {
     metaOffers = await collectMetaOfferSignups();
-  } catch {
-    console.error("[klaviyo-signup-sync] meta offer collection failed");
+  } catch (err) {
+    const detail = (err instanceof Error ? err.message : String(err)).slice(0, 500);
+    console.error("[klaviyo-signup-sync] meta offer collection failed", detail);
     metaOffers = { error: "meta_offers_failed" };
   }
   try {
