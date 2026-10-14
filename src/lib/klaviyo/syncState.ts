@@ -23,6 +23,7 @@ import { raiseAlert } from "@/lib/events/alert";
 import { SHOP_REWARDS } from "@/lib/shopRewards";
 import { normalizeSignupPhone } from "@/lib/shopSignup";
 import {
+  META_OFFER_SOURCE,
   BACKOFF_MINUTES,
   MAX_ATTEMPTS,
   SUBSCRIBE_POPUP_SMS,
@@ -233,6 +234,46 @@ function jobInputs(id: string, d: Data): StageInputs {
   };
 }
 
+/**
+ * Meta offer sign-up (meta_offer_leads). Fires the same signup event as the
+ * popup so the welcome flow can include it. Never subscribes: consent came
+ * from Meta's form and reaches Klaviyo through the Shopify integration.
+ */
+function metaOfferInputs(id: string, d: Data, opts: BuildOptions): StageInputs {
+  const email = typeof d.email === "string" ? d.email : "";
+  const consent = d.emailConsent as Data | undefined;
+  if (!email || consent?.granted !== true || opts.historical) return {};
+  const offer = (d.offer as Data | undefined) ?? {};
+  const value = (offer.value as Data | undefined) ?? {};
+  const percent = value.kind === "percentage" && typeof value.percent === "number" ? value.percent : undefined;
+  return {
+    email: {
+      source: META_OFFER_SOURCE,
+      stage: "email",
+      docKey: id,
+      email,
+      capturedAt: toDate((d.klaviyoSync as Data | undefined)?.capturedAt),
+      properties: {
+        mully_email_consent_captured: true,
+        mully_meta_offer_code: offer.code,
+        mully_meta_offer_percent: percent,
+        mully_meta_offer_ends_at: offer.endsAt ?? undefined,
+        mully_meta_offer_signup_at: offer.createdAt,
+      },
+      eventProperties: {
+        email_consent: true,
+        sms_consent: false,
+        offer_app: offer.app,
+        offer_kind: value.kind,
+        reward_code: offer.code,
+        reward_percent: percent,
+        signed_up_at: offer.createdAt,
+      },
+      subscribe: { email: false },
+    },
+  };
+}
+
 export function buildStageInputs(
   collection: SyncCollection,
   id: string,
@@ -248,6 +289,8 @@ export function buildStageInputs(
       return backInStockInputs(id, data);
     case "klaviyo_sync_jobs":
       return jobInputs(id, data);
+    case "meta_offer_leads":
+      return metaOfferInputs(id, data, opts);
   }
 }
 

@@ -30,7 +30,8 @@ export interface RewardEvidence {
 
 export interface RewardDecision {
   verified: boolean;
-  code: RewardCode | null;
+  /** A popup reward code, or a single-customer Meta offer code. */
+  code: string | null;
   percent: number | null;
   holds: string[];
 }
@@ -53,6 +54,42 @@ export function decideEarnedReward(e: RewardEvidence): RewardDecision {
   if (!status.active) return NONE([`reward_inactive:${reward.code}`]);
   if (!status.oncePerCustomer) return NONE([`reward_rules_changed:${reward.code}`]);
   return { verified: true, code: reward.code, percent: reward.percent, holds: [] };
+}
+
+export interface MetaOfferRewardEvidence {
+  /** Meta offer lead was read without error (null lead = none). */
+  leadReadOk: boolean;
+  offer: { code: string; percent: number | null } | null;
+  /** Codes seen on any of the customer's orders (any status counts as used). */
+  usedCodes: string[];
+  historyComplete: boolean;
+  status: { active: boolean; oncePerCustomer: boolean } | undefined;
+}
+
+/**
+ * A Meta offer code (e.g. IG-EMAIL-XXXX) is the person's own reward. Shown
+ * only when it is a percentage offer, still active in Shopify and unused.
+ * Meta codes are single-customer with a usage limit of one, so
+ * oncePerCustomer is not required here.
+ */
+export function decideMetaOfferReward(e: MetaOfferRewardEvidence): RewardDecision {
+  if (!e.leadReadOk) return NONE(["meta_offer_lead_unreadable"]);
+  if (!e.offer) return NONE([]);
+  if (e.offer.percent == null) return NONE([]); // Non-percentage offers are not shown in the welcome copy.
+  if (!e.historyComplete) return NONE(["meta_offer_history_incomplete"]);
+  const code = e.offer.code.trim().toUpperCase();
+  if (e.usedCodes.some((c) => c.trim().toUpperCase() === code)) return NONE([]);
+  if (!e.status) return NONE([`reward_status_unknown:${code}`]);
+  if (!e.status.active) return NONE([]); // Expired: normal, nothing to show.
+  return { verified: true, code, percent: e.offer.percent, holds: [] };
+}
+
+/** One reward at most: the higher verified percent wins; holds are kept. */
+export function pickReward(a: RewardDecision, b: RewardDecision): RewardDecision {
+  const winner = a.verified && b.verified ? ((b.percent ?? 0) > (a.percent ?? 0) ? b : a)
+    : a.verified ? a : b.verified ? b : null;
+  const holds = [...a.holds, ...b.holds];
+  return winner ? { ...winner, holds: [] } : { verified: false, code: null, percent: null, holds };
 }
 
 export const REWARD_STATUS_QUERY = `query MullyRewardCodeStatus($code: String!) {
