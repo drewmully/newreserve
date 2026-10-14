@@ -49,9 +49,14 @@ export const SYNC_COLLECTIONS = [
   "editorial_drop_list",
   "back_in_stock_requests",
   "klaviyo_sync_jobs",
+  "meta_offer_leads",
 ] as const;
 export type SyncCollection = (typeof SYNC_COLLECTIONS)[number];
 
 export function isSyncCollection(value: unknown): value is SyncCollection {
   return typeof value === "string" && (SYNC_COLLECTIONS as readonly string[]).includes(value);
 }
+
+/** Meta in-app offer sign-ups (see ./metaOffers.ts). */
+export const META_OFFER_COLLECTION = "meta_offer_leads";
+export const META_OFFER_SOURCE = "meta-email-offer";

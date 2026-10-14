@@ -22,7 +22,8 @@ import { buildNativeEvidence } from "./flowBridge";
 import { readCustomerOrderHistory } from "./orderHistory";
 import { readKlaviyoConsent } from "./consent";
 import { readLoopEvidence, readNativeEvents, readServiceEvidence, REVIEW_OWNER } from "./sources";
-import { decideEarnedReward, parseRewardStatus, REWARD_STATUS_QUERY, type RewardCode } from "./rewards";
+import { decideEarnedReward, decideMetaOfferReward, parseRewardStatus, pickReward, REWARD_STATUS_QUERY, type RewardCode } from "./rewards";
+import { META_OFFER_COLLECTION } from "@/lib/klaviyo/config";
 import type { ProfileProps, ReadinessInput } from "./readiness";
 
 type Sb = ReturnType<typeof getSupabaseService>;
@@ -42,6 +43,8 @@ export interface ReadinessDeps {
   gql?: Gql;
   /** Popup lead lookup by email digest. Returns null when absent; throws on read error. */
   lead?: (docId: string) => Promise<Record<string, unknown> | null>;
+  /** Meta offer lead lookup by email digest. Returns null when absent; throws on read error. */
+  metaLead?: (docId: string) => Promise<Record<string, unknown> | null>;
   consent?: (email: string) => Promise<{ subscribed: boolean; marketable: boolean; internal: boolean }>;
   now?: Date;
 }
@@ -50,6 +53,20 @@ const defaultLead = async (id: string) => {
   const snap = await adminDb.collection("shop_marketing_leads").doc(id).get();
   return snap.exists ? (snap.data() as Record<string, unknown>) : null;
 };
+
+const defaultMetaLead = async (id: string) => {
+  const snap = await adminDb.collection(META_OFFER_COLLECTION).doc(id).get();
+  return snap.exists ? (snap.data() as Record<string, unknown>) : null;
+};
+
+/** The Meta offer code on a lead doc, with its percent when it is a percentage offer. */
+export function metaOfferFromLead(d: Record<string, unknown> | null): { code: string; percent: number | null } | null {
+  const offer = (d?.offer ?? null) as { code?: unknown; value?: { kind?: unknown; percent?: unknown } } | null;
+  const code = typeof offer?.code === "string" ? offer.code.trim().toUpperCase() : "";
+  if (!code) return null;
+  const percent = offer?.value?.kind === "percentage" && typeof offer.value.percent === "number" ? offer.value.percent : null;
+  return { code, percent };
+}
 
 /** Synthetic decision for an email no Shopify customer owns. */
 function prospectMembership(now: Date): MembershipDecision {
@@ -72,10 +89,12 @@ export async function readReadinessEvidence(emailRaw: string, deps: ReadinessDep
   const out: ReadinessInput = { membership: null, hadTerminalContract: false, service: null, preferences: null,
     reward: { verified: false, code: null, percent: null, holds: ["reward_unread"] }, consent: null };
 
-  const [customers, consent, lead] = await Promise.all([
+  const digest = createHash("sha256").update(email).digest("hex");
+  const [customers, consent, lead, metaLead] = await Promise.all([
     gql(CUSTOMER_BY_EMAIL_QUERY, { q: `email:${searchValue(email)}` }).catch(() => null) as Promise<{ customers?: { nodes?: Array<{ id?: string; email?: string }> } } | null>,
     (deps.consent ?? readKlaviyoConsent)(email).catch(() => null),
-    (deps.lead ?? defaultLead)(createHash("sha256").update(email).digest("hex")).then((d) => ({ ok: true as const, d })).catch(() => ({ ok: false as const, d: null })),
+    (deps.lead ?? defaultLead)(digest).then((d) => ({ ok: true as const, d })).catch(() => ({ ok: false as const, d: null })),
+    (deps.metaLead ?? defaultMetaLead)(digest).then((d) => ({ ok: true as const, d })).catch(() => ({ ok: false as const, d: null })),
   ]);
   out.consent = consent;
   const matches = (customers?.customers?.nodes ?? []).filter((c) => (c.email ?? "").trim().toLowerCase() === email);
@@ -94,8 +113,25 @@ export async function readReadinessEvidence(emailRaw: string, deps: ReadinessDep
     } catch { usageOk = false; }
   }));
   const l = lead.d as { emailConsent?: { granted?: unknown }; smsConsent?: { granted?: unknown } } | null;
-  out.reward = decideEarnedReward({ leadReadOk: lead.ok, emailConsentGranted: l?.emailConsent?.granted === true,
+  const popupReward = decideEarnedReward({ leadReadOk: lead.ok, emailConsentGranted: l?.emailConsent?.granted === true,
     smsConsentGranted: l?.smsConsent?.granted === true, usedCodes, historyComplete: usageOk, codeStatus });
+
+  // Meta offer code (e.g. IG-EMAIL-XXXX): the person's own code from Meta's form.
+  const metaOffer = metaLead.ok ? metaOfferFromLead(metaLead.d) : null;
+  let metaStatus: { active: boolean; oncePerCustomer: boolean } | undefined;
+  let metaUsed: string[] = [], metaUsageOk = true;
+  if (metaOffer?.percent != null) {
+    try {
+      metaStatus = parseRewardStatus(await gql(REWARD_STATUS_QUERY, { code: metaOffer.code }), now);
+      const used = await gql(REWARD_USE_QUERY, { q: `discount_code:${metaOffer.code} email:${searchValue(email)}` }) as { orders?: { nodes?: Array<{ email?: string; discountCodes?: string[] }> } };
+      for (const o of used?.orders?.nodes ?? []) {
+        if ((o.email ?? "").trim().toLowerCase() === email) metaUsed = [...metaUsed, ...(o.discountCodes ?? [])];
+      }
+    } catch { metaUsageOk = false; }
+  }
+  const metaReward = decideMetaOfferReward({ leadReadOk: metaLead.ok, offer: metaOffer, usedCodes: metaUsed,
+    historyComplete: metaUsageOk, status: metaStatus });
+  out.reward = pickReward(popupReward, metaReward);
 
   if (!customers) return out; // Customer search failed: everything unknown.
   if (matches.length > 1) { out.membership = { ...prospectMembership(now), nonmemberVerified: false, holds: ["duplicate_customer_email"] }; return out; }
@@ -179,7 +215,7 @@ export async function recentCheckoutEmails(since: Date, get: KlaviyoGet = defaul
 }
 
 /**
- * Candidate emails: every Loop-mirror customer, recent popup leads, and
+ * Candidate emails: every Loop-mirror customer, recent popup and Meta offer leads, and
  * recent checkout starters (first-time shoppers included). Deduped, sorted.
  */
 export async function readinessCandidates(sb: Sb = getSupabaseService(), leadDays = 30, checkoutDays = 14): Promise<string[]> {
@@ -192,10 +228,12 @@ export async function readinessCandidates(sb: Sb = getSupabaseService(), leadDay
     if ((data?.length ?? 0) < 1000) break;
   }
   const since = new Date(Date.now() - leadDays * 86_400_000);
-  const leads = await adminDb.collection("shop_marketing_leads").where("updatedAt", ">=", since).limit(5000).get();
-  for (const doc of leads.docs) {
-    const e = doc.get("email");
-    if (typeof e === "string" && e) emails.add(e.trim().toLowerCase());
+  for (const collection of ["shop_marketing_leads", META_OFFER_COLLECTION]) {
+    const leads = await adminDb.collection(collection).where("updatedAt", ">=", since).limit(5000).get();
+    for (const doc of leads.docs) {
+      const e = doc.get("email");
+      if (typeof e === "string" && e) emails.add(e.trim().toLowerCase());
+    }
   }
   return [...emails].filter((e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)).sort();
 }
