@@ -29,4 +29,31 @@ describe("growth os google ads gateway", () => {
     expect(h["login-customer-id"]).toBe("9552995078");
     expect(JSON.parse(String(init.body)).operations[0].update.amountMicros).toBe("25000000");
   });
+  it("only allows MyMully's merchant and refuses non-PMax campaigns", async () => {
+    expect(() => parseRequest({ action: "attach_merchant", campaignId: "1", merchantId: "999" }, env)).toThrow("merchant_not_allowed");
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({ results: [{ campaign: { advertisingChannelType: "SEARCH" } }] }), { status: 200 }));
+    await expect(runGateway(parseRequest({ action: "attach_merchant", campaignId: "1" }, env), env, fetcher as unknown as typeof fetch)).rejects.toThrow("not_performance_max");
+  });
+  it("attaches merchant 371722715 to a PMax campaign without one", async () => {
+    const res = [{ results: [{ campaign: { advertisingChannelType: "PERFORMANCE_MAX", shoppingSetting: {} } }] }, { results: [{ resourceName: "c" }] }];
+    const fetcher = vi.fn(async () => new Response(JSON.stringify(res.shift()), { status: 200 }));
+    await runGateway(parseRequest({ action: "attach_merchant", campaignId: "24165010315" }, env), env, fetcher as unknown as typeof fetch);
+    const [url, init] = fetcher.mock.calls[1] as unknown as [string, RequestInit];
+    expect(url).toContain("/campaigns:mutate");
+    const op = JSON.parse(String(init.body)).operations[0];
+    expect(op.updateMask).toBe("shopping_setting.merchant_id");
+    expect(op.update.shoppingSetting.merchantId).toBe("371722715");
+  });
+  it("adds an all-products root listing group only when none exist", async () => {
+    const pm = { results: [{ campaign: { advertisingChannelType: "PERFORMANCE_MAX" } }] };
+    const res = [pm, { results: [{ x: 1 }] }];
+    const f1 = vi.fn(async () => new Response(JSON.stringify(res.shift()), { status: 200 }));
+    await expect(runGateway(parseRequest({ action: "include_all_products", assetGroupId: "6741759020" }, env), env, f1 as unknown as typeof fetch)).rejects.toThrow("listing_groups_already_exist");
+    const res2 = [pm, { results: [] }, { results: [{ resourceName: "lg" }] }];
+    const f2 = vi.fn(async () => new Response(JSON.stringify(res2.shift()), { status: 200 }));
+    await runGateway(parseRequest({ action: "include_all_products", assetGroupId: "6741759020" }, env), env, f2 as unknown as typeof fetch);
+    const [url, init] = f2.mock.calls[2] as unknown as [string, RequestInit];
+    expect(url).toContain("/assetGroupListingGroupFilters:mutate");
+    expect(JSON.parse(String(init.body)).operations[0].create).toEqual({ assetGroup: "customers/4335795219/assetGroups/6741759020", type: "UNIT_INCLUDED", listingSource: "SHOPPING" });
+  });
 });

@@ -8,7 +8,9 @@
  * Hard limits (not configurable by the caller):
  * - one customer only: 4335795219 (via manager 9552995078)
  * - reads: GAQL SELECT only, max 5 pages
- * - writes: campaign budget amount, campaign status (ENABLED/PAUSED) only
+ * - writes: campaign budget amount, campaign status (ENABLED/PAUSED),
+ *   attach MyMully's Merchant Center (371722715 only) to a Performance Max campaign,
+ *   and add an "all products" listing group to a Performance Max asset group that has none
  * - budget ceiling: GROWTH_OS_GOOGLE_MAX_DAILY_USD (default 100)
  */
 import { timingSafeEqual } from "node:crypto";
@@ -17,12 +19,15 @@ import { authorizeGoogleSpend } from "@/lib/analytics/googleSpendSource";
 export const GOOGLE_ADS_API_VERSION = "v25";
 export const GATEWAY_CUSTOMER_ID = "4335795219";
 export const GATEWAY_LOGIN_CUSTOMER_ID = "9552995078";
+export const GATEWAY_MERCHANT_ID = "371722715";
 
 type Env = Record<string, string | undefined>;
 export type GatewayRequest =
   | { action: "search"; query: string; maxPages?: number }
   | { action: "update_budget"; campaignBudgetId: string; dailyUsd: number; validateOnly?: boolean }
-  | { action: "set_campaign_status"; campaignId: string; status: "ENABLED" | "PAUSED"; validateOnly?: boolean };
+  | { action: "set_campaign_status"; campaignId: string; status: "ENABLED" | "PAUSED"; validateOnly?: boolean }
+  | { action: "attach_merchant"; campaignId: string; validateOnly?: boolean }
+  | { action: "include_all_products"; assetGroupId: string; validateOnly?: boolean };
 
 export class GatewayError extends Error {
   constructor(public status: number, message: string, public detail?: unknown) { super(message); }
@@ -60,6 +65,17 @@ export function parseRequest(body: unknown, env: Env): GatewayRequest {
     if (!ID.test(id)) throw new GatewayError(400, "invalid_campaign_id");
     if (b.status !== "ENABLED" && b.status !== "PAUSED") throw new GatewayError(400, "invalid_status");
     return { action: "set_campaign_status", campaignId: id, status: b.status, validateOnly: b.validateOnly === true };
+  }
+  if (b.action === "attach_merchant") {
+    const id = String(b.campaignId ?? "");
+    if (!ID.test(id)) throw new GatewayError(400, "invalid_campaign_id");
+    if (b.merchantId !== undefined && String(b.merchantId) !== GATEWAY_MERCHANT_ID) throw new GatewayError(400, "merchant_not_allowed");
+    return { action: "attach_merchant", campaignId: id, validateOnly: b.validateOnly === true };
+  }
+  if (b.action === "include_all_products") {
+    const id = String(b.assetGroupId ?? "");
+    if (!ID.test(id)) throw new GatewayError(400, "invalid_asset_group_id");
+    return { action: "include_all_products", assetGroupId: id, validateOnly: b.validateOnly === true };
   }
   throw new GatewayError(400, "unsupported_action");
 }
@@ -102,6 +118,28 @@ export async function runGateway(req: GatewayRequest, env: Env, fetcher: typeof 
       updateMask: "amount_micros",
       update: { resourceName: `customers/${GATEWAY_CUSTOMER_ID}/campaignBudgets/${req.campaignBudgetId}`,
         amountMicros: String(Math.round(req.dailyUsd * 1_000_000)) } }] }, token, devToken, fetcher);
+  }
+  if (req.action === "attach_merchant") {
+    const c = await googleFetch("googleAds:search", { query: `SELECT campaign.advertising_channel_type, campaign.shopping_setting.merchant_id FROM campaign WHERE campaign.id = ${req.campaignId}` }, token, devToken, fetcher);
+    const row = ((c.results as Array<{ campaign?: { advertisingChannelType?: string; shoppingSetting?: { merchantId?: string } } }>) ?? [])[0];
+    if (row?.campaign?.advertisingChannelType !== "PERFORMANCE_MAX") throw new GatewayError(400, "not_performance_max");
+    const existing = row.campaign.shoppingSetting?.merchantId;
+    if (existing && String(existing) !== GATEWAY_MERCHANT_ID) throw new GatewayError(409, "different_merchant_attached", { existing });
+    if (existing) return { alreadyAttached: true, merchantId: GATEWAY_MERCHANT_ID };
+    return googleFetch("campaigns:mutate", { validateOnly: req.validateOnly ?? false, operations: [{
+      updateMask: "shopping_setting.merchant_id",
+      update: { resourceName: `customers/${GATEWAY_CUSTOMER_ID}/campaigns/${req.campaignId}`,
+        shoppingSetting: { merchantId: GATEWAY_MERCHANT_ID } } }] }, token, devToken, fetcher);
+  }
+  if (req.action === "include_all_products") {
+    const ag = await googleFetch("googleAds:search", { query: `SELECT campaign.advertising_channel_type, asset_group.id FROM asset_group WHERE asset_group.id = ${req.assetGroupId}` }, token, devToken, fetcher);
+    const row = ((ag.results as Array<{ campaign?: { advertisingChannelType?: string } }>) ?? [])[0];
+    if (row?.campaign?.advertisingChannelType !== "PERFORMANCE_MAX") throw new GatewayError(400, "not_performance_max_asset_group");
+    const lg = await googleFetch("googleAds:search", { query: `SELECT asset_group_listing_group_filter.id FROM asset_group_listing_group_filter WHERE asset_group.id = ${req.assetGroupId}` }, token, devToken, fetcher);
+    if (((lg.results as unknown[]) ?? []).length) throw new GatewayError(409, "listing_groups_already_exist");
+    return googleFetch("assetGroupListingGroupFilters:mutate", { validateOnly: req.validateOnly ?? false, operations: [{
+      create: { assetGroup: `customers/${GATEWAY_CUSTOMER_ID}/assetGroups/${req.assetGroupId}`,
+        type: "UNIT_INCLUDED", listingSource: "SHOPPING" } }] }, token, devToken, fetcher);
   }
   return googleFetch("campaigns:mutate", { validateOnly: req.validateOnly ?? false, operations: [{
     updateMask: "status",
