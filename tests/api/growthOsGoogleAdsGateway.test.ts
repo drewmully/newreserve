@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/analytics/googleSpendSource", () => ({ authorizeGoogleSpend: vi.fn(async () => "tok") }));
-import { isAuthorized, parseRequest, runGateway, GatewayError } from "@/lib/growthOs/googleAdsGateway";
+import { isAuthorized, parseRequest, runGateway, GatewayError, buildPmaxOperations } from "@/lib/growthOs/googleAdsGateway";
 
 const secret = "s".repeat(40);
 const env = { GROWTH_OS_GOOGLE_SECRET: secret, GOOGLE_ADS_DEVELOPER_TOKEN: "dev", GOOGLE_ADS_SERVICE_ACCOUNT_JSON_BASE64: "e30=" };
@@ -55,5 +55,32 @@ describe("growth os google ads gateway", () => {
     const [url, init] = f2.mock.calls[2] as unknown as [string, RequestInit];
     expect(url).toContain("/assetGroupListingGroupFilters:mutate");
     expect(JSON.parse(String(init.body)).operations[0].create).toEqual({ assetGroup: "customers/4335795219/assetGroups/6741759020", type: "UNIT_INCLUDED", listingSource: "SHOPPING" });
+  });
+});
+
+describe("create_pmax", () => {
+  const env2 = { GROWTH_OS_GOOGLE_SECRET: "x".repeat(40), GOOGLE_ADS_DEVELOPER_TOKEN: "d", GOOGLE_ADS_SERVICE_ACCOUNT_JSON_BASE64: "s" };
+  const base = { action: "create_pmax", name: "Shop PMax", dailyUsd: 100, status: "ENABLED", finalUrl: "https://www.mymully.com/", businessName: "Mully",
+    headlines: ["A", "B", "C"], longHeadlines: ["L"], descriptions: ["D1", "D2"],
+    images: { marketing: ["customers/4335795219/assets/1"], square: ["customers/4335795219/assets/2"], portrait: [], logo: ["customers/4335795219/assets/3"] },
+    negativeKeywords: ["mully"], excludeUrlContains: ["/lp/"], searchThemes: ["golf vest"], excludeProductTypeL1: ["subscription"], urlExpansion: true };
+  it("rejects off-site URLs, foreign assets, long headlines and budgets over the cap", () => {
+    expect(() => parseRequest({ ...base, finalUrl: "https://evil.com/" }, env2)).toThrow("final_url_not_mymully");
+    expect(() => parseRequest({ ...base, images: { ...base.images, logo: ["customers/999/assets/3"] } }, env2)).toThrow("invalid_images_logo");
+    expect(() => parseRequest({ ...base, headlines: ["A", "B", "x".repeat(31)] }, env2)).toThrow("invalid_headlines");
+    expect(() => parseRequest({ ...base, dailyUsd: 150 }, env2)).toThrow("daily_usd_above_cap");
+  });
+  it("builds one atomic request with merchant, exclusions and listing groups", () => {
+    const req = parseRequest(base, env2);
+    const ops = buildPmaxOperations(req as never);
+    const camp = ops.find((o) => o.campaignOperation) as { campaignOperation: { create: Record<string, unknown> } };
+    expect(camp.campaignOperation.create).toMatchObject({ advertisingChannelType: "PERFORMANCE_MAX", status: "ENABLED", shoppingSetting: { merchantId: "371722715" } });
+    expect(ops.filter((o) => o.assetGroupListingGroupFilterOperation)).toHaveLength(3);
+    expect(JSON.stringify(ops)).toContain('"matchType":"PHRASE"');
+    expect(JSON.stringify(ops)).toContain('"amountMicros":"100000000"');
+  });
+  it("only accepts real image bytes for uploads", () => {
+    expect(() => parseRequest({ action: "upload_image_asset", name: "x", dataBase64: Buffer.from("hello").toString("base64") }, env2)).toThrow("invalid_image");
+    expect(parseRequest({ action: "upload_image_asset", name: "x", dataBase64: Buffer.from([0xff, 0xd8, 0xff, 0x00]).toString("base64") }, env2).action).toBe("upload_image_asset");
   });
 });

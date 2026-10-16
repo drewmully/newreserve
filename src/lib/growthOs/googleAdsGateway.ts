@@ -11,6 +11,10 @@
  * - writes: campaign budget amount, campaign status (ENABLED/PAUSED),
  *   attach MyMully's Merchant Center (371722715 only) to a Performance Max campaign,
  *   and add an "all products" listing group to a Performance Max asset group that has none
+ * - creates: one image asset per call (JPEG/PNG, max 4 MB), and a complete Performance Max
+ *   shop campaign in one atomic request (budget under the cap, US + English, Merchant Center
+ *   371722715, asset group, listing groups, negative keywords, URL exclusions, search themes).
+ *   Final URLs must be on https://www.mymully.com.
  * - budget ceiling: GROWTH_OS_GOOGLE_MAX_DAILY_USD (default 100)
  */
 import { timingSafeEqual } from "node:crypto";
@@ -27,7 +31,27 @@ export type GatewayRequest =
   | { action: "update_budget"; campaignBudgetId: string; dailyUsd: number; validateOnly?: boolean }
   | { action: "set_campaign_status"; campaignId: string; status: "ENABLED" | "PAUSED"; validateOnly?: boolean }
   | { action: "attach_merchant"; campaignId: string; validateOnly?: boolean }
-  | { action: "include_all_products"; assetGroupId: string; validateOnly?: boolean };
+  | { action: "include_all_products"; assetGroupId: string; validateOnly?: boolean }
+  | { action: "upload_image_asset"; name: string; dataBase64: string; validateOnly?: boolean }
+  | ({ action: "create_pmax"; validateOnly?: boolean } & PmaxSpec);
+
+export type PmaxSpec = {
+  name: string; dailyUsd: number; status: "ENABLED" | "PAUSED"; finalUrl: string; businessName: string;
+  headlines: string[]; longHeadlines: string[]; descriptions: string[];
+  images: { marketing: string[]; square: string[]; portrait: string[]; logo: string[] };
+  negativeKeywords: string[]; excludeUrlContains: string[]; searchThemes: string[];
+  excludeProductTypeL1: string[]; urlExpansion: boolean;
+};
+const SITE = /^https:\/\/www\.mymully\.com(\/[^\s]*)?$/;
+const ASSET_RN = /^customers\/4335795219\/assets\/\d{1,20}$/;
+function strs(v: unknown, field: string, min: number, max: number, maxLen: number): string[] {
+  if (!Array.isArray(v) || v.length < min || v.length > max) throw new GatewayError(400, `invalid_${field}_count`, { min, max });
+  return v.map((x) => {
+    const t = typeof x === "string" ? x.trim() : "";
+    if (!t || t.length > maxLen) throw new GatewayError(400, `invalid_${field}`, { value: x, maxLen });
+    return t;
+  });
+}
 
 export class GatewayError extends Error {
   constructor(public status: number, message: string, public detail?: unknown) { super(message); }
@@ -76,6 +100,42 @@ export function parseRequest(body: unknown, env: Env): GatewayRequest {
     const id = String(b.assetGroupId ?? "");
     if (!ID.test(id)) throw new GatewayError(400, "invalid_asset_group_id");
     return { action: "include_all_products", assetGroupId: id, validateOnly: b.validateOnly === true };
+  }
+  if (b.action === "upload_image_asset") {
+    const name = typeof b.name === "string" ? b.name.trim().slice(0, 120) : "";
+    const data = typeof b.dataBase64 === "string" ? b.dataBase64 : "";
+    if (!name) throw new GatewayError(400, "invalid_name");
+    const bytes = Buffer.from(data, "base64");
+    const png = bytes.subarray(0, 4).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+    const jpg = bytes.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]));
+    if (!(png || jpg) || bytes.length > 4 * 1024 * 1024) throw new GatewayError(400, "invalid_image");
+    return { action: "upload_image_asset", name, dataBase64: data, validateOnly: b.validateOnly === true };
+  }
+  if (b.action === "create_pmax") {
+    const cap = Number(env.GROWTH_OS_GOOGLE_MAX_DAILY_USD ?? "100");
+    const usd = Number(b.dailyUsd);
+    if (!Number.isFinite(usd) || usd < 1) throw new GatewayError(400, "invalid_daily_usd");
+    if (usd > cap) throw new GatewayError(400, "daily_usd_above_cap", { cap });
+    const finalUrl = String(b.finalUrl ?? "");
+    if (!SITE.test(finalUrl)) throw new GatewayError(400, "final_url_not_mymully");
+    const name = strs([b.name], "name", 1, 1, 120)[0];
+    const businessName = strs([b.businessName], "business_name", 1, 1, 25)[0];
+    const im = (b.images ?? {}) as Record<string, unknown>;
+    const imgs = (k: string, min: number, max: number) => {
+      const v = strs(im[k] ?? [], `images_${k}`, min, max, 200);
+      if (v.some((x) => !ASSET_RN.test(x))) throw new GatewayError(400, `invalid_images_${k}`);
+      return v;
+    };
+    return { action: "create_pmax", validateOnly: b.validateOnly === true, name, dailyUsd: usd,
+      status: b.status === "ENABLED" ? "ENABLED" : "PAUSED", finalUrl, businessName,
+      headlines: strs(b.headlines, "headlines", 3, 15, 30), longHeadlines: strs(b.longHeadlines, "long_headlines", 1, 5, 90),
+      descriptions: strs(b.descriptions, "descriptions", 2, 5, 90),
+      images: { marketing: imgs("marketing", 1, 20), square: imgs("square", 1, 20), portrait: imgs("portrait", 0, 20), logo: imgs("logo", 1, 5) },
+      negativeKeywords: strs(b.negativeKeywords ?? [], "negative_keywords", 0, 50, 80),
+      excludeUrlContains: strs(b.excludeUrlContains ?? [], "exclude_url_contains", 0, 10, 100),
+      searchThemes: strs(b.searchThemes ?? [], "search_themes", 0, 25, 80),
+      excludeProductTypeL1: strs(b.excludeProductTypeL1 ?? [], "exclude_product_type", 0, 5, 100),
+      urlExpansion: b.urlExpansion === true };
   }
   throw new GatewayError(400, "unsupported_action");
 }
@@ -141,8 +201,61 @@ export async function runGateway(req: GatewayRequest, env: Env, fetcher: typeof 
       create: { assetGroup: `customers/${GATEWAY_CUSTOMER_ID}/assetGroups/${req.assetGroupId}`,
         type: "UNIT_INCLUDED", listingSource: "SHOPPING" } }] }, token, devToken, fetcher);
   }
+  if (req.action === "upload_image_asset") {
+    return googleFetch("assets:mutate", { validateOnly: req.validateOnly ?? false, operations: [{
+      create: { name: req.name, type: "IMAGE", imageAsset: { data: req.dataBase64 } } }] }, token, devToken, fetcher);
+  }
+  if (req.action === "create_pmax") {
+    return googleFetch("googleAds:mutate", { validateOnly: req.validateOnly ?? false, mutateOperations: buildPmaxOperations(req) }, token, devToken, fetcher);
+  }
   return googleFetch("campaigns:mutate", { validateOnly: req.validateOnly ?? false, operations: [{
     updateMask: "status",
     update: { resourceName: `customers/${GATEWAY_CUSTOMER_ID}/campaigns/${req.campaignId}`, status: req.status } }] },
     token, devToken, fetcher);
+}
+
+/** One atomic googleAds:mutate request for a complete Performance Max shop campaign. */
+export function buildPmaxOperations(spec: PmaxSpec) {
+  const C = `customers/${GATEWAY_CUSTOMER_ID}`;
+  const budget = `${C}/campaignBudgets/-1`, campaign = `${C}/campaigns/-2`, ag = `${C}/assetGroups/-3`;
+  const ops: Array<Record<string, unknown>> = [];
+  ops.push({ campaignBudgetOperation: { create: { resourceName: budget, name: `${spec.name} budget`,
+    amountMicros: String(Math.round(spec.dailyUsd * 1_000_000)), deliveryMethod: "STANDARD", explicitlyShared: false } } });
+  ops.push({ campaignOperation: { create: { resourceName: campaign, name: spec.name, status: spec.status,
+    advertisingChannelType: "PERFORMANCE_MAX", campaignBudget: budget, maximizeConversionValue: {},
+    shoppingSetting: { merchantId: GATEWAY_MERCHANT_ID }, brandGuidelinesEnabled: false,
+    containsEuPoliticalAdvertising: "DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING",
+    assetAutomationSettings: [{ assetAutomationType: "FINAL_URL_EXPANSION_TEXT_ASSET_AUTOMATION",
+      assetAutomationStatus: spec.urlExpansion ? "OPTED_IN" : "OPTED_OUT" }] } } });
+  const crit = (c: Record<string, unknown>) => ops.push({ campaignCriterionOperation: { create: { campaign, ...c } } });
+  crit({ location: { geoTargetConstant: "geoTargetConstants/2840" } });
+  crit({ language: { languageConstant: "languageConstants/1000" } });
+  for (const k of spec.negativeKeywords) crit({ negative: true, keyword: { text: k, matchType: "PHRASE" } });
+  spec.excludeUrlContains.forEach((u, i) => crit({ negative: true, webpage: { criterionName: `Exclude ${i + 1}`,
+    conditions: [{ operand: "URL", operator: "CONTAINS", argument: u }] } }));
+  let id = -10; const text = (t: string) => { const rn = `${C}/assets/${id--}`; ops.push({ assetOperation: { create: { resourceName: rn, textAsset: { text: t } } } }); return rn; };
+  const links: Array<[string, string]> = [];
+  spec.headlines.forEach((t) => links.push([text(t), "HEADLINE"]));
+  spec.longHeadlines.forEach((t) => links.push([text(t), "LONG_HEADLINE"]));
+  spec.descriptions.forEach((t) => links.push([text(t), "DESCRIPTION"]));
+  links.push([text(spec.businessName), "BUSINESS_NAME"]);
+  spec.images.marketing.forEach((r) => links.push([r, "MARKETING_IMAGE"]));
+  spec.images.square.forEach((r) => links.push([r, "SQUARE_MARKETING_IMAGE"]));
+  spec.images.portrait.forEach((r) => links.push([r, "PORTRAIT_MARKETING_IMAGE"]));
+  spec.images.logo.forEach((r) => links.push([r, "LOGO"]));
+  ops.push({ assetGroupOperation: { create: { resourceName: ag, campaign, name: `${spec.name} | Shop`, finalUrls: [spec.finalUrl], status: "ENABLED" } } });
+  for (const [asset, fieldType] of links) ops.push({ assetGroupAssetOperation: { create: { assetGroup: ag, asset, fieldType } } });
+  const lg = (n: number) => `${C}/assetGroupListingGroupFilters/-3~${n}`;
+  if (spec.excludeProductTypeL1.length) {
+    ops.push({ assetGroupListingGroupFilterOperation: { create: { resourceName: lg(-100), assetGroup: ag, type: "SUBDIVISION", listingSource: "SHOPPING" } } });
+    let n = -101;
+    for (const v of spec.excludeProductTypeL1) ops.push({ assetGroupListingGroupFilterOperation: { create: { resourceName: lg(n--), assetGroup: ag,
+      type: "UNIT_EXCLUDED", listingSource: "SHOPPING", parentListingGroupFilter: lg(-100), caseValue: { productType: { level: "LEVEL1", value: v } } } } });
+    ops.push({ assetGroupListingGroupFilterOperation: { create: { resourceName: lg(n--), assetGroup: ag,
+      type: "UNIT_INCLUDED", listingSource: "SHOPPING", parentListingGroupFilter: lg(-100), caseValue: { productType: { level: "LEVEL1" } } } } });
+  } else {
+    ops.push({ assetGroupListingGroupFilterOperation: { create: { resourceName: lg(-100), assetGroup: ag, type: "UNIT_INCLUDED", listingSource: "SHOPPING" } } });
+  }
+  for (const t of spec.searchThemes) ops.push({ assetGroupSignalOperation: { create: { assetGroup: ag, searchTheme: { text: t } } } });
+  return ops;
 }
