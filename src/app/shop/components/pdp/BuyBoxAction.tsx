@@ -1,8 +1,5 @@
 "use client";
 
-import { useState } from "react";
-import { NotifyMeInline } from "../NotifyMeInline";
-
 interface Props {
   onAddToCart: () => void;
   added: boolean;
@@ -13,7 +10,7 @@ interface Props {
   /** Ship estimate in weeks used in the pre-order label. Defaults to 2. */
   preOrderEtaWeeks?: number;
   accent: string;
-  // Fields passed through to NotifyMeInline when the shopper opens it.
+  // Kept for caller compatibility; the back-in-stock capture was removed from the PDP.
   productSlug: string;
   productName: string;
   variantId?: string;
@@ -38,12 +35,7 @@ export function BuyBoxAction({
   isPreorder = false,
   busy = false,
   accent,
-  productSlug,
-  productName,
-  variantId,
-  selectedSize,
 }: Props) {
-  const [notifyOpen, setNotifyOpen] = useState(false);
   if (isUnavailable || isPreorder) {
     return (
       <div>
@@ -62,27 +54,6 @@ export function BuyBoxAction({
             </span>
           )}
         </button>
-        {!notifyOpen ? (
-          <div className="mt-3 flex justify-center">
-            <button
-              type="button"
-              onClick={() => setNotifyOpen(true)}
-              className="text-[10px] font-mono uppercase tracking-[0.22em] text-charcoal/50 underline underline-offset-4 transition-colors hover:text-charcoal"
-            >
-              or, notify me when back
-            </button>
-          </div>
-        ) : (
-          <div className="mt-3">
-            <NotifyMeInline
-              productSlug={productSlug}
-              productName={productName}
-              variantId={variantId}
-              selectedSize={selectedSize}
-              accent={accent}
-            />
-          </div>
-        )}
       </div>
     );
   }
