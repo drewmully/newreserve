@@ -4,6 +4,7 @@ import {
   getProductOptionGroups,
   hasVariantChoices,
   isVariantValueAvailable,
+  variantValueExistsForColor,
   type ProductVariantSelection,
 } from "@/lib/productVariants";
 import type { VariantBearingProduct } from "@/lib/productVariants";
@@ -62,6 +63,13 @@ export function PdpVariantGrid({
         const selected = selection[group.name] ?? group.values[0];
         const available = (v: string) =>
           isVariantValueAvailable(product, selection, group.name, v);
+        // Hide sizes that don't exist at all for the selected color (sold-out
+        // sizes that still exist stay visible, greyed, for preorder/notify).
+        const values = isColor
+          ? group.values
+          : group.values.filter((v) =>
+              variantValueExistsForColor(product, selection, group.name, v)
+            );
 
         if (isColor) {
           return (
@@ -81,7 +89,7 @@ export function PdpVariantGrid({
             <TileGrid
               key={group.name}
               groupName={group.name}
-              values={group.values}
+              values={values}
               selected={selected}
               available={available}
               onChange={(v) => onChange(group.name, v)}
@@ -94,7 +102,7 @@ export function PdpVariantGrid({
           <ChipGrid
             key={group.name}
             groupName={group.name}
-            values={group.values}
+            values={values}
             selected={selected}
             available={available}
             onChange={(v) => onChange(group.name, v)}
