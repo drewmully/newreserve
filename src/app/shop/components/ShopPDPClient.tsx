@@ -9,6 +9,7 @@ import { useMembership } from "../../context/MembershipContext";
 import {
   getInitialVariantSelection,
   resolveVariantBySelection,
+  applyVariantSelection,
   getDefaultProductVariant,
   hasVariantChoices,
   getProductVariants,
@@ -257,7 +258,7 @@ export function ShopPDPClient({
                 product={product}
                 selection={selection}
                 onChange={(name, value) =>
-                  setSelection((current) => ({ ...current, [name]: value }))
+                  setSelection((current) => applyVariantSelection(product, current, name, value))
                 }
                 singleColorFallback="Standard"
               />
