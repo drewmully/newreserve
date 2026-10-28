@@ -159,6 +159,12 @@ export default async function EditorialLandingPage() {
             >
               FAQ
             </Link>
+            <Link
+              href="/contact"
+              className="text-sm text-bone/50 hover:text-bone transition-colors duration-300"
+            >
+              Contact
+            </Link>
           </div>
           <p className="text-xs text-bone/30">
             &copy; {new Date().getFullYear()} Mully Group, Inc.

@@ -122,3 +122,20 @@
 @media (prefers-reduced-motion:reduce) {
   .shop-pages *,.shop-pages *::before,.shop-pages *::after {transition:none!important; animation:none!important; scroll-behavior:auto!important}
 }
+
+/* Contact form (/contact) */
+.shop-contact-form {display: grid; gap: 20px; max-width: 560px}
+.shop-contact-form label {display: grid; gap: 8px; font-size: 13px; font-weight: 600; color: #292720}
+.shop-contact-form label em {font-style: normal; font-weight: 400; color: #8a857a; margin-left: 6px}
+.shop-contact-form input,.shop-contact-form select,.shop-contact-form textarea {width: 100%; border: 1px solid #ddd9d0; background: #fff; border-radius: 2px; padding: 12px 14px; font-size: 16px; font-weight: 400; color: #292720; min-height: 48px}
+.shop-contact-form textarea {resize: vertical; line-height: 1.6}
+.shop-contact-form input:focus,.shop-contact-form select:focus,.shop-contact-form textarea:focus {outline: 2px solid #4a3528; outline-offset: 1px}
+.shop-contact-row {display: grid; grid-template-columns: 1fr 1fr; gap: 16px}
+.shop-contact-form button {min-height: 52px; border-radius: 2px; background: #4a3528; color: #fff; font-size: 11px; font-family: var(--font-mono, ui-monospace, monospace); text-transform: uppercase; letter-spacing: .28em; transition: opacity .2s}
+.shop-contact-form button:hover {opacity: .9}
+.shop-contact-form button:disabled {opacity: .6}
+.shop-contact-hp {position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden}
+.shop-contact-error {font-size: 13px; color: #a3402a}
+.shop-contact-done h2 {font-family: var(--font-serif); font-size: 28px}
+.shop-contact-done p {margin-top: 10px; font-size: 14px; line-height: 1.7; color: #625e55}
+@media (max-width: 640px) {.shop-contact-row {grid-template-columns: 1fr}}

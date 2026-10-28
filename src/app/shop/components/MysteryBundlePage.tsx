@@ -168,7 +168,7 @@ export function MysteryBundlePage({
       </main>
       <footer className="mystery-footer">
         <div><MullyWordmark accent="#bca890" tone="light" /><p>Good finds. On and off the course.</p></div>
-        <nav aria-label="Footer"><a href="https://www.mymully.com/faq">Help & FAQ</a><a href="https://www.mymully.com/policies/privacy">Privacy</a><a href="https://www.mymully.com/policies/terms">Terms</a></nav>
+        <nav aria-label="Footer"><a href="https://www.mymully.com/faq">Help & FAQ</a><a href="https://www.mymully.com/contact">Contact</a><a href="https://www.mymully.com/policies/privacy">Privacy</a><a href="https://www.mymully.com/policies/terms">Terms</a></nav>
         <small>© {new Date().getFullYear()} Mully Group</small>
       </footer>
 

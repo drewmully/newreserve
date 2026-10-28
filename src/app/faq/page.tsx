@@ -32,7 +32,7 @@ export default function FAQPage() {
           <Link className="shop-text-link" href="/returns">Start a return →</Link>
           <Link className="shop-text-link" href="/policies/shipping">Shipping</Link>
           <Link className="shop-text-link" href="/policies/refund">Refund policy</Link>
-          <a className="shop-text-link" href="mailto:info@mymully.com">Contact Mully →</a>
+          <Link className="shop-text-link" href="/contact">Contact Mully →</Link>
         </nav>
       </div>
     </main>
