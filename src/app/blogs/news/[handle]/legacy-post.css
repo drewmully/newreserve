@@ -1,0 +1,14 @@
+/* Restored archive posts: body comes from old Shopify HTML, so style plain tags. */
+.shop-legacy-copy ul {padding-left: 22px; list-style: disc; margin: 18px 0}
+.shop-legacy-copy ol {padding-left: 22px; list-style: decimal; margin: 18px 0}
+.shop-legacy-copy li + li {margin-top: 8px}
+.shop-legacy-copy a {text-decoration: underline; text-underline-offset: 3px; color: #292720}
+.shop-legacy-copy img {width: 100%; height: auto; margin: 28px 0; border-radius: 2px}
+.shop-legacy-copy blockquote {border-left: 2px solid #ddd9d0; padding-left: 18px; margin: 24px 0; font-style: italic}
+.shop-legacy-copy strong {color: #292720}
+.shop-legacy-crumbs {display: flex; flex-wrap: wrap; gap: 8px; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: #8a857a}
+.shop-legacy-crumbs a:hover {color: #292720}
+.shop-legacy-next {display: block; border: 1px solid #ddd9d0; background: #fff; padding: 24px 28px; margin: 48px 0 24px; transition: border-color .2s}
+.shop-legacy-next:hover {border-color: #4a3528}
+.shop-legacy-next span {display: block; font-size: 10px; letter-spacing: .28em; text-transform: uppercase; color: #8a857a}
+.shop-legacy-next strong {display: block; margin-top: 8px; font-family: var(--font-serif); font-size: 24px; font-weight: 400; color: #292720}

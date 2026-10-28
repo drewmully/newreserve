@@ -1,4 +1,7 @@
 import type { NextConfig } from "next";
+// Old Shopify-era URLs (blog, /pages, /collections, /policies) mapped to live
+// pages. Source: mully/mully-seo-geo/redirect-map.csv (SEO recovery s01, s02).
+import legacyRedirects from "./src/lib/legacyRedirects.json";
 
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -34,6 +37,14 @@ const nextConfig: NextConfig = {
   // theme forwards those to this domain, so send them to the headless pages.
   async redirects() {
     return [
+      // s03: old Shopify Markets locale paths (/en-gb/..., /en-au/...) drop the locale.
+      { source: "/:locale(en-[a-z]{2})", destination: "/", permanent: true },
+      { source: "/:locale(en-[a-z]{2})/products/:handle", destination: "/shop/:handle", permanent: true },
+      { source: "/:locale(en-[a-z]{2})/:path*", destination: "/:path*", permanent: true },
+      // s01 + s02: exact legacy URLs, above the generic /collections rule.
+      ...legacyRedirects.map((r) => ({ ...r, permanent: true })),
+      { source: "/blogs/news", destination: "/blog", permanent: true },
+      { source: "/blogs/news/tagged/:tag*", destination: "/blog", permanent: true },
       { source: "/products/:handle", destination: "/shop/:handle", permanent: true },
       { source: "/collections/all", destination: "/shop", permanent: true },
       { source: "/collections/:handle/products/:product", destination: "/shop/:product", permanent: true },
