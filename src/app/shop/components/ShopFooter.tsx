@@ -67,6 +67,11 @@ export function ShopFooter({ accent }: { accent: string }) {
             </h4>
             <ul className="mt-4 space-y-2 text-sm text-charcoal/70">
               <li>
+                <Link href="/contact" className="hover:text-charcoal">
+                  Contact us
+                </Link>
+              </li>
+              <li>
                 <Link href="/returns" className="hover:text-charcoal">
                   Shipping and returns
                 </Link>
