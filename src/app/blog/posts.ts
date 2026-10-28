@@ -109,3 +109,16 @@ export async function getRelatedPosts(
   if (error || !data) return [];
   return data.map(mapRowToPost);
 }
+
+/** Slugs and last-updated dates of published posts, for /sitemap.xml. */
+export async function getPublishedPostDates(): Promise<{ slug: string; updated: string | null }[]> {
+  const { data, error } = await supabase
+    .from("blog_posts")
+    .select("slug, updated_at, publish_date")
+    .eq("status", "published");
+  if (error || !data) return [];
+  return data.map((r) => ({
+    slug: r.slug as string,
+    updated: ((r.updated_at as string | null) ?? (r.publish_date as string | null) ?? null),
+  }));
+}

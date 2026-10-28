@@ -5,7 +5,7 @@
  * lastModified is only set where the source has a real date.
  */
 import type { MetadataRoute } from "next";
-import { createClient } from "@supabase/supabase-js";
+import { getPublishedPostDates } from "./blog/posts";
 import { SHOP_CATEGORY_HANDLES, GIFT_TIERS } from "./shop/shopCollections";
 import { LEGACY_HANDLES, getLegacyPost } from "@/lib/legacyBlog";
 import { PRO_SHOP_COLLECTION_HANDLE, PRIVATE_RELEASES_COLLECTION_HANDLE } from "@/lib/shopify";
@@ -49,18 +49,6 @@ async function shopProducts(): Promise<{ handle: string; updatedAt: string }[]> 
   return [...seen].map(([handle, updatedAt]) => ({ handle, updatedAt }));
 }
 
-async function journalPosts(): Promise<{ slug: string; updated: string | null }[]> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !key) return [];
-  const { data, error } = await createClient(url, key)
-    .from("blog_posts")
-    .select("slug, updated_at, publish_date")
-    .eq("status", "published");
-  if (error || !data) return [];
-  return data.map((r) => ({ slug: r.slug as string, updated: (r.updated_at ?? r.publish_date ?? null) as string | null }));
-}
-
 async function legacyPosts(): Promise<{ handle: string; date: string | null }[]> {
   return Promise.all(LEGACY_HANDLES.map(async (handle) => {
     try { return { handle, date: (await getLegacyPost(handle))?.publishedAt ?? null }; }
@@ -71,7 +59,7 @@ async function legacyPosts(): Promise<{ handle: string; date: string | null }[]>
 const when = (d: string | null | undefined) => (d ? new Date(d) : undefined);
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const [products, posts, legacy] = await Promise.all([shopProducts(), journalPosts(), legacyPosts()]);
+  const [products, posts, legacy] = await Promise.all([shopProducts(), getPublishedPostDates(), legacyPosts()]);
   const categoryPaths = ["shop-all", ...Object.values(SHOP_CATEGORY_HANDLES)].map((h) => `/shop/collection/${h}`);
   const giftPaths = GIFT_TIERS.map((t) => `/shop/gifts/${t.key}`);
   return [
