@@ -162,7 +162,7 @@ export async function getLegacyPost(handle: string): Promise<LegacyPost | null> 
     html,
     excerpt: brandSwap(a.excerpt ?? ""),
     publishedAt: a.publishedAt,
-    image: a.image,
+    image: a.image ? { url: a.image.url, altText: a.image.altText ? brandSwap(a.image.altText) : null } : null,
     seoTitle: a.seo?.title ? brandSwap(a.seo.title) : null,
     seoDescription: a.seo?.description ? brandSwap(a.seo.description) : null,
     readMinutes: Math.max(1, Math.round(words / 230)),
