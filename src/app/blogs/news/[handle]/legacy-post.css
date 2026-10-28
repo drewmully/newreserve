@@ -2,7 +2,7 @@
 .shop-legacy-copy ul {padding-left: 22px; list-style: disc; margin: 18px 0}
 .shop-legacy-copy ol {padding-left: 22px; list-style: decimal; margin: 18px 0}
 .shop-legacy-copy li + li {margin-top: 8px}
-.shop-legacy-copy a {text-decoration: underline; text-underline-offset: 3px; color: #292720}
+.shop-legacy-copy a:not(.shop-legacy-next) {text-decoration: underline; text-underline-offset: 3px; color: #292720}
 .shop-legacy-copy img {width: 100%; height: auto; margin: 28px 0; border-radius: 2px}
 .shop-legacy-copy blockquote {border-left: 2px solid #ddd9d0; padding-left: 18px; margin: 24px 0; font-style: italic}
 .shop-legacy-copy strong {color: #292720}
