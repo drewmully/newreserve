@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import {
   getCollectionProducts,
   getProductByHandle,
@@ -80,7 +80,9 @@ export default async function ProductPage({ params, searchParams }: Props) {
     console.error("[ProductPage] Shopify fetch failed:", err);
     notFound();
   }
-  if (!product) notFound();
+  // Retired or unlisted product: send old links to the shop, not a 404.
+  // Only when Shopify answers with no product; a fetch error still 404s.
+  if (!product) permanentRedirect("/shop");
 
   const preferredVariant = requestedVariantId
     ? getVariantById(product, requestedVariantId)

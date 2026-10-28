@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound, permanentRedirect } from "next/navigation";
+import { permanentRedirect } from "next/navigation";
 import { getCollectionProducts } from "@/lib/shopify";
 import { ShopPageShell } from "../../components/ShopPageShell";
 import { ShopProductCard } from "../../components/ShopProductCard";
@@ -24,7 +24,7 @@ export default async function ShopCollectionPage({ params }: Props) {
   const { handle } = await params;
   if (handle === "shop-tech") permanentRedirect("/shop/collection/shop-gear");
   const cat = categories.find(c => c.handle === handle);
-  if (!cat) notFound();
+  if (!cat) permanentRedirect("/shop/collection/shop-all");
   let products: Awaited<ReturnType<typeof getCollectionProducts>> = [];
   let failed = false;
   try {
