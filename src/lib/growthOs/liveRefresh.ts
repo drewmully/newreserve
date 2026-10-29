@@ -12,6 +12,8 @@ import { runGateway } from "@/lib/growthOs/googleAdsGateway";
 
 export const META_AD_ACCOUNT = "act_2796962933960445";
 export const PMAX_CAMPAIGN_ID = "24165010315";
+/** AgentCocoon Search campaign (not MyMully): detail rows only, kept out of MyMully totals in Supabase. */
+export const AC_SEARCH_CAMPAIGN_ID = "24405645267";
 type Env = Record<string, string | undefined>;
 type Json = Record<string, unknown>;
 type Action = { action_type: string; value: string };
@@ -79,7 +81,8 @@ export async function fetchMeta(today: string, env: Env, fetcher: typeof fetch =
   return { rows: ins.map(mapMetaInsight), states };
 }
 
-type GRow = { campaign?: Json; segments?: Json; metrics?: Json; campaignBudget?: Json; campaignSearchTermInsight?: Json };
+type GRow = { campaign?: Json; segments?: Json; metrics?: Json; campaignBudget?: Json; campaignSearchTermInsight?: Json;
+  adGroup?: Json; adGroupCriterion?: Json; searchTermView?: Json };
 export async function fetchGoogle(today: string, env: Env, fetcher: typeof fetch = fetch) {
   const since = daysBack(today, 14);
   const q = async (query: string) => (await runGateway({ action: "search", query, maxPages: 5 }, env, fetcher)) as { rows: GRow[] };
@@ -91,7 +94,9 @@ export async function fetchGoogle(today: string, env: Env, fetcher: typeof fetch
     q(`SELECT campaign.id, campaign.name, campaign.status, campaign_budget.amount_micros FROM campaign WHERE campaign.status != 'REMOVED'`),
   ]);
   const m = (r: GRow) => r.metrics ?? {};
+  const ac = await fetchAcSearchDetail(since, today, q);
   const detail = [
+    ...ac.detail,
     ...prod.rows.map((r) => ({ kind: "product", campaign_id: PMAX_CAMPAIGN_ID, date: r.segments?.date, key: r.segments?.productItemId ?? "", label: r.segments?.productTitle,
       impressions: m(r).impressions ?? 0, clicks: m(r).clicks ?? 0, cost_micros: m(r).costMicros ?? 0, conversions: m(r).conversions ?? 0, conv_value: m(r).conversionsValue ?? 0 })),
     ...net.rows.map((r) => ({ kind: "network", campaign_id: PMAX_CAMPAIGN_ID, date: r.segments?.date, key: r.segments?.adNetworkType ?? "", label: r.segments?.adNetworkType,
@@ -104,7 +109,35 @@ export async function fetchGoogle(today: string, env: Env, fetcher: typeof fetch
   const rows = camp.rows.map((r) => ({ date: r.segments?.date, campaign_id: String(r.campaign?.id ?? ""), campaign_name: r.campaign?.name,
     cost_micros: m(r).costMicros ?? 0, impressions: m(r).impressions ?? 0, clicks: m(r).clicks ?? 0,
     conversions: m(r).conversions ?? 0, conversions_value: m(r).conversionsValue ?? 0 })).filter((r) => r.date && r.campaign_id);
-  return { rows, detail, states };
+  return { rows, detail, states, detailErrors: ac.errors };
+}
+
+/** Daily ad group, keyword and search term rows for the AgentCocoon Search campaign (gads_detail). Each part fails independently. */
+export async function fetchAcSearchDetail(since: string, today: string, q: (query: string) => Promise<{ rows: GRow[] }>) {
+  const C = AC_SEARCH_CAMPAIGN_ID;
+  const met = "metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.conversions_value";
+  const where = `campaign.id = ${C} AND segments.date BETWEEN '${since}' AND '${today}'`;
+  const parts = await Promise.allSettled([
+    q(`SELECT segments.date, ad_group.id, ad_group.name, ${met} FROM ad_group WHERE ${where}`),
+    q(`SELECT segments.date, ad_group.id, ad_group_criterion.criterion_id, ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type, ${met} FROM keyword_view WHERE ${where}`),
+    q(`SELECT segments.date, ad_group.id, search_term_view.search_term, ${met} FROM search_term_view WHERE ${where}`),
+  ]);
+  const kinds = ["ad_group", "keyword", "search_term"] as const;
+  const errors: Array<{ source: string; error: string }> = [];
+  const detail: Json[] = [];
+  parts.forEach((p, i) => {
+    if (p.status === "rejected") { errors.push({ source: `google_ac_${kinds[i]}`, error: String((p.reason as Error)?.message ?? p.reason).slice(0, 300) }); return; }
+    for (const r of p.value.rows) {
+      const mm = r.metrics ?? {}, ag = String(r.adGroup?.id ?? "");
+      const crit = (r.adGroupCriterion ?? {}) as Json, kw = (crit.keyword ?? {}) as Json;
+      const key = kinds[i] === "ad_group" ? ag : kinds[i] === "keyword" ? `${ag}~${crit.criterionId ?? ""}` : `${ag}~${r.searchTermView?.searchTerm ?? ""}`;
+      const label = kinds[i] === "ad_group" ? r.adGroup?.name : kinds[i] === "keyword" ? `${kw.text ?? ""} [${kw.matchType ?? ""}]` : r.searchTermView?.searchTerm;
+      if (!r.segments?.date || !ag) continue;
+      detail.push({ kind: kinds[i], campaign_id: C, date: r.segments.date, key, label,
+        impressions: mm.impressions ?? 0, clicks: mm.clicks ?? 0, cost_micros: mm.costMicros ?? 0, conversions: mm.conversions ?? 0, conv_value: mm.conversionsValue ?? 0 });
+    }
+  });
+  return { detail, errors };
 }
 
 export async function fetchShopifyAttribution(today: string, env: Env, fetcher: typeof fetch = fetch) {
@@ -141,6 +174,7 @@ export async function runLiveRefresh(env: Env, rpc: (fn: string, args: Json) => 
     fetchGoogle(today, env, fetcher).catch(err("google")),
     fetchShopifyAttribution(today, env, fetcher).catch(err("shopify_attribution")),
   ]);
+  errors.push(...(google?.detailErrors ?? []));
   const payload = { meta: meta?.rows ?? null, google: google?.rows ?? null, pmax: google?.detail ?? null,
     states: [...(meta?.states ?? []), ...(google?.states ?? [])], orders, errors };
   const result = await rpc("gos_live_ingest", { p: payload });

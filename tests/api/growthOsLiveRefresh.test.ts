@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { daysBack, etToday, mapMetaInsight, runLiveRefresh } from "@/lib/growthOs/liveRefresh";
+import { daysBack, etToday, mapMetaInsight, runLiveRefresh, fetchAcSearchDetail, AC_SEARCH_CAMPAIGN_ID } from "@/lib/growthOs/liveRefresh";
 
 describe("growth os live refresh", () => {
   it("maps Graph insights to the connector shape ingest_meta expects", () => {
@@ -18,5 +18,21 @@ describe("growth os live refresh", () => {
     const out = await runLiveRefresh({}, rpc, fetcher as unknown as typeof fetch);
     expect(out.errors.map((e) => e.source).sort()).toEqual(["google", "meta", "shopify_attribution"]);
     expect(rpc).toHaveBeenCalledWith("gos_live_ingest", expect.objectContaining({ p: expect.objectContaining({ meta: null, google: null, orders: null }) }));
+  });
+  it("maps AgentCocoon Search ad group, keyword and search term rows per day, each part independent", async () => {
+    const mt = { impressions: "40", clicks: "3", costMicros: "7500000", conversions: 0, conversionsValue: 0 };
+    const q = vi.fn(async (query: string) => {
+      if (query.includes("FROM search_term_view")) throw new Error("boom");
+      if (query.includes("FROM keyword_view")) return { rows: [{ segments: { date: "2026-10-29" }, adGroup: { id: "210070479348" },
+        adGroupCriterion: { criterionId: "55", keyword: { text: "shopify ai agent", matchType: "EXACT" } }, metrics: mt }] };
+      return { rows: [{ segments: { date: "2026-10-29" }, adGroup: { id: "210070479348", name: "A | Shopify AI agents" }, metrics: mt }] };
+    });
+    const out = await fetchAcSearchDetail("2026-10-15", "2026-10-29", q);
+    expect(q.mock.calls.every((c) => String(c[0]).includes(`campaign.id = ${AC_SEARCH_CAMPAIGN_ID}`))).toBe(true);
+    expect(out.detail).toEqual([
+      { kind: "ad_group", campaign_id: AC_SEARCH_CAMPAIGN_ID, date: "2026-10-29", key: "210070479348", label: "A | Shopify AI agents", impressions: "40", clicks: "3", cost_micros: "7500000", conversions: 0, conv_value: 0 },
+      { kind: "keyword", campaign_id: AC_SEARCH_CAMPAIGN_ID, date: "2026-10-29", key: "210070479348~55", label: "shopify ai agent [EXACT]", impressions: "40", clicks: "3", cost_micros: "7500000", conversions: 0, conv_value: 0 },
+    ]);
+    expect(out.errors).toEqual([{ source: "google_ac_search_term", error: "boom" }]);
   });
 });
