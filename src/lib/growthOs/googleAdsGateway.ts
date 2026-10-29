@@ -22,6 +22,7 @@
  *   only: https://agentcocoon.com or https://www.agentcocoon.com. No em dashes in ad text.
  * - read-only planning and reporting: keyword_metrics (Keyword Planner historical metrics and ideas,
  *   US, English, Google Search) and ad_group_report (campaign / ad group / keyword / search term).
+ * - add_search_ad_group: adds one ad group (keywords + one RSA) to an existing Search campaign; budget untouched.
  * - never creates or edits conversion actions or conversion goals.
  * - budget ceiling: GROWTH_OS_GOOGLE_MAX_DAILY_USD (default 100)
  */
@@ -44,7 +45,8 @@ export type GatewayRequest =
   | ({ action: "create_pmax"; validateOnly?: boolean } & PmaxSpec)
   | { action: "keyword_metrics"; keywords: string[]; includeIdeas: boolean; ideasPageSize: number }
   | ({ action: "create_search"; validateOnly?: boolean } & SearchSpec)
-  | { action: "ad_group_report"; since: string; until: string; campaignId?: string; includeSearchTerms: boolean };
+  | { action: "ad_group_report"; since: string; until: string; campaignId?: string; includeSearchTerms: boolean }
+  | { action: "add_search_ad_group"; validateOnly?: boolean; campaignId: string; finalUrl: string; adGroup: SearchAdGroupSpec };
 
 export type MatchType = "PHRASE" | "EXACT";
 export type SearchAdGroupSpec = {
@@ -193,32 +195,21 @@ export function parseRequest(body: unknown, env: Env): GatewayRequest {
     if (!Array.isArray(b.adGroups) || b.adGroups.length < 1 || b.adGroups.length > 10) throw new GatewayError(400, "invalid_ad_groups_count", { min: 1, max: 10 });
     const names = new Set<string>();
     const adGroups = b.adGroups.map((g0): SearchAdGroupSpec => {
-      const g = (g0 ?? {}) as Record<string, unknown>;
-      const agName = strs([g.name], "ad_group_name", 1, 1, 120)[0];
-      if (names.has(agName)) throw new GatewayError(400, "duplicate_ad_group_name", { value: agName });
-      names.add(agName);
-      const cpc = Number(g.cpcBidUsd);
-      if (!Number.isFinite(cpc) || cpc < 0.1 || cpc > MAX_CPC_USD) throw new GatewayError(400, "invalid_cpc_bid_usd", { min: 0.1, max: MAX_CPC_USD });
-      const finalUrlSuffix = String(g.finalUrlSuffix ?? "");
-      if (!SUFFIX.test(finalUrlSuffix) || finalUrlSuffix.length > 500) throw new GatewayError(400, "invalid_final_url_suffix", { value: g.finalUrlSuffix });
-      if (!Array.isArray(g.keywords) || g.keywords.length < 1 || g.keywords.length > 100) throw new GatewayError(400, "invalid_keywords_count", { min: 1, max: 100 });
-      const seen = new Set<string>();
-      const keywords = g.keywords.map((k0) => {
-        const k = (k0 ?? {}) as Record<string, unknown>;
-        if (k.matchType !== "PHRASE" && k.matchType !== "EXACT") throw new GatewayError(400, "match_type_not_allowed", { value: k.matchType });
-        const text = kwText(k.text, "keyword");
-        const key = `${k.matchType}:${text}`;
-        if (seen.has(key)) throw new GatewayError(400, "duplicate_keyword", { value: key });
-        seen.add(key);
-        return { text, matchType: k.matchType as MatchType };
-      });
-      const headlines = noDashes(strs(g.headlines, "headlines", 3, 15, 30), "headline");
-      const descriptions = noDashes(strs(g.descriptions, "descriptions", 2, 4, 90), "description");
-      return { name: agName, cpcBidUsd: cpc, finalUrlSuffix, keywords, headlines, descriptions };
+      const g = parseSearchAdGroup(g0);
+      if (names.has(g.name)) throw new GatewayError(400, "duplicate_ad_group_name", { value: g.name });
+      names.add(g.name);
+      return g;
     });
     noDashes([name, ...negativeKeywords], "text");
     return { action: "create_search", validateOnly: b.validateOnly === true, name, dailyUsd: usd,
       status: b.status === "ENABLED" ? "ENABLED" : "PAUSED", finalUrl, negativeKeywords, adGroups };
+  }
+  if (b.action === "add_search_ad_group") {
+    const campaignId = String(b.campaignId ?? "");
+    if (!ID.test(campaignId)) throw new GatewayError(400, "invalid_campaign_id");
+    const finalUrl = String(b.finalUrl ?? "");
+    if (!AC_SITE.test(finalUrl)) throw new GatewayError(400, "final_url_not_allowed");
+    return { action: "add_search_ad_group", validateOnly: b.validateOnly === true, campaignId, finalUrl, adGroup: parseSearchAdGroup(b.adGroup) };
   }
   if (b.action === "ad_group_report") {
     const since = String(b.since ?? ""), until = String(b.until ?? "");
@@ -302,6 +293,14 @@ export async function runGateway(req: GatewayRequest, env: Env, fetcher: typeof 
   }
   if (req.action === "create_search") {
     return googleFetch("googleAds:mutate", { validateOnly: req.validateOnly ?? false, mutateOperations: buildSearchOperations(req) }, token, devToken, fetcher);
+  }
+  if (req.action === "add_search_ad_group") {
+    // Only into an existing, non-removed Search campaign.
+    const chk = await googleFetch("googleAds:search", { query: `SELECT campaign.id, campaign.advertising_channel_type, campaign.status FROM campaign WHERE campaign.id = ${req.campaignId}` }, token, devToken, fetcher);
+    const c = ((chk.results as Array<Record<string, Record<string, unknown>>>) ?? [])[0]?.campaign;
+    if (!c || c.advertisingChannelType !== "SEARCH" || c.status === "REMOVED") throw new GatewayError(400, "campaign_not_search", { campaignId: req.campaignId });
+    const campaign = `customers/${GATEWAY_CUSTOMER_ID}/campaigns/${req.campaignId}`;
+    return googleFetch("googleAds:mutate", { validateOnly: req.validateOnly ?? false, mutateOperations: searchAdGroupOps(campaign, -10, req.adGroup, req.finalUrl) }, token, devToken, fetcher);
   }
   if (req.action === "keyword_metrics") {
     const base = { geoTargetConstants: ["geoTargetConstants/2840"], language: "languageConstants/1000",
@@ -414,6 +413,29 @@ function kwMetrics(v: unknown) {
 }
 
 /** One atomic googleAds:mutate request for a Google Search-only manual CPC campaign. */
+function parseSearchAdGroup(g0: unknown): SearchAdGroupSpec {
+  const g = (g0 ?? {}) as Record<string, unknown>;
+  const agName = strs([g.name], "ad_group_name", 1, 1, 120)[0];
+  const cpc = Number(g.cpcBidUsd);
+  if (!Number.isFinite(cpc) || cpc < 0.1 || cpc > MAX_CPC_USD) throw new GatewayError(400, "invalid_cpc_bid_usd", { min: 0.1, max: MAX_CPC_USD });
+  const finalUrlSuffix = String(g.finalUrlSuffix ?? "");
+  if (!SUFFIX.test(finalUrlSuffix) || finalUrlSuffix.length > 500) throw new GatewayError(400, "invalid_final_url_suffix", { value: g.finalUrlSuffix });
+  if (!Array.isArray(g.keywords) || g.keywords.length < 1 || g.keywords.length > 100) throw new GatewayError(400, "invalid_keywords_count", { min: 1, max: 100 });
+  const seen = new Set<string>();
+  const keywords = g.keywords.map((k0) => {
+    const k = (k0 ?? {}) as Record<string, unknown>;
+    if (k.matchType !== "PHRASE" && k.matchType !== "EXACT") throw new GatewayError(400, "match_type_not_allowed", { value: k.matchType });
+    const text = kwText(k.text, "keyword");
+    const key = `${k.matchType}:${text}`;
+    if (seen.has(key)) throw new GatewayError(400, "duplicate_keyword", { value: key });
+    seen.add(key);
+    return { text, matchType: k.matchType as MatchType };
+  });
+  const headlines = noDashes(strs(g.headlines, "headlines", 3, 15, 30), "headline");
+  const descriptions = noDashes(strs(g.descriptions, "descriptions", 2, 4, 90), "description");
+  return { name: agName, cpcBidUsd: cpc, finalUrlSuffix, keywords, headlines, descriptions };
+}
+
 export function buildSearchOperations(spec: SearchSpec) {
   const C = `customers/${GATEWAY_CUSTOMER_ID}`;
   const budget = `${C}/campaignBudgets/-1`, campaign = `${C}/campaigns/-2`;
@@ -430,14 +452,19 @@ export function buildSearchOperations(spec: SearchSpec) {
   crit({ location: { geoTargetConstant: "geoTargetConstants/2840" } });
   crit({ language: { languageConstant: "languageConstants/1000" } });
   for (const k of spec.negativeKeywords) crit({ negative: true, keyword: { text: k, matchType: "PHRASE" } });
-  spec.adGroups.forEach((g, i) => {
-    const ag = `${C}/adGroups/${-10 - i}`;
-    ops.push({ adGroupOperation: { create: { resourceName: ag, campaign, name: g.name, status: "ENABLED", type: "SEARCH_STANDARD",
-      cpcBidMicros: String(Math.round(g.cpcBidUsd * 1_000_000)), finalUrlSuffix: g.finalUrlSuffix } } });
-    for (const k of g.keywords) ops.push({ adGroupCriterionOperation: { create: { adGroup: ag, status: "ENABLED",
-      keyword: { text: k.text, matchType: k.matchType } } } });
-    ops.push({ adGroupAdOperation: { create: { adGroup: ag, status: "ENABLED", ad: { finalUrls: [spec.finalUrl],
-      responsiveSearchAd: { headlines: g.headlines.map((text) => ({ text })), descriptions: g.descriptions.map((text) => ({ text })) } } } } });
-  });
+  spec.adGroups.forEach((g, i) => ops.push(...searchAdGroupOps(campaign, -10 - i, g, spec.finalUrl)));
+  return ops;
+}
+
+/** Ad group + keywords + one RSA. Budget and campaign settings are untouched. */
+export function searchAdGroupOps(campaign: string, tempId: number, g: SearchAdGroupSpec, finalUrl: string) {
+  const ag = `customers/${GATEWAY_CUSTOMER_ID}/adGroups/${tempId}`;
+  const ops: Array<Record<string, unknown>> = [];
+  ops.push({ adGroupOperation: { create: { resourceName: ag, campaign, name: g.name, status: "ENABLED", type: "SEARCH_STANDARD",
+    cpcBidMicros: String(Math.round(g.cpcBidUsd * 1_000_000)), finalUrlSuffix: g.finalUrlSuffix } } });
+  for (const k of g.keywords) ops.push({ adGroupCriterionOperation: { create: { adGroup: ag, status: "ENABLED",
+    keyword: { text: k.text, matchType: k.matchType } } } });
+  ops.push({ adGroupAdOperation: { create: { adGroup: ag, status: "ENABLED", ad: { finalUrls: [finalUrl],
+    responsiveSearchAd: { headlines: g.headlines.map((text) => ({ text })), descriptions: g.descriptions.map((text) => ({ text })) } } } } });
   return ops;
 }

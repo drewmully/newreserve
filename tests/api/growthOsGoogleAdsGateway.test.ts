@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/analytics/googleSpendSource", () => ({ authorizeGoogleSpend: vi.fn(async () => "tok") }));
-import { isAuthorized, parseRequest, runGateway, GatewayError, buildPmaxOperations, buildSearchOperations } from "@/lib/growthOs/googleAdsGateway";
+import { isAuthorized, parseRequest, runGateway, GatewayError, buildPmaxOperations, buildSearchOperations, searchAdGroupOps } from "@/lib/growthOs/googleAdsGateway";
 
 const secret = "s".repeat(40);
 const env = { GROWTH_OS_GOOGLE_SECRET: secret, GOOGLE_ADS_DEVELOPER_TOKEN: "dev", GOOGLE_ADS_SERVICE_ACCOUNT_JSON_BASE64: "e30=" };
@@ -145,5 +145,27 @@ describe("create_search, keyword_metrics, ad_group_report", () => {
     expect(urls.every((u) => u.endsWith("googleAds:search"))).toBe(true);
     expect(urls).toHaveLength(4);
     expect(res.adGroups[0]).toMatchObject({ spendUsd: 1.5, avgCpcUsd: 0.75, clicks: 2 });
+  });
+});
+
+describe("add_search_ad_group", () => {
+  const env4 = { GROWTH_OS_GOOGLE_MAX_DAILY_USD: "100" };
+  const adGroup = { name: "E, Agency alternative", cpcBidUsd: 3.5, finalUrlSuffix: "utm_source=google&utm_content=g-compare",
+    keywords: [{ text: "marketing agency alternative", matchType: "PHRASE" }, { text: "marketing agency alternative", matchType: "EXACT" }],
+    headlines: ["Four Agencies or One?", "Ditch the Agency Retainer", "AI Agents Built for You"], descriptions: ["One.", "Two."] };
+  const base = { action: "add_search_ad_group", campaignId: "24405645267", finalUrl: "https://agentcocoon.com/", adGroup };
+  it("validates campaign id, site, bid and copy", () => {
+    expect(parseRequest(base, env4).action).toBe("add_search_ad_group");
+    expect(() => parseRequest({ ...base, campaignId: "x" }, env4)).toThrow();
+    expect(() => parseRequest({ ...base, finalUrl: "https://mymully.com/" }, env4)).toThrow();
+    expect(() => parseRequest({ ...base, adGroup: { ...adGroup, cpcBidUsd: 50 } }, env4)).toThrow();
+    expect(() => parseRequest({ ...base, adGroup: { ...adGroup, headlines: ["A \u2014 B", "x", "y"] } }, env4)).toThrow();
+  });
+  it("builds ad group, keyword and RSA ops against the existing campaign only", () => {
+    const ops = searchAdGroupOps("customers/4335795219/campaigns/24405645267", -10, adGroup as never, "https://agentcocoon.com/");
+    expect(ops).toHaveLength(4);
+    expect(JSON.stringify(ops)).not.toContain("campaignBudget");
+    expect((ops[0].adGroupOperation as { create: Record<string, unknown> }).create).toMatchObject({
+      campaign: "customers/4335795219/campaigns/24405645267", cpcBidMicros: "3500000", name: "E, Agency alternative" });
   });
 });
