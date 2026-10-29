@@ -15,6 +15,14 @@
  *   shop campaign in one atomic request (budget under the cap, US + English, Merchant Center
  *   371722715, asset group, listing groups, negative keywords, URL exclusions, search themes).
  *   Final URLs must be on https://www.mymully.com.
+ * - Search campaigns (create_search): one atomic request creating a non-shared budget (under the cap),
+ *   a Google Search-only MANUAL_CPC campaign (enhanced CPC off, partners/display off, AI Max off, no broad
+ *   match campaign setting, US presence + English), ad groups with a CPC cap, PHRASE/EXACT keywords,
+ *   campaign PHRASE negatives and one responsive search ad per ad group. Final URLs for this action
+ *   only: https://agentcocoon.com or https://www.agentcocoon.com. No em dashes in ad text.
+ * - read-only planning and reporting: keyword_metrics (Keyword Planner historical metrics and ideas,
+ *   US, English, Google Search) and ad_group_report (campaign / ad group / keyword / search term).
+ * - never creates or edits conversion actions or conversion goals.
  * - budget ceiling: GROWTH_OS_GOOGLE_MAX_DAILY_USD (default 100)
  */
 import { timingSafeEqual } from "node:crypto";
@@ -33,7 +41,35 @@ export type GatewayRequest =
   | { action: "attach_merchant"; campaignId: string; validateOnly?: boolean }
   | { action: "include_all_products"; assetGroupId: string; validateOnly?: boolean }
   | { action: "upload_image_asset"; name: string; dataBase64: string; validateOnly?: boolean }
-  | ({ action: "create_pmax"; validateOnly?: boolean } & PmaxSpec);
+  | ({ action: "create_pmax"; validateOnly?: boolean } & PmaxSpec)
+  | { action: "keyword_metrics"; keywords: string[]; includeIdeas: boolean; ideasPageSize: number }
+  | ({ action: "create_search"; validateOnly?: boolean } & SearchSpec)
+  | { action: "ad_group_report"; since: string; until: string; campaignId?: string; includeSearchTerms: boolean };
+
+export type MatchType = "PHRASE" | "EXACT";
+export type SearchAdGroupSpec = {
+  name: string; cpcBidUsd: number; finalUrlSuffix: string;
+  keywords: Array<{ text: string; matchType: MatchType }>;
+  headlines: string[]; descriptions: string[];
+};
+export type SearchSpec = {
+  name: string; dailyUsd: number; status: "ENABLED" | "PAUSED"; finalUrl: string;
+  negativeKeywords: string[]; adGroups: SearchAdGroupSpec[];
+};
+const AC_SITE = /^https:\/\/(www\.)?agentcocoon\.com(\/[^\s]*)?$/;
+const SUFFIX = /^[A-Za-z0-9_.~-]+=[A-Za-z0-9_.~%-]+(&[A-Za-z0-9_.~-]+=[A-Za-z0-9_.~%-]+)*$/;
+const DASHES = /[\u2013\u2014]/;
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+export const MAX_CPC_USD = 10;
+function kwText(v: unknown, field: string): string {
+  const t = typeof v === "string" ? v.trim().toLowerCase().replace(/\s+/g, " ") : "";
+  if (!t || t.length > 80 || t.split(" ").length > 10 || /[!@%^*()={}~`<>?\\|"[\]]/.test(t)) throw new GatewayError(400, `invalid_${field}`, { value: v });
+  return t;
+}
+function noDashes(list: string[], field: string) {
+  for (const t of list) if (DASHES.test(t)) throw new GatewayError(400, `${field}_contains_dash`, { value: t });
+  return list;
+}
 
 export type PmaxSpec = {
   name: string; dailyUsd: number; status: "ENABLED" | "PAUSED"; finalUrl: string; businessName: string;
@@ -137,11 +173,67 @@ export function parseRequest(body: unknown, env: Env): GatewayRequest {
       excludeProductTypeL1: strs(b.excludeProductTypeL1 ?? [], "exclude_product_type", 0, 5, 100),
       urlExpansion: b.urlExpansion === true };
   }
+  if (b.action === "keyword_metrics") {
+    if (!Array.isArray(b.keywords) || b.keywords.length < 1 || b.keywords.length > 100) throw new GatewayError(400, "invalid_keywords_count", { min: 1, max: 100 });
+    const keywords = [...new Set(b.keywords.map((k) => kwText(k, "keyword")))];
+    const ideasPageSize = Math.min(Math.max(Number(b.ideasPageSize ?? 50) || 50, 1), 200);
+    return { action: "keyword_metrics", keywords, includeIdeas: b.includeIdeas !== false, ideasPageSize };
+  }
+  if (b.action === "create_search") {
+    const cap = Number(env.GROWTH_OS_GOOGLE_MAX_DAILY_USD ?? "100");
+    const usd = Number(b.dailyUsd);
+    if (!Number.isFinite(usd) || usd < 1) throw new GatewayError(400, "invalid_daily_usd");
+    if (usd > cap) throw new GatewayError(400, "daily_usd_above_cap", { cap });
+    const finalUrl = String(b.finalUrl ?? "");
+    if (!AC_SITE.test(finalUrl)) throw new GatewayError(400, "final_url_not_allowed");
+    const name = strs([b.name], "name", 1, 1, 120)[0];
+    const negIn = b.negativeKeywords ?? [];
+    if (!Array.isArray(negIn) || negIn.length > 200) throw new GatewayError(400, "invalid_negative_keywords_count", { max: 200 });
+    const negativeKeywords = [...new Set(negIn.map((k) => kwText(k, "negative_keyword")))];
+    if (!Array.isArray(b.adGroups) || b.adGroups.length < 1 || b.adGroups.length > 10) throw new GatewayError(400, "invalid_ad_groups_count", { min: 1, max: 10 });
+    const names = new Set<string>();
+    const adGroups = b.adGroups.map((g0): SearchAdGroupSpec => {
+      const g = (g0 ?? {}) as Record<string, unknown>;
+      const agName = strs([g.name], "ad_group_name", 1, 1, 120)[0];
+      if (names.has(agName)) throw new GatewayError(400, "duplicate_ad_group_name", { value: agName });
+      names.add(agName);
+      const cpc = Number(g.cpcBidUsd);
+      if (!Number.isFinite(cpc) || cpc < 0.1 || cpc > MAX_CPC_USD) throw new GatewayError(400, "invalid_cpc_bid_usd", { min: 0.1, max: MAX_CPC_USD });
+      const finalUrlSuffix = String(g.finalUrlSuffix ?? "");
+      if (!SUFFIX.test(finalUrlSuffix) || finalUrlSuffix.length > 500) throw new GatewayError(400, "invalid_final_url_suffix", { value: g.finalUrlSuffix });
+      if (!Array.isArray(g.keywords) || g.keywords.length < 1 || g.keywords.length > 100) throw new GatewayError(400, "invalid_keywords_count", { min: 1, max: 100 });
+      const seen = new Set<string>();
+      const keywords = g.keywords.map((k0) => {
+        const k = (k0 ?? {}) as Record<string, unknown>;
+        if (k.matchType !== "PHRASE" && k.matchType !== "EXACT") throw new GatewayError(400, "match_type_not_allowed", { value: k.matchType });
+        const text = kwText(k.text, "keyword");
+        const key = `${k.matchType}:${text}`;
+        if (seen.has(key)) throw new GatewayError(400, "duplicate_keyword", { value: key });
+        seen.add(key);
+        return { text, matchType: k.matchType as MatchType };
+      });
+      const headlines = noDashes(strs(g.headlines, "headlines", 3, 15, 30), "headline");
+      const descriptions = noDashes(strs(g.descriptions, "descriptions", 2, 4, 90), "description");
+      return { name: agName, cpcBidUsd: cpc, finalUrlSuffix, keywords, headlines, descriptions };
+    });
+    noDashes([name, ...negativeKeywords], "text");
+    return { action: "create_search", validateOnly: b.validateOnly === true, name, dailyUsd: usd,
+      status: b.status === "ENABLED" ? "ENABLED" : "PAUSED", finalUrl, negativeKeywords, adGroups };
+  }
+  if (b.action === "ad_group_report") {
+    const since = String(b.since ?? ""), until = String(b.until ?? "");
+    if (!DATE.test(since) || !DATE.test(until) || since > until) throw new GatewayError(400, "invalid_date_range");
+    if ((Date.parse(until) - Date.parse(since)) / 86400000 > 92) throw new GatewayError(400, "date_range_too_long", { maxDays: 93 });
+    const campaignId = b.campaignId === undefined ? undefined : String(b.campaignId);
+    if (campaignId !== undefined && !ID.test(campaignId)) throw new GatewayError(400, "invalid_campaign_id");
+    return { action: "ad_group_report", since, until, campaignId, includeSearchTerms: b.includeSearchTerms !== false };
+  }
   throw new GatewayError(400, "unsupported_action");
 }
 
 async function googleFetch(path: string, payload: unknown, token: string, devToken: string, fetcher: typeof fetch) {
-  const r = await fetcher(`https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}/customers/${GATEWAY_CUSTOMER_ID}/${path}`, {
+  const sep = path.startsWith(":") ? "" : "/";
+  const r = await fetcher(`https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}/customers/${GATEWAY_CUSTOMER_ID}${sep}${path}`, {
     method: "POST", redirect: "error", signal: AbortSignal.timeout(25000),
     headers: { Authorization: `Bearer ${token}`, "developer-token": devToken,
       "login-customer-id": GATEWAY_LOGIN_CUSTOMER_ID, "Content-Type": "application/json" },
@@ -208,6 +300,59 @@ export async function runGateway(req: GatewayRequest, env: Env, fetcher: typeof 
   if (req.action === "create_pmax") {
     return googleFetch("googleAds:mutate", { validateOnly: req.validateOnly ?? false, mutateOperations: buildPmaxOperations(req) }, token, devToken, fetcher);
   }
+  if (req.action === "create_search") {
+    return googleFetch("googleAds:mutate", { validateOnly: req.validateOnly ?? false, mutateOperations: buildSearchOperations(req) }, token, devToken, fetcher);
+  }
+  if (req.action === "keyword_metrics") {
+    const base = { geoTargetConstants: ["geoTargetConstants/2840"], language: "languageConstants/1000",
+      keywordPlanNetwork: "GOOGLE_SEARCH", includeAdultKeywords: false };
+    const hist = await googleFetch(":generateKeywordHistoricalMetrics", { ...base, keywords: req.keywords }, token, devToken, fetcher);
+    const historical = ((hist.results as Array<Record<string, unknown>>) ?? []).map((r) => ({
+      keyword: r.text, closeVariants: r.closeVariants ?? [], ...kwMetrics(r.keywordMetrics) }));
+    const returned = new Set(historical.flatMap((h) => [String(h.keyword), ...((h.closeVariants as string[]) ?? [])]));
+    const noData = req.keywords.filter((k) => !returned.has(k));
+    let ideas: unknown[] = [];
+    if (req.includeIdeas) {
+      const res = await googleFetch(":generateKeywordIdeas", { ...base, keywordSeed: { keywords: req.keywords.slice(0, 20) }, pageSize: req.ideasPageSize }, token, devToken, fetcher);
+      ideas = ((res.results as Array<Record<string, unknown>>) ?? []).map((r) => ({ keyword: r.text, ...kwMetrics(r.keywordIdeaMetrics) }));
+    }
+    return { geo: "US", language: "English", network: "GOOGLE_SEARCH", historical, noData, ideas };
+  }
+  if (req.action === "ad_group_report") {
+    const where = `segments.date BETWEEN '${req.since}' AND '${req.until}'${req.campaignId ? ` AND campaign.id = ${req.campaignId}` : ""}`;
+    const m = "metrics.cost_micros, metrics.impressions, metrics.clicks, metrics.ctr, metrics.average_cpc, metrics.conversions";
+    const all = async (query: string) => {
+      const rows: Array<Record<string, Record<string, unknown>>> = []; let pageToken: string | undefined; let pages = 0;
+      do {
+        const res = await googleFetch("googleAds:search", { query, ...(pageToken ? { pageToken } : {}) }, token, devToken, fetcher);
+        rows.push(...((res.results as Array<Record<string, Record<string, unknown>>>) ?? []));
+        pageToken = typeof res.nextPageToken === "string" && res.nextPageToken ? res.nextPageToken : undefined; pages++;
+      } while (pageToken && pages < 5);
+      return rows;
+    };
+    const met = (r: Record<string, Record<string, unknown>>) => {
+      const x = r.metrics ?? {};
+      return { spendUsd: Number(x.costMicros ?? 0) / 1e6, impressions: Number(x.impressions ?? 0), clicks: Number(x.clicks ?? 0),
+        ctr: Number(x.ctr ?? 0), avgCpcUsd: Number(x.averageCpc ?? 0) / 1e6, conversions: Number(x.conversions ?? 0) };
+    };
+    const camp = (r: Record<string, Record<string, unknown>>) => ({ campaignId: r.campaign?.id, campaignName: r.campaign?.name });
+    const campaigns = (await all(`SELECT campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type, ${m} FROM campaign WHERE ${where}`))
+      .map((r) => ({ ...camp(r), status: r.campaign?.status, channel: r.campaign?.advertisingChannelType, ...met(r) }));
+    const adGroups = (await all(`SELECT campaign.id, campaign.name, ad_group.id, ad_group.name, ad_group.status, ad_group.cpc_bid_micros, ${m} FROM ad_group WHERE ${where}`))
+      .map((r) => ({ ...camp(r), adGroupId: r.adGroup?.id, adGroupName: r.adGroup?.name, status: r.adGroup?.status,
+        cpcBidUsd: Number(r.adGroup?.cpcBidMicros ?? 0) / 1e6, ...met(r) }));
+    const keywords = (await all(`SELECT campaign.id, campaign.name, ad_group.id, ad_group.name, ad_group_criterion.criterion_id, ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type, ad_group_criterion.status, ad_group_criterion.approval_status, ${m} FROM keyword_view WHERE ${where}`))
+      .map((r) => { const c = (r.adGroupCriterion ?? {}) as Record<string, unknown>; const k = (c.keyword ?? {}) as Record<string, unknown>;
+        return { ...camp(r), adGroupId: r.adGroup?.id, adGroupName: r.adGroup?.name, criterionId: c.criterionId, keyword: k.text,
+          matchType: k.matchType, status: c.status, approvalStatus: c.approvalStatus, ...met(r) }; });
+    const searchTerms = req.includeSearchTerms
+      ? (await all(`SELECT campaign.id, campaign.name, ad_group.id, ad_group.name, search_term_view.search_term, search_term_view.status, segments.keyword.info.text, segments.keyword.info.match_type, ${m} FROM search_term_view WHERE ${where}`))
+        .map((r) => { const st = r.searchTermView ?? {}; const kw = ((r.segments?.keyword as Record<string, unknown>)?.info ?? {}) as Record<string, unknown>;
+          return { ...camp(r), adGroupId: r.adGroup?.id, adGroupName: r.adGroup?.name, searchTerm: st.searchTerm, status: st.status,
+            keyword: kw.text, matchType: kw.matchType, ...met(r) }; })
+      : undefined;
+    return { since: req.since, until: req.until, campaignId: req.campaignId ?? null, campaigns, adGroups, keywords, searchTerms };
+  }
   return googleFetch("campaigns:mutate", { validateOnly: req.validateOnly ?? false, operations: [{
     updateMask: "status",
     update: { resourceName: `customers/${GATEWAY_CUSTOMER_ID}/campaigns/${req.campaignId}`, status: req.status } }] },
@@ -257,5 +402,42 @@ export function buildPmaxOperations(spec: PmaxSpec) {
     ops.push({ assetGroupListingGroupFilterOperation: { create: { resourceName: lg(-100), assetGroup: ag, type: "UNIT_INCLUDED", listingSource: "SHOPPING" } } });
   }
   for (const t of spec.searchThemes) ops.push({ assetGroupSignalOperation: { create: { assetGroup: ag, searchTheme: { text: t } } } });
+  return ops;
+}
+
+function kwMetrics(v: unknown) {
+  const m = (v ?? {}) as Record<string, unknown>;
+  const usd = (x: unknown) => (x === undefined || x === null ? null : Number(x) / 1e6);
+  return { avgMonthlySearches: m.avgMonthlySearches === undefined ? null : Number(m.avgMonthlySearches),
+    competition: m.competition ?? null, competitionIndex: m.competitionIndex === undefined ? null : Number(m.competitionIndex),
+    lowTopOfPageBidUsd: usd(m.lowTopOfPageBidMicros), highTopOfPageBidUsd: usd(m.highTopOfPageBidMicros) };
+}
+
+/** One atomic googleAds:mutate request for a Google Search-only manual CPC campaign. */
+export function buildSearchOperations(spec: SearchSpec) {
+  const C = `customers/${GATEWAY_CUSTOMER_ID}`;
+  const budget = `${C}/campaignBudgets/-1`, campaign = `${C}/campaigns/-2`;
+  const ops: Array<Record<string, unknown>> = [];
+  ops.push({ campaignBudgetOperation: { create: { resourceName: budget, name: `${spec.name} budget`,
+    amountMicros: String(Math.round(spec.dailyUsd * 1_000_000)), deliveryMethod: "STANDARD", explicitlyShared: false } } });
+  ops.push({ campaignOperation: { create: { resourceName: campaign, name: spec.name, status: spec.status,
+    advertisingChannelType: "SEARCH", campaignBudget: budget, manualCpc: { enhancedCpcEnabled: false },
+    networkSettings: { targetGoogleSearch: true, targetSearchNetwork: false, targetContentNetwork: false, targetPartnerSearchNetwork: false },
+    geoTargetTypeSetting: { positiveGeoTargetType: "PRESENCE", negativeGeoTargetType: "PRESENCE" },
+    aiMaxSetting: { enableAiMax: false },
+    containsEuPoliticalAdvertising: "DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING" } } });
+  const crit = (c: Record<string, unknown>) => ops.push({ campaignCriterionOperation: { create: { campaign, ...c } } });
+  crit({ location: { geoTargetConstant: "geoTargetConstants/2840" } });
+  crit({ language: { languageConstant: "languageConstants/1000" } });
+  for (const k of spec.negativeKeywords) crit({ negative: true, keyword: { text: k, matchType: "PHRASE" } });
+  spec.adGroups.forEach((g, i) => {
+    const ag = `${C}/adGroups/${-10 - i}`;
+    ops.push({ adGroupOperation: { create: { resourceName: ag, campaign, name: g.name, status: "ENABLED", type: "SEARCH_STANDARD",
+      cpcBidMicros: String(Math.round(g.cpcBidUsd * 1_000_000)), finalUrlSuffix: g.finalUrlSuffix } } });
+    for (const k of g.keywords) ops.push({ adGroupCriterionOperation: { create: { adGroup: ag, status: "ENABLED",
+      keyword: { text: k.text, matchType: k.matchType } } } });
+    ops.push({ adGroupAdOperation: { create: { adGroup: ag, status: "ENABLED", ad: { finalUrls: [spec.finalUrl],
+      responsiveSearchAd: { headlines: g.headlines.map((text) => ({ text })), descriptions: g.descriptions.map((text) => ({ text })) } } } } });
+  });
   return ops;
 }
