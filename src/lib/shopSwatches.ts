@@ -15,7 +15,7 @@ const SWATCH_HEX: Record<string, string> = {
   "dark slate": "#34313a", "light gray": "#c6c7c7", "windward blue": "#a9bdd6",
   blue: "#6d8fbf", cotton: "#f3f1ec", white: "#f7f7f5",
   midnight: "#22304a", onyx: "#1b1919",
-  "ember brown": "#523732",
+  "ember brown": "#523732", "toasted oat": "#d3c6ad",
   "red stripes": "#a0423f", "blue stripes": "#3a4a78", "green stripes": "#3f6152",
 };
 
