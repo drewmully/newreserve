@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/analytics/googleSpendSource", () => ({ authorizeGoogleSpend: vi.fn(async () => "tok") }));
-import { isAuthorized, parseRequest, runGateway, GatewayError, buildPmaxOperations, buildSearchOperations, searchAdGroupOps } from "@/lib/growthOs/googleAdsGateway";
+import { isAuthorized, parseRequest, runGateway, GatewayError, buildPmaxOperations, buildSearchOperations, searchAdGroupOps, parseLeadgenPmax, buildLeadgenPmaxOperations, imageSize, conversionLabel } from "@/lib/growthOs/googleAdsGateway";
 
 const secret = "s".repeat(40);
 const env = { GROWTH_OS_GOOGLE_SECRET: secret, GOOGLE_ADS_DEVELOPER_TOKEN: "dev", GOOGLE_ADS_SERVICE_ACCOUNT_JSON_BASE64: "e30=" };
@@ -167,5 +167,87 @@ describe("add_search_ad_group", () => {
     expect(JSON.stringify(ops)).not.toContain("campaignBudget");
     expect((ops[0].adGroupOperation as { create: Record<string, unknown> }).create).toMatchObject({
       campaign: "customers/4335795219/campaigns/24405645267", cpcBidMicros: "3500000", name: "E, Agency alternative" });
+  });
+});
+
+describe("AgentCocoon lead gen", () => {
+  const png = (w: number, h: number) => { const b = Buffer.alloc(40); Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(b); b.writeUInt32BE(w, 16); b.writeUInt32BE(h, 20); return b; };
+  const img = (n: string) => `https://agentcocoon.com/img/pmax/${n}.png`;
+  const base = {
+    action: "create_pmax_leadgen", name: "AC | PMax | Hire", dailyUsd: 100, status: "PAUSED", finalUrl: "https://agentcocoon.com/hire",
+    finalUrlSuffix: "utm_source=google&utm_medium=cpc&utm_campaign=ac_pmax&utm_content=g-hire", assetGroupName: "Owners | Outsourced AI hire",
+    businessName: "AgentCocoon", callToAction: "Learn more", headlines: ["Your outsourced AI hire", "No agency retainers", "Get your hours back"],
+    longHeadlines: ["One price instead of a marketing agency, a lead gen agency and a web shop."],
+    descriptions: ["Tell us the job. We build the agent and keep it running.", "Month to month. Cancel anytime. You own the accounts the agents run in."],
+    images: { marketing: [img("a-1200x628")], square: [img("a-1200x1200")], portrait: [img("a-960x1200")], logo: [img("logo")], landscapeLogo: [img("wide")] },
+    negativeKeywords: ["jobs", "mully"], searchThemes: ["ai for law firms", "hire ai consultant"], conversionActionName: "AC | Hire lead",
+    audience: { customSegmentName: "AC owners AI intent", minAge: 45 },
+  };
+  const envL = { GROWTH_OS_GOOGLE_MAX_DAILY_USD: "100" };
+  it("validates the lead gen request", () => {
+    const r = parseRequest(base, envL) as Extract<ReturnType<typeof parseRequest>, { action: "create_pmax_leadgen" }>;
+    expect(r.callToAction).toBe("LEARN_MORE");
+    expect(r.audience?.terms).toEqual(base.searchThemes);
+    expect(() => parseRequest({ ...base, dailyUsd: 101 }, envL)).toThrow("daily_usd_above_cap");
+    expect(() => parseRequest({ ...base, finalUrl: "https://www.mymully.com/" }, envL)).toThrow("final_url_not_allowed");
+    expect(() => parseRequest({ ...base, name: "Mully PMax" }, envL)).toThrow("invalid_name");
+    expect(() => parseRequest({ ...base, headlines: ["A \u2014 B", "x", "y"] }, envL)).toThrow();
+    expect(() => parseRequest({ ...base, headlines: ["x".repeat(31), "x", "y"] }, envL)).toThrow("invalid_headlines");
+    expect(() => parseRequest({ ...base, descriptions: ["x".repeat(61), "y".repeat(61)] }, envL)).toThrow("need_short_description");
+    expect(() => parseRequest({ ...base, businessName: "x".repeat(26) }, envL)).toThrow("invalid_business_name");
+    expect(() => parseRequest({ ...base, images: { ...base.images, logo: ["https://www.mymully.com/logo.png"] } }, envL)).toThrow("invalid_images_logo");
+    expect(() => parseRequest({ ...base, conversionActionName: "Purchase (1)" }, envL)).toThrow("invalid_conversion_action_name");
+    expect(() => parseRequest({ action: "create_conversion_action_leadgen", name: "Email Submitted" }, envL)).toThrow("invalid_name");
+  });
+  it("builds a lead gen PMax: no Merchant Center, max conversions, URL expansion off, campaign goal only", () => {
+    const spec = parseLeadgenPmax(base, envL);
+    const ops = buildLeadgenPmaxOperations(spec, { conversionAction: "customers/4335795219/conversionActions/9", customGoal: null,
+      customAudience: "customers/4335795219/customAudiences/7", images: [{ url: img("a-1200x628"), kind: "marketing", dataBase64: "x" }, { url: img("wide"), kind: "landscapeLogo", dataBase64: "y" }] });
+    const j = JSON.stringify(ops);
+    expect(j).not.toContain("shoppingSetting"); expect(j).not.toContain("merchant"); expect(j).not.toContain("targetCpa");
+    expect(j).not.toContain("assetGroupListingGroupFilter");
+    const camp = (ops[1].campaignOperation as { create: Record<string, unknown> }).create;
+    expect(camp).toMatchObject({ status: "PAUSED", maximizeConversions: {}, finalUrlSuffix: base.finalUrlSuffix,
+      assetAutomationSettings: [{ assetAutomationType: "FINAL_URL_EXPANSION_TEXT_ASSET_AUTOMATION", assetAutomationStatus: "OPTED_OUT" }],
+      geoTargetTypeSetting: { positiveGeoTargetType: "PRESENCE", negativeGeoTargetType: "PRESENCE" } });
+    expect((ops[0].campaignBudgetOperation as { create: Record<string, unknown> }).create).toMatchObject({ amountMicros: "100000000", explicitlyShared: false });
+    expect(j).toContain('"conversionActions":["customers/4335795219/conversionActions/9"]');
+    expect(j).toContain('"goalConfigLevel":"CAMPAIGN"');
+    expect(j).toContain('"callToAction":"LEARN_MORE"'); expect(j).toContain('"fieldType":"LANDSCAPE_LOGO"'); expect(j).toContain('"fieldType":"CALL_TO_ACTION_SELECTION"');
+    expect(j).toContain('"ageRanges":[{"minAge":45,"maxAge":54},{"minAge":55,"maxAge":64},{"minAge":65}]');
+    expect(j).toContain('"customAudience":"customers/4335795219/customAudiences/7"');
+    expect(ops.filter((o) => (o.campaignCriterionOperation as { create?: { negative?: boolean } })?.create?.negative)).toHaveLength(2);
+  });
+  it("reads image sizes and conversion labels", () => {
+    expect(imageSize(png(1200, 628))).toEqual({ w: 1200, h: 628, type: "png" });
+    expect(imageSize(Buffer.from("nope"))).toBeNull();
+    expect(conversionLabel([{ eventSnippet: "gtag('event', 'conversion', {'send_to': 'AW-603275854/AbC_d-1'});" }])).toEqual({ tag: "AW-603275854", label: "AW-603275854/AbC_d-1" });
+  });
+  it("creates the conversion action as secondary (outside account goals) and returns the label", async () => {
+    const calls: Array<{ url: string; body: Record<string, unknown> }> = [];
+    const fetcher = vi.fn(async (url: string, init: { body: string }) => {
+      const body = JSON.parse(init.body); calls.push({ url, body });
+      if (url.endsWith("conversionActions:mutate")) return new Response(JSON.stringify({ results: [{ resourceName: "customers/4335795219/conversionActions/123" }] }));
+      if (String(body.query).includes("conversion_action.tag_snippets")) return new Response(JSON.stringify({ results: [{ conversionAction: { id: "123",
+        tagSnippets: [{ eventSnippet: "gtag('event', 'conversion', {'send_to': 'AW-603275854/xyz'});" }] } }] }));
+      return new Response(JSON.stringify({ results: [] }));
+    });
+    const out = await runGateway(parseRequest({ action: "create_conversion_action_leadgen", name: "AC | Hire lead" }, env), env, fetcher as unknown as typeof fetch) as Record<string, unknown>;
+    const create = ((calls.find((c) => c.url.endsWith("conversionActions:mutate"))?.body.operations as Array<{ create: Record<string, unknown> }>)[0]).create;
+    expect(create).toMatchObject({ name: "AC | Hire lead", type: "WEBPAGE", category: "SUBMIT_LEAD_FORM", countingType: "ONE_PER_CLICK",
+      clickThroughLookbackWindowDays: 30, viewThroughLookbackWindowDays: 1, primaryForGoal: false, valueSettings: { defaultValue: 0 } });
+    expect(calls.some((c) => /customerConversionGoals|conversionGoalCampaignConfigs/.test(c.url))).toBe(false);
+    expect(out.conversionLabel).toBe("AW-603275854/xyz");
+  });
+  it("rejects images with the wrong aspect ratio before calling Google", async () => {
+    const fetcher = vi.fn(async (url: string, init?: { body?: string }) => {
+      if (url.startsWith("https://agentcocoon.com/")) return new Response(png(1000, 1000));
+      const q = String(JSON.parse(init?.body ?? "{}").query ?? "");
+      if (q.includes("FROM conversion_action")) return new Response(JSON.stringify({ results: [{ conversionAction: { resourceName: "customers/4335795219/conversionActions/9", type: "WEBPAGE" } }] }));
+      return new Response(JSON.stringify({ results: [] }));
+    });
+    const req = parseRequest({ ...base, audience: undefined }, env);
+    await expect(runGateway(req, env, fetcher as unknown as typeof fetch)).rejects.toThrow("image_wrong_size");
+    expect(fetcher.mock.calls.some((c) => String(c[0]).endsWith("googleAds:mutate"))).toBe(false);
   });
 });
