@@ -89,12 +89,20 @@
       "schedule": "30 11 * * *"
     },
     {
-      "path": "/api/admin/cron/google-ads-spend",
-      "schedule": "45 11 * * *"
+      "path": "/api/admin/cron/marketing-source/google?lane=primary",
+      "schedule": "17 * * * *"
     },
     {
-      "path": "/api/admin/cron/meta-ads-spend?source_only=1",
-      "schedule": "50 11 * * *"
+      "path": "/api/admin/cron/marketing-source/meta?lane=primary",
+      "schedule": "22 * * * *"
+    },
+    {
+      "path": "/api/admin/cron/marketing-source/google?lane=correction",
+      "schedule": "37 * * * *"
+    },
+    {
+      "path": "/api/admin/cron/marketing-source/meta?lane=correction",
+      "schedule": "42 * * * *"
     },
     {
       "path": "/api/admin/cron/cash-sheet-pull",
