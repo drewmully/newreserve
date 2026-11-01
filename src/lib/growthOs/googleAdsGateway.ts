@@ -711,6 +711,16 @@ export function buildLeadgenPmaxOperations(spec: LeadgenPmaxSpec, r: LeadgenReso
   return ops;
 }
 
+/** Google may merge contiguous age bands (45-54, 55-64, 65+ is stored as minAge 45 with no max). Compare as an age floor. */
+export function sameAgeFloor(dimensions: unknown, minAge: number | null): boolean {
+  const ranges = ((Array.isArray(dimensions) ? dimensions : []) as Array<{ age?: { ageRanges?: Array<{ minAge?: number; maxAge?: number }> } }>)
+    .flatMap((d) => d.age?.ageRanges ?? []).map((r) => ({ min: Number(r.minAge ?? 18), max: r.maxAge === undefined ? Infinity : Number(r.maxAge) }))
+    .sort((x, y) => x.min - y.min);
+  if (minAge === null) return ranges.length === 0;
+  if (!ranges.length || ranges[0].min !== minAge || ranges[ranges.length - 1].max !== Infinity) return false;
+  return ranges.every((r, i) => i === 0 || r.min === ranges[i - 1].max + 1);
+}
+
 async function gsearch(query: string, token: string, devToken: string, fetcher: typeof fetch) {
   const res = await lgFetch("googleAds:search", { query }, token, devToken, fetcher);
   return ((res.results as Array<Record<string, Record<string, unknown>>>) ?? []);
@@ -778,8 +788,7 @@ async function createLeadgenPmax(req: LeadgenPmaxSpec & { validateOnly?: boolean
     const au = await gsearch(`SELECT audience.resource_name, audience.dimensions FROM audience WHERE audience.name = '${req.audience.customSegmentName} signal'`, token, devToken, fetcher);
     if (au.length) {
       const dimsJson = JSON.stringify(au[0].audience?.dimensions ?? []);
-      const wantAges = req.audience.minAge === null ? [] : AGE_BANDS.filter((x) => x.minAge >= (req.audience?.minAge ?? 0)).map((x) => x.minAge);
-      if (!dimsJson.includes(customAudience) || !wantAges.every((a) => dimsJson.includes(`"minAge":${a}`))) throw new GatewayError(409, "audience_name_mismatch", au[0]);
+      if (!dimsJson.includes(customAudience) || !sameAgeFloor(au[0].audience?.dimensions, req.audience.minAge)) throw new GatewayError(409, "audience_name_mismatch", au[0]);
       audience = String(au[0].audience?.resourceName); notes.push("reused existing audience signal");
     }
   }
