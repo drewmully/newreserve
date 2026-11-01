@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/analytics/googleSpendSource", () => ({ authorizeGoogleSpend: vi.fn(async () => "tok") }));
-import { isAuthorized, parseRequest, runGateway, GatewayError, buildPmaxOperations, buildSearchOperations, searchAdGroupOps, parseLeadgenPmax, buildLeadgenPmaxOperations, imageSize, conversionLabel, parseBudgetNetworkSettings, LEADGEN_API_VERSION } from "@/lib/growthOs/googleAdsGateway";
+import { isAuthorized, parseRequest, runGateway, GatewayError, buildPmaxOperations, buildSearchOperations, searchAdGroupOps, parseLeadgenPmax, buildLeadgenPmaxOperations, imageSize, conversionLabel, parseBudgetNetworkSettings, LEADGEN_API_VERSION, sameAgeFloor } from "@/lib/growthOs/googleAdsGateway";
 
 const secret = "s".repeat(40);
 const env = { GROWTH_OS_GOOGLE_SECRET: secret, GOOGLE_ADS_DEVELOPER_TOKEN: "dev", GOOGLE_ADS_SERVICE_ACCOUNT_JSON_BASE64: "e30=" };
@@ -321,6 +321,16 @@ describe("AgentCocoon lead gen v2 options", () => {
     expect(out.added).toEqual(["ebay"]); expect(out.skippedExisting).toEqual(["walmart"]);
     const mm = mkFetch("Search I Brand I CPC");
     await expect(runGateway(parseRequest({ action: "add_campaign_negative_keywords", campaignId: "5", keywords: ["ebay"] }, env), env, mm.fetcher)).rejects.toThrow("not_an_ac_campaign");
+  });
+});
+
+describe("sameAgeFloor", () => {
+  it("treats merged and split age bands as the same floor", () => {
+    expect(sameAgeFloor([{ age: { ageRanges: [{ minAge: 45 }] } }], 45)).toBe(true);
+    expect(sameAgeFloor([{ age: { ageRanges: [{ minAge: 45, maxAge: 54 }, { minAge: 55, maxAge: 64 }, { minAge: 65 }] } }], 45)).toBe(true);
+    expect(sameAgeFloor([{ age: { ageRanges: [{ minAge: 45, maxAge: 54 }] } }], 45)).toBe(false);
+    expect(sameAgeFloor([{ age: { ageRanges: [{ minAge: 35 }] } }], 45)).toBe(false);
+    expect(sameAgeFloor([], null)).toBe(true);
   });
 });
 
