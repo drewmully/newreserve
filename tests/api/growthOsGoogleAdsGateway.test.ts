@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/analytics/googleSpendSource", () => ({ authorizeGoogleSpend: vi.fn(async () => "tok") }));
-import { isAuthorized, parseRequest, runGateway, GatewayError, buildPmaxOperations, buildSearchOperations, searchAdGroupOps, parseLeadgenPmax, buildLeadgenPmaxOperations, imageSize, conversionLabel } from "@/lib/growthOs/googleAdsGateway";
+import { isAuthorized, parseRequest, runGateway, GatewayError, buildPmaxOperations, buildSearchOperations, searchAdGroupOps, parseLeadgenPmax, buildLeadgenPmaxOperations, imageSize, conversionLabel, parseBudgetNetworkSettings, LEADGEN_API_VERSION } from "@/lib/growthOs/googleAdsGateway";
 
 const secret = "s".repeat(40);
 const env = { GROWTH_OS_GOOGLE_SECRET: secret, GOOGLE_ADS_DEVELOPER_TOKEN: "dev", GOOGLE_ADS_SERVICE_ACCOUNT_JSON_BASE64: "e30=" };
@@ -251,3 +251,76 @@ describe("AgentCocoon lead gen", () => {
     expect(fetcher.mock.calls.some((c) => String(c[0]).endsWith("googleAds:mutate"))).toBe(false);
   });
 });
+
+describe("AgentCocoon lead gen v2 options", () => {
+  const img = (n: string) => `https://agentcocoon.com/img/pmax/${n}.png`;
+  const base = {
+    action: "create_pmax_leadgen", name: "AC | PMax | Hire v2", dailyUsd: 100, status: "PAUSED", finalUrl: "https://agentcocoon.com/hire",
+    finalUrlSuffix: "utm_source=google&utm_medium=cpc&utm_campaign=ac_pmax&utm_content=g-hire2", trackingUrlTemplate: "{lpurl}",
+    assetGroupName: "Owners | Outsourced AI hire v2", businessName: "AgentCocoon", callToAction: "Learn more",
+    headlines: ["Your outsourced AI hire", "No agency retainers", "Get your hours back"], longHeadlines: ["One price instead of three agencies."],
+    descriptions: ["Tell us the job. We build the agent and keep it running.", "Month to month. Cancel anytime."],
+    images: { marketing: [img("a")], square: [img("b")], logo: [img("c")] }, conversionActionName: "AC | Hire lead",
+    youtubeVideoIds: ["WCGRvZg_EhQ", "MfvWjhG4B3o"], excludeDevices: ["TABLET"], optOutAutomations: ["GENERATE_ENHANCED_YOUTUBE_VIDEOS"],
+  };
+  const envL = { GROWTH_OS_GOOGLE_MAX_DAILY_USD: "100" };
+  it("adds videos, {lpurl} template, device targeting without tablet and automation opt-outs", () => {
+    const spec = parseLeadgenPmax(base, envL);
+    const ops = buildLeadgenPmaxOperations(spec, { conversionAction: "customers/4335795219/conversionActions/9", customGoal: "customers/4335795219/customConversionGoals/1",
+      customAudience: null, audience: null, images: [] });
+    const j = JSON.stringify(ops);
+    const camp = (ops[1].campaignOperation as { create: Record<string, unknown> }).create;
+    expect(camp.trackingUrlTemplate).toBe("{lpurl}");
+    expect(j).toContain('{"assetAutomationType":"GENERATE_ENHANCED_YOUTUBE_VIDEOS","assetAutomationStatus":"OPTED_OUT"}');
+    expect(j).toContain('"youtubeVideoAsset":{"youtubeVideoId":"WCGRvZg_EhQ"}'); expect(j).toContain('"fieldType":"YOUTUBE_VIDEO"');
+    const devices = ops.map((o) => (o.campaignCriterionOperation as { create?: { device?: { type: string } } })?.create?.device?.type).filter(Boolean);
+    expect(devices).toEqual(["DESKTOP", "MOBILE", "CONNECTED_TV"]);
+    expect(j).not.toContain("customConversionGoalOperation");
+    expect(() => parseLeadgenPmax({ ...base, trackingUrlTemplate: "{lpurl}?utm_medium=paid" }, envL)).toThrow("invalid_tracking_url_template");
+    expect(() => parseLeadgenPmax({ ...base, youtubeVideoIds: ["bad"] }, envL)).toThrow("invalid_youtube_video_ids");
+    expect(() => parseLeadgenPmax({ ...base, excludeDevices: ["DESKTOP", "MOBILE", "TABLET", "CONNECTED_TV"] }, envL)).toThrow("invalid_exclude_devices");
+  });
+  it("validates budget network settings: caps only on tier 2 channels", () => {
+    const ok = parseBudgetNetworkSettings([{ advertisingChannelType: "PERFORMANCE_MAX",
+      channelPriorities: [{ networkChannels: ["OWNED_AND_OPERATED"], priorityTier: "TIER1" }, { networkChannels: ["SEARCH_PARTNER", "GOOGLE_DISPLAY"], priorityTier: "TIER2" }],
+      budgetCaps: [{ networkChannel: "SEARCH_PARTNER", capPercentMillis: 0 }, { networkChannel: "GOOGLE_DISPLAY", capPercentMillis: 0 }] }]);
+    expect(ok[0].budgetCaps).toEqual([{ networkChannel: "SEARCH_PARTNER", capPercentMillis: "0" }, { networkChannel: "GOOGLE_DISPLAY", capPercentMillis: "0" }]);
+    expect(() => parseBudgetNetworkSettings([{ advertisingChannelType: "PERFORMANCE_MAX", channelPriorities: [{ networkChannels: ["OWNED_AND_OPERATED"], priorityTier: "TIER1" }],
+      budgetCaps: [{ networkChannel: "OWNED_AND_OPERATED", capPercentMillis: 0 }] }])).toThrow("cap_needs_tier2_channel");
+  });
+  const mkFetch = (campaignName: string, budget: Record<string, unknown> = {}) => {
+    const calls: Array<{ url: string; body: Record<string, unknown> }> = [];
+    const fetcher = vi.fn(async (url: string, init: { body: string }) => {
+      const body = JSON.parse(init.body); calls.push({ url, body });
+      const q = String(body.query ?? "");
+      if (q.includes("FROM campaign WHERE")) return new Response(JSON.stringify({ results: [{ campaign: { id: "5", name: campaignName, status: "ENABLED" },
+        campaignBudget: { resourceName: "customers/4335795219/campaignBudgets/7", explicitlyShared: false, ...budget } }] }));
+      if (q.includes("FROM campaign_criterion")) return new Response(JSON.stringify({ results: [{ campaignCriterion: { keyword: { text: "walmart", matchType: "PHRASE" } } }] }));
+      return new Response(JSON.stringify({ results: [] }));
+    });
+    return { calls, fetcher: fetcher as unknown as typeof fetch };
+  };
+  const settings = [{ advertisingChannelType: "PERFORMANCE_MAX", channelPriorities: [{ networkChannels: ["OWNED_AND_OPERATED"], priorityTier: "TIER1" },
+    { networkChannels: ["GOOGLE_DISPLAY"], priorityTier: "TIER2" }], budgetCaps: [{ networkChannel: "GOOGLE_DISPLAY", capPercentMillis: 0 }] }];
+  it("budget network settings: AC only, v26, skipped when not eligible", async () => {
+    const mm = mkFetch("Sales-Performance Max-35", { budgetNetworkEligibility: { eligible: true } });
+    await expect(runGateway(parseRequest({ action: "set_budget_network_settings", campaignId: "5", settings }, env), env, mm.fetcher)).rejects.toThrow("not_an_ac_campaign");
+    const no = mkFetch("AC | PMax | Hire v2", { budgetNetworkEligibility: { eligible: false, ineligibleReasons: ["X"] } });
+    const out = await runGateway(parseRequest({ action: "set_budget_network_settings", campaignId: "5", settings }, env), env, no.fetcher) as Record<string, unknown>;
+    expect(out.applied).toBe(false);
+    expect(no.calls.some((c) => c.url.includes("campaignBudgets:mutate"))).toBe(false);
+    const yes = mkFetch("AC | PMax | Hire v2", { budgetNetworkEligibility: { eligible: true } });
+    await runGateway(parseRequest({ action: "set_budget_network_settings", campaignId: "5", settings }, env), env, yes.fetcher);
+    const m = yes.calls.find((c) => c.url.includes("campaignBudgets:mutate"));
+    expect(m?.url).toContain(`/${LEADGEN_API_VERSION}/`);
+    expect(JSON.stringify(m?.body)).toContain('"updateMask":"budget_network_settings"');
+  });
+  it("adds only new phrase negatives to an AC campaign", async () => {
+    const f = mkFetch("AC | Search | AgentCocoon | Manual CPC");
+    const out = await runGateway(parseRequest({ action: "add_campaign_negative_keywords", campaignId: "5", keywords: ["ebay", "walmart"] }, env), env, f.fetcher) as Record<string, unknown>;
+    expect(out.added).toEqual(["ebay"]); expect(out.skippedExisting).toEqual(["walmart"]);
+    const mm = mkFetch("Search I Brand I CPC");
+    await expect(runGateway(parseRequest({ action: "add_campaign_negative_keywords", campaignId: "5", keywords: ["ebay"] }, env), env, mm.fetcher)).rejects.toThrow("not_an_ac_campaign");
+  });
+});
+
