@@ -847,7 +847,7 @@ async function acCampaign(campaignId: string, token: string, devToken: string, f
 
 async function setBudgetNetworkSettings(req: { campaignId: string; settings: BudgetNetworkSettingSpec[]; validateOnly?: boolean }, token: string, devToken: string, fetcher: typeof fetch) {
   const row = await acCampaign(req.campaignId, token, devToken, fetcher,
-    ", campaign_budget.resource_name, campaign_budget.explicitly_shared, campaign_budget.budget_network_eligibility, campaign_budget.budget_network_settings");
+    ", campaign_budget.resource_name, campaign_budget.explicitly_shared, campaign_budget.budget_network_eligibility.eligible, campaign_budget.budget_network_eligibility.ineligible_reasons, campaign_budget.budget_network_settings.settings");
   const b = (row.campaignBudget ?? {}) as Record<string, unknown>;
   if (b.explicitlyShared === true) throw new GatewayError(400, "budget_is_shared");
   const eligibility = (b.budgetNetworkEligibility ?? null) as { eligible?: boolean; ineligibleReasons?: string[] } | null;
@@ -855,7 +855,7 @@ async function setBudgetNetworkSettings(req: { campaignId: string; settings: Bud
   const res = await lgFetch("campaignBudgets:mutate", { validateOnly: req.validateOnly ?? false, operations: [{ updateMask: "budget_network_settings",
     update: { resourceName: b.resourceName, budgetNetworkSettings: { settings: req.settings } } }] }, token, devToken, fetcher);
   if (req.validateOnly) return { applied: false, validateOnly: true, eligibility, result: res };
-  const after = (await gsearch(`SELECT campaign_budget.budget_network_settings, campaign_budget.budget_network_eligibility FROM campaign_budget WHERE campaign_budget.resource_name = '${b.resourceName}'`, token, devToken, fetcher))[0]?.campaignBudget;
+  const after = (await gsearch(`SELECT campaign_budget.budget_network_settings.settings, campaign_budget.budget_network_eligibility.eligible, campaign_budget.budget_network_eligibility.ineligible_reasons FROM campaign_budget WHERE campaign_budget.resource_name = '${b.resourceName}'`, token, devToken, fetcher))[0]?.campaignBudget;
   return { applied: true, eligibility, budget: b.resourceName, readBack: after ?? null };
 }
 
