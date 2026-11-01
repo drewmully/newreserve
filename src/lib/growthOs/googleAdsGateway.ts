@@ -56,7 +56,9 @@ export type GatewayRequest =
   | { action: "ad_group_report"; since: string; until: string; campaignId?: string; includeSearchTerms: boolean }
   | { action: "add_search_ad_group"; validateOnly?: boolean; campaignId: string; finalUrl: string; adGroup: SearchAdGroupSpec }
   | { action: "create_conversion_action_leadgen"; validateOnly?: boolean; name: string }
-  | ({ action: "create_pmax_leadgen"; validateOnly?: boolean } & LeadgenPmaxSpec);
+  | ({ action: "create_pmax_leadgen"; validateOnly?: boolean } & LeadgenPmaxSpec)
+  | { action: "set_budget_network_settings"; validateOnly?: boolean; campaignId: string; settings: BudgetNetworkSettingSpec[] }
+  | { action: "add_campaign_negative_keywords"; validateOnly?: boolean; campaignId: string; keywords: string[] };
 
 export type MatchType = "PHRASE" | "EXACT";
 export type SearchAdGroupSpec = {
@@ -232,13 +234,27 @@ export function parseRequest(body: unknown, env: Env): GatewayRequest {
   if (b.action === "create_conversion_action_leadgen") {
     return { action: "create_conversion_action_leadgen", validateOnly: b.validateOnly === true, name: acName(b.name, "name") };
   }
+  if (b.action === "set_budget_network_settings") {
+    const campaignId = String(b.campaignId ?? "");
+    if (!ID.test(campaignId)) throw new GatewayError(400, "invalid_campaign_id");
+    return { action: "set_budget_network_settings", validateOnly: b.validateOnly === true, campaignId, settings: parseBudgetNetworkSettings(b.settings) };
+  }
+  if (b.action === "add_campaign_negative_keywords") {
+    const campaignId = String(b.campaignId ?? "");
+    if (!ID.test(campaignId)) throw new GatewayError(400, "invalid_campaign_id");
+    const kw = b.keywords;
+    if (!Array.isArray(kw) || kw.length < 1 || kw.length > 200) throw new GatewayError(400, "invalid_keywords_count", { min: 1, max: 200 });
+    const keywords = [...new Set(kw.map((k) => kwText(k, "negative_keyword")))];
+    noDashes(keywords, "negative_keyword");
+    return { action: "add_campaign_negative_keywords", validateOnly: b.validateOnly === true, campaignId, keywords };
+  }
   if (b.action === "create_pmax_leadgen") return { action: "create_pmax_leadgen", validateOnly: b.validateOnly === true, ...parseLeadgenPmax(b, env) };
   throw new GatewayError(400, "unsupported_action");
 }
 
-async function googleFetch(path: string, payload: unknown, token: string, devToken: string, fetcher: typeof fetch) {
+async function googleFetch(path: string, payload: unknown, token: string, devToken: string, fetcher: typeof fetch, version: string = GOOGLE_ADS_API_VERSION) {
   const sep = path.startsWith(":") ? "" : "/";
-  const r = await fetcher(`https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}/customers/${GATEWAY_CUSTOMER_ID}${sep}${path}`, {
+  const r = await fetcher(`https://googleads.googleapis.com/${version}/customers/${GATEWAY_CUSTOMER_ID}${sep}${path}`, {
     method: "POST", redirect: "error", signal: AbortSignal.timeout(25000),
     headers: { Authorization: `Bearer ${token}`, "developer-token": devToken,
       "login-customer-id": GATEWAY_LOGIN_CUSTOMER_ID, "Content-Type": "application/json" },
@@ -310,6 +326,8 @@ export async function runGateway(req: GatewayRequest, env: Env, fetcher: typeof 
   }
   if (req.action === "create_conversion_action_leadgen") return createLeadConversionAction(req, token, devToken, fetcher);
   if (req.action === "create_pmax_leadgen") return createLeadgenPmax(req, token, devToken, fetcher);
+  if (req.action === "set_budget_network_settings") return setBudgetNetworkSettings(req, token, devToken, fetcher);
+  if (req.action === "add_campaign_negative_keywords") return addCampaignNegatives(req, token, devToken, fetcher);
   if (req.action === "add_search_ad_group") {
     // Only into an existing, non-removed Search campaign.
     const chk = await googleFetch("googleAds:search", { query: `SELECT campaign.id, campaign.advertising_channel_type, campaign.status FROM campaign WHERE campaign.id = ${req.campaignId}` }, token, devToken, fetcher);
@@ -487,6 +505,11 @@ export function searchAdGroupOps(campaign: string, tempId: number, g: SearchAdGr
 
 // ---------------------------------------------------------------- AgentCocoon lead gen
 
+/** AgentCocoon lead-gen calls use v26 (v26.1 adds budget network settings); every MyMully action stays on GOOGLE_ADS_API_VERSION. */
+export const LEADGEN_API_VERSION = "v26";
+const lgFetch = (path: string, payload: unknown, token: string, devToken: string, fetcher: typeof fetch) =>
+  googleFetch(path, payload, token, devToken, fetcher, LEADGEN_API_VERSION);
+
 export const CTA_VALUES = ["LEARN_MORE", "GET_QUOTE", "APPLY_NOW", "SIGN_UP", "CONTACT_US", "SUBSCRIBE", "BOOK_NOW", "START_NOW", "SEE_MORE", "VISIT_SITE"] as const;
 export type LeadgenImageKind = "marketing" | "square" | "portrait" | "logo" | "landscapeLogo";
 export type LeadgenPmaxSpec = {
@@ -497,7 +520,17 @@ export type LeadgenPmaxSpec = {
   negativeKeywords: string[]; searchThemes: string[]; conversionActionName: string;
   audience: { customSegmentName: string; terms: string[]; minAge: number | null } | null;
   brandListSharedSetId: string | null;
+  youtubeVideoIds: string[];
+  /** Campaign tracking template; only "{lpurl}" (overrides the account-level template so final_url_suffix wins). */
+  trackingUrlTemplate: "{lpurl}" | null;
+  /** Devices to leave out: PMax supports only positive device targeting, so the others are targeted. */
+  excludeDevices: Array<(typeof PMAX_DEVICES)[number]>;
+  optOutAutomations: Array<(typeof OPT_OUT_AUTOMATIONS)[number]>;
 };
+export const PMAX_DEVICES = ["DESKTOP", "MOBILE", "TABLET", "CONNECTED_TV"] as const;
+export const OPT_OUT_AUTOMATIONS = ["GENERATE_ENHANCED_YOUTUBE_VIDEOS", "GENERATE_VIDEOS_FROM_OTHER_ASSETS", "AUTOMATED_VIDEO_CRAWL",
+  "GENERATE_IMAGE_EXTRACTION", "GENERATE_IMAGE_ENHANCEMENT", "TEXT_ASSET_AUTOMATION"] as const;
+const YT_ID = /^[A-Za-z0-9_-]{11}$/;
 const SAFE_NAME = /^[^'"\\]+$/;
 function acName(v: unknown, field: string): string {
   const n = strs([v], field, 1, 1, 100)[0];
@@ -562,9 +595,19 @@ export function parseLeadgenPmax(b: Record<string, unknown>, env: Env): LeadgenP
   const brandListSharedSetId = b.brandListSharedSetId === undefined || b.brandListSharedSetId === null ? null : String(b.brandListSharedSetId);
   if (brandListSharedSetId !== null && !ID.test(brandListSharedSetId)) throw new GatewayError(400, "invalid_brand_list_shared_set_id");
   noDashes([assetGroupName, businessName, ...headlines, ...longHeadlines, ...descriptions, ...negativeKeywords, ...searchThemes], "text");
+  const vids = b.youtubeVideoIds ?? [];
+  if (!Array.isArray(vids) || vids.length > 5 || vids.some((v) => !YT_ID.test(String(v)))) throw new GatewayError(400, "invalid_youtube_video_ids", { max: 5 });
+  const tut = b.trackingUrlTemplate ?? null;
+  if (tut !== null && tut !== "{lpurl}") throw new GatewayError(400, "invalid_tracking_url_template", { allowed: "{lpurl}" });
+  const exd = b.excludeDevices ?? [];
+  if (!Array.isArray(exd) || exd.some((d) => !(PMAX_DEVICES as readonly string[]).includes(String(d))) || exd.length >= PMAX_DEVICES.length)
+    throw new GatewayError(400, "invalid_exclude_devices", { allowed: PMAX_DEVICES });
+  const oo = b.optOutAutomations ?? [];
+  if (!Array.isArray(oo) || oo.some((d) => !(OPT_OUT_AUTOMATIONS as readonly string[]).includes(String(d)))) throw new GatewayError(400, "invalid_opt_out_automations", { allowed: OPT_OUT_AUTOMATIONS });
   return { name, dailyUsd: usd, status: b.status === "ENABLED" ? "ENABLED" : "PAUSED", finalUrl, finalUrlSuffix, assetGroupName, businessName,
     callToAction: cta as LeadgenPmaxSpec["callToAction"], headlines, longHeadlines, descriptions, images, negativeKeywords, searchThemes,
-    conversionActionName, audience, brandListSharedSetId };
+    conversionActionName, audience, brandListSharedSetId, youtubeVideoIds: [...new Set(vids.map(String))],
+    trackingUrlTemplate: tut, excludeDevices: [...new Set(exd)] as LeadgenPmaxSpec["excludeDevices"], optOutAutomations: [...new Set(oo)] as LeadgenPmaxSpec["optOutAutomations"] };
 }
 
 /** Pixel size of a PNG or JPEG, or null. */
@@ -596,7 +639,7 @@ export async function fetchLeadgenImage(url: string, kind: LeadgenImageKind, fet
 }
 
 type LeadgenResolved = {
-  conversionAction: string; customGoal: string | null; customAudience: string | null;
+  conversionAction: string; customGoal: string | null; customAudience: string | null; audience?: string | null;
   images: Array<{ url: string; kind: LeadgenImageKind; dataBase64: string }>;
 };
 
@@ -610,13 +653,17 @@ export function buildLeadgenPmaxOperations(spec: LeadgenPmaxSpec, r: LeadgenReso
   ops.push({ campaignOperation: { create: { resourceName: campaign, name: spec.name, status: spec.status,
     advertisingChannelType: "PERFORMANCE_MAX", campaignBudget: budget, maximizeConversions: {}, brandGuidelinesEnabled: false,
     ...(spec.finalUrlSuffix ? { finalUrlSuffix: spec.finalUrlSuffix } : {}),
+    ...(spec.trackingUrlTemplate ? { trackingUrlTemplate: spec.trackingUrlTemplate } : {}),
     geoTargetTypeSetting: { positiveGeoTargetType: "PRESENCE", negativeGeoTargetType: "PRESENCE" },
     containsEuPoliticalAdvertising: "DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING",
-    assetAutomationSettings: [{ assetAutomationType: "FINAL_URL_EXPANSION_TEXT_ASSET_AUTOMATION", assetAutomationStatus: "OPTED_OUT" }] } } });
+    assetAutomationSettings: [{ assetAutomationType: "FINAL_URL_EXPANSION_TEXT_ASSET_AUTOMATION", assetAutomationStatus: "OPTED_OUT" },
+      ...(spec.optOutAutomations ?? []).map((t) => ({ assetAutomationType: t, assetAutomationStatus: "OPTED_OUT" }))] } } });
   const crit = (c: Record<string, unknown>) => ops.push({ campaignCriterionOperation: { create: { campaign, ...c } } });
   crit({ location: { geoTargetConstant: "geoTargetConstants/2840" } });
   crit({ language: { languageConstant: "languageConstants/1000" } });
   for (const k of spec.negativeKeywords) crit({ negative: true, keyword: { text: k, matchType: "PHRASE" } });
+  const ex = spec.excludeDevices ?? [];
+  if (ex.length) for (const d of PMAX_DEVICES) if (!ex.includes(d)) crit({ device: { type: d } });
   if (spec.brandListSharedSetId) crit({ negative: true, brandList: { sharedSet: `${C}/sharedSets/${spec.brandListSharedSetId}` } });
   // Campaign-specific goal: only the named AC conversion action.
   let goal = r.customGoal;
@@ -636,9 +683,14 @@ export function buildLeadgenPmaxOperations(spec: LeadgenPmaxSpec, r: LeadgenReso
   text(spec.businessName, "BUSINESS_NAME");
   r.images.forEach((im, i) => {
     const rn = next(); const file = im.url.split("/").pop() ?? `image-${i + 1}`;
-    ops.push({ assetOperation: { create: { resourceName: rn, name: `AC | ${file}`, type: "IMAGE", imageAsset: { data: im.dataBase64 } } } });
+    ops.push({ assetOperation: { create: { resourceName: rn, name: `${spec.name} | ${file}`, type: "IMAGE", imageAsset: { data: im.dataBase64 } } } });
     links.push([rn, IMAGE_SPECS[im.kind].field]);
   });
+  for (const v of spec.youtubeVideoIds ?? []) {
+    const rn = next();
+    ops.push({ assetOperation: { create: { resourceName: rn, name: `${spec.name} | yt ${v}`, type: "YOUTUBE_VIDEO", youtubeVideoAsset: { youtubeVideoId: v } } } });
+    links.push([rn, "YOUTUBE_VIDEO"]);
+  }
   const cta = next();
   ops.push({ assetOperation: { create: { resourceName: cta, callToActionAsset: { callToAction: spec.callToAction } } } });
   links.push([cta, "CALL_TO_ACTION_SELECTION"]);
@@ -649,7 +701,8 @@ export function buildLeadgenPmaxOperations(spec: LeadgenPmaxSpec, r: LeadgenReso
     const dims: Array<Record<string, unknown>> = [];
     if (r.customAudience) dims.push({ audienceSegments: { segments: [{ customAudience: { customAudience: r.customAudience } }] } });
     if (spec.audience.minAge !== null) dims.push({ age: { ageRanges: AGE_BANDS.filter((x) => x.minAge >= (spec.audience?.minAge ?? 0)), includeUndetermined: false } });
-    if (dims.length) {
+    if (r.audience) ops.push({ assetGroupSignalOperation: { create: { assetGroup: ag, audience: { audience: r.audience } } } });
+    else if (dims.length) {
       const aud = `${C}/audiences/-5`;
       ops.push({ audienceOperation: { create: { resourceName: aud, name: `${spec.audience.customSegmentName} signal`, dimensions: dims } } });
       ops.push({ assetGroupSignalOperation: { create: { assetGroup: ag, audience: { audience: aud } } } });
@@ -659,7 +712,7 @@ export function buildLeadgenPmaxOperations(spec: LeadgenPmaxSpec, r: LeadgenReso
 }
 
 async function gsearch(query: string, token: string, devToken: string, fetcher: typeof fetch) {
-  const res = await googleFetch("googleAds:search", { query }, token, devToken, fetcher);
+  const res = await lgFetch("googleAds:search", { query }, token, devToken, fetcher);
   return ((res.results as Array<Record<string, Record<string, unknown>>>) ?? []);
 }
 
@@ -674,7 +727,7 @@ export function conversionLabel(snippets: unknown): { tag: string; label: string
 async function createLeadConversionAction(req: { name: string; validateOnly?: boolean }, token: string, devToken: string, fetcher: typeof fetch) {
   const existing = await gsearch(`SELECT conversion_action.id, conversion_action.status FROM conversion_action WHERE conversion_action.name = '${req.name}' AND conversion_action.status != 'REMOVED'`, token, devToken, fetcher);
   if (existing.length) throw new GatewayError(409, "conversion_action_exists", { id: existing[0].conversionAction?.id });
-  const res = await googleFetch("conversionActions:mutate", { validateOnly: req.validateOnly ?? false, operations: [{ create: {
+  const res = await lgFetch("conversionActions:mutate", { validateOnly: req.validateOnly ?? false, operations: [{ create: {
     name: req.name, type: "WEBPAGE", category: "SUBMIT_LEAD_FORM", status: "ENABLED", countingType: "ONE_PER_CLICK",
     clickThroughLookbackWindowDays: 30, viewThroughLookbackWindowDays: 1, primaryForGoal: false,
     valueSettings: { defaultValue: 0, alwaysUseDefaultValue: false } } }] }, token, devToken, fetcher);
@@ -710,18 +763,102 @@ async function createLeadgenPmax(req: LeadgenPmaxSpec & { validateOnly?: boolean
       members: req.audience.terms.map((t) => ({ memberType: "KEYWORD", keyword: t })) };
     if (ex.length) { customAudience = String(ex[0].customAudience?.resourceName); notes.push("reused existing custom segment"); }
     else if (req.validateOnly) {
-      await googleFetch("customAudiences:mutate", { validateOnly: true, operations: [{ create: caOp }] }, token, devToken, fetcher);
+      await lgFetch("customAudiences:mutate", { validateOnly: true, operations: [{ create: caOp }] }, token, devToken, fetcher);
       notes.push("custom segment validated separately; validateOnly audience signal checks age only");
     } else {
-      const res = await googleFetch("customAudiences:mutate", { operations: [{ create: caOp }] }, token, devToken, fetcher);
+      const res = await lgFetch("customAudiences:mutate", { operations: [{ create: caOp }] }, token, devToken, fetcher);
       customAudience = String(((res.results as Array<Record<string, unknown>>) ?? [])[0]?.resourceName ?? "") || null;
       if (!customAudience) throw new GatewayError(502, "custom_segment_create_unconfirmed", res);
       notes.push("created custom segment");
     }
   }
+  // Reuse the existing audience signal (custom segment + same ages) when the name already exists; names are unique.
+  let audience: string | null = null;
+  if (req.audience && customAudience) {
+    const au = await gsearch(`SELECT audience.resource_name, audience.dimensions FROM audience WHERE audience.name = '${req.audience.customSegmentName} signal'`, token, devToken, fetcher);
+    if (au.length) {
+      const dimsJson = JSON.stringify(au[0].audience?.dimensions ?? []);
+      const wantAges = req.audience.minAge === null ? [] : AGE_BANDS.filter((x) => x.minAge >= (req.audience?.minAge ?? 0)).map((x) => x.minAge);
+      if (!dimsJson.includes(customAudience) || !wantAges.every((a) => dimsJson.includes(`"minAge":${a}`))) throw new GatewayError(409, "audience_name_mismatch", au[0]);
+      audience = String(au[0].audience?.resourceName); notes.push("reused existing audience signal");
+    }
+  }
   const images = [];
   for (const kind of Object.keys(IMAGE_SPECS) as LeadgenImageKind[]) for (const url of req.images[kind]) images.push(await fetchLeadgenImage(url, kind, fetcher));
-  const result = await googleFetch("googleAds:mutate", { validateOnly: req.validateOnly ?? false,
-    mutateOperations: buildLeadgenPmaxOperations(req, { conversionAction, customGoal, customAudience, images }) }, token, devToken, fetcher);
+  const result = await lgFetch("googleAds:mutate", { validateOnly: req.validateOnly ?? false,
+    mutateOperations: buildLeadgenPmaxOperations(req, { conversionAction, customGoal, customAudience, audience, images }) }, token, devToken, fetcher);
   return { notes, customAudience, conversionAction, images: images.map((i) => ({ url: i.url, kind: i.kind, width: i.width, height: i.height })), result };
+}
+
+// ---------------------------------------------------------------- AC budget network settings and negatives
+
+export const NETWORK_CHANNELS = ["OWNED_AND_OPERATED", "SEARCH_PARTNER", "GOOGLE_DISPLAY"] as const;
+export type BudgetNetworkSettingSpec = {
+  advertisingChannelType: "PERFORMANCE_MAX" | "SEARCH";
+  channelPriorities: Array<{ networkChannels: Array<(typeof NETWORK_CHANNELS)[number]>; priorityTier: "TIER1" | "TIER2" }>;
+  budgetCaps: Array<{ networkChannel: (typeof NETWORK_CHANNELS)[number]; capPercentMillis: string }>;
+};
+export function parseBudgetNetworkSettings(v: unknown): BudgetNetworkSettingSpec[] {
+  if (!Array.isArray(v) || v.length < 1 || v.length > 2) throw new GatewayError(400, "invalid_settings");
+  return v.map((x0) => {
+    const x = (x0 ?? {}) as Record<string, unknown>;
+    const act = String(x.advertisingChannelType ?? "");
+    if (act !== "PERFORMANCE_MAX" && act !== "SEARCH") throw new GatewayError(400, "invalid_advertising_channel_type");
+    const tiers = new Map<string, string>();
+    const cp = (Array.isArray(x.channelPriorities) ? x.channelPriorities : []).map((c0) => {
+      const c = (c0 ?? {}) as Record<string, unknown>;
+      const tier = String(c.priorityTier ?? "");
+      if (tier !== "TIER1" && tier !== "TIER2") throw new GatewayError(400, "invalid_priority_tier");
+      const chans = (Array.isArray(c.networkChannels) ? c.networkChannels : []).map(String);
+      if (!chans.length || chans.some((n) => !(NETWORK_CHANNELS as readonly string[]).includes(n) || tiers.has(n))) throw new GatewayError(400, "invalid_network_channels");
+      chans.forEach((n) => tiers.set(n, tier));
+      return { networkChannels: chans as BudgetNetworkSettingSpec["channelPriorities"][number]["networkChannels"], priorityTier: tier as "TIER1" | "TIER2" };
+    });
+    if (!cp.length) throw new GatewayError(400, "invalid_channel_priorities");
+    const seen = new Set<string>();
+    const caps = (Array.isArray(x.budgetCaps) ? x.budgetCaps : []).map((c0) => {
+      const c = (c0 ?? {}) as Record<string, unknown>;
+      const n = String(c.networkChannel ?? ""); const m = Number(c.capPercentMillis);
+      if (tiers.get(n) !== "TIER2" || seen.has(n)) throw new GatewayError(400, "cap_needs_tier2_channel", { networkChannel: n });
+      if (!Number.isInteger(m) || m < 0 || m > 100000) throw new GatewayError(400, "invalid_cap_percent_millis", { min: 0, max: 100000 });
+      seen.add(n);
+      return { networkChannel: n as BudgetNetworkSettingSpec["budgetCaps"][number]["networkChannel"], capPercentMillis: String(m) };
+    });
+    return { advertisingChannelType: act, channelPriorities: cp, budgetCaps: caps };
+  });
+}
+
+/** Only campaigns named "AC | ..." (AgentCocoon), never MyMully. */
+async function acCampaign(campaignId: string, token: string, devToken: string, fetcher: typeof fetch, extra = "") {
+  const rows = await gsearch(`SELECT campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type${extra} FROM campaign WHERE campaign.id = ${campaignId}`, token, devToken, fetcher);
+  const row = rows[0];
+  if (!row || !String(row.campaign?.name ?? "").startsWith("AC |") || row.campaign?.status === "REMOVED") throw new GatewayError(400, "not_an_ac_campaign", { campaignId });
+  return row;
+}
+
+async function setBudgetNetworkSettings(req: { campaignId: string; settings: BudgetNetworkSettingSpec[]; validateOnly?: boolean }, token: string, devToken: string, fetcher: typeof fetch) {
+  const row = await acCampaign(req.campaignId, token, devToken, fetcher,
+    ", campaign_budget.resource_name, campaign_budget.explicitly_shared, campaign_budget.budget_network_eligibility, campaign_budget.budget_network_settings");
+  const b = (row.campaignBudget ?? {}) as Record<string, unknown>;
+  if (b.explicitlyShared === true) throw new GatewayError(400, "budget_is_shared");
+  const eligibility = (b.budgetNetworkEligibility ?? null) as { eligible?: boolean; ineligibleReasons?: string[] } | null;
+  if (!eligibility?.eligible) return { applied: false, eligibility, before: b.budgetNetworkSettings ?? null };
+  const res = await lgFetch("campaignBudgets:mutate", { validateOnly: req.validateOnly ?? false, operations: [{ updateMask: "budget_network_settings",
+    update: { resourceName: b.resourceName, budgetNetworkSettings: { settings: req.settings } } }] }, token, devToken, fetcher);
+  if (req.validateOnly) return { applied: false, validateOnly: true, eligibility, result: res };
+  const after = (await gsearch(`SELECT campaign_budget.budget_network_settings, campaign_budget.budget_network_eligibility FROM campaign_budget WHERE campaign_budget.resource_name = '${b.resourceName}'`, token, devToken, fetcher))[0]?.campaignBudget;
+  return { applied: true, eligibility, budget: b.resourceName, readBack: after ?? null };
+}
+
+async function addCampaignNegatives(req: { campaignId: string; keywords: string[]; validateOnly?: boolean }, token: string, devToken: string, fetcher: typeof fetch) {
+  await acCampaign(req.campaignId, token, devToken, fetcher);
+  const have = new Set((await gsearch(`SELECT campaign_criterion.keyword.text, campaign_criterion.keyword.match_type FROM campaign_criterion WHERE campaign.id = ${req.campaignId} AND campaign_criterion.negative = TRUE AND campaign_criterion.type = KEYWORD`, token, devToken, fetcher))
+    .filter((r) => (r.campaignCriterion?.keyword as Record<string, unknown> | undefined)?.matchType === "PHRASE")
+    .map((r) => String((r.campaignCriterion?.keyword as Record<string, unknown> | undefined)?.text ?? "").toLowerCase()));
+  const add = req.keywords.filter((k) => !have.has(k.toLowerCase()));
+  if (!add.length) return { added: [], skippedExisting: req.keywords };
+  const campaign = `customers/${GATEWAY_CUSTOMER_ID}/campaigns/${req.campaignId}`;
+  const res = await lgFetch("campaignCriteria:mutate", { validateOnly: req.validateOnly ?? false,
+    operations: add.map((text) => ({ create: { campaign, negative: true, keyword: { text, matchType: "PHRASE" } } })) }, token, devToken, fetcher);
+  return { added: add, skippedExisting: req.keywords.filter((k) => !add.includes(k)), validateOnly: req.validateOnly ?? false, result: res };
 }
