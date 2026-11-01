@@ -314,6 +314,8 @@ describe("AgentCocoon lead gen v2 options", () => {
     const m = yes.calls.find((c) => c.url.includes("campaignBudgets:mutate"));
     expect(m?.url).toContain(`/${LEADGEN_API_VERSION}/`);
     expect(JSON.stringify(m?.body)).toContain('"updateMask":"budget_network_settings"');
+    const sel = String(yes.calls.find((c) => String(c.body.query ?? "").includes("FROM campaign WHERE"))?.body.query);
+    expect(sel).toContain("campaign_budget.budget_network_eligibility.eligible"); expect(sel).not.toMatch(/budget_network_eligibility,|budget_network_settings[ ,]/);
   });
   it("adds only new phrase negatives to an AC campaign", async () => {
     const f = mkFetch("AC | Search | AgentCocoon | Manual CPC");
