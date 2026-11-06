@@ -16,6 +16,8 @@ const SWATCH_HEX: Record<string, string> = {
   blue: "#6d8fbf", cotton: "#f3f1ec", white: "#f7f7f5",
   midnight: "#22304a", onyx: "#1b1919",
   "ember brown": "#523732", "toasted oat": "#d3c6ad",
+  stargazer: "#1f4a52", "seed pearl": "#e4d9c4", aluminum: "#ae9670",
+  charcoal: "#34373a", "redwood burl": "#9e4527", "oil green": "#403d22",
   "red stripes": "#a0423f", "blue stripes": "#3a4a78", "green stripes": "#3f6152",
 };
 
@@ -31,6 +33,7 @@ const PRODUCT_OVERRIDES: Record<string, Record<string, string>> = {
   "olydoe-oxford-pique-polo": { "oceana / sparrow": split("#4b4a78", "#7a6575") },
   "olydoe-og-supima-hollow-polo": { "cotton / brown / blue": split("#f3f1ec", "#8a5a64", "#6d8fbf") },
   "primo-fairway-crew": { black: "#1c252d" },
+  "sloat-organic-ventile-jacket": { stone: "#b5ae94" },
 };
 
 export function swatchBackground(color: string, slug?: string): string {
