@@ -7,7 +7,7 @@ import Link from "next/link";
 import type { ShopifyProduct } from "@/lib/shopify";
 import type { ShopSwatch } from "@/lib/shopColorCards";
 import { useMembership } from "../../context/MembershipContext";
-import { shopProductPhoto, shopProductLabel } from "@/lib/shopProductPhotos";
+import { FULL_BLEED_POSITION, isFullBleedProduct, shopProductPhoto, shopProductLabel } from "@/lib/shopProductPhotos";
 import { swatchBackground } from "@/lib/shopSwatches";
 import { money } from "@/lib/shopOutfit";
 
@@ -46,6 +46,7 @@ export function ShopProductCard({
   const variantId = swatch ? swatch.variantId : product.preferredVariantId;
   const hero = swatch?.image || product.cardImage || shopProductPhoto(product);
   const cover = (swatch ? swatch.fit : product.cardImageFit) === "cover";
+  const fullBleed = cover && isFullBleedProduct(product.slug);
   const href = variantId
     ? `/shop/${product.slug}?variant=${encodeURIComponent(variantId)}`
     : `/shop/${product.slug}`;
@@ -64,6 +65,7 @@ export function ShopProductCard({
             alt={product.imageDetails?.[0]?.altText || label}
             fill
             sizes="(max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+            style={fullBleed ? { objectPosition: FULL_BLEED_POSITION } : undefined}
             className={cover
               ? "shop-product-card__photo--cover object-cover transition-transform duration-500 group-hover:scale-[1.04]"
               : "object-contain p-4 transition-transform duration-500 group-hover:scale-[1.04] sm:p-6"}

@@ -9,6 +9,17 @@ export function shopProductPhoto(p: Pick<ShopifyProduct, "slug" | "images">): st
     : p.images[0] || "";
 }
 
+/**
+ * Brands that only shoot full-bleed studio photos (no white flat-lays). Their
+ * cards fill the frame, anchored a little above center so heads and hangers
+ * stay in the square crop.
+ */
+const FULL_BLEED_PREFIXES = ["sloat-"];
+export function isFullBleedProduct(slug: string): boolean {
+  return FULL_BLEED_PREFIXES.some((prefix) => slug.startsWith(prefix));
+}
+export const FULL_BLEED_POSITION = "50% 30%";
+
 const names: Record<string, string> = {
   "quiet-golf-remy-polo-active-pique": "Remy Polo",
   "rhone-delta-pique-polo": "Delta Piqué Polo",
@@ -26,5 +37,5 @@ const names: Record<string, string> = {
 };
 
 export function shopProductLabel(p: Pick<ShopifyProduct, "slug" | "name">): string {
-  return names[p.slug] || p.name.replace(/^(Olydoe|Rhone|Quiet Golf|Technically Golf|Primo|Duck Head|Winston|Leon|Stitch|Jolly Golf) /, "");
+  return names[p.slug] || p.name.replace(/^(Olydoe|Rhone|Quiet Golf|Technically Golf|Primo|Duck Head|Winston|Leon|Stitch|Jolly Golf|Sloat) /, "");
 }
