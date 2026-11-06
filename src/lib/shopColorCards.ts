@@ -1,6 +1,6 @@
 import type { ShopifyProduct } from "@/lib/shopify";
 import { buildShopDisplayProducts, type ShopCatalogProduct } from "@/lib/shopDisplay";
-import { shopProductPhoto } from "@/lib/shopProductPhotos";
+import { isFullBleedProduct, shopProductPhoto } from "@/lib/shopProductPhotos";
 
 export type ShopSwatch = { color: string; image: string; variantId?: string; fit?: "cover" };
 
@@ -47,7 +47,7 @@ function colorCardsFor(product: ShopifyProduct): ShopColorCard[] {
       cardColor: display.length > 1 ? d.cardColor : undefined,
       // Keep the prepared, normalized webp when the card shows the catalog primary.
       cardImage: override ?? (img === product.images[0] ? shopProductPhoto(product) : img),
-      ...(override ? { cardImageFit: "cover" as const } : {}),
+      ...(override || isFullBleedProduct(product.slug) ? { cardImageFit: "cover" as const } : {}),
       preferredVariantId: display.length > 1 ? d.preferredVariantId : undefined,
     });
   }
