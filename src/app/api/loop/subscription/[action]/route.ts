@@ -20,6 +20,7 @@ import {
   changeLoopSubscriptionPlan,
   reactivateLoopSubscription,
   swapLoopSubscriptionProduct,
+  LOOP_CUSTOMER_PORTAL_URL,
 } from "@/app/api/_lib/loopAdmin";
 import {
   getLoopUserContext,
@@ -223,8 +224,11 @@ export async function POST(
     return NextResponse.json(
       {
         error:
-          "We couldn't update your subscription right now. Please try again, or email info@mullybox.com and we'll take care of it.",
+          action === "cancel"
+            ? "We couldn't cancel here. Taking you to your subscription portal to finish."
+            : "We couldn't update your subscription right now. Please try again, or email info@mullybox.com and we'll take care of it.",
         detail,
+        ...(action === "cancel" ? { fallbackUrl: LOOP_CUSTOMER_PORTAL_URL } : {}),
       },
       { status: 502 }
     );

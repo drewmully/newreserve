@@ -164,3 +164,39 @@ describe("Loop subscription routes", () => {
     expect(pauseLoopSubscriptionMock).toHaveBeenCalledWith("sub_2");
   });
 });
+
+describe("Loop cancel fallback", () => {
+  it("returns the Mully Loop portal URL when a cancel fails", async () => {
+    vi.resetModules();
+    vi.doMock("@/app/api/_lib/loopUserContext", () => ({
+      verifyFirebaseBearer: vi.fn().mockResolvedValue("uid_1"),
+      getLoopUserContext: vi.fn().mockResolvedValue({
+        loopCustomerIdentifier: "123",
+        shopifyCustomerId: "123",
+        userRef: {},
+        userData: {},
+        email: "m@example.com",
+      }),
+    }));
+    vi.doMock("@/app/api/_lib/loopAdmin", () => ({
+      LOOP_CUSTOMER_PORTAL_URL: "https://checkout.mymully.com/a/loop_subscriptions/customer",
+      getLoopRawSubscriptions: vi.fn().mockResolvedValue([{ id: "9", status: "ACTIVE", isPrepaid: true }]),
+      cancelLoopSubscription: vi.fn().mockRejectedValue(new Error("Loop cancel error 422")),
+      pauseLoopSubscription: vi.fn(),
+      resumeLoopSubscription: vi.fn(),
+      changeLoopSubscriptionPlan: vi.fn(),
+      reactivateLoopSubscription: vi.fn(),
+      swapLoopSubscriptionProduct: vi.fn(),
+    }));
+    const { POST } = await import("@/app/api/loop/subscription/[action]/route");
+    const res = await POST(
+      makeRequest("http://localhost/api/loop/subscription/cancel", "POST", { reason: "x" }),
+      { params: Promise.resolve({ action: "cancel" }) }
+    );
+    expect(res.status).toBe(502);
+    const json = await res.json();
+    expect(json.fallbackUrl).toBe("https://checkout.mymully.com/a/loop_subscriptions/customer");
+    vi.doUnmock("@/app/api/_lib/loopUserContext");
+    vi.doUnmock("@/app/api/_lib/loopAdmin");
+  });
+});

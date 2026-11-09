@@ -35,6 +35,7 @@ export function SubscriptionManagerModal({ open, onClose, provider = "loop" }: {
   const [cancelReason, setCancelReason] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fallbackUrl, setFallbackUrl] = useState<string | null>(null);
   const [needsConnection, setNeedsConnection] = useState(false);
   const native = provider === "shopify";
 
@@ -135,10 +136,15 @@ export function SubscriptionManagerModal({ open, onClose, provider = "loop" }: {
         }),
       });
       if (!res.ok) {
-        const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+        const payload = (await res.json().catch(() => null)) as { error?: string; fallbackUrl?: string } | null;
         const message = payload?.error ?? "Subscription action failed.";
         console.error(`[SubManager] ${path} failed:`, message);
         setError(message);
+        if (!native && path.endsWith("/cancel") && payload?.fallbackUrl) {
+          setFallbackUrl(payload.fallbackUrl);
+          const url = payload.fallbackUrl;
+          setTimeout(() => window.location.assign(url), 2500);
+        }
         return false;
       }
       if (native) {
@@ -229,7 +235,9 @@ export function SubscriptionManagerModal({ open, onClose, provider = "loop" }: {
             ) : error ? (
               <div className="space-y-4">
                 <p role="alert" className="text-sm text-ember/75 py-4">{error}</p>
-                {native && needsConnection ? <>
+                {fallbackUrl ? (
+                  <a href={fallbackUrl} className="inline-flex w-full min-h-11 items-center justify-center rounded-xl bg-forest px-4 text-sm text-bone">Go to subscription portal</a>
+                ) : native && needsConnection ? <>
                   <p className="text-xs text-charcoal/60">Verify the same email you used at checkout. You’ll return here to manage your subscription.</p>
                   <button onClick={connectShopify} disabled={actionLoading} className="w-full min-h-11 rounded-xl bg-forest px-4 text-sm text-bone disabled:opacity-50">{actionLoading ? "Connecting…" : "Connect Shopify account"}</button>
                 </> : <button className="text-sm underline underline-offset-4" onClick={() => {setError(null);setLoading(true);loadSubscriptions().catch(err=>setError(err.message)).finally(()=>setLoading(false));}}>Try again</button>}
@@ -365,7 +373,7 @@ export function SubscriptionManagerModal({ open, onClose, provider = "loop" }: {
               <div className="space-y-4">
                 <p className="text-xs text-charcoal/60">{native ? "Cancel future automatic renewals? Any already-paid orders are unaffected." : "Please let us know why you’re cancelling:"}</p>
                 {!native && sub?.isPrepaid === true && (
-                  <p className="text-xs text-charcoal/60">Your plan is prepaid. Cancelling stops your next renewal, and the boxes you’ve already paid for will still ship.</p>
+                  <p className="text-xs text-charcoal/60">Your plan is prepaid. Cancelling ends it right away.</p>
                 )}
                 {!native && <textarea
                   value={cancelReason}

@@ -146,6 +146,10 @@ async function loopFetch(
   }, { label });
 }
 
+/** Mully's Loop customer portal (Shopify customer login, then Loop). */
+export const LOOP_CUSTOMER_PORTAL_URL =
+  "https://checkout.mymully.com/a/loop_subscriptions/customer";
+
 const LOOP_MANAGE_URL_FALLBACK =
   "https://mullybox-store.myshopify.com/a/loop_subscriptions/auth";
 const LOOP_CUSTOMER_ID_PLACEHOLDER = "{customer_id}";
@@ -464,11 +468,9 @@ export const resumeLoopSubscription = (id: string) =>
  *
  * Loop sends the free-text note as `comment`. Prepaid contracts (for example
  * Reserve annual: pay every 12 months, ship every 3) are rejected with a 422
- * unless `markForCancellation` is set. We default prepaid cancels to
- * `markForCancellation: true`, so the customer still gets the boxes they
- * already paid for and the contract ends after the current prepaid cycle.
- * Pass `markForCancellation: false` only for a deliberate immediate cancel
- * (any refund is then manual in Shopify).
+ * unless `markForCancellation` is set. Mully policy (Drew, 2026-11-09):
+ * prepaid plans cancel immediately (`markForCancellation: false`). Any refund
+ * for the unused prepaid balance is handled manually in Shopify.
  */
 export function buildLoopCancelBody(
   reason: string,
@@ -478,7 +480,7 @@ export function buildLoopCancelBody(
   const comment = reason.trim();
   if (comment) body.comment = comment;
   if (opts.isPrepaid) {
-    body.markForCancellation = opts.markForCancellation ?? true;
+    body.markForCancellation = opts.markForCancellation ?? false;
   }
   return body;
 }

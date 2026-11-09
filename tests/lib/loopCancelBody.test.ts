@@ -2,17 +2,17 @@ import { describe, expect, it } from "vitest";
 import { buildLoopCancelBody } from "@/app/api/_lib/loopAdmin";
 
 describe("buildLoopCancelBody", () => {
-  it("marks prepaid contracts for cancellation so Loop does not return 422", () => {
+  it("cancels prepaid contracts immediately so Loop does not return 422", () => {
     expect(buildLoopCancelBody("Too expensive", { isPrepaid: true })).toEqual({
       comment: "Too expensive",
-      markForCancellation: true,
+      markForCancellation: false,
     });
   });
 
-  it("allows an explicit immediate cancel for prepaid contracts", () => {
+  it("allows end-of-cycle cancel for prepaid contracts when asked", () => {
     expect(
-      buildLoopCancelBody("", { isPrepaid: true, markForCancellation: false })
-    ).toEqual({ markForCancellation: false });
+      buildLoopCancelBody("", { isPrepaid: true, markForCancellation: true })
+    ).toEqual({ markForCancellation: true });
   });
 
   it("omits markForCancellation for pay-as-you-go contracts", () => {
