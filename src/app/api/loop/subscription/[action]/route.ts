@@ -20,6 +20,7 @@ import {
   changeLoopSubscriptionPlan,
   reactivateLoopSubscription,
   swapLoopSubscriptionProduct,
+  LOOP_CUSTOMER_PORTAL_URL,
 } from "@/app/api/_lib/loopAdmin";
 import {
   getLoopUserContext,
@@ -165,7 +166,9 @@ export async function POST(
         await resumeLoopSubscription(subscriptionId);
         break;
       case "cancel":
-        await cancelLoopSubscription(subscriptionId, cancelReason ?? "");
+        await cancelLoopSubscription(subscriptionId, cancelReason ?? "", {
+          isPrepaid: sub.isPrepaid === true,
+        });
         break;
       case "change-plan":
         await changeLoopSubscriptionPlan(subscriptionId, sellingPlanShopifyId!);
@@ -218,6 +221,16 @@ export async function POST(
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
     console.error(`[loop/subscription/${action}] failed:`, detail);
-    return NextResponse.json({ error: "Loop API error", detail }, { status: 502 });
+    return NextResponse.json(
+      {
+        error:
+          action === "cancel"
+            ? "We couldn't cancel here. Taking you to your subscription portal to finish."
+            : "We couldn't update your subscription right now. Please try again, or email info@mullybox.com and we'll take care of it.",
+        detail,
+        ...(action === "cancel" ? { fallbackUrl: LOOP_CUSTOMER_PORTAL_URL } : {}),
+      },
+      { status: 502 }
+    );
   }
 }
