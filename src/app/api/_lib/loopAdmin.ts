@@ -459,8 +459,35 @@ export const pauseLoopSubscription = (id: string) =>
 export const resumeLoopSubscription = (id: string) =>
   loopSubscriptionMutation(id, "resume");
 
-export const cancelLoopSubscription = (id: string, reason: string) =>
-  loopSubscriptionMutation(id, "cancel", { reason });
+/**
+ * Cancel a Loop subscription.
+ *
+ * Loop sends the free-text note as `comment`. Prepaid contracts (for example
+ * Reserve annual: pay every 12 months, ship every 3) are rejected with a 422
+ * unless `markForCancellation` is set. We default prepaid cancels to
+ * `markForCancellation: true`, so the customer still gets the boxes they
+ * already paid for and the contract ends after the current prepaid cycle.
+ * Pass `markForCancellation: false` only for a deliberate immediate cancel
+ * (any refund is then manual in Shopify).
+ */
+export function buildLoopCancelBody(
+  reason: string,
+  opts: { isPrepaid?: boolean | null; markForCancellation?: boolean } = {}
+): Record<string, unknown> {
+  const body: Record<string, unknown> = {};
+  const comment = reason.trim();
+  if (comment) body.comment = comment;
+  if (opts.isPrepaid) {
+    body.markForCancellation = opts.markForCancellation ?? true;
+  }
+  return body;
+}
+
+export const cancelLoopSubscription = (
+  id: string,
+  reason: string,
+  opts: { isPrepaid?: boolean | null; markForCancellation?: boolean } = {}
+) => loopSubscriptionMutation(id, "cancel", buildLoopCancelBody(reason, opts));
 
 export const changeLoopSubscriptionPlan = (id: string, sellingPlanShopifyId: number) =>
   loopSubscriptionMutation(id, "frequency", { sellingPlanShopifyId });

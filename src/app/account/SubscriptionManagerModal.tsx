@@ -364,6 +364,9 @@ export function SubscriptionManagerModal({ open, onClose, provider = "loop" }: {
             ) : (
               <div className="space-y-4">
                 <p className="text-xs text-charcoal/60">{native ? "Cancel future automatic renewals? Any already-paid orders are unaffected." : "Please let us know why you’re cancelling:"}</p>
+                {!native && sub?.isPrepaid === true && (
+                  <p className="text-xs text-charcoal/60">Your plan is prepaid. Cancelling stops your next renewal, and the boxes you’ve already paid for will still ship.</p>
+                )}
                 {!native && <textarea
                   value={cancelReason}
                   onChange={(e) => setCancelReason(e.target.value)}
