@@ -69,6 +69,20 @@ const VALID_EVENTS = new Set([
   "gift_guide_tier_click",
   "gift_guide_product_click",
   "gift_a_season_click",
+  // Gift a Season LP funnel (#352). Without these the route returned 400 and
+  // every gift_season_* event was dropped.
+  "gift_season_view",
+  "gift_season_hero_cta_clicked",
+  "gift_season_length_selected",
+  "gift_season_form_started",
+  "gift_season_form_error",
+  "gift_season_ship_mode_selected",
+  "gift_season_summary_change_clicked",
+  "gift_season_checkout_clicked",
+  "gift_season_checkout_error",
+  "gift_season_confirmation_viewed",
+  "gift_season_continue_view",
+  "gift_season_continue_clicked",
   // Homepage hero test (home_hero_dual): every hero CTA, both arms.
   // Properties: cta, href, variant (control|dual), resolved.
   "hero_cta_click",
