@@ -94,7 +94,7 @@ export default function GiftSeasonConfirmedClient({
   return (
     <div className="min-h-screen bg-bone text-charcoal">
       <ShopSeasonalHeader accent="#4A3528" returnsLabel="Easy Returns" />
-      <main className="pt-28 pb-16">
+      <main className="pt-32 lg:pt-28 pb-16">
         <div className="max-w-xl mx-auto px-5" data-testid={`gift-confirmed-${shipMode}`}>
           <div className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-forest text-bone">
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">

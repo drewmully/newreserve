@@ -109,7 +109,7 @@ export default function GiftAddressClient(props: GiftAddressClientProps) {
   return (
     <div className="min-h-screen bg-bone text-charcoal">
       <ShopSeasonalHeader accent="#4A3528" returnsLabel="Easy Returns" />
-      <main className="pt-28 pb-16">
+      <main className="pt-32 lg:pt-28 pb-16">
         <div className="max-w-xl mx-auto px-5">
           {nextSeason === null ? (
             <div className="py-10" data-testid="gift-address-complete">
