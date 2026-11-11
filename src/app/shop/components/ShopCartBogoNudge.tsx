@@ -15,6 +15,7 @@ import {
   type CartPickProduct,
   type PickFatigue,
 } from "@/lib/cartPicks";
+import { hasBogoBlockingCode } from "@/lib/pdpCompleteLook";
 
 const FATIGUE_KEY = "mully_cart_picks_v1";
 const FATIGUE_TTL_MS = 14 * 24 * 60 * 60 * 1000;
@@ -66,7 +67,9 @@ export function ShopCartBogoNudge({ accent }: { accent: string }) {
   const units = cart.reduce((n, i) => n + i.quantity, 0);
   const codes = cartDiscountCodes ?? [];
   const bogoLive = isBogoDiscount(cartDiscountLabels, codes);
-  const otherCodes = codes.some((c) => c.applicable && c.code.toUpperCase() !== BOGO15_CODE);
+  // FIRSTORDERSHIP auto-applies at $100+ and combines with BOGO15, so it must
+  // not suppress the nudge (it hid it on nearly every vest cart).
+  const otherCodes = hasBogoBlockingCode(codes);
   const [hasReward, setHasReward] = useState(false);
   useEffect(() => { setHasReward(Boolean(readShopReward())); }, [cartOpen]);
   const suppressed = hasShopDiscount || hasReward || otherCodes;
@@ -93,7 +96,8 @@ export function ShopCartBogoNudge({ accent }: { accent: string }) {
 
   // Count impressions once per open so ignored picks rotate out over time.
   useEffect(() => {
-    if (!cartOpen || !picks.length) return;
+    // Only count a view when the nudge actually renders (same gates as below).
+    if (!cartOpen || suppressed || units !== 1 || !anchor || !picks.length) return;
     const key = `${rotation}:${picks.map((p) => p.slug).join(",")}`;
     if (viewedKey.current === key) return;
     viewedKey.current = key;
@@ -104,9 +108,10 @@ export function ShopCartBogoNudge({ accent }: { accent: string }) {
     }
     writeFatigue(store);
     void trackEvent("bogo_nudge_viewed", {
-      properties: { picks: picks.map((p) => p.slug), anchor: anchor?.slug, rotation },
+      // Comma-joined: the track route drops array properties.
+      properties: { picks: picks.map((p) => p.slug).join(","), anchor: anchor?.slug, rotation },
     });
-  }, [cartOpen, picks, rotation, anchor]);
+  }, [cartOpen, suppressed, units, picks, rotation, anchor]);
 
   if (suppressed || !cart.length) return null;
 

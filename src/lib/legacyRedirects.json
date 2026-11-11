@@ -384,6 +384,22 @@
   "destination": "/policies/terms"
  },
  {
+  "source": "/policies/refund-policy",
+  "destination": "/policies/refund"
+ },
+ {
+  "source": "/policies/privacy-policy",
+  "destination": "/policies/privacy"
+ },
+ {
+  "source": "/policies/terms-of-service",
+  "destination": "/policies/terms"
+ },
+ {
+  "source": "/policies/shipping-policy",
+  "destination": "/policies/shipping"
+ },
+ {
   "source": "/collections/mullybox-shop",
   "destination": "/shop"
  },

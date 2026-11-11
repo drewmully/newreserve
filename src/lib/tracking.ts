@@ -8,6 +8,7 @@
  */
 
 import { getStoredAttribution } from "@/lib/attribution";
+import { PDP_COMPLETE_LOOK_PROPERTY, readStoredCompleteLookVariant } from "@/lib/pdpCompleteLook";
 
 const ANON_ID_KEY = "mully_anon_id";
 const SESSION_ID_KEY = "mully_session_id";
@@ -106,12 +107,18 @@ function getCookie(name: string): string | null {
  * same variant properties that PostHogFlagSync registers client-side.
  */
 function getAbVariantProperties(): Record<string, string> {
+  // pdp_complete_look arm (sticky in localStorage) rides on every event.
+  const completeLook = readStoredCompleteLookVariant();
+  const flags: Record<string, string> = completeLook
+    ? { [PDP_COMPLETE_LOOK_PROPERTY]: completeLook }
+    : {};
   const raw = getCookie("mr_ab");
-  if (raw === null) return {};
+  if (raw === null) return flags;
   const bucket = parseInt(raw, 10);
-  if (Number.isNaN(bucket)) return {};
+  if (Number.isNaN(bucket)) return flags;
 
   return {
+    ...flags,
     "hero-headline": bucket < 34 ? "control" : bucket < 67 ? "variant-a" : "variant-b",
     "hero-cta": bucket < 50 ? "control" : "variant-a",
     "ob-plan-headline": bucket < 50 ? "control" : "variant-a",

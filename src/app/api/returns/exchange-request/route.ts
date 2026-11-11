@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
       to: "info@mymully.com",
       // Ops replies go straight back to the shopper, not to the shared inbox.
       replyTo: customerEmail,
-      subject: `Exchange Request — ${orderName}`,
+      subject: `Exchange Request: ${orderName}`,
       text: `${message.trim()}\n\nCustomer email: ${customerEmail}`,
       sendClass: "transactional",
       category: "returns_exchange_request",

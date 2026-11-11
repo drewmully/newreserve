@@ -29,6 +29,8 @@
 /* Tier section */
 .gift-guide .gg-tier, .gift-guide .gg-outfits {padding-top: 64px; margin-top: 56px; border-top: 1px solid #ddd9d0}
 .gift-guide .gg-main > div:first-of-type .gg-tier {margin-top: 40px}
+/* Sticky shop header (announcement bar + nav) clears the heading on #tier jumps. */
+.gift-guide .gg-tier {scroll-margin-top: 112px}
 .gift-guide .gg-tier__head {margin-bottom: 32px; display: grid; gap: 0}
 .gift-guide .gg-tier__head > .gg-ulink {font-size: 13px; margin-top: 14px; justify-self: start; min-height: 44px; display: inline-flex; align-items: center}
 .gift-guide .gg-grid {display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 44px 24px; list-style: none; padding: 0; margin: 0}
@@ -144,3 +146,41 @@
 }
 /* Hub: the order-by aside follows the first product grid */
 .gift-guide .gg-main > div > .gg-orderby {margin-top: 48px}
+
+/* Hub rail under the H1: four in-stock packshots */
+.gift-guide .gg-rail {display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; list-style: none; padding: 0; margin: 26px 0 0}
+.gift-guide .gg-rail__item a {display: flex; flex-direction: column; gap: 4px; color: inherit; text-decoration: none}
+.gift-guide .gg-rail__img {position: relative; display: block; aspect-ratio: 1 / 1; background: #fff; margin-bottom: 8px}
+.gift-guide .gg-rail__img img {padding: 8%}
+.gift-guide .gg-rail__brand {font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: #6b675e}
+.gift-guide .gg-rail__name {font-size: 14px; line-height: 1.35; color: #24221e}
+.gift-guide .gg-rail__item a:hover .gg-rail__name {text-decoration: underline; text-underline-offset: 3px}
+@media (max-width: 640px) {
+  .gift-guide .gg-rail {display: flex; overflow-x: auto; scroll-snap-type: x mandatory; gap: 12px; margin: 18px -20px 0; padding: 0 20px 4px; scroll-padding-inline: 20px; scrollbar-width: none}
+  .gift-guide .gg-rail::-webkit-scrollbar {display: none}
+  .gift-guide .gg-rail__item {flex: 0 0 40%; scroll-snap-align: start}
+  .gift-guide .gg-rail__name {font-size: 13px}
+}
+
+/* Fill tile: the empty last slot of a grid one short of a full row */
+.gift-guide .gg-fill a {display: flex; flex-direction: column; justify-content: flex-end; gap: 10px; aspect-ratio: 1 / 1; padding: 22px; border: 1px solid rgba(36, 34, 30, 0.14); color: inherit; text-decoration: none; transition: background 0.2s}
+.gift-guide .gg-fill a:hover {background: #fff}
+.gift-guide .gg-fill .gg-kicker {margin: 0}
+.gift-guide .gg-fill__label {font-family: var(--font-serif); font-size: clamp(20px, 2vw, 26px); line-height: 1.15}
+.gift-guide .gg-fill__arrow {font-size: 20px}
+.gift-guide .gg-fill--mobile {display: none}
+@media (max-width: 640px) {
+  .gift-guide .gg-fill--mobile {display: block}
+  .gift-guide .gg-fill a {padding: 16px}
+  .gift-guide .gg-fill__label {font-size: 19px}
+}
+/* Gift a Season in the empty slot: desktop only, one cell */
+@media (min-width: 641px) {
+  .gift-guide .gg-season-tile--slot {display: flex; flex-direction: column; justify-content: flex-end; gap: 8px; aspect-ratio: 1 / 1; padding: 22px; background: #2f3a2c; color: #f3efe6}
+  .gift-guide .gg-season-tile--slot .gg-kicker {color: #c9d0b0; margin-bottom: 0}
+  .gift-guide .gg-season-tile--slot .gg-season-tile__title {font-family: var(--font-serif); font-size: 26px; line-height: 1.1; color: #faf9f6}
+  .gift-guide .gg-season-tile--slot .gg-season-tile__copy {font-size: 14px; line-height: 1.55; color: #e3dfd3}
+}
+@media (max-width: 640px) {
+  .gift-guide .gg-season-tile--slot {display: none}
+}

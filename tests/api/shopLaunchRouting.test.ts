@@ -11,6 +11,9 @@ describe("shop-first routing", () => {
     const result = middleware(new NextRequest(`https://www.mymully.com${path}?tab=shop&utm_source=email`));
     expect(result.headers.get("location")).toBe("https://www.mymully.com/?utm_source=email");
   });
+  it("redirects /home permanently to the homepage", () => {
+    expect(middleware(new NextRequest("https://www.mymully.com/home")).status).toBe(308);
+  });
   it.each(["/", "/shop", "/subscription", "/account", "/auth/callback"])("does not redirect working route %s", path => {
     expect(middleware(new NextRequest(`https://www.mymully.com${path}`)).headers.get("location")).toBeNull();
   });

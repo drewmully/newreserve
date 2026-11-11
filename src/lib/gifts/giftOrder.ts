@@ -20,6 +20,7 @@
 
 import { adminDb } from "@/lib/firebase-admin";
 import { randomBytes } from "crypto";
+import type { GiftShipAddress } from "@/lib/gifts/giftSeason";
 
 export type GiftOrderStatus =
   | "pending_recipient_email"
@@ -28,7 +29,20 @@ export type GiftOrderStatus =
   | "first_box_shipped"
   | "completed"
   | "errored"
-  | "cancelled";
+  | "cancelled"
+  /** Season gifts only: box 1 shipped, more prepaid boxes remain. */
+  | "season_active";
+
+/** One Reserve shipment for a season gift. Box 1 is the paid order. */
+export interface GiftSeasonBoxOrder {
+  box_number: number;
+  shopify_order_id: string;
+  shopify_order_name: string | null;
+  created_at: number;
+  due_on: string | null;
+  shipped_at: number | null;
+  fulfillment_id: string | null;
+}
 
 export interface GiftOrderDoc {
   /** Document ID = Shopify order id (string). */
@@ -66,6 +80,47 @@ export interface GiftOrderDoc {
   loop_subscription_id: string | null;
   cancellation_attempted_at: number | null;
   last_error: string | null;
+
+  // ── Gift a Season (prepaid, no auto-renewal). All optional so existing
+  // subscription-style gift docs are untouched. ─────────────────────────
+  /** "season" for prepaid gifts. Missing = legacy recurring gift. */
+  gift_kind?: "subscription" | "season";
+  /** Prepaid box count: 1, 2 or 4. */
+  seasons_total?: number;
+  /** Every Shopify order that carries one of the prepaid boxes. */
+  box_orders?: GiftSeasonBoxOrder[];
+  /** Flat list of box order ids for array-contains lookups. */
+  box_order_ids?: string[];
+  /** Denormalized counters for admin + queries. */
+  boxes_shipped?: number;
+  boxes_remaining?: number;
+  next_box_due_on?: string | null;
+  continue_offer_sent_at?: number | null;
+  /** Recipient started a paid Reserve membership after the gift. */
+  converted_at?: number | null;
+  converted_order_id?: string | null;
+  /**
+   * Where season 1 ships: "to_recipient" (default) or "to_purchaser" (the
+   * gifter hands it over). Sizing is collected at purchase, so there is no
+   * reveal email and no sizing precondition.
+   */
+  ship_mode?: "to_recipient" | "to_purchaser";
+  /** Address for seasons 2..N. Copied from the paid order in ship-to-them
+   *  mode, collected on /gift-address/[token] in ship-to-me mode. */
+  next_shipping_address?: GiftShipAddress | null;
+  address_source?: "parent_order" | "recipient" | "purchaser" | null;
+  address_collected_at?: number | null;
+  /** Ship-to-me address request (14 days after season 1 ships). */
+  address_request_sent_at?: number | null;
+  address_request_target?: "recipient" | "purchaser" | null;
+  /** Purchaser fallback 7 days after an unanswered recipient request. */
+  address_fallback_sent_at?: number | null;
+  /** Purchaser reminder 14 days before season 2 when still missing. */
+  address_reminder_sent_at?: number | null;
+  /** Season numbers whose pre-season notice (update link) went out. */
+  season_notices_sent?: number[];
+  sizing_updated_at?: number | null;
+  gifter_confirmation_sent_at?: number | null;
 }
 
 export function createSizingToken(): string {
@@ -113,14 +168,28 @@ export async function createGiftOrderDoc(
     | "loop_subscription_id"
     | "cancellation_attempted_at"
     | "last_error"
-  >
+  > &
+    Partial<
+      Pick<
+        GiftOrderDoc,
+        | "gift_kind"
+        | "seasons_total"
+        | "box_orders"
+        | "box_order_ids"
+        | "boxes_shipped"
+        | "boxes_remaining"
+        | "next_box_due_on"
+        | "ship_mode"
+        | "next_shipping_address"
+        | "address_source"
+        | "address_collected_at"
+        | "sizing"
+        | "sizing_collected_at"
+      >
+    >
 ): Promise<void> {
   const now = Date.now();
   const doc: GiftOrderDoc = {
-    ...input,
-    status_history: [{ status: input.status, at: now, note: "created" }],
-    created_at: now,
-    updated_at: now,
     recipient_emailed_at: null,
     sizing_collected_at: null,
     first_box_shipped_at: null,
@@ -129,6 +198,11 @@ export async function createGiftOrderDoc(
     loop_subscription_id: null,
     cancellation_attempted_at: null,
     last_error: null,
+    // Season gifts pass sizing at purchase; legacy callers never set these.
+    ...input,
+    status_history: [{ status: input.status, at: now, note: "created" }],
+    created_at: now,
+    updated_at: now,
   };
   await adminDb.collection(COLLECTION).doc(input.shopify_order_id).set(doc);
 }
@@ -209,4 +283,61 @@ export async function getGiftOrdersAwaitingCancel(): Promise<
     .where("status", "==", "first_box_shipped")
     .get();
   return snap.docs.map((d) => ({ id: d.id, data: d.data() as GiftOrderDoc }));
+}
+
+/** Season gifts that may need a box order or a continue offer. */
+export async function getSeasonGiftsInFlight(): Promise<
+  Array<{ id: string; data: GiftOrderDoc }>
+> {
+  const snap = await adminDb
+    .collection(COLLECTION)
+    .where("gift_kind", "==", "season")
+    .get();
+  return snap.docs
+    .map((d) => ({ id: d.id, data: d.data() as GiftOrderDoc }))
+    .filter(
+      ({ data }) => data.status !== "cancelled" && data.status !== "errored"
+    );
+}
+
+/** Find the season gift that owns a given box order id (parent or child). */
+export async function getSeasonGiftByBoxOrderId(
+  shopifyOrderId: string
+): Promise<{ id: string; data: GiftOrderDoc } | null> {
+  const direct = await getGiftOrderById(shopifyOrderId);
+  if (direct) return { id: shopifyOrderId, data: direct };
+  const snap = await adminDb
+    .collection(COLLECTION)
+    .where("box_order_ids", "array-contains", shopifyOrderId)
+    .limit(1)
+    .get();
+  if (snap.empty) return null;
+  const d = snap.docs[0];
+  return { id: d.id, data: d.data() as GiftOrderDoc };
+}
+
+/** Season gifts sent to this recipient email (for conversion tracking). */
+export async function getSeasonGiftsByRecipientEmail(
+  email: string
+): Promise<Array<{ id: string; data: GiftOrderDoc }>> {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return [];
+  const snap = await adminDb
+    .collection(COLLECTION)
+    .where("recipient_email", "==", normalized)
+    .get();
+  return snap.docs
+    .map((d) => ({ id: d.id, data: d.data() as GiftOrderDoc }))
+    .filter(({ data }) => data.gift_kind === "season");
+}
+
+/** Plain field update without a status transition. */
+export async function patchGiftOrder(
+  shopifyOrderId: string,
+  extra: Partial<GiftOrderDoc>
+): Promise<void> {
+  await adminDb
+    .collection(COLLECTION)
+    .doc(shopifyOrderId)
+    .update({ ...extra, updated_at: Date.now() });
 }

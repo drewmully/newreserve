@@ -11,6 +11,10 @@ export const GAME_CODE_PATTERN = /^SHOT\d{1,2}-[A-Z0-9]{6}$/;
 export function isGameRewardCode(code: string): boolean {
   return GAME_CODE_PATTERN.test(code.toUpperCase());
 }
+/** The live Take a Shot code saved in this browser, if any (never a static popup code). */
+export function readGameShopReward(): ShopReward | null {
+  return readGameReward();
+}
 function readGameReward(): ShopReward | null {
   try {
     const raw = localStorage.getItem(GAME_STORAGE);

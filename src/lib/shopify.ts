@@ -222,6 +222,8 @@ export interface ShopifyCart {
   discountCodes?: Array<{ code: string; applicable: boolean }>;
   /** Names of discounts that took money off (automatic titles or codes). */
   discountLabels?: string[];
+  /** Dollars taken off per discount title or code, order and line level. */
+  discountAmounts?: Record<string, number>;
 }
 
 interface CollectionProductsGroup {
@@ -311,6 +313,19 @@ function discountLabels(raw: RawCart): string[] {
   return [...new Set(names)];
 }
 
+/** Dollars per discount title/code, summed across order and line allocations. */
+function discountAmounts(raw: RawCart): Record<string, number> {
+  const all = [...(raw.discountAllocations ?? []), ...raw.lines.nodes.flatMap((l) => l.discountAllocations ?? [])];
+  const out: Record<string, number> = {};
+  for (const a of all) {
+    const name = a.title || a.code || "";
+    const amount = Number(a.discountedAmount.amount);
+    if (!name || !(amount > 0)) continue;
+    out[name] = Math.round(((out[name] ?? 0) + amount) * 100) / 100;
+  }
+  return out;
+}
+
 // ─── Mappers ──────────────────────────────────────────────────────────────────
 
 export const MEMBER_DISCOUNT_RATE = 0.15;
@@ -387,6 +402,7 @@ function mapCart(raw: RawCart): ShopifyCart {
     currency: raw.cost.totalAmount.currencyCode,
     discountCodes: raw.discountCodes,
     discountLabels: discountLabels(raw),
+    discountAmounts: discountAmounts(raw),
     lines: raw.lines.nodes.map((line) => {
       const retailPrice = parseFloat(line.merchandise.price.amount);
       return {

@@ -124,7 +124,7 @@ function bucketPath(path: string): PathBucketKey {
   if (p === "/" || p === "/home") return "home";
   if (p === "/lp/subscription" || p === "/lp/subscription.")
     return "lp_subscription";
-  if (p === "/lp/gift" || p.startsWith("/lp/gift/")) return "lp_gift";
+  if (p === "/lp/gift" || p.startsWith("/lp/gift/") || p === "/lp/gift-season") return "lp_gift";
   if (p.startsWith("/lp/")) return "lp_other";
   return "other";
 }

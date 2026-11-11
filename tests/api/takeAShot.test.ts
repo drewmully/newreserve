@@ -4,7 +4,7 @@ vi.mock("@/lib/firebase-admin", () => ({ adminDb: { collection: () => ({ doc: ()
 
 import { createTakeAShotService, COLLECTIONS, type TasStore, type TasTx } from "@/lib/takeAShot/service";
 import { buildDiscountInput, codeExpiry, makeCode } from "@/lib/takeAShot/codes";
-import { CODE_RULES, FLOOR_PERCENT, MAX_PERCENT, SHOTS, isTakeAShotServerEnabled, percentForResult } from "@/lib/takeAShot/config";
+import { CODE_RULES, CODE_TERMS, FLOOR_PERCENT, MAX_PERCENT, SHOTS, isTakeAShotServerEnabled, percentForResult } from "@/lib/takeAShot/config";
 import { isDisposableDomain, leadIdFor, normalizeEmail } from "@/lib/takeAShot/identity";
 import { mulberry32, simulateShot, windFrom } from "@/lib/takeAShot/sim";
 import { discountGraphQL, getDiscountToken, probeDiscountTokens, resetDiscountTokenCache } from "@/lib/takeAShot/discountToken";
@@ -217,11 +217,38 @@ describe("codes", () => {
     expect(input).toMatchObject({
       code: "SHOT20-ABC234", usageLimit: 1, appliesOncePerCustomer: true, minimumRequirement: null,
       combinesWith: { orderDiscounts: false, productDiscounts: false, shippingDiscounts: false },
-      customerGets: { value: { percentage: 0.3 }, appliesOnSubscription: false, items: { collections: { add: CODE_RULES.eligibleCollectionIds } } },
+      customerGets: {
+        value: { percentage: 0.3 },
+        appliesOnOneTimePurchase: true,
+        appliesOnSubscription: true,
+        items: { collections: { add: CODE_RULES.eligibleCollectionIds } },
+      },
+      // Reserve first box only: renewals bill at full price.
+      recurringCycleLimit: 1,
     });
     expect(input.tags).toContain("take-a-shot");
-    // Full-price smart collection (no sale items, no Reserve/Access/gift subs).
+    // Full-price smart collection (no sale items, no Access/gift subs), plus the Reserve first box.
     expect(CODE_RULES.eligibleCollectionIds).toEqual(["gid://shopify/Collection/485574770880"]);
+  });
+  it("covers the Reserve first box and still excludes Access, gifts and the outfit-builder plan", () => {
+    const reserve = "gid://shopify/Product/8501257044160";
+    expect(CODE_RULES.reserveFirstBoxProductIds).toEqual([reserve]);
+    expect(CODE_RULES.excludedProductIds).not.toContain(reserve);
+    for (const id of [
+      "gid://shopify/Product/10250499719360", // The Seasonal Edit
+      "gid://shopify/Product/8652818940096", // Golf Curation Box (gift)
+      "gid://shopify/Product/10327639392448", // Reserve Gift Season
+      "gid://shopify/Product/8501257175232", // Access annual
+      "gid://shopify/Product/10268591096000", // Access monthly
+    ]) expect(CODE_RULES.excludedProductIds).toContain(id);
+    expect(CODE_RULES.recurringCycleLimit).toBe(1);
+    expect(MAX_PERCENT).toBe(30);
+    // No em dashes in customer copy, and the terms say renewals are full price.
+    for (const line of Object.values(CODE_TERMS)) expect(line).not.toMatch(/\u2014/);
+    expect(CODE_TERMS.short).toBe("Works on one-time Shop orders or your first Reserve box.");
+    expect(CODE_TERMS.full).not.toMatch(/Excludes Mully Reserve/);
+    expect(CODE_TERMS.full).toMatch(/renewals bill at full price/i);
+    expect(CODE_TERMS.full).toMatch(/Excludes sale items, Mully Access and gift subscriptions/);
   });
 });
 
@@ -396,5 +423,17 @@ describe("readiness evidence with a game code", () => {
     expect(discountGql).toHaveBeenCalledTimes(1);
     expect(viaDiscounts.reward).toMatchObject({ verified: false, code: null }); // Deleted in Shopify.
     expect(out.reward).toMatchObject({ verified: true, code: "SHOT25-ABC234", percent: 25 });
+  });
+});
+
+describe("Reserve checkout codes", () => {
+  it("auto-applies only a saved Take a Shot code, and an explicit code wins", async () => {
+    const { membershipDiscountCodes } = await import("@/lib/shopifyCheckout");
+    expect(membershipDiscountCodes([], "SHOT25-ABC234")).toEqual(["SHOT25-ABC234"]);
+    expect(membershipDiscountCodes([], "shot25-abc234")).toEqual(["SHOT25-ABC234"]);
+    expect(membershipDiscountCodes([], "MULLYEDIT10")).toEqual([]);
+    expect(membershipDiscountCodes([], "MULLYTEXT15")).toEqual([]);
+    expect(membershipDiscountCodes([], null)).toEqual([]);
+    expect(membershipDiscountCodes(["FOUNDERS50"], "SHOT25-ABC234")).toEqual(["FOUNDERS50"]);
   });
 });

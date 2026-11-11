@@ -10,7 +10,7 @@ import { usePathname } from "next/navigation";
 import { EMAIL_CONSENT, SMS_CONSENT } from "@/lib/shopSignup";
 import { saveShopReward } from "@/lib/shopRewards";
 import { getClientAnonymousId, trackEvent } from "@/lib/tracking";
-import { FLOOR_PERCENT, RING_TIERS, SHOTS } from "@/lib/takeAShot/config";
+import { CODE_TERMS, FLOOR_PERCENT, RING_TIERS, SHOTS } from "@/lib/takeAShot/config";
 import { MullyWordmark } from "../MullyWordmark";
 import { SIGNUP_DISMISS_KEY } from "../ShopSignupPopup";
 import "./take-a-shot.css";
@@ -207,6 +207,7 @@ export function TakeAShotModal({ openSignal }: { openSignal: number }) {
     unmountGame.current = game.mount(stage.current, {
       shots: session.shots, session,
       lead: { smsConsent: withPhone },
+      terms: CODE_TERMS.short,
       backend: {
         shot: (b: { shot: number; target: { x: number; y: number }; e: number }) => api("shot", { sid: session.sid, ...b }),
         claim: () => api<{ status: string }>("claim", { sid: session.sid }),
@@ -341,7 +342,7 @@ export function TakeAShotModal({ openSignal }: { openSignal: number }) {
           <MullyWordmark accent="#B08558" />
           <h2 className="tas__h2" id="tas-title" tabIndex={-1} data-step-focus>You already took your shot.</h2>
           {claim ? <>
-            <p className="tas__sub">One game per person. Your code is still good for {claim.pct}% off until {new Date(claim.expiresAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}.</p>
+            <p className="tas__sub">One game per person. Your code is still good for {claim.pct}% off until {new Date(claim.expiresAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}. {CODE_TERMS.short}</p>
             <div className="tas__code"><span>{claim.code}</span>
               <button className="tas__copy" type="button" onClick={(e) => { const b = e.currentTarget; void navigator.clipboard?.writeText(claim.code).then(() => { b.textContent = "Copied"; }); }}>Copy</button>
             </div>
