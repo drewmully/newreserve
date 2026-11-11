@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { isAllowedAdminEmail } from "@/lib/adminEmailAllowlist";
 import type { GiftOrderDoc } from "@/lib/gifts/giftOrder";
+import { seasonProgress } from "@/lib/gifts/giftSeason";
 
 async function verifyAdmin(request: NextRequest): Promise<void> {
   const header = request.headers.get("Authorization") ?? "";
@@ -53,6 +54,8 @@ export async function GET(request: NextRequest) {
   const snap = await query.limit(limit).get();
   const orders = snap.docs.map((d) => {
     const data = d.data() as GiftOrderDoc;
+    const isSeason = data.gift_kind === "season";
+    const progress = isSeason ? seasonProgress(data) : null;
     return {
       shopify_order_id: d.id,
       shopify_order_number: data.shopify_order_number,
@@ -75,6 +78,18 @@ export async function GET(request: NextRequest) {
       sizing: data.sizing,
       loop_subscription_id: data.loop_subscription_id,
       last_error: data.last_error,
+      // Gift a Season: prepaid count and per-box orders for ops.
+      gift_kind: data.gift_kind ?? "subscription",
+      seasons_total: progress?.seasonsTotal ?? null,
+      boxes_dispatched: progress?.boxesDispatched ?? null,
+      boxes_shipped: progress?.boxesShipped ?? null,
+      boxes_remaining: progress?.boxesRemaining ?? null,
+      next_box_number: progress?.nextBoxNumber ?? null,
+      next_box_due_on: progress?.nextBoxDueOn ?? null,
+      box_orders: isSeason ? data.box_orders ?? [] : [],
+      continue_offer_sent_at: data.continue_offer_sent_at ?? null,
+      converted_at: data.converted_at ?? null,
+      converted_order_id: data.converted_order_id ?? null,
     };
   });
 

@@ -4,7 +4,7 @@
  * /lp/gift-season: Gift a Season of Mully Reserve.
  *
  * Prepaid, one checkout, no auto-renewal. The gifter picks 1, 2 or 4
- * seasons ($250 each, no discount), enters the recipient, a note and a send
+ * seasons (prices come from the Shopify variants), enters the recipient, a note and a send
  * date, then pays once through Shopify checkout. Copy rules: no em dashes,
  * "Reserve" never "box".
  */
@@ -16,6 +16,9 @@ import { captureAttributionFromUrl } from "@/lib/attribution";
 import { GlassHeader } from "@/app/components/ClientComponents";
 import {
   GIFT_SEASON_OPTIONS,
+  formatUsd,
+  perSeasonPrice,
+  withLivePrices,
   type GiftSeasonCount,
 } from "@/lib/gifts/giftSeason";
 import {
@@ -43,7 +46,13 @@ function todayIso(): string {
   return local.toISOString().slice(0, 10);
 }
 
-export default function GiftSeasonLPClient() {
+export default function GiftSeasonLPClient({
+  livePrices = null,
+}: {
+  /** Live Storefront variant prices keyed by numeric variant id. */
+  livePrices?: Record<string, number> | null;
+}) {
+  const options = useMemo(() => withLivePrices(GIFT_SEASON_OPTIONS, livePrices), [livePrices]);
   const [seasons, setSeasons] = useState<GiftSeasonCount>(4);
   const [recipientName, setRecipientName] = useState("");
   const [recipientEmail, setRecipientEmail] = useState("");
@@ -53,8 +62,8 @@ export default function GiftSeasonLPClient() {
   const [error, setError] = useState<string | null>(null);
 
   const option = useMemo(
-    () => GIFT_SEASON_OPTIONS.find((o) => o.seasons === seasons)!,
-    [seasons]
+    () => options.find((o) => o.seasons === seasons)!,
+    [options, seasons]
   );
 
   useEffect(() => {
@@ -65,7 +74,11 @@ export default function GiftSeasonLPClient() {
   function pick(n: GiftSeasonCount) {
     setSeasons(n);
     trackEvent("gift_season_length_selected", {
-      properties: { seasons: n, value: n * 250, lp_source: LP_SOURCE },
+      properties: {
+        seasons: n,
+        value: options.find((o) => o.seasons === n)?.price ?? null,
+        lp_source: LP_SOURCE,
+      },
     }).catch(() => {});
   }
 
@@ -148,7 +161,7 @@ export default function GiftSeasonLPClient() {
                   Gift length
                 </div>
                 <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Gift length">
-                  {GIFT_SEASON_OPTIONS.map((o) => {
+                  {options.map((o) => {
                     const active = o.seasons === seasons;
                     const copy = OPTION_COPY[o.seasons];
                     return (
@@ -176,7 +189,7 @@ export default function GiftSeasonLPClient() {
                         ) : null}
                         <div className="text-sm font-medium">{copy.title}</div>
                         <div className={`font-serif text-xl mt-0.5 ${active ? "text-bone" : "text-forest"}`}>
-                          ${o.price.toLocaleString("en-US")}
+                          {formatUsd(o.price)}
                         </div>
                         <div className={`text-[11px] mt-1 leading-snug ${active ? "text-bone/80" : "text-charcoal/60"}`}>
                           {copy.detail}
@@ -236,13 +249,17 @@ export default function GiftSeasonLPClient() {
                       Reserve gift, {option.label}
                     </div>
                     <div className="font-serif text-3xl text-forest mt-1" data-testid="season-total">
-                      ${option.price.toLocaleString("en-US")}
+                      {formatUsd(option.price)}
                     </div>
                   </div>
                   <div className="text-right text-[11px] text-charcoal/60">
-                    $250 per season
-                    <br />
-                    Paid once, never renews
+                    {option.seasons > 1 ? (
+                      <>
+                        {formatUsd(perSeasonPrice(option.price, option.seasons))} per season
+                        <br />
+                      </>
+                    ) : null}
+                    Paid once, never renews.
                   </div>
                 </div>
 
@@ -253,7 +270,7 @@ export default function GiftSeasonLPClient() {
                   data-testid="gift-season-checkout"
                   className="w-full mt-4 bg-ember hover:bg-ember/90 disabled:opacity-60 text-bone py-3.5 rounded-md text-sm font-medium tracking-wide transition"
                 >
-                  {loading ? "Opening checkout..." : `Give ${option.label} · $${option.price.toLocaleString("en-US")}`}
+                  {loading ? "Opening checkout..." : `Give ${option.label} · ${formatUsd(option.price)}`}
                 </button>
                 <div className="mt-3 text-center text-[11px] text-charcoal/60">
                   Secure checkout via Shopify

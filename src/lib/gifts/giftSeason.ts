@@ -22,15 +22,30 @@ export type GiftSeasonCount = 1 | 2 | 4;
 export interface GiftSeasonOption {
   seasons: GiftSeasonCount;
   label: string;
-  /** Whole-dollar price. Reserve Member is $250 per season, no discount. */
+  /** Gift price in dollars. Mirrors the Shopify variant price; the LP
+   *  replaces it with the live Storefront price when the variant is
+   *  published. */
   price: number;
   sku: string;
   /** Numeric Shopify variant id (string to stay JSON safe). */
   variantId: string;
 }
 
-/** Reserve Member price per season. Never $249, never discounted. */
+/** Regular Reserve Member price per season (used by the continue offer).
+ *  Never $249. Gift prices are separate, see GIFT_SEASON_PRICES. */
 export const RESERVE_SEASON_PRICE = 250;
+
+/**
+ * Gift a Season prices set by Drew on 2026-11-11. These mirror the draft
+ * Shopify variants (RES-GIFT-1S/2S/4S) and are only a fallback: the LP reads
+ * live variant prices from the Storefront when available, and per-season
+ * math is always derived from the variant price.
+ */
+export const GIFT_SEASON_PRICES: Record<GiftSeasonCount, number> = {
+  1: 299,
+  2: 550,
+  4: 1000,
+};
 
 /** Months between Reserve boxes (normal quarterly cycle). */
 export const SEASON_INTERVAL_MONTHS = 3;
@@ -58,7 +73,7 @@ export const GIFT_SEASON_OPTIONS: GiftSeasonOption[] = ([1, 2, 4] as const).map(
   (seasons) => ({
     seasons,
     label: seasons === 1 ? "1 season" : `${seasons} seasons`,
-    price: seasons * RESERVE_SEASON_PRICE,
+    price: GIFT_SEASON_PRICES[seasons],
     sku: `RES-GIFT-${seasons}S`,
     variantId: envVariant(seasons),
   })
@@ -68,6 +83,33 @@ export function getGiftSeasonOption(
   seasons: number
 ): GiftSeasonOption | null {
   return GIFT_SEASON_OPTIONS.find((o) => o.seasons === seasons) ?? null;
+}
+
+/** Price per season derived from the variant price (cents-rounded). */
+export function perSeasonPrice(price: number, seasons: number): number {
+  if (!seasons || seasons <= 0) return price;
+  return Math.round((price / seasons) * 100) / 100;
+}
+
+/** "$1,000" or "$274.50": whole dollars when there are no cents. */
+export function formatUsd(amount: number): string {
+  const whole = Number.isInteger(amount);
+  return `$${amount.toLocaleString("en-US", {
+    minimumFractionDigits: whole ? 0 : 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+/** Apply live variant prices (keyed by numeric variant id) over defaults. */
+export function withLivePrices(
+  options: GiftSeasonOption[],
+  live: Record<string, number> | null | undefined
+): GiftSeasonOption[] {
+  if (!live) return options;
+  return options.map((o) => {
+    const p = live[o.variantId];
+    return typeof p === "number" && Number.isFinite(p) && p > 0 ? { ...o, price: p } : o;
+  });
 }
 
 export function parseSeasonCount(raw: unknown): GiftSeasonCount | null {

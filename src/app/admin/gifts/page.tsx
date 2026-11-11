@@ -33,6 +33,24 @@ interface GiftRow {
   sizing: Record<string, string> | null;
   loop_subscription_id: string | null;
   last_error: string | null;
+  gift_kind: "subscription" | "season";
+  seasons_total: number | null;
+  boxes_dispatched: number | null;
+  boxes_shipped: number | null;
+  boxes_remaining: number | null;
+  next_box_number: number | null;
+  next_box_due_on: string | null;
+  box_orders: Array<{
+    box_number: number;
+    shopify_order_id: string;
+    shopify_order_name: string | null;
+    created_at: number;
+    due_on: string | null;
+    shipped_at: number | null;
+  }>;
+  continue_offer_sent_at: number | null;
+  converted_at: number | null;
+  converted_order_id: string | null;
 }
 
 const STATUS_FILTERS = [
@@ -41,6 +59,7 @@ const STATUS_FILTERS = [
   { label: "Emailed", value: "recipient_emailed" },
   { label: "Sizing collected", value: "sizing_collected" },
   { label: "Shipped", value: "first_box_shipped" },
+  { label: "Season active", value: "season_active" },
   { label: "Completed", value: "completed" },
   { label: "Errored", value: "errored" },
 ];
@@ -50,6 +69,7 @@ const STATUS_COLOR: Record<string, string> = {
   recipient_emailed: "bg-sage/30 text-forest",
   sizing_collected: "bg-forest/15 text-forest",
   first_box_shipped: "bg-ember/15 text-ember",
+  season_active: "bg-ember/15 text-ember",
   completed: "bg-forest text-bone",
   errored: "bg-red-100 text-red-700",
   cancelled: "bg-taupe/20 text-charcoal/50",
@@ -147,6 +167,8 @@ export default function AdminGiftsPage() {
                 <th className="text-left px-3 py-2 font-medium">Recipient</th>
                 <th className="text-left px-3 py-2 font-medium">From</th>
                 <th className="text-left px-3 py-2 font-medium">Total</th>
+                <th className="text-left px-3 py-2 font-medium">Seasons</th>
+                <th className="text-left px-3 py-2 font-medium">Next due</th>
                 <th className="text-left px-3 py-2 font-medium">Created</th>
                 <th className="text-left px-3 py-2 font-medium">Emailed</th>
                 <th className="text-left px-3 py-2 font-medium">Sized</th>
@@ -190,6 +212,27 @@ export default function AdminGiftsPage() {
                       <td className="px-3 py-2 text-charcoal/80">
                         ${o.total_price.toFixed(2)}
                       </td>
+                      <td className="px-3 py-2 text-xs text-charcoal/80" data-testid="season-progress">
+                        {o.gift_kind === "season" && o.seasons_total ? (
+                          <>
+                            <div className="font-medium">
+                              {o.boxes_remaining} of {o.seasons_total} left
+                            </div>
+                            <div className="text-[11px] text-charcoal/55">
+                              {o.boxes_shipped} shipped, {o.boxes_dispatched} ordered
+                            </div>
+                          </>
+                        ) : (
+                          <span className="text-charcoal/40">recurring</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-charcoal/65">
+                        {o.gift_kind === "season"
+                          ? o.next_box_number
+                            ? `#${o.next_box_number}: ${o.next_box_due_on ?? "after first ships"}`
+                            : "all ordered"
+                          : "—"}
+                      </td>
                       <td className="px-3 py-2 text-xs text-charcoal/65">{fmt(o.created_at)}</td>
                       <td className="px-3 py-2 text-xs text-charcoal/65">
                         {fmt(o.recipient_emailed_at)}
@@ -214,7 +257,7 @@ export default function AdminGiftsPage() {
                     </tr>
                     {isOpen ? (
                       <tr key={`${o.shopify_order_id}-detail`} className="bg-cream/30 border-t border-taupe/10">
-                        <td colSpan={10} className="px-5 py-4 text-xs text-charcoal/75">
+                        <td colSpan={12} className="px-5 py-4 text-xs text-charcoal/75">
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                             <div>
                               <div className="text-[10px] uppercase tracking-wide text-charcoal/50 mb-1">
@@ -267,6 +310,47 @@ export default function AdminGiftsPage() {
                                 <div>—</div>
                               )}
                             </div>
+                            {o.gift_kind === "season" ? (
+                              <div className="md:col-span-3">
+                                <div className="text-[10px] uppercase tracking-wide text-charcoal/50 mb-1">
+                                  Season shipments
+                                </div>
+                                <table className="w-full text-[11px]">
+                                  <thead className="text-charcoal/50">
+                                    <tr>
+                                      <th className="text-left py-1 pr-3 font-medium">#</th>
+                                      <th className="text-left py-1 pr-3 font-medium">Shopify order</th>
+                                      <th className="text-left py-1 pr-3 font-medium">Due</th>
+                                      <th className="text-left py-1 pr-3 font-medium">Ordered</th>
+                                      <th className="text-left py-1 pr-3 font-medium">Shipped</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {Array.from({ length: o.seasons_total ?? 0 }, (_, i) => {
+                                      const b = o.box_orders.find((x) => x.box_number === i + 1);
+                                      return (
+                                        <tr key={i} className="border-t border-taupe/10">
+                                          <td className="py-1 pr-3">{i + 1}</td>
+                                          <td className="py-1 pr-3 font-mono">
+                                            {b ? b.shopify_order_name ?? b.shopify_order_id : "not yet ordered"}
+                                          </td>
+                                          <td className="py-1 pr-3">
+                                            {b?.due_on ?? (i + 1 === o.next_box_number ? o.next_box_due_on ?? "after first ships" : i === 0 ? "on sizing" : "—")}
+                                          </td>
+                                          <td className="py-1 pr-3">{b ? fmt(b.created_at) : "—"}</td>
+                                          <td className="py-1 pr-3">{b ? fmt(b.shipped_at) : "—"}</td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                                <div className="mt-2 text-charcoal/65">
+                                  Continue offer: {o.continue_offer_sent_at ? `sent ${fmt(o.continue_offer_sent_at)}` : "not sent"}
+                                  {" · "}
+                                  Converted: {o.converted_at ? `${fmt(o.converted_at)} (order ${o.converted_order_id ?? "?"})` : "no"}
+                                </div>
+                              </div>
+                            ) : null}
                             {o.last_error ? (
                               <div className="md:col-span-3">
                                 <div className="text-[10px] uppercase tracking-wide text-red-600 mb-1">
@@ -294,7 +378,9 @@ export default function AdminGiftsPage() {
         includes the <code className="bg-cream px-1">gift=true</code> attribute.
         The hourly cron at /api/gifts/scheduled-send sends recipient emails when due;
         /api/gifts/post-first-shipment auto-cancels the Loop subscription after the
-        first box ships.
+        first box ships. Season gifts (gift_kind=season) never touch Loop: the daily
+        /api/gifts/season-dispatch cron creates each $0 Reserve order when due and
+        fulfillments-create counts shipments down.
       </p>
     </div>
   );

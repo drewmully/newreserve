@@ -8,6 +8,9 @@
 import type { Metadata } from "next";
 import GiftSeasonLPClient from "./GiftSeasonLPClient";
 import { canonical } from "@/lib/seo";
+import { fetchGiftSeasonLivePrices } from "@/lib/gifts/giftSeasonPrices";
+
+export const revalidate = 300;
 
 export const metadata: Metadata = {
   alternates: canonical("/lp/gift-season"),
@@ -22,6 +25,7 @@ export const metadata: Metadata = {
   },
 };
 
-export default function GiftSeasonLPPage() {
-  return <GiftSeasonLPClient />;
+export default async function GiftSeasonLPPage() {
+  const livePrices = await fetchGiftSeasonLivePrices();
+  return <GiftSeasonLPClient livePrices={livePrices} />;
 }
