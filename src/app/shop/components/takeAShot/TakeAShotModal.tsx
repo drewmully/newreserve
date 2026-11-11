@@ -117,7 +117,13 @@ export function TakeAShotModal({ openSignal }: { openSignal: number }) {
     track("open", { step });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only on a new open request
   }, [openSignal]);
-  useEffect(() => { if (dialog.current?.open) close(); /* close on navigation */ // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Close on navigation only; the first run is the mount that just opened it.
+  const lastPath = useRef(pathname);
+  useEffect(() => {
+    if (lastPath.current === pathname) return;
+    lastPath.current = pathname;
+    if (dialog.current?.open) close();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on navigation
   }, [pathname]);
   useEffect(() => () => { unmountGame.current?.(); }, []);
   useEffect(() => {
