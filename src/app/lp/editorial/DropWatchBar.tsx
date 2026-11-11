@@ -21,6 +21,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { trackEvent } from "@/lib/tracking";
+import { signalVisitorIdentified } from "@/lib/visitorIdentified";
 import { DROP_BAR_CONSENT } from "@/lib/shopSignup";
 import { markSignedUp } from "@/lib/takeAShot/popupRules";
 
@@ -204,6 +205,7 @@ export default function DropWatchBar() {
         email: trimmed,
         properties: { source: "editorial-drop-bar" },
       });
+      signalVisitorIdentified();
       // Mark signed so the bar never re-opens on this browser, but keep
       // the bar visible while we prompt for the stylist follow-up.
       writeState("signed");

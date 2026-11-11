@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { trackEvent } from "@/lib/tracking";
+import { signalVisitorIdentified } from "@/lib/visitorIdentified";
 import { usePathname } from "next/navigation";
 import { useMembership } from "@/app/context/MembershipContext";
 import { SHOP_INTERESTS, EMAIL_CONSENT, SMS_CONSENT } from "@/lib/shopSignup";
@@ -165,6 +166,7 @@ export function ShopSignupPopup({ onTrigger }: { onTrigger?: () => void } = {}) 
           email: String(form.get("email") ?? "").trim().toLowerCase() || undefined,
           properties: { source: "shop-popup", interest },
         });
+        signalVisitorIdentified();
         setReceipt(result.receipt); setStep("sms");
       }
       else setStep("done");

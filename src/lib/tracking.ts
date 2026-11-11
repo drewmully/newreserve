@@ -490,6 +490,8 @@ export interface TrackEventPayload {
 
 interface TrackEventOptions {
   includeAuth?: boolean;
+  /** false: server only, no Meta / OpenAI / gtag browser mirrors (Klaviyo-only events). */
+  mirror?: boolean;
 }
 
 export interface IdentifyAnalyticsUserInput {
@@ -611,20 +613,22 @@ export async function trackEvent(
 
     // Mirror to client-side gtag.js (GA4 + Google Ads). No-op when the
     // Google tag is not configured.
-    mirrorToGtag(eventName, eventId, mergedProperties);
+    if (options.mirror !== false) {
+      mirrorToGtag(eventName, eventId, mergedProperties);
 
-    // Mirror to client-side Meta Pixel (fbq). No-op when NEXT_PUBLIC_META_PIXEL_ID
-    // is not configured. Uses the SAME eventId we pass to server-side CAPI
-    // so Meta dedupes the two and counts the event once.
-    mirrorToMetaPixel(eventName, eventId, {
-      ...mergedProperties,
-      ...(initialPageViewId ? { __initial_page_view: true } : {}),
-    });
+      // Mirror to client-side Meta Pixel (fbq). No-op when NEXT_PUBLIC_META_PIXEL_ID
+      // is not configured. Uses the SAME eventId we pass to server-side CAPI
+      // so Meta dedupes the two and counts the event once.
+      mirrorToMetaPixel(eventName, eventId, {
+        ...mergedProperties,
+        ...(initialPageViewId ? { __initial_page_view: true } : {}),
+      });
 
-    // Mirror to client-side OpenAI Ads pixel (oaiq). No-op when
-    // NEXT_PUBLIC_OPENAI_PIXEL_ID is not configured. Uses the SAME eventId
-    // we pass to server-side OpenAI CAPI so OpenAI dedupes the two.
-    mirrorToOpenAI(eventName, eventId, mergedProperties);
+      // Mirror to client-side OpenAI Ads pixel (oaiq). No-op when
+      // NEXT_PUBLIC_OPENAI_PIXEL_ID is not configured. Uses the SAME eventId
+      // we pass to server-side OpenAI CAPI so OpenAI dedupes the two.
+      mirrorToOpenAI(eventName, eventId, mergedProperties);
+    }
 
     await fetch("/api/analytics/track", {
       method: "POST",

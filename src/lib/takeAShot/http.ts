@@ -44,7 +44,23 @@ export function send(result: ApiResult) {
     const { httpStatus, ...rest } = result;
     return respond(rest, httpStatus ?? 400);
   }
+  if (result.status === "existing" || result.status === "resume") {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { identify, ...rest } = result;
+    return respond(rest);
+  }
   return respond(result);
+}
+
+/**
+ * May this browser be tied to the typed email for Klaviyo (mully_kid)?
+ * A new game, or a resumed/finished game whose lead is that email and was
+ * played on this browser. Another browser, or a different email typed on
+ * this browser, never gets the cookie.
+ */
+export function identifiesPlayer(result: ApiResult): boolean {
+  if (result.status === "new") return true;
+  return (result.status === "resume" || result.status === "existing") && result.identify === true;
 }
 
 export function failed(tag: string) {

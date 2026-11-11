@@ -61,3 +61,14 @@ describe("excluded handles", () => {
     }
   });
 });
+
+describe("under $100 backfill", () => {
+  it("renders all seven picks plus the fill tile when four are in stock", () => {
+    const under = GIFT_GUIDE_TIERS.find((t) => t.slug === "under-100")!;
+    expect(under.picks).toHaveLength(7);
+    expect(under.picks).toContain("rhone-approach-tech-polo");
+    const fit = fitToRows([...many(4, true, "a"), ...many(3, false, "r")]);
+    expect(fit.picks).toHaveLength(7);
+    expect(fit.fill).toBe(true);
+  });
+});

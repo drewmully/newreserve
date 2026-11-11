@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { trackEvent } from "@/lib/tracking";
+import { signalVisitorIdentified } from "@/lib/visitorIdentified";
 import type { JoinSource } from "@/lib/shopSignup";
 
 function distinctId(): string | undefined {
@@ -35,6 +36,7 @@ export function JoinForm({ source }: { source: JoinSource }) {
         email: String(form.get("email") ?? "").trim().toLowerCase() || undefined,
         properties: { source },
       });
+      signalVisitorIdentified();
       setStatus("done");
     } catch {
       setStatus("error");

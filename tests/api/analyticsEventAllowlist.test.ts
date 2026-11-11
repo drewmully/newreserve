@@ -12,6 +12,10 @@ const ROOT = join(__dirname, "..", "..");
 const route = readFileSync(join(ROOT, "src/app/api/analytics/track/route.ts"), "utf8");
 const block = route.match(/const VALID_EVENTS = new Set\(\[([\s\S]*?)\]\);/)?.[1] ?? "";
 const allowlist = new Set([...block.matchAll(/"([a-z0-9_]+)"/g)].map((m) => m[1]));
+// Klaviyo-only lane events (route answers 200 when the lane is enabled).
+const siteEvents = readFileSync(join(ROOT, "src/lib/klaviyo/siteEvents.ts"), "utf8");
+const klaviyoOnlyBlock = siteEvents.match(/KLAVIYO_ONLY_EVENTS = new Set\(\[([^\]]*)\]\)/)?.[1] ?? "";
+for (const m of klaviyoOnlyBlock.matchAll(/"([a-z0-9_]+)"/g)) allowlist.add(m[1]);
 
 // Pre-existing misses, reported to the owner and left out of this change.
 const KNOWN_MISSING = new Set([
@@ -40,6 +44,7 @@ describe("analytics event allowlist", () => {
       "complete_look_view", "complete_look_add", "cart_bogo_line_view", "cart_bogo_suggestion_add",
       "mully100_card_click", "bogo_nudge_viewed", "bogo_pick_opened", "bogo_pick_added",
       "first_order_shipping_revealed", "newsletter_signup", "reserve_added_to_cart",
+      "pdp_gallery_swipe", "pdp_image_zoom",
     ]) expect(allowlist.has(e), e).toBe(true);
   });
 
