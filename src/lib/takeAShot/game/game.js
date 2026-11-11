@@ -679,7 +679,7 @@ export function mount(root, opts) {
     el.card.classList.add('final');
     requestAnimationFrame(() => el.card.classList.add('on'));
     backend.claim().then(renderFinal).catch((err) => {
-      el.card.innerHTML = `<div class="g-final-in"><p class="g-eyebrow">Hmm</p><h3 class="g-final-h">We could not load your code.</h3><p class="g-card-sub">${(err && err.message) || 'Check your connection.'}</p><button class="g-btn" data-act="final" type="button">Try again</button></div>`;
+      el.card.innerHTML = `<div class="g-final-in"><p class="g-eyebrow">Hmm</p><h3 class="g-final-h">We could not load your code.</h3><p class="g-card-sub">${(err && err.message) || 'Check your connection.'}</p><button class="g-btn" data-act="final" type="button">Load my code</button></div>`;
     });
   }
   function renderFinal(c) {
