@@ -43,6 +43,12 @@ export const BLOG_ADDENDA: Record<string, BlogAddendum[]> = {
         ],
       },
     },
+    // s10: gift guide link.
+    {
+      kind: "append",
+      heading: "Brands like Peter Millar",
+      paragraphs: ["Shopping for a Peter Millar fan? The chino and several of these brands are in our [golf gifts for men](/shop/gifts), sorted by price."],
+    },
   ],
   // s07: answer "golf mystery box" in the subscription comparison post.
   // Price intentionally links to /subscription (no hard-coded prices).
@@ -76,8 +82,32 @@ export const BLOG_ADDENDA: Record<string, BlogAddendum[]> = {
           "A golf mystery box ships a surprise assortment of apparel and gear chosen with nothing more than your size. The reveal is the fun part. The catch is the hit rate: a polo in a color you would never pick still counts toward the box value, and past-season stock is how most mystery boxes keep that number high.",
           "Mully Reserve runs the other way. A stylist picks every piece after a short style quiz on fit, sizing and the brands you already wear, and you see your picks before anything ships. The surprise is the brand you had not tried yet, not whether the polo fits.",
           "Current plan pricing lives on the [Mully Reserve page](/subscription).",
+          // s10: gift guide link.
+          "Buying for a golfer instead of yourself? Our [golf gifts for men](/shop/gifts) are picked by Mully and sorted by price.",
         ],
       },
+    },
+  ],
+  // s10: gift guide links in the polo, layering and belt posts.
+  "best-golf-polos-2026-quiet-golf-rhone": [
+    {
+      kind: "append",
+      heading: "The Reserve ranking: the three-piece polo lineup I would buy",
+      paragraphs: ["Polos are a summer gift. For December, our [golf gifts for men](/shop/gifts) lean on long sleeve polos, vests and quarter zips."],
+    },
+  ],
+  "golf-quarter-zip-vs-hoodie": [
+    {
+      kind: "append",
+      heading: "When a quarter zip is the right answer",
+      paragraphs: ["A quarter zip is also one of the safest gifts for a golfer, and our [golf gifts for men](/shop/gifts) carry them from Rhone, Olydoe and Sloat."],
+    },
+  ],
+  "best-golf-belt-2026-braided-leather-stretch": [
+    {
+      kind: "append",
+      heading: "How to choose the right belt: sizing, buckle, and materials",
+      paragraphs: ["A braided stretch belt is also one of the easier [golf gifts under $100](/shop/gifts/under-100), since the weave forgives a guess on his size."],
     },
   ],
   // s06: internal link from the dress code post to the restored hat guide.
@@ -89,6 +119,21 @@ export const BLOG_ADDENDA: Record<string, BlogAddendum[]> = {
         "Hats get their own guide: [Choosing the Perfect Golf Hat](/blogs/news/choosing-the-perfect-golf-hat-tips-for-comfort-and-performance).",
       ],
     },
+  ],
+};
+
+/**
+ * Code-level additions to restored archive posts (/blogs/news/<handle>),
+ * whose body is Shopify HTML. Each paragraph renders after the body and
+ * supports the same [label](/internal-path) syntax.
+ */
+export const ARCHIVE_ADDENDA: Record<string, string[]> = {
+  // s10: gift guide links.
+  "the-fix-heres-how-to-finally-stop-hitting-the-ball-off-the-hosel": [
+    "For the golfer on your list who is grinding through this at the range, our [golf gifts under $100](/shop/gifts/under-100) include a Penfold shag bag with room for a hundred practice balls.",
+  ],
+  "golf-outing-ideas-35-formats-themes-contests-and-extras-with-a-planning-checklist": [
+    "Need prizes for the contests? Our [golf gifts under $100](/shop/gifts/under-100) cover tour towels, hats and bag organizers.",
   ],
 };
 
