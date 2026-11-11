@@ -141,6 +141,13 @@ const VALID_EVENTS = new Set([
   "complete_look_add",
   "cart_bogo_line_view",
   "cart_bogo_suggestion_add",
+  "take_a_shot_email_submitted",
+  "take_a_shot_phone_submitted",
+  "popup_eligible",
+  "popup_suppressed",
+  "popup_view",
+  "popup_close",
+  "popup_launcher_dismissed",
 ]);
 
 /**

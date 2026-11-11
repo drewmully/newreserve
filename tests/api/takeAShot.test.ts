@@ -223,16 +223,16 @@ describe("codes", () => {
         appliesOnSubscription: true,
         items: { collections: { add: CODE_RULES.eligibleCollectionIds } },
       },
-      // Reserve first box only: renewals bill at full price.
+      // First Reserve quarter only: renewals bill at the regular quarterly price.
       recurringCycleLimit: 1,
     });
     expect(input.tags).toContain("take-a-shot");
-    // Full-price smart collection (no sale items, no Access/gift subs), plus the Reserve first box.
+    // Full-price smart collection (no sale items, no Access/gift subs), plus the first Reserve quarter.
     expect(CODE_RULES.eligibleCollectionIds).toEqual(["gid://shopify/Collection/485574770880"]);
   });
-  it("covers the Reserve first box and still excludes Access, gifts and the outfit-builder plan", () => {
+  it("covers the first Reserve quarter and still excludes Access, gifts and the outfit-builder plan", () => {
     const reserve = "gid://shopify/Product/8501257044160";
-    expect(CODE_RULES.reserveFirstBoxProductIds).toEqual([reserve]);
+    expect(CODE_RULES.reserveFirstQuarterProductIds).toEqual([reserve]);
     expect(CODE_RULES.excludedProductIds).not.toContain(reserve);
     for (const id of [
       "gid://shopify/Product/10250499719360", // The Seasonal Edit
@@ -243,11 +243,11 @@ describe("codes", () => {
     ]) expect(CODE_RULES.excludedProductIds).toContain(id);
     expect(CODE_RULES.recurringCycleLimit).toBe(1);
     expect(MAX_PERCENT).toBe(30);
-    // No em dashes in customer copy, and the terms say renewals are full price.
+    // No em dashes in customer copy, and the terms say renewals bill at the regular quarterly price.
     for (const line of Object.values(CODE_TERMS)) expect(line).not.toMatch(/\u2014/);
-    expect(CODE_TERMS.short).toBe("Works on one-time Shop orders or your first Reserve box.");
+    expect(CODE_TERMS.short).toBe("Works on one-time Shop orders or your first Reserve quarter.");
     expect(CODE_TERMS.full).not.toMatch(/Excludes Mully Reserve/);
-    expect(CODE_TERMS.full).toMatch(/renewals bill at full price/i);
+    expect(CODE_TERMS.full).toMatch(/renewals bill at the regular quarterly price/i);
     expect(CODE_TERMS.full).toMatch(/Excludes sale items, Mully Access and gift subscriptions/);
   });
 });
@@ -358,6 +358,13 @@ describe("Klaviyo inputs", () => {
       eventProperties: { email_consent: true, sms_consent: false, reward_code: "SHOT20-ABC234", reward_percent: 20, shots: 3 } });
     expect(out.sms).toMatchObject({ stage: "sms", phone: "+14155550134", eventProperties: { sms_consent: true } });
     expect(out.sms?.subscribe).not.toHaveProperty("email");
+  });
+  it("carries the PostHog join ids on the profile", () => {
+    const out = buildStageInputs("take_a_shot_leads", "lead1", { ...base, visitorIds: ["anon-abc12345"], posthogDistinctId: "0192ab-ph",
+      reward: { code: "SHOT10-ABC234", percent: 10, status: "active", expiresAt: "z" } });
+    expect(out.email?.properties).toMatchObject({ mully_anon_id: "anon-abc12345", mully_posthog_distinct_id: "0192ab-ph" });
+    const bare = buildStageInputs("take_a_shot_leads", "lead1", { ...base, reward: { code: "SHOT10-ABC234", percent: 10, status: "active", expiresAt: "z" } });
+    expect(bare.email?.properties).not.toHaveProperty("mully_anon_id");
   });
   it("skips SMS without consent", () => {
     const out = buildStageInputs("take_a_shot_leads", "lead1", { ...base, smsConsent: undefined, reward: { code: "SHOT10-ABC234", percent: 10, status: "active", expiresAt: "z" } });

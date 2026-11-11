@@ -30,10 +30,11 @@ export async function parseTakeAShotRequest(req: Request): Promise<Parsed> {
   if (body.company) return { ok: false, res: respond({ status: "ok" }) };
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null;
   const visitor = typeof body.deviceId === "string" && /^[A-Za-z0-9_-]{8,80}$/.test(body.deviceId) ? body.deviceId : null;
+  const posthogDistinctId = typeof body.phId === "string" && /^[A-Za-z0-9_.:@$-]{8,200}$/.test(body.phId) && !body.phId.includes("@") ? body.phId : null;
   const page = typeof body.page === "string" ? body.page.slice(0, 200).split("?")[0] : null;
   return {
     ok: true, body, ip,
-    ctx: { ipHash: digest(`ip:${ip ?? "unknown"}`), visitor, page, userAgent: req.headers.get("user-agent") || "" },
+    ctx: { ipHash: digest(`ip:${ip ?? "unknown"}`), visitor, posthogDistinctId, page, userAgent: req.headers.get("user-agent") || "" },
   };
 }
 

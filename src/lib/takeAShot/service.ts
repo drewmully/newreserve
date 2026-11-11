@@ -54,6 +54,8 @@ export interface TasDeps {
 export interface RequestContext {
   ipHash: string;
   visitor: string | null;
+  /** posthog-js distinct id from the browser, for joining Klaviyo to PostHog. */
+  posthogDistinctId?: string | null;
   page: string | null;
   userAgent: string;
 }
@@ -187,14 +189,14 @@ export function createTakeAShotService(deps: TasDeps) {
 
     /** Step 2: start (or resume) the one game this person gets. Consent is stored here. */
     async session(body: Data, ctx: RequestContext): Promise<ApiResult> {
-      if (body.emailConsent !== true) return err("Check the email box to play.", "consent_required");
+      if (body.emailConsent !== true) return err("Agree to emails so we can send your code.", "consent_required");
       const r = await checkEmail(body.email);
       if (!r.ok) return r.res;
       let phone: string | null = null;
       if (body.phone !== undefined && body.phone !== null && body.phone !== "") {
         phone = normalizePhone(body.phone);
         if (!phone) return err("Use a valid phone number, including your country code outside the US.", "invalid_phone");
-        if (body.smsConsent !== true) return err("Check the text box to get 3 shots.", "sms_consent_required");
+        if (body.smsConsent !== true) return err("Agree to texts to get more shots.", "sms_consent_required");
       }
       const n = r.n;
       return store.transaction(async (tx) => {
@@ -232,6 +234,7 @@ export function createTakeAShotService(deps: TasDeps) {
           email: n.email, emailKey: n.key, phone, source: TAKE_A_SHOT_SOURCE,
           emailConsent: evidence("email"), ...(phone ? { smsConsent: evidence("sms") } : {}),
           sessionId: sid, shots, visitorIds: ctx.visitor ? [ctx.visitor] : [], ipHash: ctx.ipHash,
+          ...(ctx.posthogDistinctId ? { posthogDistinctId: ctx.posthogDistinctId } : {}),
           createdAt: new Date(now), updatedAt: new Date(now),
         });
         tx.addConsentEvent(leadId, { ...evidence("email"), email: n.email });

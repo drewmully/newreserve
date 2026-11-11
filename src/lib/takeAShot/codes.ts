@@ -35,7 +35,7 @@ export function buildDiscountInput(opts: { code: string; percent: number; starts
       appliesOnOneTimePurchase: CODE_RULES.appliesOnOneTimePurchase,
       appliesOnSubscription: CODE_RULES.appliesOnSubscription,
     },
-    // Reserve first box only: renewals bill at full price.
+    // First Reserve quarter only: renewals bill at the regular quarterly price.
     recurringCycleLimit: CODE_RULES.recurringCycleLimit,
     minimumRequirement: CODE_RULES.minSubtotal
       ? { subtotal: { greaterThanOrEqualToSubtotal: String(CODE_RULES.minSubtotal) } }
