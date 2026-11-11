@@ -23,7 +23,11 @@ function memoryStore() {
     async transaction(fn) {
       const writes: Array<() => void> = [];
       const tx: TasTx = {
-        async get(c, id) { const d = col(c).get(id); return d ? structuredClone(d) : null; },
+        // Same rule as Firestore: no read after the first write in a transaction.
+        async get(c, id) {
+          if (writes.length) throw new Error("Firestore transactions require all reads to be executed before all writes.");
+          const d = col(c).get(id); return d ? structuredClone(d) : null;
+        },
         set(c, id, data, opts) { writes.push(() => col(c).set(id, opts?.merge ? { ...(col(c).get(id) ?? {}), ...data } : { ...data })); },
         addConsentEvent(leadId, data) { writes.push(() => consent.push({ leadId, ...data })); },
         markForSync(id, stages) { writes.push(() => synced.push({ id, stages })); },
@@ -107,6 +111,13 @@ describe("service", () => {
     expect(await t.service.check({ email: "a@mailinator.com" }, t.ctx())).toMatchObject({ status: "error", code: "disposable_email" });
     expect(await t.service.check({ email: "a@nomail.example" }, t.ctx())).toMatchObject({ status: "error", code: "no_mx" });
     expect(await t.service.check({ email: "a@example.com" }, t.ctx())).toEqual({ status: "ok" });
+  });
+
+  it("check for a returning player reads its session before writing (Firestore order)", async () => {
+    await t.service.session({ email: "back@example.com", emailConsent: true }, t.ctx("v-back"));
+    // Plus aliases are the same person.
+    expect(await t.service.check({ email: "back+again@example.com" }, t.ctx("v-other"))).toMatchObject({ status: "existing", claim: null });
+    expect(await t.service.check({ email: "back@example.com" }, t.ctx("v-back"))).toEqual({ status: "ok" });
   });
 
   it("requires email consent, and SMS consent when a phone is given", async () => {

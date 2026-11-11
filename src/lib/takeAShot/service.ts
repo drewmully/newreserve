@@ -197,10 +197,11 @@ export function createTakeAShotService(deps: TasDeps) {
       return store.transaction(async (tx) => {
         const limit = await rateLimitRead(tx, "check-ip", ctx.ipHash, LIMITS.checksPerIpPerHour);
         if (!limit.ok) return err("Too many tries from this device. Try again later.", "rate_limited", 429);
+        // Firestore: every read before the first write.
         const found = await findLead(tx, r.n.key, null, ctx.visitor);
+        const out = found ? await existingOutcome(tx, found, ctx.visitor) : null;
         limit.write();
-        if (!found) return { status: "ok" };
-        const out = await existingOutcome(tx, found, ctx.visitor);
+        if (!out) return { status: "ok" };
         return out.status === "resume" ? { status: "ok" } : out;
       });
     },
@@ -399,11 +400,12 @@ export function createTakeAShotService(deps: TasDeps) {
         const ipLimit = await rateLimitRead(tx, "upgrade-ip", ctx.ipHash, LIMITS.upgradesPerIpPerHour);
         const sidLimit = await rateLimitRead(tx, "upgrade-sid", sid, LIMITS.upgradesPerSessionPerHour);
         if (!ipLimit.ok || !sidLimit.ok) return err("Too many tries. Try again later.", "rate_limited", 429);
-        ipLimit.write(); sidLimit.write();
+        // Firestore: every read before the first write. Refusals still count against the limits.
         const s = (await tx.get(COLLECTIONS.sessions, sid)) as Session | null;
-        if (!s || (s.visitor && s.visitor !== ctx.visitor)) return err("Game expired. Reopen Take a Shot.", "no_session", 404);
-        const lead = await tx.get(COLLECTIONS.leads, s.leadId);
+        const lead = s ? await tx.get(COLLECTIONS.leads, s.leadId) : null;
         const phoneRef = await tx.get(COLLECTIONS.identities, identityIdFor("phone", phone));
+        ipLimit.write(); sidLimit.write();
+        if (!s || (s.visitor && s.visitor !== ctx.visitor)) return err("Game expired. Reopen Take a Shot.", "no_session", 404);
         if (!lead) return err("Game expired. Reopen Take a Shot.", "no_session", 404);
         // Only a locked first shot with no code, no phone, and a phone nobody else used.
         const reward = lead.reward as Reward | undefined;
