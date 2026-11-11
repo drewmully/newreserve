@@ -305,18 +305,25 @@ export function fitToRows(picks: GiftPick[]): { picks: GiftPick[]; fill: boolean
   return { picks: out, fill: out.length % GRID_COLUMNS === GRID_COLUMNS - 1 };
 }
 
+/** A rail pick carries its own tier, so clicks report the tier it belongs to. */
+export type GiftRailPick = GiftPick & { tier: GiftTierSlug };
+
 /**
  * Hub rail under the H1: four in-stock picks, live from Shopify. The first
  * two hero-tier picks (the vests), then the first in-stock pick of the other
- * tiers, topped up from whatever else is in stock.
+ * tiers, topped up from whatever else is in stock. Slugs in `exclude` (the
+ * hub's first grid row) are skipped so the rail never repeats them.
  */
-export function heroRail(tiers: GiftTierData[], size = 4): GiftPick[] {
-  const inStock = (t?: GiftTierData) => (t ? t.picks.filter((p) => p.inStock) : []);
-  const hero = inStock(tiers.find((t) => t.tier.slug === "150-to-250"));
-  const core = inStock(tiers.find((t) => t.tier.slug === "100-to-150"));
-  const small = inStock(tiers.find((t) => t.tier.slug === "under-100"));
+export function heroRail(tiers: GiftTierData[], size = 4, exclude: ReadonlySet<string> = new Set()): GiftRailPick[] {
+  const inStock = (slug: GiftTierSlug): GiftRailPick[] =>
+    (tiers.find((t) => t.tier.slug === slug)?.picks ?? [])
+      .filter((p) => p.inStock && !exclude.has(p.product.slug))
+      .map((p) => ({ ...p, tier: slug }));
+  const hero = inStock("150-to-250");
+  const core = inStock("100-to-150");
+  const small = inStock("under-100");
   const seen = new Set<string>();
-  const out: GiftPick[] = [];
+  const out: GiftRailPick[] = [];
   for (const p of [hero[0], hero[1], core[0], small[0], ...hero, ...core, ...small]) {
     if (!p || seen.has(p.product.slug) || out.length >= size) continue;
     seen.add(p.product.slug);

@@ -26,6 +26,7 @@ import {
   GIFT_OUTFIT_CHINO,
   type GiftOutfitData,
   type GiftPick,
+  type GiftRailPick,
   type GiftTierData,
   type GiftTierSlug,
 } from "@/lib/giftGuide";
@@ -171,7 +172,7 @@ export function GiftSeasonTile({ placement, tier, slot = false }: { placement: s
  * packshots, live from the catalog. No price here (members see their own
  * price on the cards below). The first two images are the LCP candidates.
  */
-export function GiftHeroRail({ picks }: { picks: GiftPick[] }) {
+export function GiftHeroRail({ picks }: { picks: GiftRailPick[] }) {
   if (picks.length < 4) return null;
   return (
     <ol className="gg-rail" aria-label="Top gifts in stock now">
@@ -188,7 +189,7 @@ export function GiftHeroRail({ picks }: { picks: GiftPick[] }) {
             data-gg-product-id={product.id}
             data-gg-price={product.price || undefined}
             data-gg-brand={product.brand}
-            data-gg-tier="hub"
+            data-gg-tier={p.tier}
             data-gg-position={i + 1}
             data-gg-placement="hub-hero-rail"
           >

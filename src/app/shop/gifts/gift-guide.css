@@ -29,6 +29,8 @@
 /* Tier section */
 .gift-guide .gg-tier, .gift-guide .gg-outfits {padding-top: 64px; margin-top: 56px; border-top: 1px solid #ddd9d0}
 .gift-guide .gg-main > div:first-of-type .gg-tier {margin-top: 40px}
+/* Sticky shop header (announcement bar + nav) clears the heading on #tier jumps. */
+.gift-guide .gg-tier {scroll-margin-top: 112px}
 .gift-guide .gg-tier__head {margin-bottom: 32px; display: grid; gap: 0}
 .gift-guide .gg-tier__head > .gg-ulink {font-size: 13px; margin-top: 14px; justify-self: start; min-height: 44px; display: inline-flex; align-items: center}
 .gift-guide .gg-grid {display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 44px 24px; list-style: none; padding: 0; margin: 0}

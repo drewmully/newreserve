@@ -4,7 +4,7 @@ import { ShopPageShell } from "../components/ShopPageShell";
 import { ScrollToTop } from "../components/ScrollToTop";
 import { canonical, SITE_URL } from "@/lib/seo";
 import { serializeJsonLd } from "@/lib/safeJsonLd";
-import { GIFT_GUIDE_HUB_ORDER, GIFT_SEASON_HREF, GIFT_SEASON_LIVE, capForHub, fitToRows, heroRail, loadGiftGuide } from "@/lib/giftGuide";
+import { GIFT_GUIDE_HUB_ORDER, GIFT_SEASON_HREF, GIFT_SEASON_LIVE, GRID_COLUMNS, capForHub, fitToRows, heroRail, loadGiftGuide } from "@/lib/giftGuide";
 import { GiftGuideTracker } from "./GiftGuideTracker";
 import { faqJsonLd, itemListJsonLd } from "./jsonLd";
 import {
@@ -46,7 +46,9 @@ export default async function GiftGuideHubPage() {
       const fit = fitToRows(capForHub(t.picks));
       return { ...t, picks: fit.picks, fill: fit.fill };
     });
-  const rail = heroRail(tiers);
+  // Skip whatever already sits in the first grid row (4 across on desktop).
+  const firstRow = new Set((ordered[0]?.picks ?? []).slice(0, GRID_COLUMNS).map((p) => p.product.slug));
+  const rail = heroRail(tiers, 4, firstRow);
   const allPicks = ordered.flatMap((t) => t.picks);
 
   return (
