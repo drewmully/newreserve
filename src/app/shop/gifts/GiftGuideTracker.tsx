@@ -9,6 +9,7 @@
  *   gift_guide_tier_click     [data-gg-tier-link] { page, tier, from_tier, placement }
  *   gift_guide_product_click  [data-gg-product]   { page, tier, product_id, handle, price, brand, position, placement }
  *   gift_a_season_click       [data-gg-season]    { page, tier, placement }
+ *   gift_card_click           [data-gg-giftcard]  { page, tier, placement }
  *
  * `page` is "hub" or the tier slug the shopper is on. `tier` is the tier the
  * clicked element belongs to (a slug, "hub", or "outfit-<key>" for the
@@ -30,6 +31,11 @@ export function GiftGuideTracker({ page }: { page: string }) {
       const season = target.closest<HTMLElement>("[data-gg-season]");
       if (season) {
         void trackEvent("gift_a_season_click", { properties: { page, tier: season.dataset.ggTier ?? page, placement: season.dataset.ggSeason } });
+        return;
+      }
+      const giftCard = target.closest<HTMLElement>("[data-gg-giftcard]");
+      if (giftCard) {
+        void trackEvent("gift_card_click", { properties: { page, tier: giftCard.dataset.ggTier ?? page, placement: giftCard.dataset.ggGiftcard } });
         return;
       }
       const tier = target.closest<HTMLElement>("[data-gg-tier-link]");

@@ -1,0 +1,57 @@
+/* Mully Gift Card page. Palette: olive #2f3a2c, bone #faf9f6, brown #4a3528, sage #c9d0b0. */
+.gift-card-page {background: #faf9f6}
+.gift-card-page .gc-main {max-width: 1180px; margin: 0 auto; padding: 24px 20px 72px}
+.gift-card-page .gc-layout {display: grid; gap: 28px; margin-top: 18px}
+.gift-card-page .gc-visual {display: flex; align-items: flex-start; justify-content: center}
+.gift-card-page .gc-card {position: relative; width: 100%; max-width: 460px; aspect-ratio: 1.586 / 1; border-radius: 14px; padding: 22px 24px; background: linear-gradient(135deg, #2f3a2c 0%, #3c4a37 60%, #4a3528 140%); color: #faf9f6; box-shadow: 0 18px 40px -22px rgba(41, 39, 32, .55); display: flex; flex-direction: column; justify-content: space-between; overflow: hidden}
+.gift-card-page .gc-card::after {content: ""; position: absolute; right: -60px; bottom: -60px; width: 200px; height: 200px; border-radius: 50%; border: 1px solid rgba(201, 208, 176, .35)}
+.gift-card-page .gc-card__mark {height: 26px; width: auto; color: #faf9f6}
+.gift-card-page .gc-card__label {font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: #c9d0b0; margin: 0}
+.gift-card-page .gc-card__amount {font-family: var(--font-serif); font-size: clamp(36px, 6vw, 52px); line-height: 1; margin: 0; min-height: 1em}
+.gift-card-page .gc-form {display: flex; flex-direction: column; gap: 18px; min-width: 0}
+.gift-card-page .gc-kicker {font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: #4a3528; margin: 0}
+.gift-card-page .gc-h1 {font-family: var(--font-serif); font-size: clamp(34px, 4.6vw, 52px); line-height: 1.08; letter-spacing: -.02em; color: #292720; margin: 0}
+.gift-card-page .gc-lead {font-size: 16px; line-height: 1.6; color: #4b4840; margin: 0; max-width: 52ch}
+.gift-card-page .gc-note {padding: 14px 16px; background: #efece4; color: #292720}
+.gift-card-page .gc-field {border: 0; margin: 0; padding: 0; min-width: 0}
+.gift-card-page .gc-legend {font-size: 13px; font-weight: 600; color: #292720; margin-bottom: 10px; padding: 0}
+.gift-card-page .gc-amounts {display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px}
+.gift-card-page .gc-amount {position: relative; display: flex; align-items: center; justify-content: center; min-height: 52px; border: 1px solid #cfcabd; background: #fff; font-size: 16px; font-weight: 600; color: #292720; cursor: pointer; transition: border-color .15s, background .15s}
+.gift-card-page .gc-amount input, .gift-card-page .gc-sendto input {position: absolute; opacity: 0; pointer-events: none}
+.gift-card-page .gc-amount:hover {border-color: #2f3a2c}
+.gift-card-page .gc-amount.is-selected {border-color: #2f3a2c; background: #2f3a2c; color: #faf9f6}
+.gift-card-page .gc-amount.is-disabled {opacity: .45; cursor: not-allowed; text-decoration: line-through}
+.gift-card-page .gc-amount:has(input:focus-visible), .gift-card-page .gc-sendto label:has(input:focus-visible) {outline: 2px solid #4a3528; outline-offset: 2px}
+.gift-card-page .gc-sendto {display: grid; grid-template-columns: 1fr 1fr; gap: 8px}
+.gift-card-page .gc-sendto label {position: relative; display: block; padding: 14px; border: 1px solid #cfcabd; background: #fff; cursor: pointer}
+.gift-card-page .gc-sendto label.is-selected {border-color: #2f3a2c; box-shadow: inset 0 0 0 1px #2f3a2c}
+.gift-card-page .gc-sendto strong {display: block; font-size: 15px; color: #292720}
+.gift-card-page .gc-sendto small {display: block; margin-top: 4px; font-size: 13px; line-height: 1.4; color: #6b675c}
+.gift-card-page .gc-recipient {display: grid; gap: 14px; padding: 18px; background: #f3f0e8}
+.gift-card-page .gc-input {display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; color: #292720}
+.gift-card-page .gc-input small {font-weight: 400; color: #6b675c}
+.gift-card-page .gc-input input, .gift-card-page .gc-input textarea {width: 100%; font: inherit; font-size: 16px; font-weight: 400; padding: 12px; border: 1px solid #cfcabd; background: #fff; color: #292720; border-radius: 0}
+.gift-card-page .gc-input textarea {resize: vertical; min-height: 84px}
+.gift-card-page .gc-input input:focus, .gift-card-page .gc-input textarea:focus {outline: 2px solid #2f3a2c; outline-offset: 0; border-color: #2f3a2c}
+.gift-card-page .gc-input [aria-invalid="true"] {border-color: #a3392b}
+.gift-card-page .gc-error {font-style: normal; font-size: 13px; font-weight: 500; color: #a3392b; margin: 0}
+.gift-card-page .gc-count, .gift-card-page .gc-help {font-size: 12px; font-weight: 400; color: #6b675c}
+.gift-card-page .gc-button {min-height: 54px; padding: 0 24px; border: 0; background: #2f3a2c; color: #faf9f6; font-size: 14px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; cursor: pointer; transition: background .15s}
+.gift-card-page .gc-button:hover:not(:disabled) {background: #4a3528}
+.gift-card-page .gc-button:disabled {opacity: .6; cursor: default}
+.gift-card-page .gc-fine {font-size: 13px; line-height: 1.5; color: #6b675c; margin: 0}
+.gift-card-page .gc-faq {margin-top: 56px; padding-top: 32px; border-top: 1px solid #e3dfd3; max-width: 760px}
+.gift-card-page .gc-h2 {font-family: var(--font-serif); font-size: clamp(26px, 3vw, 34px); line-height: 1.15; color: #292720; margin: 0 0 12px}
+.gift-card-page .gc-faq details {border-bottom: 1px solid #e3dfd3; padding: 16px 0}
+.gift-card-page .gc-faq summary {cursor: pointer; font-size: 16px; font-weight: 600; color: #292720}
+.gift-card-page .gc-faq details p {margin: 10px 0 0; font-size: 15px; line-height: 1.6; color: #4b4840}
+.gift-card-page .gc-ulink {color: #292720; text-decoration: underline; text-underline-offset: 3px}
+@media (max-width: 420px) {
+  .gift-card-page .gc-amounts {grid-template-columns: repeat(2, minmax(0, 1fr))}
+}
+@media (min-width: 900px) {
+  .gift-card-page .gc-main {padding: 32px 32px 96px}
+  .gift-card-page .gc-layout {grid-template-columns: minmax(0, 1fr) minmax(0, 520px); gap: 64px; align-items: start}
+  .gift-card-page .gc-visual {position: sticky; top: 110px}
+  .gift-card-page .gc-card {max-width: 520px; padding: 30px 32px}
+}
