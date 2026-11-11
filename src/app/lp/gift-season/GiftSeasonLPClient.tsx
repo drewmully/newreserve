@@ -125,6 +125,25 @@ export default function GiftSeasonLPClient({
   const [message, setMessage] = useState("");
   const [selfDeliver, setSelfDeliver] = useState(false);
   const formStarted = useRef(false);
+  const pickerRef = useRef<HTMLDivElement | null>(null);
+
+  // Mobile: the Alhena chat launcher (#helix-chat-container) floats over the
+  // season cards. Hide it while the picker is on screen; it returns once the
+  // visitor scrolls past (or back above) the picker. CSS limits this to <sm.
+  useEffect(() => {
+    const el = pickerRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const cls = "gs-hide-chat";
+    const io = new IntersectionObserver(
+      ([entry]) => document.body.classList.toggle(cls, entry.isIntersecting),
+      { threshold: 0 }
+    );
+    io.observe(el);
+    return () => {
+      io.disconnect();
+      document.body.classList.remove(cls);
+    };
+  }, []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -218,6 +237,7 @@ export default function GiftSeasonLPClient({
 
   return (
     <div className="min-h-screen bg-bone text-charcoal">
+      <style>{`@media (max-width: 639px) { body.gs-hide-chat #helix-chat-container { opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; transition: opacity 150ms; } }`}</style>
       <GlassHeader />
       <main className="pt-20 sm:pt-24">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
@@ -254,7 +274,12 @@ export default function GiftSeasonLPClient({
                 <div className="text-[11px] uppercase tracking-[0.15em] text-charcoal/65 mb-2">
                   Gift length
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-2 pt-1" role="radiogroup" aria-label="Gift length">
+                <div
+                  ref={pickerRef}
+                  className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-2 pt-1"
+                  role="radiogroup"
+                  aria-label="Gift length"
+                >
                   {options.map((o) => {
                     const active = o.seasons === seasons;
                     const copy = OPTION_COPY[o.seasons];
