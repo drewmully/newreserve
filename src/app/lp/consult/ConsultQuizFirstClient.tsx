@@ -75,8 +75,8 @@ export default function ConsultQuizFirstClient() {
               Let&apos;s build your edit.
             </h1>
             <p className="text-sm sm:text-base text-charcoal/65 mt-3 max-w-md mx-auto leading-relaxed">
-              Six questions, 60 seconds. See your quarterly picks before you
-              commit. No phone number required.
+              Six quick steps, about a minute. See your quarterly picks before
+              you commit. No phone number required.
             </p>
           </div>
 
@@ -89,7 +89,7 @@ export default function ConsultQuizFirstClient() {
           </div>
 
           <div className="mt-5 text-center text-[11px] tracking-[0.2em] uppercase text-charcoal/45">
-            $250 / quarter · cancel after your first · 96% renewal
+            $250 / quarter · cancel after your first
           </div>
         </div>
       </section>

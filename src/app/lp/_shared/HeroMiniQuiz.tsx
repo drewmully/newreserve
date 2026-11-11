@@ -82,11 +82,11 @@ export function HeroMiniQuiz({ source }: { source: string }) {
             Build your edit
           </div>
           <h2 className="font-serif text-3xl sm:text-4xl text-forest leading-tight">
-            Three questions. Sixty seconds.
+            In a hurry? Three questions.
           </h2>
           <p className="text-sm sm:text-base text-charcoal/65 mt-4 leading-relaxed">
-            Martine curates every edit. Answer three quick questions and
-            she&rsquo;ll build yours.
+            Martine curates every edit. Skip the full quiz: share your style,
+            shirt size and waist, and she&rsquo;ll build yours.
           </p>
         </div>
 

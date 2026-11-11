@@ -1,27 +1,21 @@
 "use client";
 
 /**
- * Compact ROI slider shared by /lp/subscription and /lp/consult.
+ * Compact value slider shared by /lp/subscription and /lp/consult.
  *
  * The visitor sets how many times a year they currently shop for golf gear
- * (5 to 24). Four tiles recompute live and show only the delta (the Mully
- * improvement) as positive numbers: hours saved, extra pieces, dollars saved,
- * and extra unique pieces per edit.
+ * (5 to 24). Only one tile is computed from the slider: an hours estimate
+ * using a stated assumption (about 45 minutes per shopping trip). The second
+ * tile is the plan fact (4 to 6 pieces a quarter, so 16 to 24 a year).
+ *
+ * 2026-11-11: removed the "$ saved / year", "extra pieces / year" and
+ * "unique pieces / edit" tiles. They came from arbitrary formulas
+ * (e.g. visits * 200 - 1000) with no supporting data.
  */
 
 import { useMemo, useState } from "react";
 
-function formatSaved(dollars: number): string {
-  if (dollars < 1000) return `$${dollars}`;
-  const k = Math.round((dollars / 1000) * 10) / 10;
-  return Number.isInteger(k) ? `$${k}k` : `$${k.toFixed(1)}k`;
-}
-
-function uniquePieces(visits: number): number {
-  if (visits < 10) return 0;
-  if (visits <= 15) return 1;
-  return 2;
-}
+const MINUTES_PER_TRIP = 45;
 
 interface Tile {
   line1: string;
@@ -32,18 +26,10 @@ export function RoiSlider({ className }: { className?: string }) {
   const [visits, setVisits] = useState(12);
 
   const tiles = useMemo<Tile[]>(() => {
-    const hoursSaved = Math.round((visits * (60 - 15)) / 60);
-    const extraPieces = Math.max(0, 20 - Math.floor(visits * 1.5));
-    const dollarsSaved = Math.max(0, visits * 200 - 1000);
-    const theirUnique = uniquePieces(visits);
+    const hoursSaved = Math.round((visits * MINUTES_PER_TRIP) / 60);
     return [
-      { line1: `${hoursSaved} hours`, line2: "Hours saved / year" },
-      { line1: `+${extraPieces}`, line2: "Extra pieces / year" },
-      { line1: formatSaved(dollarsSaved), line2: "Saved / year" },
-      {
-        line1: `+${3 - theirUnique} to +${6 - theirUnique}`,
-        line2: "Unique pieces / edit",
-      },
+      { line1: `About ${hoursSaved} hours`, line2: "Est. time back / year" },
+      { line1: "16 to 24", line2: "Pieces / year" },
     ];
   }, [visits]);
 
@@ -80,6 +66,10 @@ export function RoiSlider({ className }: { className?: string }) {
           </div>
         ))}
       </div>
+      <p className="mt-3 text-[11px] leading-relaxed text-charcoal/50">
+        Estimate based on your slider, assuming about {MINUTES_PER_TRIP} minutes
+        per shopping trip. Pieces reflect 4 to 6 per quarter.
+      </p>
     </div>
   );
 }

@@ -8,7 +8,7 @@
  * Tone (Drew's instructions):
  *   - Premium curation, NEVER discounted.
  *   - "Have a guy who handles your golf wardrobe."
- *   - 96% renewal, $300+ retail value for $250, first-quarter reassurance
+ *   - cancel after Q1, $300+ retail value for $250, first-quarter reassurance
  *     (free size exchanges, cancel after Q1). No welcome-gift promise —
  *     Founding 100 rangefinder was retired 2026-07-13.
  *   - Audience: man 35+, doesn't read fluff. Short. Visual. Load-bearing words only.
@@ -29,7 +29,7 @@ function hi(firstName: string | null, alt?: string): string {
 // Real recipients land on their personalized reveal page (see revealUrl).
 const RESERVE_URL_FALLBACK = "https://mymully.com/lp/subscription";
 const REVEAL_BASE = "https://mymully.com/lp/reserve/reveal";
-const REVIEWS_LINE = "Renewal rate: 96%. The members who get one almost never leave.";
+const REVIEWS_LINE = "Cancel after your first quarter if it is not for you. No calls, no forms.";
 
 /**
  * Builds the per-recipient "see your edit" link.
@@ -82,7 +82,7 @@ Two questions I get a lot, so I'll just answer them up front.
 Yes. After you join, we confirm sizing and walk through your preferences. The edit is curated FOR you — not pushed at you. If something isn't right, we swap it. No drama.
 
 2. "What if I want to skip a quarter?"
-You can. Pause, skip, change frequency — all of it lives in your account. We don't trap anyone. The reason 96% of members renew is because the gear is good, not because the unsubscribe button is hidden.
+You can. Pause, skip, change frequency: all of it lives in your account. We don't trap anyone. Members stay because the gear is good, not because the unsubscribe button is hidden.
 
 The first quarter is the proof. If Reserve isn't for you, cancel before the next quarter bills. No calls, no forms.
 

@@ -99,17 +99,17 @@ ${configCalls.join("\n")}`,
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://www.mymully.com"),
-  title: "Mully Reserve | Progress, Earned.",
+  title: "Mully | Golf Apparel and Gear, Selected by Mully",
   description:
-    "Members-only access to curated partner benefits, reserve pricing, and private club eligibility. Built for players who care.",
+    "Golf apparel and gear from Rhone, Quiet Golf, Duck Head, Olydoe and more, selected by Mully. Shop individual pieces, build an outfit, and return within 30 days.",
   icons: {
     icon: "/favicon.svg",
   },
   openGraph: {
-    title: "Mully Reserve | Progress, Earned.",
+    title: "Mully | Golf Apparel and Gear, Selected by Mully",
     description:
-      "Members-only access to curated partner benefits, reserve pricing, and private club eligibility.",
-    siteName: "Mully Reserve",
+      "Golf apparel and gear from Rhone, Quiet Golf, Duck Head, Olydoe and more, selected by Mully. Shop individual pieces, build an outfit, and return within 30 days.",
+    siteName: "Mully",
     type: "website",
   },
 };
