@@ -28,7 +28,15 @@ function shopDomain(env: Env): string | null {
   return d ? d.replace(/^https?:\/\//, "").replace(/\/$/, "") : null;
 }
 
-async function clientCredentialsToken(env: Env, f: Fetch): Promise<{ token: string; expiresAt: number } | null> {
+type Minted = { token: string; expiresAt: number; scopes: string[] | null };
+
+/**
+ * Dev Dashboard app token (e.g. "Mully Discounts"). The grant response
+ * includes `scope` (comma-separated) and `expires_in` (86399s), so the scope
+ * check needs no extra call and the token is cached until 5 minutes before
+ * it expires.
+ */
+async function clientCredentialsToken(env: Env, f: Fetch): Promise<Minted | null> {
   const id = env.SHOPIFY_DISCOUNTS_CLIENT_ID, secret = env.SHOPIFY_DISCOUNTS_CLIENT_SECRET, shop = shopDomain(env);
   if (!id || !secret || !shop) return null;
   const res = await f(`https://${shop}/admin/oauth/access_token`, {
@@ -37,16 +45,17 @@ async function clientCredentialsToken(env: Env, f: Fetch): Promise<{ token: stri
     body: new URLSearchParams({ grant_type: "client_credentials", client_id: id, client_secret: secret }).toString(),
   });
   if (!res.ok) return null;
-  const json = (await res.json()) as { access_token?: string; expires_in?: number };
+  const json = (await res.json()) as { access_token?: string; expires_in?: number; scope?: string };
   if (!json.access_token) return null;
   const ttl = typeof json.expires_in === "number" ? json.expires_in * 1000 : 23 * 3600_000;
-  return { token: json.access_token, expiresAt: Date.now() + Math.max(60_000, ttl - 5 * 60_000) };
+  const scopes = typeof json.scope === "string" ? json.scope.split(/[,\s]+/).map((x) => x.trim()).filter(Boolean) : null;
+  return { token: json.access_token, expiresAt: Date.now() + Math.max(60_000, ttl - 5 * 60_000), scopes };
 }
 
-async function tokenFor(source: TokenSource, env: Env, f: Fetch) {
+async function tokenFor(source: TokenSource, env: Env, f: Fetch): Promise<Minted | null> {
   if (source === "client_credentials") return clientCredentialsToken(env, f);
   const token = env[source]?.trim();
-  return token ? { token, expiresAt: Number.POSITIVE_INFINITY } : null;
+  return token ? { token, expiresAt: Number.POSITIVE_INFINITY, scopes: null } : null;
 }
 
 async function probe(token: string, env: Env, f: Fetch): Promise<{ appTitle: string | null; hasWriteDiscounts: boolean }> {
@@ -71,6 +80,11 @@ let cached: { token: string; source: TokenSource; expiresAt: number } | null = n
 /** For tests. */
 export function resetDiscountTokenCache() { cached = null; }
 
+/** True when a token with write_discounts is configured (cached after the first check). */
+export async function hasDiscountToken(env: Env = process.env, f: Fetch = fetch): Promise<boolean> {
+  return Boolean(await getDiscountToken(env, f).catch(() => null));
+}
+
 /** The first token with write_discounts, or null when none is configured. */
 export async function getDiscountToken(env: Env = process.env, f: Fetch = fetch): Promise<{ token: string; source: TokenSource } | null> {
   if (cached && cached.expiresAt > Date.now()) return { token: cached.token, source: cached.source };
@@ -79,7 +93,8 @@ export async function getDiscountToken(env: Env = process.env, f: Fetch = fetch)
     try {
       const t = await tokenFor(source, env, f);
       if (!t) continue;
-      if ((await probe(t.token, env, f)).hasWriteDiscounts) {
+      const canWrite = t.scopes ? t.scopes.includes("write_discounts") : (await probe(t.token, env, f)).hasWriteDiscounts;
+      if (canWrite) {
         cached = { token: t.token, source, expiresAt: t.expiresAt };
         return { token: t.token, source };
       }
@@ -99,7 +114,11 @@ export async function probeDiscountTokens(env: Env = process.env, f: Fetch = fet
     if (present) {
       try {
         const t = await tokenFor(source, env, f);
-        if (t) ({ appTitle, hasWriteDiscounts } = await probe(t.token, env, f));
+        if (t?.scopes) {
+          // Scope comes from the grant itself; the title lookup is best effort.
+          hasWriteDiscounts = t.scopes.includes("write_discounts");
+          appTitle = await probe(t.token, env, f).then((p) => p.appTitle).catch(() => null);
+        } else if (t) ({ appTitle, hasWriteDiscounts } = await probe(t.token, env, f));
       } catch { /* report as not usable */ }
     }
     out.push({ source, present, appTitle, hasWriteDiscounts });
@@ -107,16 +126,26 @@ export async function probeDiscountTokens(env: Env = process.env, f: Fetch = fet
   return out;
 }
 
-/** Admin GraphQL with the discount token. Error messages never include the token. */
+/**
+ * Admin GraphQL with the discount token. A 401 (revoked or expired token)
+ * drops the cache and retries once with a fresh token. Error messages never
+ * include the token.
+ */
 export async function discountGraphQL<T>(query: string, variables?: Record<string, unknown>, env: Env = process.env, f: Fetch = fetch): Promise<T> {
-  const chosen = await getDiscountToken(env, f);
-  if (!chosen) throw new Error("access_denied: no token with write_discounts");
   const shop = shopDomain(env);
-  const res = await f(`https://${shop}/admin/api/${SHOPIFY_DISCOUNT_API_VERSION}/graphql.json`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": chosen.token },
-    body: JSON.stringify({ query, variables }),
-  });
+  let res: Response | null = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const chosen = await getDiscountToken(env, f);
+    if (!chosen) throw new Error("access_denied: no token with write_discounts");
+    res = await f(`https://${shop}/admin/api/${SHOPIFY_DISCOUNT_API_VERSION}/graphql.json`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Shopify-Access-Token": chosen.token },
+      body: JSON.stringify({ query, variables }),
+    });
+    if (res.status !== 401) break;
+    cached = null;
+  }
+  if (!res) throw new Error("shopify_unavailable");
   if (res.status === 401 || res.status === 403) { cached = null; throw new Error(`access_denied ${res.status}`); }
   if (!res.ok) throw new Error(`shopify ${res.status}`);
   const json = (await res.json()) as { data: T; errors?: { message?: string; extensions?: { code?: string } }[] };

@@ -7,7 +7,7 @@ import { buildDiscountInput, codeExpiry, makeCode } from "@/lib/takeAShot/codes"
 import { CODE_RULES, FLOOR_PERCENT, MAX_PERCENT, SHOTS, isTakeAShotServerEnabled, percentForResult } from "@/lib/takeAShot/config";
 import { isDisposableDomain, leadIdFor, normalizeEmail } from "@/lib/takeAShot/identity";
 import { mulberry32, simulateShot, windFrom } from "@/lib/takeAShot/sim";
-import { getDiscountToken, probeDiscountTokens, resetDiscountTokenCache } from "@/lib/takeAShot/discountToken";
+import { discountGraphQL, getDiscountToken, probeDiscountTokens, resetDiscountTokenCache } from "@/lib/takeAShot/discountToken";
 import { GAME_CODE_PATTERN, isGameRewardCode } from "@/lib/shopRewards";
 import { buildStageInputs } from "@/lib/klaviyo/syncState";
 import { decideGameReward, pickReward } from "@/lib/lifecycle/rewards";
@@ -261,6 +261,46 @@ describe("discount token", () => {
     expect(await getDiscountToken(env, f as unknown as typeof fetch)).toEqual({ token: "cc", source: "client_credentials" });
   });
 
+  it("trusts the grant's scope field, caches until 5 minutes before expiry and refreshes on 401", async () => {
+    vi.useFakeTimers({ now: Date.parse("2026-11-11T15:00:00Z") });
+    try {
+      const env = { SHOPIFY_STORE_DOMAIN: "shop.example", SHOPIFY_DISCOUNTS_CLIENT_ID: "id", SHOPIFY_DISCOUNTS_CLIENT_SECRET: "secret" };
+      let minted = 0, graphql = 0, reject = false;
+      const f = vi.fn(async (u: string, init: { headers?: Record<string, string> }) => {
+        if (u.endsWith("/admin/oauth/access_token")) {
+          minted++;
+          return { ok: true, status: 200, json: async () => ({ access_token: `cc${minted}`, expires_in: 86399, scope: "read_discounts,write_discounts" }) };
+        }
+        graphql++;
+        if (reject && init.headers?.["X-Shopify-Access-Token"] === "cc1") return { ok: false, status: 401, json: async () => ({}) };
+        return { ok: true, status: 200, json: async () => ({ data: { ok: true } }) };
+      });
+      const ff = f as unknown as typeof fetch;
+      expect(await getDiscountToken(env, ff)).toEqual({ token: "cc1", source: "client_credentials" });
+      expect(graphql).toBe(0); // No scope probe: the grant said write_discounts.
+      vi.advanceTimersByTime(86399_000 - 6 * 60_000);
+      expect((await getDiscountToken(env, ff))?.token).toBe("cc1");
+      reject = true;
+      expect(await discountGraphQL("query { ok }", {}, env, ff)).toEqual({ ok: true });
+      expect(minted).toBe(2);
+      vi.advanceTimersByTime(2 * 60_000); // Inside the 5-minute window: mint again.
+      expect((await getDiscountToken(env, ff))?.token).toBe("cc2");
+      expect(minted).toBe(2);
+      vi.advanceTimersByTime(86399_000);
+      expect((await getDiscountToken(env, ff))?.token).toBe("cc3");
+    } finally { vi.useRealTimers(); }
+  });
+
+  it("refuses a grant whose scope lacks write_discounts", async () => {
+    const env = { SHOPIFY_STORE_DOMAIN: "shop.example", SHOPIFY_DISCOUNTS_CLIENT_ID: "id", SHOPIFY_DISCOUNTS_CLIENT_SECRET: "secret" };
+    const f = async (u: string) => u.endsWith("/access_token")
+      ? { ok: true, status: 200, json: async () => ({ access_token: "cc", expires_in: 86399, scope: "read_discounts" }) }
+      : scopes("Mully Discounts", false);
+    expect(await getDiscountToken(env, f as unknown as typeof fetch)).toBeNull();
+    const diag = await probeDiscountTokens(env, f as unknown as typeof fetch);
+    expect(diag[2]).toEqual({ source: "client_credentials", present: true, appTitle: "Mully Discounts", hasWriteDiscounts: false });
+  });
+
   it("diagnostics report booleans and titles only", async () => {
     const env = { SHOPIFY_STORE_DOMAIN: "shop.example", SHOPIFY_DISCOUNTS_TOKEN: "secret-token" };
     const out = await probeDiscountTokens(env, (async () => scopes("Mully Reserve", false)) as unknown as typeof fetch);
@@ -344,6 +384,15 @@ describe("readiness evidence with a game code", () => {
       consent: async () => ({ subscribed: true, marketable: true, internal: false }),
     });
     expect(gameLead).toHaveBeenCalledWith(wantId);
+    // Status comes from the discounts token when one is injected; usage still uses the admin token.
+    const discountGql = vi.fn(async () => ({ codeDiscountNodeByCode: null }));
+    const viaDiscounts = await readReadinessEvidence("J.Doe@gmail.com", {
+      sb: {} as never, gql: gql as never, discountGql: discountGql as never, now, gameLead,
+      lead: async () => null, metaLead: async () => null,
+      consent: async () => ({ subscribed: true, marketable: true, internal: false }),
+    });
+    expect(discountGql).toHaveBeenCalledTimes(1);
+    expect(viaDiscounts.reward).toMatchObject({ verified: false, code: null }); // Deleted in Shopify.
     expect(out.reward).toMatchObject({ verified: true, code: "SHOT25-ABC234", percent: 25 });
   });
 });

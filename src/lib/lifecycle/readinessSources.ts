@@ -25,6 +25,7 @@ import { readLoopEvidence, readNativeEvents, readServiceEvidence, REVIEW_OWNER }
 import { decideEarnedReward, decideGameReward, decideMetaOfferReward, parseRewardStatus, pickReward, REWARD_STATUS_QUERY, type RewardCode } from "./rewards";
 import { META_OFFER_COLLECTION, TAKE_A_SHOT_COLLECTION } from "@/lib/klaviyo/config";
 import { leadIdFor, normalizeEmail } from "@/lib/takeAShot/identity";
+import { discountGraphQL, hasDiscountToken } from "@/lib/takeAShot/discountToken";
 import type { ProfileProps, ReadinessInput } from "./readiness";
 
 type Sb = ReturnType<typeof getSupabaseService>;
@@ -48,6 +49,8 @@ export interface ReadinessDeps {
   metaLead?: (docId: string) => Promise<Record<string, unknown> | null>;
   /** Take a Shot lead lookup by lead id. Returns null when absent; throws on read error. */
   gameLead?: (docId: string) => Promise<Record<string, unknown> | null>;
+  /** GraphQL for game-code status: the discounts app token when configured, else gql. */
+  discountGql?: Gql;
   consent?: (email: string) => Promise<{ subscribed: boolean; marketable: boolean; internal: boolean }>;
   now?: Date;
 }
@@ -158,7 +161,9 @@ export async function readReadinessEvidence(emailRaw: string, deps: ReadinessDep
   let gameUsed: string[] = [], gameUsageOk = true;
   if (gameRewardLead?.status === "active") {
     try {
-      gameStatus = parseRewardStatus(await gql(REWARD_STATUS_QUERY, { code: gameRewardLead.code }), now);
+      // The discounts app token can read its own codes; the admin token may lack read_discounts.
+      const statusGql: Gql = deps.discountGql ?? (deps.gql ? gql : (await hasDiscountToken()) ? (q, v) => discountGraphQL(q, v) : gql);
+      gameStatus = parseRewardStatus(await statusGql(REWARD_STATUS_QUERY, { code: gameRewardLead.code }), now);
       const used = await gql(REWARD_USE_QUERY, { q: `discount_code:${gameRewardLead.code} email:${searchValue(email)}` }) as { orders?: { nodes?: Array<{ email?: string; discountCodes?: string[] }> } };
       for (const o of used?.orders?.nodes ?? []) {
         if ((o.email ?? "").trim().toLowerCase() === email) gameUsed = [...gameUsed, ...(o.discountCodes ?? [])];
