@@ -109,6 +109,15 @@ export default async function EditorialLandingPage() {
             <span>Browse the Mully 100</span>
             <span aria-hidden>&rarr;</span>
           </Link>
+          <p className="mt-8 text-[13px] text-charcoal/55">
+            From the archive:{" "}
+            <Link
+              href="/blogs/news/top-5-golf-resorts-in-michigan"
+              className="underline underline-offset-4 hover:text-forest"
+            >
+              Top 5 Golf Resorts in Michigan
+            </Link>
+          </p>
         </section>
       </main>
 

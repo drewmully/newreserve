@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 import { Navigation } from "@/components/outings/Navigation";
 import { ScrollReveal } from "@/components/outings/ScrollReveal";
 import { ContactForm } from "@/components/outings/ContactForm";
@@ -471,6 +472,32 @@ export default function OutingsPage() {
               </ScrollReveal>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* Planning reads: links to restored archive posts (SEO s06) */}
+      <section className="py-16 md:py-20 border-t border-border">
+        <div className="max-w-[1200px] mx-auto px-6 md:px-10">
+          <p className="text-[11px] uppercase tracking-[0.2em] text-muted mb-5">
+            Planning reads
+          </p>
+          <ul className="space-y-3 text-[15px]">
+            <li>
+              <Link href="/blogs/news/golf-outing-ideas-35-formats-themes-contests-and-extras-with-a-planning-checklist" className="text-cream underline underline-offset-4 hover:opacity-80">
+                Golf Outing Ideas: 35 Formats, Themes, Contests and Extras
+              </Link>
+            </li>
+            <li>
+              <Link href="/blogs/news/best-formats-for-golf-trips-with-your-buddies" className="text-cream underline underline-offset-4 hover:opacity-80">
+                Best Formats for Golf Trips with Your Buddies
+              </Link>
+            </li>
+            <li>
+              <Link href="/blogs/news/golf-formats-explained-different-ways-to-play-the-game" className="text-cream underline underline-offset-4 hover:opacity-80">
+                Golf Formats Explained: Different Ways to Play the Game
+              </Link>
+            </li>
+          </ul>
         </div>
       </section>
 

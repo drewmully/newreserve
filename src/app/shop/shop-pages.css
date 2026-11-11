@@ -139,3 +139,11 @@
 .shop-contact-done h2 {font-family: var(--font-serif); font-size: 28px}
 .shop-contact-done p {margin-top: 10px; font-size: 14px; line-height: 1.7; color: #625e55}
 @media (max-width: 640px) {.shop-contact-row {grid-template-columns: 1fr}}
+
+/* /blog "From the archive" list (SEO s06): titles only */
+.shop-archive-list {margin-top: 64px; padding-top: 32px; border-top: 1px solid #ddd9d0}
+.shop-archive-list h2 {font-family: var(--font-serif); font-size: 24px; margin-bottom: 16px}
+.shop-archive-list ul {display: grid; gap: 10px 32px; grid-template-columns: 1fr}
+.shop-archive-list a {font-size: 14px; line-height: 1.6; color: #514d44; text-decoration: underline; text-underline-offset: 3px}
+.shop-archive-list a:hover {color: #292720}
+@media (min-width: 768px) {.shop-archive-list ul {grid-template-columns: 1fr 1fr}}
