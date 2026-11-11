@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
-import ShopPage, { metadata as shopMetadata } from "./shop/page";
+import { renderShopPage, metadata as shopMetadata } from "./shop/page";
+import { getReserveQuarterlyPrice } from "@/lib/shopify";
+import { SHOPIFY_MEMBERSHIP_PLANS } from "@/lib/membershipConfig";
+import { formatHeroPrice } from "@/lib/homeHero";
 import ShopLayout from "./shop/layout";
 import { SITE_URL, canonical } from "@/lib/seo";
 export const revalidate = 3600;
@@ -31,8 +34,10 @@ const ORGANIZATION_JSON_LD = {
 };
 
 export default async function Home() {
+  const member = SHOPIFY_MEMBERSHIP_PLANS.member;
+  const reservePrice = formatHeroPrice(await getReserveQuarterlyPrice(member.merchandiseId, member.sellingPlanGid));
   return <>
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ORGANIZATION_JSON_LD).replace(/</g, "\\u003c") }} />
-    <ShopLayout>{await ShopPage()}</ShopLayout>
+    <ShopLayout>{await renderShopPage({ homeHero: { reservePrice } })}</ShopLayout>
   </>;
 }

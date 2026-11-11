@@ -10,6 +10,7 @@ import { SHOP_CATEGORIES } from "./shopCollections";
 import { getSeasonalTheme } from "./seasonalTheme";
 import { getAllPublishedPosts } from "@/app/blog/posts";
 import { canonical } from "@/lib/seo";
+import type { HomeHeroProps } from "./components/ShopLanding";
 
 const SHOP_TITLE = "Shop Golf Apparel and Gear, Selected by Mully";
 const SHOP_DESCRIPTION =
@@ -28,6 +29,14 @@ export const metadata: Metadata = {
 export const revalidate = 3600;
 
 export default async function ShopPage() {
+  return renderShopPage();
+}
+
+/**
+ * Shared renderer for /shop and the homepage. The homepage passes `homeHero`
+ * to run the home_hero_dual test; /shop never does.
+ */
+export async function renderShopPage({ homeHero }: { homeHero?: HomeHeroProps } = {}) {
   const theme = getSeasonalTheme();
 
   // Fetch each category collection independently so one 404 doesn't blank
@@ -84,6 +93,7 @@ export default async function ShopPage() {
           productsByCategory={productsByCategory}
           theme={theme}
           journalPosts={journalPosts}
+          homeHero={homeHero}
         />
       </main>
 

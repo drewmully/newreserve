@@ -69,6 +69,9 @@ const VALID_EVENTS = new Set([
   "gift_guide_tier_click",
   "gift_guide_product_click",
   "gift_a_season_click",
+  // Homepage hero test (home_hero_dual): every hero CTA, both arms.
+  // Properties: cta, href, variant (control|dual), resolved.
+  "hero_cta_click",
   // Consult LP (mymully.com/lp/consult) — phone-first variant of subscription LP.
   // lp_consult_view fires on page mount; lp_consult_modal_view fires when the
   // overlay opens; lp_consult_submit fires once the phone step succeeds (this

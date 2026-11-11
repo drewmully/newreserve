@@ -583,6 +583,48 @@ export async function getFirstSellingPlanId(handle: string): Promise<string | nu
   return data.product?.sellingPlanGroups.nodes.flatMap(g => g.sellingPlans.nodes)[0]?.id ?? null;
 }
 
+/**
+ * Live quarterly price for Mully Reserve (the member subscription line used
+ * by createMembershipCheckout). Prefers the selling plan allocation price so
+ * the homepage shows what checkout charges. Returns null on any failure so
+ * callers hide the price rather than fall back to a hard-coded number.
+ */
+export async function getReserveQuarterlyPrice(
+  merchandiseId: string,
+  sellingPlanGid: string,
+): Promise<string | null> {
+  try {
+    const data = await storefrontFetch<{
+      node: {
+        price?: { amount: string } | null;
+        sellingPlanAllocations?: {
+          nodes: Array<{ sellingPlan: { id: string }; priceAdjustments: Array<{ price: { amount: string } }> }>;
+        };
+      } | null;
+    }>(
+      `query ReservePrice($id: ID!) {
+        node(id: $id) {
+          ... on ProductVariant {
+            price { amount }
+            sellingPlanAllocations(first: 10) {
+              nodes { sellingPlan { id } priceAdjustments { price { amount } } }
+            }
+          }
+        }
+      }`,
+      { id: merchandiseId },
+      3600,
+    );
+    const v = data.node;
+    if (!v) return null;
+    const plan = v.sellingPlanAllocations?.nodes.find((n) => n.sellingPlan.id === sellingPlanGid);
+    return plan?.priceAdjustments[0]?.price.amount ?? v.price?.amount ?? null;
+  } catch (err) {
+    console.error("[shopify] getReserveQuarterlyPrice failed", err);
+    return null;
+  }
+}
+
 // ─── Cart mutations ───────────────────────────────────────────────────────────
 
 export async function cartCreate(

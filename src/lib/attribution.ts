@@ -1,3 +1,4 @@
+import { HOME_HERO_CART_ATTR, readStoredHomeHeroVariant } from "@/lib/homeHero";
 /**
  * Persistent ad-click attribution.
  *
@@ -287,6 +288,12 @@ export function attributionToCartAttributes(
   const mullyAnonId = readMullyAnonId();
   if (mullyAnonId) {
     out.push({ key: "mully_anon_id", value: mullyAnonId });
+  }
+
+  // home_hero_dual arm, so the orders-paid webhook can split purchases.
+  const homeHero = readStoredHomeHeroVariant();
+  if (homeHero) {
+    out.push({ key: HOME_HERO_CART_ATTR, value: homeHero });
   }
 
   return out;
