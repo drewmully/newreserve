@@ -8,6 +8,7 @@
  */
 
 import { BOGO15_CODE, isBogoDiscount } from "./cartPicks";
+import { isFirstOrderShippingCode } from "./firstOrderShipping";
 
 export const PDP_COMPLETE_LOOK_FLAG = "pdp_complete_look";
 /** PostHog property that carries the arm on every event of the test. */
@@ -276,6 +277,17 @@ export function pdpBogoLineApplies(
   suppressed = false
 ): boolean {
   return !suppressed && vestEligible && picks.length > 0 && picks.every((p) => p.item.bogoEligible);
+}
+
+/**
+ * An applied code that BOGO15 does not combine with. BOGO15 combines with
+ * shipping discounts, so the bag's first-order free shipping code
+ * (FIRSTORDERSHIP, auto-added at $100+) must not hide the line.
+ */
+export function hasBogoBlockingCode(codes: Array<{ code: string; applicable: boolean }> = []): boolean {
+  return codes.some(
+    (c) => c.applicable && c.code.toUpperCase() !== BOGO15_CODE && !isFirstOrderShippingCode(c.code)
+  );
 }
 
 export type CartBogoState = "hidden" | "one_item" | "applied";

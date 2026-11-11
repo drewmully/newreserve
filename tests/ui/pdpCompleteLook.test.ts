@@ -5,6 +5,7 @@ import {
   cartBogoState,
   completeLookOverridesAllowed,
   defaultLookSize,
+  hasBogoBlockingCode,
   isAvailableFor,
   itemsProperty,
   pdpBogoLineApplies,
@@ -235,6 +236,15 @@ describe("cart BOGO line state", () => {
     expect(sizeFromVariantTitle("Highland Green / M")).toBe("M");
     expect(sizeFromVariantTitle("Black / XXL")).toBe("XXL");
     expect(sizeFromVariantTitle("Default Title")).toBeUndefined();
+  });
+});
+
+describe("BOGO15 blocking codes", () => {
+  it("ignores BOGO15 itself and first-order free shipping, which combine with it", () => {
+    expect(hasBogoBlockingCode([{ code: "FIRSTORDERSHIP", applicable: true }])).toBe(false);
+    expect(hasBogoBlockingCode([{ code: "bogo15", applicable: true }])).toBe(false);
+    expect(hasBogoBlockingCode([{ code: "WELCOME10", applicable: false }])).toBe(false);
+    expect(hasBogoBlockingCode([{ code: "WELCOME10", applicable: true }])).toBe(true);
   });
 });
 

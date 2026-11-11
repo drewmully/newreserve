@@ -5,7 +5,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMembership } from "../../context/MembershipContext";
 import { useHasShopReward } from "./useCompleteLookVariant";
 import { trackEvent } from "@/lib/tracking";
-import { BOGO15_CODE } from "@/lib/cartPicks";
 import { money } from "@/lib/shopOutfit";
 import {
   CART_BOGO_APPLIED,
@@ -14,6 +13,7 @@ import {
   PDP_COMPLETE_LOOK_PROPERTY,
   bogoSavedFromAllocations,
   cartBogoState,
+  hasBogoBlockingCode,
   inStockSizes,
   lookVariantFor,
   selectCompleteLook,
@@ -67,7 +67,7 @@ export function ShopCartBogoLine({ variant }: { variant: CompleteLookVariant }) 
     return () => { live = false; };
   }, [cartOpen, slugKey]);
 
-  const otherCodes = (cartDiscountCodes ?? []).some((c) => c.applicable && c.code.toUpperCase() !== BOGO15_CODE);
+  const otherCodes = hasBogoBlockingCode(cartDiscountCodes);
   const suppressed = hasShopDiscount || hasReward || otherCodes;
   const lines = cart.map((i) => ({ slug: i.slug, quantity: i.quantity, eligible: !!data?.eligible[i.slug] }));
   const { state, saved } = cartBogoState({

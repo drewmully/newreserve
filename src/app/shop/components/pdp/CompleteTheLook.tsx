@@ -5,11 +5,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMembership } from "../../../context/MembershipContext";
 import { useHasShopReward } from "../useCompleteLookVariant";
 import { trackEvent } from "@/lib/tracking";
-import { BOGO15_CODE } from "@/lib/cartPicks";
 import { money } from "@/lib/shopOutfit";
 import {
   PDP_BOGO_LINE,
   PDP_COMPLETE_LOOK_PROPERTY,
+  hasBogoBlockingCode,
   inStockSizes,
   itemsProperty,
   lookVariantFor,
@@ -41,7 +41,7 @@ interface Props {
 export function CompleteTheLook({ pdpHandle, pairing, fallbacks, vestBogoEligible, vestSize, variant }: Props) {
   const { addItemsToCart, hasShopDiscount, memberPrice, cartDiscountCodes } = useMembership();
   const hasReward = useHasShopReward();
-  const otherCodes = (cartDiscountCodes ?? []).some((c) => c.applicable && c.code.toUpperCase() !== BOGO15_CODE);
+  const otherCodes = hasBogoBlockingCode(cartDiscountCodes);
 
   const picks = useMemo(
     () => selectCompleteLook(pairing, fallbacks, { vestSize, exclude: [pdpHandle] }),
