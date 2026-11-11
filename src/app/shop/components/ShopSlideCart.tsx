@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import { useMembership } from "../../context/MembershipContext";
 import { trackEvent } from "@/lib/tracking";
 import { ShopCartBogoNudge } from "./ShopCartBogoNudge";
+import { ShopCartBogoLine } from "./ShopCartBogoLine";
+import { useCompleteLookVariant } from "./useCompleteLookVariant";
 import { isBogoDiscount } from "@/lib/cartPicks";
 import { FIRST_ORDER_SHIPPING_MIN, firstOrderShippingRevealed, markFirstOrderShippingRevealed } from "@/lib/firstOrderShipping";
 
@@ -30,6 +32,8 @@ export function ShopSlideCart({ accent }: { accent: string }) {
     cartDiscountLabels = [],
     hasShopDiscount,
   } = useMembership();
+  // pdp_complete_look: evaluated on first cart view; control keeps the nudge.
+  const completeLookVariant = useCompleteLookVariant(cartOpen);
   const appliedCode = cartDiscountCodes.find(c => c.applicable && c.code.toUpperCase() !== "BOGO15")?.code.toUpperCase();
   const savingsLabel = isBogoDiscount(cartDiscountLabels, cartDiscountCodes) ? "Mully BOGO15 savings"
     : appliedCode ? `Mully ${appliedCode} savings`
@@ -230,7 +234,9 @@ export function ShopSlideCart({ accent }: { accent: string }) {
                   </li>
                 ))}
               </ul>
-              <ShopCartBogoNudge accent={accent} />
+              {completeLookVariant === "test"
+                ? <ShopCartBogoLine variant={completeLookVariant} />
+                : <ShopCartBogoNudge accent={accent} />}
             </div>
 
             {/* Footer */}

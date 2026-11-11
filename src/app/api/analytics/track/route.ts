@@ -108,6 +108,19 @@ const VALID_EVENTS = new Set([
   "take_a_shot_phone",
   "take_a_shot_shot",
   "take_a_shot_claim",
+  // Mully 100 affiliate grid card tap. Was dropped with a 400 because it was
+  // never added here; trackEvent swallows the error, so nothing surfaced.
+  "mully100_card_click",
+  // Cart BOGO15 nudge (control arm of pdp_complete_look). Same silent miss.
+  "bogo_nudge_viewed",
+  "bogo_pick_opened",
+  "bogo_pick_added",
+  // pdp_complete_look A/B test (vest PDPs + slide cart). Every event carries
+  // $feature/pdp_complete_look.
+  "complete_look_view",
+  "complete_look_add",
+  "cart_bogo_line_view",
+  "cart_bogo_suggestion_add",
 ]);
 
 /**

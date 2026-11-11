@@ -605,6 +605,13 @@ export async function POST(request: NextRequest) {
         return Number.isFinite(n) ? n : null;
       })(),
       quiz_profile_id: orderAttr("quiz_profile_id") ?? null,
+      // pdp_complete_look arm (vest PDP + cart test), stamped on the shop
+      // cart by getProjectCartAttributes(). Same key the client registers,
+      // so the PostHog experiment can read purchases directly.
+      ...(() => {
+        const arm = orderAttr("pdp_complete_look");
+        return arm === "control" || arm === "test" ? { "$feature/pdp_complete_look": arm } : {};
+      })(),
       // Deterministic Meta CAPI dedup id. Format: purchase_<shopify_order_id>.
       // The client-side confirmation page at /auth/callback fires a matching
       // fbq('track','Purchase',{},{eventID: event_id}) using the same value,

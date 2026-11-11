@@ -2,8 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
-import { PageViewTracker } from "../components/PageViewTracker";
-import { Suspense, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
 const MembershipProvider = dynamic<{ children: ReactNode }>(() =>
   import("./MembershipContext").then((mod) => mod.MembershipProvider)
@@ -41,9 +40,7 @@ export function Providers({ children }: { children: ReactNode }) {
   return (
     <>
       {shouldWrapWithMembership && <EmailLinkHandler />}
-      <Suspense fallback={null}>
-        <PageViewTracker />
-      </Suspense>
+      {/* page_view is tracked once, by AnalyticsTracker in app/layout.tsx. */}
       {shouldWrapWithMembership ? (
         <MembershipProvider>
           {children}

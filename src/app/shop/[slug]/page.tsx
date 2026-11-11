@@ -14,12 +14,14 @@ import { getSeasonalTheme } from "../seasonalTheme";
 import { getVariantById, getVariantSelection } from "@/lib/productVariants";
 import { MysteryBundleClient } from "../components/MysteryBundleClient";
 import { canonical } from "@/lib/seo";
+import { isCompleteLookProduct, parseCompleteLookVariant, PDP_COMPLETE_LOOK_QUERY } from "@/lib/pdpCompleteLook";
+import { loadCompleteLook } from "@/lib/pdpCompleteLookServer";
 
 export const revalidate = 3600;
 
 interface Props {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ variant?: string }>;
+  searchParams: Promise<{ variant?: string; [PDP_COMPLETE_LOOK_QUERY]?: string }>;
 }
 
 export async function generateStaticParams() {
@@ -73,7 +75,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function ProductPage({ params, searchParams }: Props) {
   const { slug } = await params;
-  const { variant: requestedVariantId } = await searchParams;
+  const query = await searchParams;
+  const requestedVariantId = query.variant;
 
   let product;
   try {
@@ -110,6 +113,21 @@ export default async function ProductPage({ params, searchParams }: Props) {
     console.error("[ProductPage] related fetch failed:", err);
   }
 
+  // pdp_complete_look test: live pairing + fallback items for the 3 vests.
+  let completeLook: Awaited<ReturnType<typeof loadCompleteLook>> = null;
+  if (isCompleteLookProduct(product.slug)) {
+    try {
+      completeLook = await loadCompleteLook(product.slug);
+    } catch (err) {
+      console.error("[ProductPage] complete-look fetch failed:", err);
+    }
+  }
+  // QA: render a forced arm on the server outside production only, so the
+  // preview shows the arm before (and without) hydration.
+  const forcedCompleteLookVariant = process.env.VERCEL_ENV === "production"
+    ? null
+    : parseCompleteLookVariant(query[PDP_COMPLETE_LOOK_QUERY]);
+
   return (
     <ShopPageShell className="shop-pdp">
       <ScrollToTop />
@@ -123,6 +141,8 @@ export default async function ProductPage({ params, searchParams }: Props) {
               initialSelection={initialSelection}
               accent={theme.accent}
               relatedProducts={related}
+              completeLook={completeLook}
+              forcedCompleteLookVariant={forcedCompleteLookVariant}
             />
           </div>
         </section>

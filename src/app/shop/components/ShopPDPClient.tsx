@@ -30,12 +30,19 @@ import { EstShipDate } from "./EstShipDate";
 import { BuyBoxAction } from "./pdp/BuyBoxAction";
 import { PdpAccordion } from "./pdp/PdpAccordion";
 import { WaysToWear } from "./pdp/WaysToWear";
+import { CompleteTheLook } from "./pdp/CompleteTheLook";
+import { useCompleteLookVariant } from "./useCompleteLookVariant";
+import type { CompleteLookVariant, LookItem } from "@/lib/pdpCompleteLook";
 
 interface ShopPDPClientProps {
   product: ShopifyProduct;
   initialSelection: ProductVariantSelection;
   accent: string;
   relatedProducts?: ShopifyProduct[];
+  /** Live data for the `pdp_complete_look` test arm (test vests only). */
+  completeLook?: { pairing: Array<LookItem | null>; fallbacks: LookItem[] } | null;
+  /** QA-forced arm rendered on the server (non-production only). */
+  forcedCompleteLookVariant?: CompleteLookVariant | null;
 }
 
 /**
@@ -65,8 +72,12 @@ export function ShopPDPClient({
   initialSelection,
   accent,
   relatedProducts = [],
+  completeLook = null,
+  forcedCompleteLookVariant = null,
 }: ShopPDPClientProps) {
   const { addItemsToCart, hasShopDiscount, memberPrice } = useMembership();
+  // Evaluated on the first shop PDP view, sticky per anonymous_id.
+  const completeLookVariant = useCompleteLookVariant(true, forcedCompleteLookVariant);
   const [selection, setSelection] = useState<ProductVariantSelection>(() =>
     getInitialVariantSelection(product, initialSelection)
   );
@@ -326,6 +337,16 @@ export function ShopPDPClient({
           />
           </div>
           {addError && <p role="alert" className="mt-3 text-sm text-charcoal">{addError}</p>}
+          {completeLookVariant === "test" && completeLook && (
+            <CompleteTheLook
+              pdpHandle={product.slug}
+              pairing={completeLook.pairing}
+              fallbacks={completeLook.fallbacks}
+              vestBogoEligible={(product.tags ?? []).includes("shop")}
+              vestSize={sizeSelected}
+              variant={completeLookVariant}
+            />
+          )}
           {!sizeGuide && product.sizing && <p className="mt-4 text-sm text-charcoal/70">{product.sizing}</p>}
 
           {/* Trust strip */}

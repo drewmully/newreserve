@@ -33,6 +33,7 @@ import { attributionToCartAttributes, getStoredAttribution } from "@/lib/attribu
 import { readShopReward, rewardCodes } from "@/lib/shopRewards";
 import { FIRST_ORDER_SHIPPING_CODE, FIRST_ORDER_SHIPPING_MIN, isFirstOrderShippingCode } from "@/lib/firstOrderShipping";
 import { BOGO15_CODE } from "@/lib/cartPicks";
+import { PDP_COMPLETE_LOOK_FLAG, readStoredCompleteLookVariant } from "@/lib/pdpCompleteLook";
 import { useShopBenefit } from "./useShopBenefit";
 import { useShopifySubscriptions, type ShopifySubscription, type ShopifySubscriptionState } from "./useShopifySubscriptions";
 import { resolveMemberTierFromVariantId, resolveLegacyFromVariantId, getTierLabel } from "@/lib/membershipConfig";
@@ -86,7 +87,16 @@ function getProjectCartAttributes() {
       ? []
       : attributionToCartAttributes(getStoredAttribution());
   const originKeys = new Set(origin.map((a) => a.key));
-  return [...origin, ...attribution.filter((a) => !originKeys.has(a.key))];
+  const attrs = [...origin, ...attribution.filter((a) => !originKeys.has(a.key))];
+  // pdp_complete_look arm -> orders-paid puts it on the purchase event.
+  // Same ab_variant note-attribute pattern /lp/consult uses for purchases.
+  const completeLook = typeof window === "undefined" ? null : readStoredCompleteLookVariant();
+  if (completeLook) {
+    const keys = new Set(attrs.map((a) => a.key));
+    attrs.push({ key: PDP_COMPLETE_LOOK_FLAG, value: completeLook });
+    if (!keys.has("ab_variant")) attrs.push({ key: "ab_variant", value: `${PDP_COMPLETE_LOOK_FLAG}:${completeLook}` });
+  }
+  return attrs;
 }
 
 /* ═══════════════════════════════════════════
@@ -242,6 +252,8 @@ interface MembershipContextValue {
   cartDiscountCodes: Array<{ code: string; applicable: boolean }>;
   /** Discounts that actually took money off this cart (automatic titles or codes). */
   cartDiscountLabels: string[];
+  /** Dollars Shopify took off per discount title or code (line + order allocations). */
+  cartDiscountAmounts: Record<string, number>;
 
   // Fit profile
   fitProfile: FitProfile;
@@ -398,6 +410,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
   const [cartOrderDiscount, setCartOrderDiscount] = useState(0);
   const [cartDiscountCodes, setCartDiscountCodes] = useState<Array<{ code: string; applicable: boolean }>>([]);
   const [cartDiscountLabels, setCartDiscountLabels] = useState<string[]>([]);
+  const [cartDiscountAmounts, setCartDiscountAmounts] = useState<Record<string, number>>({});
   const [cartOpen, setCartOpen] = useState(false);
   const batchInFlight = useRef(false);
 
@@ -479,6 +492,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
     setCartOrderDiscount(sc.orderDiscountAmount ?? 0);
     setCartDiscountCodes(sc.discountCodes ?? []);
     setCartDiscountLabels(sc.discountLabels ?? []);
+    setCartDiscountAmounts(sc.discountAmounts ?? {});
     setCart(
       sc.lines.map((line) => ({
         slug: line.productSlug,
@@ -870,6 +884,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
         setCartOrderDiscount(0);
         setCartDiscountCodes([]);
         setCartDiscountLabels([]);
+        setCartDiscountAmounts({});
         setFitProfileState(EMPTY_FIT);
         setStoreCredit(null);
         setSubscriptions(null);
@@ -1379,6 +1394,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
         cartOrderDiscount,
         cartDiscountCodes,
         cartDiscountLabels,
+        cartDiscountAmounts,
 
         // Fit profile
         fitProfile,
