@@ -185,16 +185,20 @@
   .gift-guide .gg-season-tile--slot {display: none}
 }
 
-/* Mully Gift Card band (hub, after the tiers) */
-.gift-guide .gg-giftcard {display: grid; gap: 24px; align-items: center; margin: 56px 0 8px; padding: 28px 22px; background: #2f3a2c; color: #e3dfd3}
-.gift-guide .gg-giftcard__card {position: relative; width: 100%; max-width: 300px; aspect-ratio: 1.586 / 1; border-radius: 12px; padding: 18px 20px; background: linear-gradient(135deg, #3c4a37 0%, #4a3528 130%); border: 1px solid rgba(201, 208, 176, .35); display: flex; flex-direction: column; justify-content: space-between}
-.gift-guide .gg-giftcard__brand {font-size: 26px; line-height: 1; color: #faf9f6}
+/* Mully Gift Card band (hub, after the tiers). Bone panel so it does not
+   read as a second olive Gift a Season band; the card itself carries the olive. */
+.gift-guide .gg-giftcard {display: grid; gap: 22px; align-items: center; margin: 56px 0 8px; padding: 24px 20px; background: #efebe1; border: 1px solid #e0dacb; color: #4b4840}
+.gift-guide .gg-giftcard__card {position: relative; height: 160px; width: auto; max-width: 254px; aspect-ratio: 1.586 / 1; border-radius: 10px; padding: 16px 18px; background: linear-gradient(135deg, #2f3a2c 0%, #3c4a37 60%, #4a3528 140%); box-shadow: 0 14px 30px -20px rgba(41, 39, 32, .55); display: flex; flex-direction: column; justify-content: space-between}
+.gift-guide .gg-giftcard__brand {font-size: 22px; line-height: 1; color: #faf9f6}
 .gift-guide .gg-giftcard__label {font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: #c9d0b0}
 .gift-guide .gg-giftcard__copy {display: flex; flex-direction: column; gap: 10px; align-items: flex-start; max-width: 56ch}
-.gift-guide .gg-giftcard .gg-kicker {color: #c9d0b0; margin-bottom: 0}
-.gift-guide .gg-giftcard__title {font-family: var(--font-serif); font-size: clamp(28px, 3.2vw, 40px); line-height: 1.1; letter-spacing: -.02em; color: #faf9f6; margin: 0}
+.gift-guide .gg-giftcard .gg-kicker {color: #4a3528; margin-bottom: 0}
+.gift-guide .gg-giftcard__title {font-family: var(--font-serif); font-size: clamp(28px, 3.2vw, 40px); line-height: 1.1; letter-spacing: -.02em; color: #292720; margin: 0}
 .gift-guide .gg-giftcard__copy p:not(.gg-kicker) {font-size: 15px; line-height: 1.6; margin: 0}
-.gift-guide .gg-giftcard .gg-button {margin-top: 6px; background: #faf9f6; color: #2f3a2c}
+.gift-guide .gg-giftcard .gg-button {margin-top: 6px; background: #2f3a2c; color: #faf9f6}
+.gift-guide .gg-giftcard .gg-button:hover, .gift-guide .gg-giftcard .gg-button:focus-visible {background: #4a3528}
 @media (min-width: 900px) {
   .gift-guide .gg-giftcard {grid-template-columns: 300px minmax(0, 1fr); gap: 48px; padding: 40px 48px}
+  .gift-guide .gg-giftcard__card {height: auto; width: 100%; max-width: 300px; padding: 20px 22px}
+  .gift-guide .gg-giftcard__brand {font-size: 26px}
 }

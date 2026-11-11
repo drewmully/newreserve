@@ -7,9 +7,11 @@ import { trackEvent } from "@/lib/tracking";
 import {
   GIFT_CARD_HANDLE,
   GIFT_CARD_MESSAGE_MAX,
+  GIFT_CARD_NAME_MAX,
   giftCardAmountLabel,
   giftCardLineAttributes,
   sendOnRange,
+  shopifyCartErrorMessage,
   validateGiftCardForm,
   type GiftCardFieldError,
   type GiftCardForm,
@@ -30,6 +32,7 @@ export function GiftCardClient({ options, productId }: { options: GiftCardOption
   const [form, setForm] = useState<GiftCardForm>({ sendTo: "them" });
   const [errors, setErrors] = useState<GiftCardFieldError>({});
   const [status, setStatus] = useState<"idle" | "adding" | "added" | "error">("idle");
+  const [errorText, setErrorText] = useState<string | undefined>();
   const range = useMemo(() => sendOnRange(), []);
   const selected = options.find((o) => o.id === selectedId);
 
@@ -72,7 +75,8 @@ export function GiftCardClient({ options, productId }: { options: GiftCardOption
           has_message: form.sendTo === "them" && !!form.message?.trim(),
         },
       });
-    } catch {
+    } catch (err) {
+      setErrorText(shopifyCartErrorMessage(err));
       setStatus("error");
     }
   };
@@ -93,7 +97,7 @@ export function GiftCardClient({ options, productId }: { options: GiftCardOption
         <p className="gc-kicker">Delivered by email</p>
         <h1 className="gc-h1">Mully Gift Card</h1>
         <p className="gc-lead">
-          Most gift cards arrive by email within minutes. Good for anything in the Mully shop, so he picks the piece and the size.
+          Most gift cards arrive by email within minutes. Good for any piece in the Mully shop, so he picks the piece and the size.
         </p>
 
         {options.length === 0 ? (
@@ -151,7 +155,7 @@ export function GiftCardClient({ options, productId }: { options: GiftCardOption
                 </label>
                 <label className="gc-input">
                   <span>His name <small>(optional)</small></span>
-                  <input type="text" autoComplete="off" value={form.recipientName ?? ""} onChange={(e) => set({ recipientName: e.target.value })} />
+                  <input type="text" autoComplete="off" maxLength={GIFT_CARD_NAME_MAX} value={form.recipientName ?? ""} onChange={(e) => set({ recipientName: e.target.value })} />
                 </label>
                 <label className="gc-input">
                   <span>Your note <small>(optional)</small></span>
@@ -186,7 +190,7 @@ export function GiftCardClient({ options, productId }: { options: GiftCardOption
             <button type="submit" className="gc-button" disabled={!selected?.available || status === "adding"}>
               {status === "adding" ? "Adding…" : status === "added" ? "Added to bag" : `Add ${selected ? giftCardAmountLabel(selected.price) + " gift card" : "gift card"} to bag`}
             </button>
-            {status === "error" && <p className="gc-error" role="alert">We couldn&apos;t add the gift card. Please try again.</p>}
+            {status === "error" && <p className="gc-error" role="alert">{errorText ?? "We couldn't add the gift card. Please try again."}</p>}
             <p className="gc-fine">No shipping needed. You&apos;ll see the email details on the checkout page before you pay.</p>
           </>
         )}

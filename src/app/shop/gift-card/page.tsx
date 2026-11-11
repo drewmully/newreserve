@@ -15,7 +15,7 @@ export const revalidate = 300;
 
 const TITLE = "Mully Gift Card: Golf Gift Card Delivered by Email | Mully";
 const DESCRIPTION =
-  "The Mully Gift Card, delivered by email. Send it to him or to yourself, add a note, and pick a send date, like Christmas morning. Good for anything in the Mully shop.";
+  "The Mully Gift Card, delivered by email. Send it to him or to yourself, add a note, and pick a send date, like Christmas morning. Good for any piece in the Mully shop.";
 
 export const metadata: Metadata = {
   title: TITLE,
@@ -28,9 +28,11 @@ export const metadata: Metadata = {
 export default async function GiftCardPage() {
   let options: GiftCardOption[] = [];
   let productId: string | undefined;
+  let image: string | undefined;
   try {
     const product = await getProductByHandle(GIFT_CARD_HANDLE);
     productId = product?.id;
+    image = product?.images?.[0];
     options = (product?.variants ?? [])
       .map((v) => ({ id: v.id, title: v.title, price: v.price, available: v.availableForSale }))
       .sort((a, b) => a.price - b.price);
@@ -45,6 +47,7 @@ export default async function GiftCardPage() {
     name: "Mully Gift Card",
     description: DESCRIPTION,
     brand: { "@type": "Brand", name: "Mully" },
+    ...(image ? { image } : {}),
     url: `${SITE_URL}${GIFT_CARD_PATH}`,
     ...(offers.length
       ? {

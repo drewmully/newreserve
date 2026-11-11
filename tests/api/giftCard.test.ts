@@ -8,6 +8,7 @@ import {
   giftCardAmountLabel,
   giftCardLineAttributes,
   sendOnRange,
+  shopifyCartErrorMessage,
   validateGiftCardForm,
 } from "@/lib/giftCard";
 
@@ -26,11 +27,11 @@ describe("gift card form", () => {
   });
 
   it("limits the send date to today through 90 days out", () => {
-    expect(sendOnRange(today)).toEqual({ min: "2026-11-11", max: "2027-02-09" });
+    expect(sendOnRange(today)).toEqual({ min: "2026-11-11", max: "2027-02-08" });
     const base = { sendTo: "them" as const, recipientEmail: "pat@example.com" };
     expect(validateGiftCardForm({ ...base, sendOn: "2026-12-25" }, today)).toEqual({});
     expect(validateGiftCardForm({ ...base, sendOn: "2026-11-10" }, today).sendOn).toBeTruthy();
-    expect(validateGiftCardForm({ ...base, sendOn: "2027-02-10" }, today).sendOn).toBeTruthy();
+    expect(validateGiftCardForm({ ...base, sendOn: "2027-02-09" }, today).sendOn).toBeTruthy();
   });
 
   it("builds the Shopify gift card line properties", () => {
@@ -43,13 +44,19 @@ describe("gift card form", () => {
       { key: GIFT_CARD_PROPS.name, value: "Pat" },
       { key: GIFT_CARD_PROPS.message, value: "Merry Christmas" },
       { key: GIFT_CARD_PROPS.sendOn, value: "2026-12-25" },
-      { key: "__shopify_send_gift_card_to_recipient", value: "on" },
+      { key: "__shopify_send_gift_card_to_recipient", value: "true" },
+      { key: "__shopify_offset", value: String(today.getTimezoneOffset()) },
     ]);
   });
 
   it("treats today's date as send now", () => {
     const attrs = giftCardLineAttributes({ sendTo: "them", recipientEmail: "pat@example.com", sendOn: "2026-11-11" }, today);
     expect(attrs.find((a) => a.key === GIFT_CARD_PROPS.sendOn)).toBeUndefined();
+  });
+
+  it("reads Shopify userErrors from a cart error", () => {
+    expect(shopifyCartErrorMessage(new Error('cartCreate failed: [{"field":["lines"],"message":"Recipient email is invalid"}]'))).toBe("Recipient email is invalid");
+    expect(shopifyCartErrorMessage(new Error("network down"))).toBeUndefined();
   });
 
   it("formats amounts from the live price", () => {

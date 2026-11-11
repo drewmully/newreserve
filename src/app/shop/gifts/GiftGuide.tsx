@@ -136,7 +136,7 @@ export function GiftCardBand({ placement, tier }: { placement: string; tier: str
       <div className="gg-giftcard__copy">
         <p className="gg-kicker">Not sure of his size?</p>
         <h2 id={`gg-giftcard-${placement}`} className="gg-giftcard__title">Mully Gift Card</h2>
-        <p>Good for anything in the Mully shop, so he picks the piece and the size. Most gift cards arrive by email within minutes, or pick a send date, like Christmas morning.</p>
+        <p>Good for any piece in the Mully shop, so he picks the piece and the size. Most gift cards arrive by email within minutes, or pick a send date, like Christmas morning.</p>
         <Link href={GIFT_CARD_PATH} className="gg-button" data-gg-giftcard={placement} data-gg-tier={tier}>
           Send a gift card
         </Link>

@@ -16,7 +16,9 @@
 export const GIFT_CARD_HANDLE = "mully-gift-card";
 export const GIFT_CARD_PATH = "/shop/gift-card";
 export const GIFT_CARD_MESSAGE_MAX = 200;
-export const GIFT_CARD_SEND_MAX_DAYS = 90;
+/** Shopify allows up to 90 days; 89 keeps a day of margin across timezones. */
+export const GIFT_CARD_SEND_MAX_DAYS = 89;
+export const GIFT_CARD_NAME_MAX = 255;
 
 export const GIFT_CARD_PROPS = {
   email: "Recipient email",
@@ -24,6 +26,7 @@ export const GIFT_CARD_PROPS = {
   message: "Message",
   sendOn: "Send on",
   toRecipient: "__shopify_send_gift_card_to_recipient",
+  offset: "__shopify_offset",
 } as const;
 
 export interface GiftCardForm {
@@ -78,14 +81,33 @@ export function giftCardLineAttributes(form: GiftCardForm, today: Date = new Dat
     { key: GIFT_CARD_PROPS.email, value: form.recipientEmail!.trim() },
   ];
   const name = form.recipientName?.trim();
-  if (name) attrs.push({ key: GIFT_CARD_PROPS.name, value: name });
+  if (name) attrs.push({ key: GIFT_CARD_PROPS.name, value: name.slice(0, GIFT_CARD_NAME_MAX) });
   const message = form.message?.trim();
   if (message) attrs.push({ key: GIFT_CARD_PROPS.message, value: message.slice(0, GIFT_CARD_MESSAGE_MAX) });
   const sendOn = form.sendOn?.trim();
   // Today is the same as "now"; only a future date is a schedule.
   if (sendOn && sendOn > sendOnRange(today).min) attrs.push({ key: GIFT_CARD_PROPS.sendOn, value: sendOn });
-  attrs.push({ key: GIFT_CARD_PROPS.toRecipient, value: "on" });
+  attrs.push({ key: GIFT_CARD_PROPS.toRecipient, value: "true" });
+  // Buyer's timezone offset in minutes, so "Send on" means his local day, not the shop's.
+  attrs.push({ key: GIFT_CARD_PROPS.offset, value: String(today.getTimezoneOffset()) });
   return attrs;
+}
+
+/**
+ * The first Shopify userErrors message from a cart mutation error
+ * ("cartCreate failed: [{field, message}]"), or undefined.
+ */
+export function shopifyCartErrorMessage(err: unknown): string | undefined {
+  const text = err instanceof Error ? err.message : typeof err === "string" ? err : "";
+  const start = text.indexOf("[");
+  if (start < 0) return undefined;
+  try {
+    const list = JSON.parse(text.slice(start)) as Array<{ message?: unknown }>;
+    const msg = list.find((e) => typeof e?.message === "string" && e.message.trim())?.message as string | undefined;
+    return msg?.trim();
+  } catch {
+    return undefined;
+  }
 }
 
 /** "$50" from 50, "$49.50" from 49.5. Display only; the price itself comes from Shopify. */
@@ -106,7 +128,7 @@ export const GIFT_CARD_FAQS = [
   },
   {
     q: "Can I schedule it?",
-    a: "Yes. Pick a send date, like Christmas morning, up to 90 days out. Leave the date blank and it sends as soon as your order goes through.",
+    a: "Yes. Pick a send date, like Christmas morning, up to 89 days out. Leave the date blank and it sends as soon as your order goes through.",
   },
   {
     q: "Didn't get it?",
@@ -114,6 +136,6 @@ export const GIFT_CARD_FAQS = [
   },
   {
     q: "What can he use it on?",
-    a: "Anything in the Mully shop. He enters the code at checkout, and any balance stays on the card for next time.",
+    a: "Any piece in the Mully shop. He enters the code at checkout, and any balance stays on the card for next time.",
   },
 ];
