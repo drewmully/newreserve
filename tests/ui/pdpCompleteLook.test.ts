@@ -91,7 +91,7 @@ const organizer = oneSize("jolly-golf-purist-organizer", true);
 describe("pdp_complete_look config", () => {
   it("pairs the three vests with two pieces each", () => {
     expect(COMPLETE_LOOK_PAIRINGS).toEqual({
-      "olydoe-merino-ponte-vest": ["olydoe-pima-long-sleeve-polo", "rhone-c-o-r-crew-sock"],
+      "olydoe-merino-ponte-vest": ["olydoe-pima-long-sleeve-polo", "winston-golf-tour-towel"],
       "duckhead-fremont-sport-performance-quilted-vest-brandy-brown": ["rhone-rise-quarter-zip", "winston-golf-tour-towel"],
       "rhone-voyage-down-vest": ["olydoe-pima-long-sleeve-polo", "winston-golf-tour-towel"],
     });
@@ -137,10 +137,10 @@ describe("selectCompleteLook pairing and fallback", () => {
   const fallbacks = [polo(), rise(), jacket, organizer, towel(), sockItem];
 
   it("shows the configured pairing when both pieces are in stock", () => {
-    const picks = selectCompleteLook([polo(), sockItem], fallbacks, { vestSize: "M", exclude: ["olydoe-merino-ponte-vest"] });
+    const picks = selectCompleteLook([polo(), towel()], fallbacks, { vestSize: "M", exclude: ["olydoe-merino-ponte-vest"] });
     expect(picks.map((p) => [p.item.slug, p.source, p.position, p.defaultSize])).toEqual([
       ["olydoe-pima-long-sleeve-polo", "pairing", 1, "M"],
-      ["rhone-c-o-r-crew-sock", "pairing", 2, "M"],
+      ["winston-golf-tour-towel", "pairing", 2, undefined],
     ]);
   });
 
@@ -192,9 +192,11 @@ describe("selectCompleteLook pairing and fallback", () => {
 describe("PDP BOGO line", () => {
   it("shows only when the vest and every shown piece are BOGO15 eligible", () => {
     const fremont = selectCompleteLook([rise(), towel()], [], { vestSize: "M" });
-    const ponte = selectCompleteLook([polo(), sockItem], [], { vestSize: "M" });
+    const ponte = selectCompleteLook([polo(), towel()], [], { vestSize: "M" });
+    const withSock = selectCompleteLook([polo(), sockItem], [], { vestSize: "M" });
     expect(pdpBogoLineApplies(true, fremont)).toBe(true);
-    expect(pdpBogoLineApplies(true, ponte)).toBe(false); // sock is not in Shop — All
+    expect(pdpBogoLineApplies(true, ponte)).toBe(true); // Ponte now pairs the towel
+    expect(pdpBogoLineApplies(true, withSock)).toBe(false); // a piece outside Shop — All
     expect(pdpBogoLineApplies(false, fremont)).toBe(false);
     expect(pdpBogoLineApplies(true, [])).toBe(false);
   });

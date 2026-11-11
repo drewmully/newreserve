@@ -46,12 +46,13 @@ export function completeLookOverridesAllowed(payload: unknown, vercelEnv: string
 /**
  * The one config for the test. Vest handle -> two pairing handles, in order.
  * Product names for reference:
- *   Olydoe Merino Ponte Vest -> Olydoe Pima LS Polo + Rhone C.O.R. Crew Sock
+ *   Olydoe Merino Ponte Vest -> Olydoe Pima LS Polo + Winston Golf Tour Towel
+ *     (CRO, PR #361: the Crew Sock is not in Shop — All, so BOGO15 never applied)
  *   Duck Head Fremont Quilted Vest -> Rhone Rise 1/4 Zip + Winston Golf Tour Towel
  *   Rhone Voyage Down Vest -> Olydoe Pima LS Polo + Winston Golf Tour Towel
  */
 export const COMPLETE_LOOK_PAIRINGS: Record<string, readonly string[]> = {
-  "olydoe-merino-ponte-vest": ["olydoe-pima-long-sleeve-polo", "rhone-c-o-r-crew-sock"],
+  "olydoe-merino-ponte-vest": ["olydoe-pima-long-sleeve-polo", "winston-golf-tour-towel"],
   "duckhead-fremont-sport-performance-quilted-vest-brandy-brown": [
     "rhone-rise-quarter-zip",
     "winston-golf-tour-towel",
