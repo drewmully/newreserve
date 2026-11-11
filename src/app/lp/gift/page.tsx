@@ -15,8 +15,10 @@
 
 import type { Metadata } from "next";
 import GiftLPClient from "./GiftLPClient";
+import { canonical } from "@/lib/seo";
 
 export const metadata: Metadata = {
+  alternates: canonical("/lp/gift"),
   title: "Mully Reserve Gift — The Golf Gift That Lasts",
   description:
     "The hand-curated golf box every golfer secretly wants. More value inside than what you pay. Better than a gift card.",

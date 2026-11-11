@@ -3,6 +3,7 @@ import Link from "next/link";
 import { MULLY_100 } from "@/lib/mully100";
 import { EditorialHeader } from "../editorial/EditorialHeader";
 import { Mully100Grid } from "./Mully100Grid";
+import { canonical } from "@/lib/seo";
 
 /**
  * /lp/mully100
@@ -15,6 +16,7 @@ import { Mully100Grid } from "./Mully100Grid";
  */
 
 export const metadata: Metadata = {
+  alternates: canonical("/lp/mully100"),
   title: "The Mully 100 | Mully",
   description:
     "One hundred golf-adjacent picks we'd buy on Amazon this week. Curated by Mully.",

@@ -4,9 +4,10 @@ import Link from "next/link";
 import { getAllPublishedPosts, getFeaturedPost } from "./posts";
 import { ShopPageShell } from "../shop/components/ShopPageShell";
 import { LEGACY_HANDLES, LEGACY_POSTS, legacyHref } from "@/lib/legacyBlog";
+import { canonical } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
-export const metadata: Metadata = { title: "The Journal | Mully", description: "Good reads for the course and everything around it." };
+export const metadata: Metadata = { title: "The Journal | Mully", description: "Good reads for the course and everything around it.", alternates: canonical("/blog") };
 
 export default async function BlogPage() {
   const [featuredResult, allPosts] = await Promise.all([getFeaturedPost(), getAllPublishedPosts()]);

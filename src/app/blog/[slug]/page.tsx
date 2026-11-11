@@ -6,13 +6,14 @@ import { getPostBySlug, getRelatedPosts } from "../posts";
 import { ShopPageShell } from "../../shop/components/ShopPageShell";
 import { applyAddenda } from "@/lib/blogAddenda";
 import { InlineText } from "../InlineText";
+import { canonical } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
 interface Props { params: Promise<{ slug: string }> }
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const post = await getPostBySlug((await params).slug);
   if (!post) return {};
-  return { title: `${post.title} | Mully Journal`, description: post.excerpt,
+  return { title: `${post.title} | Mully Journal`, description: post.excerpt, alternates: canonical(`/blog/${post.slug}`),
     openGraph: { title: post.title, description: post.excerpt, type: "article", images: [{ url: post.image, alt: post.imageAlt }] } };
 }
 export default async function BlogPostPage({ params }: Props) {

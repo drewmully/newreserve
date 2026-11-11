@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import "./outings.css";
+import { canonical } from "@/lib/seo";
 
 export const metadata: Metadata = {
+  alternates: canonical("/outings"),
   title: "Mully | Premium Curated Gift Boxes for Golf Outings",
   description:
     "Elevate your golf outing with premium, personalized gift boxes. Curated accessories, gourmet treats, and custom branding for unforgettable events.",

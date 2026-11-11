@@ -1,8 +1,37 @@
-import ShopPage from "./shop/page";
+import type { Metadata } from "next";
+import ShopPage, { metadata as shopMetadata } from "./shop/page";
 import ShopLayout from "./shop/layout";
-export { metadata } from "./shop/page";
+import { SITE_URL, canonical } from "@/lib/seo";
 export const revalidate = 3600;
 
+const HOME_TITLE = "Mully | Golf Apparel and Mully Reserve Styling Subscription";
+
+export const metadata: Metadata = {
+  ...shopMetadata,
+  title: HOME_TITLE,
+  alternates: canonical("/"),
+  openGraph: { title: HOME_TITLE, description: shopMetadata.description ?? undefined, url: `${SITE_URL}/`, siteName: "Mully", type: "website" },
+};
+
+// Organization structured data (SEO recovery s08). sameAs lists only the
+// profiles already linked from the site's member home footer.
+const ORGANIZATION_JSON_LD = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  name: "Mully",
+  alternateName: ["Mullybox", "Mully Reserve"],
+  url: SITE_URL,
+  logo: `${SITE_URL}/checkout-branding/header-logo.png`,
+  sameAs: [
+    "https://instagram.com/MullyReserve",
+    "https://x.com/MyMully",
+    "https://facebook.com/Mullybox",
+  ],
+};
+
 export default async function Home() {
-  return <ShopLayout>{await ShopPage()}</ShopLayout>;
+  return <>
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ORGANIZATION_JSON_LD).replace(/</g, "\\u003c") }} />
+    <ShopLayout>{await ShopPage()}</ShopLayout>
+  </>;
 }

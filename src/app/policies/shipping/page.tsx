@@ -1,3 +1,7 @@
+import { canonical } from "@/lib/seo";
+
+export const metadata = { alternates: canonical("/policies/shipping") };
+
 /* ═══════════════════════════════════════════
    SHIPPING POLICY
    ═══════════════════════════════════════════ */

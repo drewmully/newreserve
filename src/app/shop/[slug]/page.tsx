@@ -13,6 +13,7 @@ import { ScrollToTop } from "../components/ScrollToTop";
 import { getSeasonalTheme } from "../seasonalTheme";
 import { getVariantById, getVariantSelection } from "@/lib/productVariants";
 import { MysteryBundleClient } from "../components/MysteryBundleClient";
+import { canonical } from "@/lib/seo";
 
 export const revalidate = 3600;
 
@@ -63,6 +64,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     return {
       title: `${product.name} | ${product.brand} | Mully Shop`,
       description: product.description,
+      alternates: canonical(`/shop/${slug}`),
     };
   } catch {
     return {};

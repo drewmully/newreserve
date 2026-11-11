@@ -9,9 +9,11 @@ import { ShopFooter } from "./components/ShopFooter";
 import { SHOP_CATEGORIES } from "./shopCollections";
 import { getSeasonalTheme } from "./seasonalTheme";
 import { getAllPublishedPosts } from "@/app/blog/posts";
+import { canonical } from "@/lib/seo";
 
 export const metadata: Metadata = {
   title: "Shop | mully.",
+  alternates: canonical("/shop"),
   description:
     "Golf apparel and gear, selected by Mully. Shop individual pieces, build an outfit, and discover the stories behind our picks.",
 };

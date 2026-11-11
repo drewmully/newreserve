@@ -2,8 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ShopPageShell } from "../shop/components/ShopPageShell";
 import { ContactForm } from "./ContactForm";
+import { canonical } from "@/lib/seo";
 
 export const metadata: Metadata = {
+  alternates: canonical("/contact"),
   title: "Contact | Mully",
   description: "Questions about an order, sizing or Mully Reserve? Send us a note.",
 };
