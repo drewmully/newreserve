@@ -72,7 +72,7 @@ export const GIFT_GUIDE_TIERS: GiftTier[] = [
     dek: "Small, useful and the kind of thing he would not buy for himself.",
     metaTitle: "Golf Gifts Under $100 for Men 2026 | Mully",
     metaDescription:
-      "Golf gifts under $100 for men: tour towels, organic cotton hats, bag organizers, shag bags, belts and a Rhone polo. Picked by Mully, with in-stock pieces first.",
+      "Golf gifts under $100 for men: stocking stuffers, small gear and easy wardrobe pieces he would not buy for himself. Picked by Mully, with in-stock pieces first.",
     min: 0,
     max: 100,
     picks: [
