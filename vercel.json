@@ -77,6 +77,10 @@
       "schedule": "0 */6 * * *"
     },
     {
+      "path": "/api/gifts/season-dispatch",
+      "schedule": "30 14 * * *"
+    },
+    {
       "path": "/api/gifts/scheduled-send",
       "schedule": "15 * * * *"
     },

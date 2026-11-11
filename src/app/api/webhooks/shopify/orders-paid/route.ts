@@ -36,7 +36,30 @@ import {
   readGiftAttribute,
   createGiftOrderDoc,
   createSizingToken,
+  getSeasonGiftsByRecipientEmail,
+  patchGiftOrder,
+  getGiftOrderById,
+  getGiftOrderByToken,
 } from "@/lib/gifts/giftOrder";
+import {
+  GIFT_SEASON_ATTR,
+  addressFromShopify,
+  formatGiftAddress,
+  isGiftSeasonChildOrder,
+  parseShipMode,
+  seasonCountFromLineItems,
+} from "@/lib/gifts/giftSeason";
+import { isSizingComplete } from "@/lib/gifts/giftSizing";
+import { readGiftSeasonOrderData } from "@/lib/gifts/giftSeasonOrderData";
+import {
+  captureGiftSeasonEvent,
+  giftEventProps,
+  mirrorGiftSeasonToSupabase,
+} from "@/lib/gifts/giftSeasonServer";
+import {
+  buildGifterConfirmationSubject,
+  buildGifterConfirmationText,
+} from "@/lib/email/templates/giftSeasonEmails";
 import {
   claimFoundingHundred,
   FOUNDING_100_CART_ATTR_KEY,
@@ -252,6 +275,15 @@ interface ShopifyOrder {
     city?: string | null;
     province?: string | null;
     country?: string | null;
+    // Full address fields (Gift a Season copies them for seasons 2..N).
+    first_name?: string | null;
+    last_name?: string | null;
+    address1?: string | null;
+    address2?: string | null;
+    zip?: string | null;
+    province_code?: string | null;
+    country_code?: string | null;
+    phone?: string | null;
   } | null;
   billing_address?: {
     city?: string | null;
@@ -378,6 +410,209 @@ async function persistOrderToSupabase(order: ShopifyOrder): Promise<void> {
   }
 }
 
+// ─── Gift a Season ────────────────────────────────────────────────────────────
+
+function siteOrigin(): string {
+  return process.env.NEXT_PUBLIC_SITE_URL ?? "https://mymully.com";
+}
+
+/**
+ * Creates the gift_orders doc for a prepaid season gift (box 1 = this paid
+ * order) and fires gift_season_purchased. No reveal: sizing came in at
+ * purchase, so season 1 ships right away. No Shopify order mutations (the
+ * production token has no write_orders); ops finds gift parents by SKU and
+ * reads sizing from the line item properties. Re-delivery safe: an existing
+ * doc is left alone.
+ */
+async function persistGiftSeasonOrder(
+  order: ShopifyOrder,
+  input: {
+    seasons: number;
+    purchaserEmail: string;
+    shopifyCustomerId: string | null;
+    value: number;
+  }
+): Promise<void> {
+  const id = String(order.id);
+  if (await getGiftOrderById(id)) return;
+
+  const g = readGiftSeasonOrderData(order);
+  // The client generates the gift link token so the confirmation page can
+  // find this doc. Reject odd shapes and collisions; mint our own instead.
+  let token = g.token && /^[A-Za-z0-9_-]{24,64}$/.test(g.token) ? g.token : null;
+  if (token && (await getGiftOrderByToken(token))) token = null;
+  const sizingToken = token ?? createSizingToken();
+
+  const parentAddress = addressFromShopify(order.shipping_address ?? null);
+  const shipToRecipient = g.shipMode === "to_recipient";
+  const sizingComplete = isSizingComplete(g.sizing);
+  const now = Date.now();
+  const doc = {
+    shopify_order_id: id,
+    shopify_order_number: String(order.order_number),
+    shopify_customer_id: input.shopifyCustomerId,
+    purchaser_email: input.purchaserEmail,
+    purchaser_first_name: order.customer?.first_name ?? null,
+    recipient_email: g.recipientEmail,
+    recipient_first_name: g.recipientName,
+    gift_message: g.message,
+    deliver_on: null,
+    sizing_token: sizingToken,
+    total_price: input.value,
+    currency: order.currency,
+    // Never "pending_recipient_email": that status is the legacy reveal
+    // queue (scheduled-send). Season gifts have no reveal.
+    status: "sizing_collected" as const,
+    sizing: { ...g.sizing },
+    sizing_collected_at: sizingComplete ? now : null,
+    ship_mode: g.shipMode,
+    // Ship to them: the checkout address is the recipient's, reuse it for
+    // seasons 2..N. Ship to me: collected later on /gift-address.
+    next_shipping_address: shipToRecipient ? parentAddress : null,
+    address_source: shipToRecipient && parentAddress ? ("parent_order" as const) : null,
+    address_collected_at: shipToRecipient && parentAddress ? now : null,
+    gift_kind: "season" as const,
+    seasons_total: input.seasons,
+    box_orders: [
+      {
+        box_number: 1,
+        shopify_order_id: id,
+        shopify_order_name: order.name ?? null,
+        created_at: now,
+        due_on: null,
+        shipped_at: null,
+        fulfillment_id: null,
+      },
+    ],
+    box_order_ids: [id],
+    boxes_shipped: 0,
+    boxes_remaining: input.seasons,
+    next_box_due_on: null,
+  };
+  await createGiftOrderDoc(doc);
+  if (!sizingComplete) {
+    await patchGiftOrder(id, { last_error: "gift season order is missing sizes (check line item properties)" });
+  }
+  console.log(
+    `[orders-paid] gift season (${input.seasons}, ${g.shipMode}) created for order ${order.id}`
+  );
+
+  const created = await getGiftOrderById(id);
+  const props = {
+    ...giftEventProps(id, doc),
+    has_message: !!doc.gift_message,
+    has_recipient_email: !!g.recipientEmail,
+    ship_mode: g.shipMode,
+    sizing_complete: sizingComplete,
+    lp_source: readGiftAttribute(order.note_attributes, "lp_source"),
+    utm_source: readGiftAttribute(order.note_attributes, "utm_source"),
+    utm_campaign: readGiftAttribute(order.note_attributes, "utm_campaign"),
+    [GIFT_SEASON_ATTR.seasons]: input.seasons,
+    // Purchase event contract: seasons + value (order total) always present.
+    seasons: input.seasons,
+    value: input.value,
+    currency: order.currency ?? "USD",
+  };
+  await Promise.allSettled([
+    created ? mirrorGiftSeasonToSupabase(id, created) : Promise.resolve(),
+    captureGiftSeasonEvent("gift_season_purchased", input.purchaserEmail || `shopify-${order.id}`, props),
+    doc.next_shipping_address
+      ? captureGiftSeasonEvent("gift_season_address_copied", input.purchaserEmail || `shopify-${order.id}`, {
+          ...giftEventProps(id, doc),
+          ship_mode: g.shipMode,
+        })
+      : Promise.resolve(),
+    sendGifterConfirmation(id, order, doc, parentAddress),
+  ]);
+}
+
+/**
+ * "Your gift is on its way" to the purchaser, from our app. Gated behind
+ * GIFT_SEASON_GIFTER_EMAIL_ENABLED (default off). Idempotent per order.
+ */
+async function sendGifterConfirmation(
+  id: string,
+  order: ShopifyOrder,
+  doc: {
+    purchaser_email: string;
+    purchaser_first_name: string | null;
+    recipient_first_name: string | null;
+    recipient_email: string;
+    seasons_total: number;
+    ship_mode: "to_recipient" | "to_purchaser";
+    sizing_token: string;
+  },
+  shipAddress: ReturnType<typeof addressFromShopify>
+): Promise<void> {
+  if (process.env.GIFT_SEASON_GIFTER_EMAIL_ENABLED !== "true") return;
+  if (!doc.purchaser_email) return;
+  try {
+    const origin = siteOrigin();
+    const updateUrl = `${origin}/gift-address/${doc.sizing_token}`;
+    await sendPlainText({
+      to: doc.purchaser_email,
+      subject: buildGifterConfirmationSubject(),
+      text: buildGifterConfirmationText({
+        purchaserFirstName: doc.purchaser_first_name,
+        recipientFirstName: doc.recipient_first_name,
+        seasonsTotal: doc.seasons_total,
+        shipMode: doc.ship_mode,
+        shipToLine: formatGiftAddress(shipAddress),
+        hasRecipientEmail: !!doc.recipient_email,
+        purchasedAt: Date.parse(order.created_at) || Date.now(),
+        updateUrl,
+        giftCardUrl: doc.ship_mode === "to_purchaser" ? `${origin}/gift-card/${doc.sizing_token}` : null,
+      }),
+      idempotencyKey: `gift-season-gifter:${id}`,
+      sendClass: "transactional",
+      category: "gift_season_gifter_confirmation",
+      tags: [
+        { name: "category", value: "gift_season_gifter_confirmation" },
+        { name: "gift_order_id", value: id },
+      ],
+    });
+    await patchGiftOrder(id, { gifter_confirmation_sent_at: Date.now() });
+    await captureGiftSeasonEvent("gift_season_gifter_confirmation_sent", doc.purchaser_email, {
+      gift_order_id: id,
+      ship_mode: doc.ship_mode,
+      seasons_total: doc.seasons_total,
+    });
+  } catch (err) {
+    console.error("[orders-paid] gift season gifter confirmation failed:", err);
+  }
+}
+
+/**
+ * When a paid Reserve membership order comes in from someone who received a
+ * season gift, stamp converted_at once and fire gift_season_converted.
+ */
+async function markGiftSeasonConversion(
+  order: ShopifyOrder,
+  email: string | undefined
+): Promise<void> {
+  try {
+    if (!email) return;
+    const hasMembership = order.line_items.some(
+      (li) => resolveMemberTierFromVariantId(li.variant_id) !== null
+    );
+    if (!hasMembership) return;
+    const gifts = await getSeasonGiftsByRecipientEmail(email);
+    for (const { id, data } of gifts) {
+      if (data.converted_at) continue;
+      const converted_at = Date.now();
+      await patchGiftOrder(id, { converted_at, converted_order_id: String(order.id) });
+      await mirrorGiftSeasonToSupabase(id, { ...data, converted_at });
+      await captureGiftSeasonEvent("gift_season_converted", email, {
+        ...giftEventProps(id, data),
+        converted_order_id: String(order.id),
+        offer_sent: !!data.continue_offer_sent_at,
+      });
+    }
+  } catch (err) {
+    console.error("[orders-paid] gift season conversion check failed:", err);
+  }
+}
+
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
@@ -409,6 +644,15 @@ export async function POST(request: NextRequest) {
     order = JSON.parse(rawBody) as ShopifyOrder;
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  // ── Gift a Season box orders ─────────────────────────────────────────────
+  // $0 box orders created by /api/gifts/season-dispatch for boxes 2..N of a
+  // prepaid gift. They are not purchases: no analytics/ad conversions, no
+  // member provisioning, no email flows. Persist to Supabase and stop.
+  if (isGiftSeasonChildOrder(order.note_attributes, order.tags)) {
+    await persistOrderToSupabase(order);
+    return NextResponse.json({ ok: true, gift_season_box: true });
   }
 
   const email = order.email ?? order.customer?.email ?? undefined;
@@ -528,7 +772,8 @@ export async function POST(request: NextRequest) {
   const channel = sourceChannel;
   const isHeadless = sourceChannel === "headless";
 
-  const orderIsGift = isGiftOrder(order.note_attributes);
+  const giftSeasons = seasonCountFromLineItems(order.line_items);
+  const orderIsGift = isGiftOrder(order.note_attributes) || giftSeasons !== null;
   const purchaseType: "subscription" | "proshop" | "mixed" | "gift" = (() => {
     if (orderIsGift) return "gift";
     let hasSub = false;
@@ -584,6 +829,11 @@ export async function POST(request: NextRequest) {
       mully_anon_id: mullyAnonId,
       is_first_purchase: isFirstPurchase,
       purchase_type: purchaseType,
+      // Gift a Season: seasons + kind on the main purchase event so the
+      // funnel closes in PostHog / GA without a join. Null on other orders.
+      gift_kind: giftSeasons !== null ? "season" : orderIsGift ? "subscription" : null,
+      seasons: giftSeasons,
+      gift_ship_mode: giftSeasons !== null ? parseShipMode(orderAttr(GIFT_SEASON_ATTR.shipMode)) : null,
       sponsorship_ref: sponsorshipRef,
       channel,
       source_channel: sourceChannel,
@@ -634,7 +884,7 @@ export async function POST(request: NextRequest) {
   //      Loop, or any SKU not in NEXT_PUBLIC_SHOPIFY_*_VARIANT_IDS) → fall
   //      back to provisionPaidMemberFromLoop so we still create the Firebase
   //      user + magic link email instead of silently doing nothing.
-  const tierUpdate = email && !isGiftOrder(order.note_attributes)
+  const tierUpdate = email && !orderIsGift
     ? (async () => {
         const tier = resolveTierFromLineItems(order.line_items);
         const outfitMembership = outfitMembershipFromPaidOrder(order);
@@ -930,12 +1180,21 @@ export async function POST(request: NextRequest) {
 
   const giftPersist = (async () => {
     try {
-      if (!isGiftOrder(order.note_attributes)) return;
+      if (!orderIsGift) return;
 
       const recipientEmail = readGiftAttribute(
         order.note_attributes,
         "gift_recipient_email"
       );
+      if (giftSeasons !== null) {
+        await persistGiftSeasonOrder(order, {
+          seasons: giftSeasons,
+          purchaserEmail: email ?? "",
+          shopifyCustomerId: shopifyCustomerId ?? null,
+          value,
+        });
+        return;
+      }
       if (!recipientEmail) {
         console.warn(
           "[orders-paid] gift order missing recipient email — skipping gift_orders create",
@@ -980,6 +1239,8 @@ export async function POST(request: NextRequest) {
     handleMullyAccessPaidOrder(order, { priorTier }).catch(err =>
       console.error("[orders-paid] mully-access handling failed:", err)),
     giftPersist,
+    // Gift a Season: did a past season-gift recipient just join Reserve?
+    orderIsGift ? Promise.resolve() : markGiftSeasonConversion(order, email),
     foundingClaim,
     sponsorshipAttribution,
     reserveConversion,

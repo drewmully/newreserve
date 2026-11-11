@@ -19,4 +19,10 @@ describe("shop announcement styling", () => {
     expect(screen.getAllByText("Easy Returns")).toHaveLength(2);
     expect(screen.queryByText(/free/i)).toBeNull();
   });
+  it("accepts a page-level returns label override", () => {
+    render(<ShopAnnouncementBar returnsLabel="Easy Returns" />);
+    expect(screen.getAllByText("Easy Returns")).toHaveLength(2);
+    expect(screen.queryByText("Free U.S. Returns")).toBeNull();
+    expect(screen.queryByText("Free Returns")).toBeNull();
+  });
 });

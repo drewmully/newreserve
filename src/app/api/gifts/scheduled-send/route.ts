@@ -59,6 +59,9 @@ export async function GET(request: NextRequest) {
   }> = [];
 
   for (const { id, data } of due) {
+    // Gift a Season has no reveal email (sizing is collected at purchase).
+    // Season docs never use pending_recipient_email; this is a guard only.
+    if (data.gift_kind === "season") continue;
     const sizingUrl = `${siteOrigin(request)}/gift-sizing/${data.sizing_token}`;
     try {
       await sendPlainText({
