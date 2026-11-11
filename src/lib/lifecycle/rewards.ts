@@ -84,6 +84,38 @@ export function decideMetaOfferReward(e: MetaOfferRewardEvidence): RewardDecisio
   return { verified: true, code, percent: e.offer.percent, holds: [] };
 }
 
+export interface GameRewardEvidence {
+  /** Take a Shot lead was read without error (null lead = none). */
+  leadReadOk: boolean;
+  /** The player's current code from take_a_shot_leads.reward. */
+  reward: { code: string; percent: number; expiresAt: string; status: string } | null;
+  /** Codes seen on any of the customer's orders (any status counts as used). */
+  usedCodes: string[];
+  historyComplete: boolean;
+  status: { active: boolean; oncePerCustomer: boolean } | undefined;
+  now: Date;
+}
+
+/**
+ * A Take a Shot code (e.g. SHOT20-7KQ2MX) is the player's own single-use
+ * code. Shown only when it was issued (not pending), is still ACTIVE in
+ * Shopify, has not expired and does not appear on any of their orders.
+ * Replaced codes are deleted in Shopify, so only the current one can pass.
+ */
+export function decideGameReward(e: GameRewardEvidence): RewardDecision {
+  if (!e.leadReadOk) return NONE(["game_lead_unreadable"]);
+  const r = e.reward;
+  if (!r || r.status !== "active" || !r.code || !(r.percent > 0)) return NONE([]);
+  const code = r.code.trim().toUpperCase();
+  const ends = Date.parse(r.expiresAt);
+  if (!Number.isFinite(ends) || ends <= e.now.getTime()) return NONE([]); // Expired: normal.
+  if (!e.historyComplete) return NONE(["game_reward_history_incomplete"]);
+  if (e.usedCodes.some((c) => c.trim().toUpperCase() === code)) return NONE([]);
+  if (!e.status) return NONE([`reward_status_unknown:${code}`]);
+  if (!e.status.active) return NONE([]); // Deleted, replaced or expired in Shopify.
+  return { verified: true, code, percent: r.percent, holds: [] };
+}
+
 /** One reward at most: the higher verified percent wins; holds are kept. */
 export function pickReward(a: RewardDecision, b: RewardDecision): RewardDecision {
   const winner = a.verified && b.verified ? ((b.percent ?? 0) > (a.percent ?? 0) ? b : a)

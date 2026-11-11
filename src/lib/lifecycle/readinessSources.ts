@@ -22,8 +22,9 @@ import { buildNativeEvidence } from "./flowBridge";
 import { readCustomerOrderHistory } from "./orderHistory";
 import { readKlaviyoConsent } from "./consent";
 import { readLoopEvidence, readNativeEvents, readServiceEvidence, REVIEW_OWNER } from "./sources";
-import { decideEarnedReward, decideMetaOfferReward, parseRewardStatus, pickReward, REWARD_STATUS_QUERY, type RewardCode } from "./rewards";
-import { META_OFFER_COLLECTION } from "@/lib/klaviyo/config";
+import { decideEarnedReward, decideGameReward, decideMetaOfferReward, parseRewardStatus, pickReward, REWARD_STATUS_QUERY, type RewardCode } from "./rewards";
+import { META_OFFER_COLLECTION, TAKE_A_SHOT_COLLECTION } from "@/lib/klaviyo/config";
+import { leadIdFor, normalizeEmail } from "@/lib/takeAShot/identity";
 import type { ProfileProps, ReadinessInput } from "./readiness";
 
 type Sb = ReturnType<typeof getSupabaseService>;
@@ -45,6 +46,8 @@ export interface ReadinessDeps {
   lead?: (docId: string) => Promise<Record<string, unknown> | null>;
   /** Meta offer lead lookup by email digest. Returns null when absent; throws on read error. */
   metaLead?: (docId: string) => Promise<Record<string, unknown> | null>;
+  /** Take a Shot lead lookup by lead id. Returns null when absent; throws on read error. */
+  gameLead?: (docId: string) => Promise<Record<string, unknown> | null>;
   consent?: (email: string) => Promise<{ subscribed: boolean; marketable: boolean; internal: boolean }>;
   now?: Date;
 }
@@ -58,6 +61,18 @@ const defaultMetaLead = async (id: string) => {
   const snap = await adminDb.collection(META_OFFER_COLLECTION).doc(id).get();
   return snap.exists ? (snap.data() as Record<string, unknown>) : null;
 };
+
+const defaultGameLead = async (id: string) => {
+  const snap = await adminDb.collection(TAKE_A_SHOT_COLLECTION).doc(id).get();
+  return snap.exists ? (snap.data() as Record<string, unknown>) : null;
+};
+
+/** The current Take a Shot reward on a lead doc. */
+export function gameRewardFromLead(d: Record<string, unknown> | null): { code: string; percent: number; expiresAt: string; status: string } | null {
+  const r = (d?.reward ?? null) as { code?: unknown; percent?: unknown; expiresAt?: unknown; status?: unknown } | null;
+  if (!r || typeof r.code !== "string" || typeof r.percent !== "number" || typeof r.expiresAt !== "string") return null;
+  return { code: r.code.trim().toUpperCase(), percent: r.percent, expiresAt: r.expiresAt, status: String(r.status ?? "") };
+}
 
 /** The Meta offer code on a lead doc, with its percent when it is a percentage offer. */
 export function metaOfferFromLead(d: Record<string, unknown> | null): { code: string; percent: number | null } | null {
@@ -90,11 +105,16 @@ export async function readReadinessEvidence(emailRaw: string, deps: ReadinessDep
     reward: { verified: false, code: null, percent: null, holds: ["reward_unread"] }, consent: null };
 
   const digest = createHash("sha256").update(email).digest("hex");
-  const [customers, consent, lead, metaLead] = await Promise.all([
+  // Take a Shot leads are keyed by the inbox identity (Gmail dots and +tags folded).
+  const gameKey = normalizeEmail(email);
+  const [customers, consent, lead, metaLead, gameLead] = await Promise.all([
     gql(CUSTOMER_BY_EMAIL_QUERY, { q: `email:${searchValue(email)}` }).catch(() => null) as Promise<{ customers?: { nodes?: Array<{ id?: string; email?: string }> } } | null>,
     (deps.consent ?? readKlaviyoConsent)(email).catch(() => null),
     (deps.lead ?? defaultLead)(digest).then((d) => ({ ok: true as const, d })).catch(() => ({ ok: false as const, d: null })),
     (deps.metaLead ?? defaultMetaLead)(digest).then((d) => ({ ok: true as const, d })).catch(() => ({ ok: false as const, d: null })),
+    gameKey
+      ? (deps.gameLead ?? defaultGameLead)(leadIdFor(gameKey.key)).then((d) => ({ ok: true as const, d })).catch(() => ({ ok: false as const, d: null }))
+      : Promise.resolve({ ok: true as const, d: null }),
   ]);
   out.consent = consent;
   const matches = (customers?.customers?.nodes ?? []).filter((c) => (c.email ?? "").trim().toLowerCase() === email);
@@ -131,7 +151,24 @@ export async function readReadinessEvidence(emailRaw: string, deps: ReadinessDep
   }
   const metaReward = decideMetaOfferReward({ leadReadOk: metaLead.ok, offer: metaOffer, usedCodes: metaUsed,
     historyComplete: metaUsageOk, status: metaStatus });
-  out.reward = pickReward(popupReward, metaReward);
+  // Take a Shot code: the player's own single-use code. Keeps mully_reward_code
+  // for game players instead of clearing it.
+  const gameRewardLead = gameLead.ok ? gameRewardFromLead(gameLead.d) : null;
+  let gameStatus: { active: boolean; oncePerCustomer: boolean } | undefined;
+  let gameUsed: string[] = [], gameUsageOk = true;
+  if (gameRewardLead?.status === "active") {
+    try {
+      gameStatus = parseRewardStatus(await gql(REWARD_STATUS_QUERY, { code: gameRewardLead.code }), now);
+      const used = await gql(REWARD_USE_QUERY, { q: `discount_code:${gameRewardLead.code} email:${searchValue(email)}` }) as { orders?: { nodes?: Array<{ email?: string; discountCodes?: string[] }> } };
+      for (const o of used?.orders?.nodes ?? []) {
+        if ((o.email ?? "").trim().toLowerCase() === email) gameUsed = [...gameUsed, ...(o.discountCodes ?? [])];
+      }
+    } catch { gameUsageOk = false; }
+  }
+  const gameReward = decideGameReward({ leadReadOk: gameLead.ok, reward: gameRewardLead, usedCodes: gameUsed,
+    historyComplete: gameUsageOk, status: gameStatus, now });
+  // Game first so a tie keeps the code the player was shown and emailed.
+  out.reward = pickReward(gameReward, pickReward(popupReward, metaReward));
 
   if (!customers) return out; // Customer search failed: everything unknown.
   if (matches.length > 1) { out.membership = { ...prospectMembership(now), nonmemberVerified: false, holds: ["duplicate_customer_email"] }; return out; }
@@ -228,7 +265,7 @@ export async function readinessCandidates(sb: Sb = getSupabaseService(), leadDay
     if ((data?.length ?? 0) < 1000) break;
   }
   const since = new Date(Date.now() - leadDays * 86_400_000);
-  for (const collection of ["shop_marketing_leads", META_OFFER_COLLECTION]) {
+  for (const collection of ["shop_marketing_leads", META_OFFER_COLLECTION, TAKE_A_SHOT_COLLECTION]) {
     const leads = await adminDb.collection(collection).where("updatedAt", ">=", since).limit(5000).get();
     for (const doc of leads.docs) {
       const e = doc.get("email");
