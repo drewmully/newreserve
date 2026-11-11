@@ -848,6 +848,8 @@ export async function POST(request: NextRequest) {
       // present on orders whose visitor originated on /lp/consult; other
       // channels (subscription LP, org, direct) will report null.
       ab_variant: orderAttr("ab_variant") ?? null,
+      // home_hero_dual arm (control|dual), stamped by attributionToCartAttributes.
+      ab_home_hero: orderAttr("ab_home_hero") ?? null,
       mr_ab_bucket: (() => {
         const raw = orderAttr("mr_ab_bucket");
         if (!raw) return null;

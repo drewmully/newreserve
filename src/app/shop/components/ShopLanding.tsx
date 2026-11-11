@@ -17,6 +17,7 @@ import { ShopNewsletter } from "./ShopNewsletter";
 import { ShopEditRail } from "./ShopEditRail";
 import { ShopHeroHotspots } from "./ShopHeroHotspots";
 import { CompactVariantPicker } from "./CompactVariantPicker";
+import { HomeHeroExperiment } from "./HomeHeroExperiment";
 import "./shop-redesign.css";
 import "./shop-redesign-native.css";
 import "./shop-outfit.css";
@@ -41,12 +42,19 @@ function ProductCard({ product: p, onQuick }: { product: ShopifyProduct; onQuick
   </article>;
 }
 
-export function ShopLanding({ products, editProducts = products, productsByCategory, theme, journalPosts = [] }: {
+/** Homepage-only hero test inputs (home_hero_dual). */
+export interface HomeHeroProps {
+  /** Live Reserve quarterly price, already formatted, or null to hide it. */
+  reservePrice: string | null;
+}
+
+export function ShopLanding({ products, editProducts = products, productsByCategory, theme, journalPosts = [], homeHero }: {
   products: ShopifyProduct[];
   editProducts?: ShopifyProduct[];
   productsByCategory: Record<string, ShopifyProduct[]>;
   theme: SeasonalTheme;
   journalPosts?: Array<{slug: string; title: string; excerpt: string; image: string; imageAlt: string}>;
+  homeHero?: HomeHeroProps;
 }) {
   const { addItemsToCart, hasShopDiscount, memberPrice, shopDiscountRate } = useMembership();
   const [quick, setQuick] = useState<ShopifyProduct | null>(null);
@@ -112,6 +120,7 @@ export function ShopLanding({ products, editProducts = products, productsByCateg
     <>
       <ScrollToTop />
       <div className="shop-redesign shop-first" style={{ "--accent": theme.accent, "--accent-d": theme.accentDark } as CSSProperties}>
+        {homeHero ? <HomeHeroExperiment season={theme.season} reservePrice={homeHero.reservePrice}>
         <section className="shop-hero" id="hero" aria-labelledby="shopHeroTitle">
           <picture>
             <source media="(max-width: 600px) and (orientation: portrait)" srcSet="/shop-redesign/lifestyle/fall-fairway-vest-mobile.webp" width={600} height={800} />
@@ -120,11 +129,26 @@ export function ShopLanding({ products, editProducts = products, productsByCateg
           <div className="wrap shop-hero__in">
             <div className="shop-hero__copy">
               <h1 id="shopHeroTitle">The {theme.season.charAt(0).toUpperCase() + theme.season.slice(1)} Edit</h1>
-              <a className="shop-hero__cta" href="#edit" aria-label="Shop the edit">[ shop ]</a>
+              <a className="shop-hero__cta" href="#edit" aria-label="Shop the edit" data-hero-cta="control_shop">[ shop ]</a>
             </div>
           </div>
           <ShopHeroHotspots imageRef={heroImage} />
         </section>
+                </HomeHeroExperiment> : <>
+        <section className="shop-hero" id="hero" aria-labelledby="shopHeroTitle">
+          <picture>
+            <source media="(max-width: 600px) and (orientation: portrait)" srcSet="/shop-redesign/lifestyle/fall-fairway-vest-mobile.webp" width={600} height={800} />
+            <img ref={heroImage} className="shop-hero__image" src="/shop-redesign/lifestyle/fall-fairway-vest-desktop.webp" alt="AI-styled editorial scene of a distant golfer wearing a brown quilted vest over a striped polo with tailored khakis on a foggy autumn fairway" width={1920} height={800} fetchPriority="high" loading="eager" />
+          </picture>
+          <div className="wrap shop-hero__in">
+            <div className="shop-hero__copy">
+              <h1 id="shopHeroTitle">The {theme.season.charAt(0).toUpperCase() + theme.season.slice(1)} Edit</h1>
+              <a className="shop-hero__cta" href="#edit" aria-label="Shop the edit" data-hero-cta="control_shop">[ shop ]</a>
+            </div>
+          </div>
+          <ShopHeroHotspots imageRef={heroImage} />
+        </section>
+                </>}
         <div className="shop-colorway-strip" aria-hidden="true" />
         <section className="sec" id="edit">
           <div className="wrap">
