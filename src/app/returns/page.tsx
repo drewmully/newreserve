@@ -134,7 +134,7 @@ function SpecificItemForm({
         </div>
         <div>
           <p className="text-xs uppercase tracking-widest text-charcoal/40 mb-1">Subject</p>
-          <p className="text-sm text-obsidian">Exchange Request — {order.orderName}</p>
+          <p className="text-sm text-obsidian">Exchange Request: {order.orderName}</p>
         </div>
         <div>
           <p className="text-xs uppercase tracking-widest text-charcoal/40 mb-1">Message</p>
@@ -437,7 +437,7 @@ function ReturnsContent() {
                   What are you exchanging?
                 </h1>
                 <p className="text-sm text-charcoal/60 max-w-md mx-auto leading-relaxed">
-                  Order {order.orderName} — let us know what you&rsquo;d like to exchange.
+                  Order {order.orderName}. Let us know what you&rsquo;d like to exchange.
                 </p>
               </div>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -453,7 +453,7 @@ function ReturnsContent() {
                   className="flex flex-col items-start gap-2 rounded-xl border border-taupe/20 bg-white p-6 text-left hover:border-forest/40 hover:shadow-sm transition-all duration-300"
                 >
                   <span className="text-base font-medium text-obsidian">Specific item</span>
-                  <span className="text-sm text-charcoal/50 leading-relaxed">Exchange one item from the box.</span>
+                  <span className="text-sm text-charcoal/50 leading-relaxed">Exchange an item for a different size.</span>
                 </button>
               </div>
               <div className="mt-6 text-center">

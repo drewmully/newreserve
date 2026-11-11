@@ -47,6 +47,9 @@ const nextConfig: NextConfig = {
       { source: "/shop/gifts/under100", destination: "/shop/gifts/under-100", permanent: true },
       { source: "/shop/gifts/hundredToThree", destination: "/shop/gifts/100-to-150", permanent: true },
       { source: "/shop/gifts/threeHundredPlus", destination: "/shop/gifts/150-to-250", permanent: true },
+      // Early slugs shared with other teams.
+      { source: "/shop/gifts/luxury", destination: "/shop/gifts/150-to-250", permanent: true },
+      { source: "/shop/gifts/100-to-200", destination: "/shop/gifts/150-to-250", permanent: true },
       { source: "/blogs/news", destination: "/blog", permanent: true },
       { source: "/blogs/news/tagged/:tag*", destination: "/blog", permanent: true },
       { source: "/products/:handle", destination: "/shop/:handle", permanent: true },
