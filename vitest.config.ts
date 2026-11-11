@@ -56,6 +56,7 @@ export default defineConfig({
             "tests/lib/shopifyRetry.test.ts",
             "tests/lib/giftSeason.test.ts",
             "tests/lib/giftSeasonCopy.test.ts",
+            "tests/lib/giftSizeHistory.test.ts",
           ],
           environment: "node",
           setupFiles: ["tests/setup/api.setup.ts"],
