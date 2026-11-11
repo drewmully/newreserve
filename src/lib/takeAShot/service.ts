@@ -54,6 +54,8 @@ export interface TasDeps {
 export interface RequestContext {
   ipHash: string;
   visitor: string | null;
+  /** posthog-js distinct id from the browser, for joining Klaviyo to PostHog. */
+  posthogDistinctId?: string | null;
   page: string | null;
   userAgent: string;
 }
@@ -232,6 +234,7 @@ export function createTakeAShotService(deps: TasDeps) {
           email: n.email, emailKey: n.key, phone, source: TAKE_A_SHOT_SOURCE,
           emailConsent: evidence("email"), ...(phone ? { smsConsent: evidence("sms") } : {}),
           sessionId: sid, shots, visitorIds: ctx.visitor ? [ctx.visitor] : [], ipHash: ctx.ipHash,
+          ...(ctx.posthogDistinctId ? { posthogDistinctId: ctx.posthogDistinctId } : {}),
           createdAt: new Date(now), updatedAt: new Date(now),
         });
         tx.addConsentEvent(leadId, { ...evidence("email"), email: n.email });

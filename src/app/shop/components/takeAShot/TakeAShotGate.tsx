@@ -2,18 +2,22 @@
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { ShopSignupPopup } from "../ShopSignupPopup";
+import { TakeAShotTrigger } from "./TakeAShotTrigger";
+import type { TriggerType } from "@/lib/takeAShot/popupRules";
 
 /** The modal (and its CSS) is a separate chunk, fetched the first time the popup would show. */
 const TakeAShotModal = dynamic(() => import("./TakeAShotModal").then((m) => m.TakeAShotModal), { ssr: false });
 
 /**
  * Chooses the shop signup. Flag off (default): ShopSignupPopup, unchanged.
- * Flag on: Take a Shot fully replaces it, using the popup's own trigger rules.
+ * Flag on: Take a Shot fully replaces it, with its own trigger, caps,
+ * suppression and launcher (TakeAShotTrigger).
  * On preview/dev, ?tas=1 forces Take a Shot on and ?tas=0 off for this tab.
  */
 export function TakeAShotGate({ enabled, allowOverride }: { enabled: boolean; allowOverride: boolean }) {
   const [override, setOverride] = useState<boolean | null>(null);
-  const [opened, setOpened] = useState(0);
+  const [opened, setOpened] = useState<{ n: number; trigger: TriggerType }>({ n: 0, trigger: "manual" });
+  const [modalOpen, setModalOpen] = useState(false);
   useEffect(() => {
     if (!allowOverride) return;
     const q = new URLSearchParams(window.location.search).get("tas");
@@ -27,7 +31,7 @@ export function TakeAShotGate({ enabled, allowOverride }: { enabled: boolean; al
   const on = override ?? enabled;
   if (!on) return <ShopSignupPopup />;
   return <>
-    <ShopSignupPopup onTrigger={() => setOpened((n) => n + 1)} />
-    {opened > 0 && <TakeAShotModal openSignal={opened} />}
+    <TakeAShotTrigger modalOpen={modalOpen} onOpen={(trigger) => { setModalOpen(true); setOpened((o) => ({ n: o.n + 1, trigger })); }} />
+    {opened.n > 0 && <TakeAShotModal openSignal={opened.n} trigger={opened.trigger} onClosed={() => setModalOpen(false)} />}
   </>;
 }

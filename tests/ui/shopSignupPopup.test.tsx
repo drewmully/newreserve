@@ -3,6 +3,8 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 vi.mock("next/navigation",()=>({usePathname:()=>"/shop"}));
 const state=vi.hoisted(()=>({cartOpen:false,cartCount:0}));
 vi.mock("@/app/context/MembershipContext",()=>({useMembership:()=>state}));
+const trackEvent=vi.hoisted(()=>vi.fn());
+vi.mock("@/lib/tracking",()=>({trackEvent}));
 import { ShopSignupPopup } from "@/app/shop/components/ShopSignupPopup";
 beforeEach(()=>{
   state.cartOpen=false;state.cartCount=0;localStorage.clear();sessionStorage.clear();
@@ -28,6 +30,8 @@ describe("preference-first signup",()=>{
     expect(screen.getByText("MULLYEDIT10")).toBeVisible();
     expect(localStorage.getItem("mully_shop_reward_v1")).toBe("MULLYEDIT10");
     expect(fetch).toHaveBeenCalledTimes(1);
+    expect(trackEvent).toHaveBeenCalledWith("email_submitted",{properties:{source:"shop-popup",interest:"tops"}},{includeAuth:false});
+    expect(localStorage.getItem("mully_signed_up_v1")).toContain("shop-popup");
   });
   it("does not open over a cart or password curtain",()=>{
     state.cartOpen=true;render(<ShopSignupPopup/>);

@@ -1,0 +1,7 @@
+/* Take a Shot launcher pill: bottom left (the support chat sits bottom right). */
+.tas-launch{position:fixed;left:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:40;display:flex;align-items:center;height:40px;border-radius:999px;background:#FAF7F0;color:#2B2018;border:1px solid rgba(43,32,24,.16);box-shadow:0 6px 20px rgba(20,14,8,.16);font-family:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;animation:tas-launch-in .3s ease-out}
+@keyframes tas-launch-in{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
+.tas-launch__open{height:100%;padding:0 6px 0 16px;border:0;background:none;color:inherit;font:600 13px/1 inherit;letter-spacing:.01em;cursor:pointer;white-space:nowrap}
+.tas-launch__x{width:32px;height:32px;margin-right:4px;border:0;border-radius:50%;background:none;color:#6B5A4C;font-size:18px;line-height:1;cursor:pointer}
+.tas-launch__open:focus-visible,.tas-launch__x:focus-visible{outline:2px solid #4A3528;outline-offset:2px}
+@media (prefers-reduced-motion:reduce){.tas-launch{animation:none}}

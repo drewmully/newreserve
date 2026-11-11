@@ -9,7 +9,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { EMAIL_CONSENT, SMS_CONSENT } from "@/lib/shopSignup";
 import { saveShopReward } from "@/lib/shopRewards";
-import { getClientAnonymousId, trackEvent } from "@/lib/tracking";
+import { getClientAnonymousId } from "@/lib/tracking";
+import { KEYS, markSignedUp, writeValue, type TriggerType } from "@/lib/takeAShot/popupRules";
+import { fetchReserveQuarterPrice, renewalLine } from "@/lib/takeAShot/reservePrice";
+import { popupContext, trackEmailSubmitted, trackPopup } from "@/lib/takeAShot/popupTracking";
 import { CODE_TERMS, FLOOR_PERCENT, RING_TIERS, SHOTS } from "@/lib/takeAShot/config";
 import { MullyWordmark } from "../MullyWordmark";
 import { SIGNUP_DISMISS_KEY } from "../ShopSignupPopup";
@@ -43,7 +46,7 @@ async function api<T>(route: string, payload: Record<string, unknown>): Promise<
     res = await fetch(`/api/take-a-shot/${route}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ deviceId: getClientAnonymousId(), page: window.location.pathname, ...payload }),
+      body: JSON.stringify({ deviceId: getClientAnonymousId(), phId: posthogDistinctId(), page: window.location.pathname, ...payload }),
     });
   } catch { throw new ApiError("Could not reach Mully. Check your connection."); }
   const json = await res.json().catch(() => ({ status: "error", error: "Something went wrong. Try again." }));
@@ -54,8 +57,12 @@ async function api<T>(route: string, payload: Record<string, unknown>): Promise<
   return json as T;
 }
 
-function track(name: string, properties: Record<string, unknown> = {}) {
-  void trackEvent(`take_a_shot_${name}`, { properties: { source: "take-a-shot", ...properties } });
+/** posthog-js distinct id, sent with the signup so Klaviyo profiles join the PostHog funnel. */
+function posthogDistinctId(): string | undefined {
+  try {
+    const id = (window as unknown as { posthog?: { get_distinct_id?: () => string } }).posthog?.get_distinct_id?.();
+    return typeof id === "string" && id.length <= 200 ? id : undefined;
+  } catch { return undefined; }
 }
 
 function remember(days: number) {
@@ -93,7 +100,7 @@ function RingsArt() {
   </svg>;
 }
 
-export function TakeAShotModal({ openSignal }: { openSignal: number }) {
+export function TakeAShotModal({ openSignal, trigger = "manual", onClosed }: { openSignal: number; trigger?: TriggerType; onClosed?: () => void }) {
   const pathname = usePathname();
   const dialog = useRef<HTMLDialogElement>(null);
   const stage = useRef<HTMLDivElement>(null);
@@ -116,17 +123,33 @@ export function TakeAShotModal({ openSignal }: { openSignal: number }) {
   const [existing, setExisting] = useState<{ claim: Claim | null } | null>(null);
   const [played, setPlayed] = useState(false);
   const pendingGame = useRef<{ game: GameModule; session: Session; withPhone: boolean } | null>(null);
+  /** Every event carries the trigger that opened this modal and the current step. */
+  const ctx = useRef({ trigger, step });
+  /** Live quarterly Reserve price for the renewal line under every code. */
+  const [quarterPrice, setQuarterPrice] = useState<string | null>(null);
+  const termsRef = useRef<{ terms: string }>({ terms: `${CODE_TERMS.short} ${renewalLine(null)}` });
+  useEffect(() => { termsRef.current.terms = `${CODE_TERMS.short} ${renewalLine(quarterPrice)}`; }, [quarterPrice]);
+  useEffect(() => { ctx.current.step = step; }, [step]);
+  const track = useCallback((name: string, properties: Record<string, unknown> = {}) => {
+    trackPopup(name, ctx.current.trigger, ctx.current.step, properties);
+  }, []);
 
   const close = useCallback(() => {
+    if (!dialog.current?.open) return;
     remember(played ? 365 : 14);
-    dialog.current?.close();
-  }, [played]);
+    track("popup_close", { played });
+    if (!played) writeValue(KEYS.closedUnplayed, String(Date.now()));
+    dialog.current.close();
+    window.dispatchEvent(new Event("mully:tas-closed"));
+  }, [played, track]);
 
   useEffect(() => {
     if (!openSignal || !dialog.current || dialog.current.open) return;
     previousFocus.current = document.activeElement as HTMLElement;
+    ctx.current.trigger = trigger;
     dialog.current.showModal();
-    track("open", { step });
+    track("popup_view");
+    void fetchReserveQuarterPrice().then((p) => { if (p) setQuarterPrice(p); });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only on a new open request
   }, [openSignal]);
   // Close on navigation only; the first run is the mount that just opened it.
@@ -204,25 +227,27 @@ export function TakeAShotModal({ openSignal }: { openSignal: number }) {
     pendingGame.current = null;
     const { game, session, withPhone } = pending;
     unmountGame.current?.();
-    unmountGame.current = game.mount(stage.current, {
+    const opts: Record<string, unknown> = {
       shots: session.shots, session,
       lead: { smsConsent: withPhone },
-      terms: CODE_TERMS.short,
       backend: {
         shot: (b: { shot: number; target: { x: number; y: number }; e: number }) => api("shot", { sid: session.sid, ...b }),
         claim: () => api<{ status: string }>("claim", { sid: session.sid }),
       },
       emit: (type: string, detail: Record<string, unknown>) => {
-        if (type === "shot") track("shot", { shot: detail.shot, pct: detail.pct, surf: detail.surf, feet: detail.feet });
-        else if (type === "claim") track("claim", { pct: detail.pct, won: detail.won, shots: detail.shots, pending: detail.pending });
+        if (type === "shot") track("take_a_shot_shot", { shot: detail.shot, pct: detail.pct, surf: detail.surf, feet: detail.feet });
+        else if (type === "claim") track("take_a_shot_claim", { pct: detail.pct, won: detail.won, shots: detail.shots, pending: detail.pending });
       },
       onReward: (reward: { code: string; percent: number; expiresAt: string }) => saveShopReward(reward),
       onClose: close,
-    });
-  }, [step, close]);
+    };
+    // The game reads opts.terms when it shows the code, so keep it live.
+    Object.defineProperty(opts, "terms", { enumerable: true, get: () => termsRef.current.terms });
+    unmountGame.current = game.mount(stage.current, opts);
+  }, [step, close, track]);
 
   function start() {
-    track("start");
+    track("take_a_shot_start");
     void loadGame().catch(() => {});
     setError("");
     setStep("email");
@@ -237,7 +262,7 @@ export function TakeAShotModal({ openSignal }: { openSignal: number }) {
     setBusy("email"); setError("");
     try {
       const r = await api<{ status: string; claim?: Claim | null }>("check", { email, company });
-      track("email");
+      track("take_a_shot_email_submitted");
       if (r.status === "existing") { setExisting({ claim: r.claim ?? null }); setStep("existing"); }
       else setStep("phone");
     } catch (e) { setError(e instanceof Error ? e.message : "Please try again."); }
@@ -265,10 +290,12 @@ export function TakeAShotModal({ openSignal }: { openSignal: number }) {
           turnstileToken: turnstileToken.current || undefined,
         }),
       ]);
-      if (withPhone) track("phone");
+      if (withPhone) track("take_a_shot_phone_submitted");
       if (r.status === "existing" || !r.session) { setExisting({ claim: r.claim ?? null }); setStep("existing"); return; }
       setPlayed(true);
       remember(365);
+      markSignedUp("take-a-shot");
+      trackEmailSubmitted("take-a-shot", popupContext(ctx.current.trigger, "session"));
       pendingGame.current = { game, session: r.session, withPhone };
       setStep("game");
     } catch (e) {
@@ -283,7 +310,7 @@ export function TakeAShotModal({ openSignal }: { openSignal: number }) {
   const claim = existing?.claim;
   return <dialog ref={dialog} className="tas" aria-labelledby="tas-title"
     onCancel={(e) => { e.preventDefault(); close(); }}
-    onClose={() => previousFocus.current?.focus({ preventScroll: true })}
+    onClose={() => { previousFocus.current?.focus({ preventScroll: true }); onClosed?.(); }}
     onClick={(e) => { if (e.target === e.currentTarget) close(); }}>
     <div className="tas__modal">
       <button className="tas__close" type="button" aria-label="Close" onClick={close}>×</button>
@@ -342,7 +369,7 @@ export function TakeAShotModal({ openSignal }: { openSignal: number }) {
           <MullyWordmark accent="#B08558" />
           <h2 className="tas__h2" id="tas-title" tabIndex={-1} data-step-focus>You already took your shot.</h2>
           {claim ? <>
-            <p className="tas__sub">One game per person. Your code is still good for {claim.pct}% off until {new Date(claim.expiresAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}. {CODE_TERMS.short}</p>
+            <p className="tas__sub">One game per person. Your code is still good for {claim.pct}% off until {new Date(claim.expiresAt).toLocaleDateString(undefined, { month: "short", day: "numeric" })}. {CODE_TERMS.short} {renewalLine(quarterPrice)}</p>
             <div className="tas__code"><span>{claim.code}</span>
               <button className="tas__copy" type="button" onClick={(e) => { const b = e.currentTarget; void navigator.clipboard?.writeText(claim.code).then(() => { b.textContent = "Copied"; }); }}>Copy</button>
             </div>

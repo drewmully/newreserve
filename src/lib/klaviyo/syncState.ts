@@ -178,6 +178,10 @@ function takeAShotInputs(id: string, d: Data): StageInputs {
     mully_reward_percent: reward.percent,
     mully_reward_expires_at: reward.expiresAt,
     mully_signup_game: true,
+    // Join keys for the PostHog funnel: mully_anon_id is the anonymous id the
+    // site's server-side PostHog events use; the posthog-js id is the browser SDK's.
+    ...(Array.isArray(d.visitorIds) && typeof d.visitorIds[0] === "string" ? { mully_anon_id: d.visitorIds[0] } : {}),
+    ...(typeof d.posthogDistinctId === "string" ? { mully_posthog_distinct_id: d.posthogDistinctId } : {}),
   };
   const rewardProps = {
     reward_code: reward.code,
