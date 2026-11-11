@@ -17,6 +17,7 @@ import {
 import { doc, updateDoc, getDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db, syncUserProfile, sendOTPEmail, confirmOTPSignIn } from "@/lib/firebase";
 import { identifyAnalyticsUser, trackEvent } from "@/lib/tracking";
+import { VISITOR_IDENTIFIED_EVENT } from "@/lib/visitorIdentified";
 import {
   cartCreate,
   cartAttributesUpdate,
@@ -427,6 +428,35 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     cartIdRef.current = cartId;
   }, [cartId]);
+  const cartCheckoutUrlRef = useRef<string | null>(null);
+  useEffect(() => {
+    cartCheckoutUrlRef.current = cartCheckoutUrl;
+  }, [cartCheckoutUrl]);
+
+  // Signup with items already in the bag: the earlier add_to_cart was
+  // anonymous, so replay the bag to Klaviyo once (cart recovery, F8).
+  // Klaviyo-only: no ad-platform mirrors, not persisted server-side.
+  const identifiedCartsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const onIdentified = () => {
+      const lines = cartRef.current.filter((item) => !item.sellingPlanId && item.slug);
+      const id = cartIdRef.current;
+      if (!lines.length || !id || identifiedCartsRef.current.has(id)) return;
+      identifiedCartsRef.current.add(id);
+      const last = lines[lines.length - 1];
+      void trackEvent("cart_identified", {
+        product_id: last.slug, variant_id: last.variantId, name: last.name,
+        brand: last.brand, value: last.price, quantity: last.quantity,
+        variant_title: last.variantTitle, image_url: last.image,
+        checkout_url: cartCheckoutUrlRef.current ?? undefined,
+        cart_total: Math.round(cartRef.current.reduce((n, item) => n + item.price * item.quantity, 0) * 100) / 100,
+        cart_item_count: cartRef.current.reduce((n, item) => n + item.quantity, 0),
+        cart_item_names: cartRef.current.map((item) => item.name).filter(Boolean).slice(0, 20),
+      }, { mirror: false });
+    };
+    window.addEventListener(VISITOR_IDENTIFIED_EVENT, onIdentified);
+    return () => window.removeEventListener(VISITOR_IDENTIFIED_EVENT, onIdentified);
+  }, []);
 
   // ── Guards ────────────────────────────────────────────────────────────────
   /** Last "cartId:email" pair that was successfully bound */

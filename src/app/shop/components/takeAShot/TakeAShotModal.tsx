@@ -12,6 +12,7 @@ import { usePathname } from "next/navigation";
 import { EMAIL_CONSENT, SMS_CONSENT } from "@/lib/shopSignup";
 import { saveShopReward } from "@/lib/shopRewards";
 import { getClientAnonymousId } from "@/lib/tracking";
+import { signalVisitorIdentified } from "@/lib/visitorIdentified";
 import { KEYS, markSignedUp, writeValue, type TriggerType } from "@/lib/takeAShot/popupRules";
 import { fetchReserveQuarterPrice, renewalLine } from "@/lib/takeAShot/reservePrice";
 import { trackPopup } from "@/lib/takeAShot/popupTracking";
@@ -308,6 +309,8 @@ export function TakeAShotModal({ openSignal, trigger = "manual", onClosed }: { o
     setBusy("email"); setError("");
     try {
       const r = await api<{ status: string; claim?: Claim | null }>("check", { email, company });
+      // A returning player on their own browser is identified by /check.
+      if (r.status === "existing") signalVisitorIdentified();
       if (r.status === "existing") { setExisting({ claim: r.claim ?? null }); setStep("existing"); setBusy(""); return; }
     } catch (e) { setError(e instanceof Error ? e.message : "Please try again."); setBusy(""); return; }
     setBusy("");
@@ -328,6 +331,8 @@ export function TakeAShotModal({ openSignal, trigger = "manual", onClosed }: { o
         turnstileToken: turnstileToken.current || undefined,
         preview: p ? { pin: p.pin, mph: p.winds[0]?.mph, dirDeg: p.winds[0]?.dirDeg } : undefined,
       });
+      // /session may have set mully_kid: let the bag (if any) reach Klaviyo cart recovery.
+      signalVisitorIdentified();
       if (r.status === "existing" || !r.session) { setExisting({ claim: r.claim ?? null }); setStep("existing"); return; }
       // Meta Lead (via #379): once per new player, only after the session stored consent.
       if (r.status === "new" && !leadSent.current) {
