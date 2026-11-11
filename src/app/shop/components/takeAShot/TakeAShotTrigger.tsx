@@ -11,10 +11,11 @@ import { readShopReward } from "@/lib/shopRewards";
 import { PURCHASE_INTENT_KEY } from "../ShopSignupPopup";
 import {
   CAPS, KEYS, exitIntentReady, excludedPath, hasSignedUp, isEmailOrSmsVisit, isPaidSocial,
-  klaviyoCookieKnown, launcherVisible, pageKindFor, readAutoOpens, readNumber, recordAutoOpen,
+  klaviyoCookieKnown, launcherVisible, pageKindFor, productPageInDom, readAutoOpens, readNumber, recordAutoOpen,
   suppressReason, timedTrigger, writeValue, type SuppressReason, type TriggerType,
 } from "@/lib/takeAShot/popupRules";
 import { trackPopup } from "@/lib/takeAShot/popupTracking";
+import { MAX_PERCENT } from "@/lib/takeAShot/config";
 import "./take-a-shot-launcher.css";
 
 const PURCHASE_INTENT_SELECTOR = "#outfit, [data-purchase-intent]";
@@ -45,7 +46,7 @@ export function TakeAShotTrigger({ onOpen, modalOpen }: { onOpen: (trigger: Trig
     onOpenRef.current = onOpen;
   });
   const [rewardSaved, setRewardSaved] = useState(true);
-  const [launcher, setLauncher] = useState({ dismissedUntil: 0, closedUnplayed: false, firstVisitBeforeTrigger: false, width: 1024, now: 0 });
+  const [launcher, setLauncher] = useState({ dismissedUntil: 0, closedUnplayed: false, firstVisitBeforeTrigger: false, width: 1024, now: 0, productPage: false });
 
   const refreshLauncher = useCallback(() => {
     setRewardSaved(Boolean(readShopReward()));
@@ -55,6 +56,7 @@ export function TakeAShotTrigger({ onOpen, modalOpen }: { onOpen: (trigger: Trig
       firstVisitBeforeTrigger: readNumber(KEYS.sessionFirstVisit, "session") === 1 && readNumber(KEYS.sessionAutoOpens, "session") === 0,
       width: window.innerWidth,
       now: Date.now(),
+      productPage: productPageInDom(),
     });
   }, []);
 
@@ -85,7 +87,8 @@ export function TakeAShotTrigger({ onOpen, modalOpen }: { onOpen: (trigger: Trig
 
   // Auto-open.
   useEffect(() => {
-    const kind = pageKindFor(pathname);
+    const productPage = productPageInDom();
+    const kind = pageKindFor(pathname, productPage);
     const started = Date.now();
     const pageViews = readNumber(KEYS.sessionPageViews, "session");
     let landing = "other";
@@ -109,7 +112,7 @@ export function TakeAShotTrigger({ onOpen, modalOpen }: { onOpen: (trigger: Trig
         knownEmail: knownEmail(),
         member: state.current.member,
         emailSmsVisit: readNumber(KEYS.emailVisitor) > Date.now(),
-        excludedPage: excludedPath(pathname),
+        excludedPage: excludedPath(pathname, productPage),
         bag: state.current.cartOpen || state.current.cartCount > 0 || purchaseIntent(),
         snoozedUntil: readNumber(KEYS.snooze),
         sessionAutoOpens: readNumber(KEYS.sessionAutoOpens, "session"),
@@ -170,15 +173,15 @@ export function TakeAShotTrigger({ onOpen, modalOpen }: { onOpen: (trigger: Trig
     };
   }, [pathname, refreshLauncher]);
 
-  const kind = pageKindFor(pathname);
+  const kind = pageKindFor(pathname, launcher.productPage);
   const show = launcherVisible({
     rewardSaved, member, dismissedUntil: launcher.dismissedUntil, now: launcher.now,
-    excludedPage: excludedPath(pathname), kind, viewportWidth: launcher.width, cartOpen, modalOpen,
+    excludedPage: excludedPath(pathname, launcher.productPage), kind, viewportWidth: launcher.width, cartOpen, modalOpen,
     closedUnplayed: launcher.closedUnplayed, firstVisitBeforeTrigger: launcher.firstVisitBeforeTrigger,
   });
   if (!show) return null;
   return <div className="tas-launch" role="complementary" aria-label="Take a Shot">
-    <button type="button" className="tas-launch__open" onClick={() => onOpenRef.current("launcher")}>Take a shot at 30% off</button>
+    <button type="button" className="tas-launch__open" onClick={() => onOpenRef.current("launcher")}>Take a shot at {MAX_PERCENT}% off</button>
     <button type="button" className="tas-launch__x" aria-label="Hide Take a Shot" onClick={() => {
       writeValue(KEYS.launcherDismissed, String(Date.now() + CAPS.launcherDismissDays * 86_400_000));
       trackPopup("popup_launcher_dismissed", "launcher", null);

@@ -1,11 +1,11 @@
 /**
  * PostHog events for the Take a Shot popup, with one consistent property set:
- * { variant, trigger_type, page_kind, path, device, step } plus whatever the
+ * { variant, trigger_type, page_kind, page_type, path, device, step } plus whatever the
  * caller adds. utm_source / utm_medium / utm_campaign (URL first, then stored
  * attribution) are added to every event by lib/tracking. No PII here.
  */
 import { trackEvent } from "@/lib/tracking";
-import { deviceFor, pageKindFor, type TriggerType } from "./popupRules";
+import { deviceFor, pageKindFor, pageTypeFor, productPageInDom, type TriggerType } from "./popupRules";
 
 export const POPUP_VARIANT = "take-a-shot";
 
@@ -15,7 +15,8 @@ export function popupContext(trigger: TriggerType | null = null, step: string | 
   return {
     variant: POPUP_VARIANT,
     trigger_type: trigger,
-    page_kind: pageKindFor(path),
+    page_kind: pageKindFor(path, productPageInDom()),
+    page_type: pageTypeFor(path, productPageInDom()),
     path,
     device: deviceFor(fine, typeof window !== "undefined" ? window.innerWidth : 0),
     step,

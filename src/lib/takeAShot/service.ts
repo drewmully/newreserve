@@ -189,14 +189,14 @@ export function createTakeAShotService(deps: TasDeps) {
 
     /** Step 2: start (or resume) the one game this person gets. Consent is stored here. */
     async session(body: Data, ctx: RequestContext): Promise<ApiResult> {
-      if (body.emailConsent !== true) return err("Check the email box to play.", "consent_required");
+      if (body.emailConsent !== true) return err("Agree to emails so we can send your code.", "consent_required");
       const r = await checkEmail(body.email);
       if (!r.ok) return r.res;
       let phone: string | null = null;
       if (body.phone !== undefined && body.phone !== null && body.phone !== "") {
         phone = normalizePhone(body.phone);
         if (!phone) return err("Use a valid phone number, including your country code outside the US.", "invalid_phone");
-        if (body.smsConsent !== true) return err("Check the text box to get 3 shots.", "sms_consent_required");
+        if (body.smsConsent !== true) return err("Agree to texts to get more shots.", "sms_consent_required");
       }
       const n = r.n;
       return store.transaction(async (tx) => {

@@ -258,7 +258,7 @@ export function TakeAShotModal({ openSignal, trigger = "manual", onClosed }: { o
     if (busy) return;
     const company = new FormData(event.currentTarget).get("company");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())) { setError("Enter a valid email."); return; }
-    if (!emailOk) { setError("Check the box so we can send your code."); return; }
+    if (!emailOk) { setError("Agree to emails so we can send your code."); return; }
     setBusy("email"); setError("");
     try {
       const r = await api<{ status: string; claim?: Claim | null }>("check", { email, company });
@@ -276,7 +276,7 @@ export function TakeAShotModal({ openSignal, trigger = "manual", onClosed }: { o
     if (withPhone) {
       const digits = phone.replace(/\D/g, "");
       if (digits.length < 10) { setError(digits.length ? "Use a valid phone number, including your country code outside the US." : `Enter your phone, or play with ${SHOTS.email} shot.`); return; }
-      if (!smsOk) { setError("Check the text box to get 3 shots."); return; }
+      if (!smsOk) { setError("Agree to texts to get more shots."); return; }
     }
     // No token yet: show "Checking…" and submit once Turnstile finishes.
     if (TURNSTILE_SITE_KEY && !turnstileToken.current) { setWaiting(withPhone ? "phone" : "one"); return; }

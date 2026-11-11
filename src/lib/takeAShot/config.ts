@@ -110,7 +110,7 @@ export const CODE_TERMS = {
   /** Under the code on the result card. */
   short: "Works on one-time Shop orders or your first Reserve quarter.",
   /** Full terms line. */
-  full: "Works on one-time Shop orders or your first Reserve quarter, up to 30% off. Reserve renewals bill at the regular quarterly price. Excludes sale items, Mully Access and gift subscriptions. One use, expires 14 days after you play, and cannot be combined with other offers.",
+  full: `Works on one-time Shop orders or your first Reserve quarter, up to ${MAX_PERCENT}% off. Reserve renewals bill at the regular quarterly price. Excludes sale items, Mully Access and gift subscriptions. One use, expires ${CODE_RULES.expiryDays} days after you play, and cannot be combined with other offers.`,
 } as const;
 
 /** Admin API version for discount mutations (DiscountCodeBasicInput.context). */

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   CAPS, deviceFor, excludedPath, exitIntentReady, isEmailOrSmsVisit, isPaidSocial, klaviyoCookieKnown,
-  launcherVisible, pageKindFor, suppressReason, timedTrigger, type SuppressInput,
+  launcherVisible, pageKindFor, pageTypeFor, suppressReason, timedTrigger, type SuppressInput,
 } from "@/lib/takeAShot/popupRules";
 import { takeAShotRedemption } from "@/lib/takeAShot/redemption";
 import { formatQuarterPrice, quarterPriceFrom, renewalLine } from "@/lib/takeAShot/reservePrice";
@@ -12,13 +12,44 @@ const base: SuppressInput = {
   excludedPage: false, bag: false, snoozedUntil: 0, sessionAutoOpens: 0, autoOpens: [], now: NOW,
 };
 
-describe("pageKindFor", () => {
-  it("classifies shop pages", () => {
+describe("storefront page scope", () => {
+  it("allows every public storefront page, with a page type", () => {
+    const allowed: Array<[string, string, boolean?]> = [
+      ["/", "home"], ["/home", "home"], ["/shop", "shop_home"], ["/shop/", "shop_home"],
+      ["/shop/collection", "listing"], ["/shop/collection/vests", "listing"], ["/shop/new-arrivals", "listing"],
+      ["/shop/vests", "listing"], ["/shop/quarter-zips", "listing"],
+      ["/shop/gifts", "gift_guide"], ["/shop/gifts/under-100", "gift_guide"],
+      ["/shop/some-vest", "product", true],
+      ["/blog", "blog"], ["/blog/letters", "blog"], ["/blog/letters/the-first-tee", "blog"], ["/blog/a-post", "blog"],
+      ["/blogs/news/old-post", "blog"], ["/lp/editorial", "editorial"], ["/lp/mully100", "editorial"],
+    ];
+    for (const [path, type, product] of allowed) expect(pageTypeFor(path, product), path).toBe(type);
+  });
+  it("keeps checkout, cart, plans, gift flows, account pages and login out", () => {
+    const denied = [
+      "/checkout", "/checkouts/abc", "/cart", "/shop/cart", "/shop/checkout", "/subscription", "/subscription/manage",
+      "/choose-plan", "/lp/gift-season", "/lp/gift-season/thanks", "/gift-address", "/gift-card/tok", "/gift-continue",
+      "/gift-sizing", "/dashboard", "/dashboard/orders", "/account", "/account/profile", "/login", "/join",
+    ];
+    for (const path of denied) {
+      expect(pageTypeFor(path, true), path).toBeNull();
+      expect(excludedPath(path, true), path).toBe(true);
+    }
+  });
+  it("defaults unknown routes, including an unrendered /shop/<slug>, to excluded", () => {
+    for (const path of ["/faq", "/reserve", "/lp/subscription", "/lp/gift", "/drops/x", "/shop/a/b/c", "/admin", "/policies/privacy"])
+      expect(pageTypeFor(path, true), path).toBeNull();
+    expect(pageTypeFor("/shop/not-a-product")).toBeNull();
+    expect(excludedPath("/shop/not-a-product")).toBe(true);
+    expect(excludedPath("/shop/some-vest", true)).toBe(false);
+  });
+  it("maps page types to trigger kinds", () => {
+    expect(pageKindFor("/")).toBe("home");
     expect(pageKindFor("/shop")).toBe("home");
-    expect(pageKindFor("/shop/")).toBe("home");
-    expect(pageKindFor("/shop/collection")).toBe("listing");
-    expect(pageKindFor("/shop/some-vest")).toBe("product");
-    expect(pageKindFor("/shop/collection/vests")).toBe("listing");
+    expect(pageKindFor("/shop/some-vest", true)).toBe("product");
+    expect(pageKindFor("/shop/some-vest")).toBe("other");
+    expect(pageKindFor("/blog")).toBe("listing");
+    expect(pageKindFor("/shop/gifts")).toBe("listing");
     expect(pageKindFor("/subscription")).toBe("other");
   });
 });
@@ -42,8 +73,10 @@ describe("timedTrigger", () => {
     expect(timedTrigger({ ...t, dwellMs: 29_000, scrollFraction: 1, paidSocialFirstPage: true })).toBeNull();
     expect(timedTrigger({ ...t, dwellMs: 30_000, scrollFraction: 1, paidSocialFirstPage: true })).toBe("timer_scroll");
   });
-  it("never auto-opens on listing or other pages", () => {
-    expect(timedTrigger({ ...t, kind: "listing", dwellMs: 60_000, scrollFraction: 1, pageViews: 3 })).toBeNull();
+  it("auto-opens on listing, blog and editorial pages with the 10s rule, never on other pages", () => {
+    expect(timedTrigger({ ...t, kind: "listing", dwellMs: 9_000, scrollFraction: 1 })).toBeNull();
+    expect(timedTrigger({ ...t, kind: "listing", dwellMs: 10_000, scrollFraction: 0.3 })).toBe("timer_scroll");
+    expect(timedTrigger({ ...t, kind: "other", dwellMs: 60_000, scrollFraction: 1, pageViews: 3 })).toBeNull();
   });
 });
 
@@ -89,7 +122,7 @@ describe("visit helpers", () => {
   it("excludes subscription and checkout pages", () => {
     expect(excludedPath("/subscription")).toBe(true);
     expect(excludedPath("/shop/checkout")).toBe(true);
-    expect(excludedPath("/shop/vest")).toBe(false);
+    expect(excludedPath("/shop/vest", true)).toBe(false);
   });
   it("reads a known Klaviyo cookie", () => {
     const known = encodeURIComponent(btoa(JSON.stringify({ $exchange_id: "x" })));
@@ -120,6 +153,9 @@ describe("launcherVisible", () => {
     expect(launcherVisible({ ...l, dismissedUntil: NOW + 1 })).toBe(false);
     expect(launcherVisible({ ...l, kind: "product", viewportWidth: 767 })).toBe(false);
     expect(launcherVisible({ ...l, kind: "product", viewportWidth: 768 })).toBe(true);
+    expect(launcherVisible({ ...l, kind: "listing", viewportWidth: 375 })).toBe(true);
+    expect(launcherVisible({ ...l, kind: "other" })).toBe(false);
+    expect(launcherVisible({ ...l, cartOpen: true })).toBe(false);
     expect(launcherVisible({ ...l, cartOpen: true })).toBe(false);
     expect(launcherVisible({ ...l, modalOpen: true })).toBe(false);
     expect(launcherVisible({ ...l, excludedPage: true })).toBe(false);

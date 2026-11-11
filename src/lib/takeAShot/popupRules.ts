@@ -12,7 +12,7 @@ export const TRIGGER = {
   scrollFraction: 0.3,
   /** Product pages wait longer so the visitor has seen the item. */
   productDwellMs: 20_000,
-  /** Second /shop page view in a session opens after this long on it. */
+  /** Second storefront page view in a session opens after this long on it. */
   secondPageDwellMs: 2_000,
   /** Desktop exit intent (pointer:fine only) needs at least this long on the page. */
   exitDwellMs: 5_000,
@@ -57,25 +57,81 @@ export type SuppressReason =
   | "reward_saved" | "signed_up" | "known_email" | "member" | "email_sms_visit"
   | "excluded_page" | "bag" | "snoozed" | "session_cap" | "window_cap";
 
-const NON_PRODUCT_SHOP_PATHS = new Set(["collection", "gifts", "new-arrivals", "vests", "quarter-zips"]);
+/** Where the visitor is, for page_type on every popup event. */
+export type PageType = "home" | "shop_home" | "listing" | "gift_guide" | "product" | "blog" | "editorial";
 
-export function pageKindFor(pathname: string | null): PageKind {
-  const p = (pathname ?? "").replace(/\/+$/, "") || "/";
-  if (p === "/" || p === "/shop") return "home";
-  const m = /^\/shop\/([^/]+)$/.exec(p);
-  if (m) return NON_PRODUCT_SHOP_PATHS.has(m[1]) ? "listing" : "product";
-  if (p.startsWith("/shop/")) return "listing";
-  return "other";
+/** /shop/<slug> pages that are listings, not products. */
+const SHOP_LISTING_SLUGS = new Set(["collection", "new-arrivals", "vests", "quarter-zips"]);
+
+/**
+ * Never show Take a Shot here, even if an allow rule matches: checkout and
+ * cart, subscription and plan picking, the gift-season landing and the
+ * /gift-* token flows, member and account pages, login, and /join (which
+ * has its own signup).
+ */
+const DENY: readonly RegExp[] = [
+  /(^|\/)(checkout|checkouts|cart)(\/|$)/,
+  /(^|\/)(subscription|choose-plan)(\/|$)/,
+  /^\/lp\/gift-season(\/|$)/,
+  /^\/gift-[^/]+(\/|$)/,
+  /^\/(dashboard|account|login|auth|join|admin|ops|onboarding)(\/|$)/,
+];
+
+/** Public storefront pages, in match order. Anything else is excluded. */
+const ALLOW: ReadonlyArray<[RegExp, PageType | ((m: RegExpExecArray, productPage: boolean) => PageType | null)]> = [
+  [/^\/(home)?$/, "home"],
+  [/^\/shop$/, "shop_home"],
+  [/^\/shop\/gifts(\/[^/]+)?$/, "gift_guide"],
+  [/^\/shop\/collection\/[^/]+$/, "listing"],
+  // Any other /shop/<slug> counts only when the page rendered a real product.
+  [/^\/shop\/([^/]+)$/, (m, productPage) => (SHOP_LISTING_SLUGS.has(m[1]) ? "listing" : productPage ? "product" : null)],
+  [/^\/blog(\/.*)?$/, "blog"],
+  [/^\/blogs\/news\/[^/]+$/, "blog"],
+  [/^\/lp\/(editorial|mully100)(\/.*)?$/, "editorial"],
+];
+
+function cleanPath(pathname: string | null): string {
+  return (pathname ?? "").split(/[?#]/)[0].replace(/\/+$/, "") || "/";
 }
 
-/** Auto-open only on the shop home and product pages. */
+/**
+ * The storefront page type, or null when Take a Shot must not run on this
+ * route. `productPage`: the page rendered a product (see productPageInDom),
+ * so an unknown /shop/<slug>, such as a 404, stays excluded.
+ */
+export function pageTypeFor(pathname: string | null, productPage = false): PageType | null {
+  const p = cleanPath(pathname);
+  if (DENY.some((re) => re.test(p))) return null;
+  for (const [re, type] of ALLOW) {
+    const m = re.exec(p);
+    if (m) return typeof type === "function" ? type(m, productPage) : type;
+  }
+  return null;
+}
+
+/** The PDP renders inside ShopPageShell with the shop-pdp class. */
+export const PRODUCT_PAGE_SELECTOR = ".shop-pdp, [data-tas-page=product]";
+export function productPageInDom(): boolean {
+  return typeof document !== "undefined" && Boolean(document.querySelector(PRODUCT_PAGE_SELECTOR));
+}
+
+/** Trigger timing only cares whether this is a product page. */
+export function pageKindFor(pathname: string | null, productPage = false): PageKind {
+  const t = pageTypeFor(pathname, productPage);
+  if (!t) return "other";
+  if (t === "product") return "product";
+  if (t === "home" || t === "shop_home") return "home";
+  return "listing";
+}
+
+/** Auto-open on every allowed storefront page. */
 export function autoOpenPage(kind: PageKind): boolean {
-  return kind === "home" || kind === "product";
+  return kind !== "other";
 }
 
-/** Never on subscription, checkout or cart pages. */
-export function excludedPath(pathname: string | null): boolean {
-  return /(^|\/)(subscription|checkout|checkouts|cart|choose-plan)(\/|$)/.test(pathname ?? "");
+/** Not an allowed storefront page (denied, or an unknown route). */
+export function excludedPath(pathname: string | null, productPage = false): boolean {
+  return pageTypeFor(pathname, productPage) === null;
 }
 
 const PAID_SOCIAL = /^(facebook|instagram|meta|fb|ig)$/i;

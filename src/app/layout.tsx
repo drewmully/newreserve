@@ -4,6 +4,7 @@ import Script from "next/script";
 import { FlagValues } from "flags/react";
 import { heroHeadline, heroCta } from "../flags";
 import { Providers } from "./context/Providers";
+import { TakeAShotGate } from "./shop/components/takeAShot/TakeAShotGate";
 import { PostHogFlagSync } from "./components/PostHogFlagSync";
 import { AnalyticsTracker } from "./components/AnalyticsTracker";
 import { SourceSessionNavigation } from "./components/SourceSessionNavigation";
@@ -128,6 +129,10 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const takeAShotEnabled = process.env.NEXT_PUBLIC_TAKE_A_SHOT_ENABLED === "true";
+  // ?tas=1 can force the game on preview deployments and local dev only.
+  const takeAShotOverride = process.env.NODE_ENV === "development" ||
+    (Boolean(process.env.VERCEL_ENV) && process.env.VERCEL_ENV !== "production");
   return (
     <html lang="en">
       <head>
@@ -226,7 +231,11 @@ export default async function RootLayout({
           strategy="afterInteractive"
           src="https://app.alhena.ai/sdk/gleenWidget.js"
         />
-        <Providers>{children}</Providers>
+        <Providers>
+          {children}
+          {/* Signup popup: ShopSignupPopup on /shop, or Take a Shot on storefront pages when the flag is on. */}
+          <TakeAShotGate enabled={takeAShotEnabled} allowOverride={takeAShotOverride} />
+        </Providers>
         <AnalyticsTracker />
         <SourceSessionNavigation />
         <Suspense fallback={null}>
