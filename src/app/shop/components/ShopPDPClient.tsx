@@ -18,7 +18,8 @@ import {
 import { orderProductImagesBySelection } from "@/lib/shopDisplay";
 import { shopProductPhoto } from "@/lib/shopProductPhotos";
 import { money, variantLabel } from "@/lib/shopOutfit";
-import { ProductImageGallery } from "./ShopClient";
+import { PdpGallery } from "./pdp/PdpGallery";
+import { PdpLightbox } from "./pdp/PdpLightbox";
 import { ShopProductCard } from "./ShopProductCard";
 import { getSizeGuide } from "@/lib/sizeCharts";
 import { SizeFitChart } from "./SizeFitChart";
@@ -85,6 +86,9 @@ export function ShopPDPClient({
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState("");
   const [sizeChartOpen, setSizeChartOpen] = useState(false);
+  // Lightbox over orderedImages; null when closed.
+  const [zoomIndex, setZoomIndex] = useState<number | null>(null);
+  const gallerySwipeTracked = useRef(false);
 
   const selectedVariant = useMemo(
     () => {
@@ -120,6 +124,17 @@ export function ShopPDPClient({
   const editorialHeadline = product.editorialHeadline || product.whyWeLikeIt;
   const editorialBody = product.editorialBody || product.description;
   const detailImages = orderedImages.slice(1, 5);
+
+  function openZoom(index: number) {
+    setZoomIndex(index);
+    void trackEvent("pdp_image_zoom", { properties: { product_slug: product.slug, index } });
+  }
+  // Once per PDP view, on the first swipe of the mobile gallery.
+  function trackGallerySwipe(index: number) {
+    if (gallerySwipeTracked.current) return;
+    gallerySwipeTracked.current = true;
+    void trackEvent("pdp_gallery_swipe", { properties: { product_slug: product.slug, index } });
+  }
 
   const sizeGuide = getSizeGuide(product.slug);
   const productHasVariantChoices = hasVariantChoices(product);
@@ -210,10 +225,12 @@ export function ShopPDPClient({
       {/* Top: gallery + buy box */}
       <div className="grid grid-cols-1 gap-10 md:grid-cols-2 md:gap-14 lg:gap-20">
         <div className="min-w-0">
-          <ProductImageGallery
+          <PdpGallery
             key={galleryKey}
             images={orderedImages}
             name={product.name}
+            onOpen={openZoom}
+            onFirstSwipe={trackGallerySwipe}
           />
         </div>
 
@@ -420,9 +437,12 @@ export function ShopPDPClient({
           {detailImages.length > 0 && (
             <div className="grid grid-cols-2 gap-3">
               {detailImages.map((src, i) => (
-                <div
+                <button
                   key={i}
-                  className="relative aspect-square overflow-hidden bg-cream"
+                  type="button"
+                  onClick={() => openZoom(i + 1)}
+                  aria-label={`Enlarge ${product.name} detail ${i + 1}`}
+                  className="relative aspect-square cursor-zoom-in overflow-hidden bg-cream"
                 >
                   <Image
                     src={src}
@@ -431,7 +451,7 @@ export function ShopPDPClient({
                     sizes="(max-width: 768px) 50vw, 25vw"
                     className="object-contain p-4"
                   />
-                </div>
+                </button>
               ))}
             </div>
           )}
@@ -476,6 +496,15 @@ export function ShopPDPClient({
             ))}
           </div>
         </section>
+      )}
+
+      {zoomIndex !== null && (
+        <PdpLightbox
+          images={orderedImages}
+          name={product.name}
+          startIndex={Math.min(zoomIndex, orderedImages.length - 1)}
+          onClose={() => setZoomIndex(null)}
+        />
       )}
     </div>
   );
