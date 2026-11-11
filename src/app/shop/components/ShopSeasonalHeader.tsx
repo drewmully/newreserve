@@ -23,7 +23,14 @@ const allCategories = [
   ["Gifts", "/shop#gift-tiers"],
 ];
 
-export function ShopSeasonalHeader({ accent }: { accent: string }) {
+export function ShopSeasonalHeader({
+  accent,
+  returnsLabel,
+}: {
+  accent: string;
+  /** Optional page-level override for the top bar returns promise. */
+  returnsLabel?: string;
+}) {
   const { cartCount, setCartOpen, isSignedIn, authLoading } = useMembership();
   const pathname = usePathname();
   const menu = useRef<HTMLDialogElement>(null);
@@ -76,7 +83,7 @@ export function ShopSeasonalHeader({ accent }: { accent: string }) {
         .shop-nav-menu .shop-build-link{margin:8px 0}
         @media(prefers-reduced-motion:reduce){.shop-nav *,.shop-nav-menu *{transition:none!important}}
       `}</style>
-      <ShopAnnouncementBar />
+      <ShopAnnouncementBar returnsLabel={returnsLabel} />
       <header className="shop-nav fixed left-0 right-0 top-8 z-40 border-b border-charcoal/10 bg-white/95 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-3 sm:px-6 lg:px-12">
           <div className="flex items-center gap-2">

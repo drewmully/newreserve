@@ -6,10 +6,10 @@
  * stacked on mobile) lives in GiftSeasonLPClient so the picker can sit in
  * the hero column.
  *
- * A: product flat lay built only from live Shopify product photography of
- *    pieces from a typical Reserve (Quiet Golf polo, Rhone quarter zip,
- *    Greyson hat, Will Leather belt), arranged on a bone ground. Nothing is
- *    generated; white packshot backgrounds drop out with multiply.
+ * A (default, CRO pick): product flat lay built only from live Shopify
+ *    product photography of pieces from a typical Reserve (Quiet Golf polo,
+ *    Rhone quarter zip, Greyson hat, Will Leather belt), cut out and arranged
+ *    on a bone ground with one shared shadow. Nothing is generated.
  * B: the real Mully course photograph already used on /shop
  *    (public/shop/hero-fall-2026.jpg, documented as a real photo in
  *    public/shop-redesign/asset-manifest.md). No generated imagery.
@@ -18,8 +18,6 @@
  */
 
 export type GiftHeroVariant = "a" | "b";
-
-const CDN = "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/";
 
 export const HERO_EYEBROW = "Gift a season";
 export const HERO_HEADLINE = "The gift that shows up every season.";
@@ -31,37 +29,35 @@ export const HERO_TRUST = [
 ];
 
 /**
- * Live product media on cdn.shopify.com. Positions are percentages of the
- * hero frame so the same arrangement holds at every aspect ratio.
+ * Flat-lay cutouts of live Shopify product photography. Source packshots
+ * (cdn.shopify.com) had their white backgrounds and baked-in shadows removed
+ * so every piece carries the same drop shadow (one direction, one blur).
+ * Sources are listed in public/lp/gift-season/flatlay/SOURCES.md.
+ * Positions are percentages of the hero frame.
  */
 const FLAT_LAY = [
   {
-    // Rhone Rise 1/4 Zip, navy packshot (Shopify product media).
-    src: `${CDN}mully-fall-2026-24.jpg?v=1790962847&width=1000`,
-    alt: "Rhone Rise quarter zip in navy",
-    style: { left: "2%", top: "0%", width: "54%", transform: "rotate(-6deg)" },
+    src: "/lp/gift-season/flatlay/qz.webp",
+    style: { left: "6%", top: "7%", width: "46%", transform: "rotate(-6deg)" },
   },
   {
-    // Quiet Golf Remy Polo, wine stripe packshot.
-    src: `${CDN}mully-fall-2026-16.jpg?v=1790962847&width=900`,
-    alt: "Quiet Golf Remy polo in wine stripe",
-    style: { right: "2%", top: "4%", width: "48%", transform: "rotate(4deg)" },
+    src: "/lp/gift-season/flatlay/polo.webp",
+    style: { right: "7%", top: "8%", width: "38%", transform: "rotate(4deg)" },
   },
   {
-    // Greyson Gothic G Dad Hat, transparent packshot (kept white, no multiply).
-    src: `${CDN}MG23A25_100_1_4858.webp?v=1781539302&width=700`,
-    alt: "Greyson Gothic G dad hat in white",
-    style: { left: "10%", bottom: "0%", width: "38%", transform: "rotate(-9deg)", mixBlendMode: "normal" as const },
+    src: "/lp/gift-season/flatlay/hat.webp",
+    style: { left: "11%", top: "57%", width: "33%", transform: "rotate(-8deg)" },
   },
   {
-    // Will Leather Goods Saddle Belt, tan packshot.
-    // Prepared white-canvas copy of the Shopify packshot
-    // 60078_SADDLE_BELT_TAN_001 (see src/lib/shopProductPhotos.json).
-    src: "/shop-redesign/products/white/will-leather-saddle-belt.webp",
-    alt: "Will Leather Goods saddle belt in tan",
-    style: { right: "2%", bottom: "6%", width: "50%", transform: "rotate(8deg)" },
+    src: "/lp/gift-season/flatlay/belt.webp",
+    style: { right: "5%", top: "60%", width: "46%", transform: "rotate(6deg)" },
   },
 ];
+
+/** One shared shadow for every piece: down and to the right, one blur. */
+const FLAT_LAY_SHADOW = "drop-shadow(4px 8px 10px rgba(58,44,30,0.24))";
+
+export const HERO_A_CAPTION = "Pieces from past Reserves. Every Reserve is styled to them.";
 
 export function HeroMedia({ variant, priority = false }: { variant: GiftHeroVariant; priority?: boolean }) {
   if (variant === "b") {
@@ -79,17 +75,19 @@ export function HeroMedia({ variant, priority = false }: { variant: GiftHeroVari
     );
   }
   return (
-    <div
-      className="absolute inset-0 overflow-hidden bg-[#ECE5D6]"
+    <figure
+      className="absolute inset-0 m-0 overflow-hidden bg-[#ECE5D6]"
       style={{
         backgroundImage:
           "radial-gradient(120% 90% at 18% 12%, rgba(255,252,244,0.85) 0%, rgba(255,252,244,0) 55%), radial-gradient(90% 70% at 90% 100%, rgba(120,98,70,0.10) 0%, rgba(120,98,70,0) 60%)",
       }}
       data-testid="gift-hero-media-a"
-      role="img"
-      aria-label="Example pieces from a past Reserve: Rhone quarter zip, Quiet Golf polo, Greyson hat and Will Leather belt"
     >
-      <div className="absolute inset-[2%]">
+      <div
+        className="absolute inset-0"
+        role="img"
+        aria-label="Rhone quarter zip, Quiet Golf polo, Greyson hat and Will Leather belt"
+      >
         {FLAT_LAY.map((p) => (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -97,14 +95,20 @@ export function HeroMedia({ variant, priority = false }: { variant: GiftHeroVari
             src={p.src}
             alt=""
             aria-hidden="true"
-            className="absolute h-auto mix-blend-multiply select-none"
-            style={p.style}
+            className="absolute h-auto select-none"
+            style={{ ...p.style, filter: FLAT_LAY_SHADOW }}
             loading={priority ? "eager" : "lazy"}
             draggable={false}
           />
         ))}
       </div>
-    </div>
+      <figcaption
+        className="absolute bottom-2.5 left-4 right-4 lg:bottom-5 lg:left-8 text-[11px] lg:text-[12px] text-[#625e55]"
+        data-testid="gift-hero-caption"
+      >
+        {HERO_A_CAPTION}
+      </figcaption>
+    </figure>
   );
 }
 

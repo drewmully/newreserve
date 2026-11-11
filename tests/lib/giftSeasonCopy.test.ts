@@ -50,7 +50,13 @@ describe("Gift a Season pricing copy", () => {
     const hero = readFileSync(path.resolve(__dirname, "../..", "src/app/lp/gift-season/GiftSeasonHero.tsx"), "utf8");
     const lp = readFileSync(path.resolve(__dirname, "../..", "src/app/lp/gift-season/GiftSeasonLPClient.tsx"), "utf8");
     expect(hero).not.toMatch(/\$300|reserve-founders-hero|fall-fairway|fall-firepit/);
-    expect(hero).toMatch(/cdn\.shopify\.com/);
+    expect(hero).toMatch(/\/lp\/gift-season\/flatlay\//);
+    expect(hero).toMatch(/Pieces from past Reserves\. Every Reserve is styled to them\./);
+    expect(hero).not.toMatch(/Unboxing-7/);
+    expect(lp).not.toMatch(/Unboxing-7|In a typical Reserve|gift-season-examples/);
+    expect(lp).toMatch(/Step 1 of 2 · Choose a gift length/);
+    expect(lp).toMatch(/returnsLabel="Easy Returns"/);
+    expect(lp).toMatch(/gift-order-summary/);
     expect(hero).toMatch(/\/shop\/hero-fall-2026\.jpg/);
     expect(hero).toMatch(/"Paid once\. Never renews\."/);
     expect(hero).toMatch(/"They pick their own sizes"/);

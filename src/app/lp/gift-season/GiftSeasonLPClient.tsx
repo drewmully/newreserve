@@ -9,7 +9,6 @@
  * "Reserve" never "box".
  */
 
-import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { trackEvent } from "@/lib/tracking";
 import { captureAttributionFromUrl } from "@/lib/attribution";
@@ -57,34 +56,6 @@ const STEPS = [
     body: GIFT_SEASON_SHOW_FREE_SHIPPING_EXCHANGES
       ? `Hand-picked by a Mully stylist. Free shipping and free exchanges. ${TIMING_LINE}`
       : `Hand-picked by a Mully stylist. ${TIMING_LINE}`,
-  },
-];
-
-/**
- * Real pieces from the June 2026 Reserve plan (mully_box_plan_by_order v4),
- * images from their Shopify products. Shown as examples only: contents vary
- * by recipient and season, so no item counts.
- */
-const EXAMPLE_PIECES = [
-  {
-    category: "Polo",
-    name: "Quiet Golf Vintage Polo",
-    src: "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/VintagePoloFOREST_1.jpg?v=1775579860",
-  },
-  {
-    category: "Outer layer",
-    name: "Rhone Heritage Quarter Zip",
-    src: "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/rhone-layering-s-heather-gray-rhone-men-s-heritage-midweight-1-4-zip-1196079589.png?v=1775579881",
-  },
-  {
-    category: "Accessory",
-    name: "Greyson Dad Hat",
-    src: "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/MG23A25_100_1_4858.webp?v=1781539302",
-  },
-  {
-    category: "Accessory",
-    name: "Will Leather Braided Belt",
-    src: "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/60397_BRAIDED_STRETCH_LEATHER_BELT_BLACK_01.jpg?v=1775486933",
   },
 ];
 
@@ -170,6 +141,13 @@ export default function GiftSeasonLPClient({
       document.body.classList.remove(cls);
     };
   }, [heroVariant]);
+
+  function changeLength() {
+    trackEvent("gift_season_summary_change_clicked", {
+      properties: { seasons, hero: heroVariant, lp_source: LP_SOURCE },
+    }).catch(() => {});
+    pickerSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   function scrollToPicker(target: "picker" | "details") {
     trackEvent("gift_season_hero_cta_clicked", {
@@ -273,7 +251,7 @@ export default function GiftSeasonLPClient({
   return (
     <div className="min-h-screen bg-bone text-charcoal">
       <style>{`@media (max-width: 639px) { body.gs-hide-chat #helix-chat-container { opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; transition: opacity 150ms; } }`}</style>
-      <ShopSeasonalHeader accent="#4A3528" />
+      <ShopSeasonalHeader accent="#4A3528" returnsLabel="Easy Returns" />
       <main className="pt-24">
         <section
           className="lg:grid lg:grid-cols-2 lg:min-h-[calc(100svh-96px)]"
@@ -325,9 +303,9 @@ export default function GiftSeasonLPClient({
                 className="mt-10 lg:mt-7 scroll-mt-28"
                 aria-label="Choose a gift length"
               >
-                  <div className="text-[11px] uppercase tracking-[0.15em] text-charcoal/65 mb-2">
-                    Gift length
-                  </div>
+                  <h2 className="text-[11px] uppercase tracking-[0.12em] text-[#5b613f] mb-2 font-normal" data-testid="gift-step-1-label">
+                    Step 1 of 2 · Choose a gift length
+                  </h2>
                   <div
                     ref={pickerRef}
                     className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-2 pt-1"
@@ -420,13 +398,14 @@ export default function GiftSeasonLPClient({
         <section
           id="gift-details"
           ref={detailsSectionRef}
-          className="max-w-2xl mx-auto px-4 sm:px-6 mt-10 lg:mt-16 scroll-mt-28"
+          className="max-w-2xl lg:max-w-5xl mx-auto px-4 sm:px-6 lg:px-10 mt-10 lg:mt-16 scroll-mt-28"
           data-testid="gift-season-details"
         >
           <div className="text-[11px] uppercase tracking-[0.12em] text-[#5b613f]">Step 2 of 2</div>
           <h2 className="font-serif font-normal text-[25px] lg:text-[30px] leading-[1.2] tracking-[-0.025em] text-[#111] mt-1 mb-4">
             Who is it for?
           </h2>
+          <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-10 lg:items-start">
             <div onFocusCapture={handleFirstFocus}>
               <div className="bg-bone-dark/40 rounded-lg border border-forest/15 p-5">
                 <button
@@ -512,7 +491,7 @@ export default function GiftSeasonLPClient({
                   </Field>
                 </div>
 
-                <div className="mt-4 pt-4 border-t border-forest/15 flex items-baseline justify-between">
+                <div className="mt-4 pt-4 border-t border-forest/15 flex items-baseline justify-between lg:hidden">
                   <div>
                     <div className="text-[11px] uppercase tracking-[0.2em] text-charcoal/60">
                       Reserve gift, {option.label}
@@ -551,32 +530,57 @@ export default function GiftSeasonLPClient({
                 ) : null}
               </div>
             </div>
+
+            {/* Desktop order summary, right column next to the form. */}
+            <aside
+              className="hidden lg:block sticky top-28 rounded-lg border border-forest/15 bg-white/60 p-6"
+              aria-label="Order summary"
+              data-testid="gift-order-summary"
+            >
+              <div className="text-[11px] uppercase tracking-[0.12em] text-[#5b613f]">Order summary</div>
+              <div className="mt-4 flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-sm text-[#111]">Reserve gift, {option.label}</div>
+                  <div className="text-[12px] text-[#625e55] mt-0.5">{OPTION_COPY[option.seasons].detail}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={changeLength}
+                  className="shrink-0 text-[12px] text-[#111] underline underline-offset-4 decoration-charcoal/30 hover:decoration-charcoal"
+                  data-testid="gift-summary-change"
+                >
+                  Change
+                </button>
+              </div>
+              <div className="mt-4 pt-4 border-t border-forest/10 space-y-1.5 text-[12px] text-[#625e55]">
+                <div className="flex justify-between">
+                  <span>Per season</span>
+                  <span>{formatUsd(perSeasonPrice(option.price, option.seasons))}</span>
+                </div>
+                {seasonSavings(option.price, option.seasons, singlePrice) > 0 ? (
+                  <div className="flex justify-between text-ember">
+                    <span>You save</span>
+                    <span>{formatUsd(seasonSavings(option.price, option.seasons, singlePrice))}</span>
+                  </div>
+                ) : null}
+                {recipientName.trim() ? (
+                  <div className="flex justify-between">
+                    <span>For</span>
+                    <span className="truncate max-w-[160px] text-right">{recipientName.trim()}</span>
+                  </div>
+                ) : null}
+              </div>
+              <div className="mt-4 pt-4 border-t border-forest/10 flex items-baseline justify-between">
+                <span className="text-sm text-[#111]">Total</span>
+                <span className="font-serif text-[28px] leading-none text-[#111]" data-testid="gift-summary-total">
+                  {formatUsd(option.price)}
+                </span>
+              </div>
+              <div className="mt-2 text-right text-[11px] text-[#625e55]">Paid once, never renews.</div>
+            </aside>
+          </div>
         </section>
 
-        <section className="max-w-5xl mx-auto px-4 sm:px-6 mt-12" data-testid="gift-season-examples">
-          <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-1 sm:gap-3 mb-4">
-            <h2 className="font-serif text-2xl text-forest">In a typical Reserve</h2>
-            <span className="text-[11px] uppercase tracking-[0.15em] text-charcoal/55">
-              Examples from past seasons
-            </span>
-          </div>
-          <ul className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {EXAMPLE_PIECES.map((p) => (
-              <li key={p.name} className="bg-bone rounded-lg border border-forest/10 overflow-hidden">
-                <div className="relative w-full aspect-square bg-white">
-                  <Image src={p.src} alt={`Example: ${p.name}`} fill sizes="(max-width: 640px) 50vw, 25vw" className="object-contain p-2" />
-                </div>
-                <div className="px-3 py-2 border-t border-forest/10">
-                  <div className="text-[10px] uppercase tracking-[0.15em] text-ember/80">{p.category}</div>
-                  <div className="text-xs text-charcoal/80 mt-0.5 leading-snug">{p.name}</div>
-                </div>
-              </li>
-            ))}
-          </ul>
-          <p className="text-[11px] text-charcoal/55 mt-3">
-            Examples only. Every Reserve is styled to the recipient, so pieces vary.
-          </p>
-        </section>
 
         <section className="py-12 mt-10 bg-bone-dark/30 border-y border-forest/10">
           <div className="max-w-5xl mx-auto px-4 sm:px-6">

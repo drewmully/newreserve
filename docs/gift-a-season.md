@@ -160,6 +160,15 @@ The page header is the standard shop header and top bar (`ShopSeasonalHeader`). 
 - No member quote yet. There's no reviews system in the repo. Quoting Intercom conversations would need the member's permission.
 - Event: `gift_season_hero_cta_clicked` {hero, target: picker|details, seasons, lp_source}. `gift_season_view` includes `hero`.
 
+- **CRO round 2 (A picked, default):**
+  - The flat lay now uses cutouts of the same Shopify packshots (`public/lp/gift-season/flatlay/`, sources in SOURCES.md). Their baked-in shadows were removed, so all four share one CSS drop shadow.
+  - New caption: "Pieces from past Reserves. Every Reserve is styled to them."
+  - The "In a typical Reserve" section is removed.
+  - The picker is labeled "Step 1 of 2 · Choose a gift length".
+  - On desktop, step 2 has an order summary column with the length, the price and a Change link (event `gift_season_summary_change_clicked`).
+  - The top bar reads "Easy Returns" on this page through the new optional `returnsLabel` prop. No sitewide change was found, so the default copy elsewhere is unchanged.
+  - Unboxing-7.jpg is not used.
+
 ## Copy rules
 
 There are no em dashes or double dashes. Customer copy uses "Mully" and "Reserve", never "box" or "Mullybox". Vitest enforces this on the season emails and season UI files.

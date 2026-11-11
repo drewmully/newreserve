@@ -7,11 +7,16 @@
  *
  * Fixed to the top of the viewport. The header sits directly beneath it.
  */
-export function ShopAnnouncementBar() {
+export function ShopAnnouncementBar({
+  returnsLabel = "Free U.S. Returns",
+}: {
+  /** Optional override for the returns promise. Defaults to the sitewide copy. */
+  returnsLabel?: string;
+} = {}) {
   const items = [
     { icon: TruckIcon, text: "Ships from Mully Fulfillment" },
     { icon: TagIcon, text: "Buy one, get 15% off the second" },
-    { icon: ReturnIcon, text: "Free U.S. Returns" },
+    { icon: ReturnIcon, text: returnsLabel },
   ];
 
   return (
