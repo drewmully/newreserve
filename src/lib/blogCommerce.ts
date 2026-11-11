@@ -202,7 +202,7 @@ export const ROW_COPY = {
 
 export interface CtaCopy { eyebrow: string; heading: string; body: string; cta: string; href: string }
 
-const RESERVE_BODY = "Take a short style quiz on fit, sizing and the brands you already wear. A stylist picks every piece, and you see the picks before anything ships.";
+const RESERVE_BODY = "Take a short style quiz on fit, sizing and the brands you already wear. A stylist picks every piece, and your fit is confirmed before anything ships.";
 
 export const END_COPY: Record<Exclude<EndIntent, "shop">, CtaCopy> = {
   "reserve-club": {
@@ -237,8 +237,8 @@ export const END_COPY: Record<Exclude<EndIntent, "shop">, CtaCopy> = {
 
 export const RESERVE_MID_COPY: CtaCopy = {
   eyebrow: "Mully Reserve",
-  heading: "Picked by a stylist. Approved by you.",
-  body: "Reserve starts with a short style quiz on fit and the brands you already wear. You see every pick before it ships.",
+  heading: "Picked by a stylist. Fit to you.",
+  body: "Reserve starts with a short style quiz on fit and the brands you already wear. Your fit is confirmed before anything ships.",
   cta: "See plans and pricing",
   href: "/subscription",
 };
