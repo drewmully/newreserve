@@ -61,7 +61,7 @@ const when = (d: string | null | undefined) => (d ? new Date(d) : undefined);
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const [products, posts, legacy] = await Promise.all([shopProducts(), getPublishedPostDates(), legacyPosts()]);
   const categoryPaths = ["shop-all", ...Object.values(SHOP_CATEGORY_HANDLES)].map((h) => `/shop/collection/${h}`);
-  const giftPaths = GIFT_TIERS.map((t) => `/shop/gifts/${t.key}`);
+  const giftPaths = ["/shop/gifts", ...GIFT_TIERS.map((t) => `/shop/gifts/${t.key}`)];
   return [
     ...[...STATIC_PATHS, ...categoryPaths, ...giftPaths].map((p) => ({ url: `${SITE}${p === "/" ? "" : p}` })),
     ...products.map((p) => ({ url: `${SITE}/shop/${p.handle}`, lastModified: when(p.updatedAt) })),

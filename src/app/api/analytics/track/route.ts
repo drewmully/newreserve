@@ -64,6 +64,11 @@ const VALID_EVENTS = new Set([
   // Editorial LP variant (mymully.com/lp/editorial) A/B against subscription LP.
   "lp_editorial_view",
   "lp_editorial_checkout_clicked",
+  // Holiday gift guide (/shop/gifts and tier pages).
+  "gift_guide_view",
+  "gift_guide_tier_click",
+  "gift_guide_product_click",
+  "gift_a_season_click",
   // Consult LP (mymully.com/lp/consult) — phone-first variant of subscription LP.
   // lp_consult_view fires on page mount; lp_consult_modal_view fires when the
   // overlay opens; lp_consult_submit fires once the phone step succeeds (this

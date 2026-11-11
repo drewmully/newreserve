@@ -26,14 +26,5 @@ export function EstShipDate({ weeks }: { weeks?: number }) {
   return <>{mounted ? estShipDateLabel(weeks) : `in about ${restockWeeks(weeks)} weeks`}</>;
 }
 
-/**
- * True when nothing in `variants` can ship from stock now but at least one
- * variant can still be ordered for restock (continue-selling with quantity
- * at or below zero). Used on cards so a "Restocking" label never appears on a
- * product or color that still has units on hand.
- */
-export function isRestockOnly(variants: Array<{ availableForSale: boolean; currentlyNotInStock?: boolean } | null | undefined>): boolean {
-  const list = variants.filter((v): v is { availableForSale: boolean; currentlyNotInStock?: boolean } => !!v);
-  const inStock = list.some(v => v.availableForSale && !v.currentlyNotInStock);
-  return !inStock && list.some(v => v.availableForSale && v.currentlyNotInStock === true);
-}
+// Shared with server components (gift guide), so the logic lives in a plain module.
+export { isRestockOnly } from "@/lib/restock";
