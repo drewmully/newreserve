@@ -32,7 +32,11 @@ function loadGame(): Promise<GameModule> {
   return gamePromise;
 }
 
-class ApiError extends Error {}
+class ApiError extends Error {
+  constructor(message: string, readonly code = "") { super(message); }
+}
+/** How long to wait for a Turnstile token before asking the player to retry. */
+const TURNSTILE_WAIT_MS = 20_000;
 async function api<T>(route: string, payload: Record<string, unknown>): Promise<T> {
   let res: Response;
   try {
@@ -43,7 +47,10 @@ async function api<T>(route: string, payload: Record<string, unknown>): Promise<
     });
   } catch { throw new ApiError("Could not reach Mully. Check your connection."); }
   const json = await res.json().catch(() => ({ status: "error", error: "Something went wrong. Try again." }));
-  if (json.status === "error" || !res.ok) throw new ApiError(json.error && json.error.length < 120 && /\s/.test(json.error) ? json.error : "Something went wrong. Try again.");
+  if (json.status === "error" || !res.ok) {
+    throw new ApiError(json.error && json.error.length < 120 && /\s/.test(json.error) ? json.error : "Something went wrong. Try again.",
+      typeof json.code === "string" ? json.code : "");
+  }
   return json as T;
 }
 
@@ -71,7 +78,7 @@ function formatPhone(raw: string): string {
 
 declare global {
   interface Window {
-    turnstile?: { render: (el: HTMLElement, opts: Record<string, unknown>) => string; reset: (id?: string) => void };
+    turnstile?: { render: (el: HTMLElement, opts: Record<string, unknown>) => string; reset: (id?: string) => void; remove?: (id?: string) => void };
   }
 }
 
@@ -92,6 +99,11 @@ export function TakeAShotModal({ openSignal }: { openSignal: number }) {
   const stage = useRef<HTMLDivElement>(null);
   const turnstileBox = useRef<HTMLDivElement>(null);
   const turnstileToken = useRef<string>("");
+  const turnstileWidget = useRef<string | undefined>(undefined);
+  /** Bumped whenever a fresh token arrives, so a waiting submit can continue. */
+  const [tokenSeq, setTokenSeq] = useState(0);
+  /** A submit that is waiting for the Turnstile token ("Checking…"). */
+  const [waiting, setWaiting] = useState<"" | "phone" | "one">("");
   const unmountGame = useRef<(() => void) | null>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
   const [step, setStep] = useState<Step>("landing");
@@ -130,18 +142,20 @@ export function TakeAShotModal({ openSignal }: { openSignal: number }) {
     dialog.current?.querySelector<HTMLElement>("[data-step-focus]")?.focus({ preventScroll: true });
   }, [step]);
 
-  // Turnstile (only when a site key is configured): rendered on the phone step,
-  // where the game session is requested.
+  // Turnstile (only when a site key is configured): rendered visibly as soon as
+  // the phone step mounts, so the check runs while the player types and any
+  // checkbox is on screen before they tap Play.
   useEffect(() => {
     if (!TURNSTILE_SITE_KEY || step !== "phone" || !turnstileBox.current) return;
     const box = turnstileBox.current;
     let cancelled = false;
     const render = () => {
       if (cancelled || !window.turnstile || box.childElementCount) return;
-      window.turnstile.render(box, {
-        sitekey: TURNSTILE_SITE_KEY, appearance: "interaction-only", action: "take-a-shot",
-        callback: (t: string) => { turnstileToken.current = t; },
+      turnstileWidget.current = window.turnstile.render(box, {
+        sitekey: TURNSTILE_SITE_KEY, appearance: "always", size: "flexible", action: "take-a-shot",
+        callback: (t: string) => { turnstileToken.current = t; setTokenSeq((n) => n + 1); },
         "expired-callback": () => { turnstileToken.current = ""; },
+        "error-callback": () => { turnstileToken.current = ""; },
       });
     };
     if (window.turnstile) render();
@@ -153,8 +167,35 @@ export function TakeAShotModal({ openSignal }: { openSignal: number }) {
       s.onload = render;
       document.head.appendChild(s);
     } else document.getElementById("cf-turnstile")!.addEventListener("load", render);
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      if (turnstileWidget.current && window.turnstile?.remove) window.turnstile.remove(turnstileWidget.current);
+      turnstileWidget.current = undefined;
+      turnstileToken.current = "";
+    };
   }, [step]);
+
+  // A tap before the token arrived waits here, then submits by itself.
+  useEffect(() => {
+    if (!waiting) return;
+    if (turnstileToken.current) {
+      const withPhone = waiting === "phone";
+      setWaiting("");
+      void startGame(withPhone, true);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setWaiting("");
+      setError("We could not finish the robot check. Complete the check above, then tap again.");
+    }, TURNSTILE_WAIT_MS);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- startGame reads current state
+  }, [waiting, tokenSeq]);
+
+  function resetTurnstile() {
+    turnstileToken.current = "";
+    if (window.turnstile) window.turnstile.reset(turnstileWidget.current);
+  }
 
   // Mount the game once the stage is visible.
   useEffect(() => {
@@ -202,14 +243,17 @@ export function TakeAShotModal({ openSignal }: { openSignal: number }) {
     finally { setBusy(""); }
   }
 
-  async function startGame(withPhone: boolean) {
-    if (busy) return;
+  /** `resumed`: called by the waiting effect once the token arrived. */
+  async function startGame(withPhone: boolean, resumed = false) {
+    if (busy || (waiting && !resumed)) return;
     setError("");
     if (withPhone) {
       const digits = phone.replace(/\D/g, "");
       if (digits.length < 10) { setError(digits.length ? "Use a valid phone number, including your country code outside the US." : `Enter your phone, or play with ${SHOTS.email} shot.`); return; }
       if (!smsOk) { setError("Check the text box to get 3 shots."); return; }
     }
+    // No token yet: show "Checking…" and submit once Turnstile finishes.
+    if (TURNSTILE_SITE_KEY && !turnstileToken.current) { setWaiting(withPhone ? "phone" : "one"); return; }
     setBusy(withPhone ? "phone" : "one");
     try {
       const [game, r] = await Promise.all([
@@ -227,8 +271,10 @@ export function TakeAShotModal({ openSignal }: { openSignal: number }) {
       pendingGame.current = { game, session: r.session, withPhone };
       setStep("game");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Please try again.");
-      if (TURNSTILE_SITE_KEY && window.turnstile) { turnstileToken.current = ""; window.turnstile.reset(); }
+      // Tokens are single use, so any failed session needs a fresh one. Inputs stay as typed.
+      if (TURNSTILE_SITE_KEY) resetTurnstile();
+      if (e instanceof ApiError && e.code === "turnstile_failed") setError("Please complete the check above, then tap again.");
+      else setError(e instanceof Error ? e.message : "Please try again.");
     } finally { setBusy(""); }
   }
 
@@ -284,9 +330,11 @@ export function TakeAShotModal({ openSignal }: { openSignal: number }) {
           </label>
           <div ref={turnstileBox} className="tas__turnstile" />
           {error && <p className="tas__err" role="alert">{error}</p>}
-          <button className="tas__btn" type="submit" disabled={Boolean(busy)}>{busy === "phone" ? <><span className="tas__spin" />Loading the hole</> : `Get ${SHOTS.phone} shots`}</button>
-          <button className="tas__link" type="button" disabled={Boolean(busy)} onClick={() => void startGame(false)}>
-            {busy === "one" ? "Loading the hole…" : `Play with ${SHOTS.email} shot (${FLOOR_PERCENT.email}% min)`}
+          <button className="tas__btn" type="submit" disabled={Boolean(busy || waiting)}>
+            {waiting === "phone" ? <><span className="tas__spin" />Checking…</> : busy === "phone" ? <><span className="tas__spin" />Loading the hole</> : `Get ${SHOTS.phone} shots`}
+          </button>
+          <button className="tas__link" type="button" disabled={Boolean(busy || waiting)} onClick={() => void startGame(false)}>
+            {waiting === "one" ? "Checking…" : busy === "one" ? "Loading the hole…" : `Play with ${SHOTS.email} shot (${FLOOR_PERCENT.email}% min)`}
           </button>
         </form>}
         {step === "existing" && <div className="tas__step">
