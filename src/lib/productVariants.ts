@@ -57,8 +57,14 @@ export function getVariantById(
   product: VariantBearingProduct,
   variantId: string
 ): ShopifyProductVariant | null {
+  // Accept the bare numeric id too (Shopify and Meta catalog links use
+  // ?variant=123), not only the gid://shopify/ProductVariant/123 form.
+  const variants = getProductVariants(product);
   return (
-    getProductVariants(product).find((variant) => variant.id === variantId) ??
+    variants.find((variant) => variant.id === variantId) ??
+    (/^\d+$/.test(variantId)
+      ? variants.find((variant) => variant.id.split("/").pop() === variantId)
+      : undefined) ??
     null
   );
 }
