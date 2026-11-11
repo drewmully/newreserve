@@ -61,17 +61,18 @@ export const CODE_RULES = {
    * Codes only apply to these collections. Shopify basic code discounts cannot
    * exclude products directly, so exclusions are enforced by scoping to a
    * merchandise collection that does not contain the products below.
-   * "Shop — All" (verified Nov 11, 2026: none of the excluded products are in it).
+   * "Shop — Full Price (Take a Shot)" (handle shop-full-price): a smart
+   * collection, tag "shop" AND compare-at price not set. That keeps sale items
+   * out. Verified Nov 11, 2026: 49 products, all 37 active shop products, none
+   * of the excluded products below, no compare-at items.
    * Empty array = every product (subscriptions are still excluded by
    * appliesOnSubscription: false).
    */
-  eligibleCollectionIds: ["gid://shopify/Collection/358572818624"] as string[],
+  eligibleCollectionIds: ["gid://shopify/Collection/485574770880"] as string[],
   /**
    * Products that must never be discounted by a game code. Documentation and
-   * test guard only (see above). Found in the Shopify catalog Nov 11, 2026.
-   * Sale items must be excluded too (Drew, Nov 11), but the store has no
-   * sale collection or tag yet. TODO: once one exists, swap
-   * eligibleCollectionIds to a "full price" automated collection.
+   * test guard only (see above): none of these may be in the eligible
+   * collection. Found in the Shopify catalog Nov 11, 2026.
    */
   excludedProductIds: [
     "gid://shopify/Product/8501257044160", // Mully Reserve | Seasonal Styling Subscription (reserve-member)

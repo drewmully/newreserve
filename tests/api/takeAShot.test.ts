@@ -220,6 +220,8 @@ describe("codes", () => {
       customerGets: { value: { percentage: 0.3 }, appliesOnSubscription: false, items: { collections: { add: CODE_RULES.eligibleCollectionIds } } },
     });
     expect(input.tags).toContain("take-a-shot");
+    // Full-price smart collection (no sale items, no Reserve/Access/gift subs).
+    expect(CODE_RULES.eligibleCollectionIds).toEqual(["gid://shopify/Collection/485574770880"]);
   });
 });
 
