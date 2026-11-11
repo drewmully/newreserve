@@ -449,9 +449,9 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
         brand: last.brand, value: last.price, quantity: last.quantity,
         variant_title: last.variantTitle, image_url: last.image,
         checkout_url: cartCheckoutUrlRef.current ?? undefined,
-        cart_total: Math.round(cartRef.current.reduce((n, item) => n + item.price * item.quantity, 0) * 100) / 100,
-        cart_item_count: cartRef.current.reduce((n, item) => n + item.quantity, 0),
-        cart_item_names: cartRef.current.map((item) => item.name).filter(Boolean).slice(0, 20),
+        cart_total: Math.round(lines.reduce((n, item) => n + item.price * item.quantity, 0) * 100) / 100,
+        cart_item_count: lines.reduce((n, item) => n + item.quantity, 0),
+        cart_item_names: lines.map((item) => item.name).filter(Boolean).slice(0, 20),
       }, { mirror: false });
     };
     window.addEventListener(VISITOR_IDENTIFIED_EVENT, onIdentified);
