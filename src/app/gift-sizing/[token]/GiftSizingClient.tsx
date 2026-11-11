@@ -29,6 +29,8 @@ interface Props {
   giftMessage: string | null;
   alreadySubmitted: boolean;
   existingSizing: Record<string, string> | null;
+  /** Gift a Season: prepaid count. Null for the legacy recurring gift. */
+  seasonsTotal?: number | null;
 }
 
 interface SizingState {
@@ -59,7 +61,11 @@ export default function GiftSizingClient({
   giftMessage,
   alreadySubmitted,
   existingSizing,
+  seasonsTotal = null,
 }: Props) {
+  const isSeason = !!seasonsTotal;
+  const seasonsLabel =
+    seasonsTotal === 1 ? "a season" : `${seasonsTotal ?? 0} seasons`;
   const initial = useMemo<SizingState>(() => {
     if (!existingSizing) return DEFAULT_SIZING;
     return {
@@ -120,6 +126,22 @@ export default function GiftSizingClient({
               <h1 className="font-serif text-3xl text-forest mb-3">
                 You&apos;re all set, {recipient}.
               </h1>
+              {isSeason ? (
+                <>
+                  <p className="text-sm text-charcoal/75 leading-relaxed max-w-md mx-auto">
+                    We have your sizing. Your first Mully Reserve is being
+                    hand-picked and ships in 5 to 7 business days.
+                    {seasonsTotal && seasonsTotal > 1
+                      ? ` The rest arrive every 3 months, ${seasonsTotal} in all.`
+                      : ""}
+                  </p>
+                  <p className="text-xs text-charcoal/55 mt-6 leading-relaxed max-w-md mx-auto">
+                    Your gift is fully prepaid. Nothing renews and you will
+                    never be charged.
+                  </p>
+                </>
+              ) : (
+              <>
               <p className="text-sm text-charcoal/75 leading-relaxed max-w-md mx-auto">
                 We&apos;ve got your sizing. Your first Mully Reserve box will be
                 hand-curated and ship in 5\u20137 business days. Watch your inbox
@@ -134,20 +156,43 @@ export default function GiftSizingClient({
                 </a>
                 .
               </p>
+              </>
+              )}
             </div>
           ) : (
             <>
-              <div className="text-[11px] tracking-[0.25em] uppercase text-ember/80 mb-2">
-                Mully Reserve \u00b7 Gift Box
-              </div>
-              <h1 className="font-serif text-3xl sm:text-4xl text-forest leading-[1.1]">
-                Hey {recipient} \u2014 {fromName} sent you Mully Reserve.
-              </h1>
-              <p className="text-sm text-charcoal/80 mt-4 leading-relaxed">
-                A hand-curated quarterly box of premium golf apparel and
-                accessories is on its way. $300+ retail value in every box.
-                Confirm your sizing below \u2014 takes about 2 minutes.
-              </p>
+              {isSeason ? (
+                <>
+                  <div className="text-[11px] tracking-[0.25em] uppercase text-ember/80 mb-2">
+                    Mully Reserve &middot; A gift for {seasonsLabel}
+                  </div>
+                  <h1 className="font-serif text-3xl sm:text-4xl text-forest leading-[1.1]">
+                    {recipient}, {fromName} gave you {seasonsLabel} of Mully Reserve.
+                  </h1>
+                  <p className="text-sm text-charcoal/80 mt-4 leading-relaxed">
+                    Hand-picked golf apparel and accessories, $300+ retail
+                    value each season.{" "}
+                    {seasonsTotal && seasonsTotal > 1
+                      ? `One Reserve every 3 months, ${seasonsTotal} in all. `
+                      : ""}
+                    Confirm your sizing below. It takes about 2 minutes.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="text-[11px] tracking-[0.25em] uppercase text-ember/80 mb-2">
+                    Mully Reserve \u00b7 Gift Box
+                  </div>
+                  <h1 className="font-serif text-3xl sm:text-4xl text-forest leading-[1.1]">
+                    Hey {recipient} \u2014 {fromName} sent you Mully Reserve.
+                  </h1>
+                  <p className="text-sm text-charcoal/80 mt-4 leading-relaxed">
+                    A hand-curated quarterly box of premium golf apparel and
+                    accessories is on its way. $300+ retail value in every box.
+                    Confirm your sizing below \u2014 takes about 2 minutes.
+                  </p>
+                </>
+              )}
 
               {giftMessage ? (
                 <div className="mt-5 bg-bone-dark/40 border border-forest/15 rounded-lg p-4">
@@ -205,7 +250,7 @@ export default function GiftSizingClient({
                   <textarea
                     value={s.notes}
                     onChange={(e) => setS({ ...s, notes: e.target.value })}
-                    placeholder="e.g. between sizes \u2014 size up; runs hot/cold; allergies; style preferences"
+                    placeholder={isSeason ? "e.g. between sizes, size up; runs hot or cold; style preferences" : "e.g. between sizes \u2014 size up; runs hot/cold; allergies; style preferences"}
                     rows={3}
                     className="w-full bg-bone border border-forest/20 rounded px-3 py-2.5 text-sm text-charcoal focus:outline-none focus:border-forest resize-none"
                   />
@@ -227,10 +272,9 @@ export default function GiftSizingClient({
                 ) : null}
 
                 <p className="text-[11px] text-charcoal/55 leading-relaxed pt-3 border-t border-forest/10">
-                  Wrong fit on anything? We swap it free, no questions, no
-                  shipping fee. Your subscription auto-cancels after the
-                  first box ships \u2014 you&apos;re only charged once unless you
-                  choose to stay on.
+                  {isSeason
+                    ? "Wrong fit on anything? We swap it free. Your gift is prepaid and never renews."
+                    : "Wrong fit on anything? We swap it free, no questions, no shipping fee. Your subscription auto-cancels after the first box ships \u2014 you\u2019re only charged once unless you choose to stay on."}
                 </p>
               </div>
 

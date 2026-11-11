@@ -11,9 +11,17 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import {
+  getGiftOrderById,
   getGiftOrderByToken,
   updateGiftOrderStatus,
 } from "@/lib/gifts/giftOrder";
+import {
+  captureGiftSeasonEvent,
+  formatSizingNote,
+  giftEventProps,
+  mirrorGiftSeasonToSupabase,
+  prependOrderNote,
+} from "@/lib/gifts/giftSeasonServer";
 
 const ALLOWED_KEYS = new Set([
   "shirt",
@@ -68,15 +76,37 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid or expired token" }, { status: 404 });
   }
 
+  const isSeason = found.data.gift_kind === "season";
+  // Season gifts that already shipped box 1 keep their lifecycle status;
+  // a sizing update only refreshes the sizing on file for the next box.
+  const keepStatus =
+    isSeason &&
+    (found.data.status === "season_active" || found.data.status === "completed");
   await updateGiftOrderStatus(
     found.id,
-    "sizing_collected",
+    keepStatus ? found.data.status : "sizing_collected",
     {
       sizing,
-      sizing_collected_at: Date.now(),
+      sizing_collected_at: found.data.sizing_collected_at ?? Date.now(),
     },
-    "recipient submitted sizing"
+    keepStatus ? "recipient updated sizing" : "recipient submitted sizing"
   );
+
+  if (isSeason) {
+    // Put the sizing on the paid Shopify order so ops can style box 1
+    // without opening admin/gifts. Best-effort.
+    const fresh = await getGiftOrderById(found.id);
+    await Promise.allSettled([
+      prependOrderNote(found.id, formatSizingNote(sizing)).catch((err) =>
+        console.error("[gifts/submit-sizing] order note failed:", err)
+      ),
+      fresh ? mirrorGiftSeasonToSupabase(found.id, fresh) : Promise.resolve(),
+      captureGiftSeasonEvent("gift_season_sizing_submitted", found.data.recipient_email, {
+        ...giftEventProps(found.id, found.data),
+        update: keepStatus,
+      }),
+    ]);
+  }
 
   return NextResponse.json({ ok: true });
 }

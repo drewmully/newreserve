@@ -32,6 +32,7 @@ export default async function GiftSizingPage({ params }: PageProps) {
   const alreadySubmitted =
     data.status === "sizing_collected" ||
     data.status === "first_box_shipped" ||
+    data.status === "season_active" ||
     data.status === "completed";
 
   return (
@@ -43,6 +44,7 @@ export default async function GiftSizingPage({ params }: PageProps) {
       giftMessage={data.gift_message}
       alreadySubmitted={alreadySubmitted}
       existingSizing={data.sizing}
+      seasonsTotal={data.gift_kind === "season" ? data.seasons_total ?? null : null}
     />
   );
 }

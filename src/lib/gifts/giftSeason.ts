@@ -1,0 +1,245 @@
+/**
+ * Gift a Season: prepaid Reserve gifts with no auto-renewal.
+ *
+ * Pure helpers + constants shared by the LP, the webhooks and the crons.
+ * Safe to import from client components (no server-only deps).
+ *
+ * How a season gift works:
+ *   - The gifter buys one variant of the "Reserve Gift Season" product
+ *     (1, 2 or 4 seasons) in a single one-time Shopify checkout.
+ *   - That paid order is box 1. It ships once the recipient confirms sizing.
+ *   - Boxes 2..N are $0 Shopify orders the season-dispatch cron creates on
+ *     the normal quarterly cycle (every 3 months after box 1 ships), so they
+ *     land in the same fulfillment queue as Loop renewals.
+ *   - The Firestore gift_orders doc tracks seasons_total / boxes_shipped.
+ *     Remaining = seasons_total - boxes_shipped.
+ *   - When the final box is dispatched the recipient gets an offer to
+ *     continue as a regular Reserve Member.
+ */
+
+export type GiftSeasonCount = 1 | 2 | 4;
+
+export interface GiftSeasonOption {
+  seasons: GiftSeasonCount;
+  label: string;
+  /** Whole-dollar price. Reserve Member is $250 per season, no discount. */
+  price: number;
+  sku: string;
+  /** Numeric Shopify variant id (string to stay JSON safe). */
+  variantId: string;
+}
+
+/** Reserve Member price per season. Never $249, never discounted. */
+export const RESERVE_SEASON_PRICE = 250;
+
+/** Months between Reserve boxes (normal quarterly cycle). */
+export const SEASON_INTERVAL_MONTHS = 3;
+
+// Draft product "Reserve Gift Season" (gid://shopify/Product/10327639392448)
+// created 2026-11-11. Env overrides let ops swap variants without a deploy.
+const DEFAULT_VARIANT_IDS: Record<GiftSeasonCount, string> = {
+  1: "50765708820672",
+  2: "50765708853440",
+  4: "50765708886208",
+};
+
+function envVariant(n: GiftSeasonCount): string {
+  const raw =
+    n === 1
+      ? process.env.NEXT_PUBLIC_SHOPIFY_GIFT_SEASON_1_VARIANT_ID
+      : n === 2
+        ? process.env.NEXT_PUBLIC_SHOPIFY_GIFT_SEASON_2_VARIANT_ID
+        : process.env.NEXT_PUBLIC_SHOPIFY_GIFT_SEASON_4_VARIANT_ID;
+  const trimmed = raw?.trim();
+  return trimmed && /^\d+$/.test(trimmed) ? trimmed : DEFAULT_VARIANT_IDS[n];
+}
+
+export const GIFT_SEASON_OPTIONS: GiftSeasonOption[] = ([1, 2, 4] as const).map(
+  (seasons) => ({
+    seasons,
+    label: seasons === 1 ? "1 season" : `${seasons} seasons`,
+    price: seasons * RESERVE_SEASON_PRICE,
+    sku: `RES-GIFT-${seasons}S`,
+    variantId: envVariant(seasons),
+  })
+);
+
+export function getGiftSeasonOption(
+  seasons: number
+): GiftSeasonOption | null {
+  return GIFT_SEASON_OPTIONS.find((o) => o.seasons === seasons) ?? null;
+}
+
+export function parseSeasonCount(raw: unknown): GiftSeasonCount | null {
+  const n = typeof raw === "number" ? raw : Number(String(raw ?? "").trim());
+  return n === 1 || n === 2 || n === 4 ? n : null;
+}
+
+function normalizeVariantId(v: unknown): string | null {
+  if (v === null || v === undefined) return null;
+  const s = String(v).trim();
+  const gid = s.match(/^gid:\/\/shopify\/ProductVariant\/(\d+)$/);
+  if (gid) return gid[1];
+  return /^\d+$/.test(s) ? s : null;
+}
+
+/**
+ * Resolve the season count from a paid order's line items. Matches on
+ * variant id first, then SKU (RES-GIFT-<n>S) so an env swap can't strand an
+ * order. Returns null if no gift season line is present.
+ */
+export function seasonCountFromLineItems(
+  lineItems: Array<{ variant_id?: unknown; sku?: string | null; quantity?: number }>
+): GiftSeasonCount | null {
+  for (const li of lineItems ?? []) {
+    const vid = normalizeVariantId(li.variant_id);
+    const byVariant = GIFT_SEASON_OPTIONS.find((o) => o.variantId === vid);
+    if (byVariant) return byVariant.seasons;
+    const skuMatch = (li.sku ?? "").trim().toUpperCase().match(/^RES-GIFT-(\d)S$/);
+    if (skuMatch) {
+      const n = parseSeasonCount(skuMatch[1]);
+      if (n) return n;
+    }
+  }
+  return null;
+}
+
+/** Cart / note attribute keys used by the season funnel. */
+export const GIFT_SEASON_ATTR = {
+  kind: "gift_kind", // "season"
+  seasons: "gift_seasons", // "1" | "2" | "4"
+  child: "gift_season_child", // "true" on $0 box orders we create
+  parentOrderId: "gift_season_parent_order_id",
+  boxNumber: "gift_season_box_number",
+} as const;
+
+/** Shopify order tags. Kept lowercase and stable for reporting. */
+export function giftSeasonParentTags(seasons: number): string[] {
+  return ["gift-season", `gift-season-${seasons}`, `gift-season-box-1-of-${seasons}`];
+}
+
+export function giftSeasonChildTags(boxNumber: number, seasons: number): string[] {
+  return [
+    "gift-season",
+    "gift-season-box",
+    `gift-season-${seasons}`,
+    `gift-season-box-${boxNumber}-of-${seasons}`,
+  ];
+}
+
+type Attr = { name?: string; key?: string; value?: string | null };
+
+export function readAttr(attrs: Attr[] | undefined, key: string): string | null {
+  if (!attrs) return null;
+  const found = attrs.find(
+    (a) => (a.name ?? a.key ?? "").toLowerCase() === key.toLowerCase()
+  );
+  const v = found?.value?.trim();
+  return v ? v : null;
+}
+
+/** True for the $0 box orders the season-dispatch cron creates. */
+export function isGiftSeasonChildOrder(
+  attrs: Attr[] | undefined,
+  tags?: string | null
+): boolean {
+  if (readAttr(attrs, GIFT_SEASON_ATTR.child) === "true") return true;
+  const tagList = (tags ?? "").split(",").map((t) => t.trim().toLowerCase());
+  return tagList.includes("gift-season-box");
+}
+
+/** Add whole calendar months in UTC, clamping to the last day of month. */
+export function addMonthsUtc(ms: number, months: number): Date {
+  const d = new Date(ms);
+  const y = d.getUTCFullYear();
+  const m = d.getUTCMonth() + months;
+  const day = d.getUTCDate();
+  const lastDay = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  return new Date(
+    Date.UTC(y, m, Math.min(day, lastDay), d.getUTCHours(), d.getUTCMinutes())
+  );
+}
+
+/**
+ * Due date (YYYY-MM-DD, UTC) for box `boxNumber` (1-indexed). Box 1 has no
+ * due date (it ships from the paid order once sizing is in). Box N is due
+ * (N-1) quarters after box 1 shipped.
+ */
+export function boxDueOn(
+  firstBoxShippedAt: number | null | undefined,
+  boxNumber: number
+): string | null {
+  if (!firstBoxShippedAt || boxNumber <= 1) return null;
+  return addMonthsUtc(firstBoxShippedAt, SEASON_INTERVAL_MONTHS * (boxNumber - 1))
+    .toISOString()
+    .slice(0, 10);
+}
+
+export interface SeasonProgress {
+  seasonsTotal: number;
+  boxesDispatched: number;
+  boxesShipped: number;
+  boxesRemaining: number;
+  nextBoxNumber: number | null;
+  nextBoxDueOn: string | null;
+}
+
+/**
+ * Derive progress from the stored counters. `boxesDispatched` counts orders
+ * that exist in Shopify (box 1 = the paid order). Remaining counts boxes not
+ * yet shipped.
+ */
+export function seasonProgress(input: {
+  seasons_total?: number | null;
+  box_orders?: Array<{ box_number: number; shipped_at?: number | null }> | null;
+  first_box_shipped_at?: number | null;
+}): SeasonProgress {
+  const total = Math.max(0, input.seasons_total ?? 0);
+  const boxes = input.box_orders ?? [];
+  const dispatched = Math.min(total, boxes.length);
+  const shipped = Math.min(total, boxes.filter((b) => !!b.shipped_at).length);
+  const nextBoxNumber = dispatched < total ? dispatched + 1 : null;
+  return {
+    seasonsTotal: total,
+    boxesDispatched: dispatched,
+    boxesShipped: shipped,
+    boxesRemaining: Math.max(0, total - shipped),
+    nextBoxNumber,
+    nextBoxDueOn: nextBoxNumber
+      ? boxDueOn(input.first_box_shipped_at ?? null, nextBoxNumber)
+      : null,
+  };
+}
+
+/**
+ * Should the cron create the next box order now? Only after box 1 has
+ * shipped, only while boxes remain, and only once the previous box shipped
+ * (never stack two open boxes for the same recipient).
+ */
+export function isNextBoxDue(
+  input: Parameters<typeof seasonProgress>[0],
+  nowMs: number
+): boolean {
+  const p = seasonProgress(input);
+  if (!p.nextBoxNumber || p.nextBoxNumber <= 1 || !p.nextBoxDueOn) return false;
+  if (p.boxesShipped < p.boxesDispatched) return false;
+  return p.nextBoxDueOn <= new Date(nowMs).toISOString().slice(0, 10);
+}
+
+/**
+ * Continue-as-member offer goes out once, when the final box is on its way:
+ * for multi-season gifts that's when the last box order is created; for a
+ * single season it's when box 1 ships.
+ */
+export function isContinueOfferDue(input: {
+  seasons_total?: number | null;
+  box_orders?: Array<{ box_number: number; shipped_at?: number | null }> | null;
+  continue_offer_sent_at?: number | null;
+  converted_at?: number | null;
+}): boolean {
+  if (input.continue_offer_sent_at || input.converted_at) return false;
+  const p = seasonProgress(input);
+  if (p.seasonsTotal <= 0) return false;
+  if (p.seasonsTotal === 1) return p.boxesShipped >= 1;
+  return p.boxesDispatched >= p.seasonsTotal;
+}

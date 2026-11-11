@@ -22,8 +22,14 @@ import {
 } from "@/lib/email/templates/giftRecipient";
 import {
   getDueGiftOrders,
+  getGiftOrderById,
   updateGiftOrderStatus,
 } from "@/lib/gifts/giftOrder";
+import {
+  captureGiftSeasonEvent,
+  giftEventProps,
+  mirrorGiftSeasonToSupabase,
+} from "@/lib/gifts/giftSeasonServer";
 
 function isAuthorized(request: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
@@ -65,6 +71,7 @@ export async function GET(request: NextRequest) {
         to: data.recipient_email,
         subject: buildGiftRecipientSubject({
           purchaserFirstName: data.purchaser_first_name,
+          seasonsTotal: data.gift_kind === "season" ? data.seasons_total : null,
         }),
         text: buildGiftRecipientText({
           recipientFirstName: data.recipient_first_name,
@@ -72,6 +79,7 @@ export async function GET(request: NextRequest) {
           purchaserEmail: data.purchaser_email,
           giftMessage: data.gift_message,
           sizingUrl,
+          seasonsTotal: data.gift_kind === "season" ? data.seasons_total : null,
         }),
         idempotencyKey: `gift-recipient:${id}`,
         sendClass: "transactional",
@@ -88,6 +96,16 @@ export async function GET(request: NextRequest) {
         { recipient_emailed_at: Date.now() },
         `recipient email sent to ${data.recipient_email}`
       );
+      if (data.gift_kind === "season") {
+        const fresh = await getGiftOrderById(id);
+        await Promise.allSettled([
+          fresh ? mirrorGiftSeasonToSupabase(id, fresh) : Promise.resolve(),
+          captureGiftSeasonEvent("gift_season_recipient_notified", data.recipient_email, {
+            ...giftEventProps(id, data),
+            scheduled: !!data.deliver_on,
+          }),
+        ]);
+      }
       results.push({ id, recipient: data.recipient_email, ok: true });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
