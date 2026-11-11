@@ -24,6 +24,7 @@
 import { useCallback, useState } from "react";
 import { readOutfitGuide, outfitLineAttributes } from "@/lib/shopOutfit";
 import { createMembershipCheckout } from "@/lib/shopifyCheckout";
+import { SHOPIFY_MEMBERSHIP_PLANS } from "@/lib/membershipConfig";
 import { trackEvent } from "@/lib/tracking";
 import type { StyleBucket } from "@/lib/styleProfiles/types";
 
@@ -39,24 +40,34 @@ export type ReserveTier = "discovery" | "signature" | "reserve";
 
 export const TIER_META: Record<
   ReserveTier,
-  { code: string; label: string; firstBoxPrice: string; renewalCopy: string }
+  {
+    code: string;
+    label: string;
+    firstBoxPrice: string;
+    /** firstBoxPrice as a number, sent as the Meta AddToCart value. */
+    firstBoxValue: number;
+    renewalCopy: string;
+  }
 > = {
   discovery: {
     code: "MULLY_DISCOVER",
     label: "Discovery",
     firstBoxPrice: "$50",
+    firstBoxValue: 50,
     renewalCopy: "then $250 / quarter",
   },
   signature: {
     code: "MULLY_SIGNATURE",
     label: "Signature Preview",
     firstBoxPrice: "$125",
+    firstBoxValue: 125,
     renewalCopy: "then $250 / quarter",
   },
   reserve: {
     code: "", // full-price tier, no code applied
     label: "Reserve Collection",
     firstBoxPrice: "$250",
+    firstBoxValue: 250,
     renewalCopy: "$250 / quarter",
   },
 };
@@ -96,6 +107,28 @@ export function ReserveCheckoutCTA({
   const onClick = useCallback(async () => {
     setError(null);
     setLoading(true);
+
+    // The RES-MEM line goes into the Shopify cart on this click, so this is
+    // the Reserve AddToCart. Fired before reveal_cta_clicked
+    // (InitiateCheckout); each trackEvent call gets its own event_id.
+    trackEvent(
+      "reserve_added_to_cart",
+      {
+        properties: {
+          variant_id: SHOPIFY_MEMBERSHIP_PLANS.member.merchandiseId,
+          sku: "RES-MEM",
+          name: "Reserve Membership",
+          price: tierMeta.firstBoxValue,
+          quantity: 1,
+          currency: "USD",
+          profileId,
+          styleBucket,
+          tier,
+          source: "lp_reveal",
+        },
+      },
+      { includeAuth: false }
+    ).catch(() => {});
 
     trackEvent(
       "reveal_cta_clicked",

@@ -20,6 +20,11 @@
  *                 POSTHOG_HOST or NEXT_PUBLIC_POSTHOG_HOST
  */
 
+import {
+  META_STANDARD_EVENTS,
+  buildMetaCapiCustomData,
+  redactGiftTokenPath,
+} from "@/lib/metaEvents";
 import crypto from "crypto";
 import { PostHog } from "posthog-node";
 import { uploadPurchaseConversion } from "@/app/api/_lib/googleAdsConversionUpload";
@@ -48,46 +53,24 @@ export interface AnalyticsEvent {
  *
  * Reserve funnel mapping rationale:
  *   - lp_subscription_view / reveal_viewed → ViewContent (top of funnel)
- *   - quiz_started / reveal_cta_clicked   → InitiateCheckout (intent)
- *   - quiz_step_completed                 → AddToCart (mid-funnel progress)
+ *   - quiz_started                        → QuizStart (custom event)
+ *   - quiz_step_completed                 → QuizStep (custom event)
+ *   - reserve_added_to_cart               → AddToCart (fired by the reveal
+ *                                              CTA just before
+ *                                              reveal_cta_clicked)
+ *   - reveal_cta_clicked                  → InitiateCheckout (Reserve line
+ *                                              added to a Shopify cart and
+ *                                              buyer sent to checkout)
  *   - quiz_email_captured                 → Lead (the optimization target for
  *                                              cold acquisition campaigns)
  *   - quiz_completed                      → CompleteRegistration (warm lead)
  *   - purchase                            → Purchase (graduate to this once we
  *                                              have 50+ purchases/week)
  */
-const META_EVENT_MAP: Record<string, string> = {
-  page_view: "PageView",
-  // Reserve acquisition funnel
-  lp_subscription_view: "ViewContent",
-  quiz_started: "InitiateCheckout",
-  quiz_step_completed: "AddToCart",
-  quiz_email_captured: "Lead",
-  quiz_completed: "CompleteRegistration",
-  reveal_viewed: "ViewContent",
-  reveal_cta_clicked: "InitiateCheckout",
-  // Generic ecom
-  add_to_cart: "AddToCart",
-  initiate_checkout: "InitiateCheckout",
-  checkout_clicked: "InitiateCheckout",
-  purchase: "Purchase",
-  // Member surface
-  login: "Contact",
-  wallet_viewed: "ViewContent",
-  // subscription_state intentionally NOT mapped: it fires on every status
-  // refresh (not just new purchases) and lacks value/currency. Meta flags it
-  // as low-quality Subscribe. Real subscription purchases flow through
-  // "purchase" event which carries value+currency.
-  registry_applied: "Lead",
-  // Consult LP phone capture (Martine funnel)
-  lp_consult_view: "ViewContent",
-  lp_consult_submit: "Lead",
-  // Paid-media SMS bridge (/text-mully). The tap on "Text Martine" is the
-  // conversion moment; mapped to Meta `Lead` so ad delivery can optimize
-  // against it. Deduped with the client-side fbq('track', 'Lead', ...,
-  // {eventID: <event_id>}) via properties.event_id.
-  sms_click: "Lead",
-};
+// Single source of truth shared with the browser mirror in src/lib/tracking.ts,
+// so client and server always send the same standard event name (Meta dedupes
+// on event_name + event_id).
+const META_EVENT_MAP = META_STANDARD_EVENTS;
 
 function sha256hex(value: string): string {
   return crypto.createHash("sha256").update(value).digest("hex");
@@ -112,6 +95,8 @@ function eventContainsReserveMember(event: AnalyticsEvent): boolean {
   }
   return false;
 }
+
+const META_CAPI_API_VERSION = "v25.0";
 
 async function fireMetaCAPI(event: AnalyticsEvent): Promise<void> {
   const pixelId = process.env.META_PIXEL_ID;
@@ -161,19 +146,16 @@ async function fireMetaCAPI(event: AnalyticsEvent): Promise<void> {
       : undefined;
 
   // Purchase events need value + currency at the top level for Meta's optimizer.
+  // Standard fields (content_ids, value, currency, ...) are built by the
+  // shared helper; identifiers, tokens and raw query strings are stripped.
   const props = event.properties ?? {};
   const customData: Record<string, unknown> = {
-    ...props,
-    user_id: event.user_id,
+    ...buildMetaCapiCustomData(event.event_name, props),
     segments: event.segments ?? [],
   };
-  if (event.event_name === "purchase") {
-    customData.value = props.value ?? 0;
-    customData.currency = props.currency ?? "USD";
-  }
 
-  await fetch(
-    `https://graph.facebook.com/v19.0/${pixelId}/events?access_token=${accessToken}`,
+  const res = await fetch(
+    `https://graph.facebook.com/${META_CAPI_API_VERSION}/${pixelId}/events?access_token=${accessToken}`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -186,12 +168,22 @@ async function fireMetaCAPI(event: AnalyticsEvent): Promise<void> {
             user_data: userData,
             custom_data: customData,
             action_source: "website",
-            event_source_url: event.page_url,
+            event_source_url: event.page_url
+              ? redactGiftTokenPath(event.page_url)
+              : event.page_url,
           },
         ],
       }),
     }
   );
+  // Surface rejected events (bad token, invalid params) instead of failing
+  // silently; dispatchAnalyticsEvent still isolates the failure.
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    console.error(
+      `[fireMetaCAPI] ${metaEventName} rejected: ${res.status} ${body.slice(0, 300)}`
+    );
+  }
 }
 
 // ─── OpenAI Ads Conversions API ──────────────────────────────────
