@@ -162,7 +162,7 @@ function DualHero({ season, reservePrice, active }: { season: string; reservePri
               <div className="hh__body">
                 <p className="hh__kicker">Shop</p>
                 <h2 className="hh__cardtitle">{seasonTitle}</h2>
-                <p className="hh__desc">Vests, quarter zips and polos from Olydoe, Duck Head, Rhone and Quiet Golf.<span className="hh__dl"> Buy one, get 15% off the second.</span></p>
+                <p className="hh__desc">Vests, quarter zips and layers from Olydoe, Duck Head, Rhone and Quiet Golf.<span className="hh__dl"> Buy one, get 15% off the second.</span></p>
                 <div className="hh__row">
                   <Link className="hh__btn" href="/shop" data-hero-cta="shop">Shop the edit</Link>
                   <Link className="hh__link" href="/shop/gifts" data-hero-cta="gifts">Gift guide</Link>
