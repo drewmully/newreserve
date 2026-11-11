@@ -167,7 +167,8 @@ export function endIntentFor(slug: string, category: BlogCategory | null, entry?
   return (category && CATEGORY_INTENT[category]) || "shop";
 }
 
-const SHOP_LINK = /\]\(\/shop\/([a-z0-9][a-z0-9-]*)\)/g;
+// /shop/gifts is the gift guide hub, not a product handle.
+const SHOP_LINK = /\]\(\/shop\/(?!gifts\))([a-z0-9][a-z0-9-]*)\)/g;
 
 /** Product handles linked inline as [label](/shop/<handle>), in order. */
 export function linkedProductHandles(sections: BlogSection[]): string[] {

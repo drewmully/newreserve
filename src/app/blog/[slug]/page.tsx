@@ -7,21 +7,24 @@ import { getPostBySlug, getRelatedPosts } from "../posts";
 import { ShopPageShell } from "../../shop/components/ShopPageShell";
 import { applyAddenda, BLOG_POST_OVERRIDES } from "@/lib/blogAddenda";
 import { InlineText } from "../InlineText";
+import { GiftSeasonLink } from "../GiftSeasonLink";
 import { canonical } from "@/lib/seo";
 import { BLOG_COMMERCE, endIntentFor, productHandlesFor, splitRows } from "@/lib/blogCommerce";
 import { EndPanel, EndShopLink, ProductRow, ReserveMid, getBlogCommerceProducts } from "../commerce/BlogCommerce";
 import { BlogCommerceProvider } from "../commerce/BlogCommerceClient";
 
 export const dynamic = "force-dynamic";
-interface Props { params: Promise<{ slug: string }> }
+interface Props { params: Promise<{ slug: string }>; searchParams?: Promise<Record<string, string | string[] | undefined>> }
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const post = await getPostBySlug((await params).slug);
   if (!post) return {};
   return { title: `${post.title} | Mully Journal`, description: post.excerpt, alternates: canonical(`/blog/${post.slug}`),
     openGraph: { title: post.title, description: post.excerpt, type: "article", images: [{ url: post.image, alt: post.imageAlt }] } };
 }
-export default async function BlogPostPage({ params }: Props) {
+export default async function BlogPostPage({ params, searchParams }: Props) {
   const { slug } = await params;
+  // ?gift_season=1 previews the seasonal gift link outside Nov 15 to Dec 24.
+  const forceGiftSeason = (await searchParams)?.gift_season === "1";
   const found = await getPostBySlug(slug);
   if (!found) notFound();
   const post = { ...found, ...BLOG_POST_OVERRIDES[found.slug] };
@@ -63,6 +66,7 @@ export default async function BlogPostPage({ params }: Props) {
         </div>
         <ProductRow products={rows.bottom} block="product_row_bottom" size="full" />
         {intent === "shop" && rows.bottom.length > 0 && <EndShopLink />}
+        <GiftSeasonLink force={forceGiftSeason} />
       </article>
       {related.length > 0 && <section className="mt-16" aria-labelledby="more-stories">
         <h2 id="more-stories" className="font-serif text-3xl mb-8">More from the Journal</h2>

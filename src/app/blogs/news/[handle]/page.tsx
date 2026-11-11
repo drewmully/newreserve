@@ -13,6 +13,9 @@ import { LEGACY_HANDLES, LEGACY_POSTS, getLegacyPost, type LegacyPost } from "@/
 import { ARCHIVE_COMMERCE, endIntentFor, splitRows } from "@/lib/blogCommerce";
 import { EndPanel, EndShopLink, ProductRow, getBlogCommerceProducts } from "../../../blog/commerce/BlogCommerce";
 import { BlogCommerceProvider } from "../../../blog/commerce/BlogCommerceClient";
+import { InlineText } from "../../../blog/InlineText";
+import { GiftSeasonLink } from "../../../blog/GiftSeasonLink";
+import { ARCHIVE_ADDENDA } from "@/lib/blogAddenda";
 import "./legacy-post.css";
 
 // Hourly, to match /shop/[slug], so the blog commerce prices stay current.
@@ -102,8 +105,10 @@ export default async function LegacyPostPage({ params }: Props) {
         {post.image && <img className="shop-article-image" src={post.image.url} alt={post.image.altText ?? post.title} width={960} height={640} fetchPriority="high" />}
         <div className="shop-article-copy shop-legacy-copy">
           <div dangerouslySetInnerHTML={{ __html: post.html }} />
+          {(ARCHIVE_ADDENDA[handle] ?? []).map(p => <p key={p}><InlineText text={p} /></p>)}
           <ProductRow products={bottom} block="product_row_bottom" size="full" />
           {intent === "shop" ? <EndShopLink /> : <EndPanel intent={intent} />}
+          <GiftSeasonLink />
           <Link className="shop-legacy-next" href={next.href}>
             <span>Next from Mully</span>
             <strong>{next.headline} →</strong>
