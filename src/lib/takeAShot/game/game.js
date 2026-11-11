@@ -181,7 +181,10 @@ export function mount(root, opts) {
     el.mark.style.opacity = 0;
     S.camT = { ...S.overview };
     updateMeter();
-    if (S.shot === 0) tipShow(TIPS);
+    // No tips on open: the course stays clear for the first swing. The 4-step
+    // tutorial starts at 1/4 on the first aim after that swing.
+    if (S.shot === 0) return;
+    if (!tutorialShown) { tutorialShown = true; tipShow(TIPS); }
     else tipShow([{ key: 'wind', t: 'New wind. Check it.', dur: 2.6, el: () => el.windBox }]);
   }
 
@@ -195,6 +198,7 @@ export function mount(root, opts) {
     { key: 'swing', t: 'Tap Swing when the needle hits the middle bar', dur: 0, el: () => el.swing },
   ];
   let tipsOff = !!PREFS.tipsOff;
+  let tutorialShown = false;
   const tip = { i: -1, t: 0, list: TIPS };
   function tipShow(list) {
     if (tipsOff) return;
@@ -521,7 +525,7 @@ export function mount(root, opts) {
   function drawInset() {
     if (S.phase !== 'aim' || S.readMode) { el.read.style.display = S.phase === 'aim' ? '' : 'none'; return; }
     el.read.style.display = '';
-    const R = 46, cx = S.W - R - 12, cy = S.topPad + R + 10;
+    const R = 46, cx = S.W - R - 22, cy = S.topPad + R + 14;
     const icam = { x: PIN.x, y: PIN.y, s: 4.4 };
     ctx.save();
     ctx.setTransform(S.dpr, 0, 0, S.dpr, 0, 0);

@@ -14,7 +14,7 @@ import { saveShopReward } from "@/lib/shopRewards";
 import { getClientAnonymousId } from "@/lib/tracking";
 import { KEYS, markSignedUp, writeValue, type TriggerType } from "@/lib/takeAShot/popupRules";
 import { fetchReserveQuarterPrice, renewalLine } from "@/lib/takeAShot/reservePrice";
-import { popupContext, trackEmailSubmitted, trackPopup } from "@/lib/takeAShot/popupTracking";
+import { trackPopup } from "@/lib/takeAShot/popupTracking";
 import { CODE_TERMS, FLOOR_PERCENT, MAX_PERCENT, SHOTS } from "@/lib/takeAShot/config";
 import { SIGNUP_DISMISS_KEY } from "../ShopSignupPopup";
 import "./take-a-shot.css";
@@ -337,7 +337,6 @@ export function TakeAShotModal({ openSignal, trigger = "manual", onClosed }: { o
       setPlayed(true);
       remember(365);
       markSignedUp("take-a-shot");
-      trackEmailSubmitted("take-a-shot", popupContext(ctx.current.trigger, "email"));
       sessionRef.current = r.session;
       setStep("game");
       // The sheet drops and the frozen swing fires: same aim, same power.
