@@ -245,7 +245,7 @@ export function giftGuideFaqs(): GiftFaq[] {
   };
   const returns: GiftFaq = {
     q: "Can gifts be returned or exchanged?",
-    a: "Unworn, unwashed pieces with tags attached can be returned within 30 days of delivery, and the refund goes to the original payment method. For a different size, return the original and place a new order. Email Info@MyMully.com with the order number to start.",
+    a: "Unworn, unwashed pieces with tags attached can be returned within 30 days of delivery, and the refund goes to the original payment method. Size exchanges are free: start one on the Returns page with the order number and email.",
   };
   if (!GIFT_SEASON_LIVE) {
     return [
