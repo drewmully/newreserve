@@ -45,6 +45,9 @@ import {
 } from "@/lib/email/templates/giftRecipient";
 import {
   GIFT_SEASON_SHOW_FREE_SHIPPING_EXCHANGES,
+  isPastGiftSeasonCutoff,
+  formatGiftSeasonCutoff,
+  parseGiftSeasonCutoff,
   giftSeasonTimingLine,
   pendingGiftSeasonPlaceholders,
 } from "@/lib/gifts/giftSeasonConfig";
@@ -180,16 +183,36 @@ describe("CRO card math (from variant prices)", () => {
 });
 
 describe("launch config placeholders", () => {
-  it("timing line has visible placeholders until Drew confirms", () => {
-    expect(giftSeasonTimingLine()).toBe(
-      "Order by [cutoff date TBD] and we email their gift reveal on the date you choose. Their first Reserve ships [ship window TBD] after they confirm sizing."
+  it("timing line has a visible placeholder until the cutoff is set", () => {
+    expect(giftSeasonTimingLine({ raw: "" })).toBe(
+      "Order by [cutoff date TBD] for their first Reserve to arrive by Christmas."
     );
-    expect(giftSeasonTimingLine(undefined, undefined, true)).toBe(
-      "Order by [cutoff date TBD] and we email you a printable gift card on the date you choose. Their first Reserve ships [ship window TBD] after they confirm sizing."
+  });
+  it("before the cutoff: order by the date for Christmas", () => {
+    const at = Date.UTC(2026, 11, 15, 23, 0); // Dec 15, 6pm ET
+    for (const selfDeliver of [false, true]) {
+      expect(giftSeasonTimingLine({ now: at, raw: "2026-12-15", window: "1-2 business days", selfDeliver })).toBe(
+        "Order by December 15 for their first Reserve to arrive by Christmas."
+      );
+    }
+  });
+  it("after the cutoff (ET midnight): the reveal still arrives on time", () => {
+    const after = Date.UTC(2026, 11, 16, 5, 0); // Dec 16, 12:00am ET
+    expect(isPastGiftSeasonCutoff(after - 1, "2026-12-15")).toBe(false);
+    expect(isPastGiftSeasonCutoff(after, "2026-12-15")).toBe(true);
+    expect(giftSeasonTimingLine({ now: after, raw: "2026-12-15", window: "1-2 business days" })).toBe(
+      "Their gift reveal still arrives on time by email. Their first Reserve ships 1-2 business days after they confirm sizing."
     );
-    expect(giftSeasonTimingLine("December 15", "5 to 7 business days")).toMatch(
-      /^Order by December 15 and .* ships 5 to 7 business days after they confirm sizing\.$/
+    expect(
+      giftSeasonTimingLine({ now: after, raw: "2026-12-15", window: "1-2 business days", selfDeliver: true })
+    ).toBe(
+      "Your printable gift card still arrives on time by email. Their first Reserve ships 1-2 business days after they confirm sizing."
     );
+  });
+  it("cutoff parsing", () => {
+    expect(formatGiftSeasonCutoff("2026-12-15")).toBe("December 15");
+    expect(parseGiftSeasonCutoff("2026-02-30")).toBeNull();
+    expect(isPastGiftSeasonCutoff(Date.UTC(2030, 0, 1), "December 15")).toBe(false);
   });
   it("free shipping / exchanges claim is off by default", () => {
     expect(GIFT_SEASON_SHOW_FREE_SHIPPING_EXCHANGES).toBe(false);

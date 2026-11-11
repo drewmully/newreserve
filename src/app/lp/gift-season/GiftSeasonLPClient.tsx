@@ -10,6 +10,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
 import { trackEvent } from "@/lib/tracking";
 import { captureAttributionFromUrl } from "@/lib/attribution";
 import { ShopSeasonalHeader } from "@/app/shop/components/ShopSeasonalHeader";
@@ -40,24 +41,27 @@ import {
 
 const LP_SOURCE = "lp_gift_season";
 
+/** Real Reserve unboxing photo (approved by Drew for the gift moment). */
+const GIFT_MOMENT_IMAGE = "/lp/discover/Unboxing-7.jpg";
+
 const OPTION_COPY: Record<GiftSeasonCount, { title: string; detail: string; badge?: string }> = {
   1: { title: "1 season", detail: "One Reserve" },
   2: { title: "2 seasons", detail: "Two Reserves, 3 months apart" },
   4: { title: "4 seasons", detail: "One Reserve each season", badge: "Full year, best value" },
 };
 
-const TIMING_LINE = giftSeasonTimingLine();
-
-const STEPS = [
+function giftSteps(timingLine: string) {
+  return [
   { title: "You check out once", body: "Pick a length, add a note and choose when we tell them." },
   { title: "They confirm sizing", body: "We send a private link on your date. Two minutes, no guessing." },
   {
     title: "Reserve arrives each season",
     body: GIFT_SEASON_SHOW_FREE_SHIPPING_EXCHANGES
-      ? `Hand-picked by a Mully stylist. Free shipping and free exchanges. ${TIMING_LINE}`
-      : `Hand-picked by a Mully stylist. ${TIMING_LINE}`,
+      ? `Hand-picked by a Mully stylist. Free shipping and free exchanges. ${timingLine}`
+      : `Hand-picked by a Mully stylist. ${timingLine}`,
   },
-];
+  ];
+}
 
 const FAQ = [
   {
@@ -149,13 +153,20 @@ export default function GiftSeasonLPClient({
     pickerSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  function scrollToPicker(target: "picker" | "details") {
+  function scrollToPicker(target: "picker" | "details" | "moment") {
     trackEvent("gift_season_hero_cta_clicked", {
       properties: { hero: heroVariant, target, seasons, lp_source: LP_SOURCE },
     }).catch(() => {});
     const el = target === "details" ? detailsSectionRef.current : pickerSectionRef.current;
     el?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
+  // Cutoff copy is evaluated at view time, so the page flips after the
+  // order-by date without a redeploy.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setTimeout(() => setNow(Date.now()), 0);
+    return () => clearTimeout(t);
+  }, []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -370,9 +381,7 @@ export default function GiftSeasonLPClient({
                     })}
                   </div>
                   <p className="text-[11px] text-charcoal/70 mt-3 leading-relaxed" data-testid="gift-season-timing">
-                    {selfDeliver
-                      ? giftSeasonTimingLine(undefined, undefined, true)
-                      : TIMING_LINE}
+                    {giftSeasonTimingLine({ now, selfDeliver })}
                   </p>
 
                 {/* Desktop: one CTA to step 2, trust row directly under it. */}
@@ -582,11 +591,49 @@ export default function GiftSeasonLPClient({
         </section>
 
 
-        <section className="py-12 mt-10 bg-bone-dark/30 border-y border-forest/10">
+        {/* Gift moment: real Reserve unboxing photo, below the fold so the
+            hero keeps one focal point. Background matches the photo's
+            backdrop so the square image blends into the band. */}
+        <section
+          className="mt-10 bg-[#1E3D2E] text-bone"
+          data-testid="gift-moment"
+          aria-labelledby="gift-moment-title"
+        >
+          <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 items-center">
+            <div className="relative aspect-square w-full max-w-[560px] mx-auto lg:mx-0 lg:justify-self-end">
+              <Image
+                src={GIFT_MOMENT_IMAGE}
+                alt="An opened Mully Reserve with a leather belt and folded apparel inside"
+                fill
+                sizes="(min-width: 1024px) 560px, 100vw"
+                className="object-cover"
+              />
+            </div>
+            <div className="px-6 pb-12 lg:py-16 lg:pl-12 lg:pr-16 max-w-xl">
+              <div className="text-[11px] tracking-[0.2em] uppercase text-bone/60">The gift moment</div>
+              <h2 id="gift-moment-title" className="font-serif text-3xl sm:text-4xl leading-[1.1] mt-3">
+                Something new to open every season.
+              </h2>
+              <p className="mt-4 text-sm sm:text-base text-bone/75 leading-relaxed">
+                Each Reserve arrives packed and styled to them, in the sizes they chose.
+              </p>
+              <button
+                type="button"
+                onClick={() => scrollToPicker("moment")}
+                className="mt-7 inline-block bg-bone text-forest hover:bg-bone/90 py-3 px-7 rounded-md text-sm font-medium tracking-wide transition"
+                data-testid="gift-moment-cta"
+              >
+                Choose a gift length
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section className="py-12 bg-bone-dark/30 border-y border-forest/10">
           <div className="max-w-5xl mx-auto px-4 sm:px-6">
             <h2 className="font-serif text-2xl text-forest mb-6">How the gift works</h2>
             <ol className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-              {STEPS.map((s, i) => (
+              {giftSteps(giftSeasonTimingLine({ now })).map((s, i) => (
                 <li key={s.title} className="bg-bone rounded-lg border border-forest/10 p-5">
                   <div className="text-[11px] tracking-[0.2em] uppercase text-ember/80">
                     Step {i + 1}

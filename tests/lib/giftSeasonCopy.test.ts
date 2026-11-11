@@ -38,7 +38,7 @@ describe("Gift a Season pricing copy", () => {
     const src = readFileSync(path.resolve(__dirname, "../..", "src/app/lp/gift-season/GiftSeasonLPClient.tsx"), "utf8");
     expect(src).not.toMatch(/\$300/);
     expect(src).toMatch(/Hand-picked by a Mully stylist\./);
-    expect(src).toMatch(/giftSeasonTimingLine\(\)/);
+    expect(src).toMatch(/giftSeasonTimingLine\(\{ now/);
     for (const m of src.matchAll(/[^\n]*[Ff]ree shipping[^\n]*/g)) {
       const at = m.index ?? 0;
       expect(src.slice(Math.max(0, at - 200), at)).toMatch(/GIFT_SEASON_SHOW_FREE_SHIPPING_EXCHANGES/);
@@ -52,8 +52,11 @@ describe("Gift a Season pricing copy", () => {
     expect(hero).not.toMatch(/\$300|reserve-founders-hero|fall-fairway|fall-firepit/);
     expect(hero).toMatch(/\/lp\/gift-season\/flatlay\//);
     expect(hero).toMatch(/Pieces from past Reserves\. Every Reserve is styled to them\./);
+    // Unboxing-7 is the gift moment band below the fold, never in the hero.
     expect(hero).not.toMatch(/Unboxing-7/);
-    expect(lp).not.toMatch(/Unboxing-7|In a typical Reserve|gift-season-examples/);
+    expect(lp).toMatch(/\/lp\/discover\/Unboxing-7\.jpg/);
+    expect(lp).toMatch(/data-testid="gift-moment"/);
+    expect(lp).not.toMatch(/In a typical Reserve|gift-season-examples/);
     expect(lp).toMatch(/Step 1 of 2 · Choose a gift length/);
     expect(lp).toMatch(/returnsLabel="Easy Returns"/);
     expect(lp).toMatch(/gift-order-summary/);

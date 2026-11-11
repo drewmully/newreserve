@@ -121,10 +121,13 @@ Orders are tagged as listed above. The Supabase `gift_seasons` table supports SQ
 ## CRO review changes (2026-11-11)
 
 - **Launch config** (`src/lib/gifts/giftSeasonConfig.ts`). These values are pending Drew and render as visible placeholders until they're set:
-  - `NEXT_PUBLIC_GIFT_SEASON_ORDER_BY`: the holiday order-by cutoff. Default `[cutoff date TBD]`.
-  - `NEXT_PUBLIC_GIFT_SEASON_SHIP_WINDOW`: when the first Reserve ships after sizing. Default `[ship window TBD]`.
+  - `NEXT_PUBLIC_GIFT_SEASON_ORDER_BY`: the holiday order-by cutoff as an ISO date. Set to `2026-12-15` in Preview and Production. The cutoff ends at midnight US Eastern after that day. Default `[cutoff date TBD]`.
+  - `NEXT_PUBLIC_GIFT_SEASON_SHIP_WINDOW`: when the first Reserve ships after sizing. Set to `1-2 business days` in Preview and Production. Default `[ship window TBD]`.
   - `NEXT_PUBLIC_GIFT_SEASON_FREE_SHIP_EXCHANGES=true`: turns on the "free shipping and free exchanges" claim on the LP, the sizing page and the season email. It is off by default.
-- **Timing line** under the picker and in Step 3: "Order by [cutoff] and we email their gift reveal on the date you choose. Their first Reserve ships [window] after they confirm sizing."
+- **Timing line** under the picker and in Step 3, evaluated at view time against the cutoff:
+  - Before: "Order by December 15 for their first Reserve to arrive by Christmas." (15th: 1-2 business days to ship, about 3-5 days ground, plus a buffer for recipient sizing.)
+  - After: "Their gift reveal still arrives on time by email. Their first Reserve ships 1-2 business days after they confirm sizing." With "I'll give it myself" on, the first sentence is "Your printable gift card still arrives on time by email."
+- Free shipping and exchanges stay off. The top bar on this page reads "Easy Returns".
 - **Mobile layout**: the eyebrow, H1 and subhead now sit above a 16/10 image. The lg layout is unchanged.
 - **Retail value**: "$300+ retail value" is replaced with "Hand-picked by a Mully stylist each season" on the LP, the season reveal and the season email.
   - The only itemized record of actual contents is the June 2026 Reserve plan (31 orders). It averages $262.89 MSRP per Reserve, and no Reserve in it reached $300.
@@ -167,7 +170,7 @@ The page header is the standard shop header and top bar (`ShopSeasonalHeader`). 
   - The picker is labeled "Step 1 of 2 · Choose a gift length".
   - On desktop, step 2 has an order summary column with the length, the price and a Change link (event `gift_season_summary_change_clicked`).
   - The top bar reads "Easy Returns" on this page through the new optional `returnsLabel` prop. No sitewide change was found, so the default copy elsewhere is unchanged.
-  - Unboxing-7.jpg is not used.
+  - Unboxing-7.jpg (real photo, approved by Drew) is the "gift moment" band below step 2, not in the hero, so the fold keeps one focal point. Its CTA fires gift_season_hero_cta_clicked with target "moment".
 
 ## Copy rules
 
