@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { categoryPathForProductType } from "@/lib/shopCategoryPages";
 
 interface Props {
   productType?: string;
@@ -25,7 +26,8 @@ export function BreadcrumbTrail({ productType, subcategory, brand }: Props) {
   if (productType && productType.trim().length > 0) {
     // Link to collection when we can guess it; slug it.
     const slug = productType.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-    crumbs.push({ label: productType, href: `/shop/collection/${slug}` });
+    // Vests and quarter-zips have indexable category pages; others keep the old collection guess.
+    crumbs.push({ label: productType, href: categoryPathForProductType(productType) ?? `/shop/collection/${slug}` });
   }
 
   if (subcategory && subcategory.trim().length > 0) {

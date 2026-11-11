@@ -35,7 +35,7 @@ export default function RefundPolicyPage() {
 
         <h2>Exchanges</h2>
         <p>
-          We currently do not offer direct exchanges. If you need a different size or item, please return the original and place a new order. Reserve Members with a fit profile on file can request a one-time courtesy exchange by contacting our concierge team.
+          We offer free size exchanges. To start one, go to our <a href="/returns">Returns page</a>, look up your order with your order number and email, choose the item, and tell us the size you need. Our team reviews every request personally and replies by email with a prepaid return label. Once the original arrives back, unworn with tags attached, we ship the new size. Exchanges follow the same 30-day window as returns. Want a different item instead of a different size? Note it in your request or email <a href="mailto:Info@MyMully.com">Info@MyMully.com</a> and we&rsquo;ll help.
         </p>
 
         <h2>Non-Returnable Items</h2>

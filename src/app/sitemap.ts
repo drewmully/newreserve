@@ -7,6 +7,7 @@
 import type { MetadataRoute } from "next";
 import { getPublishedPostDates } from "./blog/posts";
 import { SHOP_CATEGORY_HANDLES, GIFT_TIERS } from "./shop/shopCollections";
+import { SHOP_CATEGORY_PAGE_PATHS } from "@/lib/shopCategoryPages";
 import { LEGACY_HANDLES, getLegacyPost } from "@/lib/legacyBlog";
 import { PRO_SHOP_COLLECTION_HANDLE, PRIVATE_RELEASES_COLLECTION_HANDLE } from "@/lib/shopify";
 
@@ -61,9 +62,9 @@ const when = (d: string | null | undefined) => (d ? new Date(d) : undefined);
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const [products, posts, legacy] = await Promise.all([shopProducts(), getPublishedPostDates(), legacyPosts()]);
   const categoryPaths = ["shop-all", ...Object.values(SHOP_CATEGORY_HANDLES)].map((h) => `/shop/collection/${h}`);
-  const giftPaths = GIFT_TIERS.map((t) => `/shop/gifts/${t.key}`);
+  const giftPaths = ["/shop/gifts", ...GIFT_TIERS.map((t) => `/shop/gifts/${t.key}`)];
   return [
-    ...[...STATIC_PATHS, ...categoryPaths, ...giftPaths].map((p) => ({ url: `${SITE}${p === "/" ? "" : p}` })),
+    ...[...STATIC_PATHS, ...SHOP_CATEGORY_PAGE_PATHS, ...categoryPaths, ...giftPaths].map((p) => ({ url: `${SITE}${p === "/" ? "" : p}` })),
     ...products.map((p) => ({ url: `${SITE}/shop/${p.handle}`, lastModified: when(p.updatedAt) })),
     ...posts.map((p) => ({ url: `${SITE}/blog/${p.slug}`, lastModified: when(p.updated) })),
     ...legacy.map((p) => ({ url: `${SITE}/blogs/news/${p.handle}`, lastModified: when(p.date) })),

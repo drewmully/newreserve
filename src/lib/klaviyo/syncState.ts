@@ -21,7 +21,7 @@ import { FieldValue, Timestamp, type DocumentReference } from "firebase-admin/fi
 import { adminDb } from "@/lib/firebase-admin";
 import { raiseAlert } from "@/lib/events/alert";
 import { SHOP_REWARDS } from "@/lib/shopRewards";
-import { normalizeSignupPhone } from "@/lib/shopSignup";
+import { normalizeSignupPhone, shopSignupSource, SHOP_SIGNUP_SOURCES } from "@/lib/shopSignup";
 import {
   META_OFFER_SOURCE,
   BACKOFF_MINUTES,
@@ -98,24 +98,30 @@ function leadInputs(id: string, d: Data, opts: BuildOptions): StageInputs {
   if (!email) return out;
   const emailConsent = d.emailConsent as Data | undefined;
   const smsConsent = d.smsConsent as Data | undefined;
-  const common = { source: "shop-edit-popup", docKey: id, email };
+  // The source of each stage is the one recorded on its consent evidence
+  // (falling back to the lead's first source). Only the shop edit popup
+  // carries a reward code; gift-reminders signups get none.
+  const common = { source: shopSignupSource(d.source), docKey: id, email };
   if (emailConsent?.granted === true) {
     const at = toDate(emailConsent.capturedAt);
+    const emailSource = shopSignupSource(emailConsent.source ?? d.source);
+    const popup = emailSource === "shop-edit-popup";
+    const interest = popup ? d.interest : SHOP_SIGNUP_SOURCES[emailSource].interest;
     out.email = {
       ...common,
+      source: emailSource,
       stage: "email",
       capturedAt: at,
       properties: {
-        mully_interest: d.interest,
-        mully_reward_percent: SHOP_REWARDS.email.percent,
-        mully_reward_code: SHOP_REWARDS.email.code,
+        mully_interest: popup ? d.interest : (d.interest ?? interest),
+        ...(popup ? { mully_reward_percent: SHOP_REWARDS.email.percent, mully_reward_code: SHOP_REWARDS.email.code } : {}),
+        ...(Array.isArray(d.interests) ? { mully_interests: d.interests } : {}),
         mully_email_consent_captured: true,
-        mully_signup_landing_path: "/",
+        mully_signup_landing_path: popup ? "/" : "/shop/gifts",
       },
       eventProperties: {
-        interest: d.interest,
-        reward_percent: SHOP_REWARDS.email.percent,
-        reward_code: SHOP_REWARDS.email.code,
+        interest,
+        ...(popup ? { reward_percent: SHOP_REWARDS.email.percent, reward_code: SHOP_REWARDS.email.code } : {}),
         email_consent: true,
         sms_consent: false,
       },
@@ -128,6 +134,7 @@ function leadInputs(id: string, d: Data, opts: BuildOptions): StageInputs {
     const at = toDate(smsConsent.capturedAt);
     out.sms = {
       ...common,
+      source: shopSignupSource(smsConsent.source ?? d.source),
       stage: "sms",
       phone,
       capturedAt: at,
@@ -145,6 +152,59 @@ function leadInputs(id: string, d: Data, opts: BuildOptions): StageInputs {
       // Never re-send the email subscription on the SMS stage.
       subscribe: { sms: SUBSCRIBE_POPUP_SMS },
       ...(opts.historical ? { historical: { consentedAt: at } } : {}),
+    };
+  }
+  return out;
+}
+
+/**
+ * take_a_shot_leads: Take a Shot players. Nothing is sent until the player's
+ * Shopify code is active, so the signup event always carries a real code.
+ * A later upgrade (better shot) re-sends the stages: the event is deduped by
+ * unique_id, the profile properties move to the new code.
+ */
+function takeAShotInputs(id: string, d: Data): StageInputs {
+  const out: StageInputs = {};
+  const email = typeof d.email === "string" ? d.email : "";
+  const reward = (d.reward as Data | undefined) ?? {};
+  if (!email || reward.status !== "active" || typeof reward.code !== "string") return out;
+  const emailConsent = d.emailConsent as Data | undefined;
+  const smsConsent = d.smsConsent as Data | undefined;
+  const phone = normalizeSignupPhone(d.phone);
+  const shots = typeof d.shots === "number" ? d.shots : undefined;
+  const common = { source: "take-a-shot", docKey: id, email };
+  const properties = {
+    mully_reward_code: reward.code,
+    mully_reward_percent: reward.percent,
+    mully_reward_expires_at: reward.expiresAt,
+    mully_signup_game: true,
+  };
+  const rewardProps = {
+    reward_code: reward.code,
+    reward_percent: reward.percent,
+    reward_expires_at: reward.expiresAt,
+    shots,
+  };
+  if (emailConsent?.granted === true) {
+    out.email = {
+      ...common,
+      stage: "email",
+      capturedAt: toDate(emailConsent.capturedAt),
+      properties: { ...properties, mully_email_consent_captured: true },
+      eventProperties: { ...rewardProps, email_consent: true, sms_consent: false },
+      subscribe: { email: true },
+    };
+  }
+  if (phone && smsConsent?.granted === true) {
+    out.sms = {
+      ...common,
+      stage: "sms",
+      phone,
+      capturedAt: toDate(smsConsent.capturedAt),
+      properties: { ...properties, mully_sms_consent_captured: true },
+      eventProperties: { ...rewardProps, email_consent: false, sms_consent: true },
+      // Never re-send the email subscription on the SMS stage.
+      subscribe: { sms: SUBSCRIBE_POPUP_SMS },
     };
   }
   return out;
@@ -291,6 +351,8 @@ export function buildStageInputs(
       return jobInputs(id, data);
     case "meta_offer_leads":
       return metaOfferInputs(id, data, opts);
+    case "take_a_shot_leads":
+      return takeAShotInputs(id, data);
   }
 }
 

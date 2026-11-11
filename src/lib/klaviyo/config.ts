@@ -50,6 +50,7 @@ export const SYNC_COLLECTIONS = [
   "back_in_stock_requests",
   "klaviyo_sync_jobs",
   "meta_offer_leads",
+  "take_a_shot_leads",
 ] as const;
 export type SyncCollection = (typeof SYNC_COLLECTIONS)[number];
 
@@ -60,3 +61,6 @@ export function isSyncCollection(value: unknown): value is SyncCollection {
 /** Meta in-app offer sign-ups (see ./metaOffers.ts). */
 export const META_OFFER_COLLECTION = "meta_offer_leads";
 export const META_OFFER_SOURCE = "meta-email-offer";
+
+/** Take a Shot game players (see lib/takeAShot). Synced only once their code exists. */
+export const TAKE_A_SHOT_COLLECTION = "take_a_shot_leads";

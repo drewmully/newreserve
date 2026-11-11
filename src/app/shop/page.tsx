@@ -11,11 +11,16 @@ import { getSeasonalTheme } from "./seasonalTheme";
 import { getAllPublishedPosts } from "@/app/blog/posts";
 import { canonical } from "@/lib/seo";
 
+const SHOP_TITLE = "Shop Golf Apparel and Gear, Selected by Mully";
+const SHOP_DESCRIPTION =
+  "Golf apparel and gear from Rhone, Quiet Golf, Duck Head, Olydoe and more, selected by Mully. Shop individual pieces, build an outfit, and return within 30 days.";
+
 export const metadata: Metadata = {
-  title: "Shop | mully.",
+  title: SHOP_TITLE,
   alternates: canonical("/shop"),
-  description:
-    "Golf apparel and gear, selected by Mully. Shop individual pieces, build an outfit, and discover the stories behind our picks.",
+  description: SHOP_DESCRIPTION,
+  openGraph: { title: SHOP_TITLE, description: SHOP_DESCRIPTION, url: "/shop", siteName: "Mully", type: "website" },
+  twitter: { card: "summary", title: SHOP_TITLE, description: SHOP_DESCRIPTION },
 };
 
 // ISR one hour — collection contents, product tags, and seasonal

@@ -6,6 +6,7 @@ import { Timestamp } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase-admin";
 import { SYNC_COLLECTIONS, type SyncCollection } from "./config";
 import { syncDocRef, toDate, type SyncDocOutcome } from "./syncState";
+import { shopSignupSource } from "@/lib/shopSignup";
 
 /** CRON_SECRET bearer only. Vercel cron sends this header automatically. */
 export function isCronAuthorized(req: Request): boolean {
@@ -109,8 +110,9 @@ export async function buildSyncReport(now = new Date()) {
 }
 
 function sourceOf(collection: SyncCollection, d: Record<string, unknown>): string {
-  if (collection === "shop_marketing_leads") return "shop-edit-popup";
+  if (collection === "shop_marketing_leads") return shopSignupSource(d.source);
   if (collection === "back_in_stock_requests") return "back-in-stock";
   if (collection === "meta_offer_leads") return "meta-email-offer";
+  if (collection === "take_a_shot_leads") return "take-a-shot";
   return typeof d.source === "string" ? d.source : "unknown";
 }

@@ -43,6 +43,13 @@ const nextConfig: NextConfig = {
       { source: "/:locale(en-[a-z]{2})/:path*", destination: "/:path*", permanent: true },
       // s01 + s02: exact legacy URLs, above the generic /collections rule.
       ...legacyRedirects.map((r) => ({ ...r, permanent: true })),
+      // 2026 gift guide: old tag-based tier slugs to readable ones (src/lib/giftGuide.ts).
+      { source: "/shop/gifts/under100", destination: "/shop/gifts/under-100", permanent: true },
+      { source: "/shop/gifts/hundredToThree", destination: "/shop/gifts/100-to-150", permanent: true },
+      { source: "/shop/gifts/threeHundredPlus", destination: "/shop/gifts/150-to-250", permanent: true },
+      // Early slugs shared with other teams.
+      { source: "/shop/gifts/luxury", destination: "/shop/gifts/150-to-250", permanent: true },
+      { source: "/shop/gifts/100-to-200", destination: "/shop/gifts/150-to-250", permanent: true },
       { source: "/blogs/news", destination: "/blog", permanent: true },
       { source: "/blogs/news/tagged/:tag*", destination: "/blog", permanent: true },
       { source: "/products/:handle", destination: "/shop/:handle", permanent: true },

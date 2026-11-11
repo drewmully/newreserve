@@ -25,3 +25,6 @@ export function EstShipDate({ weeks }: { weeks?: number }) {
   const mounted = useSyncExternalStore(noopSubscribe, () => true, () => false);
   return <>{mounted ? estShipDateLabel(weeks) : `in about ${restockWeeks(weeks)} weeks`}</>;
 }
+
+// Shared with server components (gift guide), so the logic lives in a plain module.
+export { isRestockOnly } from "@/lib/restock";

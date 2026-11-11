@@ -10,7 +10,7 @@
  *      the buyer just paid $5, and we need to reassure them exactly what
  *      that gets them and when the next charge happens.
  *   2. Reserve Member variant 47601025122496 → quarterly curation bullets
- *      (7-day ship, free exchanges, cancel after Q1, 96% renew).
+ *      (7-day ship, free exchanges, cancel after Q1).
  *   3. Reserve Access variant 47601025482944 → annual-membership bullets.
  *   4. Anything else → generic reassurance bullets.
  *
@@ -48,7 +48,6 @@ const MEMBER_BULLETS: Bullet[] = [
   { key: "ships_7_days", text: "✓  Ships in 7 days" },
   { key: "free_exchanges", text: "✓  Free size exchanges" },
   { key: "cancel_after_q1", text: "✓  Cancel anytime after your first quarter" },
-  { key: "renew_rate", text: "✓  96% of members renew" },
 ];
 
 const ACCESS_BULLETS: Bullet[] = [

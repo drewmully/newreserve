@@ -1,103 +1,109 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getCollectionProducts, type ShopifyProduct } from "@/lib/shopify";
 import { ShopPageShell } from "../../components/ShopPageShell";
-import { ShopProductCard } from "../../components/ShopProductCard";
 import { ScrollToTop } from "../../components/ScrollToTop";
-import { GIFT_TIERS, SHOP_CATEGORIES } from "../../shopCollections";
-import { getSeasonalTheme } from "../../seasonalTheme";
-import { canonical } from "@/lib/seo";
+import { canonical, SITE_URL } from "@/lib/seo";
+import { serializeJsonLd } from "@/lib/safeJsonLd";
+import { GIFT_GUIDE_TIERS, GIFT_OUTFIT_CHINO, fitToRows, getGiftTier, loadGiftGuide } from "@/lib/giftGuide";
+import { GiftGuideTracker } from "../GiftGuideTracker";
+import { itemListJsonLd } from "../jsonLd";
+import {
+  GiftGridFill,
+  GiftFaqs,
+  GiftOrderByNote,
+  GiftOutfits,
+  GiftSeasonCard,
+  GiftSeasonTile,
+  GiftReminders,
+  GiftTierNav,
+  GiftTierSection,
+} from "../GiftGuide";
+import "../gift-guide.css";
 
 export const revalidate = 3600;
+// Old slugs (under100, hundredToThree, threeHundredPlus) are 308s in next.config.ts.
+export const dynamicParams = false;
 
 interface Props {
   params: Promise<{ tier: string }>;
 }
 
-type GiftTierKey = (typeof GIFT_TIERS)[number]["key"];
-const TIER_KEYS = new Set<string>(GIFT_TIERS.map((t) => t.key));
-
-export async function generateStaticParams() {
-  return GIFT_TIERS.map((t) => ({ tier: t.key }));
+export function generateStaticParams() {
+  return GIFT_GUIDE_TIERS.map((t) => ({ tier: t.slug }));
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { tier } = await params;
-  const t = GIFT_TIERS.find((x) => x.key === tier);
+  const { tier: slug } = await params;
+  const tier = getGiftTier(slug);
+  if (!tier) return {};
+  const path = `/shop/gifts/${tier.slug}`;
   return {
-    alternates: canonical(`/shop/gifts/${tier}`),
-    title: t ? `Gifts ${t.title} | Mully Shop` : "Gifts | Mully Shop",
-    description:
-      t?.subtitle ?? "Golf gifts curated by Mully across every price point.",
+    title: tier.metaTitle,
+    description: tier.metaDescription,
+    alternates: canonical(path),
+    openGraph: { title: tier.metaTitle, description: tier.metaDescription, url: `${SITE_URL}${path}`, siteName: "Mully", type: "website" },
+    twitter: { card: "summary_large_image", title: tier.metaTitle, description: tier.metaDescription },
   };
 }
 
-export default async function ShopGiftTierPage({ params }: Props) {
-  const { tier: tierKey } = await params;
-  if (!TIER_KEYS.has(tierKey)) notFound();
+export default async function GiftTierPage({ params }: Props) {
+  const { tier: slug } = await params;
+  const tier = getGiftTier(slug);
+  if (!tier) notFound();
 
-  const tier = GIFT_TIERS.find((t) => t.key === (tierKey as GiftTierKey))!;
-  const theme = getSeasonalTheme();
-
-  // Reuse the six category collection fetch — a gift tier is a tag filter
-  // across the whole shop catalog, not its own Shopify collection. Product
-  // dedupe is by slug so a piece in Tops and Outerwear only lists once.
-  const settled = await Promise.allSettled(
-    SHOP_CATEGORIES.map(({ handle }) => getCollectionProducts(handle))
-  );
-  const seen = new Set<string>();
-  const merged: ShopifyProduct[] = [];
-  for (const r of settled) {
-    if (r.status !== "fulfilled") continue;
-    for (const p of r.value) {
-      if (seen.has(p.slug)) continue;
-      seen.add(p.slug);
-      merged.push(p);
-    }
-  }
-  const products = merged.filter((p) =>
-    p.tags?.some((t) => t.toLowerCase() === tier.tag)
-  );
+  const { tiers, outfits } = await loadGiftGuide();
+  const full = tiers.find((t) => t.tier.slug === tier.slug)!;
+  const fit = fitToRows(full.picks);
+  const data = { ...full, picks: fit.picks };
+  // The empty last slot links on to the next budget.
+  const next = GIFT_GUIDE_TIERS[(GIFT_GUIDE_TIERS.findIndex((t) => t.slug === tier.slug) + 1) % GIFT_GUIDE_TIERS.length];
+  const path = `/shop/gifts/${tier.slug}`;
+  // Outfits sit on the tier of their anchor: the chino's ($100 to $150) or, when
+  // the vest-led looks take over, the vests' ($150 to $250).
+  const outfitTier = outfits.some((o) => o.look.anchor === GIFT_OUTFIT_CHINO) ? "100-to-150" : "150-to-250";
+  const showOutfits = outfits.length > 0 && tier.slug === outfitTier;
 
   return (
-    <ShopPageShell>
+    <ShopPageShell className="gift-guide">
       <ScrollToTop />
+      <GiftGuideTracker page={tier.slug} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(itemListJsonLd(tier.heading, path, data.picks)) }} />
 
-      <main className="shop-page-main">
-        <header className="shop-page-heading">
-            <Link
-              href="/shop"
-              className="shop-text-link shop-page-kicker"
-            >
-              ← Shop
-            </Link>
-            <h1>
-              Gifts {tier.title}
-            </h1>
-            <p className="mt-4 max-w-xl text-sm text-charcoal/70">
-              {tier.subtitle}.
-            </p>
-        </header>
-        <nav className="shop-collection-nav" aria-label="Gift budgets">
-          {GIFT_TIERS.map(t => <Link key={t.key} href={`/shop/gifts/${t.key}`} aria-current={tierKey === t.key ? "page" : undefined}>{t.title}</Link>)}
-        </nav>
+      <main className="shop-page-main gg-main">
+        <div className="gg-hero gg-hero--tier">
+          <Link href="/shop/gifts" className="shop-text-link shop-page-kicker" data-gg-tier-link="hub" data-gg-placement="tier-back">
+            ← Gift guide
+          </Link>
+          <GiftTierNav active={tier.slug} placement="tier-top" />
+        </div>
 
-        <section aria-label="Gift selection">
-          {products.length === 0 ? (
-            <div className="rounded-none border border-dashed border-charcoal/20 bg-cream/60 px-8 py-20 text-center">
-              <p className="mx-auto max-w-md text-sm text-charcoal/60">
-                No gifts in this edit right now. Explore another budget or visit the full shop.
-              </p>
-            </div>
-          ) : (
-            <div className="shop-catalog-grid">
-              {products.map((p) => (
-                <ShopProductCard key={p.slug} product={p} accent={theme.accent} />
-              ))}
-            </div>
-          )}
-        </section>
+        <GiftTierSection
+          data={data}
+          as="h1"
+          placement="tier"
+          aside={tier.slug === "150-to-250" ? <GiftSeasonCard placement="tier-hero" tier={tier.slug} /> : undefined}
+          tile={tier.slug === "150-to-250" ? <GiftSeasonTile placement="tier-grid-tile" tier={tier.slug} /> : undefined}
+          fill={
+            fit.fill ? (
+              <GiftGridFill
+                href={`/shop/gifts/${next.slug}`}
+                kicker="Next budget"
+                label={`Gifts ${next.label.replace(/^Under/, "under")}`}
+                tierLink={next.slug}
+                placement="tier-grid-fill"
+                season={tier.slug === "150-to-250" ? { placement: "tier-grid-slot", tier: tier.slug } : undefined}
+              />
+            ) : undefined
+          }
+        />
+
+        {showOutfits && <GiftOutfits outfits={outfits} placement="tier-outfits" />}
+        {tier.slug !== "150-to-250" && <GiftSeasonCard placement={`tier-${tier.slug}`} tier={tier.slug} compact />}
+
+        <GiftOrderByNote />
+        <GiftReminders tier={tier.slug} placement="tier-after-grid" />
+        <GiftFaqs />
       </main>
     </ShopPageShell>
   );

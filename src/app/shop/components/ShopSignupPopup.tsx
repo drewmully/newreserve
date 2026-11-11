@@ -8,6 +8,8 @@ import { saveShopReward, type ShopReward } from "@/lib/shopRewards";
 import "./shop-signup.css";
 
 const STORAGE = "mully_shop_signup_v1";
+/** Dismissal memory shared with TakeAShotModal (epoch ms until the popup may show again). */
+export const SIGNUP_DISMISS_KEY = STORAGE;
 /** Session flag: the visitor has started buying (outfit builder, sizes, bag). */
 export const PURCHASE_INTENT_KEY = "mully_purchase_intent_v1";
 /** Areas where a tap means the visitor is shopping, not browsing. */
@@ -27,7 +29,12 @@ export function popupPageKind(pathname: string | null): "home" | "product" | nul
   return m && !NON_PRODUCT_SHOP_PATHS.has(m[1]) ? "product" : null;
 }
 type Step = "interest" | "email" | "sms" | "done";
-export function ShopSignupPopup() {
+/**
+ * `onTrigger`: when set, the popup's trigger rules (page kind, interaction,
+ * purchase-intent suppression, dismissal memory, mully:open-signup) open
+ * another signup instead of this dialog. Used by TakeAShotGate.
+ */
+export function ShopSignupPopup({ onTrigger }: { onTrigger?: () => void } = {}) {
   const pathname = usePathname();
   const { cartOpen, cartCount } = useMembership();
   const dialog = useRef<HTMLDialogElement>(null);
@@ -35,6 +42,8 @@ export function ShopSignupPopup() {
   const cartOpenRef = useRef(cartOpen);
   const cartCountRef = useRef(cartCount);
   const fired = useRef(false);
+  const onTriggerRef = useRef(onTrigger);
+  onTriggerRef.current = onTrigger;
   const [step, setStep] = useState<Step>("interest");
   const [interest, setInterest] = useState("");
   const [receipt, setReceipt] = useState("");
@@ -76,6 +85,7 @@ export function ShopSignupPopup() {
     function show(manual = false) {
       if ((!manual && (fired.current || Date.now() < dismissedUntil)) || blocked(manual)) return;
       fired.current = true;
+      if (onTriggerRef.current) { onTriggerRef.current(); return; }
       previousFocus.current = document.activeElement as HTMLElement;
       setOpen(true);
       dialog.current?.showModal();

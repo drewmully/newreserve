@@ -88,6 +88,8 @@ async function storefrontFetch<T>(
 // ─── Public types ─────────────────────────────────────────────────────────────
 
 export interface ShopifyProduct {
+  /** Shopify product GID. Optional: pseudo-products and older callers don't carry one. */
+  id?: string;
   slug: string;
   name: string;
   brand: string;
@@ -241,6 +243,7 @@ interface RawVariant {
 }
 
 interface RawProduct {
+  id?: string;
   handle: string;
   title: string;
   vendor: string;
@@ -336,6 +339,7 @@ function mapProduct(raw: RawProduct): ShopifyProduct {
     variants.find((variant) => variant.availableForSale) ?? variants[0];
 
   return {
+    id: raw.id,
     slug: raw.handle,
     name: raw.title,
     brand: raw.vendor,
@@ -404,6 +408,7 @@ function mapCart(raw: RawCart): ShopifyCart {
 // ─── GQL field strings ────────────────────────────────────────────────────────
 
 const PRODUCT_FIELDS = `
+  id
   handle
   title
   vendor

@@ -1,6 +1,6 @@
 "use client";
 
-import { EstShipDate } from "./EstShipDate";
+import { EstShipDate, isRestockOnly } from "./EstShipDate";
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -122,7 +122,7 @@ export function ShopProductCard({
             <span className="shop-product-card__more">+{moreColors} more {moreColors === 1 ? "color" : "colors"}</span>
           )}
         </div>
-        {colorVariants.some(v => v.currentlyNotInStock) && <p className="mt-1 text-xs text-charcoal/60">Restocking · Ships <EstShipDate weeks={product.preOrderEtaWeeks} /></p>}
+        {isRestockOnly(colorVariants) && <p className="mt-1 text-xs text-charcoal/60">Restocking · Ships <EstShipDate weeks={product.preOrderEtaWeeks} /></p>}
       </Link>
     </div>
   );

@@ -21,7 +21,7 @@
  },
  {
   "source": "/blogs/news/how-to-choose-the-perfect-golf-gift-for-any-occasion",
-  "destination": "/lp/gift"
+  "destination": "/shop/gifts"
  },
  {
   "source": "/blogs/news/the-best-mystery-boxes-for-women-golfers-mullybox",
@@ -49,7 +49,7 @@
  },
  {
   "source": "/blogs/news/unique-golf-gifts-for-him",
-  "destination": "/lp/gift"
+  "destination": "/shop/gifts"
  },
  {
   "source": "/blogs/news/the-ultimate-guide-to-golf-from-beginner-to-pro",
@@ -117,7 +117,7 @@
  },
  {
   "source": "/blogs/news/seasonal-guide-the-best-golf-gifts-to-give-this-year",
-  "destination": "/lp/gift"
+  "destination": "/shop/gifts"
  },
  {
   "source": "/blogs/news/unboxing-the-benefits-what-to-expect-in-your-first-golf-glove-box",
@@ -173,7 +173,7 @@
  },
  {
   "source": "/blogs/news/tee-up-the-perfect-gift-discover-the-best-golf-gifts-for-men-in-2023",
-  "destination": "/lp/gift"
+  "destination": "/shop/gifts"
  },
  {
   "source": "/blogs/news/top-5-most-memorable-pga-championships",
@@ -185,7 +185,7 @@
  },
  {
   "source": "/blogs/news/unique-golf-gifts-why-mullybox-is-the-perfect-choice-for-golf-lovers",
-  "destination": "/lp/gift"
+  "destination": "/shop/gifts"
  },
  {
   "source": "/blogs/news/seasonal-guide-to-updating-your-golf-accessories-whats-in-this-quarter",
@@ -382,6 +382,22 @@
  {
   "source": "/policies",
   "destination": "/policies/terms"
+ },
+ {
+  "source": "/policies/refund-policy",
+  "destination": "/policies/refund"
+ },
+ {
+  "source": "/policies/privacy-policy",
+  "destination": "/policies/privacy"
+ },
+ {
+  "source": "/policies/terms-of-service",
+  "destination": "/policies/terms"
+ },
+ {
+  "source": "/policies/shipping-policy",
+  "destination": "/policies/shipping"
  },
  {
   "source": "/collections/mullybox-shop",

@@ -8,7 +8,7 @@
  * Fixed to the top of the viewport. The header sits directly beneath it.
  */
 export function ShopAnnouncementBar({
-  returnsLabel = "Free U.S. Returns",
+  returnsLabel = "Easy Returns",
 }: {
   /** Optional override for the returns promise. Defaults to the sitewide copy. */
   returnsLabel?: string;
@@ -46,7 +46,6 @@ export function ShopAnnouncementBar({
 function shortLabel(full: string): string {
   if (full.startsWith("Ships from")) return "Mully Fulfillment";
   if (full.startsWith("Buy one")) return "BOGO 15%";
-  if (full.startsWith("Free U.S. Returns")) return "Free Returns";
   return full;
 }
 

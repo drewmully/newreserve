@@ -62,7 +62,7 @@ If you're sitting on the checkout, it's usually one of two things. Let me knock 
 After checkout you fill a 60-second sizing form. Nothing ships until I've got your fit confirmed. If something arrives off, we swap it. No restocking fee, no fight.
 
 2. "What if I want to skip a quarter?"
-You can. Pause, skip, change frequency — all of it lives in your account. We don't trap anyone. 96% of members renew because the gear is good, not because the unsubscribe is hidden.
+You can. Pause, skip, change frequency: all of it lives in your account. We don't trap anyone. Members stay because the gear is good, not because the unsubscribe is hidden.
 
 The first quarter is the proof. If Reserve isn't for you after it lands, cancel before Q2 — nothing sticky.
 

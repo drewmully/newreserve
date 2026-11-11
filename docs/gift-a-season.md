@@ -107,7 +107,7 @@ Every send is idempotent (Resend idempotency key plus a `*_sent_at` stamp on the
 > Superseded in part by the no-reveal redesign above: the timing line is now "Order by December 14 for it to arrive by Christmas. Ships in 1-2 business days." (after the cutoff: "Ships in 1-2 business days."), the trust row middle item is "Ships in 1-2 business days", and "I'll give it myself", `gift_self_deliver`, the reveal email and `gift_season_self_deliver_toggled` are removed. The purchase event now carries `gift_ship_mode`.
 
 - **Launch config** (`src/lib/gifts/giftSeasonConfig.ts`). These values are pending Drew and render as visible placeholders until they're set:
-  - `NEXT_PUBLIC_GIFT_SEASON_ORDER_BY`: the holiday order-by cutoff as an ISO date. Set to `2026-12-15` in Preview and Production. The cutoff ends at midnight US Eastern after that day. Default `[cutoff date TBD]`.
+  - `NEXT_PUBLIC_GIFT_SEASON_ORDER_BY`: the holiday order-by cutoff as an ISO date. Set to `2026-12-14` in Preview and Production. The cutoff ends at midnight US Eastern after that day. Default `[cutoff date TBD]`.
   - `NEXT_PUBLIC_GIFT_SEASON_SHIP_WINDOW`: when the first Reserve ships after sizing. Set to `1-2 business days` in Preview and Production. Default `[ship window TBD]`.
   - `NEXT_PUBLIC_GIFT_SEASON_FREE_SHIP_EXCHANGES=true`: turns on the "free shipping and free exchanges" claim on the LP, the sizing page and the season email. It is off by default.
 - **Timing line** under the picker and in Step 3, evaluated at view time against the cutoff:

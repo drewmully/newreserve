@@ -12,6 +12,8 @@ const apparel = [
   ["Tops", "/shop/collection/shop-tops"],
   ["Bottoms", "/shop/collection/shop-bottoms"],
   ["Outerwear", "/shop/collection/shop-outerwear"],
+  ["Vests", "/shop/vests"],
+  ["Quarter-zips", "/shop/quarter-zips"],
 ];
 const gear = [
   ["All gear", "/shop/collection/shop-gear"],
@@ -20,7 +22,7 @@ const gear = [
 ];
 const allCategories = [
   ["Shop everything", "/shop/collection/shop-all"], ...apparel, ...gear,
-  ["Gifts", "/shop#gift-tiers"],
+  ["Gifts", "/shop/gifts"],
 ];
 
 export function ShopSeasonalHeader({
@@ -105,7 +107,7 @@ export function ShopSeasonalHeader({
                 </div>
               </details>
             ))}
-            <Link href="/shop#gift-tiers" className="inline-flex min-h-11 items-center">Gifts</Link>
+            <Link href="/shop/gifts" className="inline-flex min-h-11 items-center">Gifts</Link>
             <Link href="/shop#outfit" onClick={outfitClick} className="shop-build-link inline-flex min-h-11 items-center">Build an outfit</Link>
           </nav>
           <div className="flex items-center gap-3 sm:gap-5">
@@ -130,7 +132,7 @@ export function ShopSeasonalHeader({
           <Link href="/shop/new-arrivals" className="text-sm">New Arrivals</Link>
           <details><summary className="shop-nav-summary">Apparel</summary>{apparel.map(([name,href])=><Link key={href} href={href} className="pl-4 text-sm">{name}</Link>)}</details>
           <details><summary className="shop-nav-summary">Gear</summary>{gear.map(([name,href])=><Link key={href} href={href} className="pl-4 text-sm">{name}</Link>)}</details>
-          <Link href="/shop#gift-tiers" className="text-sm">Gifts</Link>
+          <Link href="/shop/gifts" className="text-sm">Gifts</Link>
           <Link href="/shop#outfit" onClick={outfitClick} className="shop-build-link text-sm">Build an Outfit</Link>
           <div className="mt-4 border-t border-charcoal/15 pt-3 text-sm">
             <Link href="/blog">From the Journal</Link>
