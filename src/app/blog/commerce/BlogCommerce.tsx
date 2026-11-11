@@ -59,7 +59,7 @@ export function ProductRow({
         {compact
           ? <p className="bc-eyebrow">{ROW_COPY.top}</p>
           : <h2 className="bc-row__title">{ROW_COPY.bottom}</h2>}
-        <div className="bc-row__grid">
+        <div className="bc-row__grid" data-count={products.length}>
           {products.map(p => <ShopProductCard key={p.slug} product={p} />)}
         </div>
       </section>

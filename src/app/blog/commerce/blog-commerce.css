@@ -14,11 +14,19 @@
 .shop-article-copy .bc-row__title {font-family: var(--font-serif); font-size: 28px; line-height: 1.2; margin: 0 0 24px; color: #292720}
 .bc-row--compact {border-block: 1px solid #ddd9d0; padding: 24px 0 28px}
 .bc-row--compact .shop-product-card h3 {font-size: 13px}
+/* Highlights already draw a rule above; avoid a doubled divider. */
+.shop-article-highlights + [data-bc-block] > .bc-row--compact {border-top: 0; padding-top: 0; margin-top: 28px}
+/* Three cards fill the row instead of leaving an empty fourth column. */
+.bc-row__grid[data-count="3"] {grid-template-columns: repeat(3,minmax(0,1fr))}
 
 /* Keep the shared card's own type when it sits inside article copy. */
 .bc-row .shop-product-card p,
 .bc-row .shop-product-card h3 {line-height: 1.45}
 .bc-row .shop-product-card p + p {margin-top: 0}
+/* Restocking note: article copy and legacy copy enlarge bare p tags. */
+.shop-article-copy .bc-row .shop-product-card p.text-xs,
+.shop-legacy-copy .bc-row .shop-product-card p.text-xs,
+.bc-row .shop-product-card p.text-xs {font-size: 12px; line-height: 1.45; margin: 4px 0 0; color: #686357}
 .bc-row .shop-product-card .shop-product-card__brand {font-size: 10px; color: #686357; margin-top: 14px}
 .bc-row .shop-product-card h3 {margin: 6px 0; color: #292720; font-family: inherit}
 .bc-row .shop-product-card__price {font-size: 13px}
@@ -47,10 +55,10 @@
 
 @media (max-width: 600px) {
   /* Compact row scrolls sideways on phones; the full row is a 2-up grid. */
-  .bc-row--compact .bc-row__grid {display: flex; gap: 14px; overflow-x: auto; scroll-snap-type: x mandatory; margin: 0 -20px; padding: 0 20px 4px; scrollbar-width: none}
+  .bc-row--compact .bc-row__grid {display: flex; gap: 14px; overflow-x: auto; scroll-snap-type: x mandatory; margin: 0 -20px; padding: 0 20px 4px; scroll-padding-inline: 20px; scrollbar-width: none}
   .bc-row--compact .bc-row__grid::-webkit-scrollbar {display: none}
   .bc-row--compact .shop-product-card {flex: 0 0 40%; scroll-snap-align: start}
-  .bc-row--full .bc-row__grid {grid-template-columns: repeat(2,minmax(0,1fr)); gap: 28px 14px}
+  .bc-row--full .bc-row__grid, .bc-row--full .bc-row__grid[data-count="3"] {grid-template-columns: repeat(2,minmax(0,1fr)); gap: 28px 14px}
   .bc-row__title, .shop-article-copy .bc-row__title {font-size: 24px}
   .bc-panel {padding: 26px 22px 28px}
   .bc-panel__title, .shop-article-copy .bc-panel__title {font-size: 23px}
