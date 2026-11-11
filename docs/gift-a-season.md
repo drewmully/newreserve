@@ -108,6 +108,8 @@ Its details row has a per-shipment table (Shopify order, due, ordered, shipped) 
 
 - gift_season_view
 - gift_season_length_selected
+- gift_season_form_started
+- gift_season_self_deliver_toggled
 - gift_season_form_error
 - gift_season_checkout_clicked
 - gift_season_checkout_error
@@ -115,6 +117,32 @@ Its details row has a per-shipment table (Shopify order, due, ordered, shipped) 
 - gift_season_continue_clicked
 
 Orders are tagged as listed above. The Supabase `gift_seasons` table supports SQL reporting.
+
+## CRO review changes (2026-11-11)
+
+- **Launch config** (`src/lib/gifts/giftSeasonConfig.ts`). These values are pending Drew and render as visible placeholders until they're set:
+  - `NEXT_PUBLIC_GIFT_SEASON_ORDER_BY`: the holiday order-by cutoff. Default `[cutoff date TBD]`.
+  - `NEXT_PUBLIC_GIFT_SEASON_SHIP_WINDOW`: when the first Reserve ships after sizing. Default `[ship window TBD]`.
+  - `NEXT_PUBLIC_GIFT_SEASON_FREE_SHIP_EXCHANGES=true`: turns on the "free shipping and free exchanges" claim on the LP, the sizing page and the season email. It is off by default.
+- **Timing line** under the picker and in Step 3: "Order by [cutoff] and we email their gift reveal on the date you choose. Their first Reserve ships [window] after they confirm sizing."
+- **Mobile layout**: the eyebrow, H1 and subhead now sit above a 16/10 image. The lg layout is unchanged.
+- **Retail value**: "$300+ retail value" is replaced with "Hand-picked by a Mully stylist each season" on the LP, the season reveal and the season email.
+  - The only itemized record of actual contents is the June 2026 Reserve plan (31 orders). It averages $262.89 MSRP per Reserve, and no Reserve in it reached $300.
+  - Shopify and ShipHero only record the RES-MEM line, not the contents.
+- **"In a typical Reserve" row**: four real pieces from that plan, labeled by category (polo, outer layer, accessory) and marked as examples, with no item counts.
+- **FAQ**: five collapsed items placed after "How it works".
+- **Picker cards**: each card shows its per-season price, and the 2- and 4-season cards show "Save $X" against the 1-season price. Both are derived from variant prices (`seasonSavings`).
+  - The 4-season badge reads "Full year, best value".
+  - A microline under the CTA reads "Paid once. Never renews. Secure Shopify checkout."
+- **"I'll give it myself"**:
+  - Cart attribute `gift_self_deliver=true`. The recipient email becomes optional.
+  - orders-paid stores `self_deliver`.
+  - scheduled-send emails the gifter the printable card (`/gift-card/[token]`) plus the sizing link.
+  - The sizing page asks for the recipient's email when none is on file, so the continue offer can reach them. If there is still no email, the continue offer is skipped (`offer_skipped_no_email`).
+- **Events**:
+  - New: `gift_season_form_started` (first field focus) and `gift_season_self_deliver_toggled`.
+  - `lp_source` added on `gift_season_form_error` and `gift_season_checkout_error`.
+  - `gift_season_purchased` carries `seasons`, `value` and `currency`. The main `purchase` event now carries `gift_kind`, `seasons` and `gift_self_deliver`.
 
 ## Copy rules
 
