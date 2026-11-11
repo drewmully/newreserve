@@ -7,7 +7,9 @@
  * How a season gift works:
  *   - The gifter buys one variant of the "Reserve Gift Season" product
  *     (1, 2 or 4 seasons) in a single one-time Shopify checkout.
- *   - That paid order is box 1. It ships once the recipient confirms sizing.
+ *   - That paid order is box 1. The gifter enters the recipient's sizes in
+ *     Step 2, so it ships right away (no reveal, no sizing precondition),
+ *     either to the recipient or to the gifter to hand over.
  *   - Boxes 2..N are $0 Shopify orders the season-dispatch cron creates on
  *     the normal quarterly cycle (every 3 months after box 1 ships), so they
  *     land in the same fulfillment queue as Loop renewals.
@@ -167,8 +169,215 @@ export const GIFT_SEASON_ATTR = {
   child: "gift_season_child", // "true" on $0 box orders we create
   parentOrderId: "gift_season_parent_order_id",
   boxNumber: "gift_season_box_number",
-  selfDeliver: "gift_self_deliver", // "true" when the gifter hands it over
+  shipMode: "gift_ship_mode", // "to_recipient" | "to_purchaser"
+  token: "gift_token", // gift link token, also on the line as _gift_token
 } as const;
+
+// ── Ship mode ───────────────────────────────────────────────────────────────
+
+/**
+ * Where season 1 ships. "to_recipient": the gifter enters the recipient's
+ * address as the Shopify shipping address. "to_purchaser": it ships to the
+ * gifter, who hands it over; we collect the recipient's address later.
+ */
+export type GiftShipMode = "to_recipient" | "to_purchaser";
+
+export function parseShipMode(raw: unknown): GiftShipMode {
+  return String(raw ?? "").trim() === "to_purchaser" ? "to_purchaser" : "to_recipient";
+}
+
+export const SHIP_MODE_COPY: Record<GiftShipMode, { label: string; hint: string; lineValue: string }> = {
+  to_recipient: {
+    label: "Ship to them",
+    hint: "Enter their address as the shipping address at checkout.",
+    lineValue: "Recipient",
+  },
+  to_purchaser: {
+    label: "Ship to me, I'll give it to them",
+    hint: "Use your address at checkout. We'll ask for theirs after they open it.",
+    lineValue: "Purchaser (gift hand-off)",
+  },
+};
+
+// ── Next-season address ────────────────────────────────────────────────────
+
+/** Address for seasons 2..N, stored on the gift doc (Shopify-ish keys). */
+export interface GiftShipAddress {
+  first_name: string;
+  last_name: string;
+  address1: string;
+  address2: string;
+  city: string;
+  province_code: string;
+  zip: string;
+  country_code: string;
+  phone: string;
+}
+
+export const US_STATES: Array<[code: string, name: string]> = [
+  ["AL", "Alabama"], ["AK", "Alaska"], ["AZ", "Arizona"], ["AR", "Arkansas"], ["CA", "California"],
+  ["CO", "Colorado"], ["CT", "Connecticut"], ["DE", "Delaware"], ["DC", "District of Columbia"],
+  ["FL", "Florida"], ["GA", "Georgia"], ["HI", "Hawaii"], ["ID", "Idaho"], ["IL", "Illinois"],
+  ["IN", "Indiana"], ["IA", "Iowa"], ["KS", "Kansas"], ["KY", "Kentucky"], ["LA", "Louisiana"],
+  ["ME", "Maine"], ["MD", "Maryland"], ["MA", "Massachusetts"], ["MI", "Michigan"], ["MN", "Minnesota"],
+  ["MS", "Mississippi"], ["MO", "Missouri"], ["MT", "Montana"], ["NE", "Nebraska"], ["NV", "Nevada"],
+  ["NH", "New Hampshire"], ["NJ", "New Jersey"], ["NM", "New Mexico"], ["NY", "New York"],
+  ["NC", "North Carolina"], ["ND", "North Dakota"], ["OH", "Ohio"], ["OK", "Oklahoma"], ["OR", "Oregon"],
+  ["PA", "Pennsylvania"], ["RI", "Rhode Island"], ["SC", "South Carolina"], ["SD", "South Dakota"],
+  ["TN", "Tennessee"], ["TX", "Texas"], ["UT", "Utah"], ["VT", "Vermont"], ["VA", "Virginia"],
+  ["WA", "Washington"], ["WV", "West Virginia"], ["WI", "Wisconsin"], ["WY", "Wyoming"],
+];
+
+function str(v: unknown, max = 120): string {
+  return typeof v === "string" ? v.trim().slice(0, max) : "";
+}
+
+/**
+ * Validate a next-season address from the /gift-address form. US only, which
+ * matches the Reserve shipping zone used for the parent order.
+ */
+export function validateGiftAddress(
+  input: unknown
+): { ok: true; address: GiftShipAddress } | { ok: false; error: string } {
+  const src = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
+  const address: GiftShipAddress = {
+    first_name: str(src.first_name, 60),
+    last_name: str(src.last_name, 60),
+    address1: str(src.address1),
+    address2: str(src.address2),
+    city: str(src.city, 80),
+    province_code: str(src.province_code, 2).toUpperCase(),
+    zip: str(src.zip, 10),
+    country_code: "US",
+    phone: str(src.phone, 30),
+  };
+  if (!address.first_name || !address.last_name) return { ok: false, error: "Add a first and last name." };
+  if (!address.address1) return { ok: false, error: "Add a street address." };
+  if (!address.city) return { ok: false, error: "Add a city." };
+  if (!US_STATES.some(([c]) => c === address.province_code)) return { ok: false, error: "Pick a state." };
+  if (!/^\d{5}(-\d{4})?$/.test(address.zip)) return { ok: false, error: "Check the ZIP code." };
+  return { ok: true, address };
+}
+
+/** A stored address is usable for a $0 season order. */
+export function isValidGiftAddress(a: Partial<GiftShipAddress> | null | undefined): boolean {
+  if (!a) return false;
+  return !!(a.address1?.trim() && a.city?.trim() && a.zip?.trim() && a.country_code?.trim() &&
+    (a.first_name?.trim() || a.last_name?.trim()));
+}
+
+/** Map a Shopify webhook shipping_address to our stored shape. */
+export function addressFromShopify(
+  a: Record<string, unknown> | null | undefined
+): GiftShipAddress | null {
+  if (!a) return null;
+  const out: GiftShipAddress = {
+    first_name: str(a.first_name, 60),
+    last_name: str(a.last_name, 60),
+    address1: str(a.address1),
+    address2: str(a.address2),
+    city: str(a.city, 80),
+    province_code: str(a.province_code, 10),
+    zip: str(a.zip, 12),
+    country_code: str(a.country_code, 2) || "US",
+    phone: str(a.phone, 30),
+  };
+  return isValidGiftAddress(out) ? out : null;
+}
+
+/** "Sam Lee, 12 Elm St, Austin, TX 78701" */
+export function formatGiftAddress(a: Partial<GiftShipAddress> | null | undefined): string {
+  if (!a) return "";
+  const name = [a.first_name, a.last_name].filter(Boolean).join(" ");
+  const street = [a.address1, a.address2].filter(Boolean).join(" ");
+  const cityLine = [a.city, [a.province_code, a.zip].filter(Boolean).join(" ")].filter(Boolean).join(", ");
+  return [name, street, cityLine].filter(Boolean).join(", ");
+}
+
+const DAY_MS = 86_400_000;
+/** Ship-to-me: wait this long after season 1 ships so the ask can't spoil the gift. */
+export const ADDRESS_REQUEST_DELAY_DAYS = 14;
+/** No response from the recipient after this long: ask the purchaser. */
+export const ADDRESS_FALLBACK_DAYS = 7;
+/** Remind the purchaser this long before season 2 is due if still missing. */
+export const ADDRESS_REMINDER_LEAD_DAYS = 14;
+/** Season notice (with the update link) goes out this long before each due date. */
+export const SEASON_NOTICE_LEAD_DAYS = 10;
+
+export interface AddressStateInput {
+  seasons_total?: number | null;
+  box_orders?: Array<{ box_number: number; shipped_at?: number | null }> | null;
+  first_box_shipped_at?: number | null;
+  ship_mode?: GiftShipMode | null;
+  next_shipping_address?: Partial<GiftShipAddress> | null;
+  recipient_email?: string | null;
+  purchaser_email?: string | null;
+  address_request_sent_at?: number | null;
+  address_request_target?: "recipient" | "purchaser" | null;
+  address_fallback_sent_at?: number | null;
+  address_reminder_sent_at?: number | null;
+}
+
+/** More seasons remain and there is no usable address for them yet. */
+export function needsNextAddress(g: AddressStateInput): boolean {
+  const p = seasonProgress(g);
+  if (p.seasonsTotal <= 1 || p.nextBoxNumber === null) return false;
+  return !isValidGiftAddress(g.next_shipping_address);
+}
+
+export type AddressEmailAction =
+  | { kind: "request"; target: "recipient" | "purchaser" }
+  | { kind: "fallback" }
+  | { kind: "reminder" };
+
+/**
+ * Which address email (if any) is due now. Pure so the cron and tests agree.
+ *   - Ship to me: 14 days after season 1 ships, ask the recipient (or the
+ *     purchaser when no recipient email). 7 days without a response, ask
+ *     the purchaser.
+ *   - Any mode: 14 days before season 2 is due and still missing, remind
+ *     the purchaser.
+ */
+export function addressEmailDue(g: AddressStateInput, nowMs: number): AddressEmailAction | null {
+  if (!needsNextAddress(g) || !g.first_box_shipped_at) return null;
+  if (g.ship_mode === "to_purchaser") {
+    if (!g.address_request_sent_at) {
+      if (nowMs >= g.first_box_shipped_at + ADDRESS_REQUEST_DELAY_DAYS * DAY_MS) {
+        return { kind: "request", target: g.recipient_email ? "recipient" : "purchaser" };
+      }
+      return null;
+    }
+    if (
+      g.address_request_target === "recipient" &&
+      !g.address_fallback_sent_at &&
+      nowMs >= g.address_request_sent_at + ADDRESS_FALLBACK_DAYS * DAY_MS
+    ) {
+      return { kind: "fallback" };
+    }
+  }
+  const due2 = boxDueOn(g.first_box_shipped_at, 2);
+  if (!g.address_reminder_sent_at && due2) {
+    const dueMs = Date.parse(`${due2}T00:00:00Z`);
+    if (nowMs >= dueMs - ADDRESS_REMINDER_LEAD_DAYS * DAY_MS) return { kind: "reminder" };
+  }
+  return null;
+}
+
+/**
+ * Season notice: once per season 2..N, SEASON_NOTICE_LEAD_DAYS before it is
+ * due, while the address is valid. Returns the season number or null.
+ */
+export function seasonNoticeDue(
+  g: AddressStateInput & { season_notices_sent?: number[] | null },
+  nowMs: number
+): number | null {
+  const p = seasonProgress(g);
+  if (!p.nextBoxNumber || p.nextBoxNumber <= 1 || !p.nextBoxDueOn) return null;
+  if (!isValidGiftAddress(g.next_shipping_address)) return null;
+  if ((g.season_notices_sent ?? []).includes(p.nextBoxNumber)) return null;
+  const dueMs = Date.parse(`${p.nextBoxDueOn}T00:00:00Z`);
+  return nowMs >= dueMs - SEASON_NOTICE_LEAD_DAYS * DAY_MS ? p.nextBoxNumber : null;
+}
 
 /** Shopify order tags. Kept lowercase and stable for reporting. */
 export function giftSeasonParentTags(seasons: number): string[] {
@@ -219,7 +428,7 @@ export function addMonthsUtc(ms: number, months: number): Date {
 
 /**
  * Due date (YYYY-MM-DD, UTC) for box `boxNumber` (1-indexed). Box 1 has no
- * due date (it ships from the paid order once sizing is in). Box N is due
+ * due date (it ships from the paid order right away). Box N is due
  * (N-1) quarters after box 1 shipped.
  */
 export function boxDueOn(

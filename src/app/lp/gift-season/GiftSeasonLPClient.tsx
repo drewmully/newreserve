@@ -3,10 +3,11 @@
 /**
  * /lp/gift-season: Gift a Season of Mully Reserve.
  *
- * Prepaid, one checkout, no auto-renewal. The gifter picks 1, 2 or 4
- * seasons (prices come from the Shopify variants), enters the recipient, a note and a send
- * date, then pays once through Shopify checkout. Copy rules: no em dashes,
- * "Reserve" never "box".
+ * Prepaid, one checkout, no auto-renewal, no reveal. The gifter picks 1, 2 or
+ * 4 seasons (prices come from the Shopify variants), enters the recipient's
+ * first name and sizes, an optional note and email, and where season 1
+ * ships, then pays once through Shopify checkout. Season 1 ships right away.
+ * Copy rules: no em dashes, "Reserve" never "box".
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -31,13 +32,18 @@ import {
   type GiftSeasonCount,
 } from "@/lib/gifts/giftSeason";
 import {
+  createClientGiftToken,
   createGiftSeasonCheckout,
   validateGiftSeasonInput,
 } from "@/lib/giftSeasonCheckout";
 import {
+  GIFT_SEASON_SHIP_WINDOW,
   GIFT_SEASON_SHOW_FREE_SHIPPING_EXCHANGES,
   giftSeasonTimingLine,
 } from "@/lib/gifts/giftSeasonConfig";
+import { SHIP_MODE_COPY, type GiftShipMode } from "@/lib/gifts/giftSeason";
+import { EMPTY_SIZING, SIZING_FIELDS, missingSizing, type GiftSizing } from "@/lib/gifts/giftSizing";
+import { GiftSizingFields } from "@/app/components/gifts/GiftSizingFields";
 
 const LP_SOURCE = "lp_gift_season";
 
@@ -50,49 +56,44 @@ const OPTION_COPY: Record<GiftSeasonCount, { title: string; detail: string; badg
   4: { title: "4 seasons", detail: "One Reserve each season", badge: "Full year, best value" },
 };
 
-function giftSteps(timingLine: string) {
-  return [
-  { title: "You check out once", body: "Pick a length, add a note and choose when we tell them." },
-  { title: "They confirm sizing", body: "We send a private link on your date. Two minutes, no guessing." },
+export const GIFT_STEPS = [
+  { title: "Choose a length and their sizes", body: "Pick 1, 2 or 4 seasons, add their usual sizes and a note." },
   {
-    title: "Reserve arrives each season",
+    title: "We ship the first one now",
+    body: `Season 1 ships in ${GIFT_SEASON_SHIP_WINDOW}, to them or to you to hand over.`,
+  },
+  {
+    title: "The next seasons ship every 3 months",
     body: GIFT_SEASON_SHOW_FREE_SHIPPING_EXCHANGES
-      ? `Hand-picked by a Mully stylist. Free shipping and free exchanges. ${timingLine}`
-      : `Hand-picked by a Mully stylist. ${timingLine}`,
-  },
-  ];
-}
-
-const FAQ = [
-  {
-    q: "What if their size is wrong?",
-    a: GIFT_SEASON_SHOW_FREE_SHIPPING_EXCHANGES
-      ? "They confirm their own sizing before anything ships, so nobody guesses. If a size changes or something misses, exchanges are free."
-      : "They confirm their own sizing before anything ships, so nobody guesses. If a size changes or something misses, they reply to any Mully email and our team sorts it out.",
-  },
-  {
-    q: "What if they're already a member?",
-    // Pending ops confirmation of how gift + membership stacking works.
-    a: "We coordinate it with their membership so pieces don't repeat. Reply to your order confirmation with any questions.",
-  },
-  {
-    q: "Who enters the shipping address?",
-    a: "You do, at checkout. Every Reserve in the gift ships there. If they move, they reply to any Mully email and we update it.",
-  },
-  {
-    q: "Can they change the timing?",
-    a: "You pick the reveal date at checkout. To move it, reply to your order confirmation before it sends. Each Reserve then ships on the normal quarterly cycle once they confirm sizing.",
-  },
-  {
-    q: "Does it really never renew?",
-    a: "Yes. It's one payment with no subscription attached. Before their last Reserve we invite them to continue as a member, and they're only charged if they choose to join.",
+      ? "Hand-picked by a Mully stylist, with free shipping and free exchanges. They can update sizes or address before each one."
+      : "Hand-picked by a Mully stylist. They can update sizes or address before each one.",
   },
 ];
 
-function todayIso(): string {
-  const d = new Date();
-  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
-  return local.toISOString().slice(0, 10);
+export function giftFaq(timingLine: string) {
+  return [
+    {
+      q: "What if I don't know their size?",
+      a: "Pick their usual size. Before each season we email a link to update sizes, and Easy Returns covers the rest.",
+    },
+    {
+      q: "Who enters the shipping address?",
+      a: "You do, at checkout. Choose Ship to them and enter their address, or Ship to me to hand it over yourself. If it ships to you, we email them after they open it to collect their address for the next seasons.",
+    },
+    {
+      q: "When does it ship?",
+      a: `${timingLine} The next seasons ship every 3 months after that.`,
+    },
+    {
+      q: "What if they're already a member?",
+      // Pending ops confirmation of how gift + membership stacking works.
+      a: "We coordinate it with their membership so pieces don't repeat. Reply to your order confirmation with any questions.",
+    },
+    {
+      q: "Does it really never renew?",
+      a: "Yes. It's one payment with no subscription attached. Before their last Reserve we invite them to continue as a member, and they're only charged if they choose to join.",
+    },
+  ];
 }
 
 export default function GiftSeasonLPClient({
@@ -108,9 +109,9 @@ export default function GiftSeasonLPClient({
   const [seasons, setSeasons] = useState<GiftSeasonCount>(4);
   const [recipientName, setRecipientName] = useState("");
   const [recipientEmail, setRecipientEmail] = useState("");
-  const [deliverOn, setDeliverOn] = useState("");
   const [message, setMessage] = useState("");
-  const [selfDeliver, setSelfDeliver] = useState(false);
+  const [sizing, setSizing] = useState<GiftSizing>(EMPTY_SIZING);
+  const [shipMode, setShipMode] = useState<GiftShipMode>("to_recipient");
   const formStarted = useRef(false);
   const pickerRef = useRef<HTMLDivElement | null>(null);
 
@@ -191,11 +192,10 @@ export default function GiftSeasonLPClient({
     }).catch(() => {});
   }
 
-  function toggleSelfDeliver() {
-    const next = !selfDeliver;
-    setSelfDeliver(next);
-    trackEvent("gift_season_self_deliver_toggled", {
-      properties: { seasons, self_deliver: next, lp_source: LP_SOURCE },
+  function pickShipMode(next: GiftShipMode) {
+    setShipMode(next);
+    trackEvent("gift_season_ship_mode_selected", {
+      properties: { seasons, ship_mode: next, lp_source: LP_SOURCE },
     }).catch(() => {});
   }
 
@@ -222,17 +222,27 @@ export default function GiftSeasonLPClient({
       recipientName,
       recipientEmail,
       message,
-      deliverOn,
+      sizing,
+      shipMode,
+      giftToken: createClientGiftToken(),
       lpSource: LP_SOURCE,
-      selfDeliver,
     };
-    const invalid = validateGiftSeasonInput(input, todayIso());
+    const invalid = validateGiftSeasonInput(input);
     if (invalid) {
       setError(invalid);
       trackEvent("gift_season_form_error", {
-        properties: { seasons, reason: invalid, self_deliver: selfDeliver, lp_source: LP_SOURCE },
+        properties: { seasons, reason: invalid, ship_mode: shipMode, lp_source: LP_SOURCE },
       }).catch(() => {});
       return;
+    }
+    try {
+      // Read by the confirmation page for mode-specific next steps.
+      window.localStorage.setItem(
+        "mully_gift_season_last",
+        JSON.stringify({ t: input.giftToken, name: recipientName.trim(), mode: shipMode, seasons, email: recipientEmail.trim().length > 0, at: Date.now() })
+      );
+    } catch {
+      /* ignore */
     }
     setLoading(true);
     trackEvent("gift_season_checkout_clicked", {
@@ -241,8 +251,8 @@ export default function GiftSeasonLPClient({
         value: option.price,
         currency: "USD",
         has_message: message.trim().length > 0,
-        scheduled: !!deliverOn,
-        self_deliver: selfDeliver,
+        has_recipient_email: recipientEmail.trim().length > 0,
+        ship_mode: shipMode,
         lp_source: LP_SOURCE,
       },
     }).catch(() => {});
@@ -381,7 +391,7 @@ export default function GiftSeasonLPClient({
                     })}
                   </div>
                   <p className="text-[11px] text-charcoal/70 mt-3 leading-relaxed" data-testid="gift-season-timing">
-                    {giftSeasonTimingLine({ now, selfDeliver })}
+                    {giftSeasonTimingLine({ now })}
                   </p>
 
                 {/* Desktop: one CTA to step 2, trust row directly under it. */}
@@ -417,35 +427,7 @@ export default function GiftSeasonLPClient({
           <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-10 lg:items-start">
             <div onFocusCapture={handleFirstFocus}>
               <div className="bg-bone-dark/40 rounded-lg border border-forest/15 p-5">
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={selfDeliver}
-                  onClick={toggleSelfDeliver}
-                  data-testid="gift-season-self-deliver"
-                  className="mt-4 w-full flex items-center justify-between gap-3 text-left"
-                >
-                  <span>
-                    <span className="block text-sm text-charcoal">I&apos;ll give it myself</span>
-                    <span className="block text-[11px] text-charcoal/60 leading-snug">
-                      We email the reveal and a printable gift card to you instead.
-                    </span>
-                  </span>
-                  <span
-                    aria-hidden="true"
-                    className={`relative inline-block h-5 w-9 shrink-0 rounded-full transition ${
-                      selfDeliver ? "bg-forest" : "bg-charcoal/25"
-                    }`}
-                  >
-                    <span
-                      className={`absolute top-0.5 h-4 w-4 rounded-full bg-bone transition-all ${
-                        selfDeliver ? "left-[18px]" : "left-0.5"
-                      }`}
-                    />
-                  </span>
-                </button>
-
-                <div className="space-y-3 mt-5">
+                <div className="space-y-5">
                   <Field label="Recipient first name">
                     <input
                       type="text"
@@ -453,51 +435,86 @@ export default function GiftSeasonLPClient({
                       value={recipientName}
                       onChange={(e) => setRecipientName(e.target.value)}
                       placeholder="Their first name"
+                      autoComplete="off"
                       className="w-full bg-bone border border-forest/20 rounded px-3 py-2.5 text-sm focus:outline-none focus:border-forest"
                     />
                   </Field>
-                  <Field
-                    label="Recipient email"
-                    optional={selfDeliver ? "optional" : undefined}
-                    hint={
-                      selfDeliver
-                        ? "Only used to invite them to continue later."
-                        : "We send their private sizing link here."
-                    }
-                  >
-                    <input
-                      type="email"
-                      name="recipientEmail"
-                      value={recipientEmail}
-                      onChange={(e) => setRecipientEmail(e.target.value)}
-                      placeholder="their@email.com"
-                      className="w-full bg-bone border border-forest/20 rounded px-3 py-2.5 text-sm focus:outline-none focus:border-forest"
-                    />
-                  </Field>
-                  <Field
-                    label={selfDeliver ? "Email me the gift card on" : "Send the gift on"}
-                    optional="leave blank to send today"
-                  >
-                    <input
-                      type="date"
-                      name="deliverOn"
-                      min={todayIso()}
-                      value={deliverOn}
-                      onChange={(e) => setDeliverOn(e.target.value)}
-                      className="w-full bg-bone border border-forest/20 rounded px-3 py-2.5 text-sm focus:outline-none focus:border-forest"
-                    />
-                  </Field>
-                  <Field label="Your note" optional="optional">
-                    <textarea
-                      name="message"
-                      value={message}
-                      onChange={(e) => setMessage(e.target.value)}
-                      placeholder="A few words they will see with the gift"
-                      rows={3}
-                      maxLength={500}
-                      className="w-full bg-bone border border-forest/20 rounded px-3 py-2.5 text-sm focus:outline-none focus:border-forest resize-none"
-                    />
-                  </Field>
+
+                  <div data-testid="gift-season-sizing">
+                    <div className="flex items-baseline justify-between gap-3 border-t border-forest/15 pt-4">
+                      <div className="text-sm text-[#111]">Their sizes</div>
+                      <div className="text-[11px] text-charcoal/60">Not sure? Pick their usual size.</div>
+                    </div>
+                    <div className="mt-3">
+                      <GiftSizingFields value={sizing} onChange={setSizing} compact />
+                    </div>
+                  </div>
+
+                  <div className="border-t border-forest/15 pt-4 space-y-3">
+                    <Field label="Your note" optional="optional">
+                      <textarea
+                        name="message"
+                        value={message}
+                        onChange={(e) => setMessage(e.target.value)}
+                        placeholder="A few words to go with the gift"
+                        rows={3}
+                        maxLength={500}
+                        className="w-full bg-bone border border-forest/20 rounded px-3 py-2.5 text-sm focus:outline-none focus:border-forest resize-none"
+                      />
+                    </Field>
+                    <Field
+                      label="Recipient email"
+                      optional="optional"
+                      hint="Only used for address and size updates after the first one arrives."
+                    >
+                      <input
+                        type="email"
+                        name="recipientEmail"
+                        value={recipientEmail}
+                        onChange={(e) => setRecipientEmail(e.target.value)}
+                        placeholder="their@email.com"
+                        autoComplete="off"
+                        className="w-full bg-bone border border-forest/20 rounded px-3 py-2.5 text-sm focus:outline-none focus:border-forest"
+                      />
+                    </Field>
+                  </div>
+
+                  <fieldset className="border-t border-forest/15 pt-4" data-testid="gift-season-ship-mode">
+                    <legend className="text-sm text-[#111] float-left w-full mb-2.5">
+                      Where should the first one ship?
+                    </legend>
+                    <div className="clear-both grid grid-cols-1 sm:grid-cols-2 gap-2" role="radiogroup" aria-label="Where should the first one ship?">
+                      {(["to_recipient", "to_purchaser"] as const).map((m) => {
+                        const active = shipMode === m;
+                        return (
+                          <button
+                            key={m}
+                            type="button"
+                            role="radio"
+                            aria-checked={active}
+                            onClick={() => pickShipMode(m)}
+                            data-testid={`ship-mode-${m}`}
+                            className={`text-left rounded-md border px-3 py-3 transition flex gap-2.5 ${
+                              active ? "border-forest bg-forest/[0.06]" : "border-forest/20 bg-bone hover:border-forest/40"
+                            }`}
+                          >
+                            <span
+                              aria-hidden="true"
+                              className={`mt-0.5 h-4 w-4 shrink-0 rounded-full border ${
+                                active ? "border-forest border-[5px]" : "border-charcoal/35"
+                              }`}
+                            />
+                            <span>
+                              <span className="block text-sm text-[#111]">{SHIP_MODE_COPY[m].label}</span>
+                              <span className="block text-[11px] text-charcoal/65 leading-snug mt-0.5">
+                                {SHIP_MODE_COPY[m].hint}
+                              </span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </fieldset>
                 </div>
 
                 <div className="mt-4 pt-4 border-t border-forest/15 flex items-baseline justify-between lg:hidden">
@@ -578,6 +595,14 @@ export default function GiftSeasonLPClient({
                     <span className="truncate max-w-[160px] text-right">{recipientName.trim()}</span>
                   </div>
                 ) : null}
+                <div className="flex justify-between" data-testid="gift-summary-ship-to">
+                  <span>Season 1 ships to</span>
+                  <span>{shipMode === "to_recipient" ? "Them" : "You"}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Sizes</span>
+                  <span>{missingSizing(sizing).length === 0 ? "Added" : `${SIZING_FIELDS.length - missingSizing(sizing).length} of ${SIZING_FIELDS.length}`}</span>
+                </div>
               </div>
               <div className="mt-4 pt-4 border-t border-forest/10 flex items-baseline justify-between">
                 <span className="text-sm text-[#111]">Total</span>
@@ -586,6 +611,9 @@ export default function GiftSeasonLPClient({
                 </span>
               </div>
               <div className="mt-2 text-right text-[11px] text-[#625e55]">Paid once, never renews.</div>
+              <p className="mt-4 pt-4 border-t border-forest/10 text-[11px] leading-relaxed text-[#625e55]" data-testid="gift-summary-timing">
+                {giftSeasonTimingLine({ now })} Then one every 3 months.
+              </p>
             </aside>
           </div>
         </section>
@@ -633,7 +661,7 @@ export default function GiftSeasonLPClient({
           <div className="max-w-5xl mx-auto px-4 sm:px-6">
             <h2 className="font-serif text-2xl text-forest mb-6">How the gift works</h2>
             <ol className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-              {giftSteps(giftSeasonTimingLine({ now })).map((s, i) => (
+              {GIFT_STEPS.map((s, i) => (
                 <li key={s.title} className="bg-bone rounded-lg border border-forest/10 p-5">
                   <div className="text-[11px] tracking-[0.2em] uppercase text-ember/80">
                     Step {i + 1}
@@ -654,7 +682,7 @@ export default function GiftSeasonLPClient({
         <section className="max-w-3xl mx-auto px-4 sm:px-6 py-12" data-testid="gift-season-faq">
           <h2 className="font-serif text-2xl text-forest mb-4">Questions</h2>
           <div className="divide-y divide-forest/15 border-y border-forest/15">
-            {FAQ.map((f) => (
+            {giftFaq(giftSeasonTimingLine({ now })).map((f) => (
               <details key={f.q} className="group py-3">
                 <summary className="flex items-center justify-between gap-3 cursor-pointer list-none text-sm text-charcoal">
                   {f.q}

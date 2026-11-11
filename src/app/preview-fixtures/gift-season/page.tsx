@@ -1,15 +1,15 @@
 /**
- * /preview-fixtures/gift-season?view=sizing|sizing-self|sizing-done|continue|admin|card
+ * /preview-fixtures/gift-season?view=address|address-purchaser|address-update|address-done|continue|admin|card
  *
  * Preview and local QA only (404 in production). Renders the Gift a Season
- * recipient reveal, continue offer and admin season view with sample data,
+ * /gift-address page, continue offer, printable card and admin season view with sample data,
  * because Vercel previews have no Firestore credentials. Nothing here reads
  * or writes real data.
  */
 
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import GiftSizingClient from "@/app/gift-sizing/[token]/GiftSizingClient";
+import GiftAddressClient from "@/app/gift-address/[token]/GiftAddressClient";
 import GiftCardView from "@/app/gift-card/[token]/GiftCardView";
 import GiftContinueClient from "@/app/gift-continue/[token]/GiftContinueClient";
 import { GiftsTable, type GiftRow } from "@/app/admin/gifts/GiftsTable";
@@ -47,18 +47,18 @@ function seasonRow(
     recipient_email: "sam@example.com",
     recipient_first_name: "Sam",
     gift_message: "Happy holidays. See you on the first tee.",
-    deliver_on: "2026-12-24",
+    deliver_on: null,
     sizing_token: "fixture-token-not-real",
     total_price: price,
     currency: "USD",
     status: shippedCount === 0 ? "sizing_collected" : p.boxesRemaining === 0 ? "completed" : "season_active",
     created_at: NOW - 210 * DAY,
     updated_at: NOW,
-    recipient_emailed_at: NOW - 205 * DAY,
+    recipient_emailed_at: null,
     sizing_collected_at: NOW - 204 * DAY,
     first_box_shipped_at: first,
     completed_at: null,
-    sizing: { shirt: "L", pant_waist: "34", shoe: "10.5", glove: "ML" },
+    sizing: { shirt: "L", waist: "34", inseam: '32"', shoe: "10.5", glove_size: "ML", glove_hand: "Left", notes: "" },
     loop_subscription_id: null,
     last_error: null,
     gift_kind: "season",
@@ -91,22 +91,29 @@ export default async function GiftSeasonFixturesPage({
         purchaserFirstName="Alex"
         giftMessage="Happy holidays. See you on the first tee."
         seasonsTotal={4}
-        sizingUrl="https://mymully.com/gift-sizing/fixture-token-not-real"
+        addressUrl="https://mymully.com/gift-address/fixture-token-not-real"
       />
     );
   }
-  if (view === "sizing" || view === "sizing-self" || view === "sizing-done") {
+  if (view.startsWith("address")) {
+    const update = view === "address-update";
     return (
-      <GiftSizingClient
-        orderId="fixture"
-        token="fixture-token-not-real"
+      <GiftAddressClient
+        token="fixture-token-not-real-000000"
         recipientFirstName="Sam"
         purchaserFirstName="Alex"
-        giftMessage="Happy holidays. See you on the first tee."
-        alreadySubmitted={view === "sizing-done"}
-        existingSizing={null}
         seasonsTotal={4}
-        askRecipientEmail={view === "sizing-self"}
+        nextSeason={view === "address-done" ? null : 2}
+        nextDueLabel="March 4"
+        existingAddress={
+          update
+            ? { first_name: "Sam", last_name: "Lee", address1: "12 Elm St", address2: "", city: "Austin", province_code: "TX", zip: "78701", country_code: "US", phone: "" }
+            : null
+        }
+        existingSizing={{ shirt: "L", waist: "34", inseam: '32"', shoe: "10.5", glove_size: "ML", glove_hand: "Left", notes: "" }}
+        askEmail={!update}
+        by={view === "address-purchaser" ? "purchaser" : "recipient"}
+        fixture
       />
     );
   }
@@ -124,16 +131,26 @@ export default async function GiftSeasonFixturesPage({
   }
   if (view === "admin") {
     const rows: GiftRow[] = [
-      seasonRow("6100000000001", 4, 1000, 3, 4, { continue_offer_sent_at: NOW - 1 * DAY }),
-      seasonRow("6100000000002", 2, 550, 1, 1),
-      seasonRow("6100000000003", 1, 299, 0, 1),
+      seasonRow("6100000000001", 4, 1000, 3, 4, {
+        continue_offer_sent_at: NOW - 1 * DAY,
+        ship_mode: "to_recipient",
+        next_address_line: "Sam Lee, 12 Elm St, Austin, TX 78701",
+        address_source: "parent_order",
+      }),
+      seasonRow("6100000000002", 2, 550, 1, 1, {
+        ship_mode: "to_purchaser",
+        address_needed: true,
+        address_request_sent_at: NOW - 20 * DAY,
+        recipient_first_name: "Jordan",
+      }),
+      seasonRow("6100000000003", 1, 299, 0, 1, { ship_mode: "to_purchaser", recipient_email: "" }),
     ];
     return (
       <div className="min-h-screen bg-cream">
         <div className="max-w-7xl mx-auto px-6 py-8">
           <h1 className="font-serif text-2xl text-obsidian mb-1">Gift Orders (fixture)</h1>
           <p className="text-xs text-charcoal/55 mb-5">Sample data. Preview only.</p>
-          <GiftsTable orders={rows} initiallyExpanded="6100000000001" />
+          <GiftsTable orders={rows} initiallyExpanded="6100000000002" />
         </div>
       </div>
     );

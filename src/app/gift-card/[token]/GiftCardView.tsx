@@ -1,8 +1,9 @@
 "use client";
 
 /**
- * Printable Gift a Season card for "I'll give it myself" gifts. The sizing
- * link printed on the card is the recipient's private link (token = auth).
+ * Optional printable Gift a Season card for ship-to-me gifts, linked from
+ * the gifter confirmation. For multi-season gifts it carries the private
+ * /gift-address link (token = auth) so they can add their address early.
  * Copy rules: no em dashes, "Reserve" never "box".
  */
 
@@ -11,7 +12,7 @@ export interface GiftCardViewProps {
   purchaserFirstName: string | null;
   giftMessage: string | null;
   seasonsTotal: number;
-  sizingUrl: string;
+  addressUrl: string;
 }
 
 export default function GiftCardView({
@@ -19,12 +20,12 @@ export default function GiftCardView({
   purchaserFirstName,
   giftMessage,
   seasonsTotal,
-  sizingUrl,
+  addressUrl,
 }: GiftCardViewProps) {
   const seasonsLabel = seasonsTotal === 1 ? "a season" : `${seasonsTotal} seasons`;
   const recipient = recipientFirstName?.trim();
   const from = purchaserFirstName?.trim();
-  const displayUrl = sizingUrl.replace(/^https?:\/\//, "");
+  const displayUrl = addressUrl.replace(/^https?:\/\//, "");
 
   return (
     <div className="min-h-screen bg-bone-dark/40 print:bg-white text-charcoal flex flex-col items-center py-10 px-4">
@@ -50,12 +51,18 @@ export default function GiftCardView({
         ) : from ? (
           <p className="text-sm text-charcoal/60 mt-4">From {from}</p>
         ) : null}
-        <div className="mt-auto pt-5 border-t border-forest/15">
-          <div className="text-[11px] uppercase tracking-[0.15em] text-charcoal/60">
-            Confirm your sizing to start
+        {seasonsTotal > 1 ? (
+          <div className="mt-auto pt-5 border-t border-forest/15">
+            <div className="text-[11px] uppercase tracking-[0.15em] text-charcoal/60">
+              Where should the next ones ship?
+            </div>
+            <div className="text-sm text-forest mt-1 break-all font-medium">{displayUrl}</div>
           </div>
-          <div className="text-sm text-forest mt-1 break-all font-medium">{displayUrl}</div>
-        </div>
+        ) : (
+          <div className="mt-auto pt-5 border-t border-forest/15 text-[11px] uppercase tracking-[0.15em] text-charcoal/60">
+            Hand-picked for you
+          </div>
+        )}
       </div>
       <button
         type="button"

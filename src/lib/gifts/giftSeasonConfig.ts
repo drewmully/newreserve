@@ -66,7 +66,7 @@ export function isPastGiftSeasonCutoff(now: number = Date.now(), raw: string = G
 /** Holiday order-by cutoff for display, e.g. "December 15". */
 export const GIFT_SEASON_ORDER_BY: string = formatGiftSeasonCutoff();
 
-/** How long after sizing the first Reserve ships. */
+/** How long after purchase season 1 ships. */
 export const GIFT_SEASON_SHIP_WINDOW: string =
   clean(process.env.NEXT_PUBLIC_GIFT_SEASON_SHIP_WINDOW) || GIFT_SEASON_PLACEHOLDER_SHIP_WINDOW;
 
@@ -74,25 +74,26 @@ export const GIFT_SEASON_SHIP_WINDOW: string =
 export const GIFT_SEASON_SHOW_FREE_SHIPPING_EXCHANGES: boolean =
   clean(process.env.NEXT_PUBLIC_GIFT_SEASON_FREE_SHIP_EXCHANGES) === "true";
 
+/** "Ships in 1-2 business days." from the env ship window. */
+export function giftSeasonShipsLine(window: string = GIFT_SEASON_SHIP_WINDOW): string {
+  return `Ships in ${window}.`;
+}
+
 /**
- * The timing line used under the picker and in the How it works steps.
- * Before the cutoff: order by the date for a Christmas arrival.
- * After it: the digital reveal still lands on the chosen date, and the first
- * Reserve ships the usual window after sizing.
+ * The timing line used under the picker and in the gift summary. Season 1
+ * ships right away, so the line is the holiday cutoff plus the ship window.
+ * Before the cutoff: "Order by December 15 for it to arrive by Christmas.
+ * Ships in 1-2 business days." After it: "Ships in 1-2 business days."
  */
 export function giftSeasonTimingLine(
-  opts: { now?: number; raw?: string; window?: string; selfDeliver?: boolean } = {}
+  opts: { now?: number; raw?: string; window?: string } = {}
 ): string {
   const raw = opts.raw ?? GIFT_SEASON_ORDER_BY_RAW;
   const window = opts.window ?? GIFT_SEASON_SHIP_WINDOW;
   const now = opts.now ?? Date.now();
-  if (isPastGiftSeasonCutoff(now, raw)) {
-    const reveal = opts.selfDeliver
-      ? "Your printable gift card still arrives on time by email."
-      : "Their gift reveal still arrives on time by email.";
-    return `${reveal} Their first Reserve ships ${window} after they confirm sizing.`;
-  }
-  return `Order by ${formatGiftSeasonCutoff(raw)} for their first Reserve to arrive by Christmas.`;
+  const ships = giftSeasonShipsLine(window);
+  if (isPastGiftSeasonCutoff(now, raw)) return ships;
+  return `Order by ${formatGiftSeasonCutoff(raw)} for it to arrive by Christmas. ${ships}`;
 }
 
 /** Which launch values are still placeholders (for admin/report use). */

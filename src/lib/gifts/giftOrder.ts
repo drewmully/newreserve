@@ -20,6 +20,7 @@
 
 import { adminDb } from "@/lib/firebase-admin";
 import { randomBytes } from "crypto";
+import type { GiftShipAddress } from "@/lib/gifts/giftSeason";
 
 export type GiftOrderStatus =
   | "pending_recipient_email"
@@ -99,11 +100,27 @@ export interface GiftOrderDoc {
   converted_at?: number | null;
   converted_order_id?: string | null;
   /**
-   * "I'll give it myself": the reveal and printable gift card go to the
-   * purchaser. recipient_email may be "" until the recipient adds it on
-   * the sizing page.
+   * Where season 1 ships: "to_recipient" (default) or "to_purchaser" (the
+   * gifter hands it over). Sizing is collected at purchase, so there is no
+   * reveal email and no sizing precondition.
    */
-  self_deliver?: boolean;
+  ship_mode?: "to_recipient" | "to_purchaser";
+  /** Address for seasons 2..N. Copied from the paid order in ship-to-them
+   *  mode, collected on /gift-address/[token] in ship-to-me mode. */
+  next_shipping_address?: GiftShipAddress | null;
+  address_source?: "parent_order" | "recipient" | "purchaser" | null;
+  address_collected_at?: number | null;
+  /** Ship-to-me address request (14 days after season 1 ships). */
+  address_request_sent_at?: number | null;
+  address_request_target?: "recipient" | "purchaser" | null;
+  /** Purchaser fallback 7 days after an unanswered recipient request. */
+  address_fallback_sent_at?: number | null;
+  /** Purchaser reminder 14 days before season 2 when still missing. */
+  address_reminder_sent_at?: number | null;
+  /** Season numbers whose pre-season notice (update link) went out. */
+  season_notices_sent?: number[];
+  sizing_updated_at?: number | null;
+  gifter_confirmation_sent_at?: number | null;
 }
 
 export function createSizingToken(): string {
@@ -162,15 +179,17 @@ export async function createGiftOrderDoc(
         | "boxes_shipped"
         | "boxes_remaining"
         | "next_box_due_on"
+        | "ship_mode"
+        | "next_shipping_address"
+        | "address_source"
+        | "address_collected_at"
+        | "sizing"
+        | "sizing_collected_at"
       >
     >
 ): Promise<void> {
   const now = Date.now();
   const doc: GiftOrderDoc = {
-    ...input,
-    status_history: [{ status: input.status, at: now, note: "created" }],
-    created_at: now,
-    updated_at: now,
     recipient_emailed_at: null,
     sizing_collected_at: null,
     first_box_shipped_at: null,
@@ -179,6 +198,11 @@ export async function createGiftOrderDoc(
     loop_subscription_id: null,
     cancellation_attempted_at: null,
     last_error: null,
+    // Season gifts pass sizing at purchase; legacy callers never set these.
+    ...input,
+    status_history: [{ status: input.status, at: now, note: "created" }],
+    created_at: now,
+    updated_at: now,
   };
   await adminDb.collection(COLLECTION).doc(input.shopify_order_id).set(doc);
 }

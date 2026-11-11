@@ -14,111 +14,95 @@ Prepaid Reserve gifts that never auto-renew:
 
 Pricing note: the original brief assumed $250/season with no discount ($250 / $500 / $1,000). Drew replaced that on Nov 11 with $299 / $550 / $1,000. The regular Reserve Member price used in the continue offer stays $250 a season.
 
+## Flow (no reveal, Nov 11 redesign)
+
+Season 1 is physical and ships right away (1-2 business days after purchase). There is no send date, no reveal email, no recipient sizing step before shipping and no "I'll give it myself" path. See `DESIGN.md` for the full design.
+
+1. Step 1: the purchaser picks 1, 2 or 4 seasons.
+2. Step 2 ("Who is it for?"): recipient first name, their sizes (the same six fields as `/gift-sizing`: shirt, waist, inseam, shoe, glove, glove hand, plus optional fit notes), an optional note, an optional recipient email, and "Where should the first one ship?":
+   - Ship to them (default): the purchaser enters the recipient's address as the Shopify shipping address.
+   - Ship to me, I'll give it to them: the shipping address is the purchaser's.
+3. Shopify checkout. The return page is `/lp/gift-season/confirmed?t=&mode=&seasons=`, with mode-specific next steps.
+4. `orders-paid` creates the season doc and (behind a flag) sends the gifter confirmation.
+5. Season 1 ships from the parent order. Seasons 2..N ship to the stored next-season address.
+
 ## Reuse of existing gift plumbing
 
-The season gift is a new kind of the existing `gift_orders` Firestore doc (doc id = Shopify order id). It runs on the same flow as the legacy recurring gift:
+The season gift is a kind of the existing `gift_orders` Firestore doc (doc id = Shopify order id):
 
-- The LP cart attributes (`gift=true`, `gift_recipient_*`, `gift_deliver_on`, `gift_message`) are the same ones `/lp/gift` uses.
-- `orders-paid` creates the doc.
-- `scheduled-send` sends the recipient reveal on the send date.
-- `/gift-sizing/[token]` collects sizing.
-- `fulfillments-create` records shipments.
-- `/admin/gifts` is the ops view.
+- `orders-paid` creates the doc. `fulfillments-create` records shipments. `/admin/gifts` is the ops view. `/gift-card/[token]` is the printable card. `sendPlainText` (Resend) sends the emails.
+- `scheduled-send` skips season gifts. `/gift-sizing/[token]` redirects season tokens to `/gift-address/[token]`. The legacy recurring gift is unchanged.
 
-Season gifts are told apart by `gift_kind: "season"` and the line-item variant or SKU.
+Season gifts never touch Loop.
 
-Season gifts never touch Loop. The legacy post-first-shipment cron cancels the purchaser's Loop subscription. It never sees season gifts, because they move to `season_active` rather than `first_box_shipped`.
+## Data on the order without write_orders
+
+The production Shopify token has no `write_orders`, so nothing is written to the parent order after checkout.
+
+- Cart LINE attributes (shown to the stylist as line item properties): `Recipient`, `Shirt`, `Waist`, `Inseam`, `Shoe`, `Glove`, `Glove hand`, `Fit notes`, `Ships to`, plus hidden `_gift_token`, `_gift_ship_mode`, `_recipient_email`.
+- Cart attributes (note_attributes): `gift=true`, `gift_kind=season`, `gift_seasons`, `gift_ship_mode`, `gift_token`, `gift_recipient_name`, `gift_recipient_email`, `gift_message`, `gift_size_*`.
+- `orders-paid` identifies the parent by SKU `RES-GIFT-1S/2S/4S` or variant id, and reads note_attributes first, then line item properties (`readGiftSeasonOrderData`). The parent `tagsAdd` / `orderUpdate` calls are removed.
+- Child orders (seasons 2..N) are created with `draftOrderCreate` (`write_draft_orders` only) with tags, line item custom attributes (recipient, sizes, season X of N) and the shipping address set at creation. No email or customer is set, so Shopify sends nothing.
+
+## Next-season addresses
+
+- Ship to them: `orders-paid` copies the parent shipping address into `next_shipping_address` (`address_source=parent_order`).
+- Ship to me: `next_shipping_address` stays empty and `/admin/gifts` shows "Address needed". The daily `season-dispatch` cron:
+  - 14 days after season 1 is fulfilled, emails the `/gift-address/[token]` link to the recipient (or the purchaser if no recipient email was given).
+  - 7 days later with no response, emails the purchaser (`?by=p`).
+  - 14 days before season 2 is due, reminds the purchaser.
+  - Blocks season 2 dispatch until a valid US address exists (`blocked_address_needed`, logged once as `gift_season_address_blocked`).
+- Both modes: the same `/gift-address/[token]` page confirms or updates name, address and sizes before any season. The season notice email (10 days before each season 2..N) includes the link.
+
+## Emails and flags (all default off)
+
+| Flag | Emails |
+|---|---|
+| `GIFT_SEASON_GIFTER_EMAIL_ENABLED` | Gifter confirmation on `orders-paid` ("Your gift is on its way", ship-to address, season schedule, printable card link for ship to me) |
+| `GIFT_SEASON_ADDRESS_EMAILS_ENABLED` | Address request, purchaser fallback, purchaser reminder, season notice |
+| `GIFT_SEASON_OFFER_EMAILS_ENABLED` | Continue offer before the last Reserve |
+
+Every send is idempotent (Resend idempotency key plus a `*_sent_at` stamp on the doc).
 
 ## Data model (additive only)
 
 **Firestore `gift_orders`**: new optional fields only. Legacy docs are unaffected.
 
-- `gift_kind` ("season")
-- `seasons_total` (1, 2 or 4)
-- `box_orders[]`: `{box_number, shopify_order_id, shopify_order_name, created_at, due_on, shipped_at, fulfillment_id}`
-- `box_order_ids[]`, used for array-contains lookup
+- `gift_kind` ("season"), `seasons_total` (1, 2 or 4)
+- `ship_mode` (`to_recipient` | `to_purchaser`), `next_shipping_address`, `address_source`, `address_collected_at`
+- `address_request_sent_at`, `address_request_target`, `address_fallback_sent_at`, `address_reminder_sent_at`, `season_notices_sent[]`, `sizing_updated_at`, `gifter_confirmation_sent_at`
+- `box_orders[]`: `{box_number, shopify_order_id, shopify_order_name, created_at, due_on, shipped_at, fulfillment_id}`, `box_order_ids[]`
 - `boxes_shipped`, `boxes_remaining`, `next_box_due_on`
 - `continue_offer_sent_at`, `converted_at`, `converted_order_id`
-- New status value `season_active`
+- Status `season_active`
 
-**Supabase `public.gift_seasons`**: a new table, applied to production project `xnfjdbpjuaezxjgargto`. A branch wasn't practical: the existing branch is MIGRATIONS_FAILED and the preview isn't wired to Supabase.
+**Supabase `public.gift_seasons`** (project `xnfjdbpjuaezxjgargto`): reporting mirror; Firestore is the source of truth. RLS on, no policies.
 
-- It is a reporting mirror upserted by the app; Firestore remains the source of truth.
-- RLS is enabled with no policies, so only the service role can access it.
-- Migration file: `migrations/20261111_gift_seasons.sql`. Nothing existing was altered.
+- `migrations/20261111_gift_seasons.sql`: the table.
+- `migrations/20261111_gift_seasons_ship_mode.sql`: nullable `ship_mode`, `address_needed`, `address_source`, `address_collected_at`, `address_request_sent_at`, `gifter_confirmation_sent_at`. Applied Nov 11. Nothing existing was altered.
 
-**Shopify**: one new DRAFT product, "Reserve Gift Season" (`gid://shopify/Product/10327639392448`, handle `reserve-gift-season`), with option "Length" and the 3 variants above. Each variant is one-time (no selling plan), requires shipping, is taxable and has untracked inventory. The product is unpublished.
+**Shopify**: one DRAFT product, "Reserve Gift Season" (`gid://shopify/Product/10327639392448`), option "Length", the 3 variants above. One-time, requires shipping, unpublished.
 
 ## How the prepaid count works
 
-**Box 1 is the paid gift order itself.**
-
-- `orders-paid` sees a RES-GIFT variant and creates the season doc with `box_orders=[box 1]` and `boxes_remaining=N`.
-- It tags the order `gift-season`, `gift-season-N` and `gift-season-box-1-of-N`.
-- The order ships through the normal queue once sizing is in. `submit-sizing` prepends `GIFT SIZING: ...` to the order note for the stylist.
-
-**Boxes 2..N are $0 Shopify orders.** The daily cron `/api/gifts/season-dispatch` (14:30 UTC, `vercel.json`) creates them.
-
-- How the order is built: `draftOrderCreate` on the Reserve Member variant (RES-MEM) with a 100% line discount and $0 shipping, to the parent order's shipping address, followed by `draftOrderComplete(paymentPending: false)`. The draft has no email or customer, so Shopify sends the recipient no order confirmation or shipping notification. Our season-dispatch email is the only message they get for boxes 2..N.
-- Tags: `gift-season`, `gift-season-box`, `gift-season-N`, `gift-season-box-X-of-N` and `gift-parent-<id>`.
-- Attributes: `gift_season_child=true`, plus the parent id and the box number.
-- Note: recipient, box X of N, and sizing.
-- Idempotency: before creating, the cron searches Shopify orders by tag, so a retry reuses the existing order.
-- When it fires: box N is due on `first_box_shipped_at + 3*(N-1) months`, and only once the previous box has shipped. Two open boxes are never stacked.
-- `orders-paid` returns early for child orders: they are persisted to Supabase only, with no analytics, tier changes or emails.
-
-**Decrement.** `fulfillments-create` finds the season doc by `box_order_ids`.
-
-- It stamps that box's `shipped_at` and recomputes `boxes_shipped` and `boxes_remaining`.
-- Status moves to `season_active`, then `completed` when remaining reaches 0.
-- Remaining is always `seasons_total - boxes_shipped`, derived by the pure `seasonProgress()`.
-
-**Continue offer.** It is sent once, before the final Reserve arrives:
-
-- For 2 or 4 seasons: when the final box order is created.
-- For 1 season: when it ships.
-
-It links to `/gift-continue/<token>`, which starts a regular Reserve Member checkout ($250 a season). The email only sends when `GIFT_SEASON_OFFER_EMAILS_ENABLED=true`. A later membership purchase by the recipient email stamps `converted_at`.
+- Season 1 is the paid gift order itself. It ships through the normal queue right away with sizes on the line item.
+- Seasons 2..N are $0 orders created by the daily cron `/api/gifts/season-dispatch` (14:30 UTC): `draftOrderCreate` on RES-MEM with a 100% line discount and $0 shipping, then `draftOrderComplete(paymentPending: false)`. Tags `gift-season`, `gift-season-box`, `gift-season-N`, `gift-season-box-X-of-N`, `gift-parent-<id>`. The cron searches by tag first, so retries reuse the order.
+- Season X is due `first_box_shipped_at + 3*(X-1) months`, only after the previous one shipped and only with a valid address.
+- `fulfillments-create` stamps `shipped_at` and recomputes counts via `seasonProgress()`. Status goes `season_active`, then `completed`.
 
 ## How ops sees it
 
-On `/admin/gifts`, each season gift shows:
-
-- "X of N left"
-- shipped and ordered counts
-- the next box number and due date
-
-Its details row has a per-shipment table (Shopify order, due, ordered, shipped) plus continue-offer and conversion status. There is a new "Season active" filter. In Shopify, filter orders by tag `gift-season-box`.
+`/admin/gifts` shows "X of N left", ship mode, an "Address needed" badge, the next-season address, address email status, gifter confirmation status and the per-shipment table. In Shopify, filter by tag `gift-season-box` for children; parents show the line item properties.
 
 ## Instrumentation
 
-**Server (PostHog):**
+**Server (PostHog):** gift_season_purchased, gift_season_gifter_confirmation_sent, gift_season_address_copied, gift_season_address_requested, gift_season_address_reminder_sent, gift_season_address_collected, gift_season_sizing_updated, gift_season_address_blocked, gift_season_notice_sent, gift_season_box_dispatched, gift_season_box_shipped, gift_season_completed, gift_season_continue_offer_sent, gift_season_converted, gift_season_error.
 
-- gift_season_purchased
-- gift_season_recipient_notified
-- gift_season_sizing_submitted
-- gift_season_box_dispatched
-- gift_season_box_shipped
-- gift_season_completed
-- gift_season_continue_offer_sent
-- gift_season_converted
-- gift_season_error
-
-**Client:**
-
-- gift_season_view
-- gift_season_length_selected
-- gift_season_form_started
-- gift_season_self_deliver_toggled
-- gift_season_form_error
-- gift_season_checkout_clicked
-- gift_season_checkout_error
-- gift_season_continue_view
-- gift_season_continue_clicked
-
-Orders are tagged as listed above. The Supabase `gift_seasons` table supports SQL reporting.
+**Client:** gift_season_view, gift_season_hero_cta_clicked, gift_season_length_selected, gift_season_form_started, gift_season_ship_mode_selected, gift_season_summary_change_clicked, gift_season_form_error, gift_season_checkout_clicked, gift_season_checkout_error, gift_season_confirmation_viewed, gift_season_continue_view, gift_season_continue_clicked.
 
 ## CRO review changes (2026-11-11)
+
+> Superseded in part by the no-reveal redesign above: the timing line is now "Order by December 15 for it to arrive by Christmas. Ships in 1-2 business days." (after the cutoff: "Ships in 1-2 business days."), the trust row middle item is "Ships in 1-2 business days", and "I'll give it myself", `gift_self_deliver`, the reveal email and `gift_season_self_deliver_toggled` are removed. The purchase event now carries `gift_ship_mode`.
 
 - **Launch config** (`src/lib/gifts/giftSeasonConfig.ts`). These values are pending Drew and render as visible placeholders until they're set:
   - `NEXT_PUBLIC_GIFT_SEASON_ORDER_BY`: the holiday order-by cutoff as an ISO date. Set to `2026-12-15` in Preview and Production. The cutoff ends at midnight US Eastern after that day. Default `[cutoff date TBD]`.

@@ -11,7 +11,7 @@
  * doesn't resolve, we render a friendly 404-style message.
  */
 
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getGiftOrderByToken } from "@/lib/gifts/giftOrder";
 import GiftSizingClient from "./GiftSizingClient";
 
@@ -29,10 +29,11 @@ export default async function GiftSizingPage({ params }: PageProps) {
   }
 
   const { id, data } = found;
+  // Gift a Season: sizes and address live on one page, /gift-address.
+  if (data.gift_kind === "season") redirect(`/gift-address/${token}`);
   const alreadySubmitted =
     data.status === "sizing_collected" ||
     data.status === "first_box_shipped" ||
-    data.status === "season_active" ||
     data.status === "completed";
 
   return (
@@ -44,8 +45,6 @@ export default async function GiftSizingPage({ params }: PageProps) {
       giftMessage={data.gift_message}
       alreadySubmitted={alreadySubmitted}
       existingSizing={data.sizing}
-      seasonsTotal={data.gift_kind === "season" ? data.seasons_total ?? null : null}
-      askRecipientEmail={data.gift_kind === "season" && !!data.self_deliver && !data.recipient_email}
     />
   );
 }

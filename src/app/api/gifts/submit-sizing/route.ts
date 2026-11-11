@@ -11,17 +11,9 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import {
-  getGiftOrderById,
   getGiftOrderByToken,
   updateGiftOrderStatus,
 } from "@/lib/gifts/giftOrder";
-import {
-  captureGiftSeasonEvent,
-  formatSizingNote,
-  giftEventProps,
-  mirrorGiftSeasonToSupabase,
-  prependOrderNote,
-} from "@/lib/gifts/giftSeasonServer";
 
 const ALLOWED_KEYS = new Set([
   "shirt",
@@ -49,7 +41,7 @@ function sanitize(input: unknown): Record<string, string> {
 }
 
 export async function POST(request: NextRequest) {
-  let body: { token?: string; sizing?: unknown; recipientEmail?: unknown };
+  let body: { token?: string; sizing?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -76,48 +68,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid or expired token" }, { status: 404 });
   }
 
-  const isSeason = found.data.gift_kind === "season";
-  const rawEmail =
-    typeof body.recipientEmail === "string" ? body.recipientEmail.trim().toLowerCase() : "";
-  const recipientEmail =
-    rawEmail && rawEmail.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail)
-      ? rawEmail
-      : "";
-  // Season gifts that already shipped box 1 keep their lifecycle status;
-  // a sizing update only refreshes the sizing on file for the next box.
-  const keepStatus =
-    isSeason &&
-    (found.data.status === "season_active" || found.data.status === "completed");
   await updateGiftOrderStatus(
     found.id,
-    keepStatus ? found.data.status : "sizing_collected",
+    "sizing_collected",
     {
       sizing,
-      sizing_collected_at: found.data.sizing_collected_at ?? Date.now(),
-      // Self-delivered season gift: the recipient may add their own email
-      // here so the continue offer can reach them. Never overwrites.
-      ...(isSeason && found.data.self_deliver && !found.data.recipient_email && recipientEmail
-        ? { recipient_email: recipientEmail }
-        : {}),
+      sizing_collected_at: Date.now(),
     },
-    keepStatus ? "recipient updated sizing" : "recipient submitted sizing"
+    "recipient submitted sizing"
   );
-
-  if (isSeason) {
-    // Put the sizing on the paid Shopify order so ops can style box 1
-    // without opening admin/gifts. Best-effort.
-    const fresh = await getGiftOrderById(found.id);
-    await Promise.allSettled([
-      prependOrderNote(found.id, formatSizingNote(sizing)).catch((err) =>
-        console.error("[gifts/submit-sizing] order note failed:", err)
-      ),
-      fresh ? mirrorGiftSeasonToSupabase(found.id, fresh) : Promise.resolve(),
-      captureGiftSeasonEvent("gift_season_sizing_submitted", found.data.recipient_email, {
-        ...giftEventProps(found.id, found.data),
-        update: keepStatus,
-      }),
-    ]);
-  }
 
   return NextResponse.json({ ok: true });
 }

@@ -17,6 +17,8 @@
  * Copy rules: no em dashes, "Reserve" never "box".
  */
 
+import { GIFT_SEASON_SHIP_WINDOW } from "@/lib/gifts/giftSeasonConfig";
+
 export type GiftHeroVariant = "a" | "b";
 
 export const HERO_EYEBROW = "Gift a season";
@@ -24,7 +26,7 @@ export const HERO_HEADLINE = "The gift that shows up every season.";
 export const HERO_LINE = "Stylist-picked golf apparel, in their sizes.";
 export const HERO_TRUST = [
   "Paid once. Never renews.",
-  "They pick their own sizes",
+  `Ships in ${GIFT_SEASON_SHIP_WINDOW}`,
   "Secure Shopify checkout.",
 ];
 

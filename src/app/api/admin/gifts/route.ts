@@ -13,7 +13,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { isAllowedAdminEmail } from "@/lib/adminEmailAllowlist";
 import type { GiftOrderDoc } from "@/lib/gifts/giftOrder";
-import { seasonProgress } from "@/lib/gifts/giftSeason";
+import { formatGiftAddress, needsNextAddress, seasonProgress } from "@/lib/gifts/giftSeason";
 
 async function verifyAdmin(request: NextRequest): Promise<void> {
   const header = request.headers.get("Authorization") ?? "";
@@ -90,6 +90,13 @@ export async function GET(request: NextRequest) {
       continue_offer_sent_at: data.continue_offer_sent_at ?? null,
       converted_at: data.converted_at ?? null,
       converted_order_id: data.converted_order_id ?? null,
+      ship_mode: data.ship_mode ?? null,
+      address_needed: isSeason ? needsNextAddress(data) : false,
+      next_address_line: isSeason ? formatGiftAddress(data.next_shipping_address) || null : null,
+      address_source: data.address_source ?? null,
+      address_request_sent_at: data.address_request_sent_at ?? null,
+      address_reminder_sent_at: data.address_reminder_sent_at ?? null,
+      gifter_confirmation_sent_at: data.gifter_confirmation_sent_at ?? null,
     };
   });
 

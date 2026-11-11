@@ -13,15 +13,25 @@ import type { GiftOrderDoc } from "@/lib/gifts/giftOrder";
 import {
   GIFT_SEASON_ATTR,
   giftSeasonChildTags,
+  isValidGiftAddress,
+  needsNextAddress,
   seasonProgress,
+  type GiftShipAddress,
 } from "@/lib/gifts/giftSeason";
+import { formatSizingLine, sanitizeSizing, sizingLineAttributes } from "@/lib/gifts/giftSizing";
 
 // ── Analytics ───────────────────────────────────────────────────────────────
 
 export type GiftSeasonEvent =
   | "gift_season_purchased"
-  | "gift_season_recipient_notified"
-  | "gift_season_sizing_submitted"
+  | "gift_season_gifter_confirmation_sent"
+  | "gift_season_address_copied"
+  | "gift_season_address_requested"
+  | "gift_season_address_reminder_sent"
+  | "gift_season_address_collected"
+  | "gift_season_address_blocked"
+  | "gift_season_sizing_updated"
+  | "gift_season_notice_sent"
   | "gift_season_box_dispatched"
   | "gift_season_box_shipped"
   | "gift_season_completed"
@@ -104,6 +114,12 @@ export async function mirrorGiftSeasonToSupabase(
         next_box_due_on: p.nextBoxDueOn,
         box_orders: data.box_orders ?? [],
         deliver_on: data.deliver_on,
+        ship_mode: data.ship_mode ?? null,
+        address_needed: needsNextAddress(data),
+        address_source: data.address_source ?? null,
+        address_collected_at: iso(data.address_collected_at),
+        address_request_sent_at: iso(data.address_request_sent_at),
+        gifter_confirmation_sent_at: iso(data.gifter_confirmation_sent_at),
         recipient_emailed_at: iso(data.recipient_emailed_at),
         sizing_collected_at: iso(data.sizing_collected_at),
         first_box_shipped_at: iso(data.first_box_shipped_at),
@@ -125,49 +141,16 @@ export async function mirrorGiftSeasonToSupabase(
 
 type UserErrors = Array<{ field?: string[] | null; message: string }>;
 
-export async function addOrderTags(orderId: string, tags: string[]): Promise<void> {
-  const res = await shopifyGraphQL<{ tagsAdd: { userErrors: UserErrors } }>(
-    `mutation GiftSeasonTags($id: ID!, $tags: [String!]!) {
-      tagsAdd(id: $id, tags: $tags) { userErrors { field message } }
-    }`,
-    { id: `gid://shopify/Order/${orderId}`, tags }
-  );
-  if (res.tagsAdd.userErrors.length) {
-    throw new Error(`tagsAdd: ${res.tagsAdd.userErrors.map((e) => e.message).join("; ")}`);
-  }
-}
-
-/** Prepend a line to the order note so ops sees it in Shopify admin. */
-export async function prependOrderNote(orderId: string, line: string): Promise<void> {
-  const gid = `gid://shopify/Order/${orderId}`;
-  const current = await shopifyGraphQL<{ order: { note: string | null } | null }>(
-    `query GiftSeasonNote($id: ID!) { order(id: $id) { note } }`,
-    { id: gid }
-  );
-  const note = current.order?.note ?? "";
-  if (note.includes(line)) return;
-  const res = await shopifyGraphQL<{ orderUpdate: { userErrors: UserErrors } }>(
-    `mutation GiftSeasonNoteUpdate($input: OrderInput!) {
-      orderUpdate(input: $input) { userErrors { field message } }
-    }`,
-    { input: { id: gid, note: note ? `${line}\n\n${note}` : line } }
-  );
-  if (res.orderUpdate.userErrors.length) {
-    throw new Error(`orderUpdate: ${res.orderUpdate.userErrors.map((e) => e.message).join("; ")}`);
-  }
-}
+// No order mutations here on purpose: the production Admin token has no
+// write_orders. Gift parents are identified by SKU (RES-GIFT-<n>S) and carry
+// sizing as line item properties from the Storefront cart. Child orders get
+// tags, sizing and address at draftOrderCreate (write_draft_orders only).
 
 export function formatSizingNote(sizing: Record<string, string> | null | undefined): string {
-  if (!sizing) return "GIFT SIZING: pending";
-  const parts = [
-    sizing.shirt && `shirt ${sizing.shirt}`,
-    sizing.waist && `waist ${sizing.waist}`,
-    sizing.inseam && `inseam ${sizing.inseam}`,
-    sizing.shoe && `shoe ${sizing.shoe}`,
-    sizing.glove_size && `glove ${sizing.glove_size} ${sizing.glove_hand ?? ""}`.trim(),
-    sizing.notes && `notes: ${sizing.notes}`,
-  ].filter(Boolean);
-  return `GIFT SIZING: ${parts.join(", ")}`;
+  const line = formatSizingLine(sizing ? sanitizeSizing(sizing) : null);
+  const notes = sizing?.notes?.trim();
+  if (!line && !notes) return "GIFT SIZING: pending";
+  return `GIFT SIZING: ${[line, notes && `notes: ${notes}`].filter(Boolean).join(", ")}`;
 }
 
 interface MailingAddressInput {
@@ -228,6 +211,20 @@ async function getParentShippingAddress(
   };
 }
 
+function toMailingAddress(a: GiftShipAddress): MailingAddressInput {
+  return {
+    firstName: a.first_name || null,
+    lastName: a.last_name || null,
+    address1: a.address1,
+    address2: a.address2 || null,
+    city: a.city,
+    provinceCode: a.province_code || null,
+    countryCode: a.country_code || "US",
+    zip: a.zip,
+    phone: a.phone || null,
+  };
+}
+
 /** Look for a box order we already created (crash-safe idempotency). */
 async function findExistingBoxOrder(
   parentOrderId: string,
@@ -260,8 +257,9 @@ function boxVariantGid(): string {
 
 /**
  * Create the $0 Shopify order for box `boxNumber` of a season gift: a draft
- * order with a 100% discount on the Reserve line, completed as paid. Ships
- * to the address on the original gift order. The draft has no email or
+ * order with a 100% discount on the Reserve line, completed as paid. Tags,
+ * sizing line properties and the shipping address are set at creation
+ * (write_draft_orders only). Ships to gift.next_shipping_address. The draft has no email or
  * customer, so Shopify sends no order or shipping notifications; our
  * season-dispatch email covers the recipient.
  */
@@ -274,9 +272,18 @@ export async function createSeasonBoxOrder(
   const existing = await findExistingBoxOrder(parentOrderId, boxNumber, seasons);
   if (existing) return { ...existing, reused: true };
 
-  const shippingAddress = await getParentShippingAddress(parentOrderId);
+  // Seasons 2..N ship to the stored next-season address. Ship-to-them gifts
+  // copy it from the paid order at purchase; ship-to-me gifts collect it on
+  // /gift-address. Docs from before ship_mode existed fall back to the
+  // parent order (read_orders only).
+  let shippingAddress: MailingAddressInput | null = isValidGiftAddress(gift.next_shipping_address)
+    ? toMailingAddress(gift.next_shipping_address as GiftShipAddress)
+    : null;
+  if (!shippingAddress && gift.ship_mode !== "to_purchaser") {
+    shippingAddress = await getParentShippingAddress(parentOrderId);
+  }
   if (!shippingAddress) {
-    throw new Error(`parent order ${parentOrderId} has no shipping address`);
+    throw new Error(`gift ${parentOrderId} has no next-season address`);
   }
 
   const tags = [...giftSeasonChildTags(boxNumber, seasons), `gift-parent-${parentOrderId}`];
@@ -323,7 +330,12 @@ export async function createSeasonBoxOrder(
               valueType: "PERCENTAGE",
               value: 100,
             },
+            // Same line properties as the paid order so the stylist sees
+            // sizes on every season.
             customAttributes: [
+              ...(gift.recipient_first_name ? [{ key: "Recipient", value: gift.recipient_first_name }] : []),
+              ...sizingLineAttributes(sanitizeSizing(gift.sizing)),
+              { key: "Season", value: `${boxNumber} of ${seasons}` },
               { key: "_gift_season_box", value: `${boxNumber} of ${seasons}` },
             ],
           },

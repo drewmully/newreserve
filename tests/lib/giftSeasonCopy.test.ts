@@ -12,7 +12,12 @@ const FILES = [
   "src/app/gift-continue/[token]/GiftContinueClient.tsx",
   "src/app/gift-card/[token]/page.tsx",
   "src/app/gift-card/[token]/GiftCardView.tsx",
-  "src/app/gift-sizing/[token]/GiftSizingClient.tsx",
+  "src/app/gift-address/[token]/page.tsx",
+  "src/app/gift-address/[token]/GiftAddressClient.tsx",
+  "src/app/components/gifts/GiftSizingFields.tsx",
+  "src/app/lp/gift-season/confirmed/page.tsx",
+  "src/app/lp/gift-season/confirmed/GiftSeasonConfirmedClient.tsx",
+  "src/lib/gifts/giftSizing.ts",
 ];
 
 function stripComments(src: string): string {
@@ -62,7 +67,8 @@ describe("Gift a Season pricing copy", () => {
     expect(lp).toMatch(/gift-order-summary/);
     expect(hero).toMatch(/\/shop\/hero-fall-2026\.jpg/);
     expect(hero).toMatch(/"Paid once\. Never renews\."/);
-    expect(hero).toMatch(/"They pick their own sizes"/);
+    expect(hero).not.toMatch(/They pick their own sizes/);
+    expect(hero).toMatch(/`Ships in \$\{GIFT_SEASON_SHIP_WINDOW\}`/);
     expect(hero).toMatch(/"Secure Shopify checkout\."/);
     expect(lp).toMatch(/Choose a gift length/);
     expect(lp).toMatch(/ShopSeasonalHeader/);
@@ -73,10 +79,12 @@ describe("Gift a Season pricing copy", () => {
     expect(lp).toMatch(/Math\.min\(\.\.\.options\.map\(\(o\) => o\.price\)\)/);
     expect(lp).not.toMatch(/reserve-founders-hero/);
   });
-  it("season sizing reveal drops the $300+ claim", () => {
-    const src = readFileSync(path.resolve(__dirname, "../..", "src/app/gift-sizing/[token]/GiftSizingClient.tsx"), "utf8");
-    const season = src.slice(src.indexOf("{isSeason ? ("), src.indexOf("Mully Reserve \\u00b7 Gift Box"));
-    expect(season).not.toMatch(/\$300/);
+  it("no reveal: no send date, no self-give toggle, ship mode radio in Step 2", () => {
+    const lp = readFileSync(path.resolve(__dirname, "../..", "src/app/lp/gift-season/GiftSeasonLPClient.tsx"), "utf8");
+    expect(lp).not.toMatch(/deliverOn|selfDeliver|I'll give it myself|type="date"/);
+    expect(lp).toMatch(/Where should the first one ship\?/);
+    expect(lp).toMatch(/Not sure\? Pick their usual size\./);
+    expect(lp).toMatch(/ship-mode-\$\{/);
   });
 });
 

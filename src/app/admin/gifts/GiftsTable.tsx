@@ -47,6 +47,14 @@ export interface GiftRow {
   continue_offer_sent_at: number | null;
   converted_at: number | null;
   converted_order_id: string | null;
+  // Gift a Season (no reveal): where season 1 shipped and the address for 2..N.
+  ship_mode?: "to_recipient" | "to_purchaser" | null;
+  address_needed?: boolean;
+  next_address_line?: string | null;
+  address_source?: string | null;
+  address_request_sent_at?: number | null;
+  address_reminder_sent_at?: number | null;
+  gifter_confirmation_sent_at?: number | null;
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -142,6 +150,18 @@ export function GiftsTable({
                             <div className="text-[11px] text-charcoal/55">
                               {o.boxes_shipped} shipped, {o.boxes_dispatched} ordered
                             </div>
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              {o.ship_mode ? (
+                                <span className="inline-block px-1.5 py-0.5 rounded text-[10px] bg-taupe/20 text-charcoal/70" data-testid="ship-mode-badge">
+                                  {o.ship_mode === "to_purchaser" ? "Ship to me" : "Ship to them"}
+                                </span>
+                              ) : null}
+                              {o.address_needed ? (
+                                <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700" data-testid="address-needed-badge">
+                                  Address needed
+                                </span>
+                              ) : null}
+                            </div>
                           </Fragment>
                         ) : (
                           <span className="text-charcoal/40">recurring</span>
@@ -182,22 +202,40 @@ export function GiftsTable({
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                             <div>
                               <div className="text-[10px] uppercase tracking-wide text-charcoal/50 mb-1">
-                                Sizing link (recipient view)
+                                {o.gift_kind === "season" ? "Address and sizes link" : "Sizing link (recipient view)"}
                               </div>
                               <a
-                                href={`/gift-sizing/${o.sizing_token}`}
+                                href={`/${o.gift_kind === "season" ? "gift-address" : "gift-sizing"}/${o.sizing_token}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="text-forest underline break-all"
                               >
-                                /gift-sizing/{o.sizing_token.slice(0, 16)}…
+                                /{o.gift_kind === "season" ? "gift-address" : "gift-sizing"}/{o.sizing_token.slice(0, 16)}…
                               </a>
                             </div>
                             <div>
-                              <div className="text-[10px] uppercase tracking-wide text-charcoal/50 mb-1">
-                                Scheduled deliver on
-                              </div>
-                              <div>{o.deliver_on ?? "Send immediately"}</div>
+                              {o.gift_kind === "season" ? (
+                                <>
+                                  <div className="text-[10px] uppercase tracking-wide text-charcoal/50 mb-1">
+                                    Next-season address
+                                  </div>
+                                  <div data-testid="next-address">
+                                    {o.next_address_line || (o.address_needed ? "Address needed" : "—")}
+                                  </div>
+                                  <div className="text-[11px] text-charcoal/55 mt-0.5">
+                                    {o.address_source ? `from ${o.address_source.replace(/_/g, " ")}` : null}
+                                    {o.address_request_sent_at ? ` · asked ${fmt(o.address_request_sent_at)}` : null}
+                                    {o.address_reminder_sent_at ? ` · reminded ${fmt(o.address_reminder_sent_at)}` : null}
+                                  </div>
+                                </>
+                              ) : (
+                                <>
+                                  <div className="text-[10px] uppercase tracking-wide text-charcoal/50 mb-1">
+                                    Scheduled deliver on
+                                  </div>
+                                  <div>{o.deliver_on ?? "Send immediately"}</div>
+                                </>
+                              )}
                             </div>
                             <div>
                               <div className="text-[10px] uppercase tracking-wide text-charcoal/50 mb-1">
@@ -256,7 +294,7 @@ export function GiftsTable({
                                             {b ? b.shopify_order_name ?? b.shopify_order_id : "not yet ordered"}
                                           </td>
                                           <td className="py-1 pr-3">
-                                            {b?.due_on ?? (i + 1 === o.next_box_number ? o.next_box_due_on ?? "after first ships" : i === 0 ? "on sizing" : "—")}
+                                            {b?.due_on ?? (i + 1 === o.next_box_number ? o.next_box_due_on ?? "after first ships" : i === 0 ? "at purchase" : "—")}
                                           </td>
                                           <td className="py-1 pr-3">{b ? fmt(b.created_at) : "—"}</td>
                                           <td className="py-1 pr-3">{b ? fmt(b.shipped_at) : "—"}</td>
@@ -266,6 +304,8 @@ export function GiftsTable({
                                   </tbody>
                                 </table>
                                 <div className="mt-2 text-charcoal/65">
+                                  Gifter confirmation: {o.gifter_confirmation_sent_at ? `sent ${fmt(o.gifter_confirmation_sent_at)}` : "not sent"}
+                                  {" · "}
                                   Continue offer: {o.continue_offer_sent_at ? `sent ${fmt(o.continue_offer_sent_at)}` : "not sent"}
                                   {" · "}
                                   Converted: {o.converted_at ? `${fmt(o.converted_at)} (order ${o.converted_order_id ?? "?"})` : "no"}

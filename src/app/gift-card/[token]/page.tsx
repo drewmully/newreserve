@@ -1,6 +1,6 @@
 /**
- * /gift-card/[token]: printable card for "I'll give it myself" season gifts.
- * Linked from the gifter's reveal email. Token entropy is the auth, same as
+ * /gift-card/[token]: optional printable card for ship-to-me season gifts.
+ * Linked from the gifter confirmation email. Token entropy is the auth, same as
  * /gift-sizing/[token].
  */
 
@@ -34,7 +34,7 @@ export default async function GiftCardPage({ params }: PageProps) {
       purchaserFirstName={data.purchaser_first_name}
       giftMessage={data.gift_message}
       seasonsTotal={data.seasons_total ?? 1}
-      sizingUrl={`${siteOrigin()}/gift-sizing/${token}`}
+      addressUrl={`${siteOrigin()}/gift-address/${token}`}
     />
   );
 }
