@@ -72,7 +72,7 @@ export const GIFT_GUIDE_TIERS: GiftTier[] = [
     dek: "Small, useful and the kind of thing he would not buy for himself.",
     metaTitle: "Golf Gifts Under $100 for Men 2026 | Mully",
     metaDescription:
-      "Golf gifts under $100 for men: tour towels, organic cotton hats, bag organizers and shag bags. Picked by Mully, with in-stock pieces first.",
+      "Golf gifts under $100 for men: tour towels, organic cotton hats, bag organizers, shag bags, belts and a Rhone polo. Picked by Mully, with in-stock pieces first.",
     min: 0,
     max: 100,
     picks: [
@@ -80,6 +80,7 @@ export const GIFT_GUIDE_TIERS: GiftTier[] = [
       "jolly-golf-purist-organizer",
       "penfold-heritage-shag-bag",
       "winston-golf-tour-towel",
+      "rhone-approach-tech-polo",
       "primo-fairway-crew",
       "duckhead-stretch-belt",
     ],
@@ -149,6 +150,7 @@ export const GIFT_REASONS: Record<string, string> = {
   "jolly-golf-purist-organizer": "Every tee, marker and pencil in one zip pouch. No more digging on the first tee.",
   "penfold-heritage-shag-bag": "Millerain canvas, a lifetime warranty and room for a hundred practice balls.",
   "winston-golf-tour-towel": "Ribbed terry, 22 by 44 inches. Big enough to dry a grip in a downpour.",
+  "rhone-approach-tech-polo": "Angled sleeves and all-way stretch in a clean black polo. Good on the first tee, fine at dinner after.",
   "primo-fairway-crew": "A modal-blend crew with four-way stretch that sits quietly over a polo.",
   "duckhead-stretch-belt": "A braided stretch belt that gives a little at the top of the backswing.",
   // $100 to $150
