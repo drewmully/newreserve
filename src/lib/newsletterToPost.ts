@@ -56,6 +56,9 @@ export interface LetterDraft extends LetterRow {
   _warnings: string[];
 }
 
+/** Issue images are copied to public/<LOCAL_IMAGE_ROOT>/<slug>/ (no hot-linking). */
+export const LOCAL_IMAGE_ROOT = "newsletters";
+
 const SITE_HOSTS = /^(?:www\.)?(?:mymully\.com|mullybox\.com)$/i;
 const IMAGE_HOSTS = /(?:^|\.)(?:klaviyomail\.com|klaviyo\.com|cloudfront\.net|shopify\.com|shopifycdn\.com)$/i;
 const TRACKING_PARAM = /^(?:utm_[a-z]+|_kx|_ke|kx|klaviyo_[a-z]+|mc_[a-z]+|fbclid|gclid)$/i;
@@ -234,7 +237,9 @@ export function emailToDraft(doc: Document, source: LetterSource): LetterDraft {
       if (/\.png(?:\?|$)/i.test(src) && !/\s/.test(b.alt ?? "")) continue;
       if (!b.alt) warnings.push(`Image without alt text: ${src}`);
       const alt = stripPrices(cleanText(b.alt ?? ""));
-      if (!hero) hero = { src, alt };
+      // The first photo is the post hero; it is not repeated in a section.
+      if (!hero) { hero = { src, alt }; continue; }
+      if (src === hero.src) continue;
       if (current && !current.image) { current.image = src; current.imageAlt = alt; }
       continue;
     }
@@ -294,7 +299,7 @@ export function emailToDraft(doc: Document, source: LetterSource): LetterDraft {
     title: `TODO: search title (${source.subject ?? seriesName})`,
     excerpt: `TODO: 150 to 160 character meta description. Preview text was: ${preview}`,
     category: LETTER_STORED_CATEGORY,
-    date: new Intl.DateTimeFormat("en-US", { month: "short", day: "2-digit", year: "numeric", timeZone: "America/New_York" }).format(new Date(sentAt)),
+    date: new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "America/New_York" }).format(new Date(sentAt)),
     read_time: "",
     image: hero?.src ?? "",
     image_alt: hero?.alt ?? "",
@@ -335,6 +340,10 @@ export function validateLetterRow(row: LetterRow): string[] {
   if (row.excerpt.length < 150 || row.excerpt.length > 160) problems.push(`excerpt (meta description) is ${row.excerpt.length} characters; needs 150 to 160`);
   if (!row.title || row.title.length > 90) problems.push("title is missing or longer than 90 characters");
   if (!row.image || !row.image_alt) problems.push("hero image and alt text are required");
+  const localImage = (src: string) => src.startsWith(`/${LOCAL_IMAGE_ROOT}/${row.slug}/`);
+  if (row.image && !localImage(row.image)) problems.push(`hero image must be a local copy under /${LOCAL_IMAGE_ROOT}/${row.slug}/ (run --sql to copy it)`);
+  for (const s of row.sections) if (s.image && !localImage(s.image)) problems.push(`section "${s.heading}" image must be a local copy under /${LOCAL_IMAGE_ROOT}/${row.slug}/`);
+  for (const s of row.sections) if (s.image && s.image === row.image) problems.push(`section "${s.heading}" repeats the hero image`);
   if (Number.isNaN(new Date(row.publish_date).getTime())) problems.push("publish_date must be the send timestamp");
   if (row.sections.length === 0) problems.push("no sections");
   for (const s of row.sections) if (s.image && !s.imageAlt) problems.push(`section "${s.heading}" image needs alt text`);

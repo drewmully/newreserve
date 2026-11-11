@@ -64,3 +64,9 @@
   .bc-panel__title, .shop-article-copy .bc-panel__title {font-size: 23px}
   .bc-panel__cta, .bc-shop-link {width: 100%; justify-content: center}
 }
+
+/* The Mully Letter: compact inline signup after the intro */
+.bc-letter-inline {display: flex; align-items: center; justify-content: space-between; gap: 16px 24px; flex-wrap: wrap; border-top: 1px solid #e3ddd2; border-bottom: 1px solid #e3ddd2; padding: 18px 0; margin: 28px 0}
+.bc-letter-inline p, .shop-article-copy .bc-letter-inline p {margin: 0; font-size: 15px; line-height: 1.5; color: #4d4b46; flex: 1 1 260px}
+.shop-article-copy .bc-letter-inline a.bc-panel__cta {color: #fff; text-decoration: none}
+@media (max-width: 600px) {.bc-letter-inline .bc-panel__cta {width: 100%; justify-content: center}}

@@ -13,7 +13,8 @@ import { BLOG_COMMERCE, endIntentFor, productHandlesFor, splitRows } from "@/lib
 import { EndPanel, EndShopLink, ProductRow, ReserveMid, getBlogCommerceProducts } from "../commerce/BlogCommerce";
 import { BlogCommerceProvider } from "../commerce/BlogCommerceClient";
 import { serializeJsonLd } from "@/lib/safeJsonLd";
-import { isLetter, LETTER_COLLECTION, LETTER_SUBSCRIBE, letterArticleJsonLd, sentLine } from "@/lib/newsletterCollection";
+import { isLetter, LETTER_COLLECTION, letterArticleJsonLd, sentLine } from "@/lib/newsletterCollection";
+import { LetterSignup } from "../LetterSignup";
 
 export const dynamic = "force-dynamic";
 interface Props { params: Promise<{ slug: string }>; searchParams?: Promise<Record<string, string | string[] | undefined>> }
@@ -63,11 +64,12 @@ export default async function BlogPostPage({ params, searchParams }: Props) {
           {post.highlights.length > 0 && <aside className="shop-article-highlights" aria-label="Key points">
             <ul>{post.highlights.map(point => <li key={point}>{point}</li>)}</ul>
           </aside>}
+          {letter && <LetterSignup placement="inline" />}
           <ProductRow products={rows.top} block="product_row_top" size="compact" />
           {sections.map((section, i) => <Fragment key={section.heading}>
             <section>
               <h2>{section.heading}</h2>
-              {section.image && <figure className="my-6">
+              {section.image && section.image !== post.image && <figure className="my-6">
                 <img className="shop-article-image" src={section.image} alt={section.imageAlt ?? ""} width={960} height={640} loading="lazy" />
                 {section.caption && <figcaption className="mt-2 text-xs text-charcoal/60">{section.caption}</figcaption>}
               </figure>}
@@ -76,12 +78,7 @@ export default async function BlogPostPage({ params, searchParams }: Props) {
             {i === 1 && commerce?.reserveMid && <ReserveMid />}
           </Fragment>)}
           <div className="shop-article-highlights"><p>{post.closing}</p></div>
-          {letter && <aside className="bc-panel bc-panel--end" aria-label={LETTER_SUBSCRIBE.eyebrow}>
-            <p className="bc-eyebrow">{LETTER_SUBSCRIBE.eyebrow}</p>
-            <h2 className="bc-panel__title">{LETTER_SUBSCRIBE.heading}</h2>
-            <p className="bc-panel__body">{LETTER_SUBSCRIBE.body}</p>
-            <Link className="bc-panel__cta" href={LETTER_SUBSCRIBE.href}>{LETTER_SUBSCRIBE.cta} →</Link>
-          </aside>}
+          {letter && <LetterSignup placement="end" />}
           <EndPanel intent={intent} />
           {intent === "shop" && rows.bottom.length === 0 && <EndShopLink />}
         </div>
