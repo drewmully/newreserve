@@ -10,7 +10,7 @@ import { InlineText } from "../InlineText";
 import { canonical } from "@/lib/seo";
 import { BLOG_COMMERCE, endIntentFor, productHandlesFor, splitRows } from "@/lib/blogCommerce";
 import { EndPanel, EndShopLink, ProductRow, ReserveMid, getBlogCommerceProducts } from "../commerce/BlogCommerce";
-import { BlogCommerceProvider, BlogCommerceSlot } from "../commerce/BlogCommerceClient";
+import { BlogCommerceProvider } from "../commerce/BlogCommerceClient";
 
 export const dynamic = "force-dynamic";
 interface Props { params: Promise<{ slug: string }> }
@@ -26,7 +26,7 @@ export default async function BlogPostPage({ params }: Props) {
   if (!found) notFound();
   const post = { ...found, ...BLOG_POST_OVERRIDES[found.slug] };
   const sections = applyAddenda(post.slug, post.sections);
-  // Blog commerce v1 (test variant only; control renders exactly as before).
+  // Blog commerce: product rows and intent-matched end block (server-rendered).
   const commerce = BLOG_COMMERCE[post.slug];
   const intent = endIntentFor(post.slug, post.category, commerce);
   const [related, products] = await Promise.all([
@@ -58,9 +58,6 @@ export default async function BlogPostPage({ params }: Props) {
             {i === 1 && commerce?.reserveMid && <ReserveMid />}
           </Fragment>)}
           <div className="shop-article-highlights"><p>{post.closing}</p></div>
-          <BlogCommerceSlot show="control" block="end_block" targetPath="/shop">
-            <Link className="shop-text-link text-sm" href="/shop">Explore the Mully Edit →</Link>
-          </BlogCommerceSlot>
           <EndPanel intent={intent} />
           {intent === "shop" && rows.bottom.length === 0 && <EndShopLink />}
         </div>

@@ -26,8 +26,7 @@ import { BlogCommerceProvider, BlogCommerceSlot } from "@/app/blog/commerce/Blog
 function page() {
   return render(
     <BlogCommerceProvider slug="best-golf-polos-2026-quiet-golf-rhone" template="blog">
-      <BlogCommerceSlot show="control" block="end_block" targetPath="/shop"><Link href="/shop">control link</Link></BlogCommerceSlot>
-      <BlogCommerceSlot show="test" block="product_row_top" targetPath="/shop"><Link href="/shop/rhone-commuter-polo">test card</Link></BlogCommerceSlot>
+      <BlogCommerceSlot block="product_row_top" targetPath="/shop"><Link href="/shop/rhone-commuter-polo">test card</Link></BlogCommerceSlot>
     </BlogCommerceProvider>,
   );
 }
@@ -77,68 +76,37 @@ describe("blog commerce config", () => {
   });
 });
 
-describe("blog commerce variant gate", () => {
+describe("blog commerce tracking", () => {
   beforeEach(() => {
     ph.capture.mockReset();
-    ph.getFeatureFlag.mockReset();
-    ph.onFeatureFlags.mockReset();
-    sessionStorage.clear();
-    window.history.replaceState(null, "", "/blog/best-golf-polos-2026-quiet-golf-rhone");
+    ph.__loaded = true;
   });
 
-  it("renders control until flags resolve and stays control if they never do", () => {
-    ph.onFeatureFlags.mockReturnValue(() => {});
+  it("renders blocks visibly with no flag lookup", () => {
     page();
-    expect(screen.getByText("control link")).toBeVisible();
-    expect(screen.getByText("test card")).not.toBeVisible();
-    expect(ph.capture).not.toHaveBeenCalled();
-  });
-
-  it("reveals test blocks for the test variant and records exposure", () => {
-    let cb: () => void = () => {};
-    ph.onFeatureFlags.mockImplementation((fn: () => void) => { cb = fn; return () => {}; });
-    ph.getFeatureFlag.mockReturnValue("test");
-    page();
-    act(() => cb());
     expect(screen.getByText("test card")).toBeVisible();
-    expect(screen.getByText("control link")).not.toBeVisible();
-    expect(ph.capture).toHaveBeenCalledWith(
-      "blog_commerce_exposure",
-      { slug: "best-golf-polos-2026-quiet-golf-rhone", variant: "test", template: "blog" },
-      expect.anything(),
-    );
+    expect(ph.onFeatureFlags).not.toHaveBeenCalled();
+    expect(ph.getFeatureFlag).not.toHaveBeenCalled();
+    expect(ph.capture).not.toHaveBeenCalledWith("blog_commerce_exposure", expect.anything(), expect.anything());
   });
 
-  it("tracks clicks with the product handle", () => {
-    let cb: () => void = () => {};
-    ph.onFeatureFlags.mockImplementation((fn: () => void) => { cb = fn; return () => {}; });
-    ph.getFeatureFlag.mockReturnValue("test");
+  it("tracks clicks with the product handle and variant live", () => {
     page();
-    act(() => cb());
     screen.getByText("test card").addEventListener("click", e => e.preventDefault());
     act(() => screen.getByText("test card").click());
     expect(ph.capture).toHaveBeenCalledWith(
       "blog_cta_clicked",
-      expect.objectContaining({ block: "product_row_top", variant: "test", target_path: "/shop/rhone-commuter-polo", product_handle: "rhone-commuter-polo" }),
+      { slug: "best-golf-polos-2026-quiet-golf-rhone", variant: "live", template: "blog", block: "product_row_top", target_path: "/shop/rhone-commuter-polo", product_handle: "rhone-commuter-polo" },
       expect.anything(),
     );
   });
 
-  it("keeps control when the flag is missing", () => {
-    let cb: () => void = () => {};
-    ph.onFeatureFlags.mockImplementation((fn: () => void) => { cb = fn; return () => {}; });
-    ph.getFeatureFlag.mockReturnValue(undefined);
+  it("still renders and sends nothing when PostHog is not loaded", () => {
+    ph.__loaded = false;
     page();
-    act(() => cb());
-    expect(screen.getByText("control link")).toBeVisible();
-    expect(ph.capture).not.toHaveBeenCalled();
-  });
-
-  it("honours ?bc=test without waiting for flags", () => {
-    window.history.replaceState(null, "", "/blog/x?bc=test");
-    page();
+    screen.getByText("test card").addEventListener("click", e => e.preventDefault());
+    act(() => screen.getByText("test card").click());
     expect(screen.getByText("test card")).toBeVisible();
-    expect(ph.onFeatureFlags).not.toHaveBeenCalled();
-    expect(ph.capture).toHaveBeenCalledWith("blog_commerce_exposure", expect.objectContaining({ variant: "test", bc_override: true }), expect.anything());
+    expect(ph.capture).not.toHaveBeenCalled();
   });
 });

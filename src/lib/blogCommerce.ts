@@ -3,9 +3,9 @@
  * end-of-post blocks for Journal posts (/blog/<slug>) and the restored
  * archive posts (/blogs/news/<handle>).
  *
- * Shown only to the `test` variant of the PostHog flag `blog-commerce-v1`
- * (see src/app/blog/commerce/BlogCommerceClient.tsx). Control sees the
- * template exactly as before.
+ * Server-rendered for every reader (the 2026-11 A/B test was retired and
+ * the blocks shipped as the default). Views and clicks are tracked in
+ * src/app/blog/commerce/BlogCommerceClient.tsx with variant "live".
  *
  * Rules:
  * - Product handles only. Price, image and availability always come live
@@ -19,8 +19,8 @@
  */
 import type { BlogCategory, BlogSection } from "@/app/blog/posts";
 
-export const BLOG_COMMERCE_FLAG = "blog-commerce-v1";
-export type BlogCommerceVariant = "control" | "test";
+/** Event `variant` value now that the blocks are the default. */
+export const BLOG_COMMERCE_VARIANT = "live";
 export type BlogCommerceTemplate = "blog" | "archive";
 export type BlogCommerceBlock = "product_row_top" | "product_row_bottom" | "end_block" | "reserve_mid";
 

@@ -1,8 +1,8 @@
 /**
  * Server pieces of blog commerce v1: live Shopify product fetch plus the
  * product rows, Reserve blocks and end-of-post block. Every block renders
- * inside a BlogCommerceSlot, so the server HTML matches control and the
- * test variant is revealed client-side.
+ * server-side inside a BlogCommerceSlot, which only adds view and click
+ * tracking.
  */
 import Link from "next/link";
 import { getProductByHandle, type ShopifyProduct } from "@/lib/shopify";
@@ -54,7 +54,7 @@ export function ProductRow({
   if (products.length === 0) return null;
   const compact = size === "compact";
   return (
-    <BlogCommerceSlot show="test" block={block} targetPath="/shop" productHandles={products.map(p => p.slug)}>
+    <BlogCommerceSlot block={block} targetPath="/shop" productHandles={products.map(p => p.slug)}>
       <section className={`bc-row ${compact ? "bc-row--compact" : "bc-row--full"}`} aria-label={compact ? ROW_COPY.top : ROW_COPY.bottom}>
         {compact
           ? <p className="bc-eyebrow">{ROW_COPY.top}</p>
@@ -80,7 +80,7 @@ function CtaPanel({ copy, tone }: { copy: CtaCopy; tone: "mid" | "end" }) {
 
 export function ReserveMid() {
   return (
-    <BlogCommerceSlot show="test" block="reserve_mid" targetPath={RESERVE_MID_COPY.href}>
+    <BlogCommerceSlot block="reserve_mid" targetPath={RESERVE_MID_COPY.href}>
       <CtaPanel copy={RESERVE_MID_COPY} tone="mid" />
     </BlogCommerceSlot>
   );
@@ -94,7 +94,7 @@ export function EndPanel({ intent }: { intent: EndIntent }) {
   if (intent === "shop") return null;
   const copy = END_COPY[intent];
   return (
-    <BlogCommerceSlot show="test" block="end_block" targetPath={copy.href}>
+    <BlogCommerceSlot block="end_block" targetPath={copy.href}>
       <CtaPanel copy={copy} tone="end" />
     </BlogCommerceSlot>
   );
@@ -103,7 +103,7 @@ export function EndPanel({ intent }: { intent: EndIntent }) {
 /** End block for shop-intent posts: "Shop the Mully Edit" link to /shop. */
 export function EndShopLink() {
   return (
-    <BlogCommerceSlot show="test" block="end_block" targetPath={ROW_COPY.shopLink.href}>
+    <BlogCommerceSlot block="end_block" targetPath={ROW_COPY.shopLink.href}>
       <Link className="bc-shop-link" href={ROW_COPY.shopLink.href}>{ROW_COPY.shopLink.label} →</Link>
     </BlogCommerceSlot>
   );
