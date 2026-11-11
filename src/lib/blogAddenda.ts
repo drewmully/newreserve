@@ -15,6 +15,26 @@ export type BlogAddendum =
   | { kind: "section"; after: string | null; section: BlogSection };
 
 export const BLOG_ADDENDA: Record<string, BlogAddendum[]> = {
+  // s09: answer "brands like peter millar" in the Greyson vs. Peter Millar post.
+  // Every brand below is carried in the Mully Shop; copy is drawn from each PDP.
+  "greyson-vs-peter-millar-golf-comparison": [
+    {
+      kind: "section",
+      after: "On-Course Performance",
+      section: {
+        heading: "Brands like Peter Millar",
+        paragraphs: [
+          "Peter Millar's appeal is a polo that looks as right in the dining room as it does on the first tee. These brands, all carried in the [Mully Shop](/shop), cover the same ground from different angles.",
+          "Rhone: The [Commuter Polo](/shop/rhone-commuter-polo) pairs four-way stretch with a wrinkle-releasing finish and a hidden-button collar. It is cut slim, closer to Crown Crafted than to Summer Comfort.",
+          "Sloat: The [Merino Polo](/shop/sloat-merino-polo) is 200 gsm RWS-certified merino jersey sewn in Portugal. It is a natural-fiber answer to Peter Millar's performance jersey, with a soft drape that regulates temperature through a full round.",
+          "Olydoe: The [OG Supima Hollow Polo](/shop/olydoe-og-supima-hollow-polo) uses American-grown Supima cotton with a hollow yarn that lets moisture move through. Softly structured, with fine stripes, for the golfer who wants cotton over synthetics.",
+          "Technically Golf: The [Performance Polo](/shop/technically-golf-performance-polo) is lightweight nylon-spandex piqué with permanent collar stays, so the collar holds its shape from the first tee to the 19th hole.",
+          "Quiet Golf: The [Remy Polo](/shop/quiet-golf-remy-polo-active-pique) is a 96% polyester, 4% spandex active piqué with a three-button collar and shell buttons. It is the closest match here to Peter Millar's poly-spandex stretch.",
+          "Duck Head: The [Gold School Chino](/shop/duckhead-classic-fit-gold-school-chino-khaki) comes in a classic fit with your choice of waist and inseam, in khaki. It is the pant to wear with any of the polos above.",
+        ],
+      },
+    },
+  ],
   // s07: answer "golf mystery box" in the subscription comparison post.
   // Price intentionally links to /subscription (no hard-coded prices).
   "best-golf-subscription-boxes-2026-compared": [
