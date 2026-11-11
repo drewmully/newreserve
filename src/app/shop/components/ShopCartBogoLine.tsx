@@ -69,9 +69,12 @@ export function ShopCartBogoLine({ variant }: { variant: CompleteLookVariant }) 
 
   const otherCodes = hasBogoBlockingCode(cartDiscountCodes);
   const suppressed = hasShopDiscount || hasReward || otherCodes;
+  // Eligibility from the previous cart can lag one add behind; wait until it
+  // covers every line so a just-added piece is never counted as ineligible.
+  const fresh = !!data && slugs.every((s) => s in data.eligible);
   const lines = cart.map((i) => ({ slug: i.slug, quantity: i.quantity, eligible: !!data?.eligible[i.slug] }));
   const { state, saved } = cartBogoState({
-    lines: data ? lines : [],
+    lines: fresh ? lines : [],
     bogoSaved: bogoSavedFromAllocations(cartDiscountAmounts),
     suppressed,
   });
