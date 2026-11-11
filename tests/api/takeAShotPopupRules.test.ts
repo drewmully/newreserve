@@ -56,10 +56,10 @@ describe("storefront page scope", () => {
 
 describe("timedTrigger", () => {
   const t = { kind: "home" as const, dwellMs: 0, scrollFraction: 0, pageViews: 1, paidSocialFirstPage: false };
-  it("needs 10s AND 30% scroll on the first page", () => {
-    expect(timedTrigger({ ...t, dwellMs: 9_999, scrollFraction: 0.5 })).toBeNull();
-    expect(timedTrigger({ ...t, dwellMs: 10_000, scrollFraction: 0.29 })).toBeNull();
-    expect(timedTrigger({ ...t, dwellMs: 10_000, scrollFraction: 0.3 })).toBe("timer_scroll");
+  it("needs 8s AND 30% scroll on the first page", () => {
+    expect(timedTrigger({ ...t, dwellMs: 7_999, scrollFraction: 0.5 })).toBeNull();
+    expect(timedTrigger({ ...t, dwellMs: 8_000, scrollFraction: 0.29 })).toBeNull();
+    expect(timedTrigger({ ...t, dwellMs: 8_000, scrollFraction: 0.3 })).toBe("timer_scroll");
   });
   it("opens on the second page view", () => {
     expect(timedTrigger({ ...t, pageViews: 2, dwellMs: 2_000 })).toBe("second_page");
@@ -73,9 +73,9 @@ describe("timedTrigger", () => {
     expect(timedTrigger({ ...t, dwellMs: 29_000, scrollFraction: 1, paidSocialFirstPage: true })).toBeNull();
     expect(timedTrigger({ ...t, dwellMs: 30_000, scrollFraction: 1, paidSocialFirstPage: true })).toBe("timer_scroll");
   });
-  it("auto-opens on listing, blog and editorial pages with the 10s rule, never on other pages", () => {
-    expect(timedTrigger({ ...t, kind: "listing", dwellMs: 9_000, scrollFraction: 1 })).toBeNull();
-    expect(timedTrigger({ ...t, kind: "listing", dwellMs: 10_000, scrollFraction: 0.3 })).toBe("timer_scroll");
+  it("auto-opens on listing, blog and editorial pages with the 8s rule, never on other pages", () => {
+    expect(timedTrigger({ ...t, kind: "listing", dwellMs: 7_000, scrollFraction: 1 })).toBeNull();
+    expect(timedTrigger({ ...t, kind: "listing", dwellMs: 8_000, scrollFraction: 0.3 })).toBe("timer_scroll");
     expect(timedTrigger({ ...t, kind: "other", dwellMs: 60_000, scrollFraction: 1, pageViews: 3 })).toBeNull();
   });
 });

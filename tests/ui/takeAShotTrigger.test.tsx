@@ -45,16 +45,16 @@ describe("TakeAShotTrigger", () => {
     expect(until - Date.now()).toBeGreaterThan(13 * 86_400_000);
   });
 
-  it("auto-opens after 10s and 30% scroll with trigger timer_scroll and reports eligibility", async () => {
+  it("auto-opens after 8s and 30% scroll with trigger timer_scroll and reports eligibility", async () => {
     vi.useFakeTimers();
     Object.defineProperty(document.documentElement, "scrollHeight", { configurable: true, value: 3000 });
     const onOpen = await renderTrigger();
     act(() => { window.scrollY = 1000; window.dispatchEvent(new Event("scroll")); });
-    act(() => { vi.advanceTimersByTime(9_000); });
+    act(() => { vi.advanceTimersByTime(7_000); });
     expect(onOpen).not.toHaveBeenCalled();
     act(() => { vi.advanceTimersByTime(2_000); });
     expect(onOpen).toHaveBeenCalledWith("timer_scroll");
-    expect(event("popup_eligible")?.props).toMatchObject({ variant: "take-a-shot", page_kind: "home", device: "desktop" });
+    expect(event("popup_eligible")?.props).toMatchObject({ variant: "take-a-shot", page_kind: "home", page_type: "home", device: "desktop" });
     expect(JSON.parse(localStorage.getItem(KEYS.autoOpens) ?? "[]")).toHaveLength(1);
   });
 

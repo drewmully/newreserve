@@ -8,7 +8,7 @@
 
 export const TRIGGER = {
   /** Auto-open after this long on the page AND this much scroll. */
-  dwellMs: 10_000,
+  dwellMs: 8_000,
   scrollFraction: 0.3,
   /** Product pages wait longer so the visitor has seen the item. */
   productDwellMs: 20_000,
