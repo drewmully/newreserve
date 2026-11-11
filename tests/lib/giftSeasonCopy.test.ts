@@ -93,4 +93,12 @@ describe("Gift a Season UI copy", () => {
       expect(src.replace(/box-(border|content|shadow)|\bcheckbox\b/g, "")).not.toMatch(/\bbox(es)?\b/i);
     });
   }
+  it("child box draft orders carry no email, so Shopify sends no confirmation", () => {
+    const srv = readFileSync(path.resolve(__dirname, "../..", "src/lib/gifts/giftSeasonServer.ts"), "utf8");
+    const draft = srv.slice(srv.indexOf("draftOrderCreate(input"), srv.indexOf("draftOrderComplete(id"));
+    expect(draft.length).toBeGreaterThan(0);
+    const call = srv.slice(srv.indexOf("export async function createSeasonBoxOrder"), srv.indexOf("GiftSeasonComplete"));
+    expect(call).not.toMatch(/^\s*email:/m);
+    expect(call).not.toMatch(/purchasingEntity|customerId/);
+  });
 });

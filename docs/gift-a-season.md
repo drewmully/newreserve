@@ -59,7 +59,7 @@ Season gifts never touch Loop. The legacy post-first-shipment cron cancels the p
 
 **Boxes 2..N are $0 Shopify orders.** The daily cron `/api/gifts/season-dispatch` (14:30 UTC, `vercel.json`) creates them.
 
-- How the order is built: `draftOrderCreate` on the Reserve Member variant (RES-MEM) with a 100% line discount and $0 shipping, to the parent order's shipping address, followed by `draftOrderComplete(paymentPending: false)`.
+- How the order is built: `draftOrderCreate` on the Reserve Member variant (RES-MEM) with a 100% line discount and $0 shipping, to the parent order's shipping address, followed by `draftOrderComplete(paymentPending: false)`. The draft has no email or customer, so Shopify sends the recipient no order confirmation or shipping notification. Our season-dispatch email is the only message they get for boxes 2..N.
 - Tags: `gift-season`, `gift-season-box`, `gift-season-N`, `gift-season-box-X-of-N` and `gift-parent-<id>`.
 - Attributes: `gift_season_child=true`, plus the parent id and the box number.
 - Note: recipient, box X of N, and sizing.

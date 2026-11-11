@@ -261,8 +261,9 @@ function boxVariantGid(): string {
 /**
  * Create the $0 Shopify order for box `boxNumber` of a season gift: a draft
  * order with a 100% discount on the Reserve line, completed as paid. Ships
- * to the address on the original gift order. Shopify does not send an order
- * confirmation for API-completed draft orders.
+ * to the address on the original gift order. The draft has no email or
+ * customer, so Shopify sends no order or shipping notifications; our
+ * season-dispatch email covers the recipient.
  */
 export async function createSeasonBoxOrder(
   parentOrderId: string,
@@ -299,7 +300,9 @@ export async function createSeasonBoxOrder(
     }`,
     {
       input: {
-        email: gift.recipient_email,
+        // No email or customer on purpose: Shopify sends an order confirmation
+        // for any completed draft that has contact info. The recipient hears
+        // from us via the season-dispatch email instead.
         note,
         tags,
         shippingAddress,
