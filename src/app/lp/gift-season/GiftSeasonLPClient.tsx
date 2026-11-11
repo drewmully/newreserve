@@ -642,7 +642,7 @@ export default function GiftSeasonLPClient({
                 Something new to open every season.
               </h2>
               <p className="mt-4 text-sm sm:text-base text-bone/75 leading-relaxed">
-                Each Reserve arrives packed and styled to them, in the sizes they chose.
+                Each Reserve arrives packed and styled to them, in the sizes you pick. They can update them before each season.
               </p>
               <button
                 type="button"
