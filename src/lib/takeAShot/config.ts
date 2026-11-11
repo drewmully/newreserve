@@ -108,9 +108,9 @@ export const CODE_RULES = {
  */
 export const CODE_TERMS = {
   /** Under the code on the result card. */
-  short: "Good on full-price Shop items or your first Reserve box.",
+  short: "Works on one-time Shop orders or your first Reserve box.",
   /** Full terms line. */
-  full: "Valid on full-price Shop items and the first payment of a Mully Reserve membership, up to 30% off. Reserve renewals bill at full price. Excludes Mully Access, gift subscriptions and sale items. One use, expires 14 days after you play, and cannot be combined with other offers.",
+  full: "Works on one-time Shop orders or your first Reserve box, up to 30% off. Reserve renewals bill at full price. Excludes sale items, Mully Access and gift subscriptions. One use, expires 14 days after you play, and cannot be combined with other offers.",
 } as const;
 
 /** Admin API version for discount mutations (DiscountCodeBasicInput.context). */

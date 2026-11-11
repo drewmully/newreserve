@@ -245,9 +245,10 @@ describe("codes", () => {
     expect(MAX_PERCENT).toBe(30);
     // No em dashes in customer copy, and the terms say renewals are full price.
     for (const line of Object.values(CODE_TERMS)) expect(line).not.toMatch(/\u2014/);
-    expect(CODE_TERMS.full).toMatch(/first payment of a Mully Reserve membership/);
+    expect(CODE_TERMS.short).toBe("Works on one-time Shop orders or your first Reserve box.");
+    expect(CODE_TERMS.full).not.toMatch(/Excludes Mully Reserve/);
     expect(CODE_TERMS.full).toMatch(/renewals bill at full price/i);
-    expect(CODE_TERMS.full).toMatch(/Excludes Mully Access, gift subscriptions and sale items/);
+    expect(CODE_TERMS.full).toMatch(/Excludes sale items, Mully Access and gift subscriptions/);
   });
 });
 
@@ -422,5 +423,17 @@ describe("readiness evidence with a game code", () => {
     expect(discountGql).toHaveBeenCalledTimes(1);
     expect(viaDiscounts.reward).toMatchObject({ verified: false, code: null }); // Deleted in Shopify.
     expect(out.reward).toMatchObject({ verified: true, code: "SHOT25-ABC234", percent: 25 });
+  });
+});
+
+describe("Reserve checkout codes", () => {
+  it("auto-applies only a saved Take a Shot code, and an explicit code wins", async () => {
+    const { membershipDiscountCodes } = await import("@/lib/shopifyCheckout");
+    expect(membershipDiscountCodes([], "SHOT25-ABC234")).toEqual(["SHOT25-ABC234"]);
+    expect(membershipDiscountCodes([], "shot25-abc234")).toEqual(["SHOT25-ABC234"]);
+    expect(membershipDiscountCodes([], "MULLYEDIT10")).toEqual([]);
+    expect(membershipDiscountCodes([], "MULLYTEXT15")).toEqual([]);
+    expect(membershipDiscountCodes([], null)).toEqual([]);
+    expect(membershipDiscountCodes(["FOUNDERS50"], "SHOT25-ABC234")).toEqual(["FOUNDERS50"]);
   });
 });
