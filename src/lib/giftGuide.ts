@@ -12,7 +12,8 @@
  * $300+ duffels and the Mystery Bundle stay out.
  */
 
-import { getProductByHandle, type ShopifyProduct } from "@/lib/shopify";
+import { getAvailableProducts, getProductByHandle, type ShopifyProduct } from "@/lib/shopify";
+import { GIFT_STOCKING_MAX, inStockNow, isStockingStuffer } from "@/lib/giftStocking";
 import { isRestockOnly } from "@/lib/restock";
 
 // Christmas cutoff lives in giftGuideDates.ts (client-safe). Re-exported here.
@@ -34,7 +35,7 @@ export const GIFT_SEASON_HREF = "/lp/gift-season";
 
 // ─── Tiers ──────────────────────────────────────────────────────────────────
 
-export type GiftTierSlug = "under-100" | "100-to-150" | "150-to-250";
+export type GiftTierSlug = "under-100" | "100-to-150" | "150-to-250" | "stocking-stuffers";
 
 export interface GiftTier {
   slug: GiftTierSlug;
@@ -62,7 +63,7 @@ export const GIFT_GUIDE_TIERS: GiftTier[] = [
     legacyKey: "under100",
     label: "Under $100",
     heading: "Best golf gifts under $100",
-    kicker: "Stocking stuffers",
+    kicker: "Small gifts",
     dek: "Small, useful and the kind of thing he would not buy for himself.",
     metaTitle: "Golf Gifts Under $100 for Men 2026 | Mully",
     metaDescription:
@@ -129,11 +130,33 @@ export const GIFT_GUIDE_TIERS: GiftTier[] = [
   },
 ];
 
+/**
+ * Stocking stuffers. Not a price band in GIFT_GUIDE_TIERS (it overlaps Under
+ * $100), so curated picks never land here. The grid is the live catalog
+ * filtered by giftStocking.ts: accessories priced under GIFT_STOCKING_MAX.
+ */
+export const GIFT_STOCKING_TIER: GiftTier = {
+  slug: "stocking-stuffers",
+  legacyKey: "stockingStuffers",
+  label: "Stocking stuffers",
+  heading: `Golf Stocking Stuffers Under $${GIFT_STOCKING_MAX}`,
+  kicker: "Small golf gifts",
+  dek: "Socks, towels and small gear that fit in a stocking and get used every round. Only what is in stock today, pulled live from the shop.",
+  metaTitle: `Golf Stocking Stuffers Under $${GIFT_STOCKING_MAX} | Small Golf Gifts | Mully`,
+  metaDescription: `Golf stocking stuffers under $${GIFT_STOCKING_MAX}: small golf gifts like socks, towels and small gear, in stock now. Picked from the Mully shop.`,
+  min: 0,
+  max: GIFT_STOCKING_MAX,
+  picks: [],
+};
+
+/** Every tier page, in pill order. The hub sections still use GIFT_GUIDE_TIERS. */
+export const GIFT_NAV_TIERS: GiftTier[] = [...GIFT_GUIDE_TIERS, GIFT_STOCKING_TIER];
+
 /** Hub order: hero tier first, per the velocity report. */
 export const GIFT_GUIDE_HUB_ORDER: GiftTierSlug[] = ["150-to-250", "100-to-150", "under-100"];
 
 export function getGiftTier(slug: string): GiftTier | undefined {
-  return GIFT_GUIDE_TIERS.find((t) => t.slug === slug);
+  return GIFT_NAV_TIERS.find((t) => t.slug === slug);
 }
 
 /** One line per product. No prices, no stock counts, no em dashes. */
@@ -415,4 +438,22 @@ export async function loadGiftGuide(): Promise<{ tiers: GiftTierData[]; outfits:
   }
 
   return { tiers, outfits };
+}
+
+/**
+ * Stocking stuffers, live: every accessory under GIFT_STOCKING_MAX that can
+ * be bought right now. In-stock pieces first, then Restocking ones (they carry
+ * the same Restocking label and Christmas note as every other tier). Within
+ * each group, lowest price first so the true stocking-size gifts lead.
+ */
+export async function loadStockingStuffers(): Promise<GiftTierData> {
+  let products: ShopifyProduct[] = [];
+  try {
+    products = await getAvailableProducts(100);
+  } catch (err) {
+    console.error("[giftGuide] stocking stuffers fetch failed", err);
+  }
+  const eligible = products.filter((p) => isStockingStuffer(p)).sort((a, b) => a.price - b.price);
+  const ordered = [...eligible.filter(inStockNow), ...eligible.filter((p) => !inStockNow(p))].slice(0, MAX_PER_TIER);
+  return { tier: GIFT_STOCKING_TIER, picks: ordered.map(toPick) };
 }
