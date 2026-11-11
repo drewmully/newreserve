@@ -14,11 +14,11 @@ export const revalidate = 300;
 
 export const metadata: Metadata = {
   alternates: canonical("/lp/gift-season"),
-  title: "Gift a Season of Mully Reserve",
+  title: { absolute: "Golf Gift Subscription: Gift a Season of Mully Reserve | Mully" },
   description:
-    "Give 1, 2 or 4 seasons of hand-picked golf apparel. They confirm their own sizing. Paid once, never renews.",
+    "A prepaid golf gift subscription: 1, 2 or 4 seasons of hand-picked golf apparel in his sizes, which he can update before each season. Paid once, never renews.",
   openGraph: {
-    title: "Gift a Season of Mully Reserve",
+    title: "Golf Gift Subscription: Gift a Season of Mully Reserve",
     description:
       "Hand-picked golf apparel and accessories each season. Paid once, never renews.",
     images: ["/shop/hero-fall-2026.jpg"],
