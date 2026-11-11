@@ -72,7 +72,7 @@ export function letterArticleJsonLd(post: BlogPost) {
     headline: post.title,
     description: post.excerpt,
     datePublished: post.publishedAt,
-    image: post.image ? [post.image] : undefined,
+    image: post.image ? [post.image.startsWith("/") ? `${SITE_URL}${post.image}` : post.image] : undefined,
     mainEntityOfPage: url,
     url,
     isPartOf: { "@type": "CollectionPage", name: LETTER_COLLECTION.name, url: `${SITE_URL}${LETTER_COLLECTION.path}` },
