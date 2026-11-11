@@ -21,6 +21,10 @@ export const META_STANDARD_EVENTS: Record<string, string> = {
   quiz_email_captured: "Lead",
   quiz_completed: "CompleteRegistration",
   reveal_viewed: "ViewContent",
+  // Reveal CTA puts the RES-MEM line into a Shopify cart, then sends the
+  // buyer to checkout: AddToCart first, then InitiateCheckout (separate
+  // trackEvent calls, so each has its own event_id).
+  reserve_added_to_cart: "AddToCart",
   reveal_cta_clicked: "InitiateCheckout",
   // Shop (headless storefront). proshop_product_viewed fires once per PDP
   // view; before this mapping existed no shop PDP ever sent ViewContent, so
@@ -90,7 +94,11 @@ export function buildMetaStandardData(
       ? properties.currency
       : "USD";
 
-  if (eventName === "proshop_product_viewed" || eventName === "add_to_cart") {
+  if (
+    eventName === "proshop_product_viewed" ||
+    eventName === "add_to_cart" ||
+    eventName === "reserve_added_to_cart"
+  ) {
     const id =
       shopifyNumericId(properties.variant_id) ??
       shopifyNumericId(properties.product_slug) ??
@@ -160,6 +168,17 @@ const META_CUSTOM_DATA_DENYLIST = new Set([
   "klaviyo_kx",
 ]);
 
+const GIFT_TOKEN_PATH = /\/(gift-(?:address|card|continue|sizing))\/[^/?#]+/g;
+const PATH_KEYS = new Set(["path", "$pathname", "pathname", "page_path"]);
+
+/**
+ * Gift recipient pages carry a bearer token in the path
+ * (/gift-card/<token>, ...). Replace it before the path or URL goes to CAPI.
+ */
+export function redactGiftTokenPath(value: string): string {
+  return value.replace(GIFT_TOKEN_PATH, "/$1/[token]");
+}
+
 /** Server-side CAPI custom_data: standard fields + sanitized extra props. */
 export function buildMetaCapiCustomData(
   eventName: string,
@@ -169,7 +188,8 @@ export function buildMetaCapiCustomData(
   for (const [key, value] of Object.entries(properties)) {
     if (META_CUSTOM_DATA_DENYLIST.has(key)) continue;
     if (value === undefined || value === null) continue;
-    extra[key] = value;
+    extra[key] =
+      PATH_KEYS.has(key) && typeof value === "string" ? redactGiftTokenPath(value) : value;
   }
   return { ...extra, ...buildMetaStandardData(eventName, properties) };
 }

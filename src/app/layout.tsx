@@ -21,7 +21,7 @@ import "./globals.css";
  *
  * Dedup: the first PageView carries the same eventID as the server-side
  * CAPI PageView (shared via window.__mullyPageViewEventId with
- * trackEvent("page_view") in src/lib/tracking.ts). disablePushState stops
+ * first page_view trackEvent in src/lib/tracking.ts). disablePushState stops
  * fbevents from auto-firing an id-less PageView on client-side route
  * changes; AnalyticsTracker's page_view mirror fires those instead, each
  * with its own eventID (allowDuplicatePageViews lets fbevents accept them;

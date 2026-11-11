@@ -20,7 +20,11 @@
  *                 POSTHOG_HOST or NEXT_PUBLIC_POSTHOG_HOST
  */
 
-import { META_STANDARD_EVENTS, buildMetaCapiCustomData } from "@/lib/metaEvents";
+import {
+  META_STANDARD_EVENTS,
+  buildMetaCapiCustomData,
+  redactGiftTokenPath,
+} from "@/lib/metaEvents";
 import crypto from "crypto";
 import { PostHog } from "posthog-node";
 import { uploadPurchaseConversion } from "@/app/api/_lib/googleAdsConversionUpload";
@@ -51,6 +55,9 @@ export interface AnalyticsEvent {
  *   - lp_subscription_view / reveal_viewed → ViewContent (top of funnel)
  *   - quiz_started                        → QuizStart (custom event)
  *   - quiz_step_completed                 → QuizStep (custom event)
+ *   - reserve_added_to_cart               → AddToCart (fired by the reveal
+ *                                              CTA just before
+ *                                              reveal_cta_clicked)
  *   - reveal_cta_clicked                  → InitiateCheckout (Reserve line
  *                                              added to a Shopify cart and
  *                                              buyer sent to checkout)
@@ -161,7 +168,9 @@ async function fireMetaCAPI(event: AnalyticsEvent): Promise<void> {
             user_data: userData,
             custom_data: customData,
             action_source: "website",
-            event_source_url: event.page_url,
+            event_source_url: event.page_url
+              ? redactGiftTokenPath(event.page_url)
+              : event.page_url,
           },
         ],
       }),

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   META_CUSTOM_EVENTS,
+  redactGiftTokenPath,
   META_STANDARD_EVENTS,
   buildMetaCapiCustomData,
   buildMetaStandardData,
@@ -102,5 +103,31 @@ describe("buildMetaCapiCustomData", () => {
     }
     expect(d.path).toBe("/shop/polo");
     expect(d.content_ids).toEqual(["123456789"]);
+  });
+  it("sends the reveal CTA as Reserve AddToCart with RES-MEM content", () => {
+    expect(META_STANDARD_EVENTS.reserve_added_to_cart).toBe("AddToCart");
+    const data = buildMetaStandardData("reserve_added_to_cart", {
+      variant_id: "gid://shopify/ProductVariant/47601025122496",
+      name: "Reserve Membership",
+      price: 125,
+      quantity: 1,
+    });
+    expect(data).toMatchObject({
+      content_ids: ["47601025122496"],
+      content_type: "product",
+      value: 125,
+      currency: "USD",
+    });
+  });
+  it("redacts gift tokens from paths sent to CAPI", () => {
+    expect(redactGiftTokenPath("https://www.mymully.com/gift-card/abc123?x=1")).toBe(
+      "https://www.mymully.com/gift-card/[token]?x=1"
+    );
+    for (const seg of ["gift-address", "gift-continue", "gift-sizing"]) {
+      expect(redactGiftTokenPath(`/${seg}/tok_9`)).toBe(`/${seg}/[token]`);
+    }
+    expect(redactGiftTokenPath("/shop/vests")).toBe("/shop/vests");
+    const data = buildMetaCapiCustomData("page_view", { path: "/gift-sizing/tok_9" });
+    expect(data.path).toBe("/gift-sizing/[token]");
   });
 });

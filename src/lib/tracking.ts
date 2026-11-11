@@ -188,7 +188,7 @@ function getAttributionProperties(): Record<string, string | null> {
 
 /**
  * The first PageView of a full page load is fired by the inline pixel snippet
- * in layout.tsx. Both that snippet and the first trackEvent("page_view") read
+ * in layout.tsx. Both that snippet and the first page_view trackEvent read
  * or create the same id on window, whichever runs first, so the browser
  * PageView and the server CAPI PageView share one event_id and dedupe.
  */
@@ -240,8 +240,8 @@ function mirrorToMetaPixel(
   if (!metaEvent) return;
 
   // One browser PageView per URL: the layout snippet fires the first one
-  // (same event id as this page_view), and both AnalyticsTracker and
-  // PageViewTracker emit page_view on route changes.
+  // (same event id as this page_view), and AnalyticsTracker emits
+  // page_view on route changes.
   if (eventName === "page_view") {
     const href = window.location.href;
     if (properties.__initial_page_view === true || lastMirroredPageViewUrl === href) {
