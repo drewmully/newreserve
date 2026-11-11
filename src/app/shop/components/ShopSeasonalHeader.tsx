@@ -12,6 +12,8 @@ const apparel = [
   ["Tops", "/shop/collection/shop-tops"],
   ["Bottoms", "/shop/collection/shop-bottoms"],
   ["Outerwear", "/shop/collection/shop-outerwear"],
+  ["Vests", "/shop/vests"],
+  ["Quarter-zips", "/shop/quarter-zips"],
 ];
 const gear = [
   ["All gear", "/shop/collection/shop-gear"],

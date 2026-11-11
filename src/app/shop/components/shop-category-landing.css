@@ -1,0 +1,18 @@
+/* /shop/vests and /shop/quarter-zips. Builds on shop-pages.css tokens. */
+.shop-category__crumbs {display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: #5b613f; margin-bottom: 12px}
+.shop-category__crumbs a {display: inline-flex; min-height: 44px; align-items: center; text-underline-offset: 5px}
+.shop-category__crumbs a:hover, .shop-category__crumbs a:focus-visible {text-decoration: underline}
+.shop-category__crumbs [aria-current] {color: #625e55}
+.shop-page-heading .shop-category__intro {max-width: 640px; font-size: 15px}
+.shop-category__faq {display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 40px; margin-top: 72px}
+.shop-category__faq h2 {font-family: var(--font-serif); font-size: clamp(26px, 3vw, 34px); line-height: 1.2}
+.shop-category__faq details {border-bottom: 1px solid #ddd9d0}
+.shop-category__faq details:first-child {border-top: 1px solid #ddd9d0}
+.shop-category__faq summary {cursor: pointer; list-style: none; display: flex; justify-content: space-between; gap: 16px; align-items: center; min-height: 56px; padding: 14px 0; font-size: 16px; color: #292720}
+.shop-category__faq summary::-webkit-details-marker {display: none}
+.shop-category__faq summary::after {content: "+"; font-size: 20px; color: #5b613f; flex: none}
+.shop-category__faq details[open] summary::after {content: "\2212"}
+.shop-category__faq details p {font-size: 14px; line-height: 1.7; color: #514d44; padding: 0 0 18px; max-width: 62ch}
+@media (max-width: 760px) {
+  .shop-category__faq {grid-template-columns: 1fr; gap: 16px; margin-top: 56px}
+}

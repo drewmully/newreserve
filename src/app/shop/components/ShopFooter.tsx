@@ -42,6 +42,8 @@ export function ShopFooter({ accent }: { accent: string }) {
                   Outerwear
                 </Link>
               </li>
+              <li><Link href="/shop/vests" className="hover:text-charcoal">Golf vests</Link></li>
+              <li><Link href="/shop/quarter-zips" className="hover:text-charcoal">Golf quarter-zips</Link></li>
               <li>
                 <Link href="/shop/collection/shop-gear" className="hover:text-charcoal">
                   Gear

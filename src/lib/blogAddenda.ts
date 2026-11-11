@@ -102,6 +102,27 @@ export const BLOG_ADDENDA: Record<string, BlogAddendum[]> = {
       heading: "When a quarter zip is the right answer",
       paragraphs: ["A quarter zip is also one of the safest gifts for a golfer, and our [golf gifts for men](/shop/gifts) carry them from Rhone, Olydoe and Sloat."],
     },
+    // 2026-11-11: category page link (collection SEO).
+    {
+      kind: "append",
+      heading: "When a quarter zip is the right answer",
+      paragraphs: ["Every quarter-zip and half-zip we carry, with in-stock sizes first, is on one page: [golf quarter-zips for men](/shop/quarter-zips)."],
+    },
+  ],
+  // 2026-11-11: category page links (collection SEO).
+  "golf-capsule-wardrobe-12-essential-pieces": [
+    {
+      kind: "append",
+      heading: "The Outer Layer: Quarter-Zip and Vest",
+      paragraphs: ["Shop the layer from what is in stock now: [golf vests for men](/shop/vests) in down, quilted and merino, and [golf quarter-zips](/shop/quarter-zips) from Rhone, Olydoe and Technically Golf."],
+    },
+  ],
+  "major-week-layering-system-golf-2026": [
+    {
+      kind: "append",
+      heading: "Layer 2: the mid layer that actually swings",
+      paragraphs: ["For the mid layer, start with [golf quarter-zips](/shop/quarter-zips). For core warmth without sleeves, add one of our [golf vests](/shop/vests)."],
+    },
   ],
   "best-golf-belt-2026-braided-leather-stretch": [
     {
