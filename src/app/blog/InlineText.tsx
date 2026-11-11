@@ -10,7 +10,7 @@ export function InlineText({ text }: { text: string }) {
   for (const m of text.matchAll(LINK)) {
     const i = m.index ?? 0;
     if (i > last) parts.push(text.slice(last, i));
-    parts.push(<Link key={i} href={m[2]} className="shop-text-link">{m[1]}</Link>);
+    parts.push(<Link key={i} href={m[2]} className="underline underline-offset-4 decoration-1">{m[1]}</Link>);
     last = i + m[0].length;
   }
   if (last === 0) return <>{text}</>;
