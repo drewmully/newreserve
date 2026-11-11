@@ -10,10 +10,12 @@ const noopSubscribe = () => () => {};
  * Christmas note for a restocking card, computed on the shopper's clock so a
  * cached page never shows a stale answer. Before the restock cutoff (order-by
  * date minus the restock lead time) it gives the date to order by; after it,
- * it warns the piece may not arrive by Christmas. Server render shows the warning.
+ * it warns the piece may not arrive by Christmas. The server render uses the
+ * render time (pages revalidate hourly), so no-JS readers and crawlers get the
+ * right answer too.
  */
 export function RestockChristmasNote({ weeks }: { weeks?: number }) {
-  const now = useSyncExternalStore(noopSubscribe, () => Date.now(), () => 0);
+  const now = useSyncExternalStore(noopSubscribe, () => Date.now(), () => Date.now());
   const w = restockWeeks(weeks);
   const inTime = now > 0 && now <= giftRestockCutoff(w);
   return (
