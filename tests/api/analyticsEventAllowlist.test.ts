@@ -40,6 +40,7 @@ describe("analytics event allowlist", () => {
       "complete_look_view", "complete_look_add", "cart_bogo_line_view", "cart_bogo_suggestion_add",
       "mully100_card_click", "bogo_nudge_viewed", "bogo_pick_opened", "bogo_pick_added",
       "first_order_shipping_revealed", "newsletter_signup", "reserve_added_to_cart",
+      "pdp_gallery_swipe", "pdp_image_zoom",
     ]) expect(allowlist.has(e), e).toBe(true);
   });
 

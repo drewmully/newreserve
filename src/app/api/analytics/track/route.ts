@@ -141,6 +141,10 @@ const VALID_EVENTS = new Set([
   "complete_look_add",
   "cart_bogo_line_view",
   "cart_bogo_suggestion_add",
+  // PDP gallery: first swipe of the mobile gallery (once per PDP view) and
+  // lightbox opens. PostHog/GA only; deliberately not mapped to Meta.
+  "pdp_gallery_swipe",
+  "pdp_image_zoom",
 ]);
 
 /**
