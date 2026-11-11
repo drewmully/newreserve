@@ -334,7 +334,7 @@ export function ShopPDPClient({
               selectedVariant?.currentlyNotInStock && !unavailable
                 ? { k: "Restocking", v: <>Est. ships <EstShipDate weeks={product.preOrderEtaWeeks} /></> }
                 : { k: "Mully Fulfillment", v: "Shipping at checkout" },
-              { k: "Free Returns", v: "Within 30 days" },
+              { k: "Easy Returns", v: "30 days from delivery, unworn with tags" },
               { k: "Real Support", v: "Real people" },
             ].map((item, i) => (
               <div
