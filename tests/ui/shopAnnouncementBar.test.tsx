@@ -12,8 +12,11 @@ describe("shop announcement styling", () => {
   });
   it("preserves full and compact offer labels", () => {
     render(<ShopAnnouncementBar />);
-    for (const text of ["Ships from Mully Fulfillment", "Buy one, get 15% off the second", "Free U.S. Returns", "Mully Fulfillment", "BOGO 15%", "Free Returns"]) {
+    for (const text of ["Ships from Mully Fulfillment", "Buy one, get 15% off the second", "Mully Fulfillment", "BOGO 15%"]) {
       expect(screen.getByText(text)).toBeInTheDocument();
     }
+    // Same label on desktop and mobile.
+    expect(screen.getAllByText("Easy Returns")).toHaveLength(2);
+    expect(screen.queryByText(/free/i)).toBeNull();
   });
 });
