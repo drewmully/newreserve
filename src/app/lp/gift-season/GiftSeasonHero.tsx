@@ -23,7 +23,7 @@ export type GiftHeroVariant = "a" | "b";
 
 export const HERO_EYEBROW = "Gift a season";
 export const HERO_HEADLINE = "The gift that shows up every season.";
-export const HERO_LINE = "A prepaid golf apparel gift subscription for 1, 2 or 4 seasons. Stylist-picked, in their sizes.";
+export const HERO_LINE = "A prepaid golf apparel gift for 1, 2 or 4 seasons. Stylist-picked, in their sizes.";
 export const HERO_TRUST = [
   "Paid once. Never renews.",
   `Ships in ${GIFT_SEASON_SHIP_WINDOW}`,
