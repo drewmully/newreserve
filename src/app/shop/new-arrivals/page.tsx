@@ -3,8 +3,9 @@ import Link from "next/link";
 import { getCollectionProducts, type ShopifyProduct } from "@/lib/shopify";
 import { ShopPageShell } from "../components/ShopPageShell";
 import { ShopProductCard } from "../components/ShopProductCard";
+import { canonical } from "@/lib/seo";
 export const revalidate = 60;
-export const metadata: Metadata = {title:"New Arrivals | Mully",description:"The latest additions to the Mully shop."};
+export const metadata: Metadata = {title:"New Arrivals | Mully",description:"The latest additions to the Mully shop.",alternates:canonical("/shop/new-arrivals")};
 export default async function NewArrivals() {
   let products: ShopifyProduct[] = [];
   try {

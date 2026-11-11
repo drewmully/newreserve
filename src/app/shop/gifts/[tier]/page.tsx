@@ -7,6 +7,7 @@ import { ShopProductCard } from "../../components/ShopProductCard";
 import { ScrollToTop } from "../../components/ScrollToTop";
 import { GIFT_TIERS, SHOP_CATEGORIES } from "../../shopCollections";
 import { getSeasonalTheme } from "../../seasonalTheme";
+import { canonical } from "@/lib/seo";
 
 export const revalidate = 3600;
 
@@ -25,6 +26,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { tier } = await params;
   const t = GIFT_TIERS.find((x) => x.key === tier);
   return {
+    alternates: canonical(`/shop/gifts/${tier}`),
     title: t ? `Gifts ${t.title} | Mully Shop` : "Gifts | Mully Shop",
     description:
       t?.subtitle ?? "Golf gifts curated by Mully across every price point.",

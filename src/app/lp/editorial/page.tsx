@@ -5,6 +5,7 @@ import { EditorialHeader } from "./EditorialHeader";
 import { EditorialShell } from "./EditorialShell";
 import { Mully8Hero } from "./Mully8Hero";
 import DropWatchBar from "./DropWatchBar";
+import { canonical } from "@/lib/seo";
 
 /**
  * /lp/editorial
@@ -25,6 +26,7 @@ import DropWatchBar from "./DropWatchBar";
  */
 
 export const metadata: Metadata = {
+  alternates: canonical("/lp/editorial"),
   title: "The Shelf | Mully",
   description:
     "A quiet corner of curated golf goods. New pieces added often, chosen carefully.",

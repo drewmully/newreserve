@@ -8,6 +8,7 @@ import { ScrollToTop } from "../../components/ScrollToTop";
 import { withEditorialBreaks } from "../../components/ShopEditorialBreaks";
 import { buildColorCards, buildSwatchCards } from "@/lib/shopColorCards";
 import { SHOP_CATEGORIES, SHOP_CATEGORY_HANDLES } from "../../shopCollections";
+import { canonical } from "@/lib/seo";
 
 export const revalidate = 3600;
 interface Props { params: Promise<{ handle: string }> }
@@ -18,7 +19,7 @@ export async function generateStaticParams() {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { handle } = await params;
   const cat = categories.find(c => c.handle === handle);
-  return {title: `${cat?.label ?? "Shop"} | Mully`, description: cat?.detail};
+  return {title: `${cat?.label ?? "Shop"} | Mully`, description: cat?.detail, alternates: canonical(`/shop/collection/${handle}`)};
 }
 export default async function ShopCollectionPage({ params }: Props) {
   const { handle } = await params;

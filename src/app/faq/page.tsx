@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { ShopPageShell } from "../shop/components/ShopPageShell";
+import { canonical } from "@/lib/seo";
+
+export const metadata = { alternates: canonical("/faq") };
 
 const sections = [
   { heading: "Shopping", items: [

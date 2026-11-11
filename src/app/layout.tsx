@@ -98,6 +98,7 @@ ${configCalls.join("\n")}`,
 }
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://www.mymully.com"),
   title: "Mully Reserve | Progress, Earned.",
   description:
     "Members-only access to curated partner benefits, reserve pricing, and private club eligibility. Built for players who care.",
