@@ -23,13 +23,12 @@ import { GIFT_RESTOCK_WEEKS, giftOrderByShort, giftRestockCutoffShortDay } from 
 
 /**
  * Gift a Season (prepaid Reserve, one, two or four seasons) lives at
- * /lp/gift-season, built in PR #352 and not on main yet. Flip this to true
- * when that PR ships. While false, every Gift a Season element (hero strip
+ * /lp/gift-season (PR #352, live Nov 11, 2026). Set to false to hide it. While false, every Gift a Season element (hero strip
  * CTA, intro link, the card, the mobile tile, the Gift a Season FAQs and meta
  * mention) is hidden: /lp/gift sells the recurring Reserve, so "never renews"
  * would be false there. This is the only switch.
  */
-export const GIFT_SEASON_LIVE: boolean = false;
+export const GIFT_SEASON_LIVE: boolean = true;
 export const GIFT_SEASON_HREF = "/lp/gift-season";
 
 // ─── Tiers ──────────────────────────────────────────────────────────────────
@@ -269,12 +268,12 @@ export function giftGuideFaqs(): GiftFaq[] {
     },
     {
       q: "Is a gift subscription better than a single item?",
-      a: "A single piece is something to open on the day. Gift a Season keeps arriving long after the holidays, a new edit each season. If you are unsure of his size, Gift a Season is the safer bet: he confirms his own sizing through a private link.",
+      a: "A single piece is something to open on the day. Gift a Season keeps arriving long after the holidays, a new edit each season. If you are unsure of his size, pick his usual one: he can update his sizes before each season.",
     },
     shipping,
     {
       q: "What if I am not sure of his size?",
-      a: "Most of the tops we ship this time of year go out in L or XL, and each product page has the brand's size chart. With Gift a Season he picks his own sizes, so there is nothing to guess. For single pieces, unworn items with tags attached can be returned within 30 days of delivery.",
+      a: "Most of the tops we ship this time of year go out in L or XL, and each product page has the brand's size chart. With Gift a Season you pick his usual sizes, and he can update them before each season. For single pieces, unworn items with tags attached can be returned within 30 days of delivery.",
     },
     returns,
   ];

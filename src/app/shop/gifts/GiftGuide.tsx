@@ -63,7 +63,7 @@ export function GiftOrderByNote() {
       </p>
       <p>
         {past
-          ? `In-stock pieces still ship in 5 to 7 business days.${GIFT_SEASON_LIVE ? " Gift a Season works as a gift on any date." : ""}`
+          ? `In-stock pieces still ship in 5 to 7 business days.${GIFT_SEASON_LIVE ? " Gift a Season ships in 1-2 business days." : ""}`
           : `Applies to in-stock pieces with standard shipping. Pieces marked Restocking ship in about ${GIFT_RESTOCK_WEEKS} weeks. ${giftRestockCopy()}`}
       </p>
     </aside>
@@ -136,8 +136,8 @@ export function GiftSeasonCard({ placement, tier, compact = false }: { placement
         <p className="gg-kicker">The gift that keeps arriving</p>
         <h2 id={`gg-season-${placement}`} className="gg-season__title">Gift a Season</h2>
         <p>
-          A season of Mully Reserve. A stylist hand-picks golf apparel and accessories, and he confirms his own sizing through a
-          private link, so you never guess. Paid once, never renews.
+          A season of Mully Reserve. A stylist hand-picks golf apparel and accessories in his sizes, and the first one ships in
+          1-2 business days. Paid once, never renews.
         </p>
         <p className="gg-season__options">One, two or four seasons.</p>
         <Link href={GIFT_SEASON_HREF} className="gg-button" data-gg-season={placement} data-gg-tier={tier}>
@@ -159,7 +159,7 @@ export function GiftSeasonTile({ placement, tier, slot = false }: { placement: s
     <li className={slot ? "gg-season-tile gg-season-tile--slot" : "gg-season-tile"} aria-label="Gift a Season">
       <p className="gg-kicker">The gift that keeps arriving</p>
       <p className="gg-season-tile__title">Gift a Season</p>
-      <p className="gg-season-tile__copy">A stylist picks, he confirms his own sizes. One, two or four seasons.</p>
+      <p className="gg-season-tile__copy">A stylist picks for him each season. One, two or four seasons.</p>
       <Link href={GIFT_SEASON_HREF} className="gg-button" data-gg-season={placement} data-gg-tier={tier}>
         Gift a Season
       </Link>
