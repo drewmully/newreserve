@@ -53,14 +53,14 @@ interface Props {
 function TrustRow({ tone = "dark" }: { tone?: "dark" | "light" }) {
   return (
     <ul
-      className={`flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] tracking-wide ${
+      className={`flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] tracking-wide ${
         tone === "light" ? "text-bone/80" : "text-charcoal/60"
       }`}
       data-testid="gift-hero-trust"
     >
-      {TRUST.map((t, i) => (
-        <li key={t} className="flex items-center gap-3">
-          {i > 0 ? <span aria-hidden="true" className={tone === "light" ? "text-bone/40" : "text-charcoal/30"}>·</span> : null}
+      {TRUST.map((t) => (
+        <li key={t} className="flex items-center gap-1.5 whitespace-nowrap">
+          <span aria-hidden="true" className={`inline-block w-1 h-1 rounded-full ${tone === "light" ? "bg-bone/60" : "bg-ember/70"}`} />
           {t}
         </li>
       ))}
@@ -176,7 +176,7 @@ export default function GiftSeasonHero({ variant, fromPrice, onCta }: Props) {
               {PRODUCT_TILES.map((t, i) => (
                 <div
                   key={t.src}
-                  className={`relative aspect-square lg:aspect-[4/5] rounded-md overflow-hidden bg-white ${
+                  className={`relative aspect-square rounded-md overflow-hidden bg-white ${
                     i % 2 === 1 ? "lg:translate-y-6" : ""
                   }`}
                 >
