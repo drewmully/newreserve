@@ -61,3 +61,18 @@ describe("excluded handles", () => {
     }
   });
 });
+
+describe("in stock only", () => {
+  it("drops Restocking picks from the grids", async () => {
+    const shopify = await import("@/lib/shopify");
+    const { loadGiftGuide } = await import("@/lib/giftGuide");
+    vi.mocked(shopify.getProductByHandle).mockImplementation(async (h: string) => ({
+      slug: h, price: 20,
+      variants: [{ id: "v", availableForSale: true, currentlyNotInStock: h === "sloat-organic-cotton-six-panel-hat", selectedOptions: [] }],
+    }) as never);
+    const { tiers } = await loadGiftGuide();
+    const shown = tiers.flatMap((t) => t.picks);
+    expect(shown.map((p) => p.product.slug)).not.toContain("sloat-organic-cotton-six-panel-hat");
+    expect(shown.every((p) => p.inStock)).toBe(true);
+  });
+});

@@ -422,7 +422,7 @@ function tierForPrice(price: number): GiftTier | undefined {
 /**
  * Live gift guide data. A pick lands in the tier its live Shopify price fits,
  * so a price change in Shopify moves the product without a code change.
- * Anything not purchasable is dropped. In-stock pieces sort first.
+ * Only in-stock pieces are shown; Restocking and unavailable ones are dropped.
  */
 export async function loadGiftGuide(): Promise<{ tiers: GiftTierData[]; outfits: GiftOutfitData[] }> {
   const catalog = await loadCatalog();
@@ -435,7 +435,12 @@ export async function loadGiftGuide(): Promise<{ tiers: GiftTierData[]; outfits:
       if (!purchasable(p) || placed.has(handle)) continue;
       const home = tierForPrice(p.price);
       if (!home) continue; // drifted outside every band, e.g. repriced above $250
-      buckets.get(home.slug)!.push(toPick(p));
+      const pick = toPick(p);
+      // In stock only, same as the hub rail. A "Restocking" date is only an
+      // estimate (custom.pre_order_eta_weeks), not a confirmed inbound, so it
+      // can't back a gift promise.
+      if (!pick.inStock) continue;
+      buckets.get(home.slug)!.push(pick);
       placed.add(handle);
     }
   }
@@ -457,7 +462,7 @@ export async function loadGiftGuide(): Promise<{ tiers: GiftTierData[]; outfits:
       const anchorPick = toPick(anchor);
       if (!anchorPick.inStock || !anchorPick.sizesInStock.some((size) => ANCHOR_SIZES.includes(size.toUpperCase()))) continue;
       const rest = look.with.map((h) => catalog.get(h));
-      if (!rest.every(purchasable)) continue;
+      if (!rest.every((r) => purchasable(r) && toPick(r).inStock)) continue;
       outfits.push({ outfit, look, picks: [anchorPick, ...rest.map((p) => toPick(p!))] });
       break;
     }
