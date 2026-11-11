@@ -5,7 +5,7 @@
  */
 import { identityCookie } from "@/lib/klaviyo/identity";
 import { takeAShotService } from "@/lib/takeAShot/firestoreStore";
-import { failed, parseTakeAShotRequest, respond, send } from "@/lib/takeAShot/http";
+import { failed, identifiesPlayer, parseTakeAShotRequest, respond, send } from "@/lib/takeAShot/http";
 import { verifyTurnstile } from "@/lib/takeAShot/turnstile";
 
 export const runtime = "nodejs";
@@ -19,8 +19,9 @@ export async function POST(req: Request) {
   try {
     const result = await takeAShotService().session(parsed.body, parsed.ctx);
     const res = send(result);
-    // Email consent is required on this route, so tie later site visits to the profile.
-    if (result.status === "new" && typeof parsed.body.email === "string") {
+    // Email consent is required on this route, so tie later site visits to
+    // the profile: new and resumed games, and returning players on their own browser.
+    if (identifiesPlayer(result) && typeof parsed.body.email === "string") {
       const kid = identityCookie(parsed.body.email.trim().toLowerCase());
       if (kid) res.cookies.set(kid);
     }

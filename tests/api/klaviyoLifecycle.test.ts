@@ -117,6 +117,16 @@ describe("mapSiteEvent", () => {
     });
   });
 
+  it("maps cart_identified like add_to_cart, sharing its dedupe key", () => {
+    const fields = { product_id: "duck-head-shorts", name: "Duck Head Shorts", value: 98, variant_id: "gid://shopify/ProductVariant/9", cart_total: 206 };
+    const replay = mapSiteEvent("cart_identified", fields, NOW)!;
+    const add = mapSiteEvent("add_to_cart", fields, NOW)!;
+    expect(replay.metric).toBe(LIFECYCLE_METRICS.addedToCart);
+    expect(replay.dedupeKey).toBe(add.dedupeKey);
+    expect(replay.properties.CartSource).toBe("signup");
+    expect(add.properties.CartSource).toBeUndefined();
+  });
+
   it("counts checkout_clicked as Reserve intent only for plan checkouts", () => {
     expect(mapSiteEvent("checkout_clicked", { source: "shop_cart", cart_total: 90 }, NOW)).toBeNull();
     expect(mapSiteEvent("checkout_clicked", { cart_total: 90 }, NOW)).toBeNull();

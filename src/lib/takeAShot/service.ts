@@ -76,8 +76,12 @@ export type PublicSession = {
 export type ApiResult =
   | { status: "error"; error: string; code?: string; httpStatus?: number }
   | { status: "ok" }
-  | { status: "existing"; claim: PublicClaim | null; emailed: boolean }
-  | { status: "new" | "resume"; session: PublicSession; claim: PublicClaim | null }
+  /**
+   * `identify` is server-only (stripped by http.send): the typed email owns
+   * this game and this browser played it, so it may get the mully_kid cookie.
+   */
+  | { status: "existing"; claim: PublicClaim | null; emailed: boolean; identify?: boolean }
+  | { status: "new" | "resume"; session: PublicSession; claim: PublicClaim | null; identify?: boolean }
   | { status: "shot"; noise: { carry: number; lat: number }; result: PublicResult }
   | ({ status: "claimed" } & PublicClaim)
   | { status: "pending"; pct: number; won: boolean }
@@ -180,13 +184,14 @@ export function createTakeAShotService(deps: TasDeps) {
    * Shared outcome for someone who already has a game. Codes are only shown
    * back to the same browser; anyone else is told the code went to the inbox.
    */
-  async function existingOutcome(tx: TasTx, found: { leadId: string; lead: Data }, visitor: string | null): Promise<ApiResult> {
+  async function existingOutcome(tx: TasTx, found: { leadId: string; lead: Data }, visitor: string | null, emailKey: string): Promise<ApiResult> {
     const mine = visitorMatches(found.lead, visitor);
+    const identify = mine && found.leadId === leadIdFor(emailKey);
     const sid = typeof found.lead.sessionId === "string" ? found.lead.sessionId : "";
     const session = sid ? ((await tx.get(COLLECTIONS.sessions, sid)) as Session | null) : null;
     const reward = found.lead.reward as Reward | undefined;
-    if (mine && session && shotsLeft(session)) return { status: "resume", session: publicSession(sid, session), claim: publicClaim(reward) };
-    return { status: "existing", claim: mine ? publicClaim(reward) : null, emailed: !mine || !publicClaim(reward) };
+    if (mine && session && shotsLeft(session)) return { status: "resume", session: publicSession(sid, session), claim: publicClaim(reward), identify };
+    return { status: "existing", claim: mine ? publicClaim(reward) : null, emailed: !mine || !publicClaim(reward), identify };
   }
 
   return {
@@ -199,7 +204,7 @@ export function createTakeAShotService(deps: TasDeps) {
         if (!limit.ok) return err("Too many tries from this device. Try again later.", "rate_limited", 429);
         // Firestore: every read before the first write.
         const found = await findLead(tx, r.n.key, null, ctx.visitor);
-        const out = found ? await existingOutcome(tx, found, ctx.visitor) : null;
+        const out = found ? await existingOutcome(tx, found, ctx.visitor, r.n.key) : null;
         limit.write();
         if (!out) return { status: "ok" };
         return out.status === "resume" ? { status: "ok" } : out;
@@ -221,7 +226,7 @@ export function createTakeAShotService(deps: TasDeps) {
       return store.transaction(async (tx) => {
         const found = await findLead(tx, n.key, phone, ctx.visitor);
         if (found) {
-          const out = await existingOutcome(tx, found, ctx.visitor);
+          const out = await existingOutcome(tx, found, ctx.visitor, n.key);
           return out;
         }
         const ipLimit = await rateLimitRead(tx, "session-ip", ctx.ipHash, LIMITS.sessionsPerIpPerHour);

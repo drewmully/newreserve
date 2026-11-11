@@ -147,13 +147,21 @@ describe("service", () => {
     await t.service.session({ email: "jdoe@gmail.com", emailConsent: true, phone: "+14155550134", smsConsent: true }, t.ctx("v-1"));
     // Same inbox in another form, other browser: told it was emailed, nothing revealed.
     expect(await t.service.session({ email: "j.d.o.e+2@googlemail.com", emailConsent: true }, t.ctx("v-2")))
-      .toEqual({ status: "existing", claim: null, emailed: true });
+      .toEqual({ status: "existing", claim: null, emailed: true, identify: false });
     // Same phone, new email.
     expect(await t.service.session({ email: "other@example.com", emailConsent: true, phone: "(415) 555-0134", smsConsent: true }, t.ctx("v-3")))
       .toMatchObject({ status: "existing", claim: null });
     // Same browser, new email: resumes the original game.
-    expect(await t.service.session({ email: "third@example.com", emailConsent: true }, t.ctx("v-1"))).toMatchObject({ status: "resume" });
+    expect(await t.service.session({ email: "third@example.com", emailConsent: true }, t.ctx("v-1"))).toMatchObject({ status: "resume", identify: false });
     expect(t.col(COLLECTIONS.leads).size).toBe(1);
+  });
+
+  it("marks only the owner's email on the owner's browser as identifiable", async () => {
+    await t.service.session({ email: "jdoe@gmail.com", emailConsent: true }, t.ctx("v-1"));
+    expect(await t.service.session({ email: "jdoe@gmail.com", emailConsent: true }, t.ctx("v-1")))
+      .toMatchObject({ status: "resume", identify: true });
+    expect(await t.service.session({ email: "jdoe@gmail.com", emailConsent: true }, t.ctx("v-9")))
+      .toMatchObject({ status: "existing", identify: false });
   });
 
   it("scores on the server, keeps the best shot and pays at least the floor", async () => {

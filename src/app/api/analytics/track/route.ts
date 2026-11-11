@@ -13,7 +13,7 @@ import { checkRateLimit } from "@/lib/rateLimit";
 import { captureJourney } from "@/lib/analytics/journeyRuntime";
 import { isLifecycleEnabled } from "@/lib/klaviyo/lifecycleConfig";
 import { resolveKlaviyoIdentity } from "@/lib/klaviyo/identity";
-import { mapSiteEvent, sendSiteEventToKlaviyo } from "@/lib/klaviyo/siteEvents";
+import { KLAVIYO_ONLY_EVENTS, mapSiteEvent, sendSiteEventToKlaviyo } from "@/lib/klaviyo/siteEvents";
 
 const VALID_EVENTS = new Set([
   "page_view",
@@ -317,9 +317,9 @@ export async function POST(request: NextRequest) {
   }
 
   const eventName = sanitizeString(body.event_name, 100);
-  // This existing CTA is NOT authorized for legacy/ad-platform dispatch.
-  // Accept it only in the separately enabled Klaviyo lifecycle lane.
-  const klaviyoOnly = eventName === "shop_outfit_reserve_clicked"
+  // These events are NOT authorized for legacy/ad-platform dispatch.
+  // Accept them only in the separately enabled Klaviyo lifecycle lane.
+  const klaviyoOnly = KLAVIYO_ONLY_EVENTS.has(eventName ?? "")
     && isLifecycleEnabled("site_events");
   if (!eventName || (!VALID_EVENTS.has(eventName) && !klaviyoOnly)) {
     return NextResponse.json(

@@ -4,6 +4,7 @@
  *
  *   proshop_product_viewed            -> "Mully Viewed Product"   (browse abandonment)
  *   add_to_cart                       -> "Mully Added to Cart"    (cart recovery)
+ *   cart_identified (Klaviyo-only)    -> "Mully Added to Cart"    (bag held at signup)
  *   checkout_clicked (plan checkouts),
  *   quiz_completed, plan_selected,
  *   lp_consult_submit,
@@ -39,6 +40,14 @@ export const RESERVE_INTENT_EVENTS = new Set([
   "lp_subscription_checkout_clicked",
   "lp_editorial_checkout_clicked",
 ]);
+
+/**
+ * Events accepted only in the track route's Klaviyo lane: never persisted,
+ * never sent to ad platforms. `cart_identified` replays the bag once when a
+ * visitor signs up with items already in it, because their earlier
+ * add_to_cart was anonymous and never reached Klaviyo.
+ */
+export const KLAVIYO_ONLY_EVENTS = new Set(["shop_outfit_reserve_clicked", "cart_identified"]);
 
 /** checkout_clicked is shared with the shop carts; only these are membership checkouts. */
 const RESERVE_CHECKOUT_SOURCES = new Set(["choose_plan", "reserve_founders_lp"]);
@@ -131,7 +140,7 @@ export function mapSiteEvent(
     };
   }
 
-  if (eventName === "add_to_cart") {
+  if (eventName === "add_to_cart" || eventName === "cart_identified") {
     const handle = slug(fields.product_id);
     const name = str(fields.name);
     const variant = str(fields.variant_id);
@@ -161,6 +170,7 @@ export function mapSiteEvent(
         CartTotal: cartTotal,
         CartItemCount: num(fields.cart_item_count),
         ItemNames: itemNames && itemNames.length ? itemNames : undefined,
+        CartSource: eventName === "cart_identified" ? "signup" : undefined,
       }),
     };
   }
