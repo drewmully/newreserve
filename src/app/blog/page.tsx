@@ -5,6 +5,7 @@ import { getAllPublishedPosts, getFeaturedPost } from "./posts";
 import { ShopPageShell } from "../shop/components/ShopPageShell";
 import { LEGACY_HANDLES, LEGACY_POSTS, legacyHref } from "@/lib/legacyBlog";
 import { canonical } from "@/lib/seo";
+import { LETTER_COLLECTION } from "@/lib/newsletterCollection";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "The Journal | Mully", description: "Good reads for the course and everything around it.", alternates: canonical("/blog") };
@@ -19,6 +20,7 @@ export default async function BlogPage() {
         <header className="shop-page-heading">
           <h1>The Journal</h1>
           <p>Good reads for the course and everything around it.</p>
+          <p><Link className="shop-text-link" href={LETTER_COLLECTION.path}>Read past issues of {LETTER_COLLECTION.name}, our newsletter →</Link></p>
         </header>
         {featured && <Link href={`/blog/${featured.slug}`} className="shop-journal-feature">
           <img src={featured.image} alt={featured.imageAlt} width={900} height={600} fetchPriority="high" />

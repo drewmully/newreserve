@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { LETTER_ISSUE_SLUGS } from "@/lib/letterIssues";
 
 export type BlogCategory =
   | "Gear"
@@ -6,11 +7,17 @@ export type BlogCategory =
   | "The Craft"
   | "Inside the Reserve"
   | "Guides"
-  | "Partners";
+  | "Partners"
+  | "The Mully Letter";
 
 export interface BlogSection {
   heading: string;
   paragraphs: string[];
+  /** Optional section image (absolute URL). Used by newsletter issues. */
+  image?: string;
+  imageAlt?: string;
+  /** Photo credit or caption shown under the section image. */
+  caption?: string;
 }
 
 export interface BlogPost {
@@ -27,6 +34,8 @@ export interface BlogPost {
   highlights: string[];
   sections: BlogSection[];
   closing: string;
+  /** ISO publish timestamp (publish_date column). */
+  publishedAt?: string;
 }
 
 export const CATEGORY_COLORS: Record<BlogCategory, string> = {
@@ -36,6 +45,7 @@ export const CATEGORY_COLORS: Record<BlogCategory, string> = {
   "Inside the Reserve": "bg-forest/10 text-forest",
   Guides: "bg-ember/10 text-ember",
   Partners: "bg-taupe/20 text-charcoal/65",
+  "The Mully Letter": "bg-forest/10 text-forest",
 };
 
 const supabase = createClient(
@@ -48,7 +58,8 @@ function mapRowToPost(row: Record<string, unknown>): BlogPost {
     slug: row.slug as string,
     title: row.title as string,
     excerpt: row.excerpt as string,
-    category: row.category as BlogCategory,
+    // Letter issues are stored under an allowed category; show the collection.
+    category: (LETTER_ISSUE_SLUGS.includes(row.slug as string) ? "The Mully Letter" : row.category) as BlogCategory,
     date: row.date as string,
     readTime: row.read_time as string,
     image: row.image as string,
@@ -58,6 +69,7 @@ function mapRowToPost(row: Record<string, unknown>): BlogPost {
     highlights: row.highlights as string[],
     sections: row.sections as BlogSection[],
     closing: row.closing as string,
+    publishedAt: (row.publish_date as string | null) ?? undefined,
   };
 }
 
@@ -66,6 +78,19 @@ export async function getAllPublishedPosts(): Promise<BlogPost[]> {
     .from("blog_posts")
     .select("*")
     .eq("status", "published")
+    .order("publish_date", { ascending: false });
+  if (error || !data) return [];
+  return data.map(mapRowToPost);
+}
+
+/** Published issues of The Mully Letter, newest first. */
+export async function getLetterPosts(): Promise<BlogPost[]> {
+  if (LETTER_ISSUE_SLUGS.length === 0) return [];
+  const { data, error } = await supabase
+    .from("blog_posts")
+    .select("*")
+    .eq("status", "published")
+    .in("slug", [...LETTER_ISSUE_SLUGS])
     .order("publish_date", { ascending: false });
   if (error || !data) return [];
   return data.map(mapRowToPost);
