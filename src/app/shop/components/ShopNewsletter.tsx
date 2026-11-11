@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { trackEvent } from "@/lib/tracking";
 
 export function ShopNewsletter() {
   const [status, setStatus] = useState<"idle" | "busy" | "done" | "error">("idle");
@@ -19,6 +20,10 @@ export function ShopNewsletter() {
       });
       const result = await response.json();
       if (!response.ok || result.ok !== true) throw new Error("Signup failed");
+      void trackEvent("newsletter_signup", {
+        email: String(form.get("email") ?? "").trim().toLowerCase() || undefined,
+        properties: { source: "shop-newsletter" },
+      });
       setStatus("done");
     } catch {
       setStatus("error");

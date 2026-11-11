@@ -130,4 +130,11 @@ describe("buildMetaCapiCustomData", () => {
     const data = buildMetaCapiCustomData("page_view", { path: "/gift-sizing/tok_9" });
     expect(data.path).toBe("/gift-sizing/[token]");
   });
+  it("sends email signups as Lead", () => {
+    for (const e of ["email_submitted", "take_a_shot_email_submitted", "newsletter_signup", "quiz_email_captured"]) {
+      expect(META_STANDARD_EVENTS[e]).toBe("Lead");
+    }
+    // take_a_shot_email fires after a lookup (/check), not consent.
+    expect(META_STANDARD_EVENTS.take_a_shot_email).toBeUndefined();
+  });
 });

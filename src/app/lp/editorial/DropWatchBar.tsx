@@ -20,6 +20,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { trackEvent } from "@/lib/tracking";
 import { DROP_BAR_CONSENT } from "@/lib/shopSignup";
 
 const STORAGE_KEY = "mully_drop_bar_state";
@@ -198,6 +199,10 @@ export default function DropWatchBar() {
         }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      void trackEvent("newsletter_signup", {
+        email: trimmed,
+        properties: { source: "editorial-drop-bar" },
+      });
       // Mark signed so the bar never re-opens on this browser, but keep
       // the bar visible while we prompt for the stylist follow-up.
       writeState("signed");

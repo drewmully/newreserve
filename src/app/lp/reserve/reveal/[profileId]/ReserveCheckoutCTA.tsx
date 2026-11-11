@@ -25,6 +25,11 @@ import { useCallback, useState } from "react";
 import { readOutfitGuide, outfitLineAttributes } from "@/lib/shopOutfit";
 import { createMembershipCheckout } from "@/lib/shopifyCheckout";
 import { SHOPIFY_MEMBERSHIP_PLANS } from "@/lib/membershipConfig";
+import {
+  RESERVE_TIER_CODES,
+  type ReserveTier,
+  type ReserveTierValues,
+} from "@/lib/reserveTierPricing";
 import { trackEvent } from "@/lib/tracking";
 import type { StyleBucket } from "@/lib/styleProfiles/types";
 
@@ -36,7 +41,7 @@ import type { StyleBucket } from "@/lib/styleProfiles/types";
  * discount codes that reduce the first quarter's price; Reserve is the full
  * quarterly rate. Every tier renews at $250 / quarter after the first.
  */
-export type ReserveTier = "discovery" | "signature" | "reserve";
+export type { ReserveTier };
 
 export const TIER_META: Record<
   ReserveTier,
@@ -44,27 +49,30 @@ export const TIER_META: Record<
     code: string;
     label: string;
     firstBoxPrice: string;
-    /** firstBoxPrice as a number, sent as the Meta AddToCart value. */
+    /**
+     * Fallback Meta AddToCart value when the live Shopify price read
+     * (liveTierValues) is unavailable. Keep in step with firstBoxPrice.
+     */
     firstBoxValue: number;
     renewalCopy: string;
   }
 > = {
   discovery: {
-    code: "MULLY_DISCOVER",
+    code: RESERVE_TIER_CODES.discovery,
     label: "Discovery",
     firstBoxPrice: "$50",
     firstBoxValue: 50,
     renewalCopy: "then $250 / quarter",
   },
   signature: {
-    code: "MULLY_SIGNATURE",
+    code: RESERVE_TIER_CODES.signature,
     label: "Signature Preview",
     firstBoxPrice: "$125",
     firstBoxValue: 125,
     renewalCopy: "then $250 / quarter",
   },
   reserve: {
-    code: "", // full-price tier, no code applied
+    code: RESERVE_TIER_CODES.reserve, // full-price tier, no code applied
     label: "Reserve Collection",
     firstBoxPrice: "$250",
     firstBoxValue: 250,
@@ -88,6 +96,7 @@ export function ReserveCheckoutCTA({
   styleBucket,
   tier,
   quizLineItemProps,
+  liveTierValues,
 }: {
   profileId: string;
   styleBucket: StyleBucket;
@@ -99,6 +108,9 @@ export function ReserveCheckoutCTA({
   /** Quiz answers to stamp onto the Reserve subscription line as Shopify
    *  line item properties. Visible in admin + order webhook. */
   quizLineItemProps: QuizLineItemPropsInput;
+  /** Live first-quarter prices from Shopify (variant price minus the tier's
+   *  discount code). Null when the read failed; falls back to TIER_META. */
+  liveTierValues?: ReserveTierValues | null;
 }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -118,7 +130,7 @@ export function ReserveCheckoutCTA({
           variant_id: SHOPIFY_MEMBERSHIP_PLANS.member.merchandiseId,
           sku: "RES-MEM",
           name: "Reserve Membership",
-          price: tierMeta.firstBoxValue,
+          price: liveTierValues?.[tier] ?? tierMeta.firstBoxValue,
           quantity: 1,
           currency: "USD",
           profileId,
@@ -214,7 +226,7 @@ export function ReserveCheckoutCTA({
       );
       setLoading(false);
     }
-  }, [profileId, styleBucket, tier, tierMeta, quizLineItemProps]);
+  }, [profileId, styleBucket, tier, tierMeta, quizLineItemProps, liveTierValues]);
 
   return (
     <div>
