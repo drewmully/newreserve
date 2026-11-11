@@ -29,7 +29,7 @@ dialog.tas::backdrop{background:rgba(30,22,16,.55)}
 .tas__turnstile{min-height:65px;width:100%}
 .tas__turnstile:empty{display:none}
 /* Game first: a short headline band over the live hole, then the hole. */
-.tas__modal{--tas-kb:0px}
+.tas__modal{--tas-kb:0px;overflow:clip}
 .tas__head{position:relative;z-index:5;flex:0 0 auto;padding:16px 60px 12px 20px;background:#FAF7F0;box-shadow:0 1px 0 #E2D8C6}
 .tas__h1{font-family:"Playfair Display",Georgia,serif;font-size:28px;line-height:1.08;margin:0;font-weight:600;letter-spacing:-.015em;outline:none;text-wrap:balance}
 .tas__tag{margin:6px 0 0;display:inline-block;font-size:12px;font-weight:700;letter-spacing:.02em;border-radius:999px;padding:4px 10px;background:#C9A24A;color:#1E1610}

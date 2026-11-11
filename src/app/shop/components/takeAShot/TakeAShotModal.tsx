@@ -226,6 +226,9 @@ export function TakeAShotModal({ openSignal, trigger = "manual", onClosed }: { o
     return () => { window.removeEventListener("pagehide", onHide); game.current?.(); game.current = null; };
   }, [keepIfAsked]);
   useEffect(() => {
+    // Hidden sheets sit below the fold; a focus or tap can scroll the shell and clip the code card.
+    const shell = dialog.current?.querySelector<HTMLElement>(".tas__modal");
+    if (shell) shell.scrollTop = 0;
     dialog.current?.querySelector<HTMLElement>("[data-step-focus]")?.focus({ preventScroll: true });
   }, [step]);
   // Keep the sheets (and their button) above the on-screen keyboard.
@@ -402,7 +405,7 @@ export function TakeAShotModal({ openSignal, trigger = "manual", onClosed }: { o
     onCancel={(e) => { e.preventDefault(); close(); }}
     onClose={() => { previousFocus.current?.focus({ preventScroll: true }); onClosed?.(); }}
     onClick={(e) => { if (e.target === e.currentTarget) close(); }}>
-    <div className="tas__modal" data-step={step}>
+    <div className="tas__modal" data-step={step} onScroll={(e) => { if (e.currentTarget.scrollTop) e.currentTarget.scrollTop = 0; }}>
       <button className="tas__close" type="button" aria-label="Close" onClick={close}>×</button>
       <header className="tas__head">
         <h2 className="tas__h1" id="tas-title" tabIndex={-1} data-step-focus={step === "play" ? "" : undefined}>Take a shot at {MAX_PERCENT}% off.</h2>
