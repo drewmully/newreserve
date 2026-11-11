@@ -14,6 +14,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { trackEvent } from "@/lib/tracking";
 import { captureAttributionFromUrl } from "@/lib/attribution";
 import { GlassHeader } from "@/app/components/ClientComponents";
+import GiftSeasonHero, { type GiftHeroVariant } from "./GiftSeasonHero";
 import {
   GIFT_SEASON_OPTIONS,
   formatUsd,
@@ -114,7 +115,10 @@ function todayIso(): string {
 
 export default function GiftSeasonLPClient({
   livePrices = null,
+  heroVariant = "a",
 }: {
+  /** Hero option for Drew's comparison (?hero=a|b). Defaults to A. */
+  heroVariant?: GiftHeroVariant;
   /** Live Storefront variant prices keyed by numeric variant id. */
   livePrices?: Record<string, number> | null;
 }) {
@@ -128,23 +132,43 @@ export default function GiftSeasonLPClient({
   const formStarted = useRef(false);
   const pickerRef = useRef<HTMLDivElement | null>(null);
 
+  const pickerSectionRef = useRef<HTMLElement | null>(null);
+
   // Mobile: the Alhena chat launcher (#helix-chat-container) floats over the
-  // season cards. Hide it while the picker is on screen; it returns once the
-  // visitor scrolls past (or back above) the picker. CSS limits this to <sm.
+  // hero CTA and the season cards. Hide it while either is on screen; it
+  // returns once the visitor scrolls past. CSS limits this to <sm.
   useEffect(() => {
-    const el = pickerRef.current;
-    if (!el || typeof IntersectionObserver === "undefined") return;
+    if (typeof IntersectionObserver === "undefined") return;
+    const targets = [
+      document.querySelector<HTMLElement>("[data-testid=gift-hero-cta]"),
+      pickerRef.current,
+    ].filter((el): el is HTMLElement => !!el);
+    if (targets.length === 0) return;
     const cls = "gs-hide-chat";
+    const visible = new Set<Element>();
     const io = new IntersectionObserver(
-      ([entry]) => document.body.classList.toggle(cls, entry.isIntersecting),
+      (entries) => {
+        for (const e of entries) {
+          if (e.isIntersecting) visible.add(e.target);
+          else visible.delete(e.target);
+        }
+        document.body.classList.toggle(cls, visible.size > 0);
+      },
       { threshold: 0 }
     );
-    io.observe(el);
+    targets.forEach((t) => io.observe(t));
     return () => {
       io.disconnect();
       document.body.classList.remove(cls);
     };
-  }, []);
+  }, [heroVariant]);
+
+  function scrollToPicker() {
+    trackEvent("gift_season_hero_cta_clicked", {
+      properties: { hero: heroVariant, lp_source: LP_SOURCE },
+    }).catch(() => {});
+    pickerSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -153,6 +177,7 @@ export default function GiftSeasonLPClient({
     [options, seasons]
   );
 
+  const fromPrice = useMemo(() => Math.min(...options.map((o) => o.price)), [options]);
   const singlePrice = useMemo(
     () => options.find((o) => o.seasons === 1)?.price ?? 0,
     [options]
@@ -178,7 +203,7 @@ export default function GiftSeasonLPClient({
 
   useEffect(() => {
     captureAttributionFromUrl();
-    trackEvent("gift_season_view", { properties: { lp_source: LP_SOURCE } }).catch(() => {});
+    trackEvent("gift_season_view", { properties: { lp_source: LP_SOURCE, hero: heroVariant } }).catch(() => {});
   }, []);
 
   function pick(n: GiftSeasonCount) {
@@ -241,37 +266,16 @@ export default function GiftSeasonLPClient({
       <style>{`@media (max-width: 639px) { body.gs-hide-chat #helix-chat-container { opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; transition: opacity 150ms; } }`}</style>
       <GlassHeader />
       <main className="pt-20 sm:pt-24">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          {/* Below lg: header, image, form. lg: image left (2 rows), header + form right. */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-x-10 lg:gap-y-0">
-            <div className="order-1 lg:col-span-6 lg:col-start-7 lg:row-start-1">
-              <div className="text-[11px] tracking-[0.25em] uppercase text-ember/80">
-                Gift a season
-              </div>
-              <h1 className="font-serif text-3xl sm:text-4xl text-forest leading-[1.1] mt-2">
-                Give a season of Mully Reserve.
-              </h1>
-              <p className="text-sm text-charcoal/80 mt-4 leading-relaxed">
-                Hand-picked by a Mully stylist each season. They confirm their
-                own sizing. You pay once and it never renews.
-              </p>
-            </div>
+        <GiftSeasonHero variant={heroVariant} fromPrice={formatUsd(fromPrice)} onCta={scrollToPicker} />
 
-            <div className="order-2 lg:col-span-6 lg:col-start-1 lg:row-start-1 lg:row-span-2 lg:self-start">
-              <div className="relative w-full aspect-[16/10] sm:aspect-square rounded-lg overflow-hidden bg-forest-dark">
-                <Image
-                  src="/reserve-founders-hero.jpg"
-                  alt="A Mully Reserve laid out: folded golf apparel, a Reserve card, a braided belt and a striped polo."
-                  fill
-                  priority
-                  sizes="(max-width: 1024px) 100vw, 50vw"
-                  className="object-cover"
-                />
-              </div>
-            </div>
-
-            <div className="order-3 lg:col-span-6 lg:col-start-7 lg:row-start-2" onFocusCapture={handleFirstFocus}>
-              <div className="lg:mt-5 bg-bone-dark/40 rounded-lg border border-forest/15 p-5">
+        <section
+          id="gift-picker"
+          ref={pickerSectionRef}
+          className="max-w-2xl mx-auto px-4 sm:px-6 mt-12 lg:mt-16 scroll-mt-24"
+        >
+          <h2 className="font-serif text-2xl text-forest mb-4">Choose their gift</h2>
+            <div onFocusCapture={handleFirstFocus}>
+              <div className="bg-bone-dark/40 rounded-lg border border-forest/15 p-5">
                 <div className="text-[11px] uppercase tracking-[0.15em] text-charcoal/65 mb-2">
                   Gift length
                 </div>
@@ -466,8 +470,7 @@ export default function GiftSeasonLPClient({
                 ) : null}
               </div>
             </div>
-          </div>
-        </div>
+        </section>
 
         <section className="max-w-5xl mx-auto px-4 sm:px-6 mt-12" data-testid="gift-season-examples">
           <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-1 sm:gap-3 mb-4">

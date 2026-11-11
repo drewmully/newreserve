@@ -7,6 +7,7 @@ import path from "path";
 const FILES = [
   "src/app/lp/gift-season/page.tsx",
   "src/app/lp/gift-season/GiftSeasonLPClient.tsx",
+  "src/app/lp/gift-season/GiftSeasonHero.tsx",
   "src/app/gift-continue/[token]/page.tsx",
   "src/app/gift-continue/[token]/GiftContinueClient.tsx",
   "src/app/gift-card/[token]/page.tsx",
@@ -36,7 +37,7 @@ describe("Gift a Season pricing copy", () => {
   it("LP: no $300+ claim, free shipping behind the flag, timing from config", () => {
     const src = readFileSync(path.resolve(__dirname, "../..", "src/app/lp/gift-season/GiftSeasonLPClient.tsx"), "utf8");
     expect(src).not.toMatch(/\$300/);
-    expect(src).toMatch(/Hand-picked by a Mully stylist each season\./);
+    expect(src).toMatch(/Hand-picked by a Mully stylist\./);
     expect(src).toMatch(/giftSeasonTimingLine\(\)/);
     for (const m of src.matchAll(/[^\n]*[Ff]ree shipping[^\n]*/g)) {
       const at = m.index ?? 0;
@@ -44,6 +45,18 @@ describe("Gift a Season pricing copy", () => {
     }
     expect(src.match(/<details/g)?.length).toBe(1);
     expect(src.match(/\bq: "/g)?.length).toBeGreaterThanOrEqual(4);
+  });
+  it("hero: real images only, both options, trust row, From price from variants", () => {
+    const hero = readFileSync(path.resolve(__dirname, "../..", "src/app/lp/gift-season/GiftSeasonHero.tsx"), "utf8");
+    const lp = readFileSync(path.resolve(__dirname, "../..", "src/app/lp/gift-season/GiftSeasonLPClient.tsx"), "utf8");
+    expect(hero).not.toMatch(/\$300|reserve-founders-hero|fall-fairway|fall-firepit/);
+    expect(hero).toMatch(/cdn\.shopify\.com/);
+    expect(hero).toMatch(/\/shop\/hero-fall-2026\.jpg/);
+    expect(hero).toMatch(/Secure Shopify checkout/);
+    expect(hero).toMatch(/Paid once, never renews/);
+    expect(hero).toMatch(/Stylist-picked/);
+    expect(lp).toMatch(/Math\.min\(\.\.\.options\.map\(\(o\) => o\.price\)\)/);
+    expect(lp).not.toMatch(/reserve-founders-hero/);
   });
   it("season sizing reveal drops the $300+ claim", () => {
     const src = readFileSync(path.resolve(__dirname, "../..", "src/app/gift-sizing/[token]/GiftSizingClient.tsx"), "utf8");

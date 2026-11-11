@@ -21,11 +21,17 @@ export const metadata: Metadata = {
     title: "Gift a Season of Mully Reserve",
     description:
       "Hand-picked golf apparel and accessories each season. Paid once, never renews.",
-    images: ["/reserve-founders-hero.jpg"],
+    images: ["/shop/hero-fall-2026.jpg"],
   },
 };
 
-export default async function GiftSeasonLPPage() {
-  const livePrices = await fetchGiftSeasonLivePrices();
-  return <GiftSeasonLPClient livePrices={livePrices} />;
+export default async function GiftSeasonLPPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ hero?: string }>;
+}) {
+  const [{ hero }, livePrices] = await Promise.all([searchParams, fetchGiftSeasonLivePrices()]);
+  // ?hero=a|b lets Drew compare hero options on the preview. Default A.
+  const heroVariant = hero === "b" ? "b" : "a";
+  return <GiftSeasonLPClient livePrices={livePrices} heroVariant={heroVariant} />;
 }
