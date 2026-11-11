@@ -160,12 +160,12 @@ export default function GiftSizingClient({
               ) : (
               <>
               <p className="text-sm text-charcoal/75 leading-relaxed max-w-md mx-auto">
-                We&apos;ve got your sizing. Your first Mully Reserve box will be
-                hand-curated and ship in 5\u20137 business days. Watch your inbox
+                We&apos;ve got your sizing. Your first Mully Reserve will be
+                hand-curated and ship in 5 to 7 business days. Watch your inbox
                 for tracking.
               </p>
               <p className="text-xs text-charcoal/55 mt-6 leading-relaxed max-w-md mx-auto">
-                Your subscription auto-cancels after the first box ships, so
+                Your subscription auto-cancels after your first Reserve ships, so
                 you&apos;re never charged again unless you choose to stay on.
                 Manage everything at{" "}
                 <a href="https://mymully.com/account" className="text-forest underline">
@@ -198,15 +198,15 @@ export default function GiftSizingClient({
               ) : (
                 <>
                   <div className="text-[11px] tracking-[0.25em] uppercase text-ember/80 mb-2">
-                    Mully Reserve \u00b7 Gift Box
+                    Mully Reserve \u00b7 Gift
                   </div>
                   <h1 className="font-serif text-3xl sm:text-4xl text-forest leading-[1.1]">
-                    Hey {recipient} \u2014 {fromName} sent you Mully Reserve.
+                    Hey {recipient}, {fromName} sent you Mully Reserve.
                   </h1>
                   <p className="text-sm text-charcoal/80 mt-4 leading-relaxed">
-                    A hand-curated quarterly box of premium golf apparel and
-                    accessories is on its way. $300+ retail value in every box.
-                    Confirm your sizing below \u2014 takes about 2 minutes.
+                    Premium golf apparel and accessories, hand-picked by a
+                    Mully stylist, are on their way. Confirm your sizing below.
+                    It takes about 2 minutes.
                   </p>
                 </>
               )}
@@ -286,7 +286,7 @@ export default function GiftSizingClient({
                   <textarea
                     value={s.notes}
                     onChange={(e) => setS({ ...s, notes: e.target.value })}
-                    placeholder={isSeason ? "e.g. between sizes, size up; runs hot or cold; style preferences" : "e.g. between sizes \u2014 size up; runs hot/cold; allergies; style preferences"}
+                    placeholder={isSeason ? "e.g. between sizes, size up; runs hot or cold; style preferences" : "e.g. between sizes, size up; runs hot or cold; allergies; style preferences"}
                     rows={3}
                     className="w-full bg-bone border border-forest/20 rounded px-3 py-2.5 text-sm text-charcoal focus:outline-none focus:border-forest resize-none"
                   />
@@ -312,7 +312,7 @@ export default function GiftSizingClient({
                     ? GIFT_SEASON_SHOW_FREE_SHIPPING_EXCHANGES
                       ? "Wrong fit on anything? We swap it free. Your gift is prepaid and never renews."
                       : "Wrong fit on anything? Reply to any Mully email and we will sort it out. Your gift is prepaid and never renews."
-                    : "Wrong fit on anything? We swap it free, no questions, no shipping fee. Your subscription auto-cancels after the first box ships \u2014 you\u2019re only charged once unless you choose to stay on."}
+                    : "Wrong fit on anything? We swap it free, no questions, no shipping fee. Your subscription auto-cancels after your first Reserve ships, so you\u2019re only charged once unless you choose to stay on."}
                 </p>
               </div>
 

@@ -35,9 +35,13 @@ export const GIFT_SEASON_SHOW_FREE_SHIPPING_EXCHANGES: boolean =
 /** The timing line used under the picker and in Step 3. */
 export function giftSeasonTimingLine(
   orderBy: string = GIFT_SEASON_ORDER_BY,
-  window: string = GIFT_SEASON_SHIP_WINDOW
+  window: string = GIFT_SEASON_SHIP_WINDOW,
+  selfDeliver = false
 ): string {
-  return `Order by ${orderBy} and we email their gift reveal on the date you choose. Their first Reserve ships ${window} after they confirm sizing.`;
+  const reveal = selfDeliver
+    ? "we email you a printable gift card on the date you choose"
+    : "we email their gift reveal on the date you choose";
+  return `Order by ${orderBy} and ${reveal}. Their first Reserve ships ${window} after they confirm sizing.`;
 }
 
 /** Which launch values are still placeholders (for admin/report use). */

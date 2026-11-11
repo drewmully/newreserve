@@ -11,6 +11,7 @@ const FILES = [
   "src/app/gift-continue/[token]/GiftContinueClient.tsx",
   "src/app/gift-card/[token]/page.tsx",
   "src/app/gift-card/[token]/GiftCardView.tsx",
+  "src/app/gift-sizing/[token]/GiftSizingClient.tsx",
 ];
 
 function stripComments(src: string): string {

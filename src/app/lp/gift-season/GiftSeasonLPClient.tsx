@@ -89,7 +89,8 @@ const FAQ = [
   },
   {
     q: "What if they're already a member?",
-    a: "The gift Reserves arrive on top of their membership and never touch their billing. Prefer to handle it another way? Reply to your order confirmation and we will help.",
+    // Pending ops confirmation of how gift + membership stacking works.
+    a: "We coordinate it with their membership so pieces don't repeat. Reply to your order confirmation with any questions.",
   },
   {
     q: "Who enters the shipping address?",
@@ -338,7 +339,9 @@ export default function GiftSeasonLPClient({
                   })}
                 </div>
                 <p className="text-[11px] text-charcoal/70 mt-3 leading-relaxed" data-testid="gift-season-timing">
-                  {TIMING_LINE}
+                  {selfDeliver
+                    ? giftSeasonTimingLine(undefined, undefined, true)
+                    : TIMING_LINE}
                 </p>
 
                 <button

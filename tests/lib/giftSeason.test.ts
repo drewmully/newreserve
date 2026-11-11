@@ -184,6 +184,9 @@ describe("launch config placeholders", () => {
     expect(giftSeasonTimingLine()).toBe(
       "Order by [cutoff date TBD] and we email their gift reveal on the date you choose. Their first Reserve ships [ship window TBD] after they confirm sizing."
     );
+    expect(giftSeasonTimingLine(undefined, undefined, true)).toBe(
+      "Order by [cutoff date TBD] and we email you a printable gift card on the date you choose. Their first Reserve ships [ship window TBD] after they confirm sizing."
+    );
     expect(giftSeasonTimingLine("December 15", "5 to 7 business days")).toMatch(
       /^Order by December 15 and .* ships 5 to 7 business days after they confirm sizing\.$/
     );
@@ -272,6 +275,11 @@ describe("customer copy rules", () => {
       expect(t).not.toMatch(/\$300/);
       expect(t).not.toMatch(/free shipping|exchanges are free|Shipping and exchanges/i);
     }
+  });
+  it("legacy gift email: no $300+, em dashes, box or Mullybox", () => {
+    const t = buildGiftRecipientText({ recipientFirstName: "Sam", purchaserFirstName: "Alex", purchaserEmail: "a@x.com", giftMessage: "Hi", sizingUrl: "u" });
+    expect(t).not.toMatch(/\$300|\u2014|\u2013|--|\bbox(es)?\b|mullybox/i);
+    expect(t).toMatch(/Reserve/);
   });
   it("self-give email goes with the card and sizing links", () => {
     const t = buildGiftSelfDeliverText({ purchaserFirstName: "Alex", recipientFirstName: "Sam", seasonsTotal: 2, sizingUrl: "S", giftCardUrl: "C" });
