@@ -18,6 +18,15 @@ import "./globals.css";
  *
  * It also fires a client-side PageView on every page load, which builds
  * the same retargeting audiences that CAPI alone cannot populate.
+ *
+ * Dedup: the first PageView carries the same eventID as the server-side
+ * CAPI PageView (shared via window.__mullyPageViewEventId with
+ * trackEvent("page_view") in src/lib/tracking.ts). disablePushState stops
+ * fbevents from auto-firing an id-less PageView on client-side route
+ * changes; AnalyticsTracker's page_view mirror fires those instead, each
+ * with its own eventID (allowDuplicatePageViews lets fbevents accept them;
+ * tracking.ts keeps it to one PageView per URL). Before this, browser PageViews had no eventID and
+ * never deduped against CAPI.
  */
 function MetaPixel() {
   const pixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID;
@@ -28,7 +37,7 @@ function MetaPixel() {
       id="meta-pixel"
       strategy="afterInteractive"
       dangerouslySetInnerHTML={{
-        __html: `!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');fbq('init','${pixelId}');fbq('track','PageView');`,
+        __html: `!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');fbq.disablePushState=true;fbq.allowDuplicatePageViews=true;fbq('init','${pixelId}');var w=window,k='__mullyPageViewEventId',id=w[k];if(!id){try{id='evt-'+crypto.randomUUID()}catch(e){id='evt-'+Date.now()+'-'+Math.random().toString(36).slice(2)}w[k]=id}fbq('track','PageView',{},{eventID:id});`,
       }}
     />
   );

@@ -9,6 +9,7 @@
 
 import { getStoredAttribution } from "@/lib/attribution";
 import { PDP_COMPLETE_LOOK_PROPERTY, readStoredCompleteLookVariant } from "@/lib/pdpCompleteLook";
+import { META_STANDARD_EVENTS, buildMetaStandardData } from "@/lib/metaEvents";
 
 const ANON_ID_KEY = "mully_anon_id";
 const SESSION_ID_KEY = "mully_session_id";
@@ -182,29 +183,29 @@ function getAttributionProperties(): Record<string, string | null> {
  * No-op when fbq is undefined — i.e. when NEXT_PUBLIC_META_PIXEL_ID is not
  * configured or the pixel script hasn't finished loading yet.
  */
-const META_STANDARD_EVENTS: Record<string, string> = {
-  page_view: "PageView",
-  lp_subscription_view: "ViewContent",
-  quiz_started: "InitiateCheckout",
-  quiz_step_completed: "AddToCart",
-  quiz_email_captured: "Lead",
-  quiz_completed: "CompleteRegistration",
-  reveal_viewed: "ViewContent",
-  reveal_cta_clicked: "InitiateCheckout",
-  add_to_cart: "AddToCart",
-  initiate_checkout: "InitiateCheckout",
-  checkout_clicked: "InitiateCheckout",
-  purchase: "Purchase",
-  login: "Contact",
-  wallet_viewed: "ViewContent",
-  // subscription_state intentionally NOT mapped: fires on every status refresh,
-  // lacks value/currency. Real purchases go through "purchase" → Purchase.
-  // subscription_state: "Subscribe",
-  registry_applied: "Lead",
-  // Consult LP phone capture (Martine funnel)
-  lp_consult_view: "ViewContent",
-  lp_consult_submit: "Lead",
-};
+// META_STANDARD_EVENTS and the standard custom_data builder live in
+// src/lib/metaEvents.ts, shared with the server-side CAPI dispatcher.
+
+/**
+ * The first PageView of a full page load is fired by the inline pixel snippet
+ * in layout.tsx. Both that snippet and the first trackEvent("page_view") read
+ * or create the same id on window, whichever runs first, so the browser
+ * PageView and the server CAPI PageView share one event_id and dedupe.
+ */
+const INITIAL_PAGEVIEW_ID_KEY = "__mullyPageViewEventId";
+const INITIAL_PAGEVIEW_CLAIMED_KEY = "__mullyPageViewEventIdClaimed";
+
+function claimInitialPageViewEventId(): string | null {
+  if (typeof window === "undefined") return null;
+  const w = window as unknown as Record<string, unknown>;
+  if (w[INITIAL_PAGEVIEW_CLAIMED_KEY]) return null;
+  w[INITIAL_PAGEVIEW_CLAIMED_KEY] = true;
+  const existing = w[INITIAL_PAGEVIEW_ID_KEY];
+  if (typeof existing === "string" && existing) return existing;
+  const id = createTrackingId("evt");
+  w[INITIAL_PAGEVIEW_ID_KEY] = id;
+  return id;
+}
 
 // Purchase-side gate: only mirror Meta Purchase when the order contains
 // a RES-MEM (Reserve Member Quarterly Curation) line item. Mirrors the
@@ -227,19 +228,28 @@ function purchasePropsIncludeReserveMember(
   return false;
 }
 
+let lastMirroredPageViewUrl: string | null = null;
+
 function mirrorToMetaPixel(
   eventName: string,
   eventId: string,
   properties: Record<string, unknown>
 ): void {
   if (typeof window === "undefined") return;
-  const fbq = (
-    window as unknown as { fbq?: (...args: unknown[]) => void }
-  ).fbq;
-  if (typeof fbq !== "function") return;
-
   const metaEvent = META_STANDARD_EVENTS[eventName];
   if (!metaEvent) return;
+
+  // One browser PageView per URL: the layout snippet fires the first one
+  // (same event id as this page_view), and both AnalyticsTracker and
+  // PageViewTracker emit page_view on route changes.
+  if (eventName === "page_view") {
+    const href = window.location.href;
+    if (properties.__initial_page_view === true || lastMirroredPageViewUrl === href) {
+      lastMirroredPageViewUrl = href;
+      return;
+    }
+    lastMirroredPageViewUrl = href;
+  }
 
   // Suppress Purchase mirror for non-Reserve orders so client + server stay
   // aligned. Meta's dedup only works when both sides fire (with same event_id)
@@ -248,19 +258,31 @@ function mirrorToMetaPixel(
     return;
   }
 
-  try {
-    const eventData: Record<string, unknown> = {};
-    // Purchase needs value + currency for Meta's optimizer.
-    if (eventName === "purchase") {
-      eventData.value = properties.value ?? 0;
-      eventData.currency = properties.currency ?? "USD";
+  // content_ids / value / currency etc. so ViewContent and AddToCart can be
+  // used for catalog retargeting and value-based optimization.
+  const eventData = buildMetaStandardData(eventName, properties);
+
+  // The pixel snippet is injected afterInteractive, so a PDP's mount effect
+  // can run before window.fbq exists. Retry briefly instead of dropping the
+  // event (previously it was silently skipped).
+  let attempts = 0;
+  const send = () => {
+    const fbq = (
+      window as unknown as { fbq?: (...args: unknown[]) => void }
+    ).fbq;
+    if (typeof fbq !== "function") {
+      if (attempts++ < 20) window.setTimeout(send, 250);
+      return;
     }
-    // {eventID} is Meta's dedup key against server-side CAPI; it MUST match
-    // the event_id we pass through to fireMetaCAPI on the server.
-    fbq("track", metaEvent, eventData, { eventID: eventId });
-  } catch {
-    // Never let analytics break the page.
-  }
+    try {
+      // {eventID} is Meta's dedup key against server-side CAPI; it MUST match
+      // the event_id we pass through to fireMetaCAPI on the server.
+      fbq("track", metaEvent, eventData, { eventID: eventId });
+    } catch {
+      // Never let analytics break the page.
+    }
+  };
+  send();
 }
 
 /**
@@ -567,7 +589,9 @@ export async function trackEvent(
       }
     }
 
-    const eventId = createTrackingId("evt");
+    const initialPageViewId =
+      eventName === "page_view" ? claimInitialPageViewEventId() : null;
+    const eventId = initialPageViewId ?? createTrackingId("evt");
     const mergedProperties = {
       ...getBrowserProperties(),
       ...getAbVariantProperties(),
@@ -591,7 +615,10 @@ export async function trackEvent(
     // Mirror to client-side Meta Pixel (fbq). No-op when NEXT_PUBLIC_META_PIXEL_ID
     // is not configured. Uses the SAME eventId we pass to server-side CAPI
     // so Meta dedupes the two and counts the event once.
-    mirrorToMetaPixel(eventName, eventId, mergedProperties);
+    mirrorToMetaPixel(eventName, eventId, {
+      ...mergedProperties,
+      ...(initialPageViewId ? { __initial_page_view: true } : {}),
+    });
 
     // Mirror to client-side OpenAI Ads pixel (oaiq). No-op when
     // NEXT_PUBLIC_OPENAI_PIXEL_ID is not configured. Uses the SAME eventId
