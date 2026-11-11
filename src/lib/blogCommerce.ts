@@ -22,7 +22,7 @@ import type { BlogCategory, BlogSection } from "@/app/blog/posts";
 /** Event `variant` value now that the blocks are the default. */
 export const BLOG_COMMERCE_VARIANT = "live";
 export type BlogCommerceTemplate = "blog" | "archive";
-export type BlogCommerceBlock = "product_row_top" | "product_row_bottom" | "end_block" | "reserve_mid";
+export type BlogCommerceBlock = "product_row_top" | "product_row_bottom" | "end_block" | "reserve_mid" | "letter_signup";
 
 /** Which end-of-post block a post gets. */
 export type EndIntent = "shop" | "reserve-club" | "reserve-trip" | "reserve" | "gift";

@@ -32,9 +32,10 @@ describe("newsletterToPost", () => {
     const doc = new DOMParser().parseFromString(EMAIL, "text/html");
     const draft = emailToDraft(doc, { campaignId: "c1", previewText: "Preview line here", sentAt: "2026-11-08T14:00:00Z" });
     expect(draft.slug).toBe("this-past-week-in-golf-november-8-2026");
-    expect(draft.date).toBe("Nov 08, 2026");
+    expect(draft.date).toBe("November 8, 2026");
     expect(draft.sections[0].heading).toBe("A big Sunday");
-    expect(draft.sections[0].image).toContain("cdn.klaviyomail.com");
+    expect(draft.image).toContain("cdn.klaviyomail.com");
+    expect(draft.sections[0].image).toBeUndefined();
     const body = JSON.stringify(draft.sections);
     expect(body).toContain("[Merino Polo](/shop/sloat-merino-polo)");
     expect(body).not.toMatch(/\{\{|utm_|_kx|\$|Unsubscribe|receiving|Shop the polo|\u2014/);

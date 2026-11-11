@@ -19,7 +19,15 @@ the collection at [/blog/letters](https://www.mymully.com/blog/letters).
 - `src/app/blog/[slug]/page.tsx` adds, for letter posts only: the
   "Originally sent to Mully subscribers on <date>." line, Article JSON-LD with
   `datePublished` = send time, a link back to the collection and the
-  subscribe panel (links to the existing `/join` signup).
+  subscribe signup in two places: a compact line after the intro bullets and
+  a card at the end. Both link to the existing `/join` signup with the button
+  "Get the Mully Letter" and report `blog_cta_viewed` / `blog_cta_clicked`
+  with `block: "letter_signup"` and `placement: "inline"` or `"end"`.
+- Dates show one way on every letter surface: "November 8, 2026" (Eastern
+  time, from `publish_date`).
+- Images are copied into the repo at `public/newsletters/<slug>/` and served
+  from mymully.com. Posts never hot-link the Klaviyo CDN. The first email
+  photo becomes the post hero and is not repeated inside a section.
 - Product mentions are inline links to `/shop/<handle>`. The blog commerce row
   (`src/lib/blogCommerce.ts`) picks them up and shows live prices, so the post
   never hard-codes a price.
@@ -65,13 +73,15 @@ that is already archived. Publish only after Klaviyo shows the campaign sent.
      "Mullybox", present tense).
    - Clear every `_warnings` entry.
 
-3. Validate and print the insert:
+3. Copy images, validate and print the insert:
 
    ```sh
    npx tsx scripts/newsletter-to-post.ts --sql content/newsletters/<slug>.json
    ```
 
-   It exits non-zero and lists problems if the row has a price, code, template
+   It downloads every Klaviyo or Shopify image into
+   `public/newsletters/<slug>/`, rewrites the draft to those paths, then
+   exits non-zero and lists problems if the row has a price, code, template
    tag, tracking link, footer copy, dash, absolute Mully link, TODO, a slug
    missing from `letterIssues.ts` or a meta description outside 150 to 160
    characters. `npx vitest run --project ui
@@ -80,7 +90,8 @@ that is already archived. Publish only after Klaviyo shows the campaign sent.
 
 4. Run the printed SQL in Supabase. It is insert-only
    (`on conflict (slug) do nothing`), so an existing post is never changed.
-   Commit the JSON and the `letterIssues.ts` change and merge.
+   Commit the JSON, the images and the `letterIssues.ts` change, and merge
+   before running the insert so the local images are live.
 
 The post page goes live as soon as the row is inserted (blog pages render
 dynamically). It joins the /blog/letters list and shows as "The Mully Letter"

@@ -53,6 +53,14 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhuZmpkYnBqdWFlenhqZ2FyZ3RvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0NzMxOTAsImV4cCI6MjA5MDA0OTE5MH0.rY1jpedgZ0qJmIRNJLYJNCuIBwBTljWJGpcZI9-YN_g",
 );
 
+const LETTER_DATE = new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "America/New_York" });
+
+/** Letter issues show the send date one way everywhere: "November 8, 2026". */
+function letterDate(row: Record<string, unknown>): string {
+  const d = new Date(row.publish_date as string);
+  return Number.isNaN(d.getTime()) ? (row.date as string) : LETTER_DATE.format(d);
+}
+
 function mapRowToPost(row: Record<string, unknown>): BlogPost {
   return {
     slug: row.slug as string,
@@ -60,7 +68,7 @@ function mapRowToPost(row: Record<string, unknown>): BlogPost {
     excerpt: row.excerpt as string,
     // Letter issues are stored under an allowed category; show the collection.
     category: (LETTER_ISSUE_SLUGS.includes(row.slug as string) ? "The Mully Letter" : row.category) as BlogCategory,
-    date: row.date as string,
+    date: LETTER_ISSUE_SLUGS.includes(row.slug as string) ? letterDate(row) : (row.date as string),
     readTime: row.read_time as string,
     image: row.image as string,
     imageAlt: row.image_alt as string,

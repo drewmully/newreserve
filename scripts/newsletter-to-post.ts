@@ -18,17 +18,19 @@
  * 2. Edit the JSON: title, excerpt (150 to 160 chars), slug, cut time-bound
  *    or offer lines, check every _warnings entry.
  *
- * 3. Validate and print the insert:
+ * 3. Copy images into the repo, validate and print the insert:
  *      npx tsx scripts/newsletter-to-post.ts --sql content/newsletters/<slug>.json
- *    Exits non-zero with a list of problems if the row breaks a rule.
+ *    Copies remote images to public/newsletters/<slug>/ and rewrites the
+ *    draft to the local paths. Exits non-zero with a list of problems if the
+ *    row breaks a rule.
  *    Run the printed SQL in Supabase (insert only, ON CONFLICT DO NOTHING).
  *
  * See docs/newsletter-archive.md.
  */
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { JSDOM } from "jsdom";
-import { emailToDraft, insertSql, toRow, validateLetterRow, type LetterDraft, type LetterSource } from "../src/lib/newsletterToPost";
+import { emailToDraft, insertSql, LOCAL_IMAGE_ROOT, toRow, validateLetterRow, type LetterDraft, type LetterSource } from "../src/lib/newsletterToPost";
 
 const KLAVIYO = "https://a.klaviyo.com/api";
 const REVISION = "2026-07-15";
@@ -98,10 +100,39 @@ function listIssue(slug: string): boolean {
   return true;
 }
 
+/**
+ * Copy every remote image (Klaviyo or Shopify CDN) into
+ * public/newsletters/<slug>/ and point the draft at the local copy, so old
+ * posts never depend on email assets. Rewrites the draft file in place.
+ */
+async function localizeImages(file: string, draft: LetterDraft): Promise<number> {
+  const dir = path.join("public", LOCAL_IMAGE_ROOT, draft.slug);
+  let copied = 0;
+  const local = async (src: string): Promise<string> => {
+    if (!/^https?:\/\//.test(src)) return src;
+    const name = path.basename(new URL(src).pathname).toLowerCase().replace(/[^a-z0-9._-]/g, "-");
+    const dest = path.join(dir, name);
+    if (!existsSync(dest)) {
+      const res = await fetch(src);
+      if (!res.ok) throw new Error(`Image download failed (${res.status}): ${src}`);
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(dest, Buffer.from(await res.arrayBuffer()));
+      copied++;
+    }
+    return `/${LOCAL_IMAGE_ROOT}/${draft.slug}/${name}`;
+  };
+  draft.image = await local(draft.image);
+  for (const s of draft.sections) if (s.image) s.image = await local(s.image);
+  writeFileSync(file, JSON.stringify(draft, null, 2) + "\n");
+  return copied;
+}
+
 async function main() {
   const sqlFile = args.includes("--sql") ? positional[0] : undefined;
   if (sqlFile) {
     const draft = JSON.parse(readFileSync(sqlFile, "utf8")) as LetterDraft;
+    const copied = await localizeImages(sqlFile, draft);
+    if (copied) console.error(`Copied ${copied} image(s) to public/${LOCAL_IMAGE_ROOT}/${draft.slug}/. Commit them with the draft.`);
     const row = toRow(draft);
     const problems = validateLetterRow(row);
     if (problems.length) {

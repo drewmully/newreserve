@@ -33,7 +33,9 @@ export const LETTER_SUBSCRIBE = {
   eyebrow: "The Mully Letter",
   heading: "Get the next issue in your inbox.",
   body: "Golf news, course stories and the clothes worth owning, a couple of times a week.",
-  cta: "Sign up for the newsletter",
+  cta: "Get the Mully Letter",
+  /** One-line version for the compact inline signup after the intro. */
+  inline: "Golf news, course stories and the clothes worth owning, in your inbox.",
   href: "/join",
 };
 
@@ -70,7 +72,7 @@ export function letterArticleJsonLd(post: BlogPost) {
     headline: post.title,
     description: post.excerpt,
     datePublished: post.publishedAt,
-    image: post.image ? [post.image] : undefined,
+    image: post.image ? [post.image.startsWith("/") ? `${SITE_URL}${post.image}` : post.image] : undefined,
     mainEntityOfPage: url,
     url,
     isPartOf: { "@type": "CollectionPage", name: LETTER_COLLECTION.name, url: `${SITE_URL}${LETTER_COLLECTION.path}` },

@@ -54,12 +54,15 @@ export function BlogCommerceSlot({
   block,
   targetPath,
   productHandles,
+  placement,
   className,
   children,
 }: {
   block: BlogCommerceBlock;
   targetPath: string;
   productHandles?: string[];
+  /** Where a repeated block sits on the page (e.g. "inline" or "end"). */
+  placement?: string;
   className?: string;
   children: ReactNode;
 }) {
@@ -78,12 +81,13 @@ export function BlogCommerceSlot({
       capture("blog_cta_viewed", {
         slug, variant: BLOG_COMMERCE_VARIANT, template, block,
         target_path: targetPath,
+        ...(placement ? { placement } : {}),
         ...(handlesKey ? { product_handles: handlesKey.split(",") } : {}),
       });
     }, { threshold: 0.5 });
     io.observe(el);
     return () => io.disconnect();
-  }, [slug, template, block, targetPath, handlesKey]);
+  }, [slug, template, block, targetPath, handlesKey, placement]);
 
   const onClickCapture = (e: React.MouseEvent<HTMLDivElement>) => {
     const a = (e.target as HTMLElement).closest("a");
@@ -94,12 +98,13 @@ export function BlogCommerceSlot({
     capture("blog_cta_clicked", {
       slug, variant: BLOG_COMMERCE_VARIANT, template, block,
       target_path: path,
+      ...(placement ? { placement } : {}),
       ...(handle ? { product_handle: handle } : {}),
     });
   };
 
   return (
-    <div ref={ref} className={className} data-bc-block={block} onClickCapture={onClickCapture}>
+    <div ref={ref} className={className} data-bc-block={block} data-bc-placement={placement} onClickCapture={onClickCapture}>
       {children}
     </div>
   );

@@ -5,8 +5,9 @@ import { getLetterPosts } from "../posts";
 import { ShopPageShell } from "../../shop/components/ShopPageShell";
 import { canonical, SITE_URL } from "@/lib/seo";
 import { serializeJsonLd } from "@/lib/safeJsonLd";
-import { LETTER_COLLECTION, LETTER_SUBSCRIBE, sentDate } from "@/lib/newsletterCollection";
-import "../commerce/blog-commerce.css";
+import { LETTER_COLLECTION, sentDate } from "@/lib/newsletterCollection";
+import { LetterSignup } from "../LetterSignup";
+import { BlogCommerceProvider } from "../commerce/BlogCommerceClient";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -53,12 +54,9 @@ export default async function LettersPage() {
         ) : (
           <p>The first issues are on the way. <Link className="shop-text-link" href="/blog">Read the Journal →</Link></p>
         )}
-        <aside className="bc-panel bc-panel--end" aria-label={LETTER_SUBSCRIBE.eyebrow}>
-          <p className="bc-eyebrow">{LETTER_SUBSCRIBE.eyebrow}</p>
-          <h2 className="bc-panel__title">{LETTER_SUBSCRIBE.heading}</h2>
-          <p className="bc-panel__body">{LETTER_SUBSCRIBE.body}</p>
-          <Link className="bc-panel__cta" href={LETTER_SUBSCRIBE.href}>{LETTER_SUBSCRIBE.cta} →</Link>
-        </aside>
+        <BlogCommerceProvider slug="letters" template="blog">
+          <LetterSignup placement="end" />
+        </BlogCommerceProvider>
       </main>
     </ShopPageShell>
   );
