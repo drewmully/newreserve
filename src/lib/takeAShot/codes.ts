@@ -32,9 +32,11 @@ export function buildDiscountInput(opts: { code: string; percent: number; starts
     customerGets: {
       value: { percentage: percent / 100 },
       items: collections.length ? { collections: { add: collections } } : { all: true },
-      appliesOnOneTimePurchase: true,
+      appliesOnOneTimePurchase: CODE_RULES.appliesOnOneTimePurchase,
       appliesOnSubscription: CODE_RULES.appliesOnSubscription,
     },
+    // Reserve first box only: renewals bill at full price.
+    recurringCycleLimit: CODE_RULES.recurringCycleLimit,
     minimumRequirement: CODE_RULES.minSubtotal
       ? { subtotal: { greaterThanOrEqualToSubtotal: String(CODE_RULES.minSubtotal) } }
       : null,

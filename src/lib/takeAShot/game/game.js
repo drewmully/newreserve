@@ -59,7 +59,9 @@ function injectCss() {
   document.head.appendChild(st);
 }
 
-/** Mounts the game into `root`. Returns a cleanup function. opts.backend is required. */
+const esc = (t) => String(t).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
+
+/** Mounts the game into `root`. Returns a cleanup function. opts.backend is required. opts.terms is a short code-terms line. */
 export function mount(root, opts) {
   injectCss();
   const shotsTotal = opts.shots || 1;
@@ -695,7 +697,7 @@ export function mount(root, opts) {
     const head = won
       ? `<p class="g-eyebrow">You won</p><h3 class="g-final-h">${pct}% off</h3>`
       : `<p class="g-eyebrow">Tough hole</p><h3 class="g-final-h">${pct}% off anyway.</h3><p class="g-card-sub">${hasPhone ? 'For joining the list and adding your phone.' : 'For joining the list.'}</p>`;
-    const exp = c.expiresAt ? `<p class="g-card-sub">One use. Expires ${new Date(c.expiresAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}.</p>` : '';
+    const exp = c.expiresAt ? `<p class="g-card-sub">One use. Expires ${new Date(c.expiresAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}.${opts.terms ? ` ${esc(opts.terms)}` : ''}</p>` : '';
     const codeBox = pending
       ? `<p class="g-card-sub g-pending">Your code is on its way. We will email it to you in a few minutes.</p>`
       : `<div class="g-code"><span class="g-code-txt">${c.code}</span><button class="g-copy" type="button">Copy</button></div>${exp}<p class="g-card-sub">Saved to your bag on this device. We sent it to your email too.</p>`;
