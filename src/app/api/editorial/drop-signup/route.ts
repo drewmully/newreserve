@@ -2,7 +2,8 @@
  * POST /api/editorial/drop-signup
  *
  * Public browser-callable endpoint for the "Never miss a drop" floating
- * footer on /lp/editorial. Writes the email into a Firestore collection
+ * footer on /lp/editorial, the shop footer newsletter and /join (forwarded
+ * editorial emails; whitelisted sources in JOIN_SOURCES). Writes the email into a Firestore collection
  * (`editorial_drop_list`) with dedupe on lowercased email, and fires a
  * PostHog `email_submitted` event so it flows into the daily A/B rollup.
  *
@@ -15,7 +16,7 @@ import { headers } from "next/headers";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase-admin";
 import { captureSyncFields, scheduleKlaviyoSync } from "@/lib/klaviyo/syncState";
-import { DROP_BAR_CONSENT, SHOP_NEWSLETTER_CONSENT } from "@/lib/shopSignup";
+import { DROP_BAR_CONSENT, isJoinSource, JOIN_CONSENT_VERSION, SHOP_NEWSLETTER_CONSENT } from "@/lib/shopSignup";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -98,8 +99,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, skipped: true });
   }
 
+  // Source whitelist: shop footer, /join sources, else the editorial drop bar.
   const shopSignup = body.source === "shop-newsletter";
-  if (shopSignup && body.consent !== true) {
+  const joinSignup = isJoinSource(body.source);
+  const source: string = shopSignup ? "shop-newsletter" : joinSignup ? (body.source as string) : "editorial-drop-bar";
+  if ((shopSignup || joinSignup) && body.consent !== true) {
     return NextResponse.json({ error: "consent_required" }, { status: 400 });
   }
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
@@ -178,7 +182,7 @@ export async function POST(req: Request) {
   }
 
   // Stage "email" (default): initial capture. Consent is per submission:
-  // required for the shop footer, optional (unticked checkbox) on the
+  // required for the shop footer and /join, optional (unticked checkbox) on the
   // editorial drop bar. Only this submission's consent drives a subscribe.
   const consent = body.consent === true;
   try {
@@ -188,12 +192,13 @@ export async function POST(req: Request) {
       .set(
         {
           email,
-          source: shopSignup ? "shop-newsletter" : "editorial-drop-bar",
+          source,
           ...(consent ? {
             emailMarketingConsent: true,
             emailMarketingConsentAt: FieldValue.serverTimestamp(),
-            emailMarketingConsentVersion: shopSignup ? "shop-newsletter-2026-09" : "editorial-drop-bar-2026-10",
-            emailMarketingConsentText: shopSignup ? SHOP_NEWSLETTER_CONSENT : DROP_BAR_CONSENT,
+            emailMarketingConsentVersion: shopSignup ? "shop-newsletter-2026-09" : joinSignup ? JOIN_CONSENT_VERSION : "editorial-drop-bar-2026-10",
+            // /join mirrors the shop newsletter's consent copy exactly.
+            emailMarketingConsentText: shopSignup || joinSignup ? SHOP_NEWSLETTER_CONSENT : DROP_BAR_CONSENT,
           } : {}),
           lastSubmissionConsent: consent,
           ...captureSyncFields("email"),
@@ -216,7 +221,7 @@ export async function POST(req: Request) {
 
   // Fire PostHog after the write so a failed event doesn't lose the email.
   await firePostHog(email, variant, distinctId, {
-    extraProps: { source: shopSignup ? "shop-newsletter" : "editorial-drop-bar" },
+    extraProps: { source },
   });
 
   const res = NextResponse.json({ ok: true, stage: "email" });

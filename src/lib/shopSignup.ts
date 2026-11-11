@@ -21,6 +21,21 @@ export const EMAIL_CONSENT = "I agree to receive marketing emails from Mully. Un
 export const SMS_CONSENT = "I agree to receive recurring automated marketing texts from Mully Group, Inc. at the number provided. Up to 4 messages/month. Consent is not a condition of purchase. Message and data rates may apply. Reply STOP to cancel, HELP for help.";
 /** Footer newsletter consent copy (shown in ShopNewsletter, stored as evidence). */
 export const SHOP_NEWSLETTER_CONSENT = "I’d like emails from Mully. Unsubscribe anytime.";
+/**
+ * /join newsletter page (forwarded editorial emails). `?source=` may pick one
+ * of these; anything else falls back to "forwarded". Each value is sent to
+ * Klaviyo as the signup `source`, so each must be in F1's trigger filter.
+ */
+export const JOIN_SOURCES = ["forwarded", "share", "qr"] as const;
+export type JoinSource = (typeof JOIN_SOURCES)[number];
+export function isJoinSource(raw: unknown): raw is JoinSource {
+  return typeof raw === "string" && (JOIN_SOURCES as readonly string[]).includes(raw);
+}
+export function joinSource(raw: unknown): JoinSource {
+  return isJoinSource(raw) ? raw : "forwarded";
+}
+export const JOIN_CONSENT_VERSION = "join-2026-11";
+export const JOIN_LANDING_PATH = "/join";
 /** Optional, unticked checkbox on the /lp/editorial "Never miss a drop" bar. */
 export const DROP_BAR_CONSENT = "Email me new drops and offers. Unsubscribe anytime.";
 export function normalizeSignupPhone(raw: unknown): string | null {
