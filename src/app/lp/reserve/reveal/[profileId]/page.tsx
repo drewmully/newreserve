@@ -17,6 +17,7 @@ import type { Metadata } from "next";
 import { getStyleProfile } from "@/lib/styleProfiles/admin";
 import { getFirstNameForProfile } from "@/lib/email/sequences";
 import { RevealBrick } from "./RevealBrick";
+import { getLiveReserveTierValues } from "@/lib/reserveTierPricing.server";
 import {
   STYLE_BUCKET_LABELS,
   type StyleBucket,
@@ -84,13 +85,17 @@ export default async function ReserveRevealPage({ params }: PageProps) {
       : null,
   };
 
-  const firstName = await getFirstNameForProfile(profileId);
+  const [firstName, liveTierValues] = await Promise.all([
+    getFirstNameForProfile(profileId),
+    alreadyConverted ? Promise.resolve(null) : getLiveReserveTierValues(),
+  ]);
   return (
     <RevealBrick
       profileId={profileId}
       bucket={bucket}
       quizLineItemProps={quizLineItemProps}
       alreadyConverted={alreadyConverted}
+      liveTierValues={liveTierValues}
       firstName={firstName ?? undefined}
     />
   );

@@ -40,12 +40,15 @@ import {
   type ReserveTier,
 } from "./ReserveCheckoutCTA";
 import { RevealPageView } from "./RevealPageView";
+import type { ReserveTierValues } from "@/lib/reserveTierPricing";
 
 interface RevealBrickProps {
   profileId: string;
   bucket: StyleBucket;
   quizLineItemProps: QuizLineItemPropsInput;
   alreadyConverted: boolean;
+  /** Live first-quarter prices for the Meta AddToCart value (null = fallback). */
+  liveTierValues?: ReserveTierValues | null;
   /**
    * Optional first name from the quiz submission. Not currently rendered on
    * the tier picker surface (kept in the interface for callers).
@@ -115,6 +118,7 @@ export function RevealBrick({
   bucket,
   quizLineItemProps,
   alreadyConverted,
+  liveTierValues,
 }: RevealBrickProps) {
   const [selectedTier, setSelectedTier] = useState<ReserveTier>(DEFAULT_TIER);
   useEffect(() => {
@@ -186,6 +190,7 @@ export function RevealBrick({
             styleBucket={bucket}
             tier={selectedTier}
             quizLineItemProps={quizLineItemProps}
+            liveTierValues={liveTierValues}
           />
           <p className="mt-2 text-center text-xs text-charcoal/60">
             Cancel anytime after the first quarter. Free shipping.

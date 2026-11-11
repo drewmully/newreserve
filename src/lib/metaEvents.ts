@@ -19,6 +19,13 @@ export const META_STANDARD_EVENTS: Record<string, string> = {
   quiz_started: "QuizStart",
   quiz_step_completed: "QuizStep",
   quiz_email_captured: "Lead",
+  // Email signups outside the quiz: hero/bottom EmailCTA and the gift guide
+  // reminder (email_submitted), Take a Shot's email step, and the shop
+  // footer / editorial drop bar / /join form (newsletter_signup, fired by
+  // the client after /api/editorial/drop-signup succeeds).
+  email_submitted: "Lead",
+  take_a_shot_email: "Lead",
+  newsletter_signup: "Lead",
   quiz_completed: "CompleteRegistration",
   reveal_viewed: "ViewContent",
   // Reveal CTA puts the RES-MEM line into a Shopify cart, then sends the

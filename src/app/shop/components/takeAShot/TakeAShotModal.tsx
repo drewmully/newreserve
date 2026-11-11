@@ -237,7 +237,8 @@ export function TakeAShotModal({ openSignal }: { openSignal: number }) {
     setBusy("email"); setError("");
     try {
       const r = await api<{ status: string; claim?: Claim | null }>("check", { email, company });
-      track("email");
+      // Meta Lead: pass the email so CAPI can match the person.
+      void trackEvent("take_a_shot_email", { email: email.trim().toLowerCase(), properties: { source: "take-a-shot" } });
       if (r.status === "existing") { setExisting({ claim: r.claim ?? null }); setStep("existing"); }
       else setStep("phone");
     } catch (e) { setError(e instanceof Error ? e.message : "Please try again."); }

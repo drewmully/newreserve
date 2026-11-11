@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { trackEvent } from "@/lib/tracking";
 import { usePathname } from "next/navigation";
 import { useMembership } from "@/app/context/MembershipContext";
 import { SHOP_INTERESTS, EMAIL_CONSENT, SMS_CONSENT } from "@/lib/shopSignup";
@@ -157,7 +158,13 @@ export function ShopSignupPopup({ onTrigger }: { onTrigger?: () => void } = {}) 
       }
       remember(365);
       if (result.reward) { setReward(result.reward); saveShopReward(result.reward); }
-      if (step === "email") { setReceipt(result.receipt); setStep("sms"); }
+      if (step === "email") {
+        void trackEvent("newsletter_signup", {
+          email: String(form.get("email") ?? "").trim().toLowerCase() || undefined,
+          properties: { source: "shop-popup", interest },
+        });
+        setReceipt(result.receipt); setStep("sms");
+      }
       else setStep("done");
     } catch (e) { setError(e instanceof Error ? e.message : "Please try again."); }
     finally { setBusy(false); }
