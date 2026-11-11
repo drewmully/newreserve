@@ -158,6 +158,7 @@ const CATEGORY_INTENT: Record<BlogCategory, EndIntent> = {
   Travel: "reserve-trip",
   "The Craft": "reserve-club",
   "Inside the Reserve": "reserve",
+  "The Mully Letter": "shop",
 };
 
 /** End-of-post intent: explicit config, then gift keywords, then category. */

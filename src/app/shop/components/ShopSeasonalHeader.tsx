@@ -136,6 +136,7 @@ export function ShopSeasonalHeader({
           <Link href="/shop#outfit" onClick={outfitClick} className="shop-build-link text-sm">Build an Outfit</Link>
           <div className="mt-4 border-t border-charcoal/15 pt-3 text-sm">
             <Link href="/blog">From the Journal</Link>
+            <Link href="/blog/letters">The Mully Letter</Link>
             <Link href="/lp/subscription">Explore Mully Reserve</Link>
             <Link href={isSignedIn ? "/account" : loginHref}>{isSignedIn ? "Account" : "Log in"}</Link>
           </div>

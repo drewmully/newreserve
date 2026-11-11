@@ -12,14 +12,18 @@ import { canonical } from "@/lib/seo";
 import { BLOG_COMMERCE, endIntentFor, productHandlesFor, splitRows } from "@/lib/blogCommerce";
 import { EndPanel, EndShopLink, ProductRow, ReserveMid, getBlogCommerceProducts } from "../commerce/BlogCommerce";
 import { BlogCommerceProvider } from "../commerce/BlogCommerceClient";
+import { serializeJsonLd } from "@/lib/safeJsonLd";
+import { isLetter, LETTER_COLLECTION, LETTER_SUBSCRIBE, letterArticleJsonLd, sentLine } from "@/lib/newsletterCollection";
 
 export const dynamic = "force-dynamic";
 interface Props { params: Promise<{ slug: string }>; searchParams?: Promise<Record<string, string | string[] | undefined>> }
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const post = await getPostBySlug((await params).slug);
   if (!post) return {};
-  return { title: `${post.title} | Mully Journal`, description: post.excerpt, alternates: canonical(`/blog/${post.slug}`),
-    openGraph: { title: post.title, description: post.excerpt, type: "article", images: [{ url: post.image, alt: post.imageAlt }] } };
+  const letter = isLetter(post);
+  return { title: `${post.title} | ${letter ? "The Mully Letter" : "Mully Journal"}`, description: post.excerpt, alternates: canonical(`/blog/${post.slug}`),
+    openGraph: { title: post.title, description: post.excerpt, type: "article", images: [{ url: post.image, alt: post.imageAlt }],
+      ...(letter && post.publishedAt ? { publishedTime: post.publishedAt } : {}) } };
 }
 export default async function BlogPostPage({ params, searchParams }: Props) {
   const { slug } = await params;
@@ -37,14 +41,21 @@ export default async function BlogPostPage({ params, searchParams }: Props) {
     getBlogCommerceProducts(productHandlesFor(sections, commerce)),
   ]);
   const rows = splitRows(products);
+  // The Mully Letter: newsletter issues get a send-date line, Article JSON-LD and a signup block.
+  const letter = isLetter(post);
+  const sent = letter ? sentLine(post.publishedAt) : null;
   return <ShopPageShell>
     <BlogCommerceProvider slug={post.slug} template="blog">
     <main className="shop-page-main">
+      {letter && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(letterArticleJsonLd(post)) }} />}
       <article className="shop-article">
-        <Link href="/blog" className="shop-text-link text-xs">← The Journal</Link>
+        {letter
+          ? <Link href={LETTER_COLLECTION.path} className="shop-text-link text-xs">← {LETTER_COLLECTION.name}</Link>
+          : <Link href="/blog" className="shop-text-link text-xs">← The Journal</Link>}
         <header className="shop-page-heading">
           <div className="shop-journal-meta mb-4"><span>{post.category}</span><span>{post.date}</span><span>{post.readTime}</span></div>
           <h1>{post.title}</h1><p>{post.excerpt}</p>
+          {sent && <p className="text-xs">{sent}</p>}
         </header>
         <img className="shop-article-image" src={post.image} alt={post.imageAlt} width={960} height={640} fetchPriority="high" />
         <div className="shop-article-copy">
@@ -56,11 +67,21 @@ export default async function BlogPostPage({ params, searchParams }: Props) {
           {sections.map((section, i) => <Fragment key={section.heading}>
             <section>
               <h2>{section.heading}</h2>
+              {section.image && <figure className="my-6">
+                <img className="shop-article-image" src={section.image} alt={section.imageAlt ?? ""} width={960} height={640} loading="lazy" />
+                {section.caption && <figcaption className="mt-2 text-xs text-charcoal/60">{section.caption}</figcaption>}
+              </figure>}
               {section.paragraphs.map(p => <p key={p}><InlineText text={p} /></p>)}
             </section>
             {i === 1 && commerce?.reserveMid && <ReserveMid />}
           </Fragment>)}
           <div className="shop-article-highlights"><p>{post.closing}</p></div>
+          {letter && <aside className="bc-panel bc-panel--end" aria-label={LETTER_SUBSCRIBE.eyebrow}>
+            <p className="bc-eyebrow">{LETTER_SUBSCRIBE.eyebrow}</p>
+            <h2 className="bc-panel__title">{LETTER_SUBSCRIBE.heading}</h2>
+            <p className="bc-panel__body">{LETTER_SUBSCRIBE.body}</p>
+            <Link className="bc-panel__cta" href={LETTER_SUBSCRIBE.href}>{LETTER_SUBSCRIBE.cta} →</Link>
+          </aside>}
           <EndPanel intent={intent} />
           {intent === "shop" && rows.bottom.length === 0 && <EndShopLink />}
         </div>
