@@ -11,6 +11,10 @@ const authState = vi.hoisted(() => ({
 }));
 const posthogMock = vi.hoisted(() => ({
   identify: vi.fn(),
+  loaded: false,
+  optedOut: false,
+  sessionId: "01a1211d-59e3-7476-8282-6d4fff93ba3b",
+  getSessionId: vi.fn(),
 }));
 
 vi.mock("@/lib/firebase", () => ({
@@ -20,6 +24,11 @@ vi.mock("@/lib/firebase", () => ({
 vi.mock("posthog-js", () => ({
   default: {
     identify: posthogMock.identify,
+    get __loaded() {
+      return posthogMock.loaded;
+    },
+    has_opted_out_capturing: () => posthogMock.optedOut,
+    get_session_id: posthogMock.getSessionId,
   },
 }));
 
@@ -27,6 +36,10 @@ describe("trackEvent", () => {
   beforeEach(() => {
     authState.currentUser = null;
     posthogMock.identify.mockClear();
+    posthogMock.loaded = false;
+    posthogMock.optedOut = false;
+    posthogMock.getSessionId.mockReset();
+    posthogMock.getSessionId.mockImplementation(() => posthogMock.sessionId);
     localStorage.clear();
     sessionStorage.clear();
     document.cookie = "";
@@ -151,6 +164,52 @@ describe("trackEvent", () => {
       })
     );
     expect(body.properties.$session_id).toBe(body.properties.session_id);
+    expect(body.properties.session_id_source).toBe("app");
+  });
+
+  it("uses the native PostHog session ID when the SDK is loaded", async () => {
+    posthogMock.loaded = true;
+
+    const { trackEvent } = await import("@/lib/tracking");
+    await trackEvent("add_to_cart", {}, { includeAuth: false });
+
+    const [, requestInit] = vi.mocked(fetch).mock.calls[0]!;
+    const body = JSON.parse(String(requestInit?.body));
+
+    expect(body.properties.$session_id).toBe(posthogMock.sessionId);
+    expect(body.properties.session_id).toMatch(/^session-/);
+    expect(body.properties.session_id_source).toBe("posthog");
+  });
+
+  it("keeps the app session ID when the visitor opted out of PostHog", async () => {
+    posthogMock.loaded = true;
+    posthogMock.optedOut = true;
+
+    const { trackEvent } = await import("@/lib/tracking");
+    await trackEvent("add_to_cart", {}, { includeAuth: false });
+
+    const [, requestInit] = vi.mocked(fetch).mock.calls[0]!;
+    const body = JSON.parse(String(requestInit?.body));
+
+    expect(posthogMock.getSessionId).not.toHaveBeenCalled();
+    expect(body.properties.$session_id).toBe(body.properties.session_id);
+    expect(body.properties.session_id_source).toBe("app");
+  });
+
+  it("falls back to the app session ID when reading the PostHog session fails", async () => {
+    posthogMock.loaded = true;
+    posthogMock.getSessionId.mockImplementation(() => {
+      throw new Error("sdk unavailable");
+    });
+
+    const { trackEvent } = await import("@/lib/tracking");
+    await trackEvent("page_view", {}, { includeAuth: false });
+
+    const [, requestInit] = vi.mocked(fetch).mock.calls[0]!;
+    const body = JSON.parse(String(requestInit?.body));
+
+    expect(body.properties.$session_id).toMatch(/^session-/);
+    expect(body.properties.session_id_source).toBe("app");
   });
 
   it("identifies the PostHog browser user after login", async () => {
