@@ -36,3 +36,28 @@ describe("heroRail", () => {
     expect(rail.map((p) => p.product.slug)).toEqual(["150-to-250-2", "150-to-250-3", "100-to-150-0", "under-100-0"]);
   });
 });
+
+describe("excluded handles", () => {
+  it("never lists the CM26 sock in a tier or outfit", async () => {
+    const { GIFT_EXCLUDED_HANDLES, GIFT_OUTFITS } = await import("@/lib/giftGuide");
+    const listed = [...GIFT_GUIDE_TIERS.flatMap((t) => t.picks), ...GIFT_OUTFITS.flatMap((o) => o.looks.flatMap((l) => [l.anchor, ...l.with]))];
+    expect(GIFT_EXCLUDED_HANDLES.has("rhone-c-o-r-crew-sock")).toBe(true);
+    expect(listed.filter((h) => GIFT_EXCLUDED_HANDLES.has(h))).toEqual([]);
+  });
+
+  it("drops an excluded handle from the live guide even if it is curated", async () => {
+    const shopify = await import("@/lib/shopify");
+    const { loadGiftGuide, GIFT_EXCLUDED_HANDLES } = await import("@/lib/giftGuide");
+    const seen: string[] = [];
+    vi.mocked(shopify.getProductByHandle).mockImplementation(async (h: string) => {
+      seen.push(h);
+      return { slug: h, price: 20, variants: [{ id: "v", availableForSale: true, selectedOptions: [] }] } as never;
+    });
+    const { tiers } = await loadGiftGuide();
+    const shown = tiers.flatMap((t) => t.picks.map((p) => p.product.slug));
+    for (const h of GIFT_EXCLUDED_HANDLES) {
+      expect(seen).not.toContain(h);
+      expect(shown).not.toContain(h);
+    }
+  });
+});
