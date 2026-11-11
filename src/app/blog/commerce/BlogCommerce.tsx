@@ -20,9 +20,9 @@ import "./blog-commerce.css";
 
 const FETCH_TIMEOUT_MS = 2500;
 
-/** In stock now: at least one variant can ship today (not a preorder). */
+/** Not sold out: at least one variant can be bought (preorder sizes show the card's restocking note). */
 function inStock(p: ShopifyProduct): boolean {
-  return p.price > 0 && Boolean(p.images[0]) && p.variants.some(v => v.availableForSale && !v.currentlyNotInStock);
+  return p.price > 0 && Boolean(p.images[0]) && p.variants.some(v => v.availableForSale);
 }
 
 /**

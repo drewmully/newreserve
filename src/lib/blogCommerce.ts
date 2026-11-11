@@ -10,7 +10,10 @@
  * Rules:
  * - Product handles only. Price, image and availability always come live
  *   from the Shopify Storefront API at render time; sold-out products are
- *   skipped and a failed fetch renders nothing.
+ *   skipped and a failed fetch renders nothing. Preorder sizes show the
+ *   shared card's "Restocking · Ships <date>" note, same as /shop.
+ * - Lists favor products with sizes that ship now (checked 2026-11-11);
+ *   preorder-only picks are kept only where the post is about that item.
  * - Copy follows the Mully editorial voice: short, plain, no em dashes,
  *   no hard-coded prices, no offers.
  */
@@ -41,58 +44,58 @@ export const BLOG_COMMERCE: Record<string, BlogCommerceEntry> = {
   "greyson-vs-peter-millar-golf-comparison": {},
   "what-to-wear-private-golf-club-dress-code": {
     intent: "reserve-club",
-    products: ["rhone-commuter-polo", "olydoe-merino-ponte-quarter-zip", "duckhead-classic-fit-gold-school-chino-khaki", "duckhead-stretch-belt"],
+    products: ["rhone-commuter-polo", "olydoe-merino-ponte-quarter-zip", "olydoe-pima-long-sleeve-polo", "duckhead-classic-fit-gold-school-chino-khaki"],
   },
   "private-golf-club-membership-cost-2026": {
     intent: "reserve-club",
-    products: ["rhone-commuter-polo", "sloat-merino-polo", "quiet-golf-bristol-polo-sweater", "duckhead-classic-fit-gold-school-chino-khaki"],
+    products: ["rhone-commuter-polo", "rhone-back-nine-knit-polo", "olydoe-oxford-pique-polo", "olydoe-merino-ponte-vest"],
   },
   "golf-quarter-zip-vs-hoodie": {
-    products: ["rhone-rise-quarter-zip", "sloat-organic-cotton-fleece-hoodie", "olydoe-merino-ponte-quarter-zip", "sloat-organic-cotton-fleece-quarter-zip"],
+    products: ["rhone-rise-quarter-zip", "olydoe-merino-ponte-quarter-zip", "technically-golf-nio-half-zip", "sloat-organic-cotton-fleece-hoodie"],
   },
   "best-golf-polos-2026-quiet-golf-rhone": {
-    products: ["quiet-golf-randolph-polo", "rhone-commuter-polo", "quiet-golf-remy-polo-active-pique", "rhone-commuter-flyweight-short-9"],
+    products: ["quiet-golf-remy-polo-active-pique", "rhone-commuter-polo", "quiet-golf-randolph-polo", "rhone-commuter-flyweight-short-7"],
   },
   "golf-capsule-wardrobe-12-essential-pieces": {
     intent: "reserve",
-    products: ["quiet-golf-randolph-polo", "rhone-commuter-flyweight-short-9", "rhone-rise-quarter-zip", "rhone-long-game-vest"],
+    products: ["rhone-commuter-polo", "rhone-commuter-flyweight-short-7", "rhone-rise-quarter-zip", "olydoe-merino-ponte-vest"],
   },
   "best-golf-belt-2026-braided-leather-stretch": {
-    products: ["duckhead-stretch-belt", "technically-golf-tiger-stripe-needlepoint-belt", "duckhead-classic-fit-gold-school-chino-khaki", "duckhead-long-drive-performance-five-pocket"],
+    products: ["duckhead-stretch-belt", "technically-golf-tiger-stripe-needlepoint-belt", "duckhead-classic-fit-gold-school-chino-khaki", "winston-golf-tour-towel"],
   },
   "best-golf-rain-gear-for-spring-2026": {
-    products: ["rhone-long-game-jacket", "rhone-rise-quarter-zip", "sloat-organic-ventile-jacket", "rhone-long-game-vest"],
+    products: ["rhone-long-game-jacket", "rhone-rise-quarter-zip", "technically-golf-nio-half-zip", "olydoe-merino-ponte-vest"],
   },
   "pinehurst-golf-trip-packing-list-spring-2026": {
-    products: ["quiet-golf-randolph-polo", "rhone-commuter-flyweight-short-9", "rhone-long-game-jacket", "jolly-golf-purist-organizer"],
+    products: ["rhone-commuter-polo", "rhone-commuter-flyweight-short-7", "rhone-long-game-jacket", "jolly-golf-purist-organizer"],
   },
   "mully-pro-shop-may-2026-refresh": {
-    products: ["rhone-commuter-polo", "quiet-golf-randolph-polo", "rhone-commuter-flyweight-short-9", "quiet-golf-remy-polo-active-pique"],
+    products: ["rhone-commuter-polo", "quiet-golf-remy-polo-active-pique", "rhone-back-nine-knit-polo", "rhone-commuter-flyweight-short-7"],
   },
   "what-to-wear-golf-tournament-spectator-men": {
     intent: "shop",
-    products: ["quiet-golf-randolph-polo", "rhone-commuter-flyweight-short-9", "sloat-organic-cotton-six-panel-hat", "duckhead-stretch-belt"],
+    products: ["quiet-golf-remy-polo-active-pique", "rhone-commuter-flyweight-short-7", "rhone-rise-quarter-zip", "sloat-organic-cotton-six-panel-hat"],
   },
   "major-week-layering-system-golf-2026": {
-    products: ["quiet-golf-randolph-polo", "rhone-rise-quarter-zip", "rhone-long-game-vest", "rhone-long-game-jacket"],
+    products: ["olydoe-pima-long-sleeve-polo", "rhone-rise-quarter-zip", "rhone-voyage-down-vest", "rhone-long-game-jacket"],
   },
   "golf-trip-carry-on-essentials-2026": {
-    products: ["rhone-commuter-polo", "rhone-commuter-flyweight-short-9", "rhone-rise-quarter-zip", "stitch-roller-duffle"],
+    products: ["rhone-commuter-polo", "rhone-commuter-flyweight-short-7", "rhone-rise-quarter-zip", "jolly-golf-purist-organizer"],
   },
   "best-golf-shorts-2026": {
-    products: ["rhone-commuter-flyweight-short-9", "rhone-commuter-flyweight-short-7", "quiet-golf-randolph-polo", "duckhead-stretch-belt"],
+    products: ["rhone-commuter-flyweight-short-7", "rhone-commuter-flyweight-short-9", "quiet-golf-remy-polo-active-pique", "rhone-commuter-polo"],
   },
   "best-golf-pants-2026-rhone-commuter": {
-    products: ["duckhead-long-drive-performance-five-pocket", "duckhead-classic-fit-gold-school-chino-khaki", "duckhead-stretch-belt", "technically-golf-tiger-stripe-needlepoint-belt"],
+    products: ["duckhead-long-drive-performance-five-pocket", "duckhead-classic-fit-gold-school-chino-khaki", "duckhead-stretch-belt", "rhone-commuter-polo"],
   },
   "best-golf-windbreaker-forresters-windblocker-2026": {
-    products: ["rhone-long-game-jacket", "rhone-long-game-vest", "rhone-rise-quarter-zip", "olydoe-merino-ponte-vest"],
+    products: ["rhone-long-game-jacket", "technically-golf-nio-half-zip", "rhone-rise-quarter-zip", "duckhead-fremont-sport-performance-quilted-vest-brandy-brown"],
   },
   "the-reserve-edit-golf-trip-packing-list-2026": {
-    products: ["quiet-golf-randolph-polo", "rhone-commuter-flyweight-short-7", "duckhead-stretch-belt", "leon-weekender-duffel"],
+    products: ["quiet-golf-remy-polo-active-pique", "rhone-commuter-flyweight-short-7", "rhone-rise-quarter-zip", "jolly-golf-purist-organizer"],
   },
   "best-golf-rain-jacket-forresters-rainshedder-guide": {
-    products: ["rhone-long-game-jacket", "sloat-organic-ventile-jacket", "rhone-rise-quarter-zip", "rhone-commuter-polo"],
+    products: ["rhone-long-game-jacket", "rhone-rise-quarter-zip", "rhone-commuter-polo", "olydoe-merino-ponte-vest"],
   },
 };
 
@@ -100,35 +103,35 @@ export const BLOG_COMMERCE: Record<string, BlogCommerceEntry> = {
 export const ARCHIVE_COMMERCE: Record<string, BlogCommerceEntry> = {
   "how-the-official-world-golf-rankings-determine-golfs-top-players-a-deep-dive-into-the-ranking-system": {
     intent: "reserve",
-    products: ["rhone-commuter-polo", "quiet-golf-randolph-polo", "rhone-rise-quarter-zip"],
+    products: ["rhone-commuter-polo", "olydoe-oxford-pique-polo", "rhone-rise-quarter-zip"],
   },
   "how-is-a-golf-handicap-calculated-the-complete-guide": {
     intent: "reserve",
-    products: ["sloat-merino-polo", "quiet-golf-remy-polo-active-pique", "duckhead-long-drive-performance-five-pocket"],
+    products: ["quiet-golf-remy-polo-active-pique", "olydoe-og-supima-hollow-polo", "technically-golf-nio-half-zip"],
   },
   "the-fix-heres-how-to-finally-stop-hitting-the-ball-off-the-hosel": {
     intent: "shop",
-    products: ["rhone-approach-tech-polo", "winston-golf-tour-towel", "jolly-golf-purist-organizer", "sloat-organic-cotton-six-panel-hat"],
+    products: ["rhone-approach-tech-polo", "winston-golf-tour-towel", "jolly-golf-purist-organizer", "rhone-commuter-flyweight-short-7"],
   },
   "best-formats-for-golf-trips-with-your-buddies": {
     intent: "shop",
-    products: ["stitch-roller-duffle", "leon-weekender-duffel", "rhone-commuter-polo", "jolly-golf-purist-organizer"],
+    products: ["rhone-commuter-polo", "rhone-commuter-flyweight-short-7", "jolly-golf-purist-organizer", "stitch-roller-duffle"],
   },
   "golf-formats-explained-different-ways-to-play-the-game": {
     intent: "shop",
-    products: ["technically-golf-performance-polo", "quiet-golf-randolph-polo", "rhone-commuter-flyweight-short-9", "winston-golf-tour-towel"],
+    products: ["quiet-golf-remy-polo-active-pique", "olydoe-og-supima-hollow-polo", "rhone-commuter-flyweight-short-7", "winston-golf-tour-towel"],
   },
   "top-5-golf-resorts-in-michigan": {
     intent: "reserve-trip",
-    products: ["stitch-roller-duffle", "rhone-long-game-jacket", "rhone-rise-quarter-zip", "leon-weekender-duffel"],
+    products: ["rhone-long-game-jacket", "rhone-rise-quarter-zip", "rhone-voyage-down-vest", "stitch-roller-duffle"],
   },
   "what-is-a-cadet-glove-size": {
     intent: "shop",
-    products: ["winston-golf-tour-towel", "jolly-golf-purist-organizer", "sloat-organic-cotton-six-panel-hat", "stitch-birdie-bag"],
+    products: ["winston-golf-tour-towel", "jolly-golf-purist-organizer", "rhone-approach-tech-polo", "sloat-organic-cotton-six-panel-hat"],
   },
   "choosing-the-perfect-golf-hat-tips-for-comfort-and-performance": {
     intent: "shop",
-    products: ["sloat-organic-cotton-six-panel-hat", "winston-golf-tour-towel", "duckhead-stretch-belt", "technically-golf-tiger-stripe-needlepoint-belt"],
+    products: ["sloat-organic-cotton-six-panel-hat", "winston-golf-tour-towel", "jolly-golf-purist-organizer", "rhone-approach-tech-polo"],
   },
   "5-essential-golf-wearables-every-player-should-know-about": {
     intent: "shop",
@@ -136,15 +139,15 @@ export const ARCHIVE_COMMERCE: Record<string, BlogCommerceEntry> = {
   },
   "golf-ball-rollback": {
     intent: "reserve",
-    products: ["olydoe-oxford-pique-polo", "rhone-fairway-polo", "quiet-golf-bristol-polo-sweater"],
+    products: ["olydoe-oxford-pique-polo", "rhone-back-nine-knit-polo", "olydoe-merino-ponte-quarter-zip"],
   },
   "how-to-properly-transition-from-the-backswing-to-the-downswing": {
     intent: "shop",
-    products: ["rhone-approach-tech-polo", "technically-golf-shoulder-season-polo", "rhone-commuter-flyweight-short-9", "winston-golf-tour-towel"],
+    products: ["rhone-approach-tech-polo", "quiet-golf-remy-polo-active-pique", "rhone-commuter-flyweight-short-7", "winston-golf-tour-towel"],
   },
   "golf-outing-ideas-35-formats-themes-contests-and-extras-with-a-planning-checklist": {
     intent: "shop",
-    products: ["winston-golf-tour-towel", "jolly-golf-purist-organizer", "sloat-organic-cotton-six-panel-hat", "duckhead-stretch-belt"],
+    products: ["winston-golf-tour-towel", "jolly-golf-purist-organizer", "rhone-commuter-polo", "sloat-organic-cotton-six-panel-hat"],
   },
 };
 
