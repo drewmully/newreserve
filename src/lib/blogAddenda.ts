@@ -80,7 +80,7 @@ export const BLOG_ADDENDA: Record<string, BlogAddendum[]> = {
         heading: "The Golf Mystery Box, Explained",
         paragraphs: [
           "A golf mystery box ships a surprise assortment of apparel and gear chosen with nothing more than your size. The reveal is the fun part. The catch is the hit rate: a polo in a color you would never pick still counts toward the box value, and past-season stock is how most mystery boxes keep that number high.",
-          "Mully Reserve runs the other way. A stylist picks every piece after a short style quiz on fit, sizing and the brands you already wear, and you see your picks before anything ships. The surprise is the brand you had not tried yet, not whether the polo fits.",
+          "Mully Reserve runs the other way. It is a quarterly box: one curated shipment each season. A stylist picks every piece after a short style quiz on fit, sizing and the brands you already wear, and your fit is confirmed before anything ships. The surprise is the brand you had not tried yet, not whether the polo fits.",
           "Current plan pricing lives on the [Mully Reserve page](/subscription).",
           // s10: gift guide link.
           "Buying for a golfer instead of yourself? Our [golf gifts for men](/shop/gifts) are picked by Mully and sorted by price.",
