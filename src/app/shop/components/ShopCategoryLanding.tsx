@@ -12,12 +12,20 @@ import {
   inStockFirst,
   isCardInStock,
   isProductInStock,
+  type CategoryFaq,
   type ShopCategoryPage,
 } from "@/lib/shopCategoryPages";
 import { ShopPageShell } from "./ShopPageShell";
 import { ShopProductCard } from "./ShopProductCard";
 import { ScrollToTop } from "./ScrollToTop";
 import "./shop-category-landing.css";
+
+/** FAQ answer text with its optional inline link. JSON-LD keeps the same plain text. */
+function FaqAnswer({ faq }: { faq: CategoryFaq }) {
+  const i = faq.link ? faq.a.indexOf(faq.link.text) : -1;
+  if (!faq.link || i < 0) return <>{faq.a}</>;
+  return <>{faq.a.slice(0, i)}<Link href={faq.link.href} className="underline underline-offset-4">{faq.link.text}</Link>{faq.a.slice(i + faq.link.text.length)}</>;
+}
 
 export function categoryMetadata(page: ShopCategoryPage): Metadata {
   return {
@@ -60,7 +68,7 @@ export async function ShopCategoryLanding({ page }: { page: ShopCategoryPage }) 
             <span aria-current="page">{page.label}</span>
           </nav>
           <h1>{page.h1}</h1>
-          <p className="shop-category__intro">{page.intro}</p>
+          <p className="shop-category__intro">{page.lede}</p>
         </header>
 
         <p className="text-xs text-charcoal/60 mb-6" data-testid="category-count">
@@ -77,13 +85,18 @@ export async function ShopCategoryLanding({ page }: { page: ShopCategoryPage }) 
           </div>
         )}
 
+        <section className="shop-category__about" aria-labelledby={`${page.slug}-about`}>
+          <h2 id={`${page.slug}-about`}>{page.aboutHeading}</h2>
+          <p>{page.about}</p>
+        </section>
+
         <section className="shop-category__faq" aria-labelledby={faqId}>
           <h2 id={faqId}>Questions</h2>
           <div>
             {page.faqs.map((f) => (
               <details key={f.q}>
                 <summary>{f.q}</summary>
-                <p>{f.a}</p>
+                <p><FaqAnswer faq={f} /></p>
               </details>
             ))}
           </div>

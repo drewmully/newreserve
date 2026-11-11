@@ -11,6 +11,10 @@
  * vest", "rhone puffer vest", "quarter zip vs hoodie", "can you wear a
  * quarter zip to golf", "what quarter zips will keep me warm on the golf
  * course", "how many quarter zips should i own".
+ *
+ * Product claims are checked against Shopify descriptions and editorial
+ * headlines (CRO review on PR #368). Intros stay at brand and material level
+ * because stock is thin; the return FAQ follows /policies/refund.
  */
 import type { ShopifyProduct } from "@/lib/shopify";
 import type { ShopColorCard } from "@/lib/shopColorCards";
@@ -19,6 +23,8 @@ import { SITE_URL } from "@/lib/seo";
 export interface CategoryFaq {
   q: string;
   a: string;
+  /** Optional inline link: the first occurrence of `text` inside `a` renders as a link. */
+  link?: { text: string; href: string };
 }
 
 export interface ShopCategoryPage {
@@ -33,7 +39,12 @@ export interface ShopCategoryPage {
   /** Short label used in nav, breadcrumbs and cross-links. */
   label: string;
   h1: string;
-  intro: string;
+  /** One sentence (25 words or fewer) under the H1. */
+  lede: string;
+  /** Heading for the copy block below the grid. */
+  aboutHeading: string;
+  /** Rest of the intro, rendered below the grid (still server HTML). */
+  about: string;
   faqs: CategoryFaq[];
   /** Internal links shown under the grid. */
   related: { label: string; href: string }[];
@@ -50,8 +61,10 @@ export const SHOP_CATEGORY_PAGES: Record<"vests" | "quarter-zips", ShopCategoryP
       "Golf vests for men from Rhone, Duck Head and Olydoe: 700+ fill down, quilted and Australian merino. In-stock sizes first, with 30-day returns.",
     label: "Vests",
     h1: "Golf Vests for Men",
-    intro:
-      "A vest keeps your core warm and leaves your shoulders alone, which is the whole point on a 45-degree first tee. The Rhone Voyage Down Vest packs 700+ fill down into a shell that layers clean and stows easily. The Duck Head Fremont is quilted with a full-zip front, in low-key fall colors. Olydoe's Merino Ponte Vest is two layers of Australian merino knitted together, so it wears like a sweater without the sleeves. Pieces with sizes in stock come first.",
+    lede: "Golf vests from Rhone, Duck Head and Olydoe that keep your core warm and leave your shoulders free to turn.",
+    aboutHeading: "About golf vests",
+    about:
+      "A vest is the layer for a cold first tee: warmth through the core and nothing on the arms to slow your swing. The Rhone Voyage Down Vest packs 700+ fill down into a vest that layers clean and stows easily. Duck Head goes quilted, with a full-zip front in low-key fall colors. Olydoe knits two layers of Australian merino together for structure, drape and natural stretch. Pieces with sizes in stock come first.",
     faqs: [
       {
         q: "What should I wear under a golf vest?",
@@ -59,15 +72,16 @@ export const SHOP_CATEGORY_PAGES: Record<"vests" | "quarter-zips", ShopCategoryP
       },
       {
         q: "Down vest or quilted vest for golf?",
-        a: "Down, like the Rhone Voyage with 700+ fill, gives the most warmth for its weight and packs small in a golf bag. A quilted vest like the Duck Head Fremont is flatter and cleaner, and it looks just as right at dinner. Merino is the quiet option for the clubhouse.",
+        a: "Down, like the Rhone Voyage with 700+ fill, gives the most warmth for its weight and stows easily in a golf bag. A quilted vest like the Duck Head Fremont is flatter and cleaner, and it looks just as right at dinner. Merino is the quiet option for the clubhouse.",
       },
       {
         q: "How should a golf vest fit?",
-        a: "Close enough to sit flat over a polo, with room at the armholes for a quarter-zip underneath. If you are between sizes and plan to layer, size up. Every product page has a size chart.",
+        a: "Close enough to sit flat over a polo, with room at the armholes for a quarter-zip underneath. If you are between sizes and plan to layer, size up. Size exchanges are free if you guess wrong.",
       },
       {
-        q: "Can I return a vest if the size is wrong?",
-        a: "Yes. Returns are accepted within 30 days. See the Mully return policy for the window and conditions, or start a return online.",
+        q: "Can I return or exchange it if the size is wrong?",
+        a: "Yes. You have 30 days from delivery, and size exchanges are free. Request one on the Returns page and we email a prepaid label.",
+        link: { text: "Returns page", href: "/returns" },
       },
     ],
     related: [
@@ -86,8 +100,10 @@ export const SHOP_CATEGORY_PAGES: Record<"vests" | "quarter-zips", ShopCategoryP
       "Golf quarter-zips and half-zips for men from Rhone, Olydoe and Technically Golf, in merino and stretch performance knits. In-stock sizes first.",
     label: "Quarter-zips",
     h1: "Golf Quarter-Zips for Men",
-    intro:
-      "The quarter-zip is the one layer you can swing in, wear to lunch and keep on for the drive home. The Rhone Rise has raglan sleeves and a low-profile chin guard, cut for a full turn. Olydoe's Merino Ponte is 100% Australian merino in a double knit with natural stretch. The Technically Golf Nio Half Zip is the lightweight pick for mornings that warm up by the turn. Zip it on the first tee and open it by the 9th. Pieces with sizes in stock come first.",
+    lede: "Golf quarter-zips and half-zips from Rhone, Olydoe and Technically Golf, in merino and stretch knits you can swing in.",
+    aboutHeading: "About golf quarter-zips",
+    about:
+      "The quarter-zip is the one layer you can swing in, wear to lunch and keep on for the drive home. Rhone cuts a relaxed fit in breathable stretch fabric, with reflective detailing and anti-odor technology. Olydoe knits two layers of Australian merino together for structure, drape and natural stretch. Technically Golf makes a lightweight performance half zip for mornings that warm up by the turn. Pieces with sizes in stock come first.",
     faqs: [
       {
         q: "Can you wear a quarter-zip to play golf?",
@@ -98,12 +114,13 @@ export const SHOP_CATEGORY_PAGES: Record<"vests" | "quarter-zips", ShopCategoryP
         a: "A quarter-zip. It vents at the neck as the day warms up, there is no hood to bunch on your backswing, and it works at clubs where hoodies do not. Our quarter zip vs hoodie guide covers when a hoodie wins.",
       },
       {
-        q: "Which quarter-zip keeps you warmest on the course?",
-        a: "Merino. The Olydoe Merino Ponte is two layers of Australian merino knitted together, and it holds warmth without trapping sweat. For real cold, add a vest over any quarter-zip on this page.",
-      },
-      {
         q: "How many quarter-zips should a golfer own?",
         a: "Two covers most of the year: a lightweight half zip for cool mornings and a heavier merino layer for cold ones. Add a vest before you buy a third.",
+      },
+      {
+        q: "Can I return or exchange it if the size is wrong?",
+        a: "Yes. You have 30 days from delivery, and size exchanges are free. Request one on the Returns page and we email a prepaid label.",
+        link: { text: "Returns page", href: "/returns" },
       },
     ],
     related: [

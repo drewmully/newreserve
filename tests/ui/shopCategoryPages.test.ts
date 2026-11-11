@@ -31,11 +31,16 @@ const qz = SHOP_CATEGORY_PAGES["quarter-zips"];
 describe("shop category pages copy", () => {
   for (const page of Object.values(SHOP_CATEGORY_PAGES)) {
     it(`${page.slug}: follows the copy rules`, () => {
-      const copy = [page.title, page.description, page.h1, page.intro, ...page.faqs.flatMap((f) => [f.q, f.a])].join(" ");
+      const copy = [page.title, page.description, page.h1, page.lede, page.about, ...page.faqs.flatMap((f) => [f.q, f.a])].join(" ");
       expect(copy).not.toMatch(/[\u2014\u2013]|--/);
       expect(copy).not.toMatch(/\$\s?\d/);
       expect(copy).not.toMatch(/mullybox|\bbox\b/i);
-      const words = page.intro.split(/\s+/).length;
+      expect(page.lede.split(/\s+/).length).toBeLessThanOrEqual(25);
+      expect(copy).not.toMatch(/100%|raglan|chin guard/i);
+      const ret = page.faqs.find((f) => f.link?.href === "/returns");
+      expect(ret?.a).toBe("Yes. You have 30 days from delivery, and size exchanges are free. Request one on the Returns page and we email a prepaid label.");
+      expect(ret?.a).toContain(ret!.link!.text);
+      const words = `${page.lede} ${page.about}`.split(/\s+/).length;
       expect(words).toBeGreaterThanOrEqual(60);
       expect(words).toBeLessThanOrEqual(100);
       expect(page.faqs.length).toBeGreaterThanOrEqual(3);
