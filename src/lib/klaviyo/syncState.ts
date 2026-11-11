@@ -21,7 +21,7 @@ import { FieldValue, Timestamp, type DocumentReference } from "firebase-admin/fi
 import { adminDb } from "@/lib/firebase-admin";
 import { raiseAlert } from "@/lib/events/alert";
 import { SHOP_REWARDS } from "@/lib/shopRewards";
-import { normalizeSignupPhone, shopSignupSource, SHOP_SIGNUP_SOURCES } from "@/lib/shopSignup";
+import { isJoinSource, JOIN_LANDING_PATH, normalizeSignupPhone, shopSignupSource, SHOP_SIGNUP_SOURCES } from "@/lib/shopSignup";
 import {
   META_OFFER_SOURCE,
   BACKOFF_MINUTES,
@@ -214,7 +214,8 @@ function dropListInputs(id: string, d: Data, opts: BuildOptions): StageInputs {
   const out: StageInputs = {};
   const email = typeof d.email === "string" ? d.email : "";
   if (!email) return out;
-  const source = d.source === "shop-newsletter" ? "shop-newsletter" : "editorial-drop-bar";
+  const source: string = d.source === "shop-newsletter" || isJoinSource(d.source) ? d.source : "editorial-drop-bar";
+  const landingPath = source === "shop-newsletter" ? "/" : isJoinSource(source) ? JOIN_LANDING_PATH : "/lp/editorial";
   const docKey = safeDocKey("editorial_drop_list", id);
   // Live: consent must come from the submission that queued this sync.
   // Backfill: only docs that recorded explicit consent.
@@ -230,7 +231,7 @@ function dropListInputs(id: string, d: Data, opts: BuildOptions): StageInputs {
     capturedAt: at,
     properties: {
       mully_email_consent_captured: consented,
-      mully_signup_landing_path: source === "shop-newsletter" ? "/" : "/lp/editorial",
+      mully_signup_landing_path: landingPath,
     },
     eventProperties: { email_consent: consented, sms_consent: false },
     subscribe: { email: consented },
