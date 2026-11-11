@@ -14,6 +14,7 @@ import GiftCardView from "@/app/gift-card/[token]/GiftCardView";
 import GiftContinueClient from "@/app/gift-continue/[token]/GiftContinueClient";
 import { GiftsTable, type GiftRow } from "@/app/admin/gifts/GiftsTable";
 import { seasonProgress } from "@/lib/gifts/giftSeason";
+import { giftContinueLead } from "@/lib/email/templates/giftRecipient";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { robots: { index: false, follow: false } };
@@ -125,6 +126,7 @@ export default async function GiftSeasonFixturesPage({
         recipientEmail="sam@example.com"
         purchaserFirstName="Alex"
         seasonsTotal={4}
+        lead={giftContinueLead({ seasonsTotal: 4, purchaserFirstName: "Alex", finalDueOn: "2027-09-01" })}
         alreadyMember={false}
       />
     );

@@ -493,19 +493,30 @@ export function isNextBoxDue(
 }
 
 /**
- * Continue-as-member offer goes out once, when the final box is on its way:
- * for multi-season gifts that's when the last box order is created; for a
- * single season it's when box 1 ships.
+ * Continue-as-member offer goes out once, before the last Reserve (the LP
+ * promise). Multi-season: with the season notice for the final season,
+ * SEASON_NOTICE_LEAD_DAYS before it is due, and any time after that until
+ * the final season ships (so a late flag flip or a missed cron still sends
+ * it while the copy is true). Single season: the first Reserve is the last,
+ * so after season 1 is fulfilled.
  */
-export function isContinueOfferDue(input: {
-  seasons_total?: number | null;
-  box_orders?: Array<{ box_number: number; shipped_at?: number | null }> | null;
-  continue_offer_sent_at?: number | null;
-  converted_at?: number | null;
-}): boolean {
+export function isContinueOfferDue(
+  input: {
+    seasons_total?: number | null;
+    box_orders?: Array<{ box_number: number; shipped_at?: number | null }> | null;
+    first_box_shipped_at?: number | null;
+    continue_offer_sent_at?: number | null;
+    converted_at?: number | null;
+  },
+  nowMs: number
+): boolean {
   if (input.continue_offer_sent_at || input.converted_at) return false;
   const p = seasonProgress(input);
   if (p.seasonsTotal <= 0) return false;
   if (p.seasonsTotal === 1) return p.boxesShipped >= 1;
-  return p.boxesDispatched >= p.seasonsTotal;
+  if (p.boxesShipped >= p.seasonsTotal) return false;
+  const finalDueOn = boxDueOn(input.first_box_shipped_at ?? null, p.seasonsTotal);
+  if (!finalDueOn) return false;
+  const dueMs = Date.parse(`${finalDueOn}T00:00:00Z`);
+  return nowMs >= dueMs - SEASON_NOTICE_LEAD_DAYS * DAY_MS;
 }
