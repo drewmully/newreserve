@@ -10,9 +10,13 @@ import { notFound, redirect } from "next/navigation";
 import { getAllPublishedPosts } from "../../../blog/posts";
 import { ShopPageShell } from "../../../shop/components/ShopPageShell";
 import { LEGACY_HANDLES, LEGACY_POSTS, getLegacyPost, type LegacyPost } from "@/lib/legacyBlog";
+import { ARCHIVE_COMMERCE, endIntentFor, splitRows } from "@/lib/blogCommerce";
+import { EndPanel, EndShopLink, ProductRow, getBlogCommerceProducts } from "../../../blog/commerce/BlogCommerce";
+import { BlogCommerceProvider } from "../../../blog/commerce/BlogCommerceClient";
 import "./legacy-post.css";
 
-export const revalidate = 86400;
+// Hourly, to match /shop/[slug], so the blog commerce prices stay current.
+export const revalidate = 3600;
 export const dynamicParams = false;
 
 interface Props { params: Promise<{ handle: string }> }
@@ -64,7 +68,15 @@ export default async function LegacyPostPage({ params }: Props) {
   // Content missing or Shopify unreachable: send readers to the Journal (temporary).
   if (!post) redirect("/blog");
   const next = LEGACY_POSTS[handle];
-  const related = (await getAllPublishedPosts()).slice(0, 3);
+  // Blog commerce v1 (test variant only; control renders exactly as before).
+  const commerce = ARCHIVE_COMMERCE[handle];
+  const intent = endIntentFor(handle, null, commerce);
+  const [allPosts, products] = await Promise.all([
+    getAllPublishedPosts(),
+    getBlogCommerceProducts(commerce?.products ?? []),
+  ]);
+  const related = allPosts.slice(0, 3);
+  const { bottom } = splitRows(products);
   const jsonLd = {
     "@context": "https://schema.org",
     "@type": "Article",
@@ -76,6 +88,7 @@ export default async function LegacyPostPage({ params }: Props) {
   };
 
   return <ShopPageShell>
+    <BlogCommerceProvider slug={handle} template="archive">
     <main className="shop-page-main">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
       <article className="shop-article">
@@ -89,6 +102,8 @@ export default async function LegacyPostPage({ params }: Props) {
         {post.image && <img className="shop-article-image" src={post.image.url} alt={post.image.altText ?? post.title} width={960} height={640} fetchPriority="high" />}
         <div className="shop-article-copy shop-legacy-copy">
           <div dangerouslySetInnerHTML={{ __html: post.html }} />
+          <ProductRow products={bottom} block="product_row_bottom" size="full" />
+          {intent === "shop" ? <EndShopLink /> : <EndPanel intent={intent} />}
           <Link className="shop-legacy-next" href={next.href}>
             <span>Next from Mully</span>
             <strong>{next.headline} →</strong>
@@ -105,5 +120,6 @@ export default async function LegacyPostPage({ params }: Props) {
         </Link>)}</div>
       </section>}
     </main>
+    </BlogCommerceProvider>
   </ShopPageShell>;
 }

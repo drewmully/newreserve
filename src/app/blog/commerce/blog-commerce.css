@@ -1,0 +1,66 @@
+/* Blog commerce v1 (Journal + archive). Builds on shop-pages.css tokens and
+   the shared .shop-product-card; overrides only what the article copy styles
+   (.shop-article-copy p/h2, .shop-legacy-copy a/img) would otherwise change. */
+
+.bc-eyebrow,
+.shop-article-copy .bc-eyebrow {display: block; font-size: 11px; line-height: 1.4; letter-spacing: .14em; text-transform: uppercase; font-weight: 600; color: #7a5a3a; margin: 0 0 14px}
+
+/* Product rows */
+.bc-row {margin: 36px 0}
+.bc-row__grid {display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 28px 18px}
+.bc-row--full {margin: 48px 0 0}
+.bc-row--full .bc-row__grid {gap: 36px 24px}
+.bc-row__title,
+.shop-article-copy .bc-row__title {font-family: var(--font-serif); font-size: 28px; line-height: 1.2; margin: 0 0 24px; color: #292720}
+.bc-row--compact {border-block: 1px solid #ddd9d0; padding: 24px 0 28px}
+.bc-row--compact .shop-product-card h3 {font-size: 13px}
+/* Highlights already draw a rule above; avoid a doubled divider. */
+.shop-article-highlights + [data-bc-block] > .bc-row--compact {border-top: 0; padding-top: 0; margin-top: 28px}
+/* Three cards fill the row instead of leaving an empty fourth column. */
+.bc-row__grid[data-count="3"] {grid-template-columns: repeat(3,minmax(0,1fr))}
+
+/* Keep the shared card's own type when it sits inside article copy. */
+.bc-row .shop-product-card p,
+.bc-row .shop-product-card h3 {line-height: 1.45}
+.bc-row .shop-product-card p + p {margin-top: 0}
+/* Restocking note: article copy and legacy copy enlarge bare p tags. */
+.shop-article-copy .bc-row .shop-product-card p.text-xs,
+.shop-legacy-copy .bc-row .shop-product-card p.text-xs,
+.bc-row .shop-product-card p.text-xs {font-size: 12px; line-height: 1.45; margin: 4px 0 0; color: #686357}
+.bc-row .shop-product-card .shop-product-card__brand {font-size: 10px; color: #686357; margin-top: 14px}
+.bc-row .shop-product-card h3 {margin: 6px 0; color: #292720; font-family: inherit}
+.bc-row .shop-product-card__price {font-size: 13px}
+.bc-row .shop-product-card__price span {font-size: 13px}
+.bc-row .shop-product-card__price .line-through {font-size: 11px}
+
+/* Archive body styles (.shop-legacy-copy) target bare a/img tags. */
+.shop-pages .shop-legacy-copy .bc-row a {text-decoration: none; color: inherit}
+.shop-pages .shop-legacy-copy a.bc-panel__cta,
+.shop-pages .shop-legacy-copy a.bc-shop-link {text-decoration: none; color: #fff}
+.shop-legacy-copy .bc-row img {margin: 0; border-radius: 0; height: 100%}
+.shop-legacy-copy .bc-row--full {padding-top: 0; border-top: 0; margin-top: 48px}
+
+/* Reserve / gift panels */
+.bc-panel {background: #efe9de; padding: 32px 32px 34px; margin: 40px 0}
+.bc-panel--mid {margin: 36px 0 8px}
+.bc-panel__title,
+.shop-article-copy .bc-panel__title {font-family: var(--font-serif); font-size: 26px; line-height: 1.2; font-weight: 500; color: #292720; margin: 0 0 12px; max-width: 480px; text-wrap: balance}
+.bc-panel__body,
+.shop-article-copy .bc-panel__body {font-size: 15px; line-height: 1.6; color: #4d4b46; margin: 0 0 22px; max-width: 480px}
+.bc-panel__cta,
+.bc-shop-link {display: inline-flex; align-items: center; min-height: 46px; background: #1d1d1b; color: #fff; padding: 0 22px; font-size: 14px; letter-spacing: .02em; text-decoration: none; transition: background-color 180ms}
+.bc-panel__cta:hover,.bc-panel__cta:focus-visible,
+.bc-shop-link:hover,.bc-shop-link:focus-visible {background: #4a3528}
+.bc-shop-link {margin-top: 28px}
+
+@media (max-width: 600px) {
+  /* Compact row scrolls sideways on phones; the full row is a 2-up grid. */
+  .bc-row--compact .bc-row__grid {display: flex; gap: 14px; overflow-x: auto; scroll-snap-type: x mandatory; margin: 0 -20px; padding: 0 20px 4px; scroll-padding-inline: 20px; scrollbar-width: none}
+  .bc-row--compact .bc-row__grid::-webkit-scrollbar {display: none}
+  .bc-row--compact .shop-product-card {flex: 0 0 40%; scroll-snap-align: start}
+  .bc-row--full .bc-row__grid, .bc-row--full .bc-row__grid[data-count="3"] {grid-template-columns: repeat(2,minmax(0,1fr)); gap: 28px 14px}
+  .bc-row__title, .shop-article-copy .bc-row__title {font-size: 24px}
+  .bc-panel {padding: 26px 22px 28px}
+  .bc-panel__title, .shop-article-copy .bc-panel__title {font-size: 23px}
+  .bc-panel__cta, .bc-shop-link {width: 100%; justify-content: center}
+}

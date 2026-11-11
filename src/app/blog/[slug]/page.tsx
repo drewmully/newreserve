@@ -1,12 +1,16 @@
 /* eslint-disable @next/next/no-img-element */
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Fragment } from "react";
 import { notFound } from "next/navigation";
 import { getPostBySlug, getRelatedPosts } from "../posts";
 import { ShopPageShell } from "../../shop/components/ShopPageShell";
 import { applyAddenda, BLOG_POST_OVERRIDES } from "@/lib/blogAddenda";
 import { InlineText } from "../InlineText";
 import { canonical } from "@/lib/seo";
+import { BLOG_COMMERCE, endIntentFor, productHandlesFor, splitRows } from "@/lib/blogCommerce";
+import { EndPanel, EndShopLink, ProductRow, ReserveMid, getBlogCommerceProducts } from "../commerce/BlogCommerce";
+import { BlogCommerceProvider, BlogCommerceSlot } from "../commerce/BlogCommerceClient";
 
 export const dynamic = "force-dynamic";
 interface Props { params: Promise<{ slug: string }> }
@@ -21,8 +25,17 @@ export default async function BlogPostPage({ params }: Props) {
   const found = await getPostBySlug(slug);
   if (!found) notFound();
   const post = { ...found, ...BLOG_POST_OVERRIDES[found.slug] };
-  const related = await getRelatedPosts(slug);
+  const sections = applyAddenda(post.slug, post.sections);
+  // Blog commerce v1 (test variant only; control renders exactly as before).
+  const commerce = BLOG_COMMERCE[post.slug];
+  const intent = endIntentFor(post.slug, post.category, commerce);
+  const [related, products] = await Promise.all([
+    getRelatedPosts(slug),
+    getBlogCommerceProducts(productHandlesFor(sections, commerce)),
+  ]);
+  const rows = splitRows(products);
   return <ShopPageShell>
+    <BlogCommerceProvider slug={post.slug} template="blog">
     <main className="shop-page-main">
       <article className="shop-article">
         <Link href="/blog" className="shop-text-link text-xs">← The Journal</Link>
@@ -36,13 +49,23 @@ export default async function BlogPostPage({ params }: Props) {
           {post.highlights.length > 0 && <aside className="shop-article-highlights" aria-label="Key points">
             <ul>{post.highlights.map(point => <li key={point}>{point}</li>)}</ul>
           </aside>}
-          {applyAddenda(post.slug, post.sections).map(section => <section key={section.heading}>
-            <h2>{section.heading}</h2>
-            {section.paragraphs.map(p => <p key={p}><InlineText text={p} /></p>)}
-          </section>)}
+          <ProductRow products={rows.top} block="product_row_top" size="compact" />
+          {sections.map((section, i) => <Fragment key={section.heading}>
+            <section>
+              <h2>{section.heading}</h2>
+              {section.paragraphs.map(p => <p key={p}><InlineText text={p} /></p>)}
+            </section>
+            {i === 1 && commerce?.reserveMid && <ReserveMid />}
+          </Fragment>)}
           <div className="shop-article-highlights"><p>{post.closing}</p></div>
-          <Link className="shop-text-link text-sm" href="/shop">Explore the Mully Edit →</Link>
+          <BlogCommerceSlot show="control" block="end_block" targetPath="/shop">
+            <Link className="shop-text-link text-sm" href="/shop">Explore the Mully Edit →</Link>
+          </BlogCommerceSlot>
+          <EndPanel intent={intent} />
+          {intent === "shop" && rows.bottom.length === 0 && <EndShopLink />}
         </div>
+        <ProductRow products={rows.bottom} block="product_row_bottom" size="full" />
+        {intent === "shop" && rows.bottom.length > 0 && <EndShopLink />}
       </article>
       {related.length > 0 && <section className="mt-16" aria-labelledby="more-stories">
         <h2 id="more-stories" className="font-serif text-3xl mb-8">More from the Journal</h2>
@@ -53,5 +76,6 @@ export default async function BlogPostPage({ params }: Props) {
         </Link>)}</div>
       </section>}
     </main>
+    </BlogCommerceProvider>
   </ShopPageShell>;
 }
