@@ -151,7 +151,7 @@ function DualHero({ season, reservePrice, active }: { season: string; reservePri
             <ul className="hh__trust">
               <li>Fit confirmed before Reserve ships</li>
               <li>Ships from Mully Fulfillment</li>
-              <li>Cancel Reserve after your first quarter</li>
+              <li>Free size exchanges</li>
             </ul>
           </div>
           <div className="hh__grid">
@@ -177,7 +177,7 @@ function DualHero({ season, reservePrice, active }: { season: string; reservePri
               <div className="hh__body">
                 <p className="hh__kicker">Mully Reserve<span className="hh__dl"> · Quarterly</span></p>
                 <h2 className="hh__cardtitle">Styled for you each season</h2>
-                <p className="hh__desc">4 to 6 pieces a quarter, in your sizes.<span className="hh__dl"> Your fit is confirmed first, and you can cancel after your first quarter.</span></p>
+                <p className="hh__desc">4 to 6 pieces a quarter, in your sizes.<span className="hh__dl"> Fit confirmed first, free size exchanges, cancel after your first quarter.</span></p>
                 <div className="hh__row">
                   <Link className="hh__btn" href="/subscription" data-hero-cta="reserve">Build your Reserve</Link>
                   {reservePrice && <span className="hh__price">{`${reservePrice} a quarter`}</span>}
