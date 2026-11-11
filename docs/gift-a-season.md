@@ -144,6 +144,22 @@ Orders are tagged as listed above. The Supabase `gift_seasons` table supports SQ
   - `lp_source` added on `gift_season_form_error` and `gift_season_checkout_error`.
   - `gift_season_purchased` carries `seasons`, `value` and `currency`. The main `purchase` event now carries `gift_kind`, `seasons` and `gift_self_deliver`.
 
+## Hero options (?hero=a|b)
+
+The page header is the standard shop header and top bar (`ShopSeasonalHeader`). The hero has an eyebrow, the H1, one line, a "Choose a gift length" CTA on mobile and the picker on desktop, with the trust row ("Paid once. Never renews." · "They pick their own sizes" · "Secure Shopify checkout.") right under the CTA. On desktop the image fills the left half at the same height as the picker column. The recipient form is now step 2 below the picker (`#gift-details`). The type scale matches the homepage: Playfair 400 at 30px on mobile and up to 52px on desktop, -0.025em tracking, #111 ink and an olive eyebrow.
+
+- **A (default): product flat lay.** These are live Shopify product packshots arranged on a bone ground. White backgrounds drop out with `mix-blend-multiply`, and nothing is generated.
+  - Rhone Rise 1/4 Zip: `mully-fall-2026-24.jpg`
+  - Quiet Golf Remy Polo: `mully-fall-2026-16.jpg`
+  - Greyson Gothic G Dad Hat: `MG23A25_100_1_4858.webp`
+  - Will Leather Saddle Belt: a prepared white copy of `60078_SADDLE_BELT_TAN_001`
+- **B: course photo.** This uses `/shop/hero-fall-2026.jpg`, the real Mully course photograph documented in `public/shop-redesign/asset-manifest.md`.
+  - It has no single product focal point.
+  - The homepage hero (`fall-fairway-*`) and `fall-firepit-*` are AI-generated per that manifest, so they're not used.
+  - The `/lp/discover` box images have unconfirmed provenance (PR #116 calls one a "render"), so they're excluded until someone confirms they're real photos.
+- No member quote yet. There's no reviews system in the repo. Quoting Intercom conversations would need the member's permission.
+- Event: `gift_season_hero_cta_clicked` {hero, target: picker|details, seasons, lp_source}. `gift_season_view` includes `hero`.
+
 ## Copy rules
 
 There are no em dashes or double dashes. Customer copy uses "Mully" and "Reserve", never "box" or "Mullybox". Vitest enforces this on the season emails and season UI files.
