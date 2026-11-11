@@ -49,7 +49,7 @@ const BRAND_LOGOS = [
 ];
 
 const PROOF_STATS = [
-  { stat: "96%", label: "Renewal rate" },
+  { stat: "Free", label: "Size exchanges" },
   { stat: "4 to 6", label: "Pieces per quarter" },
   { stat: "20+", label: "Brands in rotation" },
   { stat: "1", label: "Stylist on your fit" },
@@ -208,7 +208,7 @@ export default function SubscriptionLPClient() {
               A considered edit, built around how you play.
             </h2>
             <p className="text-base sm:text-lg text-bone/75 mt-6 leading-relaxed">
-              Four pieces tuned to your style and size, apparel and accessories
+              Four to six pieces tuned to your style and size, apparel and accessories
               that earn a place in your rotation. Nothing ships until your
               sizing is confirmed. If a piece misses, we exchange it.
             </p>
@@ -217,11 +217,11 @@ export default function SubscriptionLPClient() {
           <div className="mt-14 grid grid-cols-1 sm:grid-cols-3 gap-6">
             <div className="rounded-sm border border-bone/15 p-6">
               <div className="text-[10px] tracking-[0.22em] uppercase text-bone/50 mb-3">
-                Ships in 1 business day
+                Fit confirmed first
               </div>
               <div className="text-sm text-bone/75 leading-relaxed">
-                Your first edit typically ships within 1 business day. Sizing is
-                confirmed after checkout with a 60-second form.
+                Sizing is confirmed after checkout with a 60-second form. Your
+                first edit ships once your fit is set.
               </div>
             </div>
             <div className="rounded-sm border border-bone/15 p-6">

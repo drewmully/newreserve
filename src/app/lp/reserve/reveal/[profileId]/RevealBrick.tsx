@@ -197,8 +197,8 @@ export function RevealBrick({
         <ul className="mt-6 grid grid-cols-2 gap-2.5 sm:gap-3">
           <Chip icon={<IconBox />} text={chipsSpec.pieces} />
           <Chip icon={<IconGift />} text={chipsSpec.retail} />
-          <Chip icon={<IconTruck />} text="Ships in 2 days" />
-          <Chip icon={<IconStar />} text="96% renewal" />
+          <Chip icon={<IconTruck />} text="Free size exchanges" />
+          <Chip icon={<IconStar />} text="Fit confirmed first" />
         </ul>
 
         <p className="mt-6 text-center text-[10px] uppercase tracking-[0.22em] text-charcoal/45">

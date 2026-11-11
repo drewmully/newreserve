@@ -4,7 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPostBySlug, getRelatedPosts } from "../posts";
 import { ShopPageShell } from "../../shop/components/ShopPageShell";
-import { applyAddenda } from "@/lib/blogAddenda";
+import { applyAddenda, BLOG_POST_OVERRIDES } from "@/lib/blogAddenda";
 import { InlineText } from "../InlineText";
 import { canonical } from "@/lib/seo";
 
@@ -18,8 +18,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 export default async function BlogPostPage({ params }: Props) {
   const { slug } = await params;
-  const post = await getPostBySlug(slug);
-  if (!post) notFound();
+  const found = await getPostBySlug(slug);
+  if (!found) notFound();
+  const post = { ...found, ...BLOG_POST_OVERRIDES[found.slug] };
   const related = await getRelatedPosts(slug);
   return <ShopPageShell>
     <main className="shop-page-main">

@@ -11,6 +11,7 @@ export const metadata: Metadata = {
   title: HOME_TITLE,
   alternates: canonical("/"),
   openGraph: { title: HOME_TITLE, description: shopMetadata.description ?? undefined, url: `${SITE_URL}/`, siteName: "Mully", type: "website" },
+  twitter: { card: "summary", title: HOME_TITLE, description: shopMetadata.description ?? undefined },
 };
 
 // Organization structured data (SEO recovery s08). sameAs lists only the
