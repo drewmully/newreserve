@@ -1,0 +1,121 @@
+# Gift a Season: design
+
+Status: built on branch `feat/gift-a-season`, [PR #352](https://github.com/drewmully/newreserve/pull/352) (draft). Owner: Drew Amato. Target: live before about Nov 20, 2026.
+
+## What it is
+
+Prepaid Reserve gifts that never auto-renew:
+
+| Length | Reserves | Price (Drew, Nov 11) | Per season | SKU | Variant id |
+|---|---|---|---|---|---|
+| 1 season | 1 | $299 | $299 | RES-GIFT-1S | 50765708820672 |
+| 2 seasons | 2 | $550 | $275 | RES-GIFT-2S | 50765708853440 |
+| 4 seasons | 4 | $1,000 | $250 | RES-GIFT-4S | 50765708886208 |
+
+Pricing note: the original brief assumed $250/season with no discount ($250 / $500 / $1,000). Drew replaced that on Nov 11 with $299 / $550 / $1,000. The regular Reserve Member price used in the continue offer stays $250 a season.
+
+## Reuse of existing gift plumbing
+
+The season gift is a new kind of the existing `gift_orders` Firestore doc (doc id = Shopify order id). It runs on the same flow as the legacy recurring gift:
+
+- The LP cart attributes (`gift=true`, `gift_recipient_*`, `gift_deliver_on`, `gift_message`) are the same ones `/lp/gift` uses.
+- `orders-paid` creates the doc.
+- `scheduled-send` sends the recipient reveal on the send date.
+- `/gift-sizing/[token]` collects sizing.
+- `fulfillments-create` records shipments.
+- `/admin/gifts` is the ops view.
+
+Season gifts are told apart by `gift_kind: "season"` and the line-item variant or SKU.
+
+Season gifts never touch Loop. The legacy post-first-shipment cron cancels the purchaser's Loop subscription. It never sees season gifts, because they move to `season_active` rather than `first_box_shipped`.
+
+## Data model (additive only)
+
+**Firestore `gift_orders`**: new optional fields only. Legacy docs are unaffected.
+
+- `gift_kind` ("season")
+- `seasons_total` (1, 2 or 4)
+- `box_orders[]`: `{box_number, shopify_order_id, shopify_order_name, created_at, due_on, shipped_at, fulfillment_id}`
+- `box_order_ids[]`, used for array-contains lookup
+- `boxes_shipped`, `boxes_remaining`, `next_box_due_on`
+- `continue_offer_sent_at`, `converted_at`, `converted_order_id`
+- New status value `season_active`
+
+**Supabase `public.gift_seasons`**: a new table, applied to production project `xnfjdbpjuaezxjgargto`. A branch wasn't practical: the existing branch is MIGRATIONS_FAILED and the preview isn't wired to Supabase.
+
+- It is a reporting mirror upserted by the app; Firestore remains the source of truth.
+- RLS is enabled with no policies, so only the service role can access it.
+- Migration file: `migrations/20261111_gift_seasons.sql`. Nothing existing was altered.
+
+**Shopify**: one new DRAFT product, "Reserve Gift Season" (`gid://shopify/Product/10327639392448`, handle `reserve-gift-season`), with option "Length" and the 3 variants above. Each variant is one-time (no selling plan), requires shipping, is taxable and has untracked inventory. The product is unpublished.
+
+## How the prepaid count works
+
+**Box 1 is the paid gift order itself.**
+
+- `orders-paid` sees a RES-GIFT variant and creates the season doc with `box_orders=[box 1]` and `boxes_remaining=N`.
+- It tags the order `gift-season`, `gift-season-N` and `gift-season-box-1-of-N`.
+- The order ships through the normal queue once sizing is in. `submit-sizing` prepends `GIFT SIZING: ...` to the order note for the stylist.
+
+**Boxes 2..N are $0 Shopify orders.** The daily cron `/api/gifts/season-dispatch` (14:30 UTC, `vercel.json`) creates them.
+
+- How the order is built: `draftOrderCreate` on the Reserve Member variant (RES-MEM) with a 100% line discount and $0 shipping, to the parent order's shipping address, followed by `draftOrderComplete(paymentPending: false)`.
+- Tags: `gift-season`, `gift-season-box`, `gift-season-N`, `gift-season-box-X-of-N` and `gift-parent-<id>`.
+- Attributes: `gift_season_child=true`, plus the parent id and the box number.
+- Note: recipient, box X of N, and sizing.
+- Idempotency: before creating, the cron searches Shopify orders by tag, so a retry reuses the existing order.
+- When it fires: box N is due on `first_box_shipped_at + 3*(N-1) months`, and only once the previous box has shipped. Two open boxes are never stacked.
+- `orders-paid` returns early for child orders: they are persisted to Supabase only, with no analytics, tier changes or emails.
+
+**Decrement.** `fulfillments-create` finds the season doc by `box_order_ids`.
+
+- It stamps that box's `shipped_at` and recomputes `boxes_shipped` and `boxes_remaining`.
+- Status moves to `season_active`, then `completed` when remaining reaches 0.
+- Remaining is always `seasons_total - boxes_shipped`, derived by the pure `seasonProgress()`.
+
+**Continue offer.** It is sent once, before the final Reserve arrives:
+
+- For 2 or 4 seasons: when the final box order is created.
+- For 1 season: when it ships.
+
+It links to `/gift-continue/<token>`, which starts a regular Reserve Member checkout ($250 a season). The email only sends when `GIFT_SEASON_OFFER_EMAILS_ENABLED=true`. A later membership purchase by the recipient email stamps `converted_at`.
+
+## How ops sees it
+
+On `/admin/gifts`, each season gift shows:
+
+- "X of N left"
+- shipped and ordered counts
+- the next box number and due date
+
+Its details row has a per-shipment table (Shopify order, due, ordered, shipped) plus continue-offer and conversion status. There is a new "Season active" filter. In Shopify, filter orders by tag `gift-season-box`.
+
+## Instrumentation
+
+**Server (PostHog):**
+
+- gift_season_purchased
+- gift_season_recipient_notified
+- gift_season_sizing_submitted
+- gift_season_box_dispatched
+- gift_season_box_shipped
+- gift_season_completed
+- gift_season_continue_offer_sent
+- gift_season_converted
+- gift_season_error
+
+**Client:**
+
+- gift_season_view
+- gift_season_length_selected
+- gift_season_form_error
+- gift_season_checkout_clicked
+- gift_season_checkout_error
+- gift_season_continue_view
+- gift_season_continue_clicked
+
+Orders are tagged as listed above. The Supabase `gift_seasons` table supports SQL reporting.
+
+## Copy rules
+
+There are no em dashes or double dashes. Customer copy uses "Mully" and "Reserve", never "box" or "Mullybox". Vitest enforces this on the season emails and season UI files.
