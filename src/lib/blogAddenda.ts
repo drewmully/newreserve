@@ -84,6 +84,8 @@ export const BLOG_ADDENDA: Record<string, BlogAddendum[]> = {
           "Current plan pricing lives on the [Mully Reserve page](/subscription).",
           // s10: gift guide link.
           "Buying for a golfer instead of yourself? Our [golf gifts for men](/shop/gifts) are picked by Mully and sorted by price.",
+          // Gift a Season: subscription-gift intent.
+          "Want to give Reserve itself? [Gift a Season](/lp/gift-season) is a one-time prepaid golf gift subscription: 1, 2 or 4 seasons, sized by him, and it never renews.",
         ],
       },
     },
