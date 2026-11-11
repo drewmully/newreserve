@@ -1,11 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 /**
  * Full-screen PDP image viewer. Swipes on touch (CSS scroll-snap), arrow
  * buttons and the arrow keys on desktop, Esc or the close button to exit.
  * Body scroll is locked while open and focus returns to the opener.
+ * Portaled to <body> with the top z-index so third-party widgets (support
+ * chat) and the shop's overflow-clipped wrappers never sit over it.
  */
 export function PdpLightbox({
   images,
@@ -77,9 +80,9 @@ export function PdpLightbox({
 
   const arrow = "absolute top-1/2 z-10 hidden h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/10 text-bone transition-colors duration-200 hover:bg-white/20 disabled:pointer-events-none disabled:opacity-0 md:flex";
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex flex-col bg-obsidian/95"
+      className="fixed inset-0 z-[2147483647] flex flex-col bg-obsidian"
       role="dialog"
       aria-modal="true"
       aria-label={`${name} photos`}
@@ -136,6 +139,7 @@ export function PdpLightbox({
           </>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
