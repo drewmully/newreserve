@@ -16,19 +16,21 @@ import { getProductByHandle, type ShopifyProduct } from "@/lib/shopify";
 import { isRestockOnly } from "@/lib/restock";
 
 // Christmas cutoff lives in giftGuideDates.ts (client-safe). Re-exported here.
-export { GIFT_SHIP_BY, GIFT_ORDER_BY, GIFT_RESTOCK_WEEKS, giftOrderByLabel, giftOrderByShort, giftRestockCutoffLabel, isPastGiftOrderBy } from "@/lib/giftGuideDates";
-import { GIFT_RESTOCK_WEEKS, giftOrderByLabel, giftRestockCutoffLabel } from "@/lib/giftGuideDates";
+export { GIFT_SHIP_BY, GIFT_ORDER_BY, GIFT_RESTOCK_WEEKS, giftOrderByLabel, giftOrderByShort, giftRestockCutoffLabel, giftRestockCutoffShortDay, giftOrderByCopy, giftRestockCopy, isPastGiftOrderBy } from "@/lib/giftGuideDates";
+import { GIFT_RESTOCK_WEEKS, giftOrderByShort, giftRestockCutoffShortDay } from "@/lib/giftGuideDates";
 
 // ─── Gift a Season ──────────────────────────────────────────────────────────
 
 /**
  * Gift a Season (prepaid Reserve, one, two or four seasons) lives at
  * /lp/gift-season, built in PR #352 and not on main yet. Flip this to true
- * when that PR ships. Until then the hero links to the existing /lp/gift page
- * so nobody lands on a 404. This is the only switch.
+ * when that PR ships. While false, every Gift a Season element (hero strip
+ * CTA, intro link, the card, the mobile tile, the Gift a Season FAQs and meta
+ * mention) is hidden: /lp/gift sells the recurring Reserve, so "never renews"
+ * would be false there. This is the only switch.
  */
-export const GIFT_SEASON_LIVE = false;
-export const GIFT_SEASON_HREF = GIFT_SEASON_LIVE ? "/lp/gift-season" : "/lp/gift";
+export const GIFT_SEASON_LIVE: boolean = false;
+export const GIFT_SEASON_HREF = "/lp/gift-season";
 
 // ─── Tiers ──────────────────────────────────────────────────────────────────
 
@@ -235,7 +237,30 @@ export interface GiftFaq {
 }
 
 export function giftGuideFaqs(): GiftFaq[] {
-  const orderBy = giftOrderByLabel();
+  const orderBy = giftOrderByShort();
+  const restockBy = giftRestockCutoffShortDay();
+  const shipping: GiftFaq = {
+    q: "When do I need to order for Christmas delivery?",
+    a: `Order in-stock pieces by ${orderBy} for Christmas delivery with standard shipping. Pieces marked Restocking ship in about ${GIFT_RESTOCK_WEEKS} weeks: order them by ${restockBy} for the best chance by Christmas.`,
+  };
+  const returns: GiftFaq = {
+    q: "Can gifts be returned or exchanged?",
+    a: "Unworn, unwashed pieces with tags attached can be returned within 30 days of delivery, and the refund goes to the original payment method. For a different size, return the original and place a new order. Email Info@MyMully.com with the order number to start.",
+  };
+  if (!GIFT_SEASON_LIVE) {
+    return [
+      {
+        q: "What do you get a golfer who has everything?",
+        a: "Something he would not buy for himself. A merino or down vest he will wear every cold round, a needlepoint belt, or a Penfold shoe bag that outlasts his clubs.",
+      },
+      shipping,
+      {
+        q: "What if I am not sure of his size?",
+        a: "Most of the tops we ship this time of year go out in L or XL, and each product page has the brand's size chart. Unworn items with tags attached can be returned within 30 days of delivery.",
+      },
+      returns,
+    ];
+  }
   return [
     {
       q: "What do you get a golfer who has everything?",
@@ -245,22 +270,22 @@ export function giftGuideFaqs(): GiftFaq[] {
       q: "Is a gift subscription better than a single item?",
       a: "A single piece is something to open on the day. Gift a Season keeps arriving long after the holidays, a new edit each season. If you are unsure of his size, Gift a Season is the safer bet: he confirms his own sizing through a private link.",
     },
-    {
-      q: "When do I need to order for Christmas delivery?",
-      a: `Order in-stock pieces by ${orderBy} for Christmas delivery with standard shipping. Pieces marked Restocking ship in about ${GIFT_RESTOCK_WEEKS} weeks, so order those by ${giftRestockCutoffLabel()}. After that they may not arrive by Christmas.`,
-    },
+    shipping,
     {
       q: "What if I am not sure of his size?",
       a: "Most of the tops we ship this time of year go out in L or XL, and each product page has the brand's size chart. With Gift a Season he picks his own sizes, so there is nothing to guess. For single pieces, unworn items with tags attached can be returned within 30 days of delivery.",
     },
-    {
-      q: "Can gifts be returned or exchanged?",
-      a: "Unworn, unwashed pieces with tags attached can be returned within 30 days of delivery, and the refund goes to the original payment method. For a different size, return the original and place a new order. Email Info@MyMully.com with the order number to start.",
-    },
+    returns,
   ];
 }
 
 // ─── Live data ──────────────────────────────────────────────────────────────
+
+/** Hub only: every in-stock pick, then at most this many Restocking picks per tier. */
+export const HUB_MAX_RESTOCK_PER_TIER = 2;
+export function capForHub(picks: GiftPick[]): GiftPick[] {
+  return [...picks.filter((p) => p.inStock), ...picks.filter((p) => !p.inStock).slice(0, HUB_MAX_RESTOCK_PER_TIER)];
+}
 
 export interface GiftOutfitData {
   outfit: GiftOutfit;

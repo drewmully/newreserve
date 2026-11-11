@@ -131,3 +131,16 @@
   .gift-guide .gg-remind {grid-template-columns: minmax(0, 1fr); margin-top: 48px; padding: 24px 20px}
   .gift-guide .gg-assure {flex-direction: column}
 }
+
+/* Gift a Season grid tile: mobile only; the full card shows on wider screens */
+.gift-guide .gg-season-tile {display: none}
+@media (max-width: 640px) {
+  .gift-guide .gg-aside--desktop {display: none}
+  .gift-guide .gg-season-tile {display: flex; flex-direction: column; gap: 8px; grid-column: 1 / -1; padding: 22px 20px; background: #2f3a2c; color: #f3efe6}
+  .gift-guide .gg-season-tile .gg-kicker {color: #c9d0b0; margin-bottom: 0}
+  .gift-guide .gg-season-tile__title {font-family: var(--font-serif); font-size: 26px; line-height: 1.1; color: #faf9f6}
+  .gift-guide .gg-season-tile__copy {font-size: 14px; line-height: 1.55; color: #e3dfd3}
+  .gift-guide .gg-season-tile .gg-button {margin-top: 6px}
+}
+/* Hub: the order-by aside follows the first product grid */
+.gift-guide .gg-main > div > .gg-orderby {margin-top: 48px}

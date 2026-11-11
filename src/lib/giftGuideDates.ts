@@ -62,3 +62,18 @@ export function giftRestockCutoffShort(weeks: number = GIFT_RESTOCK_WEEKS): stri
 export function giftOrderByShort(): string {
   return new Date(ORDER_BY_END).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "America/New_York" });
 }
+
+/** "Mon, Nov 30" */
+export function giftRestockCutoffShortDay(weeks: number = GIFT_RESTOCK_WEEKS): string {
+  return new Date(giftRestockCutoff(weeks)).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: "America/New_York" });
+}
+
+/** "Order in-stock pieces by Mon, Dec 14 for Christmas delivery" (no period). */
+export function giftOrderByCopy(): string {
+  return `Order in-stock pieces by ${giftOrderByShort()} for Christmas delivery`;
+}
+
+/** "Order Restocking pieces by Mon, Nov 30 for the best chance by Christmas." */
+export function giftRestockCopy(weeks: number = GIFT_RESTOCK_WEEKS): string {
+  return `Order Restocking pieces by ${giftRestockCutoffShortDay(weeks)} for the best chance by Christmas.`;
+}

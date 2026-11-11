@@ -4,7 +4,7 @@ import { ShopPageShell } from "../components/ShopPageShell";
 import { ScrollToTop } from "../components/ScrollToTop";
 import { canonical, SITE_URL } from "@/lib/seo";
 import { serializeJsonLd } from "@/lib/safeJsonLd";
-import { GIFT_GUIDE_HUB_ORDER, GIFT_SEASON_HREF, loadGiftGuide } from "@/lib/giftGuide";
+import { GIFT_GUIDE_HUB_ORDER, GIFT_SEASON_HREF, GIFT_SEASON_LIVE, capForHub, loadGiftGuide } from "@/lib/giftGuide";
 import { GiftGuideTracker } from "./GiftGuideTracker";
 import { faqJsonLd, itemListJsonLd } from "./jsonLd";
 import {
@@ -14,6 +14,7 @@ import {
   GiftOutfits,
   GiftReminders,
   GiftSeasonCard,
+  GiftSeasonTile,
   GiftTierNav,
   GiftTierSection,
 } from "./GiftGuide";
@@ -22,8 +23,9 @@ import "./gift-guide.css";
 export const revalidate = 3600;
 
 const TITLE = "Golf Gifts for Men 2026: Picks by Price | Mully";
-const DESCRIPTION =
-  "Golf gifts for men, picked by price: merino and down vests, quarter zips, the Duck Head chino, and stocking stuffers under $100. Plus Gift a Season from Mully Reserve.";
+const DESCRIPTION = `Golf gifts for men, picked by price: merino and down vests, quarter zips, long sleeve polos and stocking stuffers under $100.${
+  GIFT_SEASON_LIVE ? " Plus Gift a Season from Mully Reserve." : ""
+}`;
 
 export const metadata: Metadata = {
   title: TITLE,
@@ -35,7 +37,10 @@ export const metadata: Metadata = {
 
 export default async function GiftGuideHubPage() {
   const { tiers, outfits } = await loadGiftGuide();
-  const ordered = GIFT_GUIDE_HUB_ORDER.map((slug) => tiers.find((t) => t.tier.slug === slug)!).filter(Boolean);
+  // Hub: in-stock first, at most 2 Restocking picks per tier. Tier pages show all.
+  const ordered = GIFT_GUIDE_HUB_ORDER.map((slug) => tiers.find((t) => t.tier.slug === slug)!)
+    .filter(Boolean)
+    .map((t) => ({ ...t, picks: capForHub(t.picks) }));
   const allPicks = ordered.flatMap((t) => t.picks);
 
   return (
@@ -51,15 +56,18 @@ export default async function GiftGuideHubPage() {
           <p className="gg-kicker">The 2026 Mully gift guide</p>
           <h1 className="gg-h1">Golf Gifts for Men, Picked by Price</h1>
           <GiftHeroStrip placement="hub-hero-strip" tier="hub" />
-          <p className="gg-intro">
-            The best golf gift this year is <Link href={GIFT_SEASON_HREF} className="gg-ulink" data-gg-season="hub-intro">Gift a Season</Link>: a
-            season of Mully Reserve, hand-picked by a stylist and sized by him. If you would rather wrap something, every piece below is chosen by
-            price, with in-stock picks first, from merino vests and down layers to towels, hats and a chino he will live in.
-          </p>
+          {GIFT_SEASON_LIVE ? (
+            <p className="gg-intro">
+              The best golf gift this year is <Link href={GIFT_SEASON_HREF} className="gg-ulink" data-gg-season="hub-intro" data-gg-tier="hub">Gift a Season</Link>,
+              a season of Mully Reserve picked by a stylist. Everything else is sorted by price, in-stock first.
+            </p>
+          ) : (
+            <p className="gg-intro">
+              Vests, layers and stocking stuffers he will actually wear, sorted by price. In-stock pieces come first.
+            </p>
+          )}
           <GiftTierNav active="hub" placement="hub-top" />
         </header>
-
-        <GiftOrderByNote />
 
         {ordered.map((data, i) => (
           <div key={data.tier.slug}>
@@ -68,7 +76,9 @@ export default async function GiftGuideHubPage() {
               placement="hub"
               showAllLink
               aside={i === 0 ? <GiftSeasonCard placement="hub-hero-tier" tier={data.tier.slug} /> : undefined}
+              tile={i === 0 ? <GiftSeasonTile placement="hub-grid-tile" tier={data.tier.slug} /> : undefined}
             />
+            {i === 0 && <GiftOrderByNote />}
             {i === 0 && <GiftOutfits outfits={outfits} placement="hub-outfits" />}
             {i === 0 && <GiftReminders tier="hub" placement="hub-after-hero-tier" />}
           </div>

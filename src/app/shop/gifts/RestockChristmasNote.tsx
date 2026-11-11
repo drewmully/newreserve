@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { restockWeeks } from "../components/EstShipDate";
-import { giftRestockCutoff, giftRestockCutoffShort } from "@/lib/giftGuideDates";
+import { giftRestockCopy, giftRestockCutoff } from "@/lib/giftGuideDates";
 
 const noopSubscribe = () => () => {};
 
@@ -20,7 +20,7 @@ export function RestockChristmasNote({ weeks }: { weeks?: number }) {
   const inTime = now > 0 && now <= giftRestockCutoff(w);
   return (
     <p className="gg-pick__meta gg-pick__meta--warn">
-      {inTime ? `Order by ${giftRestockCutoffShort(w)} for Christmas.` : "May not arrive by Christmas."}
+      {inTime ? giftRestockCopy(w) : "May not arrive by Christmas."}
     </p>
   );
 }

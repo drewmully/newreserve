@@ -13,6 +13,7 @@ import {
   GiftOrderByNote,
   GiftOutfits,
   GiftSeasonCard,
+  GiftSeasonTile,
   GiftReminders,
   GiftTierNav,
   GiftTierSection,
@@ -77,6 +78,7 @@ export default async function GiftTierPage({ params }: Props) {
           as="h1"
           placement="tier"
           aside={tier.slug === "150-to-250" ? <GiftSeasonCard placement="tier-hero" tier={tier.slug} /> : undefined}
+          tile={tier.slug === "150-to-250" ? <GiftSeasonTile placement="tier-grid-tile" tier={tier.slug} /> : undefined}
         />
 
         {showOutfits && <GiftOutfits outfits={outfits} placement="tier-outfits" />}

@@ -7,18 +7,21 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { Fragment } from "react";
 import { ShopProductCard } from "../components/ShopProductCard";
 import { RestockChristmasNote } from "./RestockChristmasNote";
 import { GiftReminderSignup } from "./GiftReminderSignup";
 import {
   GIFT_GUIDE_TIERS,
   giftGuideFaqs,
-  giftOrderByLabel,
+  giftOrderByCopy,
   giftOrderByShort,
+  giftRestockCutoffShortDay,
+  giftRestockCopy,
   isPastGiftOrderBy,
   GIFT_RESTOCK_WEEKS,
-  giftRestockCutoffLabel,
   GIFT_SEASON_HREF,
+  GIFT_SEASON_LIVE,
   GIFT_OUTFIT_CHINO,
   type GiftOutfitData,
   type GiftPick,
@@ -54,12 +57,12 @@ export function GiftOrderByNote() {
   return (
     <aside className="gg-orderby" aria-label="Christmas shipping">
       <p className="gg-orderby__lead">
-        {past ? "The Christmas shipping cutoff has passed." : <>Order by {giftOrderByLabel()} for Christmas.</>}
+        {past ? "The Christmas shipping cutoff has passed." : `${giftOrderByCopy()}.`}
       </p>
       <p>
         {past
-          ? "In-stock pieces still ship in 5 to 7 business days. Gift a Season works as a gift on any date."
-          : `Applies to in-stock pieces with standard shipping. Pieces marked Restocking ship in about ${GIFT_RESTOCK_WEEKS} weeks, so order those by ${giftRestockCutoffLabel()}. After that they may not arrive by Christmas.`}
+          ? `In-stock pieces still ship in 5 to 7 business days.${GIFT_SEASON_LIVE ? " Gift a Season works as a gift on any date." : ""}`
+          : `Applies to in-stock pieces with standard shipping. Pieces marked Restocking ship in about ${GIFT_RESTOCK_WEEKS} weeks. ${giftRestockCopy()}`}
       </p>
     </aside>
   );
@@ -75,12 +78,14 @@ export function GiftHeroStrip({ placement, tier }: { placement: string; tier: st
     <div className="gg-strip">
       <p className="gg-strip__date">
         <span aria-hidden="true" className="gg-strip__dot" />
-        <span>{past ? "Christmas cutoff has passed. Gift a Season works any day." : <>Order by <strong>{giftOrderByShort()}</strong> for Christmas</>}</span>
+        <span>{past ? "The Christmas shipping cutoff has passed." : giftOrderByCopy()}</span>
       </p>
-      <Link href={GIFT_SEASON_HREF} className="gg-strip__cta" data-gg-season={placement} data-gg-tier={tier}>
-        <span>Gift a Season</span>
-        <span className="gg-strip__sub">One, two or four seasons</span>
-      </Link>
+      {GIFT_SEASON_LIVE && (
+        <Link href={GIFT_SEASON_HREF} className="gg-strip__cta" data-gg-season={placement} data-gg-tier={tier}>
+          <span>Gift a Season</span>
+          <span className="gg-strip__sub">One, two or four seasons</span>
+        </Link>
+      )}
     </div>
   );
 }
@@ -100,7 +105,7 @@ export function GiftReassurance() {
 
 export function GiftReminders({ tier, placement }: { tier: string; placement: string }) {
   if (isPastGiftOrderBy()) return null;
-  return <GiftReminderSignup tier={tier} placement={placement} orderBy={giftOrderByLabel()} restockBy={giftRestockCutoffLabel()} />;
+  return <GiftReminderSignup tier={tier} placement={placement} orderBy={giftOrderByShort()} restockBy={giftRestockCutoffShortDay()} />;
 }
 
 export function GiftSizingNote() {
@@ -113,6 +118,7 @@ export function GiftSizingNote() {
 }
 
 export function GiftSeasonCard({ placement, tier, compact = false }: { placement: string; tier: string; compact?: boolean }) {
+  if (!GIFT_SEASON_LIVE) return null;
   return (
     <section className={`gg-season${compact ? " gg-season--compact" : ""}`} aria-labelledby={`gg-season-${placement}`}>
       <div className="gg-season__image">
@@ -137,6 +143,21 @@ export function GiftSeasonCard({ placement, tier, compact = false }: { placement
         </Link>
       </div>
     </section>
+  );
+}
+
+/** Compact Gift a Season tile that sits in the product grid (mobile only, via CSS). */
+export function GiftSeasonTile({ placement, tier }: { placement: string; tier: string }) {
+  if (!GIFT_SEASON_LIVE) return null;
+  return (
+    <li className="gg-season-tile" aria-label="Gift a Season">
+      <p className="gg-kicker">The gift that keeps arriving</p>
+      <p className="gg-season-tile__title">Gift a Season</p>
+      <p className="gg-season-tile__copy">A stylist picks, he confirms his own sizes. One, two or four seasons.</p>
+      <Link href={GIFT_SEASON_HREF} className="gg-button" data-gg-season={placement} data-gg-tier={tier}>
+        Gift a Season
+      </Link>
+    </li>
   );
 }
 
@@ -169,12 +190,17 @@ export function GiftTierSection({
   placement,
   showAllLink = false,
   aside,
+  tile,
+  tileAfter = 4,
 }: {
   data: GiftTierData;
   as?: "h1" | "h2";
   placement: string;
   showAllLink?: boolean;
   aside?: React.ReactNode;
+  /** Grid tile inserted after pick `tileAfter`. When set, `aside` hides on mobile. */
+  tile?: React.ReactNode;
+  tileAfter?: number;
 }) {
   const { tier, picks } = data;
   const Heading = as;
@@ -194,14 +220,15 @@ export function GiftTierSection({
           </Link>
         )}
       </header>
-      {aside}
+      {aside && (tile ? <div className="gg-aside--desktop">{aside}</div> : aside)}
       {picks.length === 0 ? (
         <p className="gg-empty">This edit is being restocked. Try another budget or the full shop.</p>
       ) : (
         <ol className="gg-grid">
-          {picks.map((p, i) => (
-            <PickCard key={p.product.slug} pick={p} tier={tier.slug} position={i + 1} placement={placement} />
-          ))}
+          {picks.flatMap((p, i) => {
+            const card = <PickCard key={p.product.slug} pick={p} tier={tier.slug} position={i + 1} placement={placement} />;
+            return tile && i + 1 === Math.min(tileAfter, picks.length) ? [card, <Fragment key="gg-season-tile">{tile}</Fragment>] : [card];
+          })}
         </ol>
       )}
     </section>

@@ -80,8 +80,7 @@ export function GiftReminderSignup({
         <p className="gg-kicker">Christmas cutoffs</p>
         <h2 id={`${id}-h`} className="gg-remind__title">Get gift shipping cutoff reminders</h2>
         <p>
-          We email you before {restockBy}, the last day for Restocking pieces, and again before {orderBy}, the last day for
-          in-stock pieces.
+          Two emails: one before {restockBy} for Restocking pieces, and one before {orderBy} for in-stock pieces.
         </p>
       </div>
       {status === "done" ? (
