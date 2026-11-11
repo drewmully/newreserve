@@ -4,6 +4,18 @@ export const SHOP_INTERESTS = [
   { id: "bottoms", label: "Pants & shorts", note: "The rest falls into place." },
   { id: "everything", label: "The full edit", note: "Keep the good finds coming." },
 ] as const;
+/**
+ * Extra capture sources that reuse /api/shop/signup (email stage only). Each
+ * one names the only interest it may send. The default source, the shop edit
+ * popup, keeps using SHOP_INTERESTS.
+ */
+export const SHOP_SIGNUP_SOURCES = {
+  "gift-reminders": { interest: "gifts" },
+} as const;
+export type ShopSignupSource = "shop-edit-popup" | keyof typeof SHOP_SIGNUP_SOURCES;
+export function shopSignupSource(raw: unknown): ShopSignupSource {
+  return typeof raw === "string" && Object.prototype.hasOwnProperty.call(SHOP_SIGNUP_SOURCES, raw) ? (raw as ShopSignupSource) : "shop-edit-popup";
+}
 export const SHOP_CONSENT_VERSION = "shop-edit-2026-09-30";
 export const EMAIL_CONSENT = "I agree to receive marketing emails from Mully. Unsubscribe anytime.";
 export const SMS_CONSENT = "I agree to receive recurring automated marketing texts from Mully Group, Inc. at the number provided. Up to 4 messages/month. Consent is not a condition of purchase. Message and data rates may apply. Reply STOP to cancel, HELP for help.";

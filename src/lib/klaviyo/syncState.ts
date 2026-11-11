@@ -21,7 +21,7 @@ import { FieldValue, Timestamp, type DocumentReference } from "firebase-admin/fi
 import { adminDb } from "@/lib/firebase-admin";
 import { raiseAlert } from "@/lib/events/alert";
 import { SHOP_REWARDS } from "@/lib/shopRewards";
-import { normalizeSignupPhone } from "@/lib/shopSignup";
+import { normalizeSignupPhone, shopSignupSource, SHOP_SIGNUP_SOURCES } from "@/lib/shopSignup";
 import {
   META_OFFER_SOURCE,
   BACKOFF_MINUTES,
@@ -98,24 +98,30 @@ function leadInputs(id: string, d: Data, opts: BuildOptions): StageInputs {
   if (!email) return out;
   const emailConsent = d.emailConsent as Data | undefined;
   const smsConsent = d.smsConsent as Data | undefined;
-  const common = { source: "shop-edit-popup", docKey: id, email };
+  // The source of each stage is the one recorded on its consent evidence
+  // (falling back to the lead's first source). Only the shop edit popup
+  // carries a reward code; gift-reminders signups get none.
+  const common = { source: shopSignupSource(d.source), docKey: id, email };
   if (emailConsent?.granted === true) {
     const at = toDate(emailConsent.capturedAt);
+    const emailSource = shopSignupSource(emailConsent.source ?? d.source);
+    const popup = emailSource === "shop-edit-popup";
+    const interest = popup ? d.interest : SHOP_SIGNUP_SOURCES[emailSource].interest;
     out.email = {
       ...common,
+      source: emailSource,
       stage: "email",
       capturedAt: at,
       properties: {
-        mully_interest: d.interest,
-        mully_reward_percent: SHOP_REWARDS.email.percent,
-        mully_reward_code: SHOP_REWARDS.email.code,
+        mully_interest: popup ? d.interest : (d.interest ?? interest),
+        ...(popup ? { mully_reward_percent: SHOP_REWARDS.email.percent, mully_reward_code: SHOP_REWARDS.email.code } : {}),
+        ...(Array.isArray(d.interests) ? { mully_interests: d.interests } : {}),
         mully_email_consent_captured: true,
-        mully_signup_landing_path: "/",
+        mully_signup_landing_path: popup ? "/" : "/shop/gifts",
       },
       eventProperties: {
-        interest: d.interest,
-        reward_percent: SHOP_REWARDS.email.percent,
-        reward_code: SHOP_REWARDS.email.code,
+        interest,
+        ...(popup ? { reward_percent: SHOP_REWARDS.email.percent, reward_code: SHOP_REWARDS.email.code } : {}),
         email_consent: true,
         sms_consent: false,
       },
@@ -128,6 +134,7 @@ function leadInputs(id: string, d: Data, opts: BuildOptions): StageInputs {
     const at = toDate(smsConsent.capturedAt);
     out.sms = {
       ...common,
+      source: shopSignupSource(smsConsent.source ?? d.source),
       stage: "sms",
       phone,
       capturedAt: at,

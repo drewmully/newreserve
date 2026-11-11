@@ -148,7 +148,7 @@ export function ShopLanding({ products, editProducts = products, productsByCateg
         </section>}
         <section className="sec shop-gifts" id="gift-tiers">
           <div className="wrap">
-            <div className="sechead"><h2 className="h2">Gifts for golfers</h2></div>
+            <div className="sechead"><h2 className="h2">Gifts for golfers</h2><a className="ulink" href="/shop/gifts">The gift guide</a></div>
             <div className="shop-gift-links">
               {GIFT_TIERS.map(t => <a key={t.key} href={`/shop/gifts/${t.key}`}><span>{t.title}</span><span aria-hidden="true">→</span></a>)}
             </div>

@@ -24,9 +24,10 @@ vi.mock("@/lib/firebase-admin", () => {
     },
   }};
 });
-vi.mock("firebase-admin/firestore",()=>({FieldValue:{serverTimestamp:()=>"server-time"}}));
+vi.mock("firebase-admin/firestore",()=>({Timestamp:class Timestamp{},FieldValue:{serverTimestamp:()=>"server-time",arrayUnion:(...v:unknown[])=>({arrayUnion:v})}}));
 import { POST } from "@/app/api/shop/signup/route";
 import { EMAIL_CONSENT, SMS_CONSENT, normalizeSignupPhone } from "@/lib/shopSignup";
+import { buildStageInputs } from "@/lib/klaviyo/syncState";
 const req=(body:unknown,origin="https://mymully.com")=>new Request("https://mymully.com/api/shop/signup",{
   method:"POST",headers:{"Content-Type":"application/json",Origin:origin,"x-forwarded-for":"192.0.2.1"},body:JSON.stringify(body),
 });
@@ -65,6 +66,47 @@ describe("shop consent capture",()=>{
     await POST(req({...email,company:"bot"}));expect(store.writes).toHaveLength(0);
     for(let i=0;i<12;i++)expect((await POST(req(email))).status).toBe(200);
     expect((await POST(req(email))).status).toBe(429);
+  });
+  it("accepts the gift-reminders source with only its gifts interest, email stage only",async()=>{
+    const gift={stage:"email",email:"gift@example.com",interest:"gifts",consent:true,source:"gift-reminders"};
+    expect((await POST(req({...gift,interest:"tops"}))).status).toBe(400);
+    expect((await POST(req({...email,interest:"gifts"}))).status).toBe(400);
+    expect((await POST(req({stage:"sms",phone:"+12485550123",receipt:"a".repeat(64),consent:true,source:"gift-reminders"}))).status).toBe(400);
+    expect(store.writes).toHaveLength(0);
+    expect((await POST(req(gift))).status).toBe(200);
+    const lead=store.writes.find(w=>/^shop_marketing_leads\/[^/]+$/.test(w.path))!;
+    expect(lead.data).toMatchObject({email:"gift@example.com",interest:"gifts",source:"gift-reminders",emailConsent:{source:"gift-reminders",text:EMAIL_CONSENT}});
+    expect((await POST(req({...email,source:"made-up"}))).status).toBe(200);
+    expect(store.writes.filter(w=>/^shop_marketing_leads\/[^/]+$/.test(w.path)).at(-1)!.data).toMatchObject({source:"shop-edit-popup"});
+  });
+  it("gives gift-reminders signups no reward code, in the response, the lead or Klaviyo",async()=>{
+    const r=await POST(req({stage:"email",email:"gift@example.com",interest:"gifts",consent:true,source:"gift-reminders"}));
+    const body=await r.json();
+    expect(body.ok).toBe(true);expect(body).not.toHaveProperty("reward");
+    const path=store.writes.find(w=>/^shop_marketing_leads\/[^/]+$/.test(w.path))!.path;
+    const doc=store.docs.get(path)!;
+    expect(doc).not.toHaveProperty("reward");
+    const {email:stage}=buildStageInputs("shop_marketing_leads",path.split("/")[1],{...doc,interests:["gifts"]});
+    expect(stage!.source).toBe("gift-reminders");
+    expect(stage!.properties).not.toHaveProperty("mully_reward_code");
+    expect(stage!.properties).not.toHaveProperty("mully_reward_percent");
+    expect(stage!.eventProperties).toMatchObject({interest:"gifts"});
+    expect(stage!.eventProperties).not.toHaveProperty("reward_code");
+    // The popup still carries its code.
+    const popup=buildStageInputs("shop_marketing_leads","p",{email:"p@example.com",interest:"tops",source:"shop-edit-popup",emailConsent:{granted:true,source:"shop-edit-popup"}});
+    expect(popup.email!.properties).toMatchObject({mully_reward_code:"MULLYEDIT10"});
+    expect(popup.email!.eventProperties).toMatchObject({reward_code:"MULLYEDIT10",interest:"tops"});
+  });
+  it("a repeat gift-reminders signup keeps the lead's source and interest and appends gifts",async()=>{
+    expect((await POST(req(email))).status).toBe(200);
+    const path=store.writes.find(w=>/^shop_marketing_leads\/[^/]+$/.test(w.path))!.path;
+    expect((await POST(req({...email,interest:"gifts",source:"gift-reminders"}))).status).toBe(200);
+    const last=store.writes.filter(w=>w.path===path).at(-1)!.data;
+    expect(last).not.toHaveProperty("source");
+    expect(last).not.toHaveProperty("interest");
+    expect(last).not.toHaveProperty("reward");
+    expect(last.interests).toEqual({arrayUnion:["gifts"]});
+    expect(store.docs.get(path)).toMatchObject({source:"shop-edit-popup",interest:"tops",reward:{code:"MULLYEDIT10"},emailConsent:{source:"gift-reminders"}});
   });
   it("normalizes US and international numbers without guessing malformed input",()=>{
     expect(normalizeSignupPhone("248-555-0123")).toBe("+12485550123");

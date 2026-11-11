@@ -85,35 +85,13 @@ export const SHOP_CATEGORIES: ShopCategoryMeta[] = [
 ];
 
 /**
- * Product tags used for gift-tier merchandising on the /shop landing page.
- * Assign on the product in Shopify Admin. A product can carry multiple.
+ * Gift guide tiers linked from the /shop landing ("Gifts for golfers") and the
+ * sitemap. Slugs match /shop/gifts/[tier]. Picks, copy and price bands live in
+ * src/lib/giftGuide.ts; old tag-based slugs (under100, hundredToThree,
+ * threeHundredPlus) 308 to these in next.config.ts.
  */
-export const GIFT_TAGS = {
-  under100: "gift-under-100",
-  hundredToThree: "gift-100-300",
-  threeHundredPlus: "gift-300-plus",
-} as const;
-
 export const GIFT_TIERS = [
-  {
-    key: "under100",
-    tag: GIFT_TAGS.under100,
-    title: "Under $100",
-    subtitle: "The one they'll actually use.",
-    accent: "Everyday",
-  },
-  {
-    key: "hundredToThree",
-    tag: GIFT_TAGS.hundredToThree,
-    title: "$100 – $300",
-    subtitle: "The one they'd never buy themselves.",
-    accent: "Signature",
-  },
-  {
-    key: "threeHundredPlus",
-    tag: GIFT_TAGS.threeHundredPlus,
-    title: "$300 & Up",
-    subtitle: "The one they'll talk about.",
-    accent: "Standout gifts",
-  },
+  { key: "under-100", title: "Under $100", subtitle: "Stocking stuffers." },
+  { key: "100-to-150", title: "$100 to $150", subtitle: "The chino, the layer, the long sleeve." },
+  { key: "150-to-250", title: "$150 to $250", subtitle: "Vests and outerwear." },
 ] as const;
