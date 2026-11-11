@@ -48,6 +48,7 @@ import {
 import {
   buildGiftContinueSubject,
   buildGiftContinueText,
+  giftContinueLead,
   buildGiftRecipientSubject,
   buildGiftRecipientText,
 } from "@/lib/email/templates/giftRecipient";
@@ -180,17 +181,70 @@ describe("schedule and countdown", () => {
 });
 
 describe("continue offer", () => {
-  it("multi-season: once the final box order exists, before it ships", () => {
-    const three = { seasons_total: 4, box_orders: [1, 2, 3].map((n) => ({ box_number: n, shipped_at: SHIP1 })) };
-    expect(isContinueOfferDue(three)).toBe(false);
-    const four = { seasons_total: 4, box_orders: [...three.box_orders, { box_number: 4, shipped_at: null }] };
-    expect(isContinueOfferDue(four)).toBe(true);
-    expect(isContinueOfferDue({ ...four, continue_offer_sent_at: 1 })).toBe(false);
-    expect(isContinueOfferDue({ ...four, converted_at: 1 })).toBe(false);
+  // SHIP1 = 2026-12-01. 4 seasons: final (season 4) due 2027-09-01, so the
+  // offer window opens 10 days before, on 2027-08-22.
+  const shipped = (n: number) => Array.from({ length: n }, (_, i) => ({ box_number: i + 1, shipped_at: SHIP1 + i * 90 * DAY }));
+  const four3 = { seasons_total: 4, first_box_shipped_at: SHIP1, box_orders: shipped(3) };
+  it("multi-season: 10 days before the final season is due, with its notice", () => {
+    expect(isContinueOfferDue(four3, Date.UTC(2027, 7, 21))).toBe(false);
+    expect(isContinueOfferDue(four3, Date.UTC(2027, 7, 22))).toBe(true);
+    // Same day the final season's notice goes out.
+    const withAddr = { ...four3, ship_mode: "to_recipient" as const, next_shipping_address: ADDR };
+    expect(seasonNoticeDue(withAddr, Date.UTC(2027, 7, 21))).toBeNull();
+    expect(seasonNoticeDue(withAddr, Date.UTC(2027, 7, 22))).toBe(4);
   });
-  it("single season: when it ships", () => {
-    expect(isContinueOfferDue({ seasons_total: 1, box_orders: [{ box_number: 1, shipped_at: null }] })).toBe(false);
-    expect(isContinueOfferDue({ seasons_total: 1, box_orders: [{ box_number: 1, shipped_at: SHIP1 }] })).toBe(true);
+  it("multi-season: not at the earlier seasons' notices", () => {
+    const four1 = { ...four3, box_orders: shipped(1) };
+    expect(isContinueOfferDue(four1, Date.UTC(2027, 1, 19))).toBe(false); // season 2 notice
+    const four2 = { ...four3, box_orders: shipped(2) };
+    expect(isContinueOfferDue(four2, Date.UTC(2027, 4, 22))).toBe(false); // season 3 notice
+  });
+  it("two seasons: season 2 is the last, so it goes with the season 2 notice", () => {
+    const two = { seasons_total: 2, first_box_shipped_at: SHIP1, box_orders: shipped(1) };
+    expect(isContinueOfferDue(two, Date.UTC(2027, 1, 18))).toBe(false);
+    expect(isContinueOfferDue(two, Date.UTC(2027, 1, 19))).toBe(true);
+  });
+  it("multi-season: still sends late while the final season has not shipped, never after", () => {
+    const four4open = { ...four3, box_orders: [...four3.box_orders, { box_number: 4, shipped_at: null }] };
+    expect(isContinueOfferDue(four4open, Date.UTC(2027, 8, 5))).toBe(true);
+    const four4shipped = { ...four3, box_orders: shipped(4) };
+    expect(isContinueOfferDue(four4shipped, Date.UTC(2027, 8, 5))).toBe(false);
+  });
+  it("once only, and never after converting", () => {
+    const at = Date.UTC(2027, 7, 25);
+    expect(isContinueOfferDue({ ...four3, continue_offer_sent_at: 1 }, at)).toBe(false);
+    expect(isContinueOfferDue({ ...four3, converted_at: 1 }, at)).toBe(false);
+  });
+  it("needs season 1 shipped to schedule anything", () => {
+    expect(isContinueOfferDue({ seasons_total: 4, box_orders: [{ box_number: 1, shipped_at: null }] }, Date.UTC(2030, 0, 1))).toBe(false);
+  });
+  it("single season: the first Reserve is the last, so after it is fulfilled", () => {
+    const now = Date.UTC(2026, 11, 2);
+    expect(isContinueOfferDue({ seasons_total: 1, box_orders: [{ box_number: 1, shipped_at: null }] }, now)).toBe(false);
+    expect(isContinueOfferDue({ seasons_total: 1, box_orders: [{ box_number: 1, shipped_at: SHIP1 }] }, now)).toBe(true);
+    expect(isContinueOfferDue({ seasons_total: 1, box_orders: [{ box_number: 1, shipped_at: SHIP1 }], continue_offer_sent_at: 1 }, now)).toBe(false);
+  });
+});
+
+describe("continue offer copy", () => {
+  const base = { recipientFirstName: "Sam", purchaserFirstName: "Alex", continueUrl: "https://mymully.com/gift-continue/t" };
+  it("multi-season: before the last Reserve, with its date", () => {
+    const c = { ...base, seasonsTotal: 4, finalDueOn: "2027-09-01" };
+    expect(buildGiftContinueSubject(c)).toBe("Before your last gifted Reserve");
+    expect(buildGiftContinueText(c)).toMatch(/The last Reserve from Alex's gift ships around September 1\./);
+    expect(giftContinueLead({ ...c, finalDueOn: null })).toBe("The last Reserve from Alex's gift is up next.");
+    expect(giftContinueLead({ ...c, finalShipped: true })).toBe("The last Reserve from Alex's gift has shipped.");
+  });
+  it("single season: after it ships", () => {
+    const c = { ...base, seasonsTotal: 1 };
+    expect(buildGiftContinueSubject(c)).toBe("Keep Mully Reserve going");
+    expect(buildGiftContinueText(c)).toMatch(/Your Reserve from Alex has shipped, and it was a one-season gift\./);
+  });
+  it("never says on its way", () => {
+    for (const n of [1, 2, 4]) {
+      const c = { ...base, seasonsTotal: n, finalDueOn: "2027-09-01" };
+      expect(`${buildGiftContinueSubject(c)} ${buildGiftContinueText(c)}`).not.toMatch(/on its way/i);
+    }
   });
 });
 
@@ -468,7 +522,7 @@ describe("next-season address", () => {
 
 describe("customer copy rules", () => {
   const texts = [1, 2, 4].flatMap((n) => {
-    const c = { recipientFirstName: "Sam", purchaserFirstName: "Alex", seasonsTotal: n, continueUrl: "https://mymully.com/gift-continue/t" };
+    const c = { recipientFirstName: "Sam", purchaserFirstName: "Alex", seasonsTotal: n, continueUrl: "https://mymully.com/gift-continue/t", finalDueOn: n > 1 ? "2027-09-01" : null };
     const out: string[] = [buildGiftContinueSubject(c), buildGiftContinueText(c)];
     for (const shipMode of ["to_recipient", "to_purchaser"] as const) {
       for (const hasRecipientEmail of [true, false]) {
