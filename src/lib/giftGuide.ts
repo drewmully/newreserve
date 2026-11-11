@@ -145,7 +145,7 @@ export const GIFT_REASONS: Record<string, string> = {
   "primo-fairway-crew": "A modal-blend crew with four-way stretch that sits quietly over a polo.",
   "duckhead-stretch-belt": "A braided stretch belt that gives a little at the top of the backswing.",
   // $100 to $150
-  "duckhead-classic-fit-gold-school-chino-khaki": "The chino our outfits start with. Pick his waist and inseam and it does the rest.",
+  "duckhead-classic-fit-gold-school-chino-khaki": "A classic-fit khaki he will wear all week. Pick his waist and inseam and it does the rest.",
   "rhone-long-game-vest": "UPF 50+ and a water-repellent finish for the round that turns on the back nine.",
   "olydoe-pima-long-sleeve-polo": "Long-staple Peruvian Pima with a little stretch. A polo built for November.",
   "rhone-rise-quarter-zip": "Raglan sleeves and a low chin guard, over any polo he already owns.",
