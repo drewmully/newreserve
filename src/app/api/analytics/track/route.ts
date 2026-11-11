@@ -145,6 +145,8 @@ const VALID_EVENTS = new Set([
   "take_a_shot_phone_submitted",
   "take_a_shot_phone_ask",
   "take_a_shot_keep",
+  "swing_attempt_gated",
+  "take_a_shot_locked",
   "popup_eligible",
   "popup_suppressed",
   "popup_view",

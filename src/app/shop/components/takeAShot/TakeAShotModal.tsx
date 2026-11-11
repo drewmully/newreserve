@@ -1,9 +1,11 @@
 "use client";
 /**
- * Take a Shot signup modal: landing > email (consent) > first shot > code
- * shown > phone ask (2 more shots, SMS consent) > game. The game module and
- * its CSS load only after the shopper taps "Take a Shot". The server decides
- * every result and issues the code; this component never makes one up.
+ * Take a Shot, game first: the popup opens on the live hole. The first swing
+ * freezes the meter and an email sheet slides up (consent, Turnstile); on
+ * submit the same swing is hit. After shot 1 the server locks the result
+ * without a code and the phone ask comes up: add a phone for best of 3, or
+ * keep the locked percent. Exactly one code is minted per player (keep, the
+ * final claim, or the cron). The server decides every result and code.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
@@ -13,16 +15,20 @@ import { getClientAnonymousId } from "@/lib/tracking";
 import { KEYS, markSignedUp, writeValue, type TriggerType } from "@/lib/takeAShot/popupRules";
 import { fetchReserveQuarterPrice, renewalLine } from "@/lib/takeAShot/reservePrice";
 import { popupContext, trackEmailSubmitted, trackPopup } from "@/lib/takeAShot/popupTracking";
-import { CODE_TERMS, FLOOR_PERCENT, MAX_PERCENT, PALETTE, RING_COLORS, RING_TIERS, SHOTS } from "@/lib/takeAShot/config";
-import { MullyWordmark } from "../MullyWordmark";
+import { CODE_TERMS, FLOOR_PERCENT, MAX_PERCENT, SHOTS } from "@/lib/takeAShot/config";
 import { SIGNUP_DISMISS_KEY } from "../ShopSignupPopup";
 import "./take-a-shot.css";
 
-type Claim = { code: string; pct: number; won: boolean; expiresAt: string };
+type Claim = { status?: string; code: string; pct: number; won: boolean; expiresAt: string };
+type Locked = { status: "locked"; pct: number; won: boolean };
 type Session = { sid: string; pin: number; winds: { mph: number; dirDeg: number }[]; shots: number; floor: number; results: unknown[] };
-type Step = "landing" | "email" | "existing" | "game" | "ask";
-type GameHandle = (() => void) & { extend?: (session: Session) => void; finish?: (claim: Claim) => void };
-type GameModule = { mount: (root: HTMLElement, opts: Record<string, unknown>) => GameHandle };
+/** play: game only. email: email sheet over the game. ask: result + phone sheet. */
+type Step = "play" | "email" | "existing" | "game" | "ask";
+type GameHandle = (() => void) & {
+  fire?: (session: Session) => void; ungate?: () => void;
+  extend?: (session: Session) => void; finish?: (claim: Claim) => void;
+};
+type GameModule = { mount: (root: HTMLElement, opts: Record<string, unknown>) => GameHandle; previewSession: () => Session };
 const TURNSTILE_SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || "";
 
 let gamePromise: Promise<GameModule> | null = null;
@@ -88,35 +94,6 @@ declare global {
   }
 }
 
-/** Landing art: the target in the Mully palette (deep green, olive, rings in sand/gold/cream, one accent). */
-function RingsArt() {
-  const rings = [...RING_TIERS].reverse();
-  return <svg className="tas__art" viewBox="0 0 240 240" aria-hidden="true">
-    <circle cx="120" cy="120" r="116" fill={PALETTE.deepGreen} />
-    <circle cx="120" cy="120" r="108" fill={PALETTE.olive} />
-    {rings.map((t, i) => <circle key={t.ft} cx="120" cy="120" r={t.ft * 4.6 + 6} fill={RING_COLORS[rings.length - 1 - i]} stroke={PALETTE.deepGreen} strokeOpacity=".35" strokeWidth="1.5" />)}
-    <line x1="120" y1="120" x2="120" y2="54" stroke="#2B2018" strokeWidth="3" />
-    <path d="M120 54 L152 64 L120 74 Z" fill={PALETTE.accent} />
-    <circle cx="120" cy="120" r="5" fill="#2B2018" />
-  </svg>;
-}
-
-/** Dimmed static preview of the hole for the empty half of the email step. */
-function HolePreview() {
-  return <div className="tas__preview" aria-hidden="true">
-    <svg viewBox="0 0 320 210" preserveAspectRatio="xMidYMax slice">
-      <rect width="320" height="210" fill="#5E9244" />
-      <path d="M0 120 C70 96 120 140 190 118 S300 92 320 108 L320 150 C260 136 210 170 140 154 S40 150 0 162 Z" fill="#43A9DA" opacity=".85" />
-      <path d="M126 210 L150 150 L172 150 L198 210 Z" fill="#8CBB5E" />
-      <ellipse cx="190" cy="66" rx="78" ry="40" fill="#A9D47C" />
-      {[...RING_TIERS].reverse().map((t, i, a) => <ellipse key={t.ft} cx="190" cy="66" rx={t.ft * 2.6 + 4} ry={t.ft * 1.35 + 2} fill={RING_COLORS[a.length - 1 - i]} opacity=".75" />)}
-      <line x1="190" y1="66" x2="190" y2="26" stroke="#2B2018" strokeWidth="2" />
-      <path d="M190 26 L210 32 L190 38 Z" fill={PALETTE.accent} />
-      <ellipse cx="160" cy="196" rx="16" ry="6" fill="#A4CF74" />
-    </svg>
-  </div>;
-}
-
 function expiryText(iso: string): string {
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
@@ -133,21 +110,24 @@ export function TakeAShotModal({ openSignal, trigger = "manual", onClosed }: { o
   /** The email submit is waiting for the Turnstile token ("Checking…"). */
   const [waiting, setWaiting] = useState(false);
   const game = useRef<GameHandle | null>(null);
+  const previewRef = useRef<Session | null>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
-  const [step, setStep] = useState<Step>("landing");
+  const [step, setStep] = useState<Step>("play");
+  const [loadFailed, setLoadFailed] = useState(false);
   const [email, setEmail] = useState("");
   const [emailOk, setEmailOk] = useState(false);
   const [phone, setPhone] = useState("");
   const [smsOk, setSmsOk] = useState(false);
   const [error, setError] = useState("");
-  const [busy, setBusy] = useState<"" | "email" | "phone">("");
+  const [busy, setBusy] = useState<"" | "email" | "phone" | "keep">("");
   const [existing, setExisting] = useState<{ claim: Claim | null } | null>(null);
   const [played, setPlayed] = useState(false);
-  /** The phone ask after the first shot: the code already issued, and the first result. */
-  const [ask, setAsk] = useState<{ claim: Claim; firstPct: number } | null>(null);
+  /** The phone ask after the first shot: the locked percent. No code exists yet. */
+  const [ask, setAsk] = useState<{ pct: number; won: boolean } | null>(null);
   const askRef = useRef<{ sid: string } | null>(null);
   const sessionRef = useRef<Session | null>(null);
-  const pendingGame = useRef<{ game: GameModule; session: Session } | null>(null);
+  /** take_a_shot_email_submitted has fired for this player. */
+  const leadSent = useRef(false);
   /** Every event carries the trigger that opened this modal and the current step. */
   const ctx = useRef({ trigger, step });
   /** Live quarterly Reserve price for the renewal line under every code. */
@@ -159,7 +139,7 @@ export function TakeAShotModal({ openSignal, trigger = "manual", onClosed }: { o
     trackPopup(name, ctx.current.trigger, ctx.current.step, properties);
   }, []);
 
-  /** Leaving the phone ask without answering keeps the code and releases the welcome email. */
+  /** Leaving the phone ask without answering: the server mints the locked percent and emails it. */
   const keepIfAsked = useCallback((keepalive = false) => {
     const asked = askRef.current;
     if (!asked) return;
@@ -176,6 +156,50 @@ export function TakeAShotModal({ openSignal, trigger = "manual", onClosed }: { o
     dialog.current.close();
     window.dispatchEvent(new Event("mully:tas-closed"));
   }, [played, track, keepIfAsked]);
+  const closeRef = useRef(close);
+  useEffect(() => { closeRef.current = close; }, [close]);
+
+  /** Mount the live hole straight away, in preview until the email arrives. */
+  const mountGame = useCallback(async () => {
+    if (game.current || !stage.current) return;
+    setLoadFailed(false);
+    let mod: GameModule;
+    try { mod = await loadGame(); } catch { setLoadFailed(true); return; }
+    if (game.current || !stage.current) return;
+    const preview = mod.previewSession();
+    previewRef.current = preview;
+    const opts: Record<string, unknown> = {
+      shots: preview.shots, session: preview, lead: { smsConsent: false },
+      gate: () => {
+        track("swing_attempt_gated");
+        setError("");
+        setStep("email");
+      },
+      backend: {
+        shot: (b: { shot: number; target: { x: number; y: number }; e: number }) => api("shot", { sid: sessionRef.current?.sid, ...b }),
+        // On 1 shot the server locks the result for the phone ask and mints nothing.
+        claim: () => api<Claim | Locked>("claim", { sid: sessionRef.current?.sid, upsell: (sessionRef.current?.shots ?? 0) === SHOTS.email }),
+      },
+      emit: (type: string, detail: Record<string, unknown>) => {
+        if (type === "shot") track("take_a_shot_shot", { shot: detail.shot, pct: detail.pct, surf: detail.surf, feet: detail.feet });
+        else if (type === "claim") track("take_a_shot_claim", { pct: detail.pct, won: detail.won, shots: detail.shots, pending: detail.pending });
+        else if (type === "locked") track("take_a_shot_locked", { pct: detail.pct, won: detail.won });
+      },
+      onReward: (reward: { code: string; percent: number; expiresAt: string }) => saveShopReward(reward),
+      onLocked: (res: Locked) => {
+        const sid = sessionRef.current?.sid;
+        if (!sid) return;
+        askRef.current = { sid };
+        setAsk({ pct: res.pct, won: res.won });
+        setPhone(""); setSmsOk(false); setError("");
+        setStep("ask");
+      },
+      onClose: () => closeRef.current(),
+    };
+    // The game reads opts.terms when it shows the code, so keep it live.
+    Object.defineProperty(opts, "terms", { enumerable: true, get: () => termsRef.current.terms });
+    game.current = mod.mount(stage.current, opts);
+  }, [track]);
 
   useEffect(() => {
     if (!openSignal || !dialog.current || dialog.current.open) return;
@@ -183,6 +207,7 @@ export function TakeAShotModal({ openSignal, trigger = "manual", onClosed }: { o
     ctx.current.trigger = trigger;
     dialog.current.showModal();
     track("popup_view");
+    void mountGame();
     void fetchReserveQuarterPrice().then((p) => { if (p) setQuarterPrice(p); });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only on a new open request
   }, [openSignal]);
@@ -197,14 +222,24 @@ export function TakeAShotModal({ openSignal, trigger = "manual", onClosed }: { o
   useEffect(() => {
     const onHide = () => keepIfAsked(true);
     window.addEventListener("pagehide", onHide);
-    return () => { window.removeEventListener("pagehide", onHide); game.current?.(); };
+    return () => { window.removeEventListener("pagehide", onHide); game.current?.(); game.current = null; };
   }, [keepIfAsked]);
   useEffect(() => {
     dialog.current?.querySelector<HTMLElement>("[data-step-focus]")?.focus({ preventScroll: true });
   }, [step]);
+  // Keep the sheets (and their button) above the on-screen keyboard.
+  useEffect(() => {
+    const vv = typeof window !== "undefined" ? window.visualViewport : null;
+    const el = dialog.current;
+    if (!vv || !el) return;
+    const update = () => el.style.setProperty("--tas-kb", `${Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop))}px`);
+    vv.addEventListener("resize", update); vv.addEventListener("scroll", update);
+    update();
+    return () => { vv.removeEventListener("resize", update); vv.removeEventListener("scroll", update); };
+  }, []);
 
   // Turnstile (only when a site key is configured): rendered visibly as soon as
-  // the email step mounts, so the check runs while the player types.
+  // the email sheet opens, so the check runs while the player types.
   useEffect(() => {
     if (!TURNSTILE_SITE_KEY || step !== "email" || !turnstileBox.current) return;
     const box = turnstileBox.current;
@@ -256,49 +291,12 @@ export function TakeAShotModal({ openSignal, trigger = "manual", onClosed }: { o
     if (window.turnstile) window.turnstile.reset(turnstileWidget.current);
   }
 
-  // Mount the game once the stage is visible.
-  useEffect(() => {
-    const pending = pendingGame.current;
-    if (step !== "game" || !pending || !stage.current) return;
-    pendingGame.current = null;
-    const { game: mod, session } = pending;
-    sessionRef.current = session;
-    game.current?.();
-    const opts: Record<string, unknown> = {
-      shots: session.shots, session,
-      lead: { smsConsent: session.shots > SHOTS.email },
-      backend: {
-        shot: (b: { shot: number; target: { x: number; y: number }; e: number }) => api("shot", { sid: session.sid, ...b }),
-        // A 1-shot claim offers the phone upsell, so the server holds the welcome email until the player decides.
-        claim: () => api<{ status: string }>("claim", { sid: session.sid, upsell: (sessionRef.current?.shots ?? 0) === SHOTS.email }),
-      },
-      emit: (type: string, detail: Record<string, unknown>) => {
-        if (type === "shot") track("take_a_shot_shot", { shot: detail.shot, pct: detail.pct, surf: detail.surf, feet: detail.feet });
-        else if (type === "claim") track("take_a_shot_claim", { pct: detail.pct, won: detail.won, shots: detail.shots, pending: detail.pending });
-      },
-      onReward: (reward: { code: string; percent: number; expiresAt: string }) => saveShopReward(reward),
-      onFirstClaim: (claim: Claim, best: { pct: number } | null) => {
-        if (claim.pct >= MAX_PERCENT) return false;
-        askRef.current = { sid: session.sid };
-        setAsk({ claim, firstPct: best?.pct ?? 0 });
-        setPhone(""); setSmsOk(false); setError("");
-        setStep("ask");
-        return true;
-      },
-      onClose: close,
-    };
-    // The game reads opts.terms when it shows the code, so keep it live.
-    Object.defineProperty(opts, "terms", { enumerable: true, get: () => termsRef.current.terms });
-    game.current = mod.mount(stage.current, opts);
-  }, [step, close, track]);
-
-  useEffect(() => { if (step === "ask") track("take_a_shot_phone_ask", { pct: ask?.claim.pct }); }, [step, ask, track]);
-
-  function start() {
-    track("take_a_shot_start");
-    void loadGame().catch(() => {});
+  /** Back to aiming without an email: the frozen swing is released. */
+  function backToHole() {
+    if (busy || waiting) return;
+    game.current?.ungate?.();
     setError("");
-    setStep("email");
+    setStep("play");
   }
 
   async function submitEmail(event: React.FormEvent<HTMLFormElement>) {
@@ -306,11 +304,10 @@ export function TakeAShotModal({ openSignal, trigger = "manual", onClosed }: { o
     if (busy || waiting) return;
     const company = new FormData(event.currentTarget).get("company");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())) { setError("Enter a valid email."); return; }
-    if (!emailOk) { setError("Check the box so we can send your code."); return; }
+    if (!emailOk) { setError("Agree to emails so we can send your code."); return; }
     setBusy("email"); setError("");
     try {
       const r = await api<{ status: string; claim?: Claim | null }>("check", { email, company });
-      track("take_a_shot_email_submitted");
       if (r.status === "existing") { setExisting({ claim: r.claim ?? null }); setStep("existing"); setBusy(""); return; }
     } catch (e) { setError(e instanceof Error ? e.message : "Please try again."); setBusy(""); return; }
     setBusy("");
@@ -319,26 +316,32 @@ export function TakeAShotModal({ openSignal, trigger = "manual", onClosed }: { o
     await startGame(true);
   }
 
-  /** Email only: the session starts with 1 shot. `resumed`: called by the waiting effect. */
+  /** Email only: the session starts with 1 shot on the hole they aimed at. `resumed`: called by the waiting effect. */
   async function startGame(resumed = false) {
     if (busy || (waiting && !resumed)) return;
     setError("");
     setBusy("email");
     try {
-      const [mod, r] = await Promise.all([
-        loadGame(),
-        api<{ status: string; session?: Session; claim?: Claim | null }>("session", {
-          email, emailConsent: true, phone: null, smsConsent: false,
-          turnstileToken: turnstileToken.current || undefined,
-        }),
-      ]);
+      const p = previewRef.current;
+      const r = await api<{ status: string; session?: Session; claim?: Claim | null }>("session", {
+        email, emailConsent: true, phone: null, smsConsent: false,
+        turnstileToken: turnstileToken.current || undefined,
+        preview: p ? { pin: p.pin, mph: p.winds[0]?.mph, dirDeg: p.winds[0]?.dirDeg } : undefined,
+      });
       if (r.status === "existing" || !r.session) { setExisting({ claim: r.claim ?? null }); setStep("existing"); return; }
+      // Meta Lead (via #379): once per new player, only after the session stored consent.
+      if (r.status === "new" && !leadSent.current) {
+        leadSent.current = true;
+        trackPopup("take_a_shot_email_submitted", ctx.current.trigger, "email", {}, email.trim());
+      }
       setPlayed(true);
       remember(365);
       markSignedUp("take-a-shot");
-      trackEmailSubmitted("take-a-shot", popupContext(ctx.current.trigger, "session"));
-      pendingGame.current = { game: mod, session: r.session };
+      trackEmailSubmitted("take-a-shot", popupContext(ctx.current.trigger, "email"));
+      sessionRef.current = r.session;
       setStep("game");
+      // The sheet drops and the frozen swing fires: same aim, same power.
+      game.current?.fire?.(r.session);
     } catch (e) {
       // Tokens are single use, so any failed session needs a fresh one. Inputs stay as typed.
       if (TURNSTILE_SITE_KEY) resetTurnstile();
@@ -347,14 +350,14 @@ export function TakeAShotModal({ openSignal, trigger = "manual", onClosed }: { o
     } finally { setBusy(""); }
   }
 
-  /** Phone ask: add a phone (SMS consent) and the same game gets 2 more shots. */
+  /** Phone ask: add a phone (SMS consent) and the same game gets 2 more shots. Nothing is minted yet. */
   async function submitPhone(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const asked = askRef.current;
     if (busy || !asked) return;
     const digits = phone.replace(/\D/g, "");
-    if (digits.length < 10) { setError(digits.length ? "Use a valid phone number, including your country code outside the US." : "Enter your phone to get 2 more shots."); return; }
-    if (!smsOk) { setError("Check the text box to get 2 more shots."); return; }
+    if (digits.length < 10) { setError(digits.length ? "Use a valid phone number, including your country code outside the US." : `Enter your phone to get ${extra} more shots.`); return; }
+    if (!smsOk) { setError("Agree to texts to get more shots."); return; }
     setBusy("phone"); setError("");
     try {
       const r = await api<{ status: string; session?: Session }>("upgrade", { sid: asked.sid, phone, smsConsent: true });
@@ -369,14 +372,20 @@ export function TakeAShotModal({ openSignal, trigger = "manual", onClosed }: { o
     finally { setBusy(""); }
   }
 
-  function keepCode() {
-    if (!ask) return;
-    track("take_a_shot_keep", { pct: ask.claim.pct });
-    keepIfAsked();
-    const claim = ask.claim;
-    setAsk(null);
-    setStep("game");
-    game.current?.finish?.(claim);
+  /** "Keep my X%": the server mints the one code now and the game shows it. */
+  async function keepCode() {
+    const asked = askRef.current;
+    if (!ask || !asked || busy) return;
+    track("take_a_shot_keep", { pct: ask.pct });
+    setBusy("keep"); setError("");
+    try {
+      const c = await api<Claim>("keep", { sid: asked.sid });
+      askRef.current = null;
+      setAsk(null);
+      setStep("game");
+      game.current?.finish?.(c);
+    } catch (e) { setError(e instanceof Error ? e.message : "Please try again."); }
+    finally { setBusy(""); }
   }
 
   const claim = existing?.claim;
@@ -389,26 +398,21 @@ export function TakeAShotModal({ openSignal, trigger = "manual", onClosed }: { o
     onCancel={(e) => { e.preventDefault(); close(); }}
     onClose={() => { previousFocus.current?.focus({ preventScroll: true }); onClosed?.(); }}
     onClick={(e) => { if (e.target === e.currentTarget) close(); }}>
-    <div className="tas__modal">
+    <div className="tas__modal" data-step={step}>
       <button className="tas__close" type="button" aria-label="Close" onClick={close}>×</button>
-      <section className="tas__gate" hidden={step === "game" || step === "ask"}>
-        {step === "landing" && <div className="tas__step tas__land">
-          <MullyWordmark accent="#B08558" />
-          <RingsArt />
-          <h2 className="tas__h1" id="tas-title" tabIndex={-1} data-step-focus>Take a shot at {MAX_PERCENT}% off.</h2>
-          <p className="tas__sub">One par 3 over water. The closer you land, the bigger the discount.</p>
-          <div className="tas__tiers">
-            <span className="tas__tier-floor">{FLOOR_PERCENT.email}% just for playing</span>
-            <span className="tas__tier-top">Up to {MAX_PERCENT}% with your best shot</span>
-          </div>
-          <button className="tas__btn" type="button" onClick={start}>Take a Shot</button>
-          <button className="tas__link" type="button" onClick={close}>No thanks</button>
-        </div>}
-        {step === "email" && <form className="tas__step tas__email" onSubmit={submitEmail} noValidate>
-          <div className="tas__progress"><i className="on" /><i /></div>
-          <MullyWordmark accent="#B08558" />
-          <h2 className="tas__h2" id="tas-title" tabIndex={-1} data-step-focus>Where should we send your code?</h2>
-          <p className="tas__sub">The hole is loading while you type.</p>
+      <header className="tas__head">
+        <h2 className="tas__h1" id="tas-title" tabIndex={-1} data-step-focus={step === "play" ? "" : undefined}>Take a shot at {MAX_PERCENT}% off.</h2>
+        <p className="tas__tag">{FLOOR_PERCENT.email}% just for playing</p>
+      </header>
+      <div className="tas__stage" ref={stage}>
+        {loadFailed && <div className="tas__loadfail"><p className="tas__sub">The hole did not load.</p>
+          <button className="tas__btn" type="button" onClick={() => void mountGame()}>Try again</button></div>}
+      </div>
+
+      <section className="tas__sheet tas__sheet--email" data-open={step === "email" ? "" : undefined} aria-hidden={step !== "email"} inert={step !== "email"}>
+        <form className="tas__sheet-in" onSubmit={submitEmail} noValidate>
+          <h3 className="tas__h2" tabIndex={-1} data-step-focus={step === "email" ? "" : undefined}>Where should we send your code?</h3>
+          <p className="tas__sub">Your swing is locked in. It fires the moment you are in.</p>
           <label className="tas__field"><span className="tas__label">Email</span>
             <input className="tas__input" type="email" inputMode="email" autoComplete="email" placeholder="you@example.com"
               maxLength={254} value={email} onChange={(e) => { setEmail(e.target.value); setError(""); }} required />
@@ -418,16 +422,19 @@ export function TakeAShotModal({ openSignal, trigger = "manual", onClosed }: { o
           </label>
           <div className="tas__trap" aria-hidden="true"><label>Company<input name="company" autoComplete="off" tabIndex={-1} /></label></div>
           <div ref={turnstileBox} className="tas__turnstile" />
-          {error && <p className="tas__err" role="alert">{error}</p>}
-          <button className="tas__btn" type="submit" disabled={Boolean(busy || waiting)}>
-            {waiting ? <><span className="tas__spin" />Checking…</> : busy === "email" ? <><span className="tas__spin" />Loading the hole</> : "Take my shot"}
-          </button>
-          <p className="tas__fine">One code per person. Best shot counts. No purchase or Reserve subscription required.</p>
-          <HolePreview />
-        </form>}
-        {step === "existing" && <div className="tas__step">
-          <MullyWordmark accent="#B08558" />
-          <h2 className="tas__h2" id="tas-title" tabIndex={-1} data-step-focus>You already took your shot.</h2>
+          {error && step === "email" && <p className="tas__err" role="alert">{error}</p>}
+          <div className="tas__sheet-cta">
+            <button className="tas__btn" type="submit" disabled={Boolean(busy || waiting)}>
+              {waiting ? <><span className="tas__spin" />Checking…</> : busy === "email" ? <><span className="tas__spin" />Teeing up</> : "Take my shot"}
+            </button>
+            <p className="tas__fine">One code per person. No purchase or Reserve subscription required. <button className="tas__inline" type="button" onClick={backToHole}>Back to the hole</button></p>
+          </div>
+        </form>
+      </section>
+
+      {step === "existing" && <section className="tas__sheet" data-open="">
+        <div className="tas__sheet-in">
+          <h3 className="tas__h2" tabIndex={-1} data-step-focus>You already took your shot.</h3>
           {claim ? <>
             <p className="tas__sub">One game per person. Your code is still good for {claim.pct}% off until {expiryText(claim.expiresAt)}. {CODE_TERMS.short} {renewalLine(quarterPrice)}</p>
             <div className="tas__code"><span>{claim.code}</span>
@@ -435,20 +442,16 @@ export function TakeAShotModal({ openSignal, trigger = "manual", onClosed }: { o
             </div>
           </> : <p className="tas__sub">One game per person. We sent your code to the email you played with.</p>}
           <button className="tas__btn" type="button" onClick={() => { if (claim) saveShopReward({ code: claim.code, percent: claim.pct, expiresAt: claim.expiresAt }); close(); }}>Keep shopping</button>
-        </div>}
-      </section>
-      <div className="tas__stage" ref={stage} hidden={step !== "game" && step !== "ask"} />
-      {step === "ask" && ask && <section className="tas__ask">
-        <div className="tas__ask-in">
-          <p className="tas__eyebrow">{ask.claim.won ? "Your first shot" : "Tough hole"}</p>
-          <h2 className="tas__h2" id="tas-title" tabIndex={-1} data-step-focus>{ask.claim.pct}% off{ask.claim.won ? "" : " anyway."}</h2>
-          <div className="tas__code"><span>{ask.claim.code}</span>
-            <button className="tas__copy" type="button" onClick={copy(ask.claim.code)}>Copy</button>
-          </div>
-          <p className="tas__fine">Yours to keep. One use, expires {expiryText(ask.claim.expiresAt)}. {CODE_TERMS.short} {renewalLine(quarterPrice)}</p>
+        </div>
+      </section>}
+
+      {step === "ask" && ask && <section className="tas__sheet tas__sheet--ask" data-open="">
+        <div className="tas__sheet-in">
+          <h3 className="tas__h2" tabIndex={-1} data-step-focus>{ask.won ? `Nice shot, ${ask.pct}% locked in` : `${ask.pct}% locked in`}</h3>
+          <p className="tas__sub">{ask.won ? "Your code comes once you decide." : "Tough hole. You still get your playing discount, and your code comes once you decide."}</p>
           <form className="tas__ask-form" onSubmit={submitPhone} noValidate>
-            <h3 className="tas__ask-h">{ask.firstPct > 0 ? `Nice shot. Want ${extra} more?` : `Want ${extra} more?`}</h3>
-            <p className="tas__sub">Add your phone and your best of {SHOTS.phone} counts, with at least {FLOOR_PERCENT.phone}% off.</p>
+            <p className="tas__ask-h">Add your phone for {extra} more shots</p>
+            <p className="tas__sub">Best of {SHOTS.phone} counts, with at least {FLOOR_PERCENT.phone}% off. Up to {MAX_PERCENT}%.</p>
             <label className="tas__field"><span className="tas__label">Mobile number</span>
               <input className="tas__input" type="tel" inputMode="tel" autoComplete="tel" placeholder="(555) 555-0123" maxLength={35}
                 value={phone} onChange={(e) => { setPhone(formatPhone(e.target.value)); setError(""); }} />
@@ -457,11 +460,15 @@ export function TakeAShotModal({ openSignal, trigger = "manual", onClosed }: { o
               <span>{SMS_CONSENT} <a href="/policies/privacy" target="_blank" rel="noopener noreferrer">Privacy</a> · <a href="/policies/terms" target="_blank" rel="noopener noreferrer">Terms</a></span>
             </label>
             {error && <p className="tas__err" role="alert">{error}</p>}
-            <button className="tas__btn" type="submit" disabled={busy === "phone"}>
-              {busy === "phone" ? <><span className="tas__spin" />Adding your shots</> : `Get ${extra} more shots`}
-            </button>
+            <div className="tas__sheet-cta">
+              <button className="tas__btn" type="submit" disabled={Boolean(busy)}>
+                {busy === "phone" ? <><span className="tas__spin" />Adding your shots</> : `Add phone for ${extra} more`}
+              </button>
+              <button className="tas__link" type="button" disabled={Boolean(busy)} onClick={() => void keepCode()}>
+                {busy === "keep" ? "Getting your code" : `Keep my ${ask.pct}%`}
+              </button>
+            </div>
           </form>
-          <button className="tas__link" type="button" disabled={busy === "phone"} onClick={keepCode}>Keep my {ask.claim.pct}%</button>
         </div>
       </section>}
     </div>

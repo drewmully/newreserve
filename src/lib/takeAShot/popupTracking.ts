@@ -23,6 +23,7 @@ export function popupContext(trigger: TriggerType | null = null, step: string | 
   };
 }
 
-export function trackPopup(name: string, trigger: TriggerType | null, step: string | null, extra: Record<string, unknown> = {}) {
-  void trackEvent(name, { properties: { source: POPUP_VARIANT, ...popupContext(trigger, step), ...extra } }, { includeAuth: false });
+export function trackPopup(name: string, trigger: TriggerType | null, step: string | null, extra: Record<string, unknown> = {}, email?: string) {
+  // email goes to the payload (Meta CAPI matching, hashed server side), never into properties.
+  void trackEvent(name, { ...(email ? { email } : {}), properties: { source: POPUP_VARIANT, ...popupContext(trigger, step), ...extra } }, { includeAuth: false });
 }
