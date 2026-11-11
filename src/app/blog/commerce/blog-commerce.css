@@ -8,7 +8,7 @@
 /* Product rows */
 .bc-row {margin: 36px 0}
 .bc-row__grid {display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 28px 18px}
-.bc-row--full {margin: 8px 0 0; padding-top: 36px; border-top: 1px solid #ddd9d0}
+.bc-row--full {margin: 48px 0 0}
 .bc-row--full .bc-row__grid {gap: 36px 24px}
 .bc-row__title,
 .shop-article-copy .bc-row__title {font-family: var(--font-serif); font-size: 28px; line-height: 1.2; margin: 0 0 24px; color: #292720}
