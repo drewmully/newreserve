@@ -62,7 +62,7 @@ The production Shopify token has no `write_orders`, so nothing is written to the
 |---|---|
 | `GIFT_SEASON_GIFTER_EMAIL_ENABLED` | Gifter confirmation on `orders-paid` ("Your gift is on its way", ship-to address, season schedule, printable card link for ship to me) |
 | `GIFT_SEASON_ADDRESS_EMAILS_ENABLED` | Address request, purchaser fallback, purchaser reminder, season notice |
-| `GIFT_SEASON_OFFER_EMAILS_ENABLED` | Continue offer before the last Reserve |
+| `GIFT_SEASON_OFFER_EMAILS_ENABLED` | Continue offer before the last Reserve: multi-season with the final season notice, 10 days before it is due (still sends until the final season ships); single season after season 1 is fulfilled. Once per gift (`continue_offer_sent_at` + Resend idempotency key) |
 
 Every send is idempotent (Resend idempotency key plus a `*_sent_at` stamp on the doc).
 

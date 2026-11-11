@@ -13,8 +13,9 @@
  *      next-season address exists (logged once as gift_season_address_blocked
  *      and shown as "Address needed" in /admin/gifts).
  *   3. Season notice before each season 2..N, with the update link.
- *   4. If the final season is on its way and the continue offer has not gone
- *      out, email the recipient the offer to continue as a Reserve Member.
+ *   4. Continue offer, once, before the last Reserve: in the same run as the
+ *      final season's notice (SEASON_NOTICE_LEAD_DAYS before it is due) for
+ *      multi-season gifts, after season 1 is fulfilled for a single season.
  *
  * Emails: address + notice emails send only when
  * GIFT_SEASON_ADDRESS_EMAILS_ENABLED === "true"; the continue offer only when
@@ -312,8 +313,8 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // 4. Continue-as-member offer, once, when the final box is on its way.
-    if (isContinueOfferDue(data)) {
+    // 4. Continue-as-member offer, once, before the last Reserve.
+    if (isContinueOfferDue(data, now)) {
       if (dry) {
         results.push({ id, action: "would_send_offer" });
         continue;
@@ -330,21 +331,20 @@ export async function GET(request: NextRequest) {
           results.push({ id, action: "offer_skipped_no_email" });
           continue;
         }
+        if (!isContinueOfferDue(fresh, now)) continue;
         const continueUrl = `${origin}/gift-continue/${fresh.sizing_token}?utm_source=gift_season&utm_medium=email&utm_campaign=continue_offer`;
+        const seasonsTotal = fresh.seasons_total ?? 1;
+        const offerArgs = {
+          recipientFirstName: fresh.recipient_first_name,
+          purchaserFirstName: fresh.purchaser_first_name,
+          seasonsTotal,
+          continueUrl,
+          finalDueOn: seasonsTotal > 1 ? boxDueOn(fresh.first_box_shipped_at, seasonsTotal) : null,
+        };
         await sendPlainText({
           to: fresh.recipient_email,
-          subject: buildGiftContinueSubject({
-            recipientFirstName: fresh.recipient_first_name,
-            purchaserFirstName: fresh.purchaser_first_name,
-            seasonsTotal: fresh.seasons_total ?? 1,
-            continueUrl,
-          }),
-          text: buildGiftContinueText({
-            recipientFirstName: fresh.recipient_first_name,
-            purchaserFirstName: fresh.purchaser_first_name,
-            seasonsTotal: fresh.seasons_total ?? 1,
-            continueUrl,
-          }),
+          subject: buildGiftContinueSubject(offerArgs),
+          text: buildGiftContinueText(offerArgs),
           idempotencyKey: `gift-season-continue:${id}`,
           sendClass: "transactional",
           category: "gift_season_continue_offer",

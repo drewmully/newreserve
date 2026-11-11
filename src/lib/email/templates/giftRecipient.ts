@@ -5,6 +5,8 @@
  * announcement (immediate, or scheduled via gift_deliver_on).
  */
 
+import { monthDay } from "./giftSeasonEmails";
+
 export interface BuildGiftRecipientEmailArgs {
   recipientFirstName: string | null;
   purchaserFirstName: string | null;
@@ -58,24 +60,43 @@ export interface BuildGiftContinueEmailArgs {
   purchaserFirstName: string | null;
   seasonsTotal: number;
   continueUrl: string;
+  /** Multi-season: final season due date (YYYY-MM-DD), if known. */
+  finalDueOn?: string | null;
 }
 
 export function buildGiftContinueSubject(args: BuildGiftContinueEmailArgs): string {
   return args.seasonsTotal > 1
-    ? "Your last gifted Reserve is on its way"
+    ? "Before your last gifted Reserve"
     : "Keep Mully Reserve going";
 }
 
-/** Sent once, when the final prepaid Reserve is on its way. */
+/** Opening line shared by the email and /gift-continue. */
+export function giftContinueLead(args: {
+  seasonsTotal: number;
+  purchaserFirstName: string | null;
+  finalDueOn?: string | null;
+  /** /gift-continue only: the final season already shipped. */
+  finalShipped?: boolean;
+}): string {
+  const from = args.purchaserFirstName?.trim() || "your gifter";
+  if (args.seasonsTotal > 1) {
+    if (args.finalShipped) return `The last Reserve from ${from}'s gift has shipped.`;
+    const when = args.finalDueOn ? ` ships around ${monthDay(args.finalDueOn)}` : " is up next";
+    return `The last Reserve from ${from}'s gift${when}.`;
+  }
+  return `Your Reserve from ${from} has shipped, and it was a one-season gift.`;
+}
+
+/**
+ * Sent once, before the last Reserve: with the final season's notice for
+ * multi-season gifts, after season 1 is fulfilled for a single season.
+ */
 export function buildGiftContinueText(args: BuildGiftContinueEmailArgs): string {
   const recipient = args.recipientFirstName?.trim() || "there";
-  const from = args.purchaserFirstName?.trim() || "your gifter";
   return [
     `Hey ${recipient},`,
     "",
-    args.seasonsTotal > 1
-      ? `The last Reserve from ${from}'s gift is on its way.`
-      : `Your Reserve from ${from} is on its way.`,
+    giftContinueLead(args),
     "",
     "Want to keep it going? Continue as a Reserve Member for $250 a season. Same stylist, same sizing, cancel anytime.",
     "",

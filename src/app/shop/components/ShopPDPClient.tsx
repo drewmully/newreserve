@@ -141,19 +141,25 @@ export function ShopPDPClient({
   useEffect(() => {
     if (viewedRef.current) return;
     viewedRef.current = true;
+    // A ?variant= link (catalog ads, swatches) opens with that variant
+    // selected; report it so Meta ViewContent matches the advertised item.
+    const urlVariant =
+      Object.keys(initialSelection).length > 0 ? selectedVariant : null;
     trackEvent("proshop_product_viewed", {
       properties: {
         product_slug: product.slug,
-        variant_id: product.variantId,
+        variant_id: urlVariant?.id ?? product.variantId,
         name: product.name,
         brand: product.brand,
         collection: product.collection,
         source: "shop_pdp_v4",
-        price: product.price,
+        price: urlVariant?.price ?? product.price,
         reserve_price: product.reservePrice,
         image_url: product.images?.[0],
       },
     });
+    // First render only (viewedRef guards repeats).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [product]);
 
   const handleAdd = async () => {

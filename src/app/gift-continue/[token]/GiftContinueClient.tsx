@@ -12,6 +12,8 @@ interface Props {
   recipientEmail: string;
   purchaserFirstName: string | null;
   seasonsTotal: number;
+  /** Opening line, built on the server (giftContinueLead). */
+  lead: string;
   alreadyMember: boolean;
 }
 
@@ -19,14 +21,13 @@ export default function GiftContinueClient({
   giftOrderId,
   recipientFirstName,
   recipientEmail,
-  purchaserFirstName,
   seasonsTotal,
+  lead,
   alreadyMember,
 }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const name = recipientFirstName?.trim() || "there";
-  const from = purchaserFirstName?.trim() || "your gifter";
 
   useEffect(() => {
     captureAttributionFromUrl();
@@ -83,9 +84,7 @@ export default function GiftContinueClient({
                 Keep Reserve going, {name}.
               </h1>
               <p className="text-sm text-charcoal/80 mt-4 leading-relaxed">
-                {seasonsTotal > 1
-                  ? `The last Reserve from ${from}'s gift is on its way.`
-                  : `Your Reserve from ${from} is on its way.`}{" "}
+                {lead}{" "}
                 Continue as a Reserve Member and keep getting a hand-picked
                 Reserve every season. Same stylist, same sizing.
               </p>

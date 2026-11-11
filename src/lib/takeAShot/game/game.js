@@ -15,8 +15,8 @@ const C = {
   page: '#FAF7F0', rough: '#5E9244', roughEdge: '#4E7E38', fair: '#8CBB5E', fairStripe: '#97C568',
   tee: '#A4CF74', surround: '#6FA34F', bank: '#7DB056', fringe: '#86BA5C', green: '#A9D47C', greenStripe: '#B5DB8A',
   sand: '#F3ECDC', sandShadow: '#D9CDB4', water: '#43A9DA', waterDeep: '#2F8FC5', waterEdge: '#CDEEFA',
-  tree: '#4C7A30', treeMid: '#5E8E3A', treeHi: '#7FAE4E', azalea: '#E0679F', azaleaHi: '#F4A3C6', mulch: '#8A5A3A',
-  shadow: 'rgba(38,52,26,0.30)', flag: '#8A2432', ink: '#2B2018', brown: '#4A3528', camel: '#B08558',
+  tree: '#4C7A30', treeMid: '#5E8E3A', treeHi: '#7FAE4E', azalea: '#8A2432', azaleaHi: '#B5656C', mulch: '#8A5A3A',
+  shadow: 'rgba(38,52,26,0.30)', flag: '#8A2432', ink: '#2B2018', brown: '#1F3A2C', camel: '#B08558',
 };
 
 function tracePoly(ctx, poly) { ctx.beginPath(); ctx.moveTo(poly[0][0], poly[0][1]); for (let i = 1; i < poly.length; i++) ctx.lineTo(poly[i][0], poly[i][1]); ctx.closePath(); }
@@ -61,10 +61,28 @@ function injectCss() {
 
 const esc = (t) => String(t).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
 
-/** Mounts the game into `root`. Returns a cleanup function. opts.backend is required. opts.terms is a short code-terms line. */
+/** A pin and first wind to show before there is a server session (game first). */
+export function previewSession() {
+  const pin = Math.floor(Math.random() * PINS.length);
+  const mph = Math.round(WIND_MIN + Math.random() * (WIND_MAX - WIND_MIN));
+  const dirDeg = Math.round(Math.random() * 360);
+  return { sid: '', pin, winds: [{ mph, dirDeg }], shots: 1, floor: 0, results: [] };
+}
+
+/**
+ * Mounts the game into `root`. Returns a cleanup function, which also
+ * carries fire(session), ungate(), extend(session) and finish(claim).
+ * opts.backend is required. opts.terms is a short code-terms line.
+ * opts.gate(): when set, the first swing freezes the meter and calls it
+ * instead of hitting (the host asks for an email); the host then calls
+ * fire(session) to hit with the same aim and power, or ungate() to go back.
+ * opts.onLocked(result, best): the server locked a 1-shot result without a
+ * code (phone ask). The host calls extend(session) for more shots or
+ * finish(claim) with the one code to show the final card.
+ */
 export function mount(root, opts) {
   injectCss();
-  const shotsTotal = opts.shots || 1;
+  let shotsTotal = opts.shots || 1;
   const emit = opts.emit || (() => {});
   root.innerHTML = '';
   const wrap = document.createElement('div');
@@ -107,8 +125,8 @@ export function mount(root, opts) {
   const mp = (e) => ((e + 1) / 2) * 100 + '%';
   const zone = (cls, w) => { const z = $(cls); z.style.left = mp(-w); z.style.width = w * 100 + '%'; };
   zone('.g-z-y', ZONE_YELLOW); zone('.g-z-g', ZONE_GREEN); zone('.g-z-p', ZONE_PERFECT);
-  const floorPct = opts.session.floor;
-  const hasPhone = !!(opts.lead && opts.lead.smsConsent);
+  let floorPct = opts.session.floor;
+  let hasPhone = !!(opts.lead && opts.lead.smsConsent);
 
   const rng = Math.random;
   const sess = opts.session;               // from the server: pin, wind per shot
@@ -163,7 +181,10 @@ export function mount(root, opts) {
     el.mark.style.opacity = 0;
     S.camT = { ...S.overview };
     updateMeter();
-    if (S.shot === 0) tipShow(TIPS);
+    // No tips on open: the course stays clear for the first swing. The 4-step
+    // tutorial starts at 1/4 on the first aim after that swing.
+    if (S.shot === 0) return;
+    if (!tutorialShown) { tutorialShown = true; tipShow(TIPS); }
     else tipShow([{ key: 'wind', t: 'New wind. Check it.', dur: 2.6, el: () => el.windBox }]);
   }
 
@@ -177,6 +198,7 @@ export function mount(root, opts) {
     { key: 'swing', t: 'Tap Swing when the needle hits the middle bar', dur: 0, el: () => el.swing },
   ];
   let tipsOff = !!PREFS.tipsOff;
+  let tutorialShown = false;
   const tip = { i: -1, t: 0, list: TIPS };
   function tipShow(list) {
     if (tipsOff) return;
@@ -503,7 +525,7 @@ export function mount(root, opts) {
   function drawInset() {
     if (S.phase !== 'aim' || S.readMode) { el.read.style.display = S.phase === 'aim' ? '' : 'none'; return; }
     el.read.style.display = '';
-    const R = 46, cx = S.W - R - 12, cy = S.topPad + R + 10;
+    const R = 46, cx = S.W - R - 22, cy = S.topPad + R + 14;
     const icam = { x: PIN.x, y: PIN.y, s: 4.4 };
     ctx.save();
     ctx.setTransform(S.dpr, 0, 0, S.dpr, 0, 0);
@@ -553,10 +575,22 @@ export function mount(root, opts) {
     S.target = { x: Math.sin(a) * d, y: Math.cos(a) * d };
     S.aim = (a * 180) / Math.PI;
   }
-  function strike() {
-    if (S.phase !== 'aim') return;
+  let gated = !!opts.gate;
+  function strike(saved) {
+    if (S.phase !== 'aim' && !(saved && S.phase === 'gated')) return;
     audio();
     tipHide();
+    if (gated && !saved) {
+      // Game first: the swing is real, but it needs an email before it counts.
+      S.phase = 'gated';
+      S.gatedShot = { e: S.meter, target: { ...S.target } };
+      el.mark.style.left = mp(S.meter); el.mark.style.opacity = 1;
+      el.swing.disabled = true;
+      setHint('Locked in. Add your email to hit it.');
+      opts.gate(S.gatedShot);
+      return;
+    }
+    if (saved) { S.target = { ...saved.target }; S.meter = saved.e; updateMeter(); }
     const e = S.meter;
     S.err = e;
     buzz(14); sfx.strike();
@@ -654,6 +688,19 @@ export function mount(root, opts) {
   function showResult() {
     const r = S.results[S.shot];
     const left = shotsTotal - S.shot - 1;
+    if (left === 0 && shotsTotal === 1 && opts.onLocked) {
+      // One shot, phone ask next: the result stays on the course and the host
+      // shows it with the ask. The server locks it; no code yet.
+      S.phase = 'done';
+      el.panel.classList.add('busy');
+      backend.claim().then((c) => {
+        if (c.status === 'locked') { renderFinal(c); return; }
+        el.card.hidden = false; el.card.classList.add('final');
+        renderFinal(c);
+        requestAnimationFrame(() => el.card.classList.add('on'));
+      }).catch(() => showFinal());
+      return;
+    }
     S.phase = 'result';
     el.panel.classList.add('busy');
     const big = r.surf === 'holed' ? 'Ace' : r.surf === 'green' ? `${r.feet} ft` : r.surf === 'water' ? 'Splash' : 'Missed';
@@ -687,13 +734,21 @@ export function mount(root, opts) {
   function renderFinal(c) {
     const best = S.best && S.best.pct > 0 ? S.best : null;
     const pct = c.pct, won = c.won, pending = c.status === 'pending';
+    if (c.status === 'locked') {
+      // No code yet: the host shows the result and the phone ask.
+      emit('locked', { pct, won: !!won, floor: floorPct, shots: S.results.length });
+      hideCard(); el.card.classList.remove('final');
+      if (opts.onLocked) opts.onLocked(c, best);
+      return;
+    }
     const chips = S.results.map((r) => `<span class="${r === best ? 'best' : ''}">${r.surf === 'holed' ? 'Ace' : r.surf === 'green' ? r.feet + ' ft' : r.surf === 'water' ? 'Creek' : 'Miss'}${r.pct ? ' · ' + r.pct + '%' : ''}</span>`).join('');
     S.code = pending ? null : c.code;
-    const leftNow = shotsTotal - S.shot - 1;
-    const canResume = leftNow > 0 && !(best && best.pct >= HOLED_PCT);
-    const resumeBtn = canResume ? `<button class="g-btn" data-act="resume" type="button">Take my ${leftNow} other shot${leftNow > 1 ? 's' : ''}</button><p class="g-card-sub">Your best shot is kept. It can only go up.</p>` : '';
-    emit('claim', { pct, won: !!won, floor: floorPct, shots: S.results.length, pending });
-    if (!pending && opts.onReward) opts.onReward({ code: c.code, percent: pct, expiresAt: c.expiresAt });
+    // A code ends the game: there is no way back to more shots.
+    const resumeBtn = '';
+    {
+      emit('claim', { pct, won: !!won, floor: floorPct, shots: S.results.length, pending });
+      if (!pending && opts.onReward) opts.onReward({ code: c.code, percent: pct, expiresAt: c.expiresAt });
+    }
     const head = won
       ? `<p class="g-eyebrow">You won</p><h3 class="g-final-h">${pct}% off</h3>`
       : `<p class="g-eyebrow">Tough hole</p><h3 class="g-final-h">${pct}% off anyway.</h3><p class="g-card-sub">${hasPhone ? 'For joining the list and adding your phone.' : 'For joining the list.'}</p>`;
@@ -716,7 +771,6 @@ export function mount(root, opts) {
       const act = b.dataset.act;
       if (act === 'next') { hideCard(); S.shot++; setupShot(); }
       else if (act === 'final') { hideCard(); showFinal(); }
-      else if (act === 'resume') { hideCard(); el.card.classList.remove('final'); S.code = null; emit('resume', {}); S.shot++; setupShot(); }
       else if (act === 'close') { opts.onClose && opts.onClose(); }
       return;
     }
@@ -747,6 +801,9 @@ export function mount(root, opts) {
   const aimAt = (e) => { const w = screenToWorld(e.clientX, e.clientY); setTarget(w.x, w.y); const cur = tip.list[tip.i]; if (cur && (cur.key === 'wind' || cur.key === 'read' || cur.key === 'aim') && tip.list.length > 1) { tip.i = 2; tipNext(); } };
   canvas.addEventListener('pointerdown', (e) => {
     if (S.phase !== 'aim') return;
+    // Tapping the ball on the tee swings, like the Swing button.
+    const r = canvas.getBoundingClientRect(), bp = toScreen(S.cam, S.W / 2, S.cy0, S.ball.x, S.ball.y);
+    if (hyp(e.clientX - r.left - bp.x, e.clientY - r.top - bp.y) < 22) { e.preventDefault(); strike(); return; }
     drag = e.pointerId; canvas.setPointerCapture(e.pointerId); aimAt(e);
   });
   canvas.addEventListener('pointermove', (e) => { if (drag === null || S.phase !== 'aim') return; aimAt(e); });
@@ -813,10 +870,43 @@ export function mount(root, opts) {
   }
   if (S.shot >= shotsTotal) { S.shot = shotsTotal - 1; renderShotBalls(); showFinal(); } else setupShot();
 
-  return () => {
+  const cleanup = () => {
     ro.disconnect();
     cancelAnimationFrame(raf);
     window.removeEventListener('keydown', onKey);
     root.innerHTML = '';
   };
+  /** Email accepted: the server session replaces the preview; hit the frozen swing. */
+  cleanup.fire = (next) => {
+    gated = false;
+    Object.assign(sess, next);
+    shotsTotal = next.shots; floorPct = next.floor; hasPhone = !!(next.shots > 1);
+    newWind(); renderShotBalls();
+    const saved = S.gatedShot; S.gatedShot = null;
+    if (saved) strike(saved); else { S.phase = 'aim'; el.swing.disabled = false; }
+  };
+  /** Email sheet dismissed without a session: back to aiming. */
+  cleanup.ungate = () => {
+    if (S.phase !== 'gated') return;
+    S.phase = 'aim'; S.gatedShot = null; el.swing.disabled = false; el.mark.style.opacity = 0;
+    setHint('Tap the course to aim');
+  };
+  /** Phone added: the server gave this session more shots. The first result stays. */
+  cleanup.extend = (next) => {
+    shotsTotal = next.shots; floorPct = next.floor; hasPhone = true;
+    sess.winds = next.winds; sess.shots = next.shots; sess.floor = next.floor;
+    hideCard(); el.card.classList.remove('final'); S.code = null;
+    emit('resume', { shots: next.shots });
+    S.shot = S.results.length; setupShot();
+  };
+  /** Phone declined: show the final card for the one code keep() minted. */
+  cleanup.finish = (c) => {
+    S.phase = 'done';
+    el.panel.classList.add('busy');
+    el.card.hidden = false;
+    el.card.classList.add('final');
+    renderFinal(c);
+    requestAnimationFrame(() => el.card.classList.add('on'));
+  };
+  return cleanup;
 }

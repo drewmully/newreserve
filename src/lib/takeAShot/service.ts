@@ -12,6 +12,12 @@ import { LIMITS, MAX_PERCENT, SHOTS, TAKE_A_SHOT_SOURCE, floorFor } from "./conf
 import { identityIdFor, isDisposableDomain, leadIdFor, normalizeEmail, normalizePhone, type NormalizedEmail } from "./identity";
 import { PINS, WIND_MAX, WIND_MIN, shotNoise, simulateShot, windFrom } from "./sim";
 
+/**
+ * Consent version for the SMS checkbox shown after the first shot (phone
+ * upsell). Bump it whenever that placement or its text changes.
+ */
+export const TAS_SMS_UPSELL_CONSENT_VERSION = "take-a-shot-upsell-2026-11-11";
+
 export const COLLECTIONS = {
   leads: "take_a_shot_leads",
   sessions: "take_a_shot_sessions",
@@ -74,13 +80,17 @@ export type ApiResult =
   | { status: "new" | "resume"; session: PublicSession; claim: PublicClaim | null }
   | { status: "shot"; noise: { carry: number; lat: number }; result: PublicResult }
   | ({ status: "claimed" } & PublicClaim)
-  | { status: "pending"; pct: number; won: boolean };
+  | { status: "pending"; pct: number; won: boolean }
+  /** First shot scored, waiting on the phone decision. No code exists yet. */
+  | { status: "locked"; pct: number; won: boolean };
 
 type StoredResult = PublicResult & { input: { x: number; y: number; e: number }; noise: { carry: number; lat: number }; at: number };
 type Session = {
   leadId: string; visitor: string | null; pin: number; winds: Array<{ mph: number; dirDeg: number }>;
   shots: number; floor: number; results: StoredResult[]; flags: Array<{ shot: number; why: string; ms?: number }>;
-  status: "open" | "claimed"; createdAtMs: number; lastShotAtMs: number; claimedAtMs?: number;
+  /** decision: 1-shot result locked in, waiting on the phone ask; no code minted yet. */
+  status: "open" | "decision" | "claimed"; createdAtMs: number; lastShotAtMs: number; claimedAtMs?: number;
+  decisionAtMs?: number;
 };
 type Reward = {
   code: string; percent: number; expiresAt: string; status: "active" | "pending" | "failed";
@@ -122,6 +132,14 @@ export function createTakeAShotService(deps: TasDeps) {
     const mx = await deps.mxCheck(n.domain);
     if (mx === false) return { ok: false, res: err("That email domain does not get mail. Check the spelling.", "no_mx") };
     return { ok: true, n };
+  }
+
+  function previewFrom(raw: unknown): { pin: number; wind: { mph: number; dirDeg: number } } | null {
+    if (!raw || typeof raw !== "object") return null;
+    const p = raw as Record<string, unknown>;
+    const pin = Number(p.pin), mph = Number(p.mph), dir = Number(p.dirDeg);
+    if (!Number.isInteger(pin) || pin < 0 || pin >= PINS.length || !Number.isFinite(mph) || !Number.isFinite(dir)) return null;
+    return { pin, wind: { mph: Math.round(Math.min(WIND_MAX, Math.max(WIND_MIN, mph))), dirDeg: Math.round(((dir % 360) + 360) % 360) } };
   }
 
   /** Bump an hourly counter inside the transaction. Returns false when over the limit. */
@@ -212,12 +230,15 @@ export function createTakeAShotService(deps: TasDeps) {
 
         const now = deps.now();
         const shots = phone ? SHOTS.phone : SHOTS.email;
+        // Game first: the shopper aimed at the hole shown before the email,
+        // so the first shot keeps that pin and wind (clamped to the normal ranges).
+        const preview = previewFrom(body.preview);
         const sid = deps.newId();
         const leadId = leadIdFor(n.key);
         const session: Session = {
           leadId, visitor: ctx.visitor,
-          pin: Math.floor(deps.rand() * PINS.length),
-          winds: Array.from({ length: shots }, () => ({
+          pin: preview ? preview.pin : Math.floor(deps.rand() * PINS.length),
+          winds: Array.from({ length: shots }, (_, i) => (i === 0 && preview ? preview.wind : {
             mph: Math.round(WIND_MIN + deps.rand() * (WIND_MAX - WIND_MIN)), dirDeg: Math.round(deps.rand() * 360),
           })),
           shots, floor: floorFor(Boolean(phone)), results: [], flags: [], status: "open",
@@ -256,6 +277,7 @@ export function createTakeAShotService(deps: TasDeps) {
       return store.transaction(async (tx) => {
         const s = (await tx.get(COLLECTIONS.sessions, sid)) as Session | null;
         if (!s || (s.visitor && s.visitor !== ctx.visitor)) return err("Game expired. Reopen Take a Shot.", "no_session", 404);
+        if (s.status === "claimed") return err("This game is finished.", "claimed", 409);
         if (shot !== s.results.length) return err("That shot was already played.", "shot_played", 409);
         if (shot >= s.shots) return err("No shots left.", "no_shots", 409);
         if (s.results.some((r) => r.surf === "holed")) return err("You already aced it.", "holed", 409);
@@ -280,7 +302,12 @@ export function createTakeAShotService(deps: TasDeps) {
       if (!sid) return err("Game expired. Reopen Take a Shot.", "no_session", 404);
       const now = deps.now();
 
-      // 1. Decide the percent. Return the existing code if it is already as good.
+      // A 1-shot email player who is about to be offered more shots (phone
+      // ask): lock the percent and mint nothing. keep(), the final claim
+      // after upgrade(), or the cron mints exactly one code later.
+      const offerUpsell = Boolean(ctx) && body.upsell === true;
+
+      // 1. Decide the percent. A lead never gets a second code: if one exists, return it.
       const plan = await store.transaction(async (tx) => {
         const s = (await tx.get(COLLECTIONS.sessions, sid)) as Session | null;
         if (!s || (ctx && s.visitor && s.visitor !== ctx.visitor)) return { done: err("Game expired. Reopen Take a Shot.", "no_session", 404) };
@@ -290,12 +317,19 @@ export function createTakeAShotService(deps: TasDeps) {
         const pct = Math.min(MAX_PERCENT, Math.max(best, s.floor));
         const won = best > 0 && best >= s.floor;
         const prior = lead.reward as Reward | undefined;
-        tx.set(COLLECTIONS.sessions, sid, { status: "claimed", claimedAtMs: now }, { merge: true });
-        if (prior && prior.status !== "failed" && prior.percent >= pct) {
+        if (prior && prior.status !== "failed") {
+          tx.set(COLLECTIONS.sessions, sid, { status: "claimed", claimedAtMs: s.claimedAtMs ?? now }, { merge: true });
           const pub = publicClaim(prior);
           return { done: pub ? ({ status: "claimed", ...pub } as ApiResult) : ({ status: "pending", pct: prior.percent, won: prior.won } as ApiResult) };
         }
-        return { leadId: s.leadId, pct, won, review: strongFlags(s), prior: prior ?? null };
+        const canUpsell = offerUpsell && s.shots === SHOTS.email && !lead.phone && best < MAX_PERCENT &&
+          (s.status === "open" || s.status === "decision");
+        if (canUpsell) {
+          if (s.status !== "decision") tx.set(COLLECTIONS.sessions, sid, { status: "decision", decisionAtMs: now }, { merge: true });
+          return { done: { status: "locked", pct, won } as ApiResult };
+        }
+        tx.set(COLLECTIONS.sessions, sid, { status: "claimed", claimedAtMs: now }, { merge: true });
+        return { leadId: s.leadId, pct, won, review: strongFlags(s) };
       });
       if ("done" in plan && plan.done) return plan.done;
       const { leadId, pct, won, review } = plan as { leadId: string; pct: number; won: boolean; review: boolean };
@@ -313,35 +347,85 @@ export function createTakeAShotService(deps: TasDeps) {
         console.warn(`[take-a-shot] code create failed (${lastError}); stored as pending`);
       }
 
-      // 3. Store it, unless a better code won a race in the meantime.
+      // 3. Store it, unless another claim stored a code in the meantime (one code per lead).
       const stored = await store.transaction(async (tx) => {
         const lead = await tx.get(COLLECTIONS.leads, leadId);
         const current = lead?.reward as Reward | undefined;
-        if (current && current.status !== "failed" && current.percent >= pct) return { lost: true as const, current };
+        if (current && current.status !== "failed") return { lost: true as const, current };
         const reward: Reward = {
           code, percent: pct, expiresAt, status: discountId ? "active" : "pending", discountId, won,
           issuedAtMs: now, attempts: discountId ? 0 : 1,
           nextAttemptAtMs: now + CODE_BACKOFF_MIN[0] * 60_000, lastError, review,
         };
         tx.set(COLLECTIONS.leads, leadId, { reward, updatedAt: new Date(now) }, { merge: true });
-        if (current?.discountId) {
-          tx.set(COLLECTIONS.codeDeletes, current.discountId.split("/").pop()!, {
-            discountId: current.discountId, status: "pending", attempts: 0, replacedAtMs: now,
-          });
-        }
         const stages = discountId ? syncStages(lead) : [];
         if (stages.length) tx.markForSync(leadId, stages);
-        return { lost: false as const, reward, replaced: current?.discountId ?? null, stages };
+        return { lost: false as const, reward, stages };
       });
       if (stored.lost) {
         if (discountId) await deps.shopify.remove(discountId).catch(() => {});
         const pub = publicClaim(stored.current);
         return pub ? { status: "claimed", ...pub } : { status: "pending", pct: stored.current.percent, won: stored.current.won };
       }
-      if (stored.replaced) await deleteReplaced(stored.replaced);
       if (stored.stages.length) deps.onSyncReady?.(leadId, stored.stages);
       const pub = publicClaim(stored.reward);
       return pub ? { status: "claimed", ...pub } : { status: "pending", pct, won };
+    },
+
+    /**
+     * Phone ask, declined ("Keep my X%"), closed, or left: mint the locked
+     * percent now. That is the lead's one code; Klaviyo gets it once.
+     */
+    async keep(body: Data, ctx: RequestContext): Promise<ApiResult> {
+      return this.claim({ sid: body.sid }, ctx);
+    },
+
+    /**
+     * Phone ask, accepted: phone + SMS consent. The same session goes from 1
+     * shot to 3 with the phone floor; the first result stays. Never mints:
+     * the final claim mints the one code at the best of 3. Errors other than
+     * input validation are one generic message, so it cannot be used to probe
+     * which phones have played.
+     */
+    async upgrade(body: Data, ctx: RequestContext): Promise<ApiResult> {
+      const sid = typeof body.sid === "string" ? body.sid : "";
+      if (!sid) return err("Game expired. Reopen Take a Shot.", "no_session", 404);
+      const phone = normalizePhone(body.phone);
+      if (!phone) return err("Use a valid phone number, including your country code outside the US.", "invalid_phone");
+      if (body.smsConsent !== true) return err("Agree to texts to get more shots.", "sms_consent_required");
+      const now = deps.now();
+      const refused = () => err("We could not add shots to this game. Keep your locked-in code instead.", "upgrade_refused", 409);
+      return store.transaction(async (tx) => {
+        const ipLimit = await rateLimitRead(tx, "upgrade-ip", ctx.ipHash, LIMITS.upgradesPerIpPerHour);
+        const sidLimit = await rateLimitRead(tx, "upgrade-sid", sid, LIMITS.upgradesPerSessionPerHour);
+        if (!ipLimit.ok || !sidLimit.ok) return err("Too many tries. Try again later.", "rate_limited", 429);
+        ipLimit.write(); sidLimit.write();
+        const s = (await tx.get(COLLECTIONS.sessions, sid)) as Session | null;
+        if (!s || (s.visitor && s.visitor !== ctx.visitor)) return err("Game expired. Reopen Take a Shot.", "no_session", 404);
+        const lead = await tx.get(COLLECTIONS.leads, s.leadId);
+        const phoneRef = await tx.get(COLLECTIONS.identities, identityIdFor("phone", phone));
+        if (!lead) return err("Game expired. Reopen Take a Shot.", "no_session", 404);
+        // Only a locked first shot with no code, no phone, and a phone nobody else used.
+        const reward = lead.reward as Reward | undefined;
+        if (s.status !== "decision" || (reward && reward.status !== "failed") || lead.phone ||
+          s.shots !== SHOTS.email || s.results.length !== SHOTS.email || s.results.some((r) => r.surf === "holed")) return refused();
+        if (typeof phoneRef?.leadId === "string" && phoneRef.leadId !== s.leadId) return refused();
+        const winds = [...s.winds];
+        while (winds.length < SHOTS.phone) {
+          winds.push({ mph: Math.round(WIND_MIN + deps.rand() * (WIND_MAX - WIND_MIN)), dirDeg: Math.round(deps.rand() * 360) });
+        }
+        const next: Session = { ...s, shots: SHOTS.phone, floor: floorFor(true), winds, status: "open", lastShotAtMs: now };
+        const smsConsent = {
+          channel: "sms", granted: true, version: TAS_SMS_UPSELL_CONSENT_VERSION, text: SMS_CONSENT,
+          placement: "after_first_shot", capturedAt: new Date(now), source: TAKE_A_SHOT_SOURCE,
+          page: ctx.page, userAgent: ctx.userAgent.slice(0, 300),
+        };
+        tx.set(COLLECTIONS.sessions, sid, { shots: next.shots, floor: next.floor, winds, status: "open", lastShotAtMs: now }, { merge: true });
+        tx.set(COLLECTIONS.leads, s.leadId, { phone, smsConsent, shots: SHOTS.phone, updatedAt: new Date(now) }, { merge: true });
+        tx.addConsentEvent(s.leadId, { ...smsConsent, phone });
+        tx.set(COLLECTIONS.identities, identityIdFor("phone", phone), { leadId: s.leadId, kind: "phone", createdAt: new Date(now) });
+        return { status: "resume", session: publicSession(sid, next), claim: null };
+      });
     },
 
     /**
@@ -352,7 +436,7 @@ export function createTakeAShotService(deps: TasDeps) {
     async maintain(opts: { limit?: number; deadlineMs?: number } = {}) {
       const limit = opts.limit ?? 25;
       const deadline = opts.deadlineMs ?? Date.now() + 20_000;
-      const summary = { pendingRetried: 0, pendingActivated: 0, pendingFailed: 0, abandonedClaimed: 0, deletesDone: 0 };
+      const summary = { pendingRetried: 0, pendingActivated: 0, pendingFailed: 0, abandonedClaimed: 0, deletesDone: 0, lockedFinalized: 0 };
       const now = deps.now();
 
       for (const doc of await store.findWhere(COLLECTIONS.leads, "reward.status", "pending", limit)) {
@@ -400,6 +484,15 @@ export function createTakeAShotService(deps: TasDeps) {
         if (Math.max(s.lastShotAtMs ?? 0, s.createdAtMs ?? 0) > staleBefore) continue;
         const out = await this.claim({ sid: doc.id }, null);
         if (out.status === "claimed" || out.status === "pending") summary.abandonedClaimed++;
+      }
+
+      // Phone asks nobody answered (tab closed): mint the locked percent and email it.
+      for (const doc of await store.findWhere(COLLECTIONS.sessions, "status", "decision", limit)) {
+        if (Date.now() > deadline) break;
+        const s = doc.data as unknown as Session;
+        if ((s.decisionAtMs ?? s.lastShotAtMs ?? 0) > staleBefore) continue;
+        const out = await this.claim({ sid: doc.id }, null);
+        if (out.status === "claimed" || out.status === "pending") summary.lockedFinalized++;
       }
 
       for (const doc of await store.findWhere(COLLECTIONS.codeDeletes, "status", "pending", limit)) {
