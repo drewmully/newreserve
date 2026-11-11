@@ -48,3 +48,25 @@ dialog.tas::backdrop{background:rgba(30,22,16,.55)}
 .tas__turnstile:empty{display:none}
 .tas__stage{position:absolute;inset:0;background:#FAF7F0}
 @media (prefers-reduced-motion:reduce){.tas__modal,.tas__step{animation:none}}
+/* Chips: the floor on its own, then the top prize. Burgundy carries cream text. */
+.tas__tiers .tas__tier-top{background:#8A2432;color:#F4EEDF}
+.tas__email{flex:1;gap:14px}
+.tas__email .tas__btn{flex:0 0 auto}
+/* Dimmed static hole filling the empty lower half while the game loads. */
+.tas__preview{flex:1 1 120px;min-height:110px;margin:4px -24px -24px;opacity:.38;filter:saturate(.7);overflow:hidden;pointer-events:none}
+.tas__preview svg{width:100%;height:100%;display:block}
+/* Phone ask over the stage after the first shot. */
+.tas__ask{position:absolute;inset:0;z-index:20;background:#FAF7F0;overflow-y:auto;display:flex;flex-direction:column}
+.tas__ask-in{display:flex;flex-direction:column;gap:12px;padding:28px 24px 20px;margin:auto 0;animation:tas-in .3s cubic-bezier(.16,1,.3,1)}
+.tas__eyebrow{margin:0;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#6E7B3F}
+.tas__ask-form{display:flex;flex-direction:column;gap:12px;margin-top:6px;padding-top:16px;border-top:1px solid #E2D8C6}
+.tas__ask-h{font-family:"Playfair Display",Georgia,serif;font-size:24px;line-height:1.1;margin:0;font-weight:600}
+@media (max-width:519px){
+  .tas__gate{padding:22px 20px 20px}
+  .tas__land{justify-content:flex-start;gap:12px;padding-top:6px}
+  .tas__art{width:140px}
+  .tas__h1{font-size:34px}
+  .tas__preview{margin:2px -20px -20px}
+  .tas__ask-in{padding:24px 20px 18px;gap:10px}
+  .tas__ask-h{font-size:22px}
+}

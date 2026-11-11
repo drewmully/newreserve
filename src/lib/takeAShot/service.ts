@@ -12,6 +12,12 @@ import { LIMITS, MAX_PERCENT, SHOTS, TAKE_A_SHOT_SOURCE, floorFor } from "./conf
 import { identityIdFor, isDisposableDomain, leadIdFor, normalizeEmail, normalizePhone, type NormalizedEmail } from "./identity";
 import { PINS, WIND_MAX, WIND_MIN, shotNoise, simulateShot, windFrom } from "./sim";
 
+/**
+ * Consent version for the SMS checkbox shown after the first shot (phone
+ * upsell). Bump it whenever that placement or its text changes.
+ */
+export const TAS_SMS_UPSELL_CONSENT_VERSION = "take-a-shot-upsell-2026-11-11";
+
 export const COLLECTIONS = {
   leads: "take_a_shot_leads",
   sessions: "take_a_shot_sessions",
@@ -280,6 +286,12 @@ export function createTakeAShotService(deps: TasDeps) {
       if (!sid) return err("Game expired. Reopen Take a Shot.", "no_session", 404);
       const now = deps.now();
 
+      // An email-only player who is about to be offered 2 more shots (phone
+      // upsell): issue and show the code now, but hold the Klaviyo sync so
+      // the welcome flow (F1d) starts once, with the final code, after the
+      // player decides. keep() / the final claim / the cron release it.
+      const holdForUpsell = Boolean(ctx) && body.upsell === true;
+
       // 1. Decide the percent. Return the existing code if it is already as good.
       const plan = await store.transaction(async (tx) => {
         const s = (await tx.get(COLLECTIONS.sessions, sid)) as Session | null;
@@ -290,15 +302,25 @@ export function createTakeAShotService(deps: TasDeps) {
         const pct = Math.min(MAX_PERCENT, Math.max(best, s.floor));
         const won = best > 0 && best >= s.floor;
         const prior = lead.reward as Reward | undefined;
+        const hold = holdForUpsell && s.shots === SHOTS.email && !lead.phone && best < MAX_PERCENT;
         tx.set(COLLECTIONS.sessions, sid, { status: "claimed", claimedAtMs: now }, { merge: true });
         if (prior && prior.status !== "failed" && prior.percent >= pct) {
+          // Same code stays. If it was held for the upsell, this is the final claim: release it.
+          const released = !hold && lead.syncHeld === true ? releaseHold(tx, s.leadId, lead, now) : [];
           const pub = publicClaim(prior);
-          return { done: pub ? ({ status: "claimed", ...pub } as ApiResult) : ({ status: "pending", pct: prior.percent, won: prior.won } as ApiResult) };
+          return {
+            released,
+            leadId: s.leadId,
+            done: pub ? ({ status: "claimed", ...pub } as ApiResult) : ({ status: "pending", pct: prior.percent, won: prior.won } as ApiResult),
+          };
         }
-        return { leadId: s.leadId, pct, won, review: strongFlags(s), prior: prior ?? null };
+        return { leadId: s.leadId, pct, won, review: strongFlags(s), prior: prior ?? null, hold };
       });
-      if ("done" in plan && plan.done) return plan.done;
-      const { leadId, pct, won, review } = plan as { leadId: string; pct: number; won: boolean; review: boolean };
+      if ("done" in plan && plan.done) {
+        if (plan.released?.length && plan.leadId) deps.onSyncReady?.(plan.leadId, plan.released);
+        return plan.done;
+      }
+      const { leadId, pct, won, review, hold } = plan as { leadId: string; pct: number; won: boolean; review: boolean; hold: boolean };
 
       // 2. Create the Shopify code outside the transaction.
       const code = makeCode(pct);
@@ -323,13 +345,16 @@ export function createTakeAShotService(deps: TasDeps) {
           issuedAtMs: now, attempts: discountId ? 0 : 1,
           nextAttemptAtMs: now + CODE_BACKOFF_MIN[0] * 60_000, lastError, review,
         };
-        tx.set(COLLECTIONS.leads, leadId, { reward, updatedAt: new Date(now) }, { merge: true });
+        tx.set(COLLECTIONS.leads, leadId, {
+          reward, updatedAt: new Date(now),
+          ...(hold ? { syncHeld: true, syncHeldAtMs: now } : lead?.syncHeld === true ? { syncHeld: false } : {}),
+        }, { merge: true });
         if (current?.discountId) {
           tx.set(COLLECTIONS.codeDeletes, current.discountId.split("/").pop()!, {
             discountId: current.discountId, status: "pending", attempts: 0, replacedAtMs: now,
           });
         }
-        const stages = discountId ? syncStages(lead) : [];
+        const stages = discountId && !hold ? syncStages(lead) : [];
         if (stages.length) tx.markForSync(leadId, stages);
         return { lost: false as const, reward, replaced: current?.discountId ?? null, stages };
       });
@@ -345,6 +370,67 @@ export function createTakeAShotService(deps: TasDeps) {
     },
 
     /**
+     * Phone upsell, step 1: the player declined ("Keep my X%") or closed the
+     * ask. Their code stands; release the held Klaviyo sync.
+     */
+    async keep(body: Data, ctx: RequestContext): Promise<ApiResult> {
+      const sid = typeof body.sid === "string" ? body.sid : "";
+      if (!sid) return err("Game expired. Reopen Take a Shot.", "no_session", 404);
+      const now = deps.now();
+      const out = await store.transaction(async (tx) => {
+        const s = (await tx.get(COLLECTIONS.sessions, sid)) as Session | null;
+        if (!s || (s.visitor && s.visitor !== ctx.visitor)) return null;
+        const lead = await tx.get(COLLECTIONS.leads, s.leadId);
+        if (!lead || lead.syncHeld !== true) return { leadId: s.leadId, stages: [] as string[] };
+        return { leadId: s.leadId, stages: releaseHold(tx, s.leadId, lead, now) };
+      });
+      if (!out) return err("Game expired. Reopen Take a Shot.", "no_session", 404);
+      if (out.stages.length) deps.onSyncReady?.(out.leadId, out.stages);
+      return { status: "ok" };
+    },
+
+    /**
+     * Phone upsell, step 2: phone + SMS consent after the first shot. The same
+     * session goes from 1 shot to 3 with the phone floor; the first result
+     * stays. The final claim keeps the best result and replaces the code only
+     * if it is better, so each person has one live code.
+     */
+    async upgrade(body: Data, ctx: RequestContext): Promise<ApiResult> {
+      const sid = typeof body.sid === "string" ? body.sid : "";
+      if (!sid) return err("Game expired. Reopen Take a Shot.", "no_session", 404);
+      const phone = normalizePhone(body.phone);
+      if (!phone) return err("Use a valid phone number, including your country code outside the US.", "invalid_phone");
+      if (body.smsConsent !== true) return err("Check the text box to get 2 more shots.", "sms_consent_required");
+      const now = deps.now();
+      return store.transaction(async (tx) => {
+        const s = (await tx.get(COLLECTIONS.sessions, sid)) as Session | null;
+        if (!s || (s.visitor && s.visitor !== ctx.visitor)) return err("Game expired. Reopen Take a Shot.", "no_session", 404);
+        const lead = await tx.get(COLLECTIONS.leads, s.leadId);
+        const phoneRef = await tx.get(COLLECTIONS.identities, identityIdFor("phone", phone));
+        if (!lead) return err("Game expired. Reopen Take a Shot.", "no_session", 404);
+        if (lead.phone || s.shots !== SHOTS.email || s.results.length !== SHOTS.email || s.results.some((r) => r.surf === "holed"))
+          return err("This game cannot take more shots.", "no_upgrade", 409);
+        if (typeof phoneRef?.leadId === "string" && phoneRef.leadId !== s.leadId)
+          return err("That phone number already played Take a Shot.", "phone_played", 409);
+        const winds = [...s.winds];
+        while (winds.length < SHOTS.phone) {
+          winds.push({ mph: Math.round(WIND_MIN + deps.rand() * (WIND_MAX - WIND_MIN)), dirDeg: Math.round(deps.rand() * 360) });
+        }
+        const next: Session = { ...s, shots: SHOTS.phone, floor: floorFor(true), winds, status: "open", lastShotAtMs: now };
+        const smsConsent = {
+          channel: "sms", granted: true, version: TAS_SMS_UPSELL_CONSENT_VERSION, text: SMS_CONSENT,
+          placement: "after_first_shot", capturedAt: new Date(now), source: TAKE_A_SHOT_SOURCE,
+          page: ctx.page, userAgent: ctx.userAgent.slice(0, 300),
+        };
+        tx.set(COLLECTIONS.sessions, sid, { shots: next.shots, floor: next.floor, winds, status: "open", lastShotAtMs: now }, { merge: true });
+        tx.set(COLLECTIONS.leads, s.leadId, { phone, smsConsent, shots: SHOTS.phone, updatedAt: new Date(now) }, { merge: true });
+        tx.addConsentEvent(s.leadId, { ...smsConsent, phone });
+        tx.set(COLLECTIONS.identities, identityIdFor("phone", phone), { leadId: s.leadId, kind: "phone", createdAt: new Date(now) });
+        return { status: "resume", session: publicSession(sid, next), claim: publicClaim(lead.reward as Reward | undefined) };
+      });
+    },
+
+    /**
      * Cron: retry pending Shopify codes, finish abandoned games at their best
      * result (the player consented, so they still get their code by email),
      * and retry deleting replaced codes. Counts only.
@@ -352,7 +438,7 @@ export function createTakeAShotService(deps: TasDeps) {
     async maintain(opts: { limit?: number; deadlineMs?: number } = {}) {
       const limit = opts.limit ?? 25;
       const deadline = opts.deadlineMs ?? Date.now() + 20_000;
-      const summary = { pendingRetried: 0, pendingActivated: 0, pendingFailed: 0, abandonedClaimed: 0, deletesDone: 0 };
+      const summary = { pendingRetried: 0, pendingActivated: 0, pendingFailed: 0, abandonedClaimed: 0, deletesDone: 0, holdsReleased: 0 };
       const now = deps.now();
 
       for (const doc of await store.findWhere(COLLECTIONS.leads, "reward.status", "pending", limit)) {
@@ -376,6 +462,8 @@ export function createTakeAShotService(deps: TasDeps) {
           const attempts = cur.attempts + 1;
           if (discountId) {
             tx.set(COLLECTIONS.leads, doc.id, { reward: { ...cur, status: "active", discountId, lastError: null, attempts }, updatedAt: new Date(now) }, { merge: true });
+            // Held for the phone upsell: keep() / final claim / the hold pass sends it.
+            if (lead.syncHeld === true) return false;
             const stages = syncStages(lead);
             if (stages.length) tx.markForSync(doc.id, stages);
             return stages;
@@ -402,6 +490,22 @@ export function createTakeAShotService(deps: TasDeps) {
         if (out.status === "claimed" || out.status === "pending") summary.abandonedClaimed++;
       }
 
+      // Upsell asks nobody answered (tab closed): release the held sync.
+      for (const doc of await store.findWhere(COLLECTIONS.leads, "syncHeld", true, limit)) {
+        if (Date.now() > deadline) break;
+        const heldAt = typeof doc.data.syncHeldAtMs === "number" ? doc.data.syncHeldAtMs : 0;
+        if (heldAt > staleBefore) continue;
+        const sid = typeof doc.data.sessionId === "string" ? doc.data.sessionId : "";
+        const session = sid ? ((await store.transaction((tx) => tx.get(COLLECTIONS.sessions, sid))) as Session | null) : null;
+        // An upgraded game still being played is finished by the open-session pass above.
+        if (session && session.status === "open") continue;
+        const stages = await store.transaction(async (tx) => {
+          const lead = await tx.get(COLLECTIONS.leads, doc.id);
+          return lead && lead.syncHeld === true ? releaseHold(tx, doc.id, lead, now) : [];
+        });
+        if (stages.length) { summary.holdsReleased++; deps.onSyncReady?.(doc.id, stages); }
+      }
+
       for (const doc of await store.findWhere(COLLECTIONS.codeDeletes, "status", "pending", limit)) {
         if (Date.now() > deadline) break;
         if (await deleteReplaced(String(doc.data.discountId))) summary.deletesDone++;
@@ -409,6 +513,16 @@ export function createTakeAShotService(deps: TasDeps) {
       return summary;
     },
   };
+
+  /** Clear the upsell hold and queue the Klaviyo stages if the code is live. */
+  function releaseHold(tx: TasTx, leadId: string, lead: Data, now: number): string[] {
+    tx.set(COLLECTIONS.leads, leadId, { syncHeld: false, updatedAt: new Date(now) }, { merge: true });
+    const reward = lead.reward as Reward | undefined;
+    if (reward?.status !== "active") return [];
+    const stages = syncStages(lead);
+    if (stages.length) tx.markForSync(leadId, stages);
+    return stages;
+  }
 
   /** Stages the Klaviyo worker should (re)send once the code is real. */
   function syncStages(lead: Data | null): string[] {

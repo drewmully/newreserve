@@ -199,6 +199,89 @@ describe("service", () => {
   });
 });
 
+describe("phone upsell after the first shot", () => {
+  let t: ReturnType<typeof setup>;
+  beforeEach(() => { t = setup(); });
+  const start = async (email = "a@example.com", visitor = "v-1") => {
+    const s = await t.service.session({ email, emailConsent: true }, t.ctx(visitor));
+    const sid = (s as { session: { sid: string } }).session.sid;
+    t.tick(2000);
+    await t.service.shot({ sid, shot: 0, target: { x: 0, y: 0 }, e: 0.3 }, t.ctx(visitor));
+    return sid;
+  };
+  const lead = (email = "a@example.com") => t.col(COLLECTIONS.leads).get(leadIdFor(normalizeEmail(email)!.key))!;
+
+  it("issues the first code before the ask and holds the welcome sync", async () => {
+    const sid = await start();
+    const first = await t.service.claim({ sid, upsell: true }, t.ctx()) as { status: string; code: string; pct: number };
+    expect(first.status).toBe("claimed");
+    expect(first.pct).toBeGreaterThanOrEqual(10);
+    expect(t.created).toHaveLength(1);
+    expect(t.synced).toHaveLength(0);
+    expect(lead().syncHeld).toBe(true);
+  });
+
+  it("keep releases the hold and syncs the email stage once", async () => {
+    const sid = await start();
+    const first = await t.service.claim({ sid, upsell: true }, t.ctx()) as { code: string };
+    expect(await t.service.keep({ sid }, t.ctx())).toMatchObject({ status: "ok" });
+    expect(t.synced).toEqual([{ id: expect.any(String), stages: ["email"] }]);
+    expect(lead().syncHeld).toBeFalsy();
+    expect((lead().reward as Data).code).toBe(first.code);
+    await t.service.keep({ sid }, t.ctx());
+    expect(t.synced).toHaveLength(1);
+  });
+
+  it("upgrade needs SMS consent and the same browser", async () => {
+    const sid = await start();
+    await t.service.claim({ sid, upsell: true }, t.ctx());
+    expect(await t.service.upgrade({ sid, phone: "+14155550134" }, t.ctx())).toMatchObject({ code: "sms_consent_required" });
+    expect(await t.service.upgrade({ sid, phone: "+14155550134", smsConsent: true }, t.ctx("intruder"))).toMatchObject({ status: "error" });
+    expect(lead().phone).toBeFalsy();
+  });
+
+  it("upgrade goes 1 to 3 shots, keeps the first result, and the final claim leaves one live code", async () => {
+    const sid = await start();
+    const first = await t.service.claim({ sid, upsell: true }, t.ctx()) as { code: string; pct: number };
+    const up = await t.service.upgrade({ sid, phone: "+14155550134", smsConsent: true }, t.ctx());
+    expect(up).toMatchObject({ status: "resume", session: { shots: 3, floor: 15 } });
+    expect((up as { session: { results: unknown[]; winds: unknown[] } }).session.results).toHaveLength(1);
+    expect((up as { session: { winds: unknown[] } }).session.winds).toHaveLength(3);
+    const l = lead();
+    expect(l.smsConsent).toMatchObject({ version: "take-a-shot-upsell-2026-11-11", placement: "after_first_shot" });
+    expect(t.consent.map((c) => c.channel)).toEqual(["email", "sms"]);
+    expect(t.synced).toHaveLength(0);
+    // A better later shot, as if it landed 5 ft away.
+    const sess = t.col(COLLECTIONS.sessions).get(sid)!;
+    t.col(COLLECTIONS.sessions).set(sid, { ...sess, results: [...(sess.results as unknown[]), { surf: "green", feet: 5, pct: 25, note: "", shot: 1 }] });
+    const final = await t.service.claim({ sid }, t.ctx()) as { code: string; pct: number };
+    expect(final.pct).toBe(Math.max(25, first.pct));
+    if (first.pct < 25) {
+      expect(final.code).not.toBe(first.code);
+      expect(t.removed).toEqual(["gid://shopify/DiscountCodeNode/1"]);
+    }
+    expect(t.synced).toEqual([{ id: expect.any(String), stages: ["email", "sms"] }]);
+    expect(lead().syncHeld).toBeFalsy();
+  });
+
+  it("a phone that already played elsewhere is refused", async () => {
+    await t.service.session({ email: "b@example.com", emailConsent: true, phone: "+14155550134", smsConsent: true }, t.ctx("v-b"));
+    const sid = await start("a@example.com", "v-a");
+    await t.service.claim({ sid, upsell: true }, t.ctx("v-a"));
+    expect(await t.service.upgrade({ sid, phone: "(415) 555-0134", smsConsent: true }, t.ctx("v-a"))).toMatchObject({ code: "phone_played" });
+  });
+
+  it("the cron releases holds left more than 30 minutes", async () => {
+    const sid = await start();
+    await t.service.claim({ sid, upsell: true }, t.ctx());
+    t.tick(10 * 60_000);
+    expect(await t.service.maintain({ deadlineMs: Date.now() + 5000 })).toMatchObject({ holdsReleased: 0 });
+    t.tick(25 * 60_000);
+    expect(await t.service.maintain({ deadlineMs: Date.now() + 5000 })).toMatchObject({ holdsReleased: 1 });
+    expect(t.synced).toEqual([{ id: expect.any(String), stages: ["email"] }]);
+  });
+});
+
 describe("codes", () => {
   it("makes codes the bag recognizes", () => {
     for (const pct of [10, 15, 20, 25, 30]) {

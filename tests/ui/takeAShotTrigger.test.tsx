@@ -96,7 +96,7 @@ describe("TakeAShotModal tracking", () => {
     expect(event("take_a_shot_start")?.props).toMatchObject({ trigger_type: "launcher", step: "landing" });
     fireEvent.change(screen.getByPlaceholderText("you@example.com"), { target: { value: "player@example.com" } });
     fireEvent.click(screen.getByRole("checkbox"));
-    fireEvent.submit(screen.getByRole("button", { name: "Next" }).closest("form")!);
+    fireEvent.submit(screen.getByRole("button", { name: "Take my shot" }).closest("form")!);
     await waitFor(() => expect(event("take_a_shot_email_submitted")).toBeTruthy());
     const body = JSON.parse(vi.mocked(fetch).mock.calls.find(([u]) => String(u).endsWith("/check"))![1]!.body as string);
     expect(body).toMatchObject({ phId: "ph-distinct-123", deviceId: "anon-12345" });

@@ -143,6 +143,8 @@ const VALID_EVENTS = new Set([
   "cart_bogo_suggestion_add",
   "take_a_shot_email_submitted",
   "take_a_shot_phone_submitted",
+  "take_a_shot_phone_ask",
+  "take_a_shot_keep",
   "popup_eligible",
   "popup_suppressed",
   "popup_view",

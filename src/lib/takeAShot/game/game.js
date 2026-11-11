@@ -15,7 +15,7 @@ const C = {
   page: '#FAF7F0', rough: '#5E9244', roughEdge: '#4E7E38', fair: '#8CBB5E', fairStripe: '#97C568',
   tee: '#A4CF74', surround: '#6FA34F', bank: '#7DB056', fringe: '#86BA5C', green: '#A9D47C', greenStripe: '#B5DB8A',
   sand: '#F3ECDC', sandShadow: '#D9CDB4', water: '#43A9DA', waterDeep: '#2F8FC5', waterEdge: '#CDEEFA',
-  tree: '#4C7A30', treeMid: '#5E8E3A', treeHi: '#7FAE4E', azalea: '#E0679F', azaleaHi: '#F4A3C6', mulch: '#8A5A3A',
+  tree: '#4C7A30', treeMid: '#5E8E3A', treeHi: '#7FAE4E', azalea: '#8A2432', azaleaHi: '#B5656C', mulch: '#8A5A3A',
   shadow: 'rgba(38,52,26,0.30)', flag: '#8A2432', ink: '#2B2018', brown: '#4A3528', camel: '#B08558',
 };
 
@@ -61,10 +61,17 @@ function injectCss() {
 
 const esc = (t) => String(t).replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
 
-/** Mounts the game into `root`. Returns a cleanup function. opts.backend is required. opts.terms is a short code-terms line. */
+/**
+ * Mounts the game into `root`. Returns a cleanup function, which also
+ * carries extend(session) and finish(claim) for the phone upsell.
+ * opts.backend is required. opts.terms is a short code-terms line.
+ * opts.onFirstClaim(claim, best): if it returns true, the host shows its own
+ * screen after a 1-shot claim instead of the final card, then calls
+ * extend(session) for more shots or finish(claim) to show the final card.
+ */
 export function mount(root, opts) {
   injectCss();
-  const shotsTotal = opts.shots || 1;
+  let shotsTotal = opts.shots || 1;
   const emit = opts.emit || (() => {});
   root.innerHTML = '';
   const wrap = document.createElement('div');
@@ -107,8 +114,8 @@ export function mount(root, opts) {
   const mp = (e) => ((e + 1) / 2) * 100 + '%';
   const zone = (cls, w) => { const z = $(cls); z.style.left = mp(-w); z.style.width = w * 100 + '%'; };
   zone('.g-z-y', ZONE_YELLOW); zone('.g-z-g', ZONE_GREEN); zone('.g-z-p', ZONE_PERFECT);
-  const floorPct = opts.session.floor;
-  const hasPhone = !!(opts.lead && opts.lead.smsConsent);
+  let floorPct = opts.session.floor;
+  let hasPhone = !!(opts.lead && opts.lead.smsConsent);
 
   const rng = Math.random;
   const sess = opts.session;               // from the server: pin, wind per shot
@@ -684,16 +691,24 @@ export function mount(root, opts) {
       el.card.innerHTML = `<div class="g-final-in"><p class="g-eyebrow">Hmm</p><h3 class="g-final-h">We could not load your code.</h3><p class="g-card-sub">${(err && err.message) || 'Check your connection.'}</p><button class="g-btn" data-act="final" type="button">Load my code</button></div>`;
     });
   }
-  function renderFinal(c) {
+  function renderFinal(c, skipHost) {
     const best = S.best && S.best.pct > 0 ? S.best : null;
     const pct = c.pct, won = c.won, pending = c.status === 'pending';
+    if (!skipHost && !pending && opts.onFirstClaim && shotsTotal === 1 && S.results.length === 1 && !(best && best.pct >= HOLED_PCT)) {
+      emit('claim', { pct, won: !!won, floor: floorPct, shots: S.results.length, pending });
+      if (opts.onReward) opts.onReward({ code: c.code, percent: pct, expiresAt: c.expiresAt });
+      S.code = c.code;
+      if (opts.onFirstClaim(c, best)) { hideCard(); el.card.classList.remove('final'); return; }
+    }
     const chips = S.results.map((r) => `<span class="${r === best ? 'best' : ''}">${r.surf === 'holed' ? 'Ace' : r.surf === 'green' ? r.feet + ' ft' : r.surf === 'water' ? 'Creek' : 'Miss'}${r.pct ? ' · ' + r.pct + '%' : ''}</span>`).join('');
     S.code = pending ? null : c.code;
     const leftNow = shotsTotal - S.shot - 1;
     const canResume = leftNow > 0 && !(best && best.pct >= HOLED_PCT);
     const resumeBtn = canResume ? `<button class="g-btn" data-act="resume" type="button">Take my ${leftNow} other shot${leftNow > 1 ? 's' : ''}</button><p class="g-card-sub">Your best shot is kept. It can only go up.</p>` : '';
-    emit('claim', { pct, won: !!won, floor: floorPct, shots: S.results.length, pending });
-    if (!pending && opts.onReward) opts.onReward({ code: c.code, percent: pct, expiresAt: c.expiresAt });
+    if (!skipHost || pending) {
+      emit('claim', { pct, won: !!won, floor: floorPct, shots: S.results.length, pending });
+      if (!pending && opts.onReward) opts.onReward({ code: c.code, percent: pct, expiresAt: c.expiresAt });
+    }
     const head = won
       ? `<p class="g-eyebrow">You won</p><h3 class="g-final-h">${pct}% off</h3>`
       : `<p class="g-eyebrow">Tough hole</p><h3 class="g-final-h">${pct}% off anyway.</h3><p class="g-card-sub">${hasPhone ? 'For joining the list and adding your phone.' : 'For joining the list.'}</p>`;
@@ -813,10 +828,28 @@ export function mount(root, opts) {
   }
   if (S.shot >= shotsTotal) { S.shot = shotsTotal - 1; renderShotBalls(); showFinal(); } else setupShot();
 
-  return () => {
+  const cleanup = () => {
     ro.disconnect();
     cancelAnimationFrame(raf);
     window.removeEventListener('keydown', onKey);
     root.innerHTML = '';
   };
+  /** Upsell accepted: the server gave this session more shots. The first result stays. */
+  cleanup.extend = (next) => {
+    shotsTotal = next.shots; floorPct = next.floor; hasPhone = true;
+    sess.winds = next.winds; sess.shots = next.shots; sess.floor = next.floor;
+    hideCard(); el.card.classList.remove('final'); S.code = null;
+    emit('resume', { shots: next.shots });
+    S.shot = S.results.length; setupShot();
+  };
+  /** Upsell declined: show the normal final card for the code already issued. */
+  cleanup.finish = (c) => {
+    S.phase = 'done';
+    el.panel.classList.add('busy');
+    el.card.hidden = false;
+    el.card.classList.add('final');
+    renderFinal(c, true);
+    requestAnimationFrame(() => el.card.classList.add('on'));
+  };
+  return cleanup;
 }

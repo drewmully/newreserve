@@ -40,6 +40,20 @@ export const RING_TIERS: ReadonlyArray<{ ft: number; pct: number }> = [
   { ft: 12, pct: 20 },
   { ft: 20, pct: 15 },
 ];
+/**
+ * Mully palette for the game and its landing art (CRO review, Nov 11):
+ * deep green, olive, sand, gold and cream, with burgundy as the one accent.
+ */
+export const PALETTE = {
+  deepGreen: "#2E4A36",
+  olive: "#6E7B3F",
+  sand: "#D9C6A0",
+  gold: "#C9A24A",
+  cream: "#F4EEDF",
+  accent: "#8A2432",
+} as const;
+/** Ring colors, inner (30%) to outer (15%), same order as RING_TIERS. */
+export const RING_COLORS: readonly string[] = [PALETTE.accent, PALETTE.gold, PALETTE.sand, PALETTE.cream];
 /** On the green but outside every ring. 0 means "the floor applies". */
 export const ON_GREEN_PERCENT = 0;
 /** Hole in one. Never above the cap. */
