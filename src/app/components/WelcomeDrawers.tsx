@@ -233,7 +233,7 @@ export function FirstBoxWelcomeDrawer() {
               </li>
               <li className="flex gap-2">
                 <span className="text-forest font-medium">•</span>
-                Free returns within 30 days.
+                Easy returns within 30 days, free size exchanges.
               </li>
             </ul>
             <div className="flex flex-col gap-2">
