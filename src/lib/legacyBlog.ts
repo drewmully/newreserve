@@ -11,26 +11,30 @@ import sanitizeHtml from "sanitize-html";
 import legacyRedirects from "./legacyRedirects.json";
 
 export interface LegacyNextCard {
+  /** Short link title used on /blog, /outings and other internal links (s06). */
+  title: string;
   headline: string;
   href: string;
 }
 
 export const LEGACY_POSTS: Record<string, LegacyNextCard> = {
-  "how-the-official-world-golf-rankings-determine-golfs-top-players-a-deep-dive-into-the-ranking-system": { headline: "Golf, sent to your door", href: "/subscription" },
-  "how-is-a-golf-handicap-calculated-the-complete-guide": { headline: "Golf, sent to your door", href: "/subscription" },
-  "the-fix-heres-how-to-finally-stop-hitting-the-ball-off-the-hosel": { headline: "Training aids we actually use", href: "/lp/mully100" },
-  "best-formats-for-golf-trips-with-your-buddies": { headline: "Outfit the whole group", href: "/outings" },
-  "golf-formats-explained-different-ways-to-play-the-game": { headline: "Outfit the whole group", href: "/outings" },
-  "top-5-golf-resorts-in-michigan": { headline: "Courses worth the trip", href: "/lp/editorial" },
-  "what-is-a-cadet-glove-size": { headline: "Shop gear", href: "/shop/collection/shop-gear" },
-  "choosing-the-perfect-golf-hat-tips-for-comfort-and-performance": { headline: "Shop hats and accessories", href: "/shop/collection/shop-accessories" },
-  "5-essential-golf-wearables-every-player-should-know-about": { headline: "The Mully 100", href: "/lp/mully100" },
-  "golf-ball-rollback": { headline: "The Mully 100", href: "/lp/mully100" },
-  "how-to-properly-transition-from-the-backswing-to-the-downswing": { headline: "Training aids we actually use", href: "/lp/mully100" },
-  "golf-outing-ideas-35-formats-themes-contests-and-extras-with-a-planning-checklist": { headline: "Outfit the whole group", href: "/outings" },
+  "how-the-official-world-golf-rankings-determine-golfs-top-players-a-deep-dive-into-the-ranking-system": { title: "How the Official World Golf Rankings Determine Golf's Top Players", headline: "Golf, sent to your door", href: "/subscription" },
+  "how-is-a-golf-handicap-calculated-the-complete-guide": { title: "How Is a Golf Handicap Calculated? The Complete Guide", headline: "Golf, sent to your door", href: "/subscription" },
+  "the-fix-heres-how-to-finally-stop-hitting-the-ball-off-the-hosel": { title: "The Fix: How to Finally Stop Hitting the Ball off the Hosel", headline: "Training aids we actually use", href: "/lp/mully100" },
+  "best-formats-for-golf-trips-with-your-buddies": { title: "Best Formats for Golf Trips with Your Buddies", headline: "Outfit the whole group", href: "/outings" },
+  "golf-formats-explained-different-ways-to-play-the-game": { title: "Golf Formats Explained: Different Ways to Play the Game", headline: "Outfit the whole group", href: "/outings" },
+  "top-5-golf-resorts-in-michigan": { title: "Top 5 Golf Resorts in Michigan", headline: "Courses worth the trip", href: "/lp/editorial" },
+  "what-is-a-cadet-glove-size": { title: "What Is a Cadet Glove Size?", headline: "Shop gear", href: "/shop/collection/shop-gear" },
+  "choosing-the-perfect-golf-hat-tips-for-comfort-and-performance": { title: "Choosing the Perfect Golf Hat", headline: "Shop hats and accessories", href: "/shop/collection/shop-accessories" },
+  "5-essential-golf-wearables-every-player-should-know-about": { title: "5 Essential Golf Wearables Every Player Should Know About", headline: "The Mully 100", href: "/lp/mully100" },
+  "golf-ball-rollback": { title: "The Pros and Cons of Golf Ball Rollback", headline: "The Mully 100", href: "/lp/mully100" },
+  "how-to-properly-transition-from-the-backswing-to-the-downswing": { title: "How to Transition from the Backswing to the Downswing", headline: "Training aids we actually use", href: "/lp/mully100" },
+  "golf-outing-ideas-35-formats-themes-contests-and-extras-with-a-planning-checklist": { title: "Golf Outing Ideas: 35 Formats, Themes, Contests and Extras", headline: "Outfit the whole group", href: "/outings" },
 };
 
 export const LEGACY_HANDLES = Object.keys(LEGACY_POSTS);
+
+export const legacyHref = (handle: string) => `/blogs/news/${handle}`;
 
 export interface LegacyPost {
   handle: string;

@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getAllPublishedPosts, getFeaturedPost } from "./posts";
 import { ShopPageShell } from "../shop/components/ShopPageShell";
+import { LEGACY_HANDLES, LEGACY_POSTS, legacyHref } from "@/lib/legacyBlog";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "The Journal | Mully", description: "Good reads for the course and everything around it." };
@@ -37,6 +38,10 @@ export default async function BlogPage() {
           </Link>)}
         </div>
         {!featured && <p>New stories are on the way. <Link className="shop-text-link" href="/shop">Explore the edit →</Link></p>}
+        <section className="shop-archive-list" aria-labelledby="from-the-archive">
+          <h2 id="from-the-archive">From the archive</h2>
+          <ul>{LEGACY_HANDLES.map(h => <li key={h}><Link href={legacyHref(h)}>{LEGACY_POSTS[h].title}</Link></li>)}</ul>
+        </section>
       </main>
     </ShopPageShell>
   );

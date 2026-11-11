@@ -4,6 +4,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPostBySlug, getRelatedPosts } from "../posts";
 import { ShopPageShell } from "../../shop/components/ShopPageShell";
+import { applyAddenda } from "@/lib/blogAddenda";
+import { InlineText } from "../InlineText";
 
 export const dynamic = "force-dynamic";
 interface Props { params: Promise<{ slug: string }> }
@@ -32,9 +34,9 @@ export default async function BlogPostPage({ params }: Props) {
           {post.highlights.length > 0 && <aside className="shop-article-highlights" aria-label="Key points">
             <ul>{post.highlights.map(point => <li key={point}>{point}</li>)}</ul>
           </aside>}
-          {post.sections.map(section => <section key={section.heading}>
+          {applyAddenda(post.slug, post.sections).map(section => <section key={section.heading}>
             <h2>{section.heading}</h2>
-            {section.paragraphs.map(p => <p key={p}>{p}</p>)}
+            {section.paragraphs.map(p => <p key={p}><InlineText text={p} /></p>)}
           </section>)}
           <div className="shop-article-highlights"><p>{post.closing}</p></div>
           <Link className="shop-text-link text-sm" href="/shop">Explore the Mully Edit →</Link>
