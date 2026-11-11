@@ -44,6 +44,7 @@ import {
 import { SHIP_MODE_COPY, type GiftShipMode } from "@/lib/gifts/giftSeason";
 import { EMPTY_SIZING, requiredSizingCount, type GiftSizing } from "@/lib/gifts/giftSizing";
 import { GiftSizingFields } from "@/app/components/gifts/GiftSizingFields";
+import { ShopFooter } from "@/app/shop/components/ShopFooter";
 
 const LP_SOURCE = "lp_gift_season";
 
@@ -692,10 +693,8 @@ export default function GiftSeasonLPClient({
           </div>
         </section>
 
-        <footer className="bg-forest-dark text-bone/55 text-xs py-8 text-center">
-          © {new Date().getFullYear()} Mully. All rights reserved.
-        </footer>
       </main>
+      <ShopFooter accent="#4A3528" />
     </div>
   );
 }

@@ -85,6 +85,7 @@ describe("Gift a Season pricing copy", () => {
     expect(lp).toMatch(/Where should the first one ship\?/);
     expect(lp).toMatch(/Not sure\? Pick their usual size\./);
     expect(lp).toMatch(/collapseOptional/);
+    expect(lp).toMatch(/<ShopFooter accent=/);
     expect(lp).toMatch(/requiredSizingCount\(sizing\)/);
     const fields = readFileSync(path.resolve(__dirname, "../..", "src/app/components/gifts/GiftSizingFields.tsx"), "utf8");
     expect(fields).toMatch(/More sizes \(optional\)/);

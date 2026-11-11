@@ -18,7 +18,7 @@ A prepaid Reserve gift of 1, 2 or 4 seasons ($299 / $550 / $1,000) that never re
 3. Shopify checkout. The purchaser enters the shipping address (theirs or the recipient's) there.
 4. `/lp/gift-season/confirmed`: next steps for the chosen mode.
 
-Timing copy is driven by `NEXT_PUBLIC_GIFT_SEASON_ORDER_BY` and `NEXT_PUBLIC_GIFT_SEASON_SHIP_WINDOW`: "Order by December 15 for it to arrive by Christmas. Ships in 1-2 business days." until the cutoff (ET midnight), then "Ships in 1-2 business days."
+Timing copy is driven by `NEXT_PUBLIC_GIFT_SEASON_ORDER_BY` and `NEXT_PUBLIC_GIFT_SEASON_SHIP_WINDOW`: "Order by December 14 for it to arrive by Christmas. Ships in 1-2 business days." until the cutoff (ET midnight), then "Ships in 1-2 business days."
 
 ## Order data without write_orders
 

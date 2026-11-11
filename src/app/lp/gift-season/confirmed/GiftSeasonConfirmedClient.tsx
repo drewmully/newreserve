@@ -8,6 +8,7 @@
 import { useEffect, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { ShopSeasonalHeader } from "@/app/shop/components/ShopSeasonalHeader";
+import { ShopFooter } from "@/app/shop/components/ShopFooter";
 import { trackEvent } from "@/lib/tracking";
 import type { GiftSeasonCount, GiftShipMode } from "@/lib/gifts/giftSeason";
 import { GIFT_SEASON_SHIP_WINDOW } from "@/lib/gifts/giftSeasonConfig";
@@ -148,6 +149,7 @@ export default function GiftSeasonConfirmedClient({
           </Link>
         </div>
       </main>
+      <ShopFooter accent="#4A3528" />
     </div>
   );
 }

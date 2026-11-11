@@ -14,6 +14,8 @@ Prepaid Reserve gifts that never auto-renew:
 
 Pricing note: the original brief assumed $250/season with no discount ($250 / $500 / $1,000). Drew replaced that on Nov 11 with $299 / $550 / $1,000. The regular Reserve Member price used in the continue offer stays $250 a season.
 
+NEXT_PUBLIC_GIFT_SEASON_ORDER_BY is 2026-12-14 in Production and Preview (matches the gift guide, Mon Dec 14).
+
 ## Flow (no reveal, Nov 11 redesign)
 
 Season 1 is physical and ships right away (1-2 business days after purchase). There is no send date, no reveal email, no recipient sizing step before shipping and no "I'll give it myself" path. See `DESIGN.md` for the full design.
@@ -102,7 +104,7 @@ Every send is idempotent (Resend idempotency key plus a `*_sent_at` stamp on the
 
 ## CRO review changes (2026-11-11)
 
-> Superseded in part by the no-reveal redesign above: the timing line is now "Order by December 15 for it to arrive by Christmas. Ships in 1-2 business days." (after the cutoff: "Ships in 1-2 business days."), the trust row middle item is "Ships in 1-2 business days", and "I'll give it myself", `gift_self_deliver`, the reveal email and `gift_season_self_deliver_toggled` are removed. The purchase event now carries `gift_ship_mode`.
+> Superseded in part by the no-reveal redesign above: the timing line is now "Order by December 14 for it to arrive by Christmas. Ships in 1-2 business days." (after the cutoff: "Ships in 1-2 business days."), the trust row middle item is "Ships in 1-2 business days", and "I'll give it myself", `gift_self_deliver`, the reveal email and `gift_season_self_deliver_toggled` are removed. The purchase event now carries `gift_ship_mode`.
 
 - **Launch config** (`src/lib/gifts/giftSeasonConfig.ts`). These values are pending Drew and render as visible placeholders until they're set:
   - `NEXT_PUBLIC_GIFT_SEASON_ORDER_BY`: the holiday order-by cutoff as an ISO date. Set to `2026-12-15` in Preview and Production. The cutoff ends at midnight US Eastern after that day. Default `[cutoff date TBD]`.
