@@ -13,6 +13,7 @@ import { RestockChristmasNote } from "./RestockChristmasNote";
 import { shopProductLabel, shopProductPhoto } from "@/lib/shopProductPhotos";
 import { GiftReminderSignup } from "./GiftReminderSignup";
 import { GIFT_CARD_PATH } from "@/lib/giftCard";
+import { MullyWordmark } from "../components/MullyWordmark";
 import {
   GIFT_GUIDE_TIERS,
   giftGuideFaqs,
@@ -129,7 +130,7 @@ export function GiftCardBand({ placement, tier }: { placement: string; tier: str
   return (
     <section className="gg-giftcard" aria-labelledby={`gg-giftcard-${placement}`}>
       <div className="gg-giftcard__card" aria-hidden="true">
-        <span className="gg-giftcard__brand">Mully</span>
+        <MullyWordmark accent="#c9d0b0" tone="light" className="gg-giftcard__brand" />
         <span className="gg-giftcard__label">Gift card</span>
       </div>
       <div className="gg-giftcard__copy">

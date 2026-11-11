@@ -187,8 +187,8 @@
 
 /* Mully Gift Card band (hub, after the tiers) */
 .gift-guide .gg-giftcard {display: grid; gap: 24px; align-items: center; margin: 56px 0 8px; padding: 28px 22px; background: #2f3a2c; color: #e3dfd3}
-.gift-guide .gg-giftcard__card {position: relative; width: 100%; max-width: 340px; aspect-ratio: 1.586 / 1; border-radius: 12px; padding: 18px 20px; background: linear-gradient(135deg, #3c4a37 0%, #4a3528 130%); border: 1px solid rgba(201, 208, 176, .35); display: flex; flex-direction: column; justify-content: space-between}
-.gift-guide .gg-giftcard__brand {font-family: var(--font-serif); font-size: 28px; color: #faf9f6}
+.gift-guide .gg-giftcard__card {position: relative; width: 100%; max-width: 300px; aspect-ratio: 1.586 / 1; border-radius: 12px; padding: 18px 20px; background: linear-gradient(135deg, #3c4a37 0%, #4a3528 130%); border: 1px solid rgba(201, 208, 176, .35); display: flex; flex-direction: column; justify-content: space-between}
+.gift-guide .gg-giftcard__brand {font-size: 26px; line-height: 1; color: #faf9f6}
 .gift-guide .gg-giftcard__label {font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: #c9d0b0}
 .gift-guide .gg-giftcard__copy {display: flex; flex-direction: column; gap: 10px; align-items: flex-start; max-width: 56ch}
 .gift-guide .gg-giftcard .gg-kicker {color: #c9d0b0; margin-bottom: 0}
@@ -196,5 +196,5 @@
 .gift-guide .gg-giftcard__copy p:not(.gg-kicker) {font-size: 15px; line-height: 1.6; margin: 0}
 .gift-guide .gg-giftcard .gg-button {margin-top: 6px; background: #faf9f6; color: #2f3a2c}
 @media (min-width: 900px) {
-  .gift-guide .gg-giftcard {grid-template-columns: 340px minmax(0, 1fr); gap: 48px; padding: 40px 48px}
+  .gift-guide .gg-giftcard {grid-template-columns: 300px minmax(0, 1fr); gap: 48px; padding: 40px 48px}
 }
