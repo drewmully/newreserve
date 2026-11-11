@@ -84,6 +84,13 @@ describe("Gift a Season pricing copy", () => {
     expect(lp).not.toMatch(/deliverOn|selfDeliver|I'll give it myself|type="date"/);
     expect(lp).toMatch(/Where should the first one ship\?/);
     expect(lp).toMatch(/Not sure\? Pick their usual size\./);
+    expect(lp).toMatch(/collapseOptional/);
+    expect(lp).toMatch(/requiredSizingCount\(sizing\)/);
+    const fields = readFileSync(path.resolve(__dirname, "../..", "src/app/components/gifts/GiftSizingFields.tsx"), "utf8");
+    expect(fields).toMatch(/More sizes \(optional\)/);
+    expect(fields).toMatch(/Skip any you don&apos;t know\. They can update these later\./);
+    const conf = readFileSync(path.resolve(__dirname, "../..", "src/app/lp/gift-season/confirmed/GiftSeasonConfirmedClient.tsx"), "utf8");
+    expect(conf).toMatch(/firePurchaseConversion\(/);
     expect(lp).toMatch(/ship-mode-\$\{/);
   });
 });

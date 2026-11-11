@@ -19,7 +19,7 @@ import {
   validateGiftAddress,
   type GiftShipAddress,
 } from "@/lib/gifts/giftSeason";
-import { missingSizing, sanitizeSizing, type GiftSizing } from "@/lib/gifts/giftSizing";
+import { missingOptionalSizing, missingSizing, sanitizeSizing, type GiftSizing } from "@/lib/gifts/giftSizing";
 
 export interface GiftAddressClientProps {
   token: string;
@@ -69,6 +69,8 @@ export default function GiftAddressClient(props: GiftAddressClientProps) {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null);
   const hadAddress = !!props.existingAddress?.address1;
+  // Optional sizes the gifter skipped at purchase; prompt for them here.
+  const [initialBlank] = useState(() => missingOptionalSizing(sanitizeSizing(props.existingSizing ?? {})));
   const set = (k: keyof GiftShipAddress) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setAddress({ ...address, [k]: e.target.value });
 
@@ -177,7 +179,12 @@ export default function GiftAddressClient(props: GiftAddressClientProps) {
                   <div className="text-sm text-[#111]">{isPurchaser ? "Their sizes" : "Your sizes"}</div>
                   <div className="text-[11px] text-charcoal/60">Confirm or update.</div>
                 </div>
-                <GiftSizingFields value={sizing} onChange={setSizing} compact />
+                {initialBlank.length ? (
+                  <p className="mb-3 rounded-md bg-[#f4e6d4] px-3 py-2 text-[12px] text-[#5c3a14]" data-testid="sizes-blank-prompt">
+                    A few sizes are still blank: {initialBlank.join(", ").toLowerCase()}. Add any you know so your stylist can get the fit right.
+                  </p>
+                ) : null}
+                <GiftSizingFields value={sizing} onChange={setSizing} compact highlightBlank />
               </section>
 
               {props.askEmail ? (

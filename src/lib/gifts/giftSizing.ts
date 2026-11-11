@@ -18,14 +18,25 @@ export const SIZING_OPTIONS = {
 
 export type SizingKey = keyof typeof SIZING_OPTIONS;
 
-export const SIZING_FIELDS: Array<{ key: SizingKey; label: string; short: string }> = [
-  { key: "shirt", label: "Shirt size", short: "Shirt" },
-  { key: "waist", label: "Pant waist", short: "Waist" },
-  { key: "inseam", label: "Pant inseam", short: "Inseam" },
-  { key: "shoe", label: "Shoe size (US)", short: "Shoe" },
-  { key: "glove_size", label: "Glove size", short: "Glove" },
-  { key: "glove_hand", label: "Glove hand", short: "Glove hand" },
+/**
+ * Shirt and pant waist are required at purchase (low friction for gifters).
+ * The rest are optional; the stylist sees which are blank, and the
+ * /gift-address link prompts the recipient to fill them in.
+ */
+export const SIZING_FIELDS: Array<{ key: SizingKey; label: string; short: string; required: boolean }> = [
+  { key: "shirt", label: "Shirt size", short: "Shirt", required: true },
+  { key: "waist", label: "Pant waist", short: "Waist", required: true },
+  { key: "inseam", label: "Pant inseam", short: "Inseam", required: false },
+  { key: "shoe", label: "Shoe size (US)", short: "Shoe", required: false },
+  { key: "glove_size", label: "Glove size", short: "Glove", required: false },
+  { key: "glove_hand", label: "Glove hand", short: "Glove hand", required: false },
 ];
+
+export const REQUIRED_SIZING_FIELDS = SIZING_FIELDS.filter((f) => f.required);
+export const OPTIONAL_SIZING_FIELDS = SIZING_FIELDS.filter((f) => !f.required);
+
+/** Line item property key listing optional sizes left blank. */
+export const SIZES_TO_CONFIRM_KEY = "Sizes to confirm";
 
 export interface GiftSizing {
   shirt: string;
@@ -65,13 +76,29 @@ export function sanitizeSizing(input: unknown): GiftSizing {
   return out;
 }
 
-/** Fields still missing, as display labels. Same required set as /gift-sizing. */
+/** Required fields still missing, as display labels (shirt, pant waist). */
 export function missingSizing(s: GiftSizing): string[] {
-  return SIZING_FIELDS.filter((f) => !s[f.key]).map((f) => f.label);
+  return REQUIRED_SIZING_FIELDS.filter((f) => !s[f.key]).map((f) => f.label);
 }
 
+/** Optional fields left blank, as display labels. */
+export function missingOptionalSizing(s: GiftSizing): string[] {
+  return OPTIONAL_SIZING_FIELDS.filter((f) => !s[f.key]).map((f) => f.label);
+}
+
+/** Required sizes are in (enough to ship). */
 export function isSizingComplete(s: GiftSizing): boolean {
   return missingSizing(s).length === 0;
+}
+
+/** Every size, optional ones included. */
+export function isSizingFullyComplete(s: GiftSizing): boolean {
+  return isSizingComplete(s) && missingOptionalSizing(s).length === 0;
+}
+
+export function requiredSizingCount(s: GiftSizing): { done: number; total: number } {
+  const total = REQUIRED_SIZING_FIELDS.length;
+  return { done: total - missingSizing(s).length, total };
 }
 
 /** One-line summary for order notes, admin and emails. */
@@ -83,6 +110,7 @@ export function formatSizingLine(s: Partial<GiftSizing> | null | undefined): str
     s.inseam && `Inseam ${s.inseam}`,
     s.shoe && `Shoe ${s.shoe}`,
     s.glove_size && `Glove ${s.glove_size}${s.glove_hand ? ` ${s.glove_hand}` : ""}`,
+    !s.glove_size && s.glove_hand && `Glove hand ${s.glove_hand}`,
   ].filter(Boolean);
   return parts.join(", ");
 }
@@ -94,6 +122,8 @@ export function formatSizingLine(s: Partial<GiftSizing> | null | undefined): str
 export function sizingLineAttributes(s: GiftSizing): Array<{ key: string; value: string }> {
   const attrs = SIZING_FIELDS.map((f) => ({ key: f.short, value: s[f.key] }));
   if (s.notes) attrs.push({ key: "Fit notes", value: s.notes });
+  const blank = OPTIONAL_SIZING_FIELDS.filter((f) => !s[f.key]).map((f) => f.short);
+  if (blank.length) attrs.push({ key: SIZES_TO_CONFIRM_KEY, value: blank.join(", ") });
   return attrs.filter((a) => a.value !== "");
 }
 

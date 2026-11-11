@@ -42,7 +42,7 @@ import {
   giftSeasonTimingLine,
 } from "@/lib/gifts/giftSeasonConfig";
 import { SHIP_MODE_COPY, type GiftShipMode } from "@/lib/gifts/giftSeason";
-import { EMPTY_SIZING, SIZING_FIELDS, missingSizing, type GiftSizing } from "@/lib/gifts/giftSizing";
+import { EMPTY_SIZING, requiredSizingCount, type GiftSizing } from "@/lib/gifts/giftSizing";
 import { GiftSizingFields } from "@/app/components/gifts/GiftSizingFields";
 
 const LP_SOURCE = "lp_gift_season";
@@ -446,7 +446,7 @@ export default function GiftSeasonLPClient({
                       <div className="text-[11px] text-charcoal/60">Not sure? Pick their usual size.</div>
                     </div>
                     <div className="mt-3">
-                      <GiftSizingFields value={sizing} onChange={setSizing} compact />
+                      <GiftSizingFields value={sizing} onChange={setSizing} compact collapseOptional />
                     </div>
                   </div>
 
@@ -599,7 +599,7 @@ export default function GiftSeasonLPClient({
                 </div>
                 <div className="flex justify-between">
                   <span>Sizes</span>
-                  <span>{missingSizing(sizing).length === 0 ? "Added" : `${SIZING_FIELDS.length - missingSizing(sizing).length} of ${SIZING_FIELDS.length}`}</span>
+                  <span data-testid="summary-sizes">{`${requiredSizingCount(sizing).done} of ${requiredSizingCount(sizing).total}`}</span>
                 </div>
               </div>
               <div className="mt-4 pt-4 border-t border-forest/10 flex items-baseline justify-between">

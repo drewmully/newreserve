@@ -204,6 +204,8 @@ export interface SeasonNoticeArgs {
   dueOn: string;
   shipToLine: string;
   updateUrl: string;
+  /** Optional sizes still blank (display labels), prompted for in the email. */
+  missingSizes?: string[];
 }
 
 export function buildSeasonNoticeSubject(a: Pick<SeasonNoticeArgs, "seasonNumber">): string {
@@ -218,7 +220,9 @@ export function buildSeasonNoticeText(a: SeasonNoticeArgs): string {
     `Season ${a.seasonNumber} of ${a.seasonsTotal} ships around ${monthDay(a.dueOn)}${a.shipToLine ? " to:" : "."}`,
     ...(a.shipToLine ? [a.shipToLine] : []),
     "",
-    "Moved or sizes changed? Update them here before it ships:",
+    ...(a.missingSizes?.length
+      ? [`A few sizes are still blank (${a.missingSizes.join(", ").toLowerCase()}). Add any you know, or update your address, here before it ships:`]
+      : ["Moved or sizes changed? Update them here before it ships:"]),
     a.updateUrl,
     "",
     SIGN_OFF,

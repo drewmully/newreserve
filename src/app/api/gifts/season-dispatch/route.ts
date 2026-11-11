@@ -63,6 +63,7 @@ import {
   giftEventProps,
   mirrorGiftSeasonToSupabase,
 } from "@/lib/gifts/giftSeasonServer";
+import { missingOptionalSizing, sanitizeSizing } from "@/lib/gifts/giftSizing";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -283,6 +284,7 @@ export async function GET(request: NextRequest) {
               seasonsTotal: data.seasons_total ?? 1,
               dueOn,
               shipToLine: formatGiftAddress(data.next_shipping_address),
+              missingSizes: missingOptionalSizing(sanitizeSizing(data.sizing ?? {})),
               updateUrl: linkFor(data.sizing_token, toRecipient ? "recipient" : "purchaser", `season_${noticeFor}_notice`),
             }),
             idempotencyKey: `gift-season-notice:${id}:${noticeFor}`,

@@ -11,6 +11,7 @@ import { ShopSeasonalHeader } from "@/app/shop/components/ShopSeasonalHeader";
 import { trackEvent } from "@/lib/tracking";
 import type { GiftSeasonCount, GiftShipMode } from "@/lib/gifts/giftSeason";
 import { GIFT_SEASON_SHIP_WINDOW } from "@/lib/gifts/giftSeasonConfig";
+import { firePurchaseConversion } from "@/lib/analytics/googleAdsPurchaseClient";
 
 interface Stored {
   name?: string;
@@ -63,10 +64,12 @@ export default function GiftSeasonConfirmedClient({
   shipMode,
   seasons,
   fallbackName,
+  giftToken = null,
 }: {
   shipMode: GiftShipMode;
   seasons: GiftSeasonCount;
   fallbackName: string | null;
+  giftToken?: string | null;
 }) {
   const raw = useSyncExternalStore(
     () => () => {},
@@ -87,6 +90,12 @@ export default function GiftSeasonConfirmedClient({
       properties: { ship_mode: shipMode, seasons, lp_source: "lp_gift_season" },
     }).catch(() => {});
   }, [shipMode, seasons]);
+
+  // Gift checkouts return here, not /auth/callback, so fire the browser
+  // Google Ads purchase conversion here. Deduped by transaction id.
+  useEffect(() => {
+    firePurchaseConversion({ fallbackTxnId: giftToken ? `mully-gift-${giftToken}` : null }).catch(() => {});
+  }, [giftToken]);
 
   const steps = giftConfirmedSteps({ shipMode, seasons, hasRecipientEmail });
   const seasonsLabel = seasons === 1 ? "a season" : `${seasons} seasons`;

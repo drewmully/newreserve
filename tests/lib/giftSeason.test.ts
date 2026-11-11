@@ -67,7 +67,11 @@ import {
   EMPTY_SIZING,
   formatSizingLine,
   isSizingComplete,
+  isSizingFullyComplete,
+  missingOptionalSizing,
+  requiredSizingCount,
   sanitizeSizing,
+  sizingLineAttributes,
   sizingFromAttributes,
   type GiftSizing,
 } from "@/lib/gifts/giftSizing";
@@ -267,6 +271,9 @@ describe("checkout", () => {
     expect(validateGiftSeasonInput({ ...base, recipientName: " " })).toMatch(/name/);
     expect(validateGiftSeasonInput({ ...base, recipientEmail: "nope" })).toMatch(/email/);
     expect(validateGiftSeasonInput({ ...base, sizing: { ...SIZES, waist: "" } })).toBe("Pick their pant waist.");
+    expect(validateGiftSeasonInput({ ...base, sizing: { ...SIZES, shirt: "" } })).toBe("Pick their shirt size.");
+    // Only shirt and waist are required.
+    expect(validateGiftSeasonInput({ ...base, sizing: { ...EMPTY_SIZING, shirt: "L", waist: "34" } })).toBeNull();
     expect(validateGiftSeasonInput({ ...base, sizing: { ...SIZES, notes: "" } })).toBeNull();
     expect(validateGiftSeasonInput({ ...base, seasons: 3 as never })).toMatch(/length/);
     expect(validateGiftSeasonInput({ ...base, message: "x".repeat(501) })).toMatch(/500/);
@@ -323,10 +330,33 @@ describe("checkout", () => {
 });
 
 describe("sizing", () => {
+  it("only shirt and pant waist are required; the rest are optional", () => {
+    const min = { ...EMPTY_SIZING, shirt: "M", waist: "32" };
+    expect(isSizingComplete(min)).toBe(true);
+    expect(isSizingFullyComplete(min)).toBe(false);
+    expect(missingOptionalSizing(min)).toEqual(["Pant inseam", "Shoe size (US)", "Glove size", "Glove hand"]);
+    expect(requiredSizingCount(EMPTY_SIZING)).toEqual({ done: 0, total: 2 });
+    expect(requiredSizingCount(min)).toEqual({ done: 2, total: 2 });
+    expect(formatSizingLine(min)).toBe("Shirt M, Waist 32");
+    expect(formatSizingLine({ ...min, glove_hand: "Right" })).toBe("Shirt M, Waist 32, Glove hand Right");
+  });
+  it("stylist line properties omit blanks and list sizes to confirm", () => {
+    const min = { ...EMPTY_SIZING, shirt: "M", waist: "32", shoe: "11" };
+    expect(sizingLineAttributes(min)).toEqual([
+      { key: "Shirt", value: "M" },
+      { key: "Waist", value: "32" },
+      { key: "Shoe", value: "11" },
+      { key: "Sizes to confirm", value: "Inseam, Glove, Glove hand" },
+    ]);
+    expect(sizingLineAttributes(SIZES).some((a) => a.key === "Sizes to confirm")).toBe(false);
+    // Round trip still reads back the given sizes, blanks stay blank.
+    expect(sizingFromAttributes(sizingLineAttributes(min).map((a) => ({ name: a.key, value: a.value })))).toEqual(min);
+  });
   it("drops unknown values and keys", () => {
     expect(sanitizeSizing({ shirt: "XXXL", waist: "34", evil: "x" })).toEqual({ ...EMPTY_SIZING, waist: "34" });
     expect(isSizingComplete(SIZES)).toBe(true);
-    expect(isSizingComplete({ ...SIZES, glove_hand: "" })).toBe(false);
+    expect(isSizingComplete({ ...SIZES, glove_hand: "" })).toBe(true);
+    expect(isSizingComplete({ ...SIZES, shirt: "" })).toBe(false);
     expect(formatSizingLine(SIZES)).toBe('Shirt L, Waist 34, Inseam 32", Shoe 10.5, Glove ML Left');
   });
   it("reads back from line properties or note attributes", () => {
@@ -491,10 +521,38 @@ describe("customer copy rules", () => {
     const one = buildGifterConfirmationText({ ...base, seasonsTotal: 1, shipMode: "to_recipient" });
     expect(one).not.toMatch(/every 3 months|Season 2/);
   });
+  it("season notice prompts for blank optional sizes", () => {
+    const base = { recipientFirstName: "Sam", seasonNumber: 2, seasonsTotal: 4, dueOn: "2027-03-01", shipToLine: "x", updateUrl: "U" };
+    expect(buildSeasonNoticeText(base)).toMatch(/Moved or sizes changed\?/);
+    const t = buildSeasonNoticeText({ ...base, missingSizes: ["Pant inseam", "Shoe size (US)"] });
+    expect(t).toMatch(/A few sizes are still blank \(pant inseam, shoe size \(us\)\)/);
+    expect(t).not.toMatch(/\u2014|--|\bbox\b/);
+  });
   it("legacy gift email: no $300+, em dashes, box or Mullybox", () => {
     const t = buildGiftRecipientText({ recipientFirstName: "Sam", purchaserFirstName: "Alex", purchaserEmail: "a@x.com", giftMessage: "Hi", sizingUrl: "u" });
     expect(t).not.toMatch(/\$300|\u2014|\u2013|--|\bbox(es)?\b|mullybox/i);
     expect(t).toMatch(/Reserve/);
     expect(buildGiftRecipientSubject({ purchaserFirstName: "Alex" })).toBe("Alex sent you a Mully Reserve gift");
+  });
+});
+
+import { resolvePurchaseTxn } from "@/lib/analytics/googleAdsPurchaseClient";
+
+describe("gift Google Ads conversion dedupe", () => {
+  const none = () => false;
+  it("uses the checkout transaction id (the one orders-paid sends)", () => {
+    expect(resolvePurchaseTxn({ pendingTxnId: "txn-1", fallbackTxnId: "mully-gift-t", firedTxnIds: none, sessionFired: false })).toEqual({ txnId: "txn-1", skip: null });
+  });
+  it("never fires twice for the same order", () => {
+    const fired = new Set(["txn-1", "mully-gift-t"]);
+    const has = (id: string) => fired.has(id);
+    expect(resolvePurchaseTxn({ pendingTxnId: "txn-1", fallbackTxnId: null, firedTxnIds: has, sessionFired: false }).skip).toBe("already_fired");
+    // Revisit later without the pending id: the fallback was claimed too.
+    expect(resolvePurchaseTxn({ pendingTxnId: null, fallbackTxnId: "mully-gift-t", firedTxnIds: has, sessionFired: false }).skip).toBe("already_fired");
+    expect(resolvePurchaseTxn({ pendingTxnId: null, fallbackTxnId: "mully-gift-x", firedTxnIds: none, sessionFired: true }).skip).toBe("already_fired");
+  });
+  it("falls back to the gift token, and skips with no id at all", () => {
+    expect(resolvePurchaseTxn({ pendingTxnId: null, fallbackTxnId: "mully-gift-t", firedTxnIds: none, sessionFired: false })).toEqual({ txnId: "mully-gift-t", skip: null });
+    expect(resolvePurchaseTxn({ pendingTxnId: null, fallbackTxnId: null, firedTxnIds: none, sessionFired: false }).skip).toBe("no_transaction");
   });
 });
