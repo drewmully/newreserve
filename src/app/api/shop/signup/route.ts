@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createHash, randomBytes } from "node:crypto";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase-admin";
-import { SHOP_INTERESTS, SHOP_CONSENT_VERSION, EMAIL_CONSENT, SMS_CONSENT, normalizeSignupPhone } from "@/lib/shopSignup";
+import { SHOP_INTERESTS, SHOP_SIGNUP_SOURCES, shopSignupSource, SHOP_CONSENT_VERSION, EMAIL_CONSENT, SMS_CONSENT, normalizeSignupPhone } from "@/lib/shopSignup";
 import { SHOP_REWARDS } from "@/lib/shopRewards";
 import { captureSyncFields, scheduleKlaviyoSync } from "@/lib/klaviyo/syncState";
 import { identityCookie } from "@/lib/klaviyo/identity";
@@ -31,7 +31,13 @@ export async function POST(req: Request) {
   if (stage !== "email" && stage !== "sms") return respond({ error: "invalid_stage" }, 400);
   if (body.consent !== true) return respond({ error: "consent_required" }, 400);
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
-  const interest = SHOP_INTERESTS.find(item => item.id === body.interest)?.id;
+  // Default source is the shop edit popup. Other allowlisted sources (the gift
+  // guide's cutoff reminders) are email-only and may send only their interest.
+  const source = shopSignupSource(body.source);
+  if (source !== "shop-edit-popup" && stage !== "email") return respond({ error: "invalid_stage" }, 400);
+  const interest: string | undefined = source === "shop-edit-popup"
+    ? SHOP_INTERESTS.find(item => item.id === body.interest)?.id
+    : body.interest === SHOP_SIGNUP_SOURCES[source].interest ? SHOP_SIGNUP_SOURCES[source].interest : undefined;
   const phone = normalizeSignupPhone(body.phone);
   if (stage === "email" && (!interest || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)))
     return respond({ error: "invalid_email_or_interest" }, 400);
@@ -59,7 +65,7 @@ export async function POST(req: Request) {
       const evidence = {
         channel: stage, granted: true, version: SHOP_CONSENT_VERSION,
         text: stage === "email" ? EMAIL_CONSENT : SMS_CONSENT,
-        capturedAt: FieldValue.serverTimestamp(), source: "shop-edit-popup",
+        capturedAt: FieldValue.serverTimestamp(), source,
         userAgent: (req.headers.get("user-agent") || "").slice(0, 300),
       };
       tx.set(rate, { count: (limit.data()?.count || 0) + 1, expiresAt: new Date(now + 86400_000) });
@@ -67,7 +73,7 @@ export async function POST(req: Request) {
         ...(stage === "email" ? { email, interest, emailConsent: evidence } : { phone, smsConsent: evidence }),
         ...(!existing.exists ? { createdAt: FieldValue.serverTimestamp() } : {}),
         ...captureSyncFields(stage),
-        updatedAt: FieldValue.serverTimestamp(), source: "shop-edit-popup",
+        updatedAt: FieldValue.serverTimestamp(), source,
         reward: SHOP_REWARDS[stage],
       }, { merge: true });
       tx.set(lead.collection("consent_events").doc(), {

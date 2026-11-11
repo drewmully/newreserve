@@ -66,6 +66,18 @@ describe("shop consent capture",()=>{
     for(let i=0;i<12;i++)expect((await POST(req(email))).status).toBe(200);
     expect((await POST(req(email))).status).toBe(429);
   });
+  it("accepts the gift-reminders source with only its gifts interest, email stage only",async()=>{
+    const gift={stage:"email",email:"gift@example.com",interest:"gifts",consent:true,source:"gift-reminders"};
+    expect((await POST(req({...gift,interest:"tops"}))).status).toBe(400);
+    expect((await POST(req({...email,interest:"gifts"}))).status).toBe(400);
+    expect((await POST(req({stage:"sms",phone:"+12485550123",receipt:"a".repeat(64),consent:true,source:"gift-reminders"}))).status).toBe(400);
+    expect(store.writes).toHaveLength(0);
+    expect((await POST(req(gift))).status).toBe(200);
+    const lead=store.writes.find(w=>/^shop_marketing_leads\/[^/]+$/.test(w.path))!;
+    expect(lead.data).toMatchObject({email:"gift@example.com",interest:"gifts",source:"gift-reminders",emailConsent:{source:"gift-reminders",text:EMAIL_CONSENT}});
+    expect((await POST(req({...email,source:"made-up"}))).status).toBe(200);
+    expect(store.writes.filter(w=>/^shop_marketing_leads\/[^/]+$/.test(w.path)).at(-1)!.data).toMatchObject({source:"shop-edit-popup"});
+  });
   it("normalizes US and international numbers without guessing malformed input",()=>{
     expect(normalizeSignupPhone("248-555-0123")).toBe("+12485550123");
     expect(normalizeSignupPhone("+44 7700 900123")).toBe("+447700900123");

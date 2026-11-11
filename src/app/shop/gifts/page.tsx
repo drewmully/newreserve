@@ -9,10 +9,11 @@ import { GiftGuideTracker } from "./GiftGuideTracker";
 import { faqJsonLd, itemListJsonLd } from "./jsonLd";
 import {
   GiftFaqs,
+  GiftHeroStrip,
   GiftOrderByNote,
   GiftOutfits,
+  GiftReminders,
   GiftSeasonCard,
-  GiftSizingNote,
   GiftTierNav,
   GiftTierSection,
 } from "./GiftGuide";
@@ -49,6 +50,7 @@ export default async function GiftGuideHubPage() {
           <Link href="/shop" className="shop-text-link shop-page-kicker">← Shop</Link>
           <p className="gg-kicker">The 2026 Mully gift guide</p>
           <h1 className="gg-h1">Golf Gifts for Men, Picked by Price</h1>
+          <GiftHeroStrip placement="hub-hero-strip" tier="hub" />
           <p className="gg-intro">
             The best golf gift this year is <Link href={GIFT_SEASON_HREF} className="gg-ulink" data-gg-season="hub-intro">Gift a Season</Link>: a
             season of Mully Reserve, hand-picked by a stylist and sized by him. If you would rather wrap something, every piece below is chosen by
@@ -65,13 +67,13 @@ export default async function GiftGuideHubPage() {
               data={data}
               placement="hub"
               showAllLink
-              aside={i === 0 ? <GiftSeasonCard placement="hub-hero-tier" /> : undefined}
+              aside={i === 0 ? <GiftSeasonCard placement="hub-hero-tier" tier={data.tier.slug} /> : undefined}
             />
             {i === 0 && <GiftOutfits outfits={outfits} placement="hub-outfits" />}
+            {i === 0 && <GiftReminders tier="hub" placement="hub-after-hero-tier" />}
           </div>
         ))}
 
-        <GiftSizingNote />
         <GiftFaqs />
       </main>
     </ShopPageShell>

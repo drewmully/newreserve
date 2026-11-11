@@ -30,7 +30,7 @@
 .gift-guide .gg-tier, .gift-guide .gg-outfits {padding-top: 64px; margin-top: 56px; border-top: 1px solid #ddd9d0}
 .gift-guide .gg-main > div:first-of-type .gg-tier {margin-top: 40px}
 .gift-guide .gg-tier__head {margin-bottom: 32px; display: grid; gap: 0}
-.gift-guide .gg-tier__head .gg-ulink {font-size: 13px; margin-top: 14px; justify-self: start; min-height: 44px; display: inline-flex; align-items: center}
+.gift-guide .gg-tier__head > .gg-ulink {font-size: 13px; margin-top: 14px; justify-self: start; min-height: 44px; display: inline-flex; align-items: center}
 .gift-guide .gg-grid {display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 44px 24px; list-style: none; padding: 0; margin: 0}
 .gift-guide .gg-grid--three {grid-template-columns: repeat(3, minmax(0, 1fr))}
 .gift-guide .gg-pick {min-width: 0; display: flex; flex-direction: column}
@@ -85,4 +85,49 @@
   .gift-guide .gg-tiernav {flex-wrap: nowrap; overflow-x: auto; margin-inline: -20px; padding-inline: 20px; scrollbar-width: none}
   .gift-guide .gg-tiernav a {flex: none}
   .gift-guide .gg-pick__reason {font-size: 12.5px}
+}
+
+/* Hero strip: order-by date + Gift a Season CTA, above the fold at 375px */
+.gift-guide .gg-strip {display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-top: 18px}
+.gift-guide .gg-strip__date {display: inline-flex; align-items: center; gap: 10px; font-size: 14px; color: #45413a}
+.gift-guide .gg-strip__date strong {font-weight: 600; color: #292720}
+.gift-guide .gg-strip__dot {width: 8px; height: 8px; border-radius: 50%; background: #8a4b1f; flex: none}
+.gift-guide .gg-strip__cta {display: inline-flex; flex-direction: column; justify-content: center; min-height: 52px; padding: 8px 22px; background: #2f3a2c; color: #faf9f6; transition: background 160ms}
+.gift-guide .gg-strip__cta:hover, .gift-guide .gg-strip__cta:focus-visible {background: #3e4b39}
+.gift-guide .gg-strip__cta span:first-child {font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase}
+.gift-guide .gg-strip__sub {font-size: 12px; color: #c9d0b0; margin-top: 2px}
+.gift-guide .gg-tier__head .gg-strip {margin-bottom: 4px}
+
+/* Tier pages: the H1 section sits right under the nav */
+.gift-guide .gg-hero--tier + .gg-tier {border-top: 0; padding-top: 28px; margin-top: 0}
+.gift-guide .gg-hero--tier .gg-tiernav {margin-top: 12px}
+
+/* Sizing + returns reassurance in each tier head */
+.gift-guide .gg-assure {display: flex; flex-wrap: wrap; gap: 6px 28px; list-style: none; padding: 0; margin: 14px 0 0; font-size: 13px; line-height: 1.55; color: #514d44}
+.gift-guide .gg-assure strong {font-weight: 600; color: #292720}
+
+/* Cutoff reminder signup */
+.gift-guide .gg-remind {display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px 48px; align-items: center; margin-top: 64px; padding: clamp(24px, 4vw, 44px); background: #efeadf}
+.gift-guide .gg-remind .gg-kicker {margin-bottom: 8px}
+.gift-guide .gg-remind__title {font-family: var(--font-serif); font-size: clamp(24px, 2.6vw, 32px); line-height: 1.15; letter-spacing: -.015em; color: #292720; text-wrap: balance}
+.gift-guide .gg-remind__copy p:last-child {font-size: 14px; line-height: 1.6; color: #514d44; margin-top: 10px; max-width: 46ch}
+.gift-guide .gg-remind__row {display: flex; gap: 8px}
+.gift-guide .gg-remind__row input {flex: 1; min-width: 0; min-height: 48px; padding: 0 14px; border: 1px solid #cfc9bc; background: #fff; font-size: 16px; color: #292720}
+.gift-guide .gg-remind__row input:focus-visible {outline: 2px solid #5b613f; outline-offset: 1px}
+.gift-guide .gg-remind__row button {min-height: 48px; padding: 0 22px; background: #4a3528; color: #faf9f6; font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; flex: none}
+.gift-guide .gg-remind__row button:disabled {opacity: .6}
+.gift-guide .gg-remind__consent {display: flex; gap: 10px; align-items: flex-start; margin-top: 12px; font-size: 12px; line-height: 1.5; color: #625e55}
+.gift-guide .gg-remind__consent input {margin-top: 2px; width: 16px; height: 16px; flex: none; accent-color: #4a3528}
+.gift-guide .gg-remind__consent a {text-decoration: underline}
+.gift-guide .gg-remind__hp {position: absolute; left: -10000px; width: 1px; height: 1px; opacity: 0}
+.gift-guide .gg-remind__error {font-size: 13px; color: #8a2f1f; margin-top: 10px}
+.gift-guide .gg-remind__done {font-family: var(--font-serif); font-size: 20px; color: #292720}
+.gift-guide .gg-main > .gg-orderby {margin-top: 64px}
+
+@media (max-width: 640px) {
+  .gift-guide .gg-hero .gg-h1, .gift-guide .gg-tier__head .gg-h1 {font-size: 34px}
+  .gift-guide .gg-strip {gap: 10px; margin-top: 14px}
+  .gift-guide .gg-strip__cta {width: 100%; align-items: flex-start}
+  .gift-guide .gg-remind {grid-template-columns: minmax(0, 1fr); margin-top: 48px; padding: 24px 20px}
+  .gift-guide .gg-assure {flex-direction: column}
 }

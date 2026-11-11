@@ -5,10 +5,15 @@
  * (/api/analytics/track). One listener on the page, driven by data attributes
  * set in the server-rendered markup:
  *
- *   gift_guide_view           on mount            { page }
- *   gift_guide_tier_click     [data-gg-tier-link] { tier, page, placement }
- *   gift_guide_product_click  [data-gg-product]   { product, brand, tier, position, page, placement }
- *   gift_a_season_click       [data-gg-season]    { page, placement }
+ *   gift_guide_view           on mount            { page, tier }
+ *   gift_guide_tier_click     [data-gg-tier-link] { page, tier, from_tier, placement }
+ *   gift_guide_product_click  [data-gg-product]   { page, tier, product_id, handle, price, brand, position, placement }
+ *   gift_a_season_click       [data-gg-season]    { page, tier, placement }
+ *
+ * `page` is "hub" or the tier slug the shopper is on. `tier` is the tier the
+ * clicked element belongs to (a slug, "hub", or "outfit-<key>" for the
+ * outfit sets). `price` is the live Shopify retail price at render time.
+ * email_submitted is fired by GiftReminderSignup, not here.
  */
 
 import { useEffect } from "react";
@@ -16,7 +21,7 @@ import { trackEvent } from "@/lib/tracking";
 
 export function GiftGuideTracker({ page }: { page: string }) {
   useEffect(() => {
-    void trackEvent("gift_guide_view", { properties: { page } });
+    void trackEvent("gift_guide_view", { properties: { page, tier: page } });
 
     const onClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null;
@@ -24,13 +29,13 @@ export function GiftGuideTracker({ page }: { page: string }) {
 
       const season = target.closest<HTMLElement>("[data-gg-season]");
       if (season) {
-        void trackEvent("gift_a_season_click", { properties: { page, placement: season.dataset.ggSeason } });
+        void trackEvent("gift_a_season_click", { properties: { page, tier: season.dataset.ggTier ?? page, placement: season.dataset.ggSeason } });
         return;
       }
       const tier = target.closest<HTMLElement>("[data-gg-tier-link]");
       if (tier) {
         void trackEvent("gift_guide_tier_click", {
-          properties: { page, tier: tier.dataset.ggTierLink, placement: tier.dataset.ggPlacement },
+          properties: { page, tier: tier.dataset.ggTierLink, from_tier: page, placement: tier.dataset.ggPlacement },
         });
         return;
       }
@@ -39,9 +44,11 @@ export function GiftGuideTracker({ page }: { page: string }) {
         void trackEvent("gift_guide_product_click", {
           properties: {
             page,
-            product: product.dataset.ggProduct,
-            brand: product.dataset.ggBrand,
             tier: product.dataset.ggTier,
+            product_id: product.dataset.ggProductId,
+            handle: product.dataset.ggProduct,
+            price: product.dataset.ggPrice ? Number(product.dataset.ggPrice) : undefined,
+            brand: product.dataset.ggBrand,
             position: Number(product.dataset.ggPosition) || undefined,
             placement: product.dataset.ggPlacement,
           },

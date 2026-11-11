@@ -7,7 +7,8 @@
  * Copy never names a price or a stock count.
  *
  * Picks follow cmo_audit/merchandise_velocity.md (2026-11-11): vests and
- * outerwear lead, the Gold School Chino anchors the outfits, summer polos,
+ * outerwear lead, the Gold School Chino anchors the outfits while it is in
+ * stock in L or XL (vest-led looks take over when it is not), summer polos,
  * $300+ duffels and the Mystery Bundle stay out.
  */
 
@@ -15,7 +16,7 @@ import { getProductByHandle, type ShopifyProduct } from "@/lib/shopify";
 import { isRestockOnly } from "@/lib/restock";
 
 // Christmas cutoff lives in giftGuideDates.ts (client-safe). Re-exported here.
-export { GIFT_ORDER_BY, GIFT_RESTOCK_WEEKS, giftOrderByLabel, giftRestockCutoffLabel, isPastGiftOrderBy } from "@/lib/giftGuideDates";
+export { GIFT_SHIP_BY, GIFT_ORDER_BY, GIFT_RESTOCK_WEEKS, giftOrderByLabel, giftOrderByShort, giftRestockCutoffLabel, isPastGiftOrderBy } from "@/lib/giftGuideDates";
 import { GIFT_RESTOCK_WEEKS, giftOrderByLabel, giftRestockCutoffLabel } from "@/lib/giftGuideDates";
 
 // ─── Gift a Season ──────────────────────────────────────────────────────────
@@ -167,36 +168,64 @@ export const GIFT_REASONS: Record<string, string> = {
 
 // ─── Outfits ────────────────────────────────────────────────────────────────
 
+export interface GiftOutfitLook {
+  /** Anchor piece. The look only shows if the anchor is in stock in L or XL right now. */
+  anchor: string;
+  /** The other pieces. Each must be purchasable (in stock or restocking). */
+  with: string[];
+  note: string;
+}
+
 export interface GiftOutfit {
   key: string;
   name: string;
-  note: string;
-  handles: string[];
+  /**
+   * Looks in priority order. The first look whose anchor passes the live
+   * stock check is shown; if none pass, the outfit is hidden. The chino
+   * comes first; the vest-led looks cover the chino being oversold.
+   */
+  looks: GiftOutfitLook[];
 }
 
-/** Pre-built sets anchored on the Gold School Chino (the shop's outfit anchor). */
+export const GIFT_OUTFIT_CHINO = "duckhead-classic-fit-gold-school-chino-khaki";
+/** Sizes that count as "common" for the anchor stock check. */
+const ANCHOR_SIZES = ["L", "XL"];
+
 export const GIFT_OUTFITS: GiftOutfit[] = [
   {
     key: "saturday-morning",
     name: "The Saturday Morning",
-    note: "Khaki chino, a Pima long sleeve and the merino vest. Three of the pieces golfers bought most this fall, worn together.",
-    handles: [
-      "duckhead-classic-fit-gold-school-chino-khaki",
-      "olydoe-pima-long-sleeve-polo",
-      "olydoe-merino-ponte-vest",
+    looks: [
+      {
+        anchor: GIFT_OUTFIT_CHINO,
+        with: ["olydoe-pima-long-sleeve-polo", "olydoe-merino-ponte-vest"],
+        note: "Khaki chino, a Pima long sleeve and the merino vest. Three of the pieces golfers bought most this fall, worn together.",
+      },
+      {
+        anchor: "olydoe-merino-ponte-vest",
+        with: ["olydoe-pima-long-sleeve-polo", "rhone-c-o-r-crew-sock"],
+        note: "The merino vest over a Pima long sleeve, plus the crew sock. The vest is the piece golfers bought most this fall.",
+      },
     ],
   },
   {
     key: "frost-delay",
     name: "The Frost Delay",
-    note: "The same chino under a Rhone quarter zip and a quilted Duck Head vest.",
-    handles: [
-      "duckhead-classic-fit-gold-school-chino-khaki",
-      "rhone-rise-quarter-zip",
-      "duckhead-fremont-sport-performance-quilted-vest-brandy-brown",
+    looks: [
+      {
+        anchor: GIFT_OUTFIT_CHINO,
+        with: ["rhone-rise-quarter-zip", "duckhead-fremont-sport-performance-quilted-vest-brandy-brown"],
+        note: "The same chino under a Rhone quarter zip and a quilted Duck Head vest.",
+      },
+      {
+        anchor: "duckhead-fremont-sport-performance-quilted-vest-brandy-brown",
+        with: ["rhone-rise-quarter-zip", "winston-golf-tour-towel"],
+        note: "A quilted Duck Head vest over a Rhone quarter zip, and a tour towel for the wet first tee.",
+      },
     ],
   },
 ];
+
 
 // ─── FAQs ───────────────────────────────────────────────────────────────────
 
@@ -232,6 +261,12 @@ export function giftGuideFaqs(): GiftFaq[] {
 }
 
 // ─── Live data ──────────────────────────────────────────────────────────────
+
+export interface GiftOutfitData {
+  outfit: GiftOutfit;
+  look: GiftOutfitLook;
+  picks: GiftPick[];
+}
 
 export interface GiftPick {
   product: ShopifyProduct & { preferredVariantId?: string };
@@ -292,7 +327,7 @@ function toPick(p: ShopifyProduct): GiftPick {
 /** Every curated handle, fetched once per render (Storefront fetch is cached 60s, page ISR 1h). */
 async function loadCatalog(): Promise<Map<string, ShopifyProduct>> {
   const handles = Array.from(
-    new Set([...GIFT_GUIDE_TIERS.flatMap((t) => t.picks), ...GIFT_OUTFITS.flatMap((o) => o.handles)])
+    new Set([...GIFT_GUIDE_TIERS.flatMap((t) => t.picks), ...GIFT_OUTFITS.flatMap((o) => o.looks.flatMap((l) => [l.anchor, ...l.with]))])
   );
   const settled = await Promise.allSettled(handles.map((h) => getProductByHandle(h)));
   const map = new Map<string, ShopifyProduct>();
@@ -315,7 +350,7 @@ function tierForPrice(price: number): GiftTier | undefined {
  * so a price change in Shopify moves the product without a code change.
  * Anything not purchasable is dropped. In-stock pieces sort first.
  */
-export async function loadGiftGuide(): Promise<{ tiers: GiftTierData[]; outfits: { outfit: GiftOutfit; picks: GiftPick[] }[] }> {
+export async function loadGiftGuide(): Promise<{ tiers: GiftTierData[]; outfits: GiftOutfitData[] }> {
   const catalog = await loadCatalog();
   const buckets = new Map<GiftTierSlug, GiftPick[]>(GIFT_GUIDE_TIERS.map((t) => [t.slug, []]));
   const placed = new Set<string>();
@@ -338,10 +373,21 @@ export async function loadGiftGuide(): Promise<{ tiers: GiftTierData[]; outfits:
     return { tier, picks: sorted };
   });
 
-  const outfits = GIFT_OUTFITS.map((outfit) => ({
-    outfit,
-    picks: outfit.handles.map((h) => catalog.get(h)).filter(purchasable).map(toPick),
-  })).filter((o) => o.picks.length === o.outfit.handles.length);
+  // Live stock decides the anchor: first look whose anchor is in stock in L
+  // or XL and whose other pieces can all be bought. No look, no outfit.
+  const outfits: GiftOutfitData[] = [];
+  for (const outfit of GIFT_OUTFITS) {
+    for (const look of outfit.looks) {
+      const anchor = catalog.get(look.anchor);
+      if (!purchasable(anchor)) continue;
+      const anchorPick = toPick(anchor);
+      if (!anchorPick.inStock || !anchorPick.sizesInStock.some((size) => ANCHOR_SIZES.includes(size.toUpperCase()))) continue;
+      const rest = look.with.map((h) => catalog.get(h));
+      if (!rest.every(purchasable)) continue;
+      outfits.push({ outfit, look, picks: [anchorPick, ...rest.map((p) => toPick(p!))] });
+      break;
+    }
+  }
 
   return { tiers, outfits };
 }

@@ -5,7 +5,7 @@ import { ShopPageShell } from "../../components/ShopPageShell";
 import { ScrollToTop } from "../../components/ScrollToTop";
 import { canonical, SITE_URL } from "@/lib/seo";
 import { serializeJsonLd } from "@/lib/safeJsonLd";
-import { GIFT_GUIDE_TIERS, getGiftTier, loadGiftGuide } from "@/lib/giftGuide";
+import { GIFT_GUIDE_TIERS, GIFT_OUTFIT_CHINO, getGiftTier, loadGiftGuide } from "@/lib/giftGuide";
 import { GiftGuideTracker } from "../GiftGuideTracker";
 import { itemListJsonLd } from "../jsonLd";
 import {
@@ -13,7 +13,7 @@ import {
   GiftOrderByNote,
   GiftOutfits,
   GiftSeasonCard,
-  GiftSizingNote,
+  GiftReminders,
   GiftTierNav,
   GiftTierSection,
 } from "../GiftGuide";
@@ -53,7 +53,10 @@ export default async function GiftTierPage({ params }: Props) {
   const { tiers, outfits } = await loadGiftGuide();
   const data = tiers.find((t) => t.tier.slug === tier.slug)!;
   const path = `/shop/gifts/${tier.slug}`;
-  const chinoTier = outfits.length > 0 && tier.slug === "100-to-150";
+  // Outfits sit on the tier of their anchor: the chino's ($100 to $150) or, when
+  // the vest-led looks take over, the vests' ($150 to $250).
+  const outfitTier = outfits.some((o) => o.look.anchor === GIFT_OUTFIT_CHINO) ? "100-to-150" : "150-to-250";
+  const showOutfits = outfits.length > 0 && tier.slug === outfitTier;
 
   return (
     <ShopPageShell className="gift-guide">
@@ -69,19 +72,18 @@ export default async function GiftTierPage({ params }: Props) {
           <GiftTierNav active={tier.slug} placement="tier-top" />
         </div>
 
-        <GiftOrderByNote />
-
         <GiftTierSection
           data={data}
           as="h1"
           placement="tier"
-          aside={tier.slug === "150-to-250" ? <GiftSeasonCard placement="tier-hero" /> : undefined}
+          aside={tier.slug === "150-to-250" ? <GiftSeasonCard placement="tier-hero" tier={tier.slug} /> : undefined}
         />
 
-        {chinoTier && <GiftOutfits outfits={outfits} placement="tier-outfits" />}
-        {tier.slug !== "150-to-250" && <GiftSeasonCard placement={`tier-${tier.slug}`} compact />}
+        {showOutfits && <GiftOutfits outfits={outfits} placement="tier-outfits" />}
+        {tier.slug !== "150-to-250" && <GiftSeasonCard placement={`tier-${tier.slug}`} tier={tier.slug} compact />}
 
-        <GiftSizingNote />
+        <GiftOrderByNote />
+        <GiftReminders tier={tier.slug} placement="tier-after-grid" />
         <GiftFaqs />
       </main>
     </ShopPageShell>

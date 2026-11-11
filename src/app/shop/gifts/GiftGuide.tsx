@@ -9,15 +9,18 @@ import Image from "next/image";
 import Link from "next/link";
 import { ShopProductCard } from "../components/ShopProductCard";
 import { RestockChristmasNote } from "./RestockChristmasNote";
+import { GiftReminderSignup } from "./GiftReminderSignup";
 import {
   GIFT_GUIDE_TIERS,
   giftGuideFaqs,
   giftOrderByLabel,
+  giftOrderByShort,
   isPastGiftOrderBy,
   GIFT_RESTOCK_WEEKS,
   giftRestockCutoffLabel,
   GIFT_SEASON_HREF,
-  type GiftOutfit,
+  GIFT_OUTFIT_CHINO,
+  type GiftOutfitData,
   type GiftPick,
   type GiftTierData,
   type GiftTierSlug,
@@ -62,6 +65,44 @@ export function GiftOrderByNote() {
   );
 }
 
+/**
+ * Above-the-fold strip under the H1: the order-by date and the Gift a Season
+ * CTA, so both show on a 375px screen without scrolling.
+ */
+export function GiftHeroStrip({ placement, tier }: { placement: string; tier: string }) {
+  const past = isPastGiftOrderBy();
+  return (
+    <div className="gg-strip">
+      <p className="gg-strip__date">
+        <span aria-hidden="true" className="gg-strip__dot" />
+        <span>{past ? "Christmas cutoff has passed. Gift a Season works any day." : <>Order by <strong>{giftOrderByShort()}</strong> for Christmas</>}</span>
+      </p>
+      <Link href={GIFT_SEASON_HREF} className="gg-strip__cta" data-gg-season={placement} data-gg-tier={tier}>
+        <span>Gift a Season</span>
+        <span className="gg-strip__sub">One, two or four seasons</span>
+      </Link>
+    </div>
+  );
+}
+
+/** Sizing and returns reassurance, shown in each tier header. */
+export function GiftReassurance() {
+  return (
+    <ul className="gg-assure" aria-label="Sizing and returns">
+      <li><strong>Unsure of his size?</strong> Most tops we ship this time of year go out in L or XL.</li>
+      <li>
+        <strong>Easy returns.</strong> Unworn with tags, within 30 days of delivery.{" "}
+        <Link href="/policies/refund" className="gg-ulink">Policy</Link>
+      </li>
+    </ul>
+  );
+}
+
+export function GiftReminders({ tier, placement }: { tier: string; placement: string }) {
+  if (isPastGiftOrderBy()) return null;
+  return <GiftReminderSignup tier={tier} placement={placement} orderBy={giftOrderByLabel()} restockBy={giftRestockCutoffLabel()} />;
+}
+
 export function GiftSizingNote() {
   return (
     <p className="gg-sizing">
@@ -71,7 +112,7 @@ export function GiftSizingNote() {
   );
 }
 
-export function GiftSeasonCard({ placement, compact = false }: { placement: string; compact?: boolean }) {
+export function GiftSeasonCard({ placement, tier, compact = false }: { placement: string; tier: string; compact?: boolean }) {
   return (
     <section className={`gg-season${compact ? " gg-season--compact" : ""}`} aria-labelledby={`gg-season-${placement}`}>
       <div className="gg-season__image">
@@ -79,7 +120,7 @@ export function GiftSeasonCard({ placement, compact = false }: { placement: stri
           src="/reserve-flatlay-hero.webp"
           alt="A Mully Reserve shipment laid out on turf: boxes, a quarter zip, a polo, a shoe bag and a belt."
           fill
-          sizes="(max-width: 900px) 100vw, 50vw"
+          sizes="(max-width: 900px) 100vw, 640px"
           className="object-cover"
         />
       </div>
@@ -91,7 +132,7 @@ export function GiftSeasonCard({ placement, compact = false }: { placement: stri
           private link, so you never guess. Paid once, never renews.
         </p>
         <p className="gg-season__options">One, two or four seasons.</p>
-        <Link href={GIFT_SEASON_HREF} className="gg-button" data-gg-season={placement}>
+        <Link href={GIFT_SEASON_HREF} className="gg-button" data-gg-season={placement} data-gg-tier={tier}>
           Gift a Season
         </Link>
       </div>
@@ -105,6 +146,8 @@ function PickCard({ pick, tier, position, placement }: { pick: GiftPick; tier: s
     <li
       className="gg-pick"
       data-gg-product={product.slug}
+      data-gg-product-id={product.id}
+      data-gg-price={product.price || undefined}
       data-gg-brand={product.brand}
       data-gg-tier={tier}
       data-gg-position={position}
@@ -142,7 +185,9 @@ export function GiftTierSection({
         <Heading id={`gg-h-${tier.slug}`} className={as === "h1" ? "gg-h1" : "gg-h2"}>
           {tier.heading}
         </Heading>
+        {as === "h1" && <GiftHeroStrip placement="tier-hero-strip" tier={tier.slug} />}
         <p className="gg-dek">{tier.dek}</p>
+        <GiftReassurance />
         {showAllLink && (
           <Link href={`/shop/gifts/${tier.slug}`} className="gg-ulink" data-gg-tier-link={tier.slug} data-gg-placement={`${placement}-see-all`}>
             See the {tier.label} page
@@ -163,20 +208,23 @@ export function GiftTierSection({
   );
 }
 
-export function GiftOutfits({ outfits, placement }: { outfits: { outfit: GiftOutfit; picks: GiftPick[] }[]; placement: string }) {
+export function GiftOutfits({ outfits, placement }: { outfits: GiftOutfitData[]; placement: string }) {
   if (!outfits.length) return null;
+  const onChino = outfits.every((o) => o.look.anchor === GIFT_OUTFIT_CHINO);
   return (
     <section className="gg-outfits" aria-labelledby={`gg-outfits-${placement}`}>
       <header className="gg-tier__head">
         <p className="gg-kicker">Head to toe</p>
         <h2 id={`gg-outfits-${placement}`} className="gg-h2">The full outfit</h2>
-        <p className="gg-dek">Built on the Duck Head Gold School Chino. Give the set, or one piece of it.</p>
+        <p className="gg-dek">
+          {onChino ? "Built on the Duck Head Gold School Chino." : "Built around the vest he will wear all winter."} Give the set, or one piece of it.
+        </p>
       </header>
-      {outfits.map(({ outfit, picks }) => (
+      {outfits.map(({ outfit, look, picks }) => (
         <div className="gg-outfit" key={outfit.key}>
           <div className="gg-outfit__copy">
             <h3>{outfit.name}</h3>
-            <p>{outfit.note}</p>
+            <p>{look.note}</p>
           </div>
           <ol className="gg-grid gg-grid--three">
             {picks.map((p, i) => (

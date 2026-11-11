@@ -21,7 +21,7 @@ import { FieldValue, Timestamp, type DocumentReference } from "firebase-admin/fi
 import { adminDb } from "@/lib/firebase-admin";
 import { raiseAlert } from "@/lib/events/alert";
 import { SHOP_REWARDS } from "@/lib/shopRewards";
-import { normalizeSignupPhone } from "@/lib/shopSignup";
+import { normalizeSignupPhone, shopSignupSource } from "@/lib/shopSignup";
 import {
   META_OFFER_SOURCE,
   BACKOFF_MINUTES,
@@ -98,7 +98,7 @@ function leadInputs(id: string, d: Data, opts: BuildOptions): StageInputs {
   if (!email) return out;
   const emailConsent = d.emailConsent as Data | undefined;
   const smsConsent = d.smsConsent as Data | undefined;
-  const common = { source: "shop-edit-popup", docKey: id, email };
+  const common = { source: shopSignupSource(d.source), docKey: id, email };
   if (emailConsent?.granted === true) {
     const at = toDate(emailConsent.capturedAt);
     out.email = {
