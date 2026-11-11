@@ -69,12 +69,23 @@ export async function POST(req: Request) {
         userAgent: (req.headers.get("user-agent") || "").slice(0, 300),
       };
       tx.set(rate, { count: (limit.data()?.count || 0) + 1, expiresAt: new Date(now + 86400_000) });
+      // Repeat signups never overwrite the lead's first source. A popup
+      // signup still sets the lead's interest (as before); other sources
+      // only append theirs to `interests`, and carry no reward code.
+      const popup = source === "shop-edit-popup";
+      const prior = existing.exists ? existing.data() : undefined;
       tx.set(lead, {
-        ...(stage === "email" ? { email, interest, emailConsent: evidence } : { phone, smsConsent: evidence }),
-        ...(!existing.exists ? { createdAt: FieldValue.serverTimestamp() } : {}),
+        ...(stage === "email"
+          ? {
+              email, emailConsent: evidence,
+              ...(popup || !prior?.interest ? { interest } : {}),
+              interests: FieldValue.arrayUnion(interest),
+            }
+          : { phone, smsConsent: evidence }),
+        ...(!existing.exists ? { createdAt: FieldValue.serverTimestamp(), source } : {}),
         ...captureSyncFields(stage),
-        updatedAt: FieldValue.serverTimestamp(), source,
-        reward: SHOP_REWARDS[stage],
+        updatedAt: FieldValue.serverTimestamp(),
+        ...(popup ? { reward: SHOP_REWARDS[stage] } : {}),
       }, { merge: true });
       tx.set(lead.collection("consent_events").doc(), {
         ...evidence, ...(stage === "email" ? { email, interest } : { phone }),
@@ -83,7 +94,11 @@ export async function POST(req: Request) {
       else tx.update(session, { used: true });
     });
     scheduleKlaviyoSync("shop_marketing_leads", leadId, [stage]);
-    const res = respond({ ok: true, reward: SHOP_REWARDS[stage], ...(stage === "email" ? { receipt } : {}) });
+    const res = respond({
+      ok: true,
+      ...(source === "shop-edit-popup" ? { reward: SHOP_REWARDS[stage] } : {}),
+      ...(stage === "email" ? { receipt } : {}),
+    });
     // Consent is required on this route, so every email-stage success can be
     // tied to later site visits (Klaviyo browse and cart events).
     const kid = stage === "email" ? identityCookie(email) : null;
