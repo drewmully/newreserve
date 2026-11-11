@@ -442,7 +442,7 @@ export default function GiftSeasonLPClient({
         </div>
 
         <section className="max-w-5xl mx-auto px-4 sm:px-6 mt-12" data-testid="gift-season-examples">
-          <div className="flex items-baseline justify-between gap-3 mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-1 sm:gap-3 mb-4">
             <h2 className="font-serif text-2xl text-forest">In a typical Reserve</h2>
             <span className="text-[11px] uppercase tracking-[0.15em] text-charcoal/55">
               Examples from past seasons
