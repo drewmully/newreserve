@@ -517,7 +517,7 @@ export default function GiftSeasonLPClient({
                   </fieldset>
                 </div>
 
-                <div className="mt-4 pt-4 border-t border-forest/15 flex items-end justify-between gap-3 lg:hidden">
+                <div className="mt-4 pt-4 border-t border-forest/15 lg:hidden">
                   <div>
                     <div className="text-[11px] uppercase tracking-[0.14em] text-charcoal/60 whitespace-nowrap">
                       Reserve gift, {option.label}
@@ -526,10 +526,8 @@ export default function GiftSeasonLPClient({
                       {formatUsd(option.price)}
                     </div>
                   </div>
-                  <div className="text-right text-[11px] leading-relaxed text-charcoal/60 whitespace-nowrap pb-1">
-                    {formatUsd(perSeasonPrice(option.price, option.seasons))} per season
-                    <br />
-                    Paid once, never renews.
+                  <div className="mt-1 text-[11px] text-charcoal/60">
+                    {formatUsd(perSeasonPrice(option.price, option.seasons))} per season · Paid once, never renews.
                   </div>
                 </div>
 
