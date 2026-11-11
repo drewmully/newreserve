@@ -1,11 +1,13 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { trackEvent } from "@/lib/tracking";
+import { signalVisitorIdentified } from "@/lib/visitorIdentified";
 import { usePathname } from "next/navigation";
 import { useMembership } from "@/app/context/MembershipContext";
 import { SHOP_INTERESTS, EMAIL_CONSENT, SMS_CONSENT } from "@/lib/shopSignup";
 import { MullyWordmark } from "./MullyWordmark";
 import { saveShopReward, type ShopReward } from "@/lib/shopRewards";
+import { markSignedUp } from "@/lib/takeAShot/popupRules";
 import "./shop-signup.css";
 
 const STORAGE = "mully_shop_signup_v1";
@@ -157,12 +159,14 @@ export function ShopSignupPopup({ onTrigger }: { onTrigger?: () => void } = {}) 
           : "We couldn’t save that just now. Please try again.");
       }
       remember(365);
+      if (step === "email") markSignedUp("shop-popup");
       if (result.reward) { setReward(result.reward); saveShopReward(result.reward); }
       if (step === "email") {
         void trackEvent("newsletter_signup", {
           email: String(form.get("email") ?? "").trim().toLowerCase() || undefined,
           properties: { source: "shop-popup", interest },
         });
+        signalVisitorIdentified();
         setReceipt(result.receipt); setStep("sms");
       }
       else setStep("done");

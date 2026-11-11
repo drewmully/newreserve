@@ -24,6 +24,7 @@ import {
 import { adminDb, adminAuth } from "@/lib/firebase-admin";
 import { sendPlainText } from "@/lib/email/resend";
 import { resolveMemberTierFromVariantId } from "@/lib/membershipConfig";
+import { takeAShotRedemption } from "@/lib/takeAShot/redemption";
 import { outfitMembershipFromPaidOrder } from "@/lib/shopifyOutfitMembership";
 import {
   startFlow,
@@ -834,6 +835,8 @@ export async function POST(request: NextRequest) {
       gift_kind: giftSeasons !== null ? "season" : orderIsGift ? "subscription" : null,
       seasons: giftSeasons,
       gift_ship_mode: giftSeasons !== null ? parseShipMode(orderAttr(GIFT_SEASON_ATTR.shipMode)) : null,
+      // Take a Shot redemption: SHOT code (if any), and whether the order is Reserve, retail or both.
+      ...takeAShotRedemption(order),
       sponsorship_ref: sponsorshipRef,
       channel,
       source_channel: sourceChannel,

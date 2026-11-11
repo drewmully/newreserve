@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { PENDING_SIGN_IN_EMAIL_KEY } from "@/lib/pendingSignInEmail";
 import { trackEvent } from "@/lib/tracking";
+import { markSignedUp } from "@/lib/takeAShot/popupRules";
 
 export const PENDING_ONBOARDING_EMAIL_KEY = "pending_onboarding_email";
 
@@ -53,6 +54,7 @@ export function EmailCTA({ variant = "hero", ctaText }: { variant?: "hero" | "bo
       email,
       properties: { source: variant === "hero" ? "hero_cta" : "bottom_cta" },
     });
+    markSignedUp(variant === "hero" ? "hero_cta" : "bottom_cta");
 
     try {
       const checkRes = await fetch("/api/auth/check-email", {

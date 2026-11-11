@@ -23,7 +23,7 @@ import { GIFT_RESTOCK_WEEKS, giftOrderByShort, giftRestockCutoffShortDay } from 
 
 /**
  * Gift a Season (prepaid Reserve, one, two or four seasons) lives at
- * /lp/gift-season (PR #352, live Nov 11, 2026). Set to false to hide it. While false, every Gift a Season element (hero strip
+ * /lp/gift-season (PR #352, live 2026-11-11). Set to false to hide it. While false, every Gift a Season element (hero strip
  * CTA, intro link, the card, the mobile tile, the Gift a Season FAQs and meta
  * mention) is hidden: /lp/gift sells the recurring Reserve, so "never renews"
  * would be false there. This is the only switch.
@@ -55,6 +55,13 @@ export interface GiftTier {
   picks: string[];
 }
 
+/**
+ * Never shown anywhere in the guide (tiers, hub rail, outfits, JSON-LD),
+ * even if a handle is added to a list below. The Rhone C.O.R. Crew Sock is
+ * reserved as the CM26 gift and isn't in Shop - All.
+ */
+export const GIFT_EXCLUDED_HANDLES: ReadonlySet<string> = new Set(["rhone-c-o-r-crew-sock"]);
+
 export const GIFT_GUIDE_TIERS: GiftTier[] = [
   {
     slug: "under-100",
@@ -73,7 +80,6 @@ export const GIFT_GUIDE_TIERS: GiftTier[] = [
       "jolly-golf-purist-organizer",
       "penfold-heritage-shag-bag",
       "winston-golf-tour-towel",
-      "rhone-c-o-r-crew-sock",
       "primo-fairway-crew",
       "duckhead-stretch-belt",
     ],
@@ -143,7 +149,6 @@ export const GIFT_REASONS: Record<string, string> = {
   "jolly-golf-purist-organizer": "Every tee, marker and pencil in one zip pouch. No more digging on the first tee.",
   "penfold-heritage-shag-bag": "Millerain canvas, a lifetime warranty and room for a hundred practice balls.",
   "winston-golf-tour-towel": "Ribbed terry, 22 by 44 inches. Big enough to dry a grip in a downpour.",
-  "rhone-c-o-r-crew-sock": "Rhone's everyday crew sock. Fits in a stocking, gets worn every week.",
   "primo-fairway-crew": "A modal-blend crew with four-way stretch that sits quietly over a polo.",
   "duckhead-stretch-belt": "A braided stretch belt that gives a little at the top of the backswing.",
   // $100 to $150
@@ -205,8 +210,8 @@ export const GIFT_OUTFITS: GiftOutfit[] = [
       },
       {
         anchor: "olydoe-merino-ponte-vest",
-        with: ["olydoe-pima-long-sleeve-polo", "rhone-c-o-r-crew-sock"],
-        note: "The merino vest over a Pima long sleeve, plus the crew sock. The vest is the piece golfers bought most this fall.",
+        with: ["olydoe-pima-long-sleeve-polo", "winston-golf-tour-towel"],
+        note: "The merino vest over a Pima long sleeve, plus a tour towel. The vest is the piece golfers bought most this fall.",
       },
     ],
   },
@@ -397,7 +402,7 @@ function toPick(p: ShopifyProduct): GiftPick {
 async function loadCatalog(): Promise<Map<string, ShopifyProduct>> {
   const handles = Array.from(
     new Set([...GIFT_GUIDE_TIERS.flatMap((t) => t.picks), ...GIFT_OUTFITS.flatMap((o) => o.looks.flatMap((l) => [l.anchor, ...l.with]))])
-  );
+  ).filter((h) => !GIFT_EXCLUDED_HANDLES.has(h));
   const settled = await Promise.allSettled(handles.map((h) => getProductByHandle(h)));
   const map = new Map<string, ShopifyProduct>();
   settled.forEach((r, i) => {
@@ -407,7 +412,7 @@ async function loadCatalog(): Promise<Map<string, ShopifyProduct>> {
 }
 
 function purchasable(p: ShopifyProduct | undefined): p is ShopifyProduct {
-  return !!p && p.variants.some((v) => v.availableForSale);
+  return !!p && !GIFT_EXCLUDED_HANDLES.has(p.slug) && p.variants.some((v) => v.availableForSale);
 }
 
 function tierForPrice(price: number): GiftTier | undefined {

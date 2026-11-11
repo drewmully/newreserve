@@ -1,19 +1,28 @@
 "use client";
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
+import { usePathname } from "next/navigation";
 import { ShopSignupPopup } from "../ShopSignupPopup";
+import { TakeAShotTrigger } from "./TakeAShotTrigger";
+import { pageTypeFor, type TriggerType } from "@/lib/takeAShot/popupRules";
 
 /** The modal (and its CSS) is a separate chunk, fetched the first time the popup would show. */
 const TakeAShotModal = dynamic(() => import("./TakeAShotModal").then((m) => m.TakeAShotModal), { ssr: false });
 
 /**
- * Chooses the shop signup. Flag off (default): ShopSignupPopup, unchanged.
- * Flag on: Take a Shot fully replaces it, using the popup's own trigger rules.
+ * Site-wide signup popup, mounted once in the root layout.
+ * Flag off (default): ShopSignupPopup on /shop pages only, unchanged.
+ * Flag on: Take a Shot fully replaces it, with its own trigger, caps,
+ * suppression and launcher (TakeAShotTrigger), on every public storefront
+ * page that popupRules allows (home, shop, listings, gifts, PDPs, blog,
+ * editorial). Unknown routes get nothing.
  * On preview/dev, ?tas=1 forces Take a Shot on and ?tas=0 off for this tab.
  */
 export function TakeAShotGate({ enabled, allowOverride }: { enabled: boolean; allowOverride: boolean }) {
+  const pathname = usePathname() ?? "";
   const [override, setOverride] = useState<boolean | null>(null);
-  const [opened, setOpened] = useState(0);
+  const [opened, setOpened] = useState<{ n: number; trigger: TriggerType }>({ n: 0, trigger: "manual" });
+  const [modalOpen, setModalOpen] = useState(false);
   useEffect(() => {
     if (!allowOverride) return;
     const q = new URLSearchParams(window.location.search).get("tas");
@@ -25,9 +34,11 @@ export function TakeAShotGate({ enabled, allowOverride }: { enabled: boolean; al
     } catch { if (q === "1" || q === "0") setOverride(q === "1"); }
   }, [allowOverride]);
   const on = override ?? enabled;
-  if (!on) return <ShopSignupPopup />;
+  if (!on) return /^\/shop(\/|$)/.test(pathname) ? <ShopSignupPopup /> : null;
+  // /shop/<slug> may be a PDP; the trigger checks the rendered page before it acts.
+  const storefront = pageTypeFor(pathname, true) !== null;
   return <>
-    <ShopSignupPopup onTrigger={() => setOpened((n) => n + 1)} />
-    {opened > 0 && <TakeAShotModal openSignal={opened} />}
+    {storefront && <TakeAShotTrigger modalOpen={modalOpen} onOpen={(trigger) => { setModalOpen(true); setOpened((o) => ({ n: o.n + 1, trigger })); }} />}
+    {opened.n > 0 && <TakeAShotModal openSignal={opened.n} trigger={opened.trigger} onClosed={() => setModalOpen(false)} />}
   </>;
 }

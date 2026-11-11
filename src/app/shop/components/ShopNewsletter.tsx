@@ -1,6 +1,8 @@
 "use client";
 import { useState } from "react";
 import { trackEvent } from "@/lib/tracking";
+import { markSignedUp } from "@/lib/takeAShot/popupRules";
+import { signalVisitorIdentified } from "@/lib/visitorIdentified";
 
 export function ShopNewsletter() {
   const [status, setStatus] = useState<"idle" | "busy" | "done" | "error">("idle");
@@ -24,6 +26,8 @@ export function ShopNewsletter() {
         email: String(form.get("email") ?? "").trim().toLowerCase() || undefined,
         properties: { source: "shop-newsletter" },
       });
+      markSignedUp("shop-newsletter");
+      signalVisitorIdentified();
       setStatus("done");
     } catch {
       setStatus("error");

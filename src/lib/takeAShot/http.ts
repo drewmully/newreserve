@@ -30,10 +30,11 @@ export async function parseTakeAShotRequest(req: Request): Promise<Parsed> {
   if (body.company) return { ok: false, res: respond({ status: "ok" }) };
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null;
   const visitor = typeof body.deviceId === "string" && /^[A-Za-z0-9_-]{8,80}$/.test(body.deviceId) ? body.deviceId : null;
+  const posthogDistinctId = typeof body.phId === "string" && /^[A-Za-z0-9_.:@$-]{8,200}$/.test(body.phId) && !body.phId.includes("@") ? body.phId : null;
   const page = typeof body.page === "string" ? body.page.slice(0, 200).split("?")[0] : null;
   return {
     ok: true, body, ip,
-    ctx: { ipHash: digest(`ip:${ip ?? "unknown"}`), visitor, page, userAgent: req.headers.get("user-agent") || "" },
+    ctx: { ipHash: digest(`ip:${ip ?? "unknown"}`), visitor, posthogDistinctId, page, userAgent: req.headers.get("user-agent") || "" },
   };
 }
 
@@ -43,7 +44,23 @@ export function send(result: ApiResult) {
     const { httpStatus, ...rest } = result;
     return respond(rest, httpStatus ?? 400);
   }
+  if (result.status === "existing" || result.status === "resume") {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { identify, ...rest } = result;
+    return respond(rest);
+  }
   return respond(result);
+}
+
+/**
+ * May this browser be tied to the typed email for Klaviyo (mully_kid)?
+ * A new game, or a resumed/finished game whose lead is that email and was
+ * played on this browser. Another browser, or a different email typed on
+ * this browser, never gets the cookie.
+ */
+export function identifiesPlayer(result: ApiResult): boolean {
+  if (result.status === "new") return true;
+  return (result.status === "resume" || result.status === "existing") && result.identify === true;
 }
 
 export function failed(tag: string) {

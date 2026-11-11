@@ -13,6 +13,8 @@
 
 import { useId, useState } from "react";
 import { trackEvent } from "@/lib/tracking";
+import { markSignedUp } from "@/lib/takeAShot/popupRules";
+import { signalVisitorIdentified } from "@/lib/visitorIdentified";
 import { EMAIL_CONSENT } from "@/lib/shopSignup";
 
 type Status = "idle" | "busy" | "done" | "error";
@@ -67,6 +69,8 @@ export function GiftReminderSignup({
         email,
         properties: { source: "gift_guide", tier, placement, signup_source: "gift-reminders" },
       });
+      markSignedUp("gift_guide");
+      signalVisitorIdentified();
       setStatus("done");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Please try again.");

@@ -40,6 +40,20 @@ export const RING_TIERS: ReadonlyArray<{ ft: number; pct: number }> = [
   { ft: 12, pct: 20 },
   { ft: 20, pct: 15 },
 ];
+/**
+ * Mully palette for the game and its landing art (CRO review, Nov 11):
+ * deep green, olive, sand, gold and cream, with burgundy as the one accent.
+ */
+export const PALETTE = {
+  deepGreen: "#2E4A36",
+  olive: "#6E7B3F",
+  sand: "#D9C6A0",
+  gold: "#C9A24A",
+  cream: "#F4EEDF",
+  accent: "#8A2432",
+} as const;
+/** Ring colors, inner (30%) to outer (15%), same order as RING_TIERS. */
+export const RING_COLORS: readonly string[] = [PALETTE.accent, PALETTE.gold, PALETTE.sand, PALETTE.cream];
 /** On the green but outside every ring. 0 means "the floor applies". */
 export const ON_GREEN_PERCENT = 0;
 /** Hole in one. Never above the cap. */
@@ -66,7 +80,7 @@ export const CODE_RULES = {
    * collection, tag "shop" AND compare-at price not set. That keeps sale items
    * out. Verified Nov 11, 2026: 49 products, all 37 active shop products, none
    * of the excluded products below, no compare-at items.
-   * Reserve first box (Drew, Nov 11): the collection also has to include
+   * First Reserve quarter (Drew, Nov 11): the collection also has to include
    * RESERVE_FIRST_BOX_PRODUCT_IDS (done in Shopify, e.g. a second collection
    * source on a dedicated tag). Until then codes simply do not apply there.
    * Empty array = every product.
@@ -90,13 +104,13 @@ export const CODE_RULES = {
    * "member": variant 47601025122496, Loop plan "Quarterly Reserve" 3241476288,
    * $250). Same setup as FOUNDERS50: appliesOnSubscription true, cycle limit 1.
    */
-  reserveFirstBoxProductIds: [
+  reserveFirstQuarterProductIds: [
     "gid://shopify/Product/8501257044160", // Mully Reserve | Seasonal Styling Subscription (reserve-member)
   ] as string[],
-  /** Shop items are one-time purchases; the Reserve first box is a subscription. */
+  /** Shop items are one-time purchases; the first Reserve quarter is a subscription. */
   appliesOnOneTimePurchase: true,
   appliesOnSubscription: true,
-  /** Subscription payments discounted: the first one only. Renewals bill at full price. */
+  /** Subscription payments discounted: the first one only. Renewals bill at the regular quarterly price. */
   recurringCycleLimit: 1,
   /** No stacking with anything (Drew, Nov 11), including shipping codes. */
   combinesWith: { orderDiscounts: false, productDiscounts: false, shippingDiscounts: false },
@@ -108,9 +122,9 @@ export const CODE_RULES = {
  */
 export const CODE_TERMS = {
   /** Under the code on the result card. */
-  short: "Works on one-time Shop orders or your first Reserve box.",
+  short: "Works on one-time Shop orders or your first Reserve quarter.",
   /** Full terms line. */
-  full: "Works on one-time Shop orders or your first Reserve box, up to 30% off. Reserve renewals bill at full price. Excludes sale items, Mully Access and gift subscriptions. One use, expires 14 days after you play, and cannot be combined with other offers.",
+  full: `Works on one-time Shop orders or your first Reserve quarter, up to ${MAX_PERCENT}% off. Reserve renewals bill at the regular quarterly price. Excludes sale items, Mully Access and gift subscriptions. One use, expires ${CODE_RULES.expiryDays} days after you play, and cannot be combined with other offers.`,
 } as const;
 
 /** Admin API version for discount mutations (DiscountCodeBasicInput.context). */
@@ -121,6 +135,9 @@ export const LIMITS = {
   sessionsPerIpPerHour: 6,
   sessionsPerVisitorPerHour: 4,
   checksPerIpPerHour: 40,
+  /** Phone upgrade attempts per IP, and per game. Over either: one generic error. */
+  upgradesPerIpPerHour: 10,
+  upgradesPerSessionPerHour: 3,
   /** Faster than a person can aim and tap; flagged for review, not blocked. */
   minMsBetweenShots: 900,
   /** An unclaimed game older than this is finished by the cron at its best result. */

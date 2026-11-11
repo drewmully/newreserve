@@ -21,7 +21,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { trackEvent } from "@/lib/tracking";
+import { signalVisitorIdentified } from "@/lib/visitorIdentified";
 import { DROP_BAR_CONSENT } from "@/lib/shopSignup";
+import { markSignedUp } from "@/lib/takeAShot/popupRules";
 
 const STORAGE_KEY = "mully_drop_bar_state";
 const DISMISS_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
@@ -203,9 +205,12 @@ export default function DropWatchBar() {
         email: trimmed,
         properties: { source: "editorial-drop-bar" },
       });
+      signalVisitorIdentified();
       // Mark signed so the bar never re-opens on this browser, but keep
       // the bar visible while we prompt for the stylist follow-up.
       writeState("signed");
+      // email_submitted { source: "editorial-drop-bar" } is fired server side by drop-signup.
+      markSignedUp("editorial-drop-bar");
       setStatus("success");
       // Brief "You're in." flash, then swap into the stylist prompt.
       window.setTimeout(() => setStatus("stylist"), 1600);

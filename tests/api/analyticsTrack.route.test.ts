@@ -332,6 +332,40 @@ describe("POST /api/analytics/track", () => {
       expectNoOtherDispatch();
     });
 
+    const bag = {
+      event_name: "cart_identified", klaviyo_kx: "abcDEF123_kx",
+      properties: {
+        product_id: "rhone-long-game-vest", name: "Rhone Long Game Vest", value: 138,
+        variant_id: "gid://shopify/ProductVariant/50621438099648", cart_total: 236, cart_item_count: 2,
+        cart_item_names: ["Rhone Long Game Vest", "Rhone Polo"],
+      },
+    };
+
+    it("accepts cart_identified in the Klaviyo-only lane as Mully Added to Cart", async () => {
+      const res = await post(bag);
+      expect(res.status).toBe(200);
+      expect(sendSiteEventMock).toHaveBeenCalledTimes(1);
+      expect(sendSiteEventMock.mock.calls[0][1]).toMatchObject({
+        metric: "Mully Added to Cart",
+        value: 236,
+        properties: { AddedItemProductID: "rhone-long-game-vest", CartSource: "signup", ItemNames: ["Rhone Long Game Vest", "Rhone Polo"] },
+      });
+      expectNoOtherDispatch();
+    });
+
+    it("rejects cart_identified when the Klaviyo lane is off", async () => {
+      vi.stubEnv("KLAVIYO_SITE_EVENTS_ENABLED", "false");
+      expect((await post(bag)).status).toBe(400);
+      expect(sendSiteEventMock).not.toHaveBeenCalled();
+      expectNoOtherDispatch();
+    });
+
+    it("sends cart_identified for nobody without an identity", async () => {
+      expect((await post({ ...bag, klaviyo_kx: undefined, email: "victim@example.com" })).status).toBe(200);
+      expect(sendSiteEventMock).not.toHaveBeenCalled();
+      expectNoOtherDispatch();
+    });
+
     it("does not identify an outfit visitor from arbitrary body email", async () => {
       expect((await post({ ...outfit, klaviyo_kx: undefined, email: "victim@example.com" })).status).toBe(200);
       expect(sendSiteEventMock).not.toHaveBeenCalled();
