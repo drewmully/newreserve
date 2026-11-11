@@ -294,7 +294,7 @@ export default function GiftSeasonLPClient({
 
               {/* Mobile: compact full-bleed image, CTA and trust row above the fold. */}
               <div className="lg:hidden">
-                <div className="relative -mx-5 sm:-mx-8 mt-4 aspect-[4/3] max-h-[300px] sm:max-h-[420px]">
+                <div className="relative -mx-5 sm:-mx-8 mt-4 h-[360px] sm:h-[460px]">
                   <HeroMedia variant={heroVariant} priority />
                 </div>
                 <div className="mt-4 flex items-center gap-4">

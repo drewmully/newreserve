@@ -39,25 +39,27 @@ const FLAT_LAY = [
     // Rhone Rise 1/4 Zip, navy packshot (Shopify product media).
     src: `${CDN}mully-fall-2026-24.jpg?v=1790962847&width=1000`,
     alt: "Rhone Rise quarter zip in navy",
-    style: { left: "2%", top: "4%", width: "52%", transform: "rotate(-5deg)" },
+    style: { left: "2%", top: "0%", width: "54%", transform: "rotate(-6deg)" },
   },
   {
     // Quiet Golf Remy Polo, wine stripe packshot.
     src: `${CDN}mully-fall-2026-16.jpg?v=1790962847&width=900`,
     alt: "Quiet Golf Remy polo in wine stripe",
-    style: { right: "1%", top: "2%", width: "47%", transform: "rotate(4deg)" },
+    style: { right: "2%", top: "4%", width: "48%", transform: "rotate(4deg)" },
   },
   {
-    // Greyson Gothic G Dad Hat, transparent packshot.
+    // Greyson Gothic G Dad Hat, transparent packshot (kept white, no multiply).
     src: `${CDN}MG23A25_100_1_4858.webp?v=1781539302&width=700`,
     alt: "Greyson Gothic G dad hat in white",
-    style: { left: "12%", bottom: "-6%", width: "33%", transform: "rotate(-9deg)" },
+    style: { left: "10%", bottom: "0%", width: "38%", transform: "rotate(-9deg)", mixBlendMode: "normal" as const },
   },
   {
     // Will Leather Goods Saddle Belt, tan packshot.
-    src: `${CDN}60078_SADDLE_BELT_TAN_001_61d8e0d1-3437-47b3-b85c-79c3836fbe2b.jpg?v=1789573017&width=900`,
+    // Prepared white-canvas copy of the Shopify packshot
+    // 60078_SADDLE_BELT_TAN_001 (see src/lib/shopProductPhotos.json).
+    src: "/shop-redesign/products/white/will-leather-saddle-belt.webp",
     alt: "Will Leather Goods saddle belt in tan",
-    style: { right: "6%", bottom: "4%", width: "44%", transform: "rotate(7deg)" },
+    style: { right: "2%", bottom: "6%", width: "50%", transform: "rotate(8deg)" },
   },
 ];
 
@@ -87,7 +89,7 @@ export function HeroMedia({ variant, priority = false }: { variant: GiftHeroVari
       role="img"
       aria-label="Example pieces from a past Reserve: Rhone quarter zip, Quiet Golf polo, Greyson hat and Will Leather belt"
     >
-      <div className="absolute inset-[4%]">
+      <div className="absolute inset-[2%]">
         {FLAT_LAY.map((p) => (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -109,7 +111,7 @@ export function HeroMedia({ variant, priority = false }: { variant: GiftHeroVari
 export function HeroTrustRow({ className = "" }: { className?: string }) {
   return (
     <ul
-      className={`flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[12px] text-[#625e55] ${className}`}
+      className={`flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] sm:text-[12px] text-[#625e55] ${className}`}
       data-testid="gift-hero-trust"
     >
       {HERO_TRUST.map((t) => (
