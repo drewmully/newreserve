@@ -68,7 +68,7 @@ export default async function LegacyPostPage({ params }: Props) {
   // Content missing or Shopify unreachable: send readers to the Journal (temporary).
   if (!post) redirect("/blog");
   const next = LEGACY_POSTS[handle];
-  // Blog commerce v1 (test variant only; control renders exactly as before).
+  // Blog commerce: product row and end block (server-rendered).
   const commerce = ARCHIVE_COMMERCE[handle];
   const intent = endIntentFor(handle, null, commerce);
   const [allPosts, products] = await Promise.all([
