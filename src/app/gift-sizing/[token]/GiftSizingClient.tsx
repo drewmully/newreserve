@@ -10,6 +10,10 @@
  */
 
 import { useMemo, useState } from "react";
+import {
+  GIFT_SEASON_SHIP_WINDOW,
+  GIFT_SEASON_SHOW_FREE_SHIPPING_EXCHANGES,
+} from "@/lib/gifts/giftSeasonConfig";
 import { GlassHeader } from "@/app/components/ClientComponents";
 
 const SHIRT = ["S", "M", "L", "XL", "XXL"] as const;
@@ -31,6 +35,11 @@ interface Props {
   existingSizing: Record<string, string> | null;
   /** Gift a Season: prepaid count. Null for the legacy recurring gift. */
   seasonsTotal?: number | null;
+  /**
+   * Self-delivered season gift with no recipient email on file: ask for it
+   * so the continue offer can reach them.
+   */
+  askRecipientEmail?: boolean;
 }
 
 interface SizingState {
@@ -62,7 +71,9 @@ export default function GiftSizingClient({
   alreadySubmitted,
   existingSizing,
   seasonsTotal = null,
+  askRecipientEmail = false,
 }: Props) {
+  const [recipientEmail, setRecipientEmail] = useState("");
   const isSeason = !!seasonsTotal;
   const seasonsLabel =
     seasonsTotal === 1 ? "a season" : `${seasonsTotal ?? 0} seasons`;
@@ -94,7 +105,13 @@ export default function GiftSizingClient({
       const res = await fetch("/api/gifts/submit-sizing", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, sizing: s }),
+        body: JSON.stringify({
+          token,
+          sizing: s,
+          ...(askRecipientEmail && recipientEmail.trim()
+            ? { recipientEmail: recipientEmail.trim() }
+            : {}),
+        }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -130,7 +147,7 @@ export default function GiftSizingClient({
                 <>
                   <p className="text-sm text-charcoal/75 leading-relaxed max-w-md mx-auto">
                     We have your sizing. Your first Mully Reserve is being
-                    hand-picked and ships in 5 to 7 business days.
+                    hand-picked and ships {GIFT_SEASON_SHIP_WINDOW}.
                     {seasonsTotal && seasonsTotal > 1
                       ? ` The rest arrive every 3 months, ${seasonsTotal} in all.`
                       : ""}
@@ -170,8 +187,8 @@ export default function GiftSizingClient({
                     {recipient}, {fromName} gave you {seasonsLabel} of Mully Reserve.
                   </h1>
                   <p className="text-sm text-charcoal/80 mt-4 leading-relaxed">
-                    Hand-picked golf apparel and accessories, $300+ retail
-                    value each season.{" "}
+                    Golf apparel and accessories hand-picked by a Mully
+                    stylist each season.{" "}
                     {seasonsTotal && seasonsTotal > 1
                       ? `One Reserve every 3 months, ${seasonsTotal} in all. `
                       : ""}
@@ -243,6 +260,25 @@ export default function GiftSizingClient({
                   onChange={(v) => setS({ ...s, glove_hand: v })}
                 />
 
+                {askRecipientEmail ? (
+                  <div>
+                    <label className="block text-[11px] uppercase tracking-[0.15em] text-charcoal/65 mb-1.5">
+                      Your email <span className="text-charcoal/45 normal-case tracking-normal">(optional)</span>
+                    </label>
+                    <input
+                      type="email"
+                      name="recipientEmail"
+                      value={recipientEmail}
+                      onChange={(e) => setRecipientEmail(e.target.value)}
+                      placeholder="you@email.com"
+                      className="w-full bg-bone border border-forest/20 rounded px-3 py-2.5 text-sm text-charcoal focus:outline-none focus:border-forest"
+                    />
+                    <span className="block text-[10px] text-charcoal/55 mt-1">
+                      For shipping updates on your gift.
+                    </span>
+                  </div>
+                ) : null}
+
                 <div>
                   <label className="block text-[11px] uppercase tracking-[0.15em] text-charcoal/65 mb-1.5">
                     Anything we should know? <span className="text-charcoal/45 normal-case tracking-normal">(optional)</span>
@@ -273,7 +309,9 @@ export default function GiftSizingClient({
 
                 <p className="text-[11px] text-charcoal/55 leading-relaxed pt-3 border-t border-forest/10">
                   {isSeason
-                    ? "Wrong fit on anything? We swap it free. Your gift is prepaid and never renews."
+                    ? GIFT_SEASON_SHOW_FREE_SHIPPING_EXCHANGES
+                      ? "Wrong fit on anything? We swap it free. Your gift is prepaid and never renews."
+                      : "Wrong fit on anything? Reply to any Mully email and we will sort it out. Your gift is prepaid and never renews."
                     : "Wrong fit on anything? We swap it free, no questions, no shipping fee. Your subscription auto-cancels after the first box ships \u2014 you\u2019re only charged once unless you choose to stay on."}
                 </p>
               </div>

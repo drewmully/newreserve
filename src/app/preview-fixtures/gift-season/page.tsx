@@ -1,5 +1,5 @@
 /**
- * /preview-fixtures/gift-season?view=sizing|sizing-done|continue|admin
+ * /preview-fixtures/gift-season?view=sizing|sizing-self|sizing-done|continue|admin|card
  *
  * Preview and local QA only (404 in production). Renders the Gift a Season
  * recipient reveal, continue offer and admin season view with sample data,
@@ -10,6 +10,7 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import GiftSizingClient from "@/app/gift-sizing/[token]/GiftSizingClient";
+import GiftCardView from "@/app/gift-card/[token]/GiftCardView";
 import GiftContinueClient from "@/app/gift-continue/[token]/GiftContinueClient";
 import { GiftsTable, type GiftRow } from "@/app/admin/gifts/GiftsTable";
 import { seasonProgress } from "@/lib/gifts/giftSeason";
@@ -83,7 +84,18 @@ export default async function GiftSeasonFixturesPage({
   if (process.env.VERCEL_ENV === "production") notFound();
   const { view = "sizing" } = await searchParams;
 
-  if (view === "sizing" || view === "sizing-done") {
+  if (view === "card") {
+    return (
+      <GiftCardView
+        recipientFirstName="Sam"
+        purchaserFirstName="Alex"
+        giftMessage="Happy holidays. See you on the first tee."
+        seasonsTotal={4}
+        sizingUrl="https://mymully.com/gift-sizing/fixture-token-not-real"
+      />
+    );
+  }
+  if (view === "sizing" || view === "sizing-self" || view === "sizing-done") {
     return (
       <GiftSizingClient
         orderId="fixture"
@@ -94,6 +106,7 @@ export default async function GiftSeasonFixturesPage({
         alreadySubmitted={view === "sizing-done"}
         existingSizing={null}
         seasonsTotal={4}
+        askRecipientEmail={view === "sizing-self"}
       />
     );
   }

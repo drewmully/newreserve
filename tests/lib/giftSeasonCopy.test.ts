@@ -9,6 +9,8 @@ const FILES = [
   "src/app/lp/gift-season/GiftSeasonLPClient.tsx",
   "src/app/gift-continue/[token]/page.tsx",
   "src/app/gift-continue/[token]/GiftContinueClient.tsx",
+  "src/app/gift-card/[token]/page.tsx",
+  "src/app/gift-card/[token]/GiftCardView.tsx",
 ];
 
 function stripComments(src: string): string {
@@ -23,7 +25,29 @@ describe("Gift a Season pricing copy", () => {
     const src = readFileSync(path.resolve(__dirname, "../..", "src/app/lp/gift-season/GiftSeasonLPClient.tsx"), "utf8");
     expect(src).not.toMatch(/\$250 per season|\* ?250/);
     expect(src).toMatch(/perSeasonPrice\(option\.price, option\.seasons\)/);
+    expect(src).toMatch(/perSeasonPrice\(o\.price, o\.seasons\)/);
+    expect(src).toMatch(/seasonSavings\(o\.price, o\.seasons, singlePrice\)/);
+    expect(src).not.toMatch(/Save \$\d/);
     expect(src).toMatch(/Paid once, never renews\./);
+    expect(src).toMatch(/Paid once\. Never renews\. Secure Shopify checkout\./);
+    expect(src).toMatch(/Full year, best value/);
+  });
+  it("LP: no $300+ claim, free shipping behind the flag, timing from config", () => {
+    const src = readFileSync(path.resolve(__dirname, "../..", "src/app/lp/gift-season/GiftSeasonLPClient.tsx"), "utf8");
+    expect(src).not.toMatch(/\$300/);
+    expect(src).toMatch(/Hand-picked by a Mully stylist each season\./);
+    expect(src).toMatch(/giftSeasonTimingLine\(\)/);
+    for (const m of src.matchAll(/[^\n]*[Ff]ree shipping[^\n]*/g)) {
+      const at = m.index ?? 0;
+      expect(src.slice(Math.max(0, at - 200), at)).toMatch(/GIFT_SEASON_SHOW_FREE_SHIPPING_EXCHANGES/);
+    }
+    expect(src.match(/<details/g)?.length).toBe(1);
+    expect(src.match(/\bq: "/g)?.length).toBeGreaterThanOrEqual(4);
+  });
+  it("season sizing reveal drops the $300+ claim", () => {
+    const src = readFileSync(path.resolve(__dirname, "../..", "src/app/gift-sizing/[token]/GiftSizingClient.tsx"), "utf8");
+    const season = src.slice(src.indexOf("{isSeason ? ("), src.indexOf("Mully Reserve \\u00b7 Gift Box"));
+    expect(season).not.toMatch(/\$300/);
   });
 });
 

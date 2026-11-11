@@ -19,6 +19,8 @@ import { sendPlainText } from "@/lib/email/resend";
 import {
   buildGiftRecipientSubject,
   buildGiftRecipientText,
+  buildGiftSelfDeliverSubject,
+  buildGiftSelfDeliverText,
 } from "@/lib/email/templates/giftRecipient";
 import {
   getDueGiftOrders,
@@ -67,46 +69,79 @@ export async function GET(request: NextRequest) {
   for (const { id, data } of due) {
     const sizingUrl = `${siteOrigin(request)}/gift-sizing/${data.sizing_token}`;
     try {
-      await sendPlainText({
-        to: data.recipient_email,
-        subject: buildGiftRecipientSubject({
-          purchaserFirstName: data.purchaser_first_name,
-          seasonsTotal: data.gift_kind === "season" ? data.seasons_total : null,
-        }),
-        text: buildGiftRecipientText({
-          recipientFirstName: data.recipient_first_name,
-          purchaserFirstName: data.purchaser_first_name,
-          purchaserEmail: data.purchaser_email,
-          giftMessage: data.gift_message,
-          sizingUrl,
-          seasonsTotal: data.gift_kind === "season" ? data.seasons_total : null,
-        }),
-        idempotencyKey: `gift-recipient:${id}`,
-        sendClass: "transactional",
-        category: "gift_recipient_announcement",
-        tags: [
-          { name: "category", value: "gift_recipient_announcement" },
-          { name: "gift_order_id", value: id },
-        ],
-      });
+      // "I'll give it myself": the reveal + printable card go to the gifter.
+      const selfDeliver = data.gift_kind === "season" && !!data.self_deliver;
+      const to = selfDeliver ? data.purchaser_email : data.recipient_email;
+      if (!to) throw new Error("gift has no delivery email");
+      const giftCardUrl = `${siteOrigin(request)}/gift-card/${data.sizing_token}`;
+      await sendPlainText(
+        selfDeliver
+          ? {
+              to,
+              subject: buildGiftSelfDeliverSubject({
+                purchaserFirstName: data.purchaser_first_name,
+                recipientFirstName: data.recipient_first_name,
+                seasonsTotal: data.seasons_total ?? 1,
+                sizingUrl,
+                giftCardUrl,
+              }),
+              text: buildGiftSelfDeliverText({
+                purchaserFirstName: data.purchaser_first_name,
+                recipientFirstName: data.recipient_first_name,
+                seasonsTotal: data.seasons_total ?? 1,
+                sizingUrl,
+                giftCardUrl,
+              }),
+              idempotencyKey: `gift-recipient:${id}`,
+              sendClass: "transactional",
+              category: "gift_self_deliver_card",
+              tags: [
+                { name: "category", value: "gift_self_deliver_card" },
+                { name: "gift_order_id", value: id },
+              ],
+            }
+          : {
+              to,
+              subject: buildGiftRecipientSubject({
+                purchaserFirstName: data.purchaser_first_name,
+                seasonsTotal: data.gift_kind === "season" ? data.seasons_total : null,
+              }),
+              text: buildGiftRecipientText({
+                recipientFirstName: data.recipient_first_name,
+                purchaserFirstName: data.purchaser_first_name,
+                purchaserEmail: data.purchaser_email,
+                giftMessage: data.gift_message,
+                sizingUrl,
+                seasonsTotal: data.gift_kind === "season" ? data.seasons_total : null,
+              }),
+              idempotencyKey: `gift-recipient:${id}`,
+              sendClass: "transactional",
+              category: "gift_recipient_announcement",
+              tags: [
+                { name: "category", value: "gift_recipient_announcement" },
+                { name: "gift_order_id", value: id },
+              ],
+            }
+      );
 
       await updateGiftOrderStatus(
         id,
         "recipient_emailed",
         { recipient_emailed_at: Date.now() },
-        `recipient email sent to ${data.recipient_email}`
+        selfDeliver ? `gift card sent to purchaser ${to}` : `recipient email sent to ${to}`
       );
       if (data.gift_kind === "season") {
         const fresh = await getGiftOrderById(id);
         await Promise.allSettled([
           fresh ? mirrorGiftSeasonToSupabase(id, fresh) : Promise.resolve(),
-          captureGiftSeasonEvent("gift_season_recipient_notified", data.recipient_email, {
+          captureGiftSeasonEvent("gift_season_recipient_notified", to, {
             ...giftEventProps(id, data),
             scheduled: !!data.deliver_on,
+            self_deliver: selfDeliver,
           }),
         ]);
       }
-      results.push({ id, recipient: data.recipient_email, ok: true });
+      results.push({ id, recipient: to, ok: true });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error("[gifts/scheduled-send] failed for", id, msg);

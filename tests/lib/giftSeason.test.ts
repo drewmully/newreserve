@@ -19,6 +19,7 @@ import {
   boxDueOn,
   formatUsd,
   perSeasonPrice,
+  seasonSavings,
   withLivePrices,
   giftSeasonChildTags,
   giftSeasonParentTags,
@@ -39,7 +40,14 @@ import {
   buildGiftContinueText,
   buildGiftRecipientSubject,
   buildGiftRecipientText,
+  buildGiftSelfDeliverSubject,
+  buildGiftSelfDeliverText,
 } from "@/lib/email/templates/giftRecipient";
+import {
+  GIFT_SEASON_SHOW_FREE_SHIPPING_EXCHANGES,
+  giftSeasonTimingLine,
+  pendingGiftSeasonPlaceholders,
+} from "@/lib/gifts/giftSeasonConfig";
 
 const DAY = 24 * 60 * 60 * 1000;
 const SHIP1 = Date.UTC(2026, 11, 1, 15, 0); // 2026-12-01
@@ -150,6 +158,42 @@ describe("continue offer", () => {
   });
 });
 
+describe("CRO card math (from variant prices)", () => {
+  const single = GIFT_SEASON_OPTIONS.find((o) => o.seasons === 1)!.price;
+  it("per-season price on every card: $299 / $275 / $250", () => {
+    expect(GIFT_SEASON_OPTIONS.map((o) => formatUsd(perSeasonPrice(o.price, o.seasons)))).toEqual([
+      "$299",
+      "$275",
+      "$250",
+    ]);
+  });
+  it("savings vs 1-season price: none / $48 / $196", () => {
+    expect(GIFT_SEASON_OPTIONS.map((o) => seasonSavings(o.price, o.seasons, single))).toEqual([0, 48, 196]);
+  });
+  it("follows live prices instead of hard-coded numbers", () => {
+    const live = withLivePrices(GIFT_SEASON_OPTIONS, {
+      [GIFT_SEASON_OPTIONS[0].variantId]: 300,
+      [GIFT_SEASON_OPTIONS[2].variantId]: 1000,
+    });
+    expect(seasonSavings(live[2].price, 4, live[0].price)).toBe(200);
+  });
+});
+
+describe("launch config placeholders", () => {
+  it("timing line has visible placeholders until Drew confirms", () => {
+    expect(giftSeasonTimingLine()).toBe(
+      "Order by [cutoff date TBD] and we email their gift reveal on the date you choose. Their first Reserve ships [ship window TBD] after they confirm sizing."
+    );
+    expect(giftSeasonTimingLine("December 15", "5 to 7 business days")).toMatch(
+      /^Order by December 15 and .* ships 5 to 7 business days after they confirm sizing\.$/
+    );
+  });
+  it("free shipping / exchanges claim is off by default", () => {
+    expect(GIFT_SEASON_SHOW_FREE_SHIPPING_EXCHANGES).toBe(false);
+    expect(pendingGiftSeasonPlaceholders()).toHaveLength(3);
+  });
+});
+
 describe("checkout", () => {
   const base: GiftSeasonCheckoutInput = {
     seasons: 4,
@@ -182,6 +226,16 @@ describe("checkout", () => {
     });
     const sendNow = buildGiftSeasonCart({ ...base, deliverOn: "" });
     expect(sendNow.attributes.find((a) => a.key === "gift_deliver_on")).toBeUndefined();
+    expect(attrs).not.toHaveProperty("gift_self_deliver");
+  });
+  it("self-give: recipient email optional, flagged on the cart", () => {
+    const self = { ...base, recipientEmail: "", selfDeliver: true };
+    expect(validateGiftSeasonInput(self, "2026-11-11")).toBeNull();
+    expect(validateGiftSeasonInput({ ...self, recipientEmail: "nope" }, "2026-11-11")).toMatch(/email/);
+    expect(validateGiftSeasonInput({ ...base, recipientEmail: "" }, "2026-11-11")).toMatch(/email/);
+    const attrs = Object.fromEntries(buildGiftSeasonCart(self).attributes.map((a) => [a.key, a.value]));
+    expect(attrs.gift_self_deliver).toBe("true");
+    expect(attrs).not.toHaveProperty("gift_recipient_email");
   });
 });
 
@@ -189,7 +243,12 @@ describe("customer copy rules", () => {
   const texts = [1, 2, 4].flatMap((n) => {
     const args = { recipientFirstName: "Sam", purchaserFirstName: "Alex", purchaserEmail: "a@x.com", giftMessage: "Enjoy", sizingUrl: "https://mymully.com/gift-sizing/t", seasonsTotal: n };
     const c = { recipientFirstName: "Sam", purchaserFirstName: "Alex", seasonsTotal: n, continueUrl: "https://mymully.com/gift-continue/t" };
-    return [buildGiftRecipientSubject(args), buildGiftRecipientText(args), buildGiftContinueSubject(c), buildGiftContinueText(c)];
+    const sd = { purchaserFirstName: "Alex", recipientFirstName: "Sam", seasonsTotal: n, sizingUrl: "https://mymully.com/gift-sizing/t", giftCardUrl: "https://mymully.com/gift-card/t" };
+    return [
+      buildGiftRecipientSubject(args), buildGiftRecipientText(args),
+      buildGiftContinueSubject(c), buildGiftContinueText(c),
+      buildGiftSelfDeliverSubject(sd), buildGiftSelfDeliverText(sd),
+    ];
   });
   it("has no em dashes, en dashes or double dashes", () => {
     for (const t of texts) expect(t).not.toMatch(/\u2014|\u2013|--/);
@@ -207,5 +266,17 @@ describe("customer copy rules", () => {
     const four = buildGiftRecipientText({ recipientFirstName: "Sam", purchaserFirstName: "Alex", purchaserEmail: "a@x.com", giftMessage: null, sizingUrl: "u", seasonsTotal: 4 });
     expect(four).toMatch(/4 seasons/);
     expect(four).toMatch(/Nothing renews/);
+  });
+  it("makes no unverified value or free shipping claims", () => {
+    for (const t of texts) {
+      expect(t).not.toMatch(/\$300/);
+      expect(t).not.toMatch(/free shipping|exchanges are free|Shipping and exchanges/i);
+    }
+  });
+  it("self-give email goes with the card and sizing links", () => {
+    const t = buildGiftSelfDeliverText({ purchaserFirstName: "Alex", recipientFirstName: "Sam", seasonsTotal: 2, sizingUrl: "S", giftCardUrl: "C" });
+    expect(t).toMatch(/2 seasons/);
+    expect(t).toContain("C");
+    expect(t).toContain("S");
   });
 });

@@ -98,6 +98,12 @@ export interface GiftOrderDoc {
   /** Recipient started a paid Reserve membership after the gift. */
   converted_at?: number | null;
   converted_order_id?: string | null;
+  /**
+   * "I'll give it myself": the reveal and printable gift card go to the
+   * purchaser. recipient_email may be "" until the recipient adds it on
+   * the sizing page.
+   */
+  self_deliver?: boolean;
 }
 
 export function createSizingToken(): string {

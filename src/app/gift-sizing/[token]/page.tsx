@@ -45,6 +45,7 @@ export default async function GiftSizingPage({ params }: PageProps) {
       alreadySubmitted={alreadySubmitted}
       existingSizing={data.sizing}
       seasonsTotal={data.gift_kind === "season" ? data.seasons_total ?? null : null}
+      askRecipientEmail={data.gift_kind === "season" && !!data.self_deliver && !data.recipient_email}
     />
   );
 }

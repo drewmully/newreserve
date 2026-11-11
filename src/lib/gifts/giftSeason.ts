@@ -91,6 +91,20 @@ export function perSeasonPrice(price: number, seasons: number): number {
   return Math.round((price / seasons) * 100) / 100;
 }
 
+/**
+ * Savings vs buying the 1-season gift N times, derived from variant prices
+ * (never hard-coded). 0 for the 1-season option or when there is no saving.
+ */
+export function seasonSavings(
+  price: number,
+  seasons: number,
+  singleSeasonPrice: number
+): number {
+  if (seasons <= 1) return 0;
+  const saving = Math.round((singleSeasonPrice * seasons - price) * 100) / 100;
+  return saving > 0 ? saving : 0;
+}
+
 /** "$1,000" or "$274.50": whole dollars when there are no cents. */
 export function formatUsd(amount: number): string {
   const whole = Number.isInteger(amount);
@@ -153,6 +167,7 @@ export const GIFT_SEASON_ATTR = {
   child: "gift_season_child", // "true" on $0 box orders we create
   parentOrderId: "gift_season_parent_order_id",
   boxNumber: "gift_season_box_number",
+  selfDeliver: "gift_self_deliver", // "true" when the gifter hands it over
 } as const;
 
 /** Shopify order tags. Kept lowercase and stable for reporting. */

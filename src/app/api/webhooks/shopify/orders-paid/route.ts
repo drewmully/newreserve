@@ -405,6 +405,7 @@ async function persistGiftSeasonOrder(
   input: {
     seasons: number;
     recipientEmail: string | null;
+    selfDeliver?: boolean;
     purchaserEmail: string;
     shopifyCustomerId: string | null;
     value: number;
@@ -427,9 +428,14 @@ async function persistGiftSeasonOrder(
     sizing_token: createSizingToken(),
     total_price: input.value,
     currency: order.currency,
-    // No recipient email = nothing to send. Surface it to ops instead of
-    // silently dropping the gift.
-    status: recipientEmail ? ("pending_recipient_email" as const) : ("errored" as const),
+    // No recipient email = nothing to send, unless the gifter is handing it
+    // over themselves (the reveal goes to the purchaser). Surface it to ops
+    // instead of silently dropping the gift.
+    status:
+      recipientEmail || (input.selfDeliver && input.purchaserEmail)
+        ? ("pending_recipient_email" as const)
+        : ("errored" as const),
+    self_deliver: !!input.selfDeliver,
     gift_kind: "season" as const,
     seasons_total: input.seasons,
     box_orders: [
@@ -449,7 +455,7 @@ async function persistGiftSeasonOrder(
     next_box_due_on: null,
   };
   await createGiftOrderDoc(doc);
-  if (!recipientEmail) {
+  if (!recipientEmail && !(input.selfDeliver && input.purchaserEmail)) {
     await patchGiftOrder(id, { last_error: "gift season order has no recipient email" });
   }
   console.log(
@@ -471,6 +477,11 @@ async function persistGiftSeasonOrder(
       utm_source: readGiftAttribute(order.note_attributes, "utm_source"),
       utm_campaign: readGiftAttribute(order.note_attributes, "utm_campaign"),
       [GIFT_SEASON_ATTR.seasons]: input.seasons,
+      // Purchase event contract: seasons + value (order total) always present.
+      seasons: input.seasons,
+      value: input.value,
+      currency: order.currency ?? "USD",
+      self_deliver: !!input.selfDeliver,
     }),
   ]);
 }
@@ -722,6 +733,11 @@ export async function POST(request: NextRequest) {
       mully_anon_id: mullyAnonId,
       is_first_purchase: isFirstPurchase,
       purchase_type: purchaseType,
+      // Gift a Season: seasons + kind on the main purchase event so the
+      // funnel closes in PostHog / GA without a join. Null on other orders.
+      gift_kind: giftSeasons !== null ? "season" : orderIsGift ? "subscription" : null,
+      seasons: giftSeasons,
+      gift_self_deliver: giftSeasons !== null ? orderAttr(GIFT_SEASON_ATTR.selfDeliver) === "true" : null,
       sponsorship_ref: sponsorshipRef,
       channel,
       source_channel: sourceChannel,
@@ -1071,6 +1087,8 @@ export async function POST(request: NextRequest) {
         await persistGiftSeasonOrder(order, {
           seasons: giftSeasons,
           recipientEmail,
+          selfDeliver:
+            readGiftAttribute(order.note_attributes, GIFT_SEASON_ATTR.selfDeliver) === "true",
           purchaserEmail: email ?? "",
           shopifyCustomerId: shopifyCustomerId ?? null,
           value,

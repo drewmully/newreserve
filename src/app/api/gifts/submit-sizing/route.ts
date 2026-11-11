@@ -49,7 +49,7 @@ function sanitize(input: unknown): Record<string, string> {
 }
 
 export async function POST(request: NextRequest) {
-  let body: { token?: string; sizing?: unknown };
+  let body: { token?: string; sizing?: unknown; recipientEmail?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -77,6 +77,12 @@ export async function POST(request: NextRequest) {
   }
 
   const isSeason = found.data.gift_kind === "season";
+  const rawEmail =
+    typeof body.recipientEmail === "string" ? body.recipientEmail.trim().toLowerCase() : "";
+  const recipientEmail =
+    rawEmail && rawEmail.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail)
+      ? rawEmail
+      : "";
   // Season gifts that already shipped box 1 keep their lifecycle status;
   // a sizing update only refreshes the sizing on file for the next box.
   const keepStatus =
@@ -88,6 +94,11 @@ export async function POST(request: NextRequest) {
     {
       sizing,
       sizing_collected_at: found.data.sizing_collected_at ?? Date.now(),
+      // Self-delivered season gift: the recipient may add their own email
+      // here so the continue offer can reach them. Never overwrites.
+      ...(isSeason && found.data.self_deliver && !found.data.recipient_email && recipientEmail
+        ? { recipient_email: recipientEmail }
+        : {}),
     },
     keepStatus ? "recipient updated sizing" : "recipient submitted sizing"
   );

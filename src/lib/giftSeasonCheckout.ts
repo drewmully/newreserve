@@ -25,6 +25,11 @@ export interface GiftSeasonCheckoutInput {
   /** YYYY-MM-DD or "" for send now. */
   deliverOn: string;
   lpSource: string;
+  /**
+   * "I'll give it myself": the reveal and a printable gift card go to the
+   * gifter's checkout email instead, and the recipient email is optional.
+   */
+  selfDeliver?: boolean;
 }
 
 const MESSAGE_MAX = 500;
@@ -36,7 +41,10 @@ export function validateGiftSeasonInput(
   if (!getGiftSeasonOption(input.seasons)) return "Pick a gift length.";
   if (!input.recipientName.trim()) return "Add the recipient's first name.";
   const email = input.recipientEmail.trim();
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  if (input.selfDeliver) {
+    if (email && !emailOk) return "Check the recipient's email, or leave it blank.";
+  } else if (!email || !emailOk) {
     return "Add the recipient's email so we can send the gift.";
   }
   if (input.deliverOn) {
@@ -65,6 +73,7 @@ export function buildGiftSeasonCart(input: GiftSeasonCheckoutInput): {
     { key: "gift_recipient_email", value: input.recipientEmail.trim().toLowerCase() },
     { key: "gift_deliver_on", value: input.deliverOn },
     { key: "gift_message", value: input.message.trim().slice(0, MESSAGE_MAX) },
+    { key: GIFT_SEASON_ATTR.selfDeliver, value: input.selfDeliver ? "true" : "" },
   ];
   return {
     merchandiseId: `gid://shopify/ProductVariant/${option.variantId}`,

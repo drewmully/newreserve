@@ -53,7 +53,8 @@ function siteOrigin(request: NextRequest): string {
 
 type Result = {
   id: string;
-  action: "box_created" | "box_reused" | "offer_sent" | "offer_skipped" | "would_create_box" | "would_send_offer";
+  action: "box_created" | "box_reused" | "offer_sent" | "offer_skipped" | "would_create_box" | "would_send_offer"
+      | "offer_skipped_no_email";
   box_number?: number;
   order?: string;
   error?: string;
@@ -147,6 +148,11 @@ export async function GET(request: NextRequest) {
       try {
         const fresh = (await getGiftOrderById(id)) ?? data;
         if (fresh.continue_offer_sent_at || fresh.converted_at) continue;
+        if (!fresh.recipient_email) {
+          // Self-delivered gift where the recipient never added an email.
+          results.push({ id, action: "offer_skipped_no_email" });
+          continue;
+        }
         const continueUrl = `${siteOrigin(request)}/gift-continue/${fresh.sizing_token}?utm_source=gift_season&utm_medium=email&utm_campaign=continue_offer`;
         await sendPlainText({
           to: fresh.recipient_email,
