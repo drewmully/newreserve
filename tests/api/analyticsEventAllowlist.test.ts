@@ -18,7 +18,7 @@ const KNOWN_MISSING = new Set([
   "editorial_access_upsell_clicked", "editorial_access_upsell_dismissed", "editorial_add_to_cart",
   "editorial_card_click", "editorial_category_filter", "editorial_curated_shipments_click",
   "editorial_promoted_click", "editorial_read_more_toggle", "first_box_sized",
-  "first_order_shipping_revealed", "legacy_loop_login_provisioned", "lp_discover_closing_quiz_tapped",
+  "legacy_loop_login_provisioned", "lp_discover_closing_quiz_tapped",
   "magic_link_sent", "mully100_category_filter", "password_set", "profile_nudge_pick_plan_clicked",
   "proshop_back_in_stock_request", "shop_curated_shipments_click", "shop_outfit_reserve_clicked",
   "sponsorship_link_copied", "sponsorship_link_shared", "welcome_banner_dismissed",
@@ -39,6 +39,7 @@ describe("analytics event allowlist", () => {
     for (const e of [
       "complete_look_view", "complete_look_add", "cart_bogo_line_view", "cart_bogo_suggestion_add",
       "mully100_card_click", "bogo_nudge_viewed", "bogo_pick_opened", "bogo_pick_added",
+      "first_order_shipping_revealed", "newsletter_signup", "reserve_added_to_cart",
     ]) expect(allowlist.has(e), e).toBe(true);
   });
 

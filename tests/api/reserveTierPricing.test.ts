@@ -67,4 +67,13 @@ describe("reserve tier pricing", () => {
     await expect(getLiveReserveTierValues()).resolves.toBeNull();
     warn.mockRestore();
   });
+
+  it("falls back when Shopify is slower than the timeout", async () => {
+    vi.mocked(shopifyGraphQL).mockImplementationOnce(
+      () => new Promise((resolve) => setTimeout(() => resolve({ productVariant: { price: "250.00" } }), 200))
+    );
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await expect(getLiveReserveTierValues(20)).resolves.toBeNull();
+    warn.mockRestore();
+  });
 });

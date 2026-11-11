@@ -94,11 +94,22 @@ const cachedLiveTierValues = unstable_cache(readLiveTierValues, ["reserve-tier-v
   revalidate: 900,
 });
 
-export async function getLiveReserveTierValues(): Promise<ReserveTierValues | null> {
+/** Max wait for Shopify on a cache miss before the reveal page falls back. */
+export const LIVE_TIER_PRICE_TIMEOUT_MS = 800;
+
+export async function getLiveReserveTierValues(
+  timeoutMs = LIVE_TIER_PRICE_TIMEOUT_MS
+): Promise<ReserveTierValues | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
-    return await cachedLiveTierValues();
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`timed out after ${timeoutMs}ms`)), timeoutMs);
+    });
+    return await Promise.race([cachedLiveTierValues(), timeout]);
   } catch (err) {
     console.warn("[reserveTierPricing] live tier price unavailable; using fallback", err);
     return null;
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }

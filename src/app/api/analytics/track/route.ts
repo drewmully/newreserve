@@ -50,6 +50,7 @@ const VALID_EVENTS = new Set([
   "reveal_cta_clicked",
   "reserve_added_to_cart",
   "newsletter_signup",
+  "first_order_shipping_revealed",
   // Pro Shop funnel — for the dashboard shop tab + /shop/* public pages
   "proshop_view",
   "proshop_product_viewed",
