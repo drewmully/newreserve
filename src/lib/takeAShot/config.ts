@@ -59,14 +59,17 @@ export const CODE_RULES = {
   tags: [TAKE_A_SHOT_SOURCE],
   /**
    * Codes only apply to these collections. Shopify basic code discounts cannot
-   * exclude products directly, so exclusions are enforced by scoping to a
-   * merchandise collection that does not contain the products below.
+   * exclude products directly, and one DiscountCodeBasic holds either
+   * collections or products, never both (DiscountItems is a union). So every
+   * eligible product, Shop and Reserve alike, has to be in this collection.
    * "Shop — Full Price (Take a Shot)" (handle shop-full-price): a smart
    * collection, tag "shop" AND compare-at price not set. That keeps sale items
    * out. Verified Nov 11, 2026: 49 products, all 37 active shop products, none
    * of the excluded products below, no compare-at items.
-   * Empty array = every product (subscriptions are still excluded by
-   * appliesOnSubscription: false).
+   * Reserve first box (Drew, Nov 11): the collection also has to include
+   * RESERVE_FIRST_BOX_PRODUCT_IDS (done in Shopify, e.g. a second collection
+   * source on a dedicated tag). Until then codes simply do not apply there.
+   * Empty array = every product.
    */
   eligibleCollectionIds: ["gid://shopify/Collection/485574770880"] as string[],
   /**
@@ -75,17 +78,39 @@ export const CODE_RULES = {
    * collection. Found in the Shopify catalog Nov 11, 2026.
    */
   excludedProductIds: [
-    "gid://shopify/Product/8501257044160", // Mully Reserve | Seasonal Styling Subscription (reserve-member)
-    "gid://shopify/Product/10250499719360", // Mully Reserve | The Seasonal Edit
+    "gid://shopify/Product/10250499719360", // Mully Reserve | The Seasonal Edit (outfit builder; that checkout drops discount codes)
     "gid://shopify/Product/8652818940096", // Mully Reserve - Golf Curation Box (reserve-member-gift)
     "gid://shopify/Product/10327639392448", // Reserve Gift Season (gift subscription, draft)
     "gid://shopify/Product/8501257175232", // Mully Access — Annual Membership (reserve-access)
     "gid://shopify/Product/10268591096000", // Mully Access
   ] as string[],
-  /** Never discount Reserve/Access selling-plan purchases. */
-  appliesOnSubscription: false,
+  /**
+   * Reserve products a code may discount, first payment only. This is the
+   * product every live Reserve signup checkout sells (createMembershipCheckout
+   * "member": variant 47601025122496, Loop plan "Quarterly Reserve" 3241476288,
+   * $250). Same setup as FOUNDERS50: appliesOnSubscription true, cycle limit 1.
+   */
+  reserveFirstBoxProductIds: [
+    "gid://shopify/Product/8501257044160", // Mully Reserve | Seasonal Styling Subscription (reserve-member)
+  ] as string[],
+  /** Shop items are one-time purchases; the Reserve first box is a subscription. */
+  appliesOnOneTimePurchase: true,
+  appliesOnSubscription: true,
+  /** Subscription payments discounted: the first one only. Renewals bill at full price. */
+  recurringCycleLimit: 1,
   /** No stacking with anything (Drew, Nov 11), including shipping codes. */
   combinesWith: { orderDiscounts: false, productDiscounts: false, shippingDiscounts: false },
+} as const;
+
+/**
+ * Customer-facing code terms. Keep in step with CODE_RULES and with the
+ * Take a Shot Klaviyo emails. No em dashes.
+ */
+export const CODE_TERMS = {
+  /** Under the code on the result card. */
+  short: "Works on one-time Shop orders or your first Reserve box.",
+  /** Full terms line. */
+  full: "Works on one-time Shop orders or your first Reserve box, up to 30% off. Reserve renewals bill at full price. Excludes sale items, Mully Access and gift subscriptions. One use, expires 14 days after you play, and cannot be combined with other offers.",
 } as const;
 
 /** Admin API version for discount mutations (DiscountCodeBasicInput.context). */

@@ -1,6 +1,7 @@
 import { SHOPIFY_MEMBERSHIP_PLANS, SHOPIFY_OUTFIT_SUBSCRIPTION } from "./membershipConfig";
 import { firstBoxAttributes, firstBoxDisplayAttributes, assertFirstBoxCart, type FirstBoxItem } from "./shopFirstBoxCheckout";
 import { buildCheckoutOriginAttributes } from "./shopifyCheckoutOrigin";
+import { isGameRewardCode, readGameShopReward } from "./shopRewards";
 import { recordJourneyCart } from "./analytics/journeyClient";
 import { recordSourceSessionCart } from "./analytics/journeySourceSessionClient";
 import {
@@ -90,6 +91,18 @@ export interface CreateMembershipCheckoutOptions {
   subscriptionLineAttributes?: Array<{ key: string; value: string }>;
   /** First-box order instructions only. Reserve remains the only cart line. */
   firstBoxItems?: FirstBoxItem[];
+}
+
+/**
+ * Codes for a Reserve signup cart. Codes never stack, so an explicit code
+ * (FOUNDERS50, a reveal tier code, the Founding 100 gift) wins. Otherwise a
+ * saved Take a Shot code (SHOT prefix) is applied to the first box; static
+ * shop rewards such as MULLYEDIT10 are never sent to Reserve checkout.
+ */
+export function membershipDiscountCodes(explicit: string[], savedGameCode: string | null): string[] {
+  if (explicit.length) return explicit;
+  const code = savedGameCode?.trim().toUpperCase() ?? "";
+  return isGameRewardCode(code) ? [code] : [];
 }
 
 export async function createMembershipCheckout(
@@ -215,9 +228,12 @@ export async function createMembershipCheckout(
     ...(options.discountCodes ?? []),
     ...(foundingGift.attach ? [FOUNDING_100_DISCOUNT_CODE] : []),
   ];
-  const discountCodes = combinedDiscountCodes
+  const explicitCodes = combinedDiscountCodes
     .map((code) => code.trim())
     .filter(Boolean);
+  const discountCodes = options.firstBoxItems
+    ? explicitCodes
+    : membershipDiscountCodes(explicitCodes, readGameShopReward()?.code ?? null);
 
   const requestPayload = {
     lines,
