@@ -15,6 +15,10 @@
  *   - Gender, Glove Hand, Glove Size,
  *     Hat Size, anything else useful   -> serialized into sourcing_notes
  *
+ * Gift a Season orders are skipped entirely (RES-GIFT-* SKU, _gift_season_box
+ * line property, or gift-season tags): the customer is the buyer but the
+ * sizes are the recipient's. See src/lib/gifts/giftSizeHistory.ts.
+ *
  * Idempotent: upsert by customer_id; overlay-merges with existing facts row,
  * never clobbers a non-null sizing field with null.
  *
@@ -23,6 +27,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseService, withJobRun } from "@/app/api/_lib/supabaseService";
+import { isGiftSeasonLine, hasGiftSeasonTag } from "@/lib/gifts/giftSizeHistory";
 
 export const runtime = "nodejs";
 export const maxDuration = 800;
@@ -37,6 +42,7 @@ type Props = Record<string, string | null> | null;
 
 interface LineRow {
   order_id: number;
+  sku: string | null;
   properties: Props;
 }
 
@@ -44,6 +50,7 @@ interface OrderEmailRow {
   id: number;
   email: string | null;
   created_at: string | null;
+  tags: string | null;
 }
 
 interface CustomerRow {
@@ -161,7 +168,7 @@ export async function GET(req: NextRequest) {
     while (true) {
       const { data, error } = await sb
         .from("order_line_items")
-        .select("order_id,properties")
+        .select("order_id,sku,properties")
         .not("properties", "is", null)
         .order("id", { ascending: true })
         .range(from, from + PAGE - 1);
@@ -186,12 +193,36 @@ export async function GET(req: NextRequest) {
         const slice = orderIds.slice(i, i + CHUNK);
         const { data, error } = await sb
           .from("orders")
-          .select("id,email,created_at")
+          .select("id,email,created_at,tags")
           .in("id", slice);
         if (error) throw new Error(`orders fetch: ${error.message}`);
         for (const r of data || []) orderMap.set(Number(r.id), r as OrderEmailRow);
       }
     }
+
+    // 2b) Drop Gift a Season orders (recipient sizes on the buyer's order).
+    //     The SKU check sees every line of the order, including lines with
+    //     no properties, so query those orders' SKUs too.
+    const giftOrderIds = new Set<number>();
+    for (const li of lineItems) if (isGiftSeasonLine(li)) giftOrderIds.add(li.order_id);
+    for (const o of orderMap.values()) if (hasGiftSeasonTag(o.tags)) giftOrderIds.add(Number(o.id));
+    {
+      const CHUNK = 1000;
+      for (let i = 0; i < orderIds.length; i += CHUNK) {
+        const slice = orderIds.slice(i, i + CHUNK);
+        const { data, error } = await sb
+          .from("order_line_items")
+          .select("order_id")
+          .in("order_id", slice)
+          .ilike("sku", "RES-GIFT-%");
+        if (error) throw new Error(`gift sku check: ${error.message}`);
+        for (const r of data || []) giftOrderIds.add(Number(r.order_id));
+      }
+    }
+    if (giftOrderIds.size > 0) {
+      for (const id of giftOrderIds) orderMap.delete(id);
+    }
+    setMeta({ gift_season_orders_skipped: giftOrderIds.size });
 
     // 3) Bulk pull customers.id by lowercased email.
     const emails = Array.from(
