@@ -97,7 +97,7 @@ export function GiftCardClient({ options, productId }: { options: GiftCardOption
         <p className="gc-kicker">Delivered by email</p>
         <h1 className="gc-h1">Mully Gift Card</h1>
         <p className="gc-lead">
-          Most gift cards arrive by email within minutes. Good for any piece in the Mully shop, so he picks the piece and the size.
+          Most gift cards arrive by email within minutes. Good for any piece in the Mully shop, so he picks the style and the size.
         </p>
 
         {options.length === 0 ? (
