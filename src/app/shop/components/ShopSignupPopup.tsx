@@ -7,7 +7,6 @@ import { SHOP_INTERESTS, EMAIL_CONSENT, SMS_CONSENT } from "@/lib/shopSignup";
 import { MullyWordmark } from "./MullyWordmark";
 import { saveShopReward, type ShopReward } from "@/lib/shopRewards";
 import { markSignedUp } from "@/lib/takeAShot/popupRules";
-import { trackEmailSubmitted } from "@/lib/takeAShot/popupTracking";
 import "./shop-signup.css";
 
 const STORAGE = "mully_shop_signup_v1";
@@ -159,7 +158,7 @@ export function ShopSignupPopup({ onTrigger }: { onTrigger?: () => void } = {}) 
           : "We couldn’t save that just now. Please try again.");
       }
       remember(365);
-      if (step === "email") { markSignedUp("shop-popup"); trackEmailSubmitted("shop-popup", { interest }); }
+      if (step === "email") markSignedUp("shop-popup");
       if (result.reward) { setReward(result.reward); saveShopReward(result.reward); }
       if (step === "email") {
         void trackEvent("newsletter_signup", {

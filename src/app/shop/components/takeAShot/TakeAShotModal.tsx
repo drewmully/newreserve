@@ -12,7 +12,7 @@ import { saveShopReward } from "@/lib/shopRewards";
 import { getClientAnonymousId } from "@/lib/tracking";
 import { KEYS, markSignedUp, writeValue, type TriggerType } from "@/lib/takeAShot/popupRules";
 import { fetchReserveQuarterPrice, renewalLine } from "@/lib/takeAShot/reservePrice";
-import { popupContext, trackEmailSubmitted, trackPopup } from "@/lib/takeAShot/popupTracking";
+import { trackPopup } from "@/lib/takeAShot/popupTracking";
 import { CODE_TERMS, FLOOR_PERCENT, RING_TIERS, SHOTS } from "@/lib/takeAShot/config";
 import { MullyWordmark } from "../MullyWordmark";
 import { SIGNUP_DISMISS_KEY } from "../ShopSignupPopup";
@@ -295,7 +295,6 @@ export function TakeAShotModal({ openSignal, trigger = "manual", onClosed }: { o
       setPlayed(true);
       remember(365);
       markSignedUp("take-a-shot");
-      trackEmailSubmitted("take-a-shot", popupContext(ctx.current.trigger, "session"));
       pendingGame.current = { game, session: r.session, withPhone };
       setStep("game");
     } catch (e) {

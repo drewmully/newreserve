@@ -26,11 +26,3 @@ export function popupContext(trigger: TriggerType | null = null, step: string | 
 export function trackPopup(name: string, trigger: TriggerType | null, step: string | null, extra: Record<string, unknown> = {}) {
   void trackEvent(name, { properties: { source: POPUP_VARIANT, ...popupContext(trigger, step), ...extra } }, { includeAuth: false });
 }
-
-/**
- * Site-wide signup funnel: one email_submitted per form, tagged with its
- * source, so PostHog shows where emails enter. Never carries the email.
- */
-export function trackEmailSubmitted(source: string, extra: Record<string, unknown> = {}) {
-  void trackEvent("email_submitted", { properties: { source, ...extra } }, { includeAuth: false });
-}

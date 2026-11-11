@@ -30,7 +30,8 @@ describe("preference-first signup",()=>{
     expect(screen.getByText("MULLYEDIT10")).toBeVisible();
     expect(localStorage.getItem("mully_shop_reward_v1")).toBe("MULLYEDIT10");
     expect(fetch).toHaveBeenCalledTimes(1);
-    expect(trackEvent).toHaveBeenCalledWith("email_submitted",{properties:{source:"shop-popup",interest:"tops"}},{includeAuth:false});
+    // newsletter_signup is the one Meta Lead for this form (#379); no second email_submitted.
+    expect(vi.mocked(trackEvent).mock.calls.filter((c)=>c[0]==="email_submitted")).toHaveLength(0);
     expect(localStorage.getItem("mully_signed_up_v1")).toContain("shop-popup");
   });
   it("does not open over a cart or password curtain",()=>{
