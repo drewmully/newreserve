@@ -157,6 +157,59 @@ function leadInputs(id: string, d: Data, opts: BuildOptions): StageInputs {
   return out;
 }
 
+/**
+ * take_a_shot_leads: Take a Shot players. Nothing is sent until the player's
+ * Shopify code is active, so the signup event always carries a real code.
+ * A later upgrade (better shot) re-sends the stages: the event is deduped by
+ * unique_id, the profile properties move to the new code.
+ */
+function takeAShotInputs(id: string, d: Data): StageInputs {
+  const out: StageInputs = {};
+  const email = typeof d.email === "string" ? d.email : "";
+  const reward = (d.reward as Data | undefined) ?? {};
+  if (!email || reward.status !== "active" || typeof reward.code !== "string") return out;
+  const emailConsent = d.emailConsent as Data | undefined;
+  const smsConsent = d.smsConsent as Data | undefined;
+  const phone = normalizeSignupPhone(d.phone);
+  const shots = typeof d.shots === "number" ? d.shots : undefined;
+  const common = { source: "take-a-shot", docKey: id, email };
+  const properties = {
+    mully_reward_code: reward.code,
+    mully_reward_percent: reward.percent,
+    mully_reward_expires_at: reward.expiresAt,
+    mully_signup_game: true,
+  };
+  const rewardProps = {
+    reward_code: reward.code,
+    reward_percent: reward.percent,
+    reward_expires_at: reward.expiresAt,
+    shots,
+  };
+  if (emailConsent?.granted === true) {
+    out.email = {
+      ...common,
+      stage: "email",
+      capturedAt: toDate(emailConsent.capturedAt),
+      properties: { ...properties, mully_email_consent_captured: true },
+      eventProperties: { ...rewardProps, email_consent: true, sms_consent: false },
+      subscribe: { email: true },
+    };
+  }
+  if (phone && smsConsent?.granted === true) {
+    out.sms = {
+      ...common,
+      stage: "sms",
+      phone,
+      capturedAt: toDate(smsConsent.capturedAt),
+      properties: { ...properties, mully_sms_consent_captured: true },
+      eventProperties: { ...rewardProps, email_consent: false, sms_consent: true },
+      // Never re-send the email subscription on the SMS stage.
+      subscribe: { sms: SUBSCRIBE_POPUP_SMS },
+    };
+  }
+  return out;
+}
+
 function dropListInputs(id: string, d: Data, opts: BuildOptions): StageInputs {
   const out: StageInputs = {};
   const email = typeof d.email === "string" ? d.email : "";
@@ -298,6 +351,8 @@ export function buildStageInputs(
       return jobInputs(id, data);
     case "meta_offer_leads":
       return metaOfferInputs(id, data, opts);
+    case "take_a_shot_leads":
+      return takeAShotInputs(id, data);
   }
 }
 

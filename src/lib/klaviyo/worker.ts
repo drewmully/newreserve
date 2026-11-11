@@ -113,5 +113,6 @@ function sourceOf(collection: SyncCollection, d: Record<string, unknown>): strin
   if (collection === "shop_marketing_leads") return shopSignupSource(d.source);
   if (collection === "back_in_stock_requests") return "back-in-stock";
   if (collection === "meta_offer_leads") return "meta-email-offer";
+  if (collection === "take_a_shot_leads") return "take-a-shot";
   return typeof d.source === "string" ? d.source : "unknown";
 }

@@ -11,6 +11,10 @@
  * Facebook & Instagram app) into meta_offer_leads; see lib/klaviyo/metaOffers.
  * A failure there never blocks the drain.
  *
+ * When Take a Shot is on, it also retries pending game codes in Shopify,
+ * claims abandoned games and deletes replaced codes (lib/takeAShot), so
+ * activated codes are drained in the same run. Also never blocks the drain.
+ *
  * Auth: Bearer CRON_SECRET. Exits early when KLAVIYO_SYNC_ENABLED !== "true".
  * Returns counts only.
  */
@@ -19,6 +23,8 @@ import { NextResponse } from "next/server";
 import { isKlaviyoSyncEnabled } from "@/lib/klaviyo/config";
 import { drainSyncQueue, isCronAuthorized } from "@/lib/klaviyo/worker";
 import { collectMetaOfferSignups, type CollectSummary } from "@/lib/klaviyo/metaOffers";
+import { isTakeAShotServerEnabled } from "@/lib/takeAShot/config";
+import { takeAShotService } from "@/lib/takeAShot/firestoreStore";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,9 +41,20 @@ export async function GET(req: Request) {
     console.error("[klaviyo-signup-sync] meta offer collection failed", detail);
     metaOffers = { error: "meta_offers_failed" };
   }
+  let takeAShot: Record<string, number> | { error: string } | null = null;
+  const tasStarted = Date.now();
+  if (isTakeAShotServerEnabled()) {
+    try {
+      takeAShot = await takeAShotService().maintain({ deadlineMs: tasStarted + 15_000 });
+    } catch {
+      console.error("[klaviyo-signup-sync] take a shot maintenance failed");
+      takeAShot = { error: "take_a_shot_failed" };
+    }
+  }
   try {
-    const summary = await drainSyncQueue({ deadlineMs: Date.now() + 50_000 });
-    return NextResponse.json({ ok: true, metaOffers, ...summary });
+    const drainMs = Math.max(20_000, 50_000 - (Date.now() - tasStarted));
+    const summary = await drainSyncQueue({ deadlineMs: Date.now() + drainMs });
+    return NextResponse.json({ ok: true, metaOffers, takeAShot, ...summary });
   } catch {
     console.error("[klaviyo-signup-sync] drain failed");
     return NextResponse.json({ ok: false, error: "drain_failed" }, { status: 500 });
