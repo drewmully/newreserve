@@ -77,8 +77,17 @@ export function middleware(request: NextRequest) {
     }
   }
 
+  // /home is a retired alias of the homepage; redirect permanently so search
+  // engines consolidate it onto /.
+  if (normalized === "/home") {
+    const url = request.nextUrl.clone();
+    url.pathname = "/";
+    url.searchParams.delete("tab");
+    return NextResponse.redirect(url, 308);
+  }
+
   // Keep old bookmarks functional, but retire the dashboard entry points.
-  if (normalized === "/home" || normalized === "/dashboard") {
+  if (normalized === "/dashboard") {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     url.searchParams.delete("tab");
