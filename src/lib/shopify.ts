@@ -516,6 +516,23 @@ export async function getCollectionProducts(
   return (data.collection?.products.nodes ?? []).map(mapProduct);
 }
 
+/**
+ * Every product currently available for sale on the Storefront channel, one
+ * page of up to `first`. Used by the gift guide's stocking-stuffer page, which
+ * filters the live catalog instead of a curated list.
+ */
+export async function getAvailableProducts(first = 100): Promise<ShopifyProduct[]> {
+  const query = `
+    query AvailableProductsV1($first: Int!) {
+      products(first: $first, query: "available_for_sale:true") {
+        nodes { ${PRODUCT_FIELDS} }
+      }
+    }
+  `;
+  const data = await storefrontFetch<{ products: { nodes: RawProduct[] } }>(query, { first }, 60);
+  return (data.products?.nodes ?? []).map(mapProduct);
+}
+
 export async function getProductByHandle(
   handle: string
 ): Promise<ShopifyProduct | null> {

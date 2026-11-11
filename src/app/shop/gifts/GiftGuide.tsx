@@ -12,7 +12,7 @@ import { ShopProductCard } from "../components/ShopProductCard";
 import { RestockChristmasNote } from "./RestockChristmasNote";
 import { GiftReminderSignup } from "./GiftReminderSignup";
 import {
-  GIFT_GUIDE_TIERS,
+  GIFT_NAV_TIERS,
   giftGuideFaqs,
   giftOrderByCopy,
   giftOrderByShort,
@@ -36,7 +36,7 @@ export function GiftTierNav({ active, placement }: { active?: GiftTierSlug | "hu
       <Link href="/shop/gifts" aria-current={active === "hub" ? "page" : undefined} data-gg-tier-link="hub" data-gg-placement={placement}>
         All gifts
       </Link>
-      {GIFT_GUIDE_TIERS.map((t) => (
+      {GIFT_NAV_TIERS.map((t) => (
         <Link
           key={t.slug}
           href={`/shop/gifts/${t.slug}`}

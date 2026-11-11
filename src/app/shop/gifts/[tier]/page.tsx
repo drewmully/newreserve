@@ -5,7 +5,7 @@ import { ShopPageShell } from "../../components/ShopPageShell";
 import { ScrollToTop } from "../../components/ScrollToTop";
 import { canonical, SITE_URL } from "@/lib/seo";
 import { serializeJsonLd } from "@/lib/safeJsonLd";
-import { GIFT_GUIDE_TIERS, GIFT_OUTFIT_CHINO, getGiftTier, loadGiftGuide } from "@/lib/giftGuide";
+import { GIFT_NAV_TIERS, GIFT_OUTFIT_CHINO, getGiftTier, loadGiftGuide, loadStockingStuffers } from "@/lib/giftGuide";
 import { GiftGuideTracker } from "../GiftGuideTracker";
 import { itemListJsonLd } from "../jsonLd";
 import {
@@ -29,7 +29,7 @@ interface Props {
 }
 
 export function generateStaticParams() {
-  return GIFT_GUIDE_TIERS.map((t) => ({ tier: t.slug }));
+  return GIFT_NAV_TIERS.map((t) => ({ tier: t.slug }));
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -51,7 +51,9 @@ export default async function GiftTierPage({ params }: Props) {
   const tier = getGiftTier(slug);
   if (!tier) notFound();
 
-  const { tiers, outfits } = await loadGiftGuide();
+  // Stocking stuffers is the live accessories catalog, not a curated price band.
+  const stocking = tier.slug === "stocking-stuffers";
+  const { tiers, outfits } = stocking ? { tiers: [await loadStockingStuffers()], outfits: [] } : await loadGiftGuide();
   const data = tiers.find((t) => t.tier.slug === tier.slug)!;
   const path = `/shop/gifts/${tier.slug}`;
   // Outfits sit on the tier of their anchor: the chino's ($100 to $150) or, when
