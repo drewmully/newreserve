@@ -3,12 +3,11 @@
 // so both sides compute the exact same shot from the same inputs.
 // World units are yards. Origin is the tee. +x is right, +y is toward the green.
 // Ported from the staged sim.js; only the discount table moved to ./config.
-import { HOLED_PERCENT, ON_GREEN_PERCENT, RING_TIERS } from "./config";
+import { HOLED_PERCENT, ON_GREEN_PERCENT, RING_COLORS, RING_TIERS } from "./config";
 
 export const SIM_VERSION = 1;
 
 
-const RING_COLORS = ["#E8B33F", "#E2677A", "#F2A65A", "#F4D86B", "#7FC8E8"];
 /** Distance to hole in feet -> % off. Inner first. Percentages come from ./config. */
 export const TIERS = RING_TIERS.map((t, i) => ({ ft: t.ft, pct: t.pct, color: RING_COLORS[i % RING_COLORS.length] }));
 export const ON_GREEN_PCT = ON_GREEN_PERCENT;
