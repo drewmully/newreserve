@@ -10,6 +10,7 @@ import Link from "next/link";
 import { Fragment } from "react";
 import { ShopProductCard } from "../components/ShopProductCard";
 import { RestockChristmasNote } from "./RestockChristmasNote";
+import { shopProductLabel, shopProductPhoto } from "@/lib/shopProductPhotos";
 import { GiftReminderSignup } from "./GiftReminderSignup";
 import {
   GIFT_GUIDE_TIERS,
@@ -146,11 +147,15 @@ export function GiftSeasonCard({ placement, tier, compact = false }: { placement
   );
 }
 
-/** Compact Gift a Season tile that sits in the product grid (mobile only, via CSS). */
-export function GiftSeasonTile({ placement, tier }: { placement: string; tier: string }) {
+/**
+ * Compact Gift a Season tile in the product grid. Default: full-width row
+ * after pick 4, mobile only. `slot`: one grid cell in the last row's empty
+ * slot, desktop only. Both render nothing while GIFT_SEASON_LIVE is false.
+ */
+export function GiftSeasonTile({ placement, tier, slot = false }: { placement: string; tier: string; slot?: boolean }) {
   if (!GIFT_SEASON_LIVE) return null;
   return (
-    <li className="gg-season-tile" aria-label="Gift a Season">
+    <li className={slot ? "gg-season-tile gg-season-tile--slot" : "gg-season-tile"} aria-label="Gift a Season">
       <p className="gg-kicker">The gift that keeps arriving</p>
       <p className="gg-season-tile__title">Gift a Season</p>
       <p className="gg-season-tile__copy">A stylist picks, he confirms his own sizes. One, two or four seasons.</p>
@@ -159,6 +164,83 @@ export function GiftSeasonTile({ placement, tier }: { placement: string; tier: s
       </Link>
     </li>
   );
+}
+
+/**
+ * Hub rail directly under the H1: four in-stock pieces, real Shopify
+ * packshots, live from the catalog. No price here (members see their own
+ * price on the cards below). The first two images are the LCP candidates.
+ */
+export function GiftHeroRail({ picks }: { picks: GiftPick[] }) {
+  if (picks.length < 4) return null;
+  return (
+    <ol className="gg-rail" aria-label="Top gifts in stock now">
+      {picks.map((p, i) => {
+        const { product } = p;
+        const href = product.preferredVariantId
+          ? `/shop/${product.slug}?variant=${encodeURIComponent(product.preferredVariantId)}`
+          : `/shop/${product.slug}`;
+        return (
+          <li
+            key={product.slug}
+            className="gg-rail__item"
+            data-gg-product={product.slug}
+            data-gg-product-id={product.id}
+            data-gg-price={product.price || undefined}
+            data-gg-brand={product.brand}
+            data-gg-tier="hub"
+            data-gg-position={i + 1}
+            data-gg-placement="hub-hero-rail"
+          >
+            <Link href={href}>
+              <span className="gg-rail__img">
+                <Image
+                  src={shopProductPhoto(product)}
+                  alt={shopProductLabel(product)}
+                  fill
+                  priority={i < 2}
+                  sizes="(max-width: 640px) 40vw, (max-width: 1280px) 22vw, 280px"
+                  className="object-contain"
+                />
+              </span>
+              <span className="gg-rail__brand">{product.brand}</span>
+              <span className="gg-rail__name">{shopProductLabel(product)}</span>
+            </Link>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/** One link tile that fills the last slot of a grid one short of a full row. */
+export function GiftFillTile({ href, kicker, label, tierLink, placement, mobileOnly = false }: { href: string; kicker: string; label: string; tierLink: string; placement: string; mobileOnly?: boolean }) {
+  return (
+    <li className={mobileOnly ? "gg-fill gg-fill--mobile" : "gg-fill"}>
+      <Link href={href} data-gg-tier-link={tierLink} data-gg-placement={placement}>
+        <span className="gg-kicker">{kicker}</span>
+        <span className="gg-fill__label">{label}</span>
+        <span aria-hidden="true" className="gg-fill__arrow">→</span>
+      </Link>
+    </li>
+  );
+}
+
+/**
+ * What fills a grid's empty last slot. On the Gift a Season tier, once it is
+ * live, the Season tile takes the slot on desktop (mobile already has the
+ * tile after pick 4, so the link tile stays there).
+ */
+export function GiftGridFill({ season, ...link }: Omit<Parameters<typeof GiftFillTile>[0], "mobileOnly"> & { season?: { placement: string; tier: string } }) {
+  if (season && GIFT_SEASON_LIVE) {
+    return (
+      <>
+        <GiftSeasonTile {...season} slot />
+        <GiftFillTile {...link} mobileOnly />
+      </>
+    );
+  }
+  return <GiftFillTile {...link} />;
 }
 
 function PickCard({ pick, tier, position, placement }: { pick: GiftPick; tier: string; position: number; placement: string }) {
@@ -192,6 +274,7 @@ export function GiftTierSection({
   aside,
   tile,
   tileAfter = 4,
+  fill,
 }: {
   data: GiftTierData;
   as?: "h1" | "h2";
@@ -201,6 +284,8 @@ export function GiftTierSection({
   /** Grid tile inserted after pick `tileAfter`. When set, `aside` hides on mobile. */
   tile?: React.ReactNode;
   tileAfter?: number;
+  /** Last grid slot when the picks are one short of a full row (see fitToRows). */
+  fill?: React.ReactNode;
 }) {
   const { tier, picks } = data;
   const Heading = as;
@@ -229,6 +314,7 @@ export function GiftTierSection({
             const card = <PickCard key={p.product.slug} pick={p} tier={tier.slug} position={i + 1} placement={placement} />;
             return tile && i + 1 === Math.min(tileAfter, picks.length) ? [card, <Fragment key="gg-season-tile">{tile}</Fragment>] : [card];
           })}
+          {fill}
         </ol>
       )}
     </section>

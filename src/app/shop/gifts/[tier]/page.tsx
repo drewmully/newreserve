@@ -5,10 +5,11 @@ import { ShopPageShell } from "../../components/ShopPageShell";
 import { ScrollToTop } from "../../components/ScrollToTop";
 import { canonical, SITE_URL } from "@/lib/seo";
 import { serializeJsonLd } from "@/lib/safeJsonLd";
-import { GIFT_GUIDE_TIERS, GIFT_OUTFIT_CHINO, getGiftTier, loadGiftGuide } from "@/lib/giftGuide";
+import { GIFT_GUIDE_TIERS, GIFT_OUTFIT_CHINO, fitToRows, getGiftTier, loadGiftGuide } from "@/lib/giftGuide";
 import { GiftGuideTracker } from "../GiftGuideTracker";
 import { itemListJsonLd } from "../jsonLd";
 import {
+  GiftGridFill,
   GiftFaqs,
   GiftOrderByNote,
   GiftOutfits,
@@ -52,7 +53,11 @@ export default async function GiftTierPage({ params }: Props) {
   if (!tier) notFound();
 
   const { tiers, outfits } = await loadGiftGuide();
-  const data = tiers.find((t) => t.tier.slug === tier.slug)!;
+  const full = tiers.find((t) => t.tier.slug === tier.slug)!;
+  const fit = fitToRows(full.picks);
+  const data = { ...full, picks: fit.picks };
+  // The empty last slot links on to the next budget.
+  const next = GIFT_GUIDE_TIERS[(GIFT_GUIDE_TIERS.findIndex((t) => t.slug === tier.slug) + 1) % GIFT_GUIDE_TIERS.length];
   const path = `/shop/gifts/${tier.slug}`;
   // Outfits sit on the tier of their anchor: the chino's ($100 to $150) or, when
   // the vest-led looks take over, the vests' ($150 to $250).
@@ -79,6 +84,18 @@ export default async function GiftTierPage({ params }: Props) {
           placement="tier"
           aside={tier.slug === "150-to-250" ? <GiftSeasonCard placement="tier-hero" tier={tier.slug} /> : undefined}
           tile={tier.slug === "150-to-250" ? <GiftSeasonTile placement="tier-grid-tile" tier={tier.slug} /> : undefined}
+          fill={
+            fit.fill ? (
+              <GiftGridFill
+                href={`/shop/gifts/${next.slug}`}
+                kicker="Next budget"
+                label={`Gifts ${next.label.replace(/^Under/, "under")}`}
+                tierLink={next.slug}
+                placement="tier-grid-fill"
+                season={tier.slug === "150-to-250" ? { placement: "tier-grid-slot", tier: tier.slug } : undefined}
+              />
+            ) : undefined
+          }
         />
 
         {showOutfits && <GiftOutfits outfits={outfits} placement="tier-outfits" />}

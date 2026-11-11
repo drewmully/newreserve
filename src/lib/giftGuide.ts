@@ -120,7 +120,8 @@ export const GIFT_GUIDE_TIERS: GiftTier[] = [
       "rhone-voyage-down-vest",
       "olydoe-merino-ponte-quarter-zip",
       "quiet-golf-bristol-polo-sweater",
-      "stitch-player-puffer-jacket",
+      // stitch-player-puffer-jacket is out until Shopify has a flat packshot
+      // for it: every photo in its media is a model shot (CRO, 2026-11-11).
       "technically-golf-nio-half-zip",
       "sloat-organic-cotton-fleece-quarter-zip",
       "sloat-organic-cotton-fleece-crewneck",
@@ -285,6 +286,43 @@ export function giftGuideFaqs(): GiftFaq[] {
 export const HUB_MAX_RESTOCK_PER_TIER = 2;
 export function capForHub(picks: GiftPick[]): GiftPick[] {
   return [...picks.filter((p) => p.inStock), ...picks.filter((p) => !p.inStock).slice(0, HUB_MAX_RESTOCK_PER_TIER)];
+}
+
+/** Product grids are 4 across on desktop and 2 on mobile. */
+export const GRID_COLUMNS = 4;
+
+/**
+ * Keep a grid free of empty slots. Trailing Restocking picks are dropped
+ * until the count is a multiple of 4, or one short of it; in that case
+ * `fill` is true and the grid adds one link tile (or the Gift a Season tile
+ * when it is live). In-stock picks are never dropped.
+ */
+export function fitToRows(picks: GiftPick[]): { picks: GiftPick[]; fill: boolean } {
+  const out = [...picks];
+  while (out.length % GRID_COLUMNS !== 0 && out.length % GRID_COLUMNS !== GRID_COLUMNS - 1 && out.length && !out[out.length - 1].inStock) {
+    out.pop();
+  }
+  return { picks: out, fill: out.length % GRID_COLUMNS === GRID_COLUMNS - 1 };
+}
+
+/**
+ * Hub rail under the H1: four in-stock picks, live from Shopify. The first
+ * two hero-tier picks (the vests), then the first in-stock pick of the other
+ * tiers, topped up from whatever else is in stock.
+ */
+export function heroRail(tiers: GiftTierData[], size = 4): GiftPick[] {
+  const inStock = (t?: GiftTierData) => (t ? t.picks.filter((p) => p.inStock) : []);
+  const hero = inStock(tiers.find((t) => t.tier.slug === "150-to-250"));
+  const core = inStock(tiers.find((t) => t.tier.slug === "100-to-150"));
+  const small = inStock(tiers.find((t) => t.tier.slug === "under-100"));
+  const seen = new Set<string>();
+  const out: GiftPick[] = [];
+  for (const p of [hero[0], hero[1], core[0], small[0], ...hero, ...core, ...small]) {
+    if (!p || seen.has(p.product.slug) || out.length >= size) continue;
+    seen.add(p.product.slug);
+    out.push(p);
+  }
+  return out;
 }
 
 export interface GiftOutfitData {
