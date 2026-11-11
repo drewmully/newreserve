@@ -52,9 +52,15 @@ describe("Gift a Season pricing copy", () => {
     expect(hero).not.toMatch(/\$300|reserve-founders-hero|fall-fairway|fall-firepit/);
     expect(hero).toMatch(/cdn\.shopify\.com/);
     expect(hero).toMatch(/\/shop\/hero-fall-2026\.jpg/);
-    expect(hero).toMatch(/Secure Shopify checkout/);
-    expect(hero).toMatch(/Paid once, never renews/);
-    expect(hero).toMatch(/Stylist-picked/);
+    expect(hero).toMatch(/"Paid once\. Never renews\."/);
+    expect(hero).toMatch(/"They pick their own sizes"/);
+    expect(hero).toMatch(/"Secure Shopify checkout\."/);
+    expect(lp).toMatch(/Choose a gift length/);
+    expect(lp).toMatch(/ShopSeasonalHeader/);
+    expect(lp).not.toMatch(/GlassHeader/);
+    // Recipient form is step 2, after the picker.
+    expect(lp.indexOf('id="gift-picker"')).toBeLessThan(lp.indexOf('id="gift-details"'));
+    expect(lp.indexOf('id="gift-details"')).toBeLessThan(lp.indexOf('name="recipientName"'));
     expect(lp).toMatch(/Math\.min\(\.\.\.options\.map\(\(o\) => o\.price\)\)/);
     expect(lp).not.toMatch(/reserve-founders-hero/);
   });

@@ -1,10 +1,15 @@
 "use client";
 
 /**
- * Gift a Season hero, two options for Drew to compare (?hero=a|b).
+ * Gift a Season hero media and shared hero copy. Two options for Drew to
+ * compare on the preview (?hero=a|b). The page layout (split on desktop,
+ * stacked on mobile) lives in GiftSeasonLPClient so the picker can sit in
+ * the hero column.
  *
- * A: real Shopify product photography from a typical Reserve (June 2026
- *    plan pieces), 2x2 collage on a neutral ground.
+ * A: product flat lay built only from live Shopify product photography of
+ *    pieces from a typical Reserve (Quiet Golf polo, Rhone quarter zip,
+ *    Greyson hat, Will Leather belt), arranged on a bone ground. Nothing is
+ *    generated; white packshot backgrounds drop out with multiply.
  * B: the real Mully course photograph already used on /shop
  *    (public/shop/hero-fall-2026.jpg, documented as a real photo in
  *    public/shop-redesign/asset-manifest.md). No generated imagery.
@@ -12,198 +17,109 @@
  * Copy rules: no em dashes, "Reserve" never "box".
  */
 
-import Image from "next/image";
-
 export type GiftHeroVariant = "a" | "b";
 
 const CDN = "https://cdn.shopify.com/s/files/1/0561/0530/4256/files/";
 
-/** Live product images on cdn.shopify.com (Shopify product media). */
-const PRODUCT_TILES = [
+export const HERO_EYEBROW = "Gift a season";
+export const HERO_HEADLINE = "The gift that shows up every season.";
+export const HERO_LINE = "Stylist-picked golf apparel, in their sizes.";
+export const HERO_TRUST = [
+  "Paid once. Never renews.",
+  "They pick their own sizes",
+  "Secure Shopify checkout.",
+];
+
+/**
+ * Live product media on cdn.shopify.com. Positions are percentages of the
+ * hero frame so the same arrangement holds at every aspect ratio.
+ */
+const FLAT_LAY = [
   {
-    src: `${CDN}VintagePoloFORESTDetail.jpg?v=1775579861`,
-    alt: "Quiet Golf Vintage Polo in forest green, collar and placket detail",
-    position: "50% 30%",
+    // Rhone Rise 1/4 Zip, navy packshot (Shopify product media).
+    src: `${CDN}mully-fall-2026-24.jpg?v=1790962847&width=1000`,
+    alt: "Rhone Rise quarter zip in navy",
+    style: { left: "2%", top: "4%", width: "52%", transform: "rotate(-5deg)" },
   },
   {
-    src: `${CDN}rhone-layering-rhone-men-s-heritage-midweight-1-4-zip-1196079588.png?v=1775579880`,
-    alt: "Rhone Heritage Midweight Quarter Zip in heather gray",
-    position: "50% 20%",
+    // Quiet Golf Remy Polo, wine stripe packshot.
+    src: `${CDN}mully-fall-2026-16.jpg?v=1790962847&width=900`,
+    alt: "Quiet Golf Remy polo in wine stripe",
+    style: { right: "1%", top: "2%", width: "47%", transform: "rotate(4deg)" },
   },
   {
-    src: `${CDN}MG23A25_100_3_4860.webp?v=1781539301`,
-    alt: "Greyson Gothic G Dad Hat, embroidered logo detail",
-    position: "50% 50%",
+    // Greyson Gothic G Dad Hat, transparent packshot.
+    src: `${CDN}MG23A25_100_1_4858.webp?v=1781539302&width=700`,
+    alt: "Greyson Gothic G dad hat in white",
+    style: { left: "12%", bottom: "-6%", width: "33%", transform: "rotate(-9deg)" },
   },
   {
-    src: `${CDN}60397_BRAIDED_STRETCH_LEATHER_BELT_BROWN_03.jpg?v=1775486933`,
-    alt: "Will Leather Goods braided leather stretch belt in brown",
-    position: "40% 50%",
+    // Will Leather Goods Saddle Belt, tan packshot.
+    src: `${CDN}60078_SADDLE_BELT_TAN_001_61d8e0d1-3437-47b3-b85c-79c3836fbe2b.jpg?v=1789573017&width=900`,
+    alt: "Will Leather Goods saddle belt in tan",
+    style: { right: "6%", bottom: "4%", width: "44%", transform: "rotate(7deg)" },
   },
 ];
 
-const TRUST = ["Secure Shopify checkout", "Paid once, never renews", "Stylist-picked"];
-
-interface Props {
-  variant: GiftHeroVariant;
-  fromPrice: string;
-  onCta: () => void;
-}
-
-function TrustRow({ tone = "dark" }: { tone?: "dark" | "light" }) {
+export function HeroMedia({ variant, priority = false }: { variant: GiftHeroVariant; priority?: boolean }) {
+  if (variant === "b") {
+    return (
+      <div className="absolute inset-0 bg-[#5c6658]" data-testid="gift-hero-media-b">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/shop/hero-fall-2026.jpg"
+          alt="Early morning on a tree-lined fairway"
+          className="h-full w-full object-cover object-[50%_60%]"
+          fetchPriority={priority ? "high" : "auto"}
+          loading={priority ? "eager" : "lazy"}
+        />
+      </div>
+    );
+  }
   return (
-    <ul
-      className={`flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] tracking-wide ${
-        tone === "light" ? "text-bone/80" : "text-charcoal/60"
-      }`}
-      data-testid="gift-hero-trust"
+    <div
+      className="absolute inset-0 overflow-hidden bg-[#ECE5D6]"
+      style={{
+        backgroundImage:
+          "radial-gradient(120% 90% at 18% 12%, rgba(255,252,244,0.85) 0%, rgba(255,252,244,0) 55%), radial-gradient(90% 70% at 90% 100%, rgba(120,98,70,0.10) 0%, rgba(120,98,70,0) 60%)",
+      }}
+      data-testid="gift-hero-media-a"
+      role="img"
+      aria-label="Example pieces from a past Reserve: Rhone quarter zip, Quiet Golf polo, Greyson hat and Will Leather belt"
     >
-      {TRUST.map((t) => (
-        <li key={t} className="flex items-center gap-1.5 whitespace-nowrap">
-          <span aria-hidden="true" className={`inline-block w-1 h-1 rounded-full ${tone === "light" ? "bg-bone/60" : "bg-ember/70"}`} />
-          {t}
-        </li>
-      ))}
-    </ul>
-  );
-}
-
-function CtaBlock({ fromPrice, onCta, tone = "dark" }: { fromPrice: string; onCta: () => void; tone?: "dark" | "light" }) {
-  return (
-    <div className="flex items-center gap-4">
-      <a
-        href="#gift-picker"
-        onClick={(e) => {
-          e.preventDefault();
-          onCta();
-        }}
-        data-testid="gift-hero-cta"
-        className="inline-flex items-center justify-center bg-ember hover:bg-ember/90 text-bone px-6 py-3.5 rounded-md text-sm font-medium tracking-wide transition"
-      >
-        Choose their gift
-      </a>
-      <div className={tone === "light" ? "text-bone" : "text-charcoal"}>
-        <div className={`text-[10px] uppercase tracking-[0.2em] ${tone === "light" ? "text-bone/70" : "text-charcoal/55"}`}>
-          From
-        </div>
-        <div className={`font-serif text-2xl leading-none mt-0.5 ${tone === "light" ? "text-bone" : "text-forest"}`} data-testid="gift-hero-from">
-          {fromPrice}
-        </div>
+      <div className="absolute inset-[4%]">
+        {FLAT_LAY.map((p) => (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            key={p.src}
+            src={p.src}
+            alt=""
+            aria-hidden="true"
+            className="absolute h-auto mix-blend-multiply select-none"
+            style={p.style}
+            loading={priority ? "eager" : "lazy"}
+            draggable={false}
+          />
+        ))}
       </div>
     </div>
   );
 }
 
-const HEADLINE = "The gift that shows up every season.";
-const SUB = "Golf apparel hand-picked by a Mully stylist. They choose their sizes. You pay once.";
-
-export default function GiftSeasonHero({ variant, fromPrice, onCta }: Props) {
-  if (variant === "b") {
-    return (
-      <section className="relative" data-testid="gift-hero-b">
-        {/* Mobile: stacked. Desktop: text overlaid on the photo. */}
-        <div className="lg:hidden max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="text-[11px] tracking-[0.25em] uppercase text-ember/80">Gift a season</div>
-          <h1 className="font-serif text-[2rem] sm:text-4xl text-forest leading-[1.08] mt-2">{HEADLINE}</h1>
-          <p className="text-sm text-charcoal/75 mt-3 leading-relaxed">{SUB}</p>
-          <div className="relative w-full aspect-[16/9] rounded-lg overflow-hidden mt-4 bg-forest-dark">
-            <Image
-              src="/shop/hero-fall-2026.jpg"
-              alt="A tree-lined fairway and bunker in early morning light"
-              fill
-              priority
-              sizes="100vw"
-              className="object-cover"
-            />
-          </div>
-          <div className="mt-4">
-            <CtaBlock fromPrice={fromPrice} onCta={onCta} />
-          </div>
-          <div className="mt-3">
-            <TrustRow />
-          </div>
-        </div>
-
-        <div className="hidden lg:block max-w-6xl mx-auto px-6">
-          <div className="relative w-full h-[560px] rounded-lg overflow-hidden bg-forest-dark">
-            <Image
-              src="/shop/hero-fall-2026.jpg"
-              alt="A tree-lined fairway and bunker in early morning light"
-              fill
-              priority
-              sizes="(min-width: 1152px) 1152px, 100vw"
-              className="object-cover"
-              style={{ objectPosition: "60% 60%" }}
-            />
-            <div className="absolute inset-0 bg-gradient-to-r from-forest-dark/90 via-forest-dark/60 to-transparent" />
-            <div className="relative h-full flex flex-col justify-center max-w-[480px] pl-14">
-              <div className="text-[11px] tracking-[0.25em] uppercase text-bone/75">Gift a season</div>
-              <h1 className="font-serif text-5xl text-bone leading-[1.05] mt-3">{HEADLINE}</h1>
-              <p className="text-[15px] text-bone/85 mt-4 leading-relaxed">{SUB}</p>
-              <div className="mt-7">
-                <CtaBlock fromPrice={fromPrice} onCta={onCta} tone="light" />
-              </div>
-              <div className="mt-6">
-                <TrustRow tone="light" />
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-    );
-  }
-
+export function HeroTrustRow({ className = "" }: { className?: string }) {
   return (
-    <section className="max-w-6xl mx-auto px-4 sm:px-6" data-testid="gift-hero-a">
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-12 items-center">
-        <div className="order-1 lg:col-span-5">
-          <div className="text-[11px] tracking-[0.25em] uppercase text-ember/80">Gift a season</div>
-          <h1 className="font-serif text-[2rem] sm:text-4xl lg:text-5xl text-forest leading-[1.08] mt-2 lg:mt-3">
-            {HEADLINE}
-          </h1>
-          <p className="text-sm lg:text-[15px] text-charcoal/75 mt-3 lg:mt-4 leading-relaxed">{SUB}</p>
-          <div className="hidden lg:block mt-7">
-            <CtaBlock fromPrice={fromPrice} onCta={onCta} />
-          </div>
-          <div className="hidden lg:block mt-6">
-            <TrustRow />
-          </div>
-        </div>
-
-        <div className="order-2 lg:col-span-7">
-          <div className="bg-bone-dark/50 rounded-lg p-2 sm:p-3">
-            <div className="grid grid-cols-4 lg:grid-cols-2 gap-2 sm:gap-3">
-              {PRODUCT_TILES.map((t, i) => (
-                <div
-                  key={t.src}
-                  className={`relative aspect-square rounded-md overflow-hidden bg-white ${
-                    i % 2 === 1 ? "lg:translate-y-6" : ""
-                  }`}
-                >
-                  <Image
-                    src={t.src}
-                    alt={t.alt}
-                    fill
-                    priority={i < 2}
-                    sizes="(min-width: 1024px) 320px, 25vw"
-                    className="object-cover"
-                    style={{ objectPosition: t.position }}
-                  />
-                </div>
-              ))}
-            </div>
-            <div className="hidden lg:block h-6" aria-hidden="true" />
-          </div>
-          <p className="text-[10px] text-charcoal/50 mt-2">Real pieces from a past Reserve. Every Reserve is styled to the recipient.</p>
-        </div>
-
-        <div className="order-3 lg:hidden">
-          <CtaBlock fromPrice={fromPrice} onCta={onCta} />
-          <div className="mt-3">
-            <TrustRow />
-          </div>
-        </div>
-      </div>
-    </section>
+    <ul
+      className={`flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[12px] text-[#625e55] ${className}`}
+      data-testid="gift-hero-trust"
+    >
+      {HERO_TRUST.map((t) => (
+        <li key={t} className="flex items-center gap-1.5 whitespace-nowrap">
+          <svg aria-hidden="true" viewBox="0 0 12 12" className="h-3 w-3 text-[#5b613f]">
+            <path d="M2.5 6.2l2.3 2.3 4.7-5" fill="none" stroke="currentColor" strokeWidth="1.5" />
+          </svg>
+          {t}
+        </li>
+      ))}
+    </ul>
   );
 }

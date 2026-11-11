@@ -13,8 +13,15 @@ import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { trackEvent } from "@/lib/tracking";
 import { captureAttributionFromUrl } from "@/lib/attribution";
-import { GlassHeader } from "@/app/components/ClientComponents";
-import GiftSeasonHero, { type GiftHeroVariant } from "./GiftSeasonHero";
+import { ShopSeasonalHeader } from "@/app/shop/components/ShopSeasonalHeader";
+import {
+  HERO_EYEBROW,
+  HERO_HEADLINE,
+  HERO_LINE,
+  HeroMedia,
+  HeroTrustRow,
+  type GiftHeroVariant,
+} from "./GiftSeasonHero";
 import {
   GIFT_SEASON_OPTIONS,
   formatUsd,
@@ -133,6 +140,7 @@ export default function GiftSeasonLPClient({
   const pickerRef = useRef<HTMLDivElement | null>(null);
 
   const pickerSectionRef = useRef<HTMLElement | null>(null);
+  const detailsSectionRef = useRef<HTMLElement | null>(null);
 
   // Mobile: the Alhena chat launcher (#helix-chat-container) floats over the
   // hero CTA and the season cards. Hide it while either is on screen; it
@@ -163,11 +171,12 @@ export default function GiftSeasonLPClient({
     };
   }, [heroVariant]);
 
-  function scrollToPicker() {
+  function scrollToPicker(target: "picker" | "details") {
     trackEvent("gift_season_hero_cta_clicked", {
-      properties: { hero: heroVariant, lp_source: LP_SOURCE },
+      properties: { hero: heroVariant, target, seasons, lp_source: LP_SOURCE },
     }).catch(() => {});
-    pickerSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const el = target === "details" ? detailsSectionRef.current : pickerSectionRef.current;
+    el?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -264,90 +273,162 @@ export default function GiftSeasonLPClient({
   return (
     <div className="min-h-screen bg-bone text-charcoal">
       <style>{`@media (max-width: 639px) { body.gs-hide-chat #helix-chat-container { opacity: 0 !important; visibility: hidden !important; pointer-events: none !important; transition: opacity 150ms; } }`}</style>
-      <GlassHeader />
-      <main className="pt-20 sm:pt-24">
-        <GiftSeasonHero variant={heroVariant} fromPrice={formatUsd(fromPrice)} onCta={scrollToPicker} />
+      <ShopSeasonalHeader accent="#4A3528" />
+      <main className="pt-24">
+        <section
+          className="lg:grid lg:grid-cols-2 lg:min-h-[calc(100svh-96px)]"
+          data-testid={`gift-hero-${heroVariant}`}
+        >
+          {/* Desktop: full-bleed image fills the left half, matched to the picker column height. */}
+          <div className="relative hidden lg:block">
+            <HeroMedia variant={heroVariant} priority />
+          </div>
+
+          <div className="px-5 pt-5 sm:px-8 lg:px-14 xl:px-20 lg:py-10 flex flex-col justify-center">
+            <div className="w-full max-w-[560px] lg:mx-auto">
+              <div className="text-[11px] uppercase tracking-[0.12em] text-[#5b613f]">{HERO_EYEBROW}</div>
+              <h1 className="font-serif font-normal text-[30px] sm:text-[40px] lg:text-[clamp(40px,3.6vw,52px)] leading-[1.1] tracking-[-0.025em] text-[#111] mt-2 lg:mt-3">
+                {HERO_HEADLINE}
+              </h1>
+              <p className="text-[14px] lg:text-[15px] leading-[1.55] text-[#625e55] mt-2.5 lg:mt-3">{HERO_LINE}</p>
+
+              {/* Mobile: compact full-bleed image, CTA and trust row above the fold. */}
+              <div className="lg:hidden">
+                <div className="relative -mx-5 sm:-mx-8 mt-4 aspect-[4/3] max-h-[300px] sm:max-h-[420px]">
+                  <HeroMedia variant={heroVariant} priority />
+                </div>
+                <div className="mt-4 flex items-center gap-4">
+                  <a
+                    href="#gift-picker"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      scrollToPicker("picker");
+                    }}
+                    data-testid="gift-hero-cta"
+                    className="inline-flex flex-1 items-center justify-center min-h-12 bg-ember hover:bg-ember/90 text-bone px-6 rounded-md text-sm font-medium tracking-wide transition"
+                  >
+                    Choose a gift length
+                  </a>
+                  <div className="shrink-0 text-right">
+                    <div className="text-[10px] uppercase tracking-[0.14em] text-[#625e55]">From</div>
+                    <div className="font-serif text-[22px] leading-none text-[#111]" data-testid="gift-hero-from">
+                      {formatUsd(fromPrice)}
+                    </div>
+                  </div>
+                </div>
+                <HeroTrustRow className="mt-3" />
+              </div>
+
+              <section
+                id="gift-picker"
+                ref={pickerSectionRef}
+                className="mt-10 lg:mt-7 scroll-mt-28"
+                aria-label="Choose a gift length"
+              >
+                  <div className="text-[11px] uppercase tracking-[0.15em] text-charcoal/65 mb-2">
+                    Gift length
+                  </div>
+                  <div
+                    ref={pickerRef}
+                    className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-2 pt-1"
+                    role="radiogroup"
+                    aria-label="Gift length"
+                  >
+                    {options.map((o) => {
+                      const active = o.seasons === seasons;
+                      const copy = OPTION_COPY[o.seasons];
+                      const each = perSeasonPrice(o.price, o.seasons);
+                      const save = seasonSavings(o.price, o.seasons, singlePrice);
+                      return (
+                        <button
+                          key={o.seasons}
+                          type="button"
+                          role="radio"
+                          aria-checked={active}
+                          data-testid={`season-${o.seasons}`}
+                          onClick={() => pick(o.seasons)}
+                          className={`relative text-left rounded-md border px-3 py-3 transition flex sm:block items-center justify-between gap-3 ${
+                            active
+                              ? "border-forest bg-forest text-bone"
+                              : "border-forest/20 bg-bone hover:border-forest/40"
+                          }`}
+                        >
+                          {copy.badge ? (
+                            <span
+                              className={`absolute -top-2 right-2 sm:left-2 sm:right-auto whitespace-nowrap text-[9px] uppercase tracking-[0.12em] px-1.5 py-0.5 rounded ${
+                                active ? "bg-ember text-bone" : "bg-ember/90 text-bone"
+                              }`}
+                            >
+                              {copy.badge}
+                            </span>
+                          ) : null}
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium">{copy.title}</div>
+                            <div className={`text-[11px] mt-0.5 sm:mt-1 leading-snug ${active ? "text-bone/80" : "text-charcoal/60"}`}>
+                              {copy.detail}
+                            </div>
+                          </div>
+                          <div className="text-right sm:text-left sm:mt-2 shrink-0">
+                            <div className={`font-serif text-xl ${active ? "text-bone" : "text-forest"}`}>
+                              {formatUsd(o.price)}
+                            </div>
+                            <div
+                              className={`text-[11px] leading-snug ${active ? "text-bone/85" : "text-charcoal/70"}`}
+                              data-testid={`season-${o.seasons}-each`}
+                            >
+                              {formatUsd(each)} per season
+                            </div>
+                            {save > 0 ? (
+                              <div
+                                className={`text-[11px] font-medium leading-snug ${active ? "text-bone" : "text-ember"}`}
+                                data-testid={`season-${o.seasons}-save`}
+                              >
+                                Save {formatUsd(save)}
+                              </div>
+                            ) : null}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[11px] text-charcoal/70 mt-3 leading-relaxed" data-testid="gift-season-timing">
+                    {selfDeliver
+                      ? giftSeasonTimingLine(undefined, undefined, true)
+                      : TIMING_LINE}
+                  </p>
+
+                {/* Desktop: one CTA to step 2, trust row directly under it. */}
+                <div className="hidden lg:block mt-5">
+                  <a
+                    href="#gift-details"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      scrollToPicker("details");
+                    }}
+                    data-testid="gift-hero-cta-desktop"
+                    className="flex w-full items-center justify-center min-h-12 bg-ember hover:bg-ember/90 text-bone px-6 rounded-md text-sm font-medium tracking-wide transition"
+                  >
+                    Continue with {option.label} · {formatUsd(option.price)}
+                  </a>
+                  <HeroTrustRow className="mt-3 justify-center" />
+                </div>
+              </section>
+            </div>
+          </div>
+        </section>
 
         <section
-          id="gift-picker"
-          ref={pickerSectionRef}
-          className="max-w-2xl mx-auto px-4 sm:px-6 mt-12 lg:mt-16 scroll-mt-24"
+          id="gift-details"
+          ref={detailsSectionRef}
+          className="max-w-2xl mx-auto px-4 sm:px-6 mt-10 lg:mt-16 scroll-mt-28"
+          data-testid="gift-season-details"
         >
-          <h2 className="font-serif text-2xl text-forest mb-4">Choose their gift</h2>
+          <div className="text-[11px] uppercase tracking-[0.12em] text-[#5b613f]">Step 2 of 2</div>
+          <h2 className="font-serif font-normal text-[25px] lg:text-[30px] leading-[1.2] tracking-[-0.025em] text-[#111] mt-1 mb-4">
+            Who is it for?
+          </h2>
             <div onFocusCapture={handleFirstFocus}>
               <div className="bg-bone-dark/40 rounded-lg border border-forest/15 p-5">
-                <div className="text-[11px] uppercase tracking-[0.15em] text-charcoal/65 mb-2">
-                  Gift length
-                </div>
-                <div
-                  ref={pickerRef}
-                  className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-2 pt-1"
-                  role="radiogroup"
-                  aria-label="Gift length"
-                >
-                  {options.map((o) => {
-                    const active = o.seasons === seasons;
-                    const copy = OPTION_COPY[o.seasons];
-                    const each = perSeasonPrice(o.price, o.seasons);
-                    const save = seasonSavings(o.price, o.seasons, singlePrice);
-                    return (
-                      <button
-                        key={o.seasons}
-                        type="button"
-                        role="radio"
-                        aria-checked={active}
-                        data-testid={`season-${o.seasons}`}
-                        onClick={() => pick(o.seasons)}
-                        className={`relative text-left rounded-md border px-3 py-3 transition flex sm:block items-center justify-between gap-3 ${
-                          active
-                            ? "border-forest bg-forest text-bone"
-                            : "border-forest/20 bg-bone hover:border-forest/40"
-                        }`}
-                      >
-                        {copy.badge ? (
-                          <span
-                            className={`absolute -top-2 right-2 sm:left-2 sm:right-auto whitespace-nowrap text-[9px] uppercase tracking-[0.12em] px-1.5 py-0.5 rounded ${
-                              active ? "bg-ember text-bone" : "bg-ember/90 text-bone"
-                            }`}
-                          >
-                            {copy.badge}
-                          </span>
-                        ) : null}
-                        <div className="min-w-0">
-                          <div className="text-sm font-medium">{copy.title}</div>
-                          <div className={`text-[11px] mt-0.5 sm:mt-1 leading-snug ${active ? "text-bone/80" : "text-charcoal/60"}`}>
-                            {copy.detail}
-                          </div>
-                        </div>
-                        <div className="text-right sm:text-left sm:mt-2 shrink-0">
-                          <div className={`font-serif text-xl ${active ? "text-bone" : "text-forest"}`}>
-                            {formatUsd(o.price)}
-                          </div>
-                          <div
-                            className={`text-[11px] leading-snug ${active ? "text-bone/85" : "text-charcoal/70"}`}
-                            data-testid={`season-${o.seasons}-each`}
-                          >
-                            {formatUsd(each)} per season
-                          </div>
-                          {save > 0 ? (
-                            <div
-                              className={`text-[11px] font-medium leading-snug ${active ? "text-bone" : "text-ember"}`}
-                              data-testid={`season-${o.seasons}-save`}
-                            >
-                              Save {formatUsd(save)}
-                            </div>
-                          ) : null}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-                <p className="text-[11px] text-charcoal/70 mt-3 leading-relaxed" data-testid="gift-season-timing">
-                  {selfDeliver
-                    ? giftSeasonTimingLine(undefined, undefined, true)
-                    : TIMING_LINE}
-                </p>
-
                 <button
                   type="button"
                   role="switch"
