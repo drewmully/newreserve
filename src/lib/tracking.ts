@@ -9,7 +9,7 @@
 
 import { getStoredAttribution } from "@/lib/attribution";
 import { PDP_COMPLETE_LOOK_PROPERTY, readStoredCompleteLookVariant } from "@/lib/pdpCompleteLook";
-import { META_STANDARD_EVENTS, buildMetaStandardData } from "@/lib/metaEvents";
+import { META_CUSTOM_EVENTS, META_STANDARD_EVENTS, buildMetaStandardData } from "@/lib/metaEvents";
 
 const ANON_ID_KEY = "mully_anon_id";
 const SESSION_ID_KEY = "mully_session_id";
@@ -277,7 +277,8 @@ function mirrorToMetaPixel(
     try {
       // {eventID} is Meta's dedup key against server-side CAPI; it MUST match
       // the event_id we pass through to fireMetaCAPI on the server.
-      fbq("track", metaEvent, eventData, { eventID: eventId });
+      const method = META_CUSTOM_EVENTS.has(metaEvent) ? "trackCustom" : "track";
+      fbq(method, metaEvent, eventData, { eventID: eventId });
     } catch {
       // Never let analytics break the page.
     }

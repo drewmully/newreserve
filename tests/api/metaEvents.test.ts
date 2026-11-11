@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  META_CUSTOM_EVENTS,
   META_STANDARD_EVENTS,
   buildMetaCapiCustomData,
   buildMetaStandardData,
@@ -9,6 +10,18 @@ import {
 describe("META_STANDARD_EVENTS", () => {
   it("maps shop PDP views to ViewContent", () => {
     expect(META_STANDARD_EVENTS.proshop_product_viewed).toBe("ViewContent");
+  });
+  it("sends quiz progress as custom events, not cart/checkout", () => {
+    expect(META_STANDARD_EVENTS.quiz_step_completed).toBe("QuizStep");
+    expect(META_STANDARD_EVENTS.quiz_started).toBe("QuizStart");
+    expect(META_CUSTOM_EVENTS.has("QuizStep")).toBe(true);
+    expect(META_CUSTOM_EVENTS.has("QuizStart")).toBe(true);
+  });
+  it("keeps the real Reserve checkout start and Purchase standard", () => {
+    expect(META_STANDARD_EVENTS.reveal_cta_clicked).toBe("InitiateCheckout");
+    for (const e of ["AddToCart", "InitiateCheckout", "Purchase", "ViewContent"]) {
+      expect(META_CUSTOM_EVENTS.has(e)).toBe(false);
+    }
   });
   it("keeps the existing funnel mappings", () => {
     expect(META_STANDARD_EVENTS.add_to_cart).toBe("AddToCart");

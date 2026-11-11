@@ -49,8 +49,11 @@ export interface AnalyticsEvent {
  *
  * Reserve funnel mapping rationale:
  *   - lp_subscription_view / reveal_viewed → ViewContent (top of funnel)
- *   - quiz_started / reveal_cta_clicked   → InitiateCheckout (intent)
- *   - quiz_step_completed                 → AddToCart (mid-funnel progress)
+ *   - quiz_started                        → QuizStart (custom event)
+ *   - quiz_step_completed                 → QuizStep (custom event)
+ *   - reveal_cta_clicked                  → InitiateCheckout (Reserve line
+ *                                              added to a Shopify cart and
+ *                                              buyer sent to checkout)
  *   - quiz_email_captured                 → Lead (the optimization target for
  *                                              cold acquisition campaigns)
  *   - quiz_completed                      → CompleteRegistration (warm lead)

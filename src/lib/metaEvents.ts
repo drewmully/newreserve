@@ -12,8 +12,12 @@ export const META_STANDARD_EVENTS: Record<string, string> = {
   page_view: "PageView",
   // Reserve acquisition funnel
   lp_subscription_view: "ViewContent",
-  quiz_started: "InitiateCheckout",
-  quiz_step_completed: "AddToCart",
+  // Quiz progress is NOT a cart or checkout. These used to send AddToCart /
+  // InitiateCheckout, which inflated both standard events (every quiz step
+  // was an AddToCart). They now go to Meta as custom events; the real
+  // Reserve checkout start (reveal_cta_clicked) and Purchase are unchanged.
+  quiz_started: "QuizStart",
+  quiz_step_completed: "QuizStep",
   quiz_email_captured: "Lead",
   quiz_completed: "CompleteRegistration",
   reveal_viewed: "ViewContent",
@@ -38,6 +42,13 @@ export const META_STANDARD_EVENTS: Record<string, string> = {
   // Paid-media SMS bridge (/text-mully)
   sms_click: "Lead",
 };
+
+/**
+ * Meta event names above that are custom (not Meta standard events). The
+ * browser must send these with fbq("trackCustom", …); fbq("track", …) only
+ * accepts standard names. CAPI takes the same name in event_name either way.
+ */
+export const META_CUSTOM_EVENTS = new Set<string>(["QuizStart", "QuizStep"]);
 
 function num(value: unknown): number | undefined {
   if (typeof value === "number" && Number.isFinite(value)) return value;
