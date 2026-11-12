@@ -16,7 +16,6 @@ import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 import Link from "next/link";
 import posthog from "posthog-js";
 import { trackEvent } from "@/lib/tracking";
-import { GIFT_SEASON_HREF, GIFT_SEASON_LIVE } from "@/lib/giftGuide";
 import {
   HOME_HERO_FLAG,
   HOME_HERO_OVERRIDE_PARAM,
@@ -139,34 +138,23 @@ export function HomeHeroExperiment({
 function DualHero({ season, reservePrice, active }: { season: string; reservePrice: string | null; active: boolean }) {
   const headline = homeHeroHeadline(season);
   const seasonTitle = `The ${season.charAt(0).toUpperCase() + season.slice(1)} Edit`;
+  // Fewer words, more product: one short headline, two image-led cards, one
+  // button each. Trust lines live in the top bar; gifts live in the nav.
   return (
     <div className="hh-dual" hidden={!active}>
       <section className="hh" id={active ? "hero" : undefined} aria-labelledby="hhTitle">
         <div className="hh__in">
-          <div className="hh__head">
-            <div>
-              <p className="hh__eyebrow">Mully · Golf apparel</p>
-              {active ? <h1 id="hhTitle" className="hh__title">{headline}</h1> : <p id="hhTitle" className="hh__title">{headline}</p>}
-            </div>
-            <ul className="hh__trust">
-              <li>Fit confirmed before Reserve ships</li>
-              <li>Ships from Mully Fulfillment</li>
-              <li>Free size exchanges</li>
-            </ul>
-          </div>
+          {active ? <h1 id="hhTitle" className="hh__title">{headline}</h1> : <p id="hhTitle" className="hh__title">{headline}</p>}
           <div className="hh__grid">
             <article className="hh__card">
               <Link className="hh__art hh__art--shop" href="/shop" data-hero-cta="shop_image" tabIndex={-1} aria-hidden="true">
                 {HOME_HERO_SHOP_IMAGES.map((img) => <img key={img.src} src={img.src} alt="" width={480} height={640} loading="lazy" />)}
               </Link>
               <div className="hh__body">
-                <p className="hh__kicker">Shop</p>
                 <h2 className="hh__cardtitle">{seasonTitle}</h2>
-                <p className="hh__desc">Vests, quarter zips and layers from Olydoe, Duck Head, Rhone and Quiet Golf.<span className="hh__dl"> Buy one, get 15% off the second.</span></p>
                 <div className="hh__row">
                   <Link className="hh__btn" href="/shop" data-hero-cta="shop">Shop the edit</Link>
-                  <Link className="hh__link" href="/shop/gifts" data-hero-cta="gifts">Gift guide</Link>
-                  {GIFT_SEASON_LIVE && <Link className="hh__link" href={GIFT_SEASON_HREF} data-hero-cta="gift_season">Gift a Season</Link>}
+                  <Link className="hh__link" href="/shop/gifts" data-hero-cta="gifts">Gifts</Link>
                 </div>
               </div>
             </article>
@@ -175,9 +163,7 @@ function DualHero({ season, reservePrice, active }: { season: string; reservePri
                 {HOME_HERO_RESERVE_IMAGES.map((img, i) => <span key={img.src} className={i > 1 ? "hh__tile hh__tile--x" : "hh__tile"}><img src={img.src} alt="" width={480} height={480} loading="lazy" /></span>)}
               </Link>
               <div className="hh__body">
-                <p className="hh__kicker">Mully Reserve<span className="hh__dl"> · Quarterly</span></p>
-                <h2 className="hh__cardtitle">Styled for you each season</h2>
-                <p className="hh__desc">4 to 6 pieces a quarter, in your sizes.<span className="hh__dl"> Fit confirmed first, free size exchanges, cancel after your first quarter.</span></p>
+                <h2 className="hh__cardtitle">Styled for you</h2>
                 <div className="hh__row">
                   <Link className="hh__btn" href="/subscription" data-hero-cta="reserve">Build your Reserve</Link>
                   {reservePrice && <span className="hh__price">{`${reservePrice} a quarter`}</span>}
@@ -187,10 +173,6 @@ function DualHero({ season, reservePrice, active }: { season: string; reservePri
           </div>
         </div>
       </section>
-      <div className="hh-bridge">
-        Like what&apos;s in the shop? Reserve members get pieces like these every quarter, picked for their fit.
-        <Link href="/subscription" data-hero-cta="bridge">See how Reserve works</Link>
-      </div>
     </div>
   );
 }
