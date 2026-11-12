@@ -418,8 +418,8 @@ export function TakeAShotModal({ openSignal, trigger = "manual", onClosed }: { o
 
       <section className="tas__sheet tas__sheet--email" data-open={step === "email" ? "" : undefined} aria-hidden={step !== "email"} inert={step !== "email"}>
         <form className="tas__sheet-in" onSubmit={submitEmail} noValidate>
-          <h3 className="tas__h2" tabIndex={-1} data-step-focus={step === "email" ? "" : undefined}>Where should we send your code?</h3>
-          <p className="tas__sub">Your swing is locked in. It fires the moment you are in.</p>
+          <h3 className="tas__h2" tabIndex={-1} data-step-focus={step === "email" ? "" : undefined}>Your shot is in the air.</h3>
+          <p className="tas__sub">Enter your email to see where it lands.</p>
           <label className="tas__field"><span className="tas__label">Email</span>
             <input className="tas__input" type="email" inputMode="email" autoComplete="email" placeholder="you@example.com"
               maxLength={254} value={email} onChange={(e) => { setEmail(e.target.value); setError(""); }} required />
@@ -432,7 +432,7 @@ export function TakeAShotModal({ openSignal, trigger = "manual", onClosed }: { o
           {error && step === "email" && <p className="tas__err" role="alert">{error}</p>}
           <div className="tas__sheet-cta">
             <button className="tas__btn" type="submit" disabled={Boolean(busy || waiting)}>
-              {waiting ? <><span className="tas__spin" />Checking…</> : busy === "email" ? <><span className="tas__spin" />Teeing up</> : "Take my shot"}
+              {waiting ? <><span className="tas__spin" />Checking…</> : busy === "email" ? <><span className="tas__spin" />Saving your shot</> : "See where it lands"}
             </button>
             <p className="tas__fine">One code per person. No purchase or Reserve subscription required. <button className="tas__inline" type="button" onClick={backToHole}>Back to the hole</button></p>
           </div>
