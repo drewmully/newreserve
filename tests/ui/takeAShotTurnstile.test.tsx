@@ -78,7 +78,7 @@ describe("Take a Shot game first, email sheet and Turnstile", () => {
     expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
     expect(screen.queryByPlaceholderText("(555) 555-0123")).toBeNull();
     expect(turnstile.render).toHaveBeenCalledTimes(1);
-    expect(turnstile.render.mock.calls[0][1]).toMatchObject({ sitekey: "test-site-key", appearance: "always" });
+    expect(turnstile.render.mock.calls[0][1]).toMatchObject({ sitekey: "test-site-key", appearance: "interaction-only" });
   });
 
   it("asks for email consent with the Agree wording", async () => {

@@ -242,8 +242,9 @@ export function TakeAShotModal({ openSignal, trigger = "manual", onClosed }: { o
     return () => { vv.removeEventListener("resize", update); vv.removeEventListener("scroll", update); };
   }, []);
 
-  // Turnstile (only when a site key is configured): rendered visibly as soon as
-  // the email sheet opens, so the check runs while the player types.
+  // Turnstile (only when a site key is configured): runs as soon as the email
+  // sheet opens, while the player types. It stays hidden unless Cloudflare needs
+  // a click, so most players never see a security box at the ask.
   useEffect(() => {
     if (!TURNSTILE_SITE_KEY || step !== "email" || !turnstileBox.current) return;
     const box = turnstileBox.current;
@@ -251,7 +252,7 @@ export function TakeAShotModal({ openSignal, trigger = "manual", onClosed }: { o
     const render = () => {
       if (cancelled || !window.turnstile || box.childElementCount) return;
       turnstileWidget.current = window.turnstile.render(box, {
-        sitekey: TURNSTILE_SITE_KEY, appearance: "always", size: "flexible", action: "take-a-shot",
+        sitekey: TURNSTILE_SITE_KEY, appearance: "interaction-only", size: "flexible", action: "take-a-shot",
         callback: (t: string) => { turnstileToken.current = t; setTokenSeq((n) => n + 1); },
         "expired-callback": () => { turnstileToken.current = ""; },
         "error-callback": () => { turnstileToken.current = ""; },
