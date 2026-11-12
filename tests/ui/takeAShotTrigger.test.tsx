@@ -105,7 +105,7 @@ describe("TakeAShotModal tracking", () => {
     act(() => gameOpts.current!.gate());
     fireEvent.change(screen.getByPlaceholderText("you@example.com"), { target: { value: " player@example.com " } });
     fireEvent.click(screen.getByRole("checkbox"));
-    fireEvent.submit(screen.getByRole("button", { name: "Take my shot" }).closest("form")!);
+    fireEvent.submit(screen.getByRole("button", { name: "See where it lands" }).closest("form")!);
   }
 
   it("sends the posthog distinct id with the signup; the gated swing is tracked", async () => {

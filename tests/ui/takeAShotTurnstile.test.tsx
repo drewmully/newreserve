@@ -32,12 +32,12 @@ async function openToEmail() {
   expect(screen.getByText("10% just for playing")).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Take a Shot" })).toBeNull();
   await waitFor(() => expect(gameState.opts).not.toBeNull());
-  expect(screen.queryByRole("heading", { name: "Where should we send your code?" })).toBeNull();
+  expect(screen.queryByRole("heading", { name: "Your shot is in the air." })).toBeNull();
   act(() => opts().gate());
   fireEvent.change(screen.getByPlaceholderText("you@example.com"), { target: { value: "player@example.com" } });
   fireEvent.click(screen.getByRole("checkbox"));
 }
-const submitEmail = () => fireEvent.submit(screen.getByRole("button", { name: /Take my shot|Checking/ }).closest("form")!);
+const submitEmail = () => fireEvent.submit(screen.getByRole("button", { name: /See where it lands|Checking/ }).closest("form")!);
 const calls = (route: string) => vi.mocked(fetch).mock.calls.filter(([u]) => String(u).endsWith(`/${route}`));
 const body = (route: string, i = 0) => JSON.parse(calls(route)[i][1]!.body as string);
 
@@ -72,9 +72,9 @@ describe("Take a Shot game first, email sheet and Turnstile", () => {
     await waitFor(() => expect(gameState.opts).not.toBeNull());
     expect(typeof opts().gate).toBe("function");
     act(() => opts().gate());
-    expect(screen.getByRole("heading", { name: "Where should we send your code?" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Your shot is in the air." })).toBeInTheDocument();
     expect(screen.getByRole("checkbox")).not.toBeChecked();
-    expect(screen.getByRole("button", { name: "Take my shot" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "See where it lands" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Close" })).toBeInTheDocument();
     expect(screen.queryByPlaceholderText("(555) 555-0123")).toBeNull();
     expect(turnstile.render).toHaveBeenCalledTimes(1);

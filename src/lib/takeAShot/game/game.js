@@ -143,7 +143,13 @@ export function mount(root, opts) {
     flight: null, roll: null, rest: null, landSurf: null, holed: false, splash: null,
     cam: { x: 0, y: 86, s: 3 }, camT: { x: 0, y: 86, s: 3 }, readMode: false,
     W: 0, H: 0, dpr: 1, topPad: 64, botPad: 170, cy0: 0, overview: null, dirty: true, time: 0,
+    // First-aim coaching (shot 1 until the player aims) and the gated mid-air freeze.
+    aimHint: false, tease: null,
   };
+  const reduceMotion = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const AIM_HINT = 'Check the wind. Tap the course to aim, then swing.';
+  /** Seconds the gated ball flies before it freezes (capped at half the flight, so the landing stays hidden). */
+  const TEASE_SECONDS = 1.25;
 
   function newWind() {
     const w = sess.winds[S.shot];
@@ -175,6 +181,7 @@ export function mount(root, opts) {
     el.yds.textContent = Math.round(pinDist());
     renderShotBalls();
     setHint('Tap the course to aim');
+    if (S.shot === 0 && !aimedOnce) showAimHint();
     el.swing.textContent = 'Swing';
     el.swing.disabled = false;
     el.panel.classList.remove('busy');
@@ -189,6 +196,20 @@ export function mount(root, opts) {
   }
 
   function setHint(t) { el.hint.textContent = t; }
+  // One clear instruction plus two cues (wind chip pulse, tap ring on the
+  // fairway) until the first aim. Hidden for good after that.
+  let aimedOnce = false;
+  function showAimHint() {
+    S.aimHint = true;
+    setHint(AIM_HINT); el.hint.classList.add('g-hint-lead');
+    el.windBox.classList.add('g-glow');
+  }
+  function hideAimHint() {
+    if (!S.aimHint) return;
+    S.aimHint = false; aimedOnce = true;
+    el.hint.classList.remove('g-hint-lead');
+    el.windBox.classList.remove('g-glow');
+  }
 
   // ---------- in-game tips ----------
   const TIPS = [
@@ -437,6 +458,25 @@ export function mount(root, opts) {
     }
   }
 
+  /** Tap cue on the fairway until the first aim. Static rings under reduced motion. */
+  function drawAimHint(c, cam, cx, cy) {
+    if (!S.aimHint || S.phase !== 'aim' || S.readMode) return;
+    const p = toScreen(cam, cx, cy, PIN.x * 0.5, PIN.y * 0.62);
+    c.setTransform(S.dpr, 0, 0, S.dpr, 0, 0);
+    const base = 12;
+    const rings = reduceMotion ? [0.35, 0.8] : [(S.time * 0.9) % 1, (S.time * 0.9 + 0.5) % 1];
+    for (const k of rings) {
+      c.strokeStyle = `rgba(255,255,255,${(0.95 * (1 - k)).toFixed(3)})`; c.lineWidth = 2.5;
+      c.beginPath(); c.arc(p.x, p.y, base + k * 22, 0, Math.PI * 2); c.stroke();
+    }
+    c.fillStyle = 'rgba(255,255,255,0.95)'; c.beginPath(); c.arc(p.x, p.y, 7, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = 'rgba(31,58,44,0.55)'; c.lineWidth = 1.5; c.stroke();
+    c.font = '700 12px Inter, system-ui, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    const ly = p.y + base + 30;
+    c.fillStyle = 'rgba(31,58,44,0.92)'; roundRect(c, p.x - 22, ly - 10, 44, 20, 10); c.fill();
+    c.fillStyle = '#FAF7F0'; c.fillText('Tap', p.x, ly + 0.5);
+  }
+
   function drawAim(c, cam, cx, cy) {
     if (S.phase !== 'aim') return;
     const t = toScreen(cam, cx, cy, 0, 0), e = toScreen(cam, cx, cy, S.target.x, S.target.y);
@@ -556,6 +596,7 @@ export function mount(root, opts) {
       ctx.drawImage(cache.canvas, 0, 0);
     }
     drawAim(ctx, cam, S.W / 2, S.cy0);
+    drawAimHint(ctx, cam, S.W / 2, S.cy0);
     drawPin(ctx, cam, S.W / 2, S.cy0, cam.s > 7);
     drawRingLabels(ctx, cam, S.W / 2, S.cy0);
     drawSplash(ctx, cam, S.W / 2, S.cy0);
@@ -580,40 +621,85 @@ export function mount(root, opts) {
     if (S.phase !== 'aim' && !(saved && S.phase === 'gated')) return;
     audio();
     tipHide();
+    if (!saved) hideAimHint();
     if (gated && !saved) {
-      // Game first: the swing is real, but it needs an email before it counts.
-      S.phase = 'gated';
+      // Game first: the swing is real and the ball really leaves the tee, but
+      // where it lands needs an email. It flies on the no-noise path (the
+      // server has not rolled anything yet), freezes mid-air, then the host
+      // asks for an email. fire() resumes from the frozen point.
       S.gatedShot = { e: S.meter, target: { ...S.target } };
       el.mark.style.left = mp(S.meter); el.mark.style.opacity = 1;
       el.swing.disabled = true;
-      setHint('Locked in. Add your email to hit it.');
-      opts.gate(S.gatedShot);
+      el.panel.classList.add('busy');
+      buzz(14); sfx.strike();
+      if (S.readMode) { S.readMode = false; el.read.classList.remove('on'); el.read.querySelector('span').textContent = 'Read'; }
+      const sim = simulateShot({ pin: pinIdx, wind: S.wind, target: S.gatedShot.target, e: S.gatedShot.e, noise: { carry: 0, lat: 0 } });
+      const f = { ...sim.flight, t: 0 };
+      const stopT = Math.min(0.5, TEASE_SECONDS / f.dur);
+      S.tease = { f, stopT, pos: null };
+      S.flight = f;
+      S.camT = { ...S.overview };
+      S.phase = 'tease';
+      setHint('Your shot is in the air.');
+      if (reduceMotion) { f.t = stopT; freezeTease(); }
       return;
     }
     if (saved) { S.target = { ...saved.target }; S.meter = saved.e; updateMeter(); }
     const e = S.meter;
     S.err = e;
-    buzz(14); sfx.strike();
+    if (!S.tease) { buzz(14); sfx.strike(); }
     el.mark.style.left = mp(e); el.mark.style.opacity = 1;
     el.swing.disabled = true;
     el.panel.classList.add('busy');
     const zoneName = Math.abs(e) <= ZONE_PERFECT ? 'Perfect' : Math.abs(e) <= ZONE_GREEN ? 'Good' : Math.abs(e) <= ZONE_YELLOW ? 'Off' : 'Bad';
     setHint(zoneName === 'Perfect' ? 'Perfect strike' : zoneName === 'Good' ? 'Good strike' : e < 0 ? 'Early. Pulled left.' : 'Late. Pushed right.');
     if (S.readMode) { S.readMode = false; el.read.classList.remove('on'); el.read.querySelector('span').textContent = 'Read'; }
-    S.camT = { ...S.overview };
+    if (!S.tease) S.camT = { ...S.overview };
     S.phase = 'wait';
     const shotNo = S.shot, target = { ...S.target };
     const req = backend.shot({ shot: shotNo, target, e });
     req.then((r) => launch(e, target, r)).catch((err) => {
+      if (S.tease) resetTease();
       S.phase = 'aim'; el.swing.disabled = false; el.panel.classList.remove('busy'); el.mark.style.opacity = 0;
       setHint(err && err.message ? err.message : 'Lost the connection. Try that swing again.');
     });
+  }
+  /** Hold the ball mid-air, zoomed in on it so the landing stays hidden, then ask for the email. */
+  function freezeTease() {
+    const tz = S.tease, p = flightPos(tz.f, tz.stopT);
+    tz.pos = p;
+    S.ball.x = p.x; S.ball.y = p.y; S.ball.h = p.h;
+    S.phase = 'gated';
+    // Keep the ball in the band above the email sheet (it covers about 55%).
+    const s = S.overview.s * 1.7, visTop = S.topPad + 8, visBot = S.H * 0.45;
+    const screenY = (visTop + visBot) / 2 + p.h * s * 0.55;
+    S.camT = { x: p.x, y: p.y - (S.cy0 - screenY) / s, s };
+    if (reduceMotion) S.cam = { ...S.camT };
+    opts.gate(S.gatedShot);
+  }
+  /** Sheet closed without an email: the ball goes back to the tee. */
+  function resetTease() {
+    S.tease = null; S.flight = null; S.trail = [];
+    S.ball = { x: 0, y: 0, h: 0, vx: 0, vy: 0 };
+    S.camT = { ...S.overview };
+    el.panel.classList.remove('busy');
   }
   function launch(e, target, r) {
     const sim = simulateShot({ pin: pinIdx, wind: S.wind, target, e, noise: r.noise });
     S.sim = sim;
     S.serverResult = r.result || sim.result;
     S.flight = { ...sim.flight, t: 0 };
+    const tz = S.tease;
+    if (tz && tz.pos) {
+      // Resume from the frozen point: same fraction of the flight, and the
+      // small gap to the server-noise path closes before touchdown, so the
+      // ball lands exactly where the server decided.
+      const f = S.flight, at = flightPos(f, tz.stopT);
+      f.t = tz.stopT; f.t0 = tz.stopT;
+      f.off = { x: tz.pos.x - at.x, y: tz.pos.y - at.y, h: tz.pos.h - at.h };
+      S.camT = { ...S.overview };
+    }
+    S.tease = null;
     S.phase = 'flight';
     S.shotMeta = { strike: zoneFor(e), err: +e.toFixed(3), target: { x: +sim.target.x.toFixed(1), y: +sim.target.y.toFixed(1), yds: Math.round(hyp(sim.target.x, sim.target.y)) }, wind: { mph: S.wind.mph, dirDeg: S.wind.dirDeg }, carry: +sim.flight.carry.toFixed(1) };
   }
@@ -798,7 +884,8 @@ export function mount(root, opts) {
     return { x: c.x + (sx - S.W / 2) / c.s, y: c.y - (sy - S.cy0) / c.s };
   }
   let drag = null;
-  const aimAt = (e) => { const w = screenToWorld(e.clientX, e.clientY); setTarget(w.x, w.y); const cur = tip.list[tip.i]; if (cur && (cur.key === 'wind' || cur.key === 'read' || cur.key === 'aim') && tip.list.length > 1) { tip.i = 2; tipNext(); } };
+  const aimAt = (e) => { const w = screenToWorld(e.clientX, e.clientY); setTarget(w.x, w.y);
+    if (S.aimHint) { hideAimHint(); setHint('Now swing when the needle hits the middle.'); } const cur = tip.list[tip.i]; if (cur && (cur.key === 'wind' || cur.key === 'read' || cur.key === 'aim') && tip.list.length > 1) { tip.i = 2; tipNext(); } };
   canvas.addEventListener('pointerdown', (e) => {
     if (S.phase !== 'aim') return;
     // Tapping the ball on the tee swings, like the Swing button.
@@ -830,9 +917,17 @@ export function mount(root, opts) {
       const f = S.flight;
       f.t = Math.min(1, f.t + dt / f.dur);
       const p = flightPos(f, f.t);
+      if (f.off) { const k = (1 - f.t) / (1 - f.t0); p.x += f.off.x * k; p.y += f.off.y * k; p.h += f.off.h * k; }
       S.ball.x = p.x; S.ball.y = p.y; S.ball.h = p.h;
       S.trail.push({ x: p.x, y: p.y, h: p.h }); if (S.trail.length > 26) S.trail.shift();
       if (f.t >= 1) { S.trail = []; land(); }
+    } else if (S.phase === 'tease') {
+      const f = S.tease.f;
+      f.t = Math.min(S.tease.stopT, f.t + dt / f.dur);
+      const p = flightPos(f, f.t);
+      S.ball.x = p.x; S.ball.y = p.y; S.ball.h = p.h;
+      S.trail.push({ x: p.x, y: p.y, h: p.h }); if (S.trail.length > 26) S.trail.shift();
+      if (f.t >= S.tease.stopT) freezeTease();
     } else if (S.phase === 'roll') {
       stepRoll(dt);
     } else if (S.phase === 'splash') {
@@ -888,6 +983,7 @@ export function mount(root, opts) {
   /** Email sheet dismissed without a session: back to aiming. */
   cleanup.ungate = () => {
     if (S.phase !== 'gated') return;
+    resetTease();
     S.phase = 'aim'; S.gatedShot = null; el.swing.disabled = false; el.mark.style.opacity = 0;
     setHint('Tap the course to aim');
   };
