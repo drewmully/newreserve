@@ -32,7 +32,7 @@ export const HOME_HERO_OVERRIDE_PARAM = "hh";
  * layout.
  */
 export const HOME_HERO_USE_NEW_H1 = true;
-export const HOME_HERO_NEW_H1 = "Better golf clothes from Mully. Shop the edit, or let a stylist pick for you.";
+export const HOME_HERO_NEW_H1 = "Better golf clothes.";
 
 export function homeHeroHeadline(season: string): string {
   if (HOME_HERO_USE_NEW_H1) return HOME_HERO_NEW_H1;
