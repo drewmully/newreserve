@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { Fragment } from "react";
 
-const LINK = /\[([^\]]+)\]\(((?:\/|https:\/\/)[^)\s]*)\)/g;
+// URLs may contain one level of balanced parentheses, e.g. Wikipedia's
+// /wiki/Skins_Game_(PGA_Tour).
+const LINK = /\[([^\]]+)\]\(((?:\/|https:\/\/)(?:[^()\s]|\([^()\s]*\))*)\)/g;
 
 /**
  * Renders [label](/path) as internal links and [label](https://...) as
