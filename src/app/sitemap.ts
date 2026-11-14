@@ -17,7 +17,7 @@ const SITE = "https://www.mymully.com";
 
 const STATIC_PATHS = [
   "/", "/subscription", "/shop", "/shop/new-arrivals", "/blog", "/blog/letters",
-  "/lp/editorial", "/lp/mully100", "/lp/gift", "/lp/gift-season", "/outings", "/faq", "/contact",
+  "/lp/editorial", "/lp/mully100", "/lp/gift", "/lp/gift-season", "/shop/gift-card", "/outings", "/faq", "/contact",
   "/policies/terms", "/policies/privacy", "/policies/refund", "/policies/shipping",
 ];
 

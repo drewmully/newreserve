@@ -12,6 +12,8 @@ import { ShopProductCard } from "../components/ShopProductCard";
 import { RestockChristmasNote } from "./RestockChristmasNote";
 import { shopProductLabel, shopProductPhoto } from "@/lib/shopProductPhotos";
 import { GiftReminderSignup } from "./GiftReminderSignup";
+import { GIFT_CARD_PATH } from "@/lib/giftCard";
+import { MullyWordmark } from "../components/MullyWordmark";
 import {
   GIFT_GUIDE_TIERS,
   giftGuideFaqs,
@@ -116,6 +118,30 @@ export function GiftSizingNote() {
       Not sure of his size? Most tops we ship this time of year go out in L or XL. Unworn pieces with tags return within 30 days of delivery.{" "}
       <Link href="/policies/refund" className="gg-ulink">Return policy</Link>
     </p>
+  );
+}
+
+/**
+ * Mully Gift Card band on the hub, after the tiers: the answer for the
+ * shopper who does not know his size or taste. No price in the copy; the
+ * live denominations are on /shop/gift-card.
+ */
+export function GiftCardBand({ placement, tier }: { placement: string; tier: string }) {
+  return (
+    <section className="gg-giftcard" aria-labelledby={`gg-giftcard-${placement}`}>
+      <div className="gg-giftcard__card" aria-hidden="true">
+        <MullyWordmark accent="#c9d0b0" tone="light" className="gg-giftcard__brand" />
+        <span className="gg-giftcard__label">Gift card</span>
+      </div>
+      <div className="gg-giftcard__copy">
+        <p className="gg-kicker">Not sure of his size?</p>
+        <h2 id={`gg-giftcard-${placement}`} className="gg-giftcard__title">Mully Gift Card</h2>
+        <p>Good for any piece in the Mully shop, so he picks the style and the size. Most gift cards arrive by email within minutes, or pick a send date, like Christmas morning.</p>
+        <Link href={GIFT_CARD_PATH} className="gg-button" data-gg-giftcard={placement} data-gg-tier={tier}>
+          Send a gift card
+        </Link>
+      </div>
+    </section>
   );
 }
 

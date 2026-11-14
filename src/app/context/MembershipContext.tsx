@@ -124,6 +124,8 @@ export interface CartItem {
   image?: string;
   /** Subscription selling plan for membership lines (Mully Access). */
   sellingPlanId?: string;
+  /** Cart line properties, e.g. gift card recipient details. */
+  attributes?: Array<{ key: string; value: string }>;
 }
 
 /** Cart context for the Klaviyo "Mully Added to Cart" event (cart recovery). */
@@ -976,7 +978,7 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
     setCart(prev => [...prev, ...items.map(item => ({ ...item, quantity: 1 }))]);
     setCartOpen(true);
     try {
-      const lines = items.map(item => ({ merchandiseId: item.variantId!, quantity: 1, ...(item.sellingPlanId ? { sellingPlanId: item.sellingPlanId } : {}) }));
+      const lines = items.map(item => ({ merchandiseId: item.variantId!, quantity: 1, ...(item.sellingPlanId ? { sellingPlanId: item.sellingPlanId } : {}), ...(item.attributes?.length ? { attributes: item.attributes } : {}) }));
       const attrs = getProjectCartAttributes();
       const attrSig = JSON.stringify(attrs);
       let result: ShopifyCart | null = null;
