@@ -16,4 +16,5 @@ export const LETTER_ISSUE_SLUGS: readonly string[] = [
   "fall-ball-sloat-leaf-rule-greywalls-november-2026",
   "this-past-week-in-golf-november-8-2026",
   "holiday-golf-gift-guide-mully-edit-november-2026",
+  "this-past-week-in-golf-november-15-2026",
 ];
