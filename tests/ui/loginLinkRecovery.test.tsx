@@ -1,5 +1,7 @@
 import type React from "react";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { renderToString } from "react-dom/server";
+import { hydrateRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -180,5 +182,58 @@ describe("Google sign-in errors", () => {
     } finally {
       ua.mockRestore();
     }
+  });
+});
+
+describe("hydration of the prefilled email", () => {
+  it("enables Continue after a refresh on the expired-link notice (server HTML has an empty field)", async () => {
+    window.history.replaceState({}, "", "/login?returnTo=%2Fshop");
+    // Server render: no storage access, so the field is empty and the button disabled.
+    const html = renderToString(<LoginPage />);
+    const container = document.createElement("div");
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    expect((container.querySelector("button[type=submit]") as HTMLButtonElement).disabled).toBe(true);
+
+    sessionStorage.setItem("mully_pending_sign_in_email", "jane@example.com");
+    const errors: unknown[] = [];
+    let root: ReturnType<typeof hydrateRoot> | undefined;
+    await act(async () => {
+      root = hydrateRoot(container, <LoginPage />, { onRecoverableError: (e) => errors.push(e) });
+    });
+    const input = container.querySelector("input[type=email]") as HTMLInputElement;
+    const button = container.querySelector("button[type=submit]") as HTMLButtonElement;
+    await waitFor(() => expect(input.value).toBe("jane@example.com"));
+    expect(button.disabled).toBe(false);
+    expect(errors).toEqual([]);
+    await act(async () => { root?.unmount(); });
+    container.remove();
+  });
+});
+
+describe("wrong email, then 'Send me a new link instead'", () => {
+  async function typeWrongEmail() {
+    mocks.confirm.mockRejectedValue(authErr("auth/invalid-email"));
+    render(<LoginPage />);
+    fireEvent.change(await screen.findByPlaceholderText("you@example.com"), { target: { value: "wrong@example.com" } });
+    fireEvent.click(screen.getByText("Sign In"));
+    await screen.findByText(WRONG_EMAIL_FOR_LINK_MESSAGE);
+  }
+
+  it("leaves the field empty when the intended email is unknown", async () => {
+    window.history.replaceState({}, "", LINK);
+    await typeWrongEmail();
+    fireEvent.click(screen.getByText("Send me a new link instead"));
+    expect((screen.getByPlaceholderText("you@example.com") as HTMLInputElement).value).toBe("");
+    expect(sessionStorage.getItem("mully_pending_sign_in_email")).toBeNull();
+    expect(screen.getByText("Continue")).toBeTruthy();
+  });
+
+  it("prefills the stored intended email instead of the wrong one", async () => {
+    window.history.replaceState({}, "", LINK);
+    sessionStorage.setItem("mully_pending_sign_in_email", "intended@example.com");
+    await typeWrongEmail();
+    fireEvent.click(screen.getByText("Send me a new link instead"));
+    expect((screen.getByPlaceholderText("you@example.com") as HTMLInputElement).value).toBe("intended@example.com");
   });
 });

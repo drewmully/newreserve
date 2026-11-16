@@ -61,3 +61,14 @@ describe("email helpers", () => {
     expect(stripEmailLinkParams("https://mymully.com/login?oobCode=X")).toBe("/login");
   });
 });
+
+describe("sign-in link expiry copy", () => {
+  // Firebase does not document an email-link lifetime, so the UI must not
+  // promise one. /login and /onboarding share the same generic wording.
+  it.each(["src/app/login/page.tsx", "src/app/onboarding/page.tsx"])("%s makes no specific expiry claim", async (file) => {
+    const { readFileSync } = await import("node:fs");
+    const source = readFileSync(file, "utf8");
+    expect(source).not.toMatch(/expires? (after|in) (1|one|60|24) ?(hour|minute)/i);
+    expect(source).toContain("Each link works once and expires after a while, so use the newest one.");
+  });
+});

@@ -414,7 +414,7 @@ export default function OnboardingPage() {
             Click it to confirm your account and complete your membership.
           </p>
           <div className="rounded-xl bg-cream border border-taupe/15 px-5 py-4 text-sm text-charcoal/55 leading-relaxed mb-6">
-            The link expires after 1 hour. Check your spam folder if you don&apos;t see it.
+            Each link works once and expires after a while, so use the newest one. Check your spam folder if you don&apos;t see it.
           </div>
           <button
             onClick={() => {

@@ -88,15 +88,11 @@ export default function LoginPage() {
     return "email";
   });
 
-  const [emailValue, setEmailValue] = useState(() => {
-    if (contextEmail) return contextEmail;
-    if (typeof window === "undefined") return "";
-    try {
-      return sessionStorage.getItem(PENDING_SIGN_IN_EMAIL_KEY) ?? "";
-    } catch {
-      return "";
-    }
-  });
+  // Starts empty on both server and client so hydration matches; the
+  // prefill (signed-in email or the email saved by a dead-link recovery) is
+  // applied in an effect below. Reading storage in the initializer made the
+  // client state disagree with the server HTML, leaving "Continue" disabled.
+  const [emailValue, setEmailValue] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Non-error guidance shown above the send-link form, e.g. after a dead link.
@@ -104,9 +100,8 @@ export default function LoginPage() {
   const [resendCooldown, setResendCooldown] = useState(0);
   // True when the link is opened on a different device (no localStorage entry)
   const [needsEmailForLink, setNeedsEmailForLink] = useState(false);
-  const [inAppBrowser] = useState(() =>
-    typeof navigator !== "undefined" && isInAppBrowser(navigator.userAgent)
-  );
+  // Detected after mount for the same hydration reason.
+  const [inAppBrowser, setInAppBrowser] = useState(false);
 
   /**
    * The email link can no longer be used (expired, already used, or any
@@ -118,9 +113,10 @@ export default function LoginPage() {
     try {
       window.history.replaceState(window.history.state, "", stripEmailLinkParams(window.location.href));
     } catch {}
+    // An empty prefill clears the field, so a wrong address never sticks.
     const prefill = normalizeEmail(email);
+    setEmailValue(prefill);
     if (prefill) {
-      setEmailValue(prefill);
       try {
         sessionStorage.setItem(PENDING_SIGN_IN_EMAIL_KEY, prefill);
       } catch {}
@@ -129,6 +125,22 @@ export default function LoginPage() {
     setNotice(message);
     setNeedsEmailForLink(false);
     setStep("email");
+  }
+
+  /**
+   * The address this sign-in is meant for, if we know it: the email saved
+   * when the link was requested on this device, the one saved by a dead-link
+   * recovery, or the signed-in account. Never what was just typed into the
+   * confirm form (that may be the wrong address).
+   */
+  function knownIntendedEmail(): string {
+    try {
+      const stored =
+        localStorage.getItem("emailForSignIn") ||
+        sessionStorage.getItem(PENDING_SIGN_IN_EMAIL_KEY);
+      if (stored) return stored;
+    } catch {}
+    return contextEmail || "";
   }
 
   function handleLinkConfirmFailure(err: unknown, email: string) {
@@ -148,6 +160,19 @@ export default function LoginPage() {
         : DEAD_LINK_MESSAGE,
     );
   }
+
+  /* ── Client-only initial state (after hydration) ── */
+  useEffect(() => {
+    setInAppBrowser(isInAppBrowser(navigator.userAgent));
+    let saved = "";
+    try {
+      saved = sessionStorage.getItem(PENDING_SIGN_IN_EMAIL_KEY) ?? "";
+    } catch {}
+    const initial = contextEmail || saved;
+    if (initial) setEmailValue((current) => current || initial);
+  // Mount-only; later contextEmail changes are handled by the effect below.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /* ── Handle email link (and Google redirect result) on mount ── */
   useEffect(() => {
@@ -596,7 +621,7 @@ export default function LoginPage() {
 
               <button
                 type="button"
-                onClick={() => recoverFromDeadLink(emailValue, null)}
+                onClick={() => recoverFromDeadLink(knownIntendedEmail(), null)}
                 className="w-full mt-4 text-sm text-charcoal/45 hover:text-charcoal/70 transition-colors duration-300 cursor-pointer"
               >
                 Send me a new link instead
