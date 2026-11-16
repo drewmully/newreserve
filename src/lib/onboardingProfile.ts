@@ -179,3 +179,23 @@ export function buildCompleteOnboardingUpdatePayload<
     updates,
   };
 }
+
+/** Same pattern firestore.rules enforces for users/{uid}.phone_e164. */
+const E164_RE = /^\+[1-9][0-9]{6,14}$/;
+
+export function isE164Phone(value: string | null | undefined): value is string {
+  return typeof value === "string" && E164_RE.test(value);
+}
+
+export const ONBOARDING_SAVE_ERROR_MESSAGE =
+  "We couldn't save your profile. Check your connection and try again.";
+
+/** Thrown by completeOnboarding when Firestore rejects or fails the write. */
+export class OnboardingSaveError extends Error {
+  readonly cause: unknown;
+  constructor(cause: unknown) {
+    super(ONBOARDING_SAVE_ERROR_MESSAGE);
+    this.name = "OnboardingSaveError";
+    this.cause = cause;
+  }
+}
