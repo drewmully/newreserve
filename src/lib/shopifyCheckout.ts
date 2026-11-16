@@ -4,6 +4,8 @@ import { buildCheckoutOriginAttributes } from "./shopifyCheckoutOrigin";
 import { isGameRewardCode, readGameShopReward } from "./shopRewards";
 import { recordJourneyCart } from "./analytics/journeyClient";
 import { recordSourceSessionCart } from "./analytics/journeySourceSessionClient";
+import { getSignedInCheckoutIdentity } from "./checkoutIdentityClient";
+import { CHECKOUT_UID_ATTRIBUTE } from "./checkoutIdentityConstants";
 import {
   getStoredAttribution,
   attributionToCartAttributes,
@@ -169,6 +171,11 @@ export async function createMembershipCheckout(
     }
   })();
   const sponsorshipCode = getStoredSponsorshipCode();
+  // Signed-in shoppers: prefill checkout with their account email and carry
+  // a server-signed uid so orders-paid links the order to this account even
+  // if they type a different email at checkout. No-op when signed out.
+  const identity = await getSignedInCheckoutIdentity();
+  const buyerEmail = options.email?.trim() || identity.email || undefined;
   const attributes = [
     ...buildCheckoutOriginAttributes(returnTo),
     ...attributionToCartAttributes(attribution),
@@ -180,7 +187,9 @@ export async function createMembershipCheckout(
     ...(foundingGift.attach
       ? [{ key: FOUNDING_100_CART_ATTR_KEY, value: "true" }]
       : []),
-    ...(options.attributes ?? []),
+    // Callers can never supply (or spoof) the signed uid attribute.
+    ...(options.attributes ?? []).filter((a) => a.key !== CHECKOUT_UID_ATTRIBUTE),
+    ...identity.attributes,
   ];
 
   // Cart lines: subscription line first, optional rangefinder gift second.
@@ -239,7 +248,7 @@ export async function createMembershipCheckout(
     lines,
     attributes,
     discountCodes: discountCodes.length ? discountCodes : null,
-    buyerIdentity: options.email ? { email: options.email } : null,
+    buyerIdentity: buyerEmail ? { email: buyerEmail } : null,
     ...(options.firstBoxItems ? { note: [
       "Mully Reserve: first-box outfit",
       ...options.firstBoxItems.map(item => `${item.slot}: ${item.name.slice(0,300)} / ${item.size.slice(0,100)} (qty 1)`),
@@ -336,14 +345,14 @@ export async function createMembershipCheckout(
   try {
     const checkout = new URL(checkoutUrl);
     checkout.searchParams.set("return_url", returnTo);
-    if (options.email) {
-      checkout.searchParams.set("checkout[email]", options.email);
+    if (buyerEmail) {
+      checkout.searchParams.set("checkout[email]", buyerEmail);
     }
     window.location.href = checkout.toString();
   } catch {
     const separator = checkoutUrl.includes("?") ? "&" : "?";
-    const emailParam = options.email
-      ? `&checkout%5Bemail%5D=${encodeURIComponent(options.email)}`
+    const emailParam = buyerEmail
+      ? `&checkout%5Bemail%5D=${encodeURIComponent(buyerEmail)}`
       : "";
     window.location.href = `${checkoutUrl}${separator}return_url=${encodeURIComponent(returnTo)}${emailParam}`;
   }
