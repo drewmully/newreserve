@@ -132,6 +132,6 @@ export const TRUST_BADGES = [
   { icon: "value", label: "$300+ Retail", sub: "Every quarter" },
   { icon: "ship", label: "Free Shipping", sub: "Continental US" },
   { icon: "cancel", label: "Cancel Anytime", sub: "After your first quarter" },
-  { icon: "exchange", label: "Wrong Fit?", sub: "We swap, no questions" },
+  { icon: "exchange", label: "Wrong Fit?", sub: "We swap it, free*" },
   { icon: "sizing", label: "Sizing Confirmed", sub: "After your purchase" },
 ] as const;

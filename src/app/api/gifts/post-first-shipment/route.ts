@@ -99,7 +99,7 @@ export async function GET(request: NextRequest) {
           `Your first Mully Reserve box just shipped. You should have tracking in your inbox from our fulfillment partner shortly.`,
           "",
           `A few things to know:`,
-          ` • Wrong fit on anything? We swap it free, no questions, no shipping fee. Just reply to this email.`,
+          ` • Wrong fit on anything? We swap it free, no shipping fee, within 30 days of delivery. Just reply to this email.`,
           ` • Your gift subscription is now cancelled — you won't be charged again unless you decide to stay on.`,
           ` • Want to keep getting boxes? Reactivate in one click from your account: https://mymully.com/account`,
           "",

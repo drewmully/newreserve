@@ -17,6 +17,7 @@ import {
   LifestyleGallery,
   ProductDetails,
 } from "../_shared/LPSections";
+import { RETURN_WINDOW_FOOTNOTE } from "@/lib/returnsCopy";
 
 const BRAND_LOGOS = [
   { src: "/brands/greyson.png", alt: "Greyson" },
@@ -34,7 +35,7 @@ const ABOUT_BULLETS = [
   "Give a hand-curated quarterly box of $300+ retail value golf apparel and accessories — without picking sizes blind.",
   "After you check out, your recipient gets a beautifully designed note from you with a private link to confirm their sizing.",
   "Brands worth knowing: Rhone, Greyson, Quiet Golf, Will Leather Goods, Field Day, Penfold and more.",
-  "Wrong fit on anything? They exchange free — no questions, no shipping fee.",
+  "Wrong fit on anything? They exchange free, no shipping fee.*",
   "Quarterly recurring at $250/qtr — they can cancel anytime after the first box if they prefer a one-and-done gift.",
 ];
 
@@ -394,6 +395,7 @@ export default function GiftLPClient() {
                 </li>
               ))}
             </ul>
+            <p className="mt-3 text-xs text-charcoal/60">{RETURN_WINDOW_FOOTNOTE}</p>
             <div className="mt-6">
               <GuaranteedValue />
             </div>

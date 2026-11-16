@@ -11,6 +11,7 @@
 
 import { useMemo, useState } from "react";
 import { GlassHeader } from "@/app/components/ClientComponents";
+import { RETURN_WINDOW_FOOTNOTE } from "@/lib/returnsCopy";
 
 const SHIRT = ["S", "M", "L", "XL", "XXL"] as const;
 const WAIST = ["28", "30", "32", "34", "36", "38", "40"] as const;
@@ -227,10 +228,11 @@ export default function GiftSizingClient({
                 ) : null}
 
                 <p className="text-[11px] text-charcoal/55 leading-relaxed pt-3 border-t border-forest/10">
-                  Wrong fit on anything? We swap it free, no questions, no
-                  shipping fee. Your subscription auto-cancels after the
+                  Wrong fit on anything? We swap it free, no shipping fee.*
+                  Your subscription auto-cancels after the
                   first box ships \u2014 you&apos;re only charged once unless you
                   choose to stay on.
+                  <span className="block mt-1">{RETURN_WINDOW_FOOTNOTE}</span>
                 </p>
               </div>
 

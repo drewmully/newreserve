@@ -10,6 +10,7 @@
  * Pure-display component, server-rendered. No client hooks.
  */
 import React from "react";
+import { RETURN_WINDOW_FOOTNOTE } from "@/lib/returnsCopy";
 
 type Tone = "light" | "dark";
 
@@ -60,8 +61,10 @@ export function GuaranteedValue({
             Each quarterly box contains{" "}
             <span className={`font-medium ${accent}`}>$300+ retail value</span>{" "}
             of premium gear from Rhone, Greyson, Quiet Golf &amp; more. If you
-            don&apos;t absolutely love it, exchange or return anything &mdash;
-            no questions asked.
+            don&apos;t absolutely love it, exchange or return anything.*
+          </p>
+          <p className={`text-xs leading-relaxed mt-1 opacity-70 ${body}`}>
+            {RETURN_WINDOW_FOOTNOTE}
           </p>
         </div>
       </div>

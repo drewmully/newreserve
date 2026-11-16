@@ -27,6 +27,7 @@ import { createMembershipCheckout } from "@/lib/shopifyCheckout";
 import { trackEvent } from "@/lib/tracking";
 import { PENDING_ONBOARDING_EMAIL_KEY } from "../components/EmailCTA";
 import { GuaranteedValue } from "../components/GuaranteedValue";
+import { RETURN_WINDOW_FOOTNOTE } from "@/lib/returnsCopy";
 
 /* ═══════════════════════════════════════════════════════════════ */
 
@@ -194,7 +195,7 @@ export default function ChoosePlanPage() {
                     <FeatureItem text="Quarterly curated box" light />
                     <FeatureItem text="Everything in Digital" light />
                     <FeatureItem text="Free shipping" light />
-                    <FeatureItem text="Exchange anything, free" light />
+                    <FeatureItem text="Exchange anything, free*" light />
                     <FeatureItem text="Concierge support" light />
                     <FeatureItem text="Invite-only events" light />
                   </ul>
@@ -224,7 +225,10 @@ export default function ChoosePlanPage() {
         )}
 
         <p className="text-center text-sm text-charcoal/40 mt-8">
-          Cancel anytime. Exchange anything, free.
+          Cancel anytime. Exchange anything, free.*
+        </p>
+        <p className="text-center text-xs text-charcoal/40 mt-1">
+          {RETURN_WINDOW_FOOTNOTE}
         </p>
       </div>
     </main>
