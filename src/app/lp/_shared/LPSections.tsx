@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { RECENT_BOX_PRODUCTS, TRUST_BADGES } from "./products";
+import { RETURN_WINDOW_FOOTNOTE } from "@/lib/returnsCopy";
 
 /* -------------------------------------------------------------------------- */
 /*  Trust badge strip — Amazon-style icons row directly under the buy box     */
@@ -75,6 +76,9 @@ export function TrustBadgeStrip() {
             </div>
           ))}
         </div>
+        <p className="mt-3 text-[11px] text-charcoal/60 text-center">
+          {RETURN_WINDOW_FOOTNOTE}
+        </p>
       </div>
     </div>
   );
@@ -214,7 +218,7 @@ export function HowItWorks({ giftMode = false }: { giftMode?: boolean }) {
         {
           n: "3",
           title: "First quarter ships",
-          body: "Their hand-curated $300+ retail value edit ships the next business day after they submit. Wrong size? Exchange free, no questions.",
+          body: "Their hand-curated $300+ retail value edit ships the next business day after they submit. Wrong size? Exchange free.*",
         },
       ]
     : [
@@ -231,7 +235,7 @@ export function HowItWorks({ giftMode = false }: { giftMode?: boolean }) {
         {
           n: "3",
           title: "First quarter ships",
-          body: "Your first hand-curated edit ships within one business day of the form. Wrong fit on anything? Exchange free, no questions asked.",
+          body: "Your first hand-curated edit ships within one business day of the form. Wrong fit on anything? Exchange free.*",
         },
       ];
 
@@ -264,6 +268,9 @@ export function HowItWorks({ giftMode = false }: { giftMode?: boolean }) {
             </div>
           ))}
         </div>
+        <p className="mt-6 text-xs text-charcoal/60 text-center">
+          {RETURN_WINDOW_FOOTNOTE}
+        </p>
       </div>
     </section>
   );
@@ -380,8 +387,10 @@ export function ProductDetails({ giftMode = false }: { giftMode?: boolean }) {
             <p className="text-sm text-charcoal/80 leading-relaxed">
               If anything in your edit doesn't fit or doesn't land for you,
               email us. We'll send a swap in the next size or pull something
-              else from the rack. No restocking fee, no shipping fee, no
-              questions.
+              else from the rack. No restocking fee, no shipping fee.*
+            </p>
+            <p className="text-xs text-charcoal/60 mt-2">
+              {RETURN_WINDOW_FOOTNOTE}
             </p>
           </div>
         </div>

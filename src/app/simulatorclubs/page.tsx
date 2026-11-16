@@ -283,7 +283,7 @@ const FAQ = [
   },
   {
     q: "What is your return policy?",
-    a: "Inventory can be returned within 30 days of purchase for a refund, no questions asked. The POS reader, slatwall fixture, signage, and Mullybox display can be returned anytime for a full refund of the hardware, in working condition.",
+    a: "Inventory can be returned within 30 days of purchase for a refund. The POS reader, slatwall fixture, signage, and Mullybox display can be returned anytime for a full refund of the hardware, in working condition.",
   },
   {
     q: "What if I want to cancel?",
