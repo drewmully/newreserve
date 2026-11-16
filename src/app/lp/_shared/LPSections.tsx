@@ -387,8 +387,10 @@ export function ProductDetails({ giftMode = false }: { giftMode?: boolean }) {
             <p className="text-sm text-charcoal/80 leading-relaxed">
               If anything in your edit doesn't fit or doesn't land for you,
               email us. We'll send a swap in the next size or pull something
-              else from the rack. No restocking fee, no shipping fee, no
-              questions.
+              else from the rack. No restocking fee, no shipping fee.*
+            </p>
+            <p className="text-xs text-charcoal/60 mt-2">
+              {RETURN_WINDOW_FOOTNOTE}
             </p>
           </div>
         </div>
