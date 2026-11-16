@@ -4,10 +4,29 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useMembership } from "../context/MembershipContext";
-import { auth, isSignInWithEmailLink, confirmOTPSignIn, signInWithGoogle } from "@/lib/firebase";
+import {
+  auth,
+  isSignInWithEmailLink,
+  confirmOTPSignIn,
+  signInWithGoogle,
+  signInWithGoogleRedirect,
+  completeGoogleRedirectSignIn,
+} from "@/lib/firebase";
 import { PENDING_SIGN_IN_EMAIL_KEY } from "@/lib/pendingSignInEmail";
 import { createMembershipCheckout } from "@/lib/shopifyCheckout";
 import { shopReturnFromLogin } from "@/lib/shopLogin";
+import {
+  DEAD_LINK_MESSAGE,
+  IN_APP_BROWSER_GOOGLE_HINT,
+  isInAppBrowser,
+  isRetryableAuthError,
+  isValidEmail,
+  isWrongEmailForLink,
+  mapAuthError,
+  normalizeEmail,
+  shouldFallBackToGoogleRedirect,
+  stripEmailLinkParams,
+} from "./loginErrors";
 import { ShopPageShell } from "../shop/components/ShopPageShell";
 
 const PENDING_ONBOARDING_DATA_KEY = "pending_onboarding_data";
@@ -27,6 +46,8 @@ async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
     } catch (err) {
       lastError = err;
       console.error(`[SignIn] attempt ${attempt}/${maxAttempts} failed:`, err);
+      // Expired/used/wrong-email codes never succeed on retry.
+      if (!isRetryableAuthError(err)) break;
       if (attempt < maxAttempts) {
         await new Promise((r) => setTimeout(r, 600 * attempt));
       }
@@ -35,25 +56,15 @@ async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
   throw lastError;
 }
 
-function mapAuthError(code: string): string {
-  const messages: Record<string, string> = {
-    "auth/invalid-email": "Please enter a valid email address.",
-    "auth/too-many-requests": "Too many attempts. Please try again later.",
-    "auth/unauthorized-continue-uri":
-      "Sign-in is not configured for this domain.",
-    "auth/expired-action-code":
-      "This link has expired. Please request a new one.",
-    "auth/invalid-action-code":
-      "This link has already been used or is invalid.",
-    "auth/user-disabled": "This account has been disabled.",
-  };
-  return messages[code] ?? "Something went wrong. Please try again.";
+function errorCode(err: unknown): string {
+  return (err as { code?: string })?.code ?? "";
 }
 
+const PAID_TIERS = new Set(["access", "member", "black"]);
 
 export default function LoginPage() {
   const router = useRouter();
-  const { sendOTPEmail, isSignedIn, authLoading, onboardingCompleted, completeOnboarding, setTier, email: contextEmail } = useMembership();
+  const { sendOTPEmail, isSignedIn, authLoading, onboardingCompleted, completeOnboarding, setTier, tier, email: contextEmail } = useMembership();
   const pendingOnboardingHandled = useRef(false);
 
   // Detect email link synchronously on first render so we never flash the form.
@@ -88,12 +99,64 @@ export default function LoginPage() {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Non-error guidance shown above the send-link form, e.g. after a dead link.
+  const [notice, setNotice] = useState<string | null>(null);
   const [resendCooldown, setResendCooldown] = useState(0);
   // True when the link is opened on a different device (no localStorage entry)
   const [needsEmailForLink, setNeedsEmailForLink] = useState(false);
+  const [inAppBrowser] = useState(() =>
+    typeof navigator !== "undefined" && isInAppBrowser(navigator.userAgent)
+  );
 
-  /* ── Handle email link on mount ── */
+  /**
+   * The email link can no longer be used (expired, already used, or any
+   * other confirm failure). Drop the one-time code from the URL so a refresh
+   * doesn't retry it, and switch to the normal send-link form with the email
+   * pre-filled.
+   */
+  function recoverFromDeadLink(email: string, message: string | null = DEAD_LINK_MESSAGE) {
+    try {
+      window.history.replaceState(window.history.state, "", stripEmailLinkParams(window.location.href));
+    } catch {}
+    const prefill = normalizeEmail(email);
+    if (prefill) {
+      setEmailValue(prefill);
+      try {
+        sessionStorage.setItem(PENDING_SIGN_IN_EMAIL_KEY, prefill);
+      } catch {}
+    }
+    setError(null);
+    setNotice(message);
+    setNeedsEmailForLink(false);
+    setStep("email");
+  }
+
+  function handleLinkConfirmFailure(err: unknown, email: string) {
+    if (isWrongEmailForLink(err)) {
+      // The one-time code is still valid; let them enter the right address.
+      setError(mapAuthError("auth/invalid-email", "link"));
+      setNotice(null);
+      setStep("email");
+      setNeedsEmailForLink(true);
+      return;
+    }
+    const code = errorCode(err);
+    recoverFromDeadLink(
+      email,
+      code === "auth/network-request-failed"
+        ? "We couldn't finish signing you in with that link. Check your connection — we can send you a fresh one."
+        : DEAD_LINK_MESSAGE,
+    );
+  }
+
+  /* ── Handle email link (and Google redirect result) on mount ── */
   useEffect(() => {
+    // Completes a Google redirect started by the popup fallback below.
+    completeGoogleRedirectSignIn().catch((err: unknown) => {
+      console.error("[SignIn] Google redirect failed:", err);
+      setError(mapAuthError(errorCode(err), "google"));
+    });
+
     if (!isSignInWithEmailLink(auth, window.location.href)) return;
 
     const savedEmail = localStorage.getItem("emailForSignIn") ?? "";
@@ -102,14 +165,15 @@ export default function LoginPage() {
       setEmailValue(savedEmail);
       withRetry(() => confirmOTPSignIn(savedEmail, window.location.href)).catch((err) => {
         console.error("[SignIn] auto-confirm failed after all retries:", err);
-        setError(mapAuthError((err as { code?: string })?.code ?? ""));
-        setStep("email");
+        handleLinkConfirmFailure(err, savedEmail);
       });
     } else {
       // Different device — ask user for email
       setStep("email");
       setNeedsEmailForLink(true);
     }
+  // Mount-only: the handlers above only call stable state setters.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -121,8 +185,10 @@ export default function LoginPage() {
   useEffect(() => {
     if (authLoading || !isSignedIn) return;
     if (pendingOnboardingHandled.current) return;
-    // Explicit shop sign-in does not enroll or resume an abandoned membership.
-    // The return path is carried in the email link, including on another device.
+    // Explicit shop sign-in (?returnTo=/shop…, or "/") does not enroll or
+    // resume an abandoned membership. The return path is carried in the email
+    // link, including on another device. Plain /login links carry no returnTo,
+    // so they fall through to the pending-onboarding completion below.
     const shopReturn = shopReturnFromLogin(window.location.search);
     if (shopReturn) {
       router.replace(shopReturn);
@@ -144,11 +210,13 @@ export default function LoginPage() {
           phone?: string;
           smsOptIn?: boolean;
         };
-        try { localStorage.removeItem(PENDING_ONBOARDING_DATA_KEY); } catch {}
 
         const { selectedTier, username, onboardingProfile, fitProfile, phone, smsOptIn } = data;
 
+        const hasPaidTier = PAID_TIERS.has(tier);
         const alreadyPaid = (() => {
+          // Never send someone who already has a paid tier back to checkout.
+          if (hasPaidTier) return true;
           try {
             // Set by the magic link URL (?paid=1) when webhook generates the link post-checkout
             if (new URLSearchParams(window.location.search).get("paid") === "1") return true;
@@ -156,9 +224,6 @@ export default function LoginPage() {
             return !!localStorage.getItem(POST_CHECKOUT_KEY);
           } catch { return false; }
         })();
-        if (alreadyPaid) {
-          try { localStorage.removeItem(POST_CHECKOUT_KEY); } catch {}
-        }
 
         void completeOnboarding({
           username,
@@ -167,7 +232,14 @@ export default function LoginPage() {
           phone,
           smsOptIn,
         }).then(() => {
-          setTier(selectedTier);
+          // Only clear the saved answers once they are actually stored, so a
+          // failed save can be retried instead of silently losing them.
+          try { localStorage.removeItem(PENDING_ONBOARDING_DATA_KEY); } catch {}
+          if (alreadyPaid) {
+            try { localStorage.removeItem(POST_CHECKOUT_KEY); } catch {}
+          }
+          // Don't locally downgrade a paid member to the tier picked pre-auth.
+          if (!hasPaidTier) setTier(selectedTier);
           if (!alreadyPaid && (selectedTier === "access" || selectedTier === "member")) {
             return createMembershipCheckout(selectedTier);
           } else {
@@ -178,13 +250,15 @@ export default function LoginPage() {
           router.replace("/onboarding");
         });
       } catch {
+        // Unreadable leftovers: drop them so they can't block future logins.
+        try { localStorage.removeItem(PENDING_ONBOARDING_DATA_KEY); } catch {}
         router.replace("/");
       }
       return;
     }
 
     router.replace("/");
-  }, [authLoading, isSignedIn, onboardingCompleted, router, completeOnboarding, setTier]);
+  }, [authLoading, isSignedIn, onboardingCompleted, router, completeOnboarding, setTier, tier]);
 
   /* ── Resend cooldown countdown ── */
   useEffect(() => {
@@ -204,21 +278,37 @@ export default function LoginPage() {
 
   /* ── Handlers ── */
 
+  /** Lowercased, validated email or null (with the error already shown). */
+  function readEmailInput(): string | null {
+    const email = normalizeEmail(emailValue);
+    if (!email) {
+      setError(mapAuthError("auth/missing-email"));
+      return null;
+    }
+    if (!isValidEmail(email)) {
+      setError(mapAuthError("auth/invalid-email"));
+      return null;
+    }
+    if (email !== emailValue) setEmailValue(email);
+    return email;
+  }
+
   async function handleSendLink(e: React.FormEvent) {
     e.preventDefault();
-    const email = emailValue.trim();
+    setError(null);
+    const email = readEmailInput();
     if (!email) return;
     setLoading(true);
-    setError(null);
     try {
       await sendOTPEmail(email);
       try {
         sessionStorage.removeItem(PENDING_SIGN_IN_EMAIL_KEY);
       } catch {}
+      setNotice(null);
       setStep("sent");
       setResendCooldown(60);
     } catch (err) {
-      setError(mapAuthError((err as { code?: string })?.code ?? ""));
+      setError(mapAuthError(errorCode(err), "send"));
     } finally {
       setLoading(false);
     }
@@ -231,7 +321,16 @@ export default function LoginPage() {
       await signInWithGoogle();
       // onAuthStateChanged → isSignedIn → redirect
     } catch (err) {
-      setError(mapAuthError((err as { code?: string })?.code ?? ""));
+      const code = errorCode(err);
+      if (shouldFallBackToGoogleRedirect(code, inAppBrowser)) {
+        try {
+          await signInWithGoogleRedirect();
+          return; // the page navigates away
+        } catch (redirectErr) {
+          console.error("[SignIn] Google redirect fallback failed:", redirectErr);
+        }
+      }
+      setError(mapAuthError(code, "google"));
     } finally {
       setLoading(false);
     }
@@ -239,13 +338,15 @@ export default function LoginPage() {
 
   async function handleResend() {
     if (resendCooldown > 0 || loading) return;
-    setLoading(true);
     setError(null);
+    const email = readEmailInput();
+    if (!email) return;
+    setLoading(true);
     try {
-      await sendOTPEmail(emailValue.trim());
+      await sendOTPEmail(email);
       setResendCooldown(60);
     } catch (err) {
-      setError(mapAuthError((err as { code?: string })?.code ?? ""));
+      setError(mapAuthError(errorCode(err), "send"));
     } finally {
       setLoading(false);
     }
@@ -254,19 +355,17 @@ export default function LoginPage() {
   // Confirm the link on a different device after the user types their email
   async function handleConfirmWithEmail(e: React.FormEvent) {
     e.preventDefault();
-    const email = emailValue.trim();
+    setError(null);
+    const email = readEmailInput();
     if (!email) return;
     setLoading(true);
-    setError(null);
     setStep("confirming");
     try {
       await withRetry(() => confirmOTPSignIn(email, window.location.href));
       // onAuthStateChanged → isSignedIn → redirect
     } catch (err) {
       console.error("[SignIn] handleConfirmWithEmail failed after all retries:", err);
-      setError(mapAuthError((err as { code?: string })?.code ?? ""));
-      setStep("email");
-      setNeedsEmailForLink(true);
+      handleLinkConfirmFailure(err, email);
     } finally {
       setLoading(false);
     }
@@ -285,8 +384,14 @@ export default function LoginPage() {
   );
 
   const errorBanner = error && (
-    <p className="text-xs text-red-600/80 bg-red-50 border border-red-200/60 rounded-lg px-3 py-2.5 text-center">
+    <p role="alert" className="text-xs text-red-600/80 bg-red-50 border border-red-200/60 rounded-lg px-3 py-2.5 text-center">
       {error}
+    </p>
+  );
+
+  const noticeBanner = notice && (
+    <p role="status" className="text-xs text-charcoal/70 bg-cream border border-taupe/25 rounded-lg px-3 py-2.5 text-center mb-4">
+      {notice}
     </p>
   );
 
@@ -314,11 +419,15 @@ export default function LoginPage() {
             <>
               <div className="text-center mb-8">
                 {logoBox}
-                <h1 className="font-serif text-2xl text-obsidian mb-1">Welcome back</h1>
+                <h1 className="font-serif text-2xl text-obsidian mb-1">
+                  {notice ? "Get a new sign‑in link" : "Welcome back"}
+                </h1>
                 <p className="text-sm text-charcoal/45">
                   Enter your email and we&apos;ll send you a sign‑in link.
                 </p>
               </div>
+
+              {noticeBanner}
 
               {/* Google sign-in */}
               <button
@@ -334,6 +443,11 @@ export default function LoginPage() {
                 </svg>
                 Continue with Google
               </button>
+              {inAppBrowser && (
+                <p className="text-[11px] text-charcoal/45 text-center mt-2">
+                  {IN_APP_BROWSER_GOOGLE_HINT}
+                </p>
+              )}
 
               {/* Divider */}
               <div className="relative flex items-center gap-3 my-4">
@@ -393,7 +507,7 @@ export default function LoginPage() {
 
               <div className="space-y-4">
                 <div className="rounded-xl bg-cream border border-taupe/15 px-5 py-4 text-sm text-charcoal/55 leading-relaxed">
-                  Click the link in your inbox to sign in. It expires after 1&nbsp;hour.
+                  Click the link in your inbox to sign in. Each link works once and expires after a while, so use the newest one. If it stops working, come back here for a fresh link.
                 </div>
 
                 {errorBanner}
@@ -439,7 +553,7 @@ export default function LoginPage() {
           )}
 
           {/* ══ Different device — user must enter their email to confirm ══ */}
-          {needsEmailForLink && (
+          {needsEmailForLink && step === "email" && (
             <>
               <div className="text-center mb-8">
                 {logoBox}
@@ -479,6 +593,14 @@ export default function LoginPage() {
                   {loading ? spinner : "Sign In"}
                 </button>
               </form>
+
+              <button
+                type="button"
+                onClick={() => recoverFromDeadLink(emailValue, null)}
+                className="w-full mt-4 text-sm text-charcoal/45 hover:text-charcoal/70 transition-colors duration-300 cursor-pointer"
+              >
+                Send me a new link instead
+              </button>
 
               {termsFooter}
             </>
