@@ -14,7 +14,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth } from "@/lib/firebase-admin";
-import { isAllowedAdminEmail } from "@/lib/adminEmailAllowlist";
+import { isAdminIdToken } from "@/lib/adminTokenPolicy";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -52,7 +52,7 @@ async function verifyAdmin(request: NextRequest): Promise<boolean> {
   if (!token) return false;
   try {
     const decoded = await adminAuth.verifyIdToken(token);
-    return !!decoded.email && isAllowedAdminEmail(decoded.email);
+    return isAdminIdToken(decoded);
   } catch {
     return false;
   }

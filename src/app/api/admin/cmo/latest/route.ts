@@ -9,7 +9,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth } from "@/lib/firebase-admin";
-import { isAllowedAdminEmail } from "@/lib/adminEmailAllowlist";
+import { isAdminIdToken } from "@/lib/adminTokenPolicy";
 import { getSupabaseService } from "@/app/api/_lib/supabaseService";
 
 export const runtime = "nodejs";
@@ -24,7 +24,7 @@ async function verifyCaller(request: NextRequest): Promise<void> {
   if (cronSecret && token === cronSecret) return;
 
   const decoded = await adminAuth.verifyIdToken(token, true);
-  if (!decoded.email || !isAllowedAdminEmail(decoded.email)) {
+  if (!isAdminIdToken(decoded)) {
     throw new Error("Forbidden");
   }
 }

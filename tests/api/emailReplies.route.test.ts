@@ -65,10 +65,29 @@ describe("GET /api/email/replies", () => {
     expect(adminDbCollectionMock).not.toHaveBeenCalled();
   });
 
+  it("returns 401 for an allowlisted email signed in with a custom token", async () => {
+    verifyIdTokenMock.mockResolvedValue({
+      uid: "admin_1",
+      email: "drew@mullybox.com",
+      email_verified: true,
+      mully_signup: "email_only",
+      firebase: { sign_in_provider: "custom" },
+    });
+
+    const { GET } = await loadRoute();
+    const res = await GET(makeRequest());
+
+    expect(res.status).toBe(401);
+    expect(adminDbCollectionMock).not.toHaveBeenCalled();
+  });
+
   it("returns pending replies for allowlisted Firebase admins", async () => {
     verifyIdTokenMock.mockResolvedValue({
       uid: "admin_1",
       email: "drew@mullybox.com",
+      // Real admin ID tokens (Google popup / email link) carry these claims.
+      email_verified: true,
+      firebase: { sign_in_provider: "google.com" },
     });
 
     const getMock = vi.fn().mockResolvedValue({

@@ -22,7 +22,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth } from "@/lib/firebase-admin";
-import { isAllowedAdminEmail } from "@/lib/adminEmailAllowlist";
+import { isAdminIdToken } from "@/lib/adminTokenPolicy";
 import { getSupabaseService } from "@/app/api/_lib/supabaseService";
 import {
   refreshOrganicPerformance,
@@ -38,7 +38,7 @@ async function verifyAdmin(req: NextRequest): Promise<void> {
   const token = header.replace(/^Bearer\s+/i, "").trim();
   if (!token) throw new Error("Missing Authorization header");
   const decoded = await adminAuth.verifyIdToken(token, true);
-  if (!decoded.email || !isAllowedAdminEmail(decoded.email)) {
+  if (!isAdminIdToken(decoded)) {
     throw new Error("Forbidden");
   }
 }

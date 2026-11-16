@@ -36,7 +36,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
-import { isAllowedAdminEmail } from "@/lib/adminEmailAllowlist";
+import { isAdminIdToken } from "@/lib/adminTokenPolicy";
 import { Timestamp } from "firebase-admin/firestore";
 import { mintGoogleAccessToken } from "@/app/api/_lib/googleAuth";
 import { FLOW_STEPS, type EmailFlow } from "@/lib/email/sequences";
@@ -69,7 +69,7 @@ async function verifyAdmin(request: NextRequest): Promise<void> {
   }
 
   const decoded = await adminAuth.verifyIdToken(token, true);
-  if (!decoded.email || !isAllowedAdminEmail(decoded.email)) {
+  if (!isAdminIdToken(decoded)) {
     throw new Error("Forbidden");
   }
 }

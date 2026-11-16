@@ -1,23 +1,32 @@
 /**
  * POST /api/auth/start-account
  *
- * Creates a Firebase Auth user with no password (or returns the existing one)
- * and issues a custom token so the client can sign in immediately.
+ * Creates a NEW Firebase Auth user with no password and issues a custom
+ * token so the client can sign in immediately.
  *
- * Used by the new low-friction onboarding flow:
+ * Used by the low-friction onboarding flow:
  *   EmailCTA -> /api/auth/start-account -> client signs in -> /choose-plan
  *
- * The user starts as tier='free' with `auth_method: 'email_only'` and
+ * SECURITY: this endpoint is unauthenticated and the caller has not proven
+ * they own the email address. It must therefore NEVER issue a sign-in token
+ * for an account that already exists (that would let anyone sign in as any
+ * customer or admin just by knowing their email). For existing accounts it
+ * returns `{ exists: true }` and the client sends the user to /login, where
+ * they prove ownership with a magic link or Google.
+ *
+ * New users start as tier='free' with `auth_method: 'email_only'` and
  * `password_set: false`. The /home page enforces a one-time password or
  * magic-link gate on the first visit so they can come back later. We do
  * NOT require a password before payment so the EmailCTA -> Shopify path
- * is as low-friction as possible.
+ * is as low-friction as possible. Sessions minted here carry the
+ * `mully_signup: "email_only"` claim and sign_in_provider "custom"; admin
+ * APIs reject both (see src/lib/adminTokenPolicy.ts).
  *
- * Body: { email: string }
- * Response: { uid: string, customToken: string, isNewUser: boolean }
+ * Body: { email: string, source?: string, utm?: object }
+ * Response (new user):      { uid: string, customToken: string, isNewUser: true }
+ * Response (existing user): { exists: true }
  *
- * No auth required. Email is the only PII. Rate-limited implicitly by
- * Firebase Admin SDK + downstream Firestore.
+ * No auth required. Email is the only PII.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -60,13 +69,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid body" }, { status: 400 });
   }
 
-  let uid: string;
-  let isNewUser = false;
+  const signupSource = source ?? "homepage_email_cta";
 
-  // 1. Create or look up the Firebase Auth user.
+  // 1. Existing account? Never issue a token — the caller has not proven
+  //    they own this email. Send them to /login instead.
+  let alreadyExists = false;
   try {
-    const existing = await adminAuth.getUserByEmail(email);
-    uid = existing.uid;
+    await adminAuth.getUserByEmail(email);
+    alreadyExists = true;
   } catch (err) {
     const code = (err as { code?: string })?.code;
     if (code !== "auth/user-not-found") {
@@ -76,43 +86,37 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
+  }
+  if (alreadyExists) return existingAccountResponse(email, signupSource);
 
-    try {
-      const created = await adminAuth.createUser({
-        email,
-        emailVerified: false,
-        // Intentionally no password. The user will set one on first /home
-        // visit, or use magic-link sign-in.
-      });
-      uid = created.uid;
-      isNewUser = true;
-    } catch (createErr) {
-      const createCode = (createErr as { code?: string })?.code;
-      if (createCode === "auth/email-already-exists") {
-        // Race condition — fetch again.
-        try {
-          const after = await adminAuth.getUserByEmail(email);
-          uid = after.uid;
-        } catch (fetchErr) {
-          console.error("[start-account] race fetch failed:", fetchErr);
-          return NextResponse.json(
-            { error: "Account exists" },
-            { status: 500 }
-          );
-        }
-      } else {
-        console.error("[start-account] createUser failed:", createErr);
-        return NextResponse.json(
-          { error: "Could not create account" },
-          { status: 500 }
-        );
-      }
+  // 2. Create the new Firebase Auth user.
+  let uid: string;
+  try {
+    const created = await adminAuth.createUser({
+      email,
+      emailVerified: false,
+      // Intentionally no password. The user will set one on first /home
+      // visit, or use magic-link sign-in.
+    });
+    uid = created.uid;
+  } catch (createErr) {
+    const createCode = (createErr as { code?: string })?.code;
+    if (createCode === "auth/email-already-exists") {
+      // Race: someone else created this account between the lookup and the
+      // create. Treat exactly like an existing account — no token.
+      return existingAccountResponse(email, signupSource);
     }
+    console.error("[start-account] createUser failed:", createErr);
+    return NextResponse.json(
+      { error: "Could not create account" },
+      { status: 500 }
+    );
   }
 
-  // 2. Ensure a Firestore profile exists. Free tier by default. We mark
+  // 3. Create the Firestore profile. Free tier by default. We mark
   //    `password_set: false` so /home knows to prompt the user to set a
-  //    password (or send a magic link) on first visit.
+  //    password (or send a magic link) on first visit. Only brand-new
+  //    users reach this point, so we never touch an existing user's doc.
   try {
     const userRef = adminDb.collection("users").doc(uid);
     const snap = await userRef.get();
@@ -123,20 +127,11 @@ export async function POST(request: NextRequest) {
         onboarding_completed: false,
         password_set: false,
         auth_method: "email_only",
-        signup_source: source ?? "homepage_email_cta",
+        signup_source: signupSource,
         signup_utm: utm ?? null,
         created_at: Date.now(),
         updated_at: Date.now(),
       });
-    } else {
-      const data = snap.data() ?? {};
-      const updates: Record<string, unknown> = { updated_at: Date.now() };
-      // Only set tier=free if the user has no tier yet (do NOT overwrite
-      // a paid tier coming back through this endpoint).
-      if (!data.tier) updates.tier = "free";
-      if (data.password_set === undefined) updates.password_set = false;
-      if (!data.auth_method) updates.auth_method = "email_only";
-      await userRef.set(updates, { merge: true });
     }
   } catch (err) {
     // Firestore failure should not block sign-in. The orders-paid webhook
@@ -144,7 +139,7 @@ export async function POST(request: NextRequest) {
     console.error("[start-account] firestore upsert failed:", err);
   }
 
-  // 3. Issue a custom token so the client can sign in without a password.
+  // 4. Issue a custom token so the client can sign in without a password.
   let customToken: string;
   try {
     customToken = await adminAuth.createCustomToken(uid, {
@@ -160,14 +155,27 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Contact only: creating an account is not marketing consent (Firebase's
-  // default messaging_preferences are not consent either).
+  queueSignupContact(email, signupSource, true);
+
+  return NextResponse.json({ uid, customToken, isNewUser: true });
+}
+
+/**
+ * Contact only: creating an account is not marketing consent (Firebase's
+ * default messaging_preferences are not consent either). Queued for both
+ * new and returning emails, exactly as before, so no lead signal is lost.
+ * This writes only to the `klaviyo_sync_jobs` queue, never to `users/*`.
+ */
+function queueSignupContact(email: string, signupSource: string, isNewUser: boolean) {
   queueKlaviyoContact({
     source: "account-start",
     email,
-    properties: { mully_account_signup_source: source ?? "homepage_email_cta" },
-    eventProperties: { signup_source: source ?? "homepage_email_cta", is_new_user: isNewUser },
+    properties: { mully_account_signup_source: signupSource },
+    eventProperties: { signup_source: signupSource, is_new_user: isNewUser },
   });
+}
 
-  return NextResponse.json({ uid, customToken, isNewUser });
+function existingAccountResponse(email: string, signupSource: string) {
+  queueSignupContact(email, signupSource, false);
+  return NextResponse.json({ exists: true });
 }

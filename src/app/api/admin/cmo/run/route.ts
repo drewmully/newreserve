@@ -16,7 +16,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth } from "@/lib/firebase-admin";
-import { isAllowedAdminEmail } from "@/lib/adminEmailAllowlist";
+import { isAdminIdToken } from "@/lib/adminTokenPolicy";
 import {
   runCMOBrainPhase1,
   triggerPhase2Async,
@@ -41,7 +41,7 @@ async function verifyCaller(request: NextRequest): Promise<{ source: string }> {
   }
 
   const decoded = await adminAuth.verifyIdToken(token, true);
-  if (!decoded.email || !isAllowedAdminEmail(decoded.email)) {
+  if (!isAdminIdToken(decoded)) {
     throw new Error("Forbidden");
   }
   return { source: `admin:${decoded.email}` };
