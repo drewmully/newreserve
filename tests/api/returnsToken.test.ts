@@ -13,7 +13,38 @@ const input = { orderId: "11", orderName: "#1234", email: " Member@Example.com "
 describe("return token", () => {
   beforeEach(() => {
     delete process.env.RETURNS_TOKEN_SECRET;
+    delete process.env.SHOPIFY_ADMIN_TOKEN;
+    delete process.env.SHOPIFY_CLIENT_SECRET;
     process.env.CRON_SECRET = "cron-secret-at-least-16";
+  });
+
+  it("works with no RETURNS_TOKEN_SECRET/CRON_SECRET by deriving a key from the Shopify Admin credential", () => {
+    delete process.env.CRON_SECRET;
+    process.env.SHOPIFY_ADMIN_TOKEN = "shpat_example_admin_token_value";
+    expect(isReturnTokenConfigured()).toBe(true);
+    const t = signReturnToken(input)!;
+    expect(verifyReturnToken(t)).toEqual({ ok: true, payload: expect.objectContaining({ orderId: "11" }) });
+    // The raw credential is never the signing key.
+    const [encoded, sig] = t.split(".");
+    const rawSig = createHmac("sha256", "shpat_example_admin_token_value").update(`mully-returns:v1:${encoded}`).digest("base64url");
+    expect(sig).not.toBe(rawSig);
+    // A different Shopify credential cannot verify it.
+    process.env.SHOPIFY_ADMIN_TOKEN = "shpat_some_other_admin_token__";
+    expect(verifyReturnToken(t)).toEqual({ ok: false, reason: "invalid" });
+  });
+
+  it("falls back to SHOPIFY_CLIENT_SECRET when no admin token is set", () => {
+    delete process.env.CRON_SECRET;
+    process.env.SHOPIFY_CLIENT_SECRET = "client-secret-at-least-16";
+    expect(isReturnTokenConfigured()).toBe(true);
+    expect(verifyReturnToken(signReturnToken(input)!).ok).toBe(true);
+  });
+
+  it("CRON_SECRET still takes precedence over the derived Shopify key", () => {
+    process.env.SHOPIFY_ADMIN_TOKEN = "shpat_example_admin_token_value";
+    const t = signReturnToken(input)!;
+    delete process.env.CRON_SECRET;
+    expect(verifyReturnToken(t)).toEqual({ ok: false, reason: "invalid" });
   });
 
   it("falls back to CRON_SECRET and round-trips a normalized payload", () => {

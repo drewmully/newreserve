@@ -10,11 +10,10 @@
  * a fixed domain prefix + the encoded payload, so it can't be confused with
  * any other signature in the app even though the key may be shared.
  *
- * Key: RETURNS_TOKEN_SECRET (preferred), falling back to the existing
- * server-only CRON_SECRET, mirroring CHECKOUT_IDENTITY_SECRET in
- * src/lib/checkoutIdentity.ts. Keys shorter than 16 chars are ignored. With
- * no key, signing returns null and create/exchange fail closed with a
- * friendly "email us" message.
+ * Key: RETURNS_TOKEN_SECRET (preferred), then CRON_SECRET, then a key derived
+ * from the Shopify Admin credential (see signingKey). Keys shorter than 16
+ * chars are ignored. With no usable key, signing returns null and
+ * create/exchange fail closed with a friendly "email us" message.
  */
 import { createHmac, timingSafeEqual } from "crypto";
 import type { OrderReturnType } from "./policy";
@@ -39,9 +38,28 @@ export type ReturnTokenResult =
   | { ok: true; payload: ReturnTokenPayload }
   | { ok: false; reason: "missing" | "invalid" | "expired" | "unconfigured" };
 
+const MIN_KEY_LENGTH = 16;
+const DERIVED_KEY_LABEL = "mully-returns-token-key:v1";
+
+/**
+ * Key resolution, first usable wins:
+ *   1. RETURNS_TOKEN_SECRET
+ *   2. CRON_SECRET
+ *   3. A key derived (HMAC-SHA256 with a fixed label) from the Shopify Admin
+ *      credential the returns routes already require. The returns flow cannot
+ *      work without that credential, so returns never go "unavailable" merely
+ *      because an optional secret wasn't configured. The raw credential is
+ *      never used as the key directly.
+ */
 function signingKey(): string | null {
-  const key = process.env.RETURNS_TOKEN_SECRET || process.env.CRON_SECRET || "";
-  return key.length >= 16 ? key : null;
+  for (const candidate of [process.env.RETURNS_TOKEN_SECRET, process.env.CRON_SECRET]) {
+    if (candidate && candidate.length >= MIN_KEY_LENGTH) return candidate;
+  }
+  const shopify = process.env.SHOPIFY_ADMIN_TOKEN || process.env.SHOPIFY_CLIENT_SECRET || "";
+  if (shopify.length >= MIN_KEY_LENGTH) {
+    return createHmac("sha256", shopify).update(DERIVED_KEY_LABEL).digest("hex");
+  }
+  return null;
 }
 
 export function isReturnTokenConfigured(): boolean {
