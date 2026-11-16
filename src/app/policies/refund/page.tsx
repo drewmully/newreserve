@@ -9,7 +9,7 @@ export const metadata = { alternates: canonical("/policies/refund") };
 export default function RefundPolicyPage() {
   return (
     <article>
-      <PolicyHeader title="Refund Policy" updated="February 1, 2026" />
+      <PolicyHeader title="Refund Policy" updated="November 16, 2026" />
 
       <div className="policy-prose">
         <p>
@@ -18,19 +18,29 @@ export default function RefundPolicyPage() {
 
         <h2>Returns</h2>
         <p>
-          We accept returns within <strong>30 days of delivery</strong> for items that are unworn, unwashed, and in their original packaging with all tags attached. To initiate a return, contact us at <a href="mailto:Info@MyMully.com">Info@MyMully.com</a> with your order number and reason for return.
+          We accept returns within <strong>30 days of delivery</strong> for items that are unworn, unwashed, and in their original packaging with all tags attached. This applies to both Mully Pro Shop orders and subscription box orders. If your order arrived in more than one shipment, the 30 days count from the delivery of each shipment.
+        </p>
+        <p>
+          To start a return, go to our <a href="/returns">Returns page</a> and look up your order with your order number and email. If you can&rsquo;t complete it there, email <a href="mailto:info@mymully.com">info@mymully.com</a> with your order number and reason for return.
         </p>
 
         <h2>Return Shipping</h2>
         <ul>
           <li><strong>Reserve Member &amp; Black tier:</strong> Free return shipping via prepaid label.</li>
-          <li><strong>Reserve Access tier:</strong> Flat-rate $5.95 return shipping (deducted from refund).</li>
-          <li><strong>Free tier:</strong> Customer is responsible for return shipping costs.</li>
+          <li><strong>Reserve Access tier:</strong> Flat-rate $5.95 return shipping, deducted from your refund or store credit.</li>
+          <li><strong>Free tier:</strong> Flat-rate $9.95 return shipping, deducted from your refund or store credit.</li>
         </ul>
 
         <h2>Refunds</h2>
         <p>
-          Once we receive and inspect your return, we&rsquo;ll process your refund within <strong>5&ndash;7 business days</strong>. Refunds are issued to the original payment method. You&rsquo;ll receive an email confirmation when your refund has been processed.
+          How you&rsquo;re paid back depends on what you ordered and when you start the return:
+        </p>
+        <ul>
+          <li><strong>Mully Pro Shop orders:</strong> Refund to your original payment method for returns started within 30 days of delivery.</li>
+          <li><strong>Subscription box orders:</strong> Refund to your original payment method if you start the return within 14 days of delivery. From day 15 through day 30 after delivery, returns are issued as store credit to your Mully Pro Shop account.</li>
+        </ul>
+        <p>
+          Once we receive and inspect your return, we&rsquo;ll process your refund or store credit within <strong>5&ndash;7 business days</strong>. You&rsquo;ll receive an email confirmation when it has been processed.
         </p>
 
         <h2>Exchanges</h2>

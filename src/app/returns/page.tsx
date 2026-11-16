@@ -5,6 +5,13 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useMembership } from "../context/MembershipContext";
 import { ShopPageShell } from "../shop/components/ShopPageShell";
+import {
+  RESOLUTION_LABELS,
+  RETURN_REASONS,
+  RETURN_RULES,
+  type OrderReturnType,
+  type ReturnResolution,
+} from "@/lib/returns/policy";
 
 /* ═══════════════════════════════════════════
    RETURNS FLOW — 4 Steps
@@ -29,13 +36,91 @@ interface ReturnableItem {
   parentSku?: string;
   isFinalSale?: boolean;
   alreadyReturned?: boolean;
+  ineligibleReason?: "final_sale" | "not_fulfilled" | "already_returned" | "outside_window" | null;
+  returnDeadline?: string | null;
+  /** Server-computed: refund vs store credit if requested now. */
+  resolution?: ReturnResolution | null;
+  resolutionUntil?: string | null;
 }
+
+interface OrderPolicy {
+  windowDays: number;
+  exchangeAllowed: boolean;
+}
+
+/** Overall outcome of a selection: all refund, all credit, or both. */
+type ResolutionSummary = ReturnResolution | "mixed";
+
+function summarizeResolutions(list: Array<ReturnResolution | "mixed" | null | undefined>): ResolutionSummary {
+  const set = new Set(list.filter((r): r is ReturnResolution | "mixed" => !!r));
+  if (set.has("mixed") || set.size > 1) return "mixed";
+  return set.values().next().value ?? "store_credit";
+}
+
+const SUMMARY_LABELS: Record<ResolutionSummary, { short: string; title: string }> = {
+  refund_original_payment: { short: "refund", title: "Estimated refund" },
+  store_credit: { short: "store credit", title: "Estimated store credit" },
+  mixed: { short: "refund and store credit", title: "Estimated refund and store credit" },
+};
 
 interface OrderData {
   orderId: string;
   orderName: string;
   orderDate: string;
   items: ReturnableItem[];
+  /** Signed, short-lived proof of order ownership from /api/returns/lookup. */
+  returnToken: string;
+  orderType?: OrderReturnType;
+  policy?: OrderPolicy;
+  /** Return shipping fee computed server-side. */
+  returnShippingCost?: number;
+}
+
+/** API error with an optional machine-readable code. */
+class ReturnsApiError extends Error {
+  code?: string;
+  constructor(message: string, code?: string) {
+    super(message);
+    this.code = code;
+  }
+}
+
+const TOKEN_ERROR_CODES = new Set(["return_token_expired", "return_token_invalid"]);
+
+function policyFor(order: OrderData): OrderPolicy {
+  if (order.policy) return order.policy;
+  const rules = RETURN_RULES[order.orderType ?? "pro_shop"];
+  return { windowDays: rules.windowDays, exchangeAllowed: rules.exchangeAllowed };
+}
+
+function ineligibleLabel(item: ReturnableItem): string {
+  switch (item.ineligibleReason) {
+    case "final_sale":
+      return "Final sale";
+    case "already_returned":
+      return "Already returned";
+    case "not_fulfilled":
+      return "Not shipped yet";
+    case "outside_window":
+      return "Return window closed";
+    default:
+      return item.alreadyReturned ? "Already returned" : item.isFinalSale ? "Final sale" : "Not eligible";
+  }
+}
+
+/** Firebase ID token when signed in, so the server can apply member pricing. */
+async function authHeaders(
+  user: { getIdToken: () => Promise<string> } | null | undefined
+): Promise<Record<string, string>> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (!user) return headers;
+  try {
+    const idToken = await user.getIdToken();
+    if (idToken) headers.Authorization = `Bearer ${idToken}`;
+  } catch {
+    // Guest pricing is fine if the token can't be fetched.
+  }
+  return headers;
 }
 
 interface SelectedItem {
@@ -50,25 +135,20 @@ interface ReturnConfirmation {
   itemsCreditAmount: number;
   shippingCost: number;
   estimatedCreditAmount: number;
+  resolution?: ResolutionSummary;
 }
 
-const RETURN_REASONS = [
-  "Wrong size",
-  "Didn't like the fit",
-  "Not as described",
-  "Damaged or defective",
-  "Changed my mind",
-  "Other",
-];
 
 function SpecificItemForm({
   order,
   customerEmail,
   onBack,
+  onTokenExpired,
 }: {
   order: OrderData;
   customerEmail: string;
   onBack: () => void;
+  onTokenExpired: (message: string) => void;
 }) {
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
@@ -85,12 +165,23 @@ function SpecificItemForm({
       const res = await fetch("/api/returns/exchange-request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderName: order.orderName, customerEmail, message }),
+        body: JSON.stringify({ returnToken: order.returnToken, message }),
       });
-      if (!res.ok) throw new Error("Failed to send");
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string; code?: string };
+        if (data.code && TOKEN_ERROR_CODES.has(data.code)) {
+          onTokenExpired(data.error || "Please look up your order again.");
+          return;
+        }
+        throw new ReturnsApiError(data.error || "Something went wrong. Please try again.", data.code);
+      }
       setSent(true);
-    } catch {
-      setError("Something went wrong. Please try again.");
+    } catch (err) {
+      setError(
+        err instanceof ReturnsApiError && err.code
+          ? err.message
+          : "Something went wrong. Please try again."
+      );
     } finally {
       setSending(false);
     }
@@ -141,6 +232,7 @@ function SpecificItemForm({
           <textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}
+            maxLength={2000}
             rows={4}
             className="w-full text-sm text-obsidian bg-bone border border-taupe/20 rounded-lg px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-forest/20 resize-none leading-relaxed"
           />
@@ -199,7 +291,17 @@ function ReturnsContent() {
     );
   }
 
-  const { tier } = useMembership();
+  const { tier, user } = useMembership();
+
+  /** Token expired or invalid: back to step 1 with the order number kept. */
+  function restartLookup(message: string) {
+    setOrder(null);
+    setSelections(new Map());
+    setBoxChoice(null);
+    setConfirmation(null);
+    setStep(1);
+    setError(message);
+  }
 
   /* ── Step 1: Lookup ── */
 
@@ -213,7 +315,7 @@ function ReturnsContent() {
     try {
       const res = await fetch("/api/returns/lookup", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await authHeaders(user),
         body: JSON.stringify({ orderNumber: orderNumber.trim(), email: email.trim() }),
       });
       const data = await res.json();
@@ -287,16 +389,21 @@ function ReturnsContent() {
     try {
       const res = await fetch("/api/returns/create", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await authHeaders(user),
         body: JSON.stringify({
+          returnToken: order.returnToken,
           orderId: order.orderId,
           items: Array.from(selections.values()),
-          customerEmail: email,
-          membershipTier: tier,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to submit return");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (data.code && TOKEN_ERROR_CODES.has(data.code)) {
+          restartLookup(data.error || "Your session expired. Please look up your order again.");
+          return;
+        }
+        throw new Error(data.error || "Failed to submit return");
+      }
       setConfirmation(data as ReturnConfirmation);
       setStep(4);
     } catch (err) {
@@ -309,10 +416,28 @@ function ReturnsContent() {
   /* ── Shipping cost by tier ── */
 
   function shippingCost(): number {
+    // Server-computed fee from lookup (what create will actually charge).
+    if (typeof order?.returnShippingCost === "number") return order.returnShippingCost;
     if (tier === "member" || tier === "black") return 0;
     if (tier === "access") return 5.95;
     return 9.95;
   }
+
+  const policy = order ? policyFor(order) : null;
+  // Per-item resolution comes from the server (lookup); create recomputes it.
+  const selectedResolution: ResolutionSummary = order
+    ? summarizeResolutions(
+        (selectedItems.length > 0
+          ? selectedItems.map((sel) => order.items.find((it) => it.lineItemId === sel.lineItemId))
+          : order.items.filter((it) => it.returnableQty > 0 && !it.isFinalSale)
+        ).map((it) => it?.resolution),
+      )
+    : "store_credit";
+  const resolutionSummary: ResolutionSummary = confirmation?.resolution ?? selectedResolution;
+  const isRefund = resolutionSummary === "refund_original_payment";
+  const hasRefund = resolutionSummary !== "store_credit";
+  const hasCredit = resolutionSummary !== "refund_original_payment";
+  const creditLabel = SUMMARY_LABELS[resolutionSummary].short;
 
   function netCredit(): number {
     return Math.max(0, creditTotal() - shippingCost());
@@ -359,7 +484,9 @@ function ReturnsContent() {
                 </h1>
                 <p className="text-sm text-charcoal/60 max-w-md mx-auto leading-relaxed">
                   Enter your order details below and we&rsquo;ll pull up your items.
-                  Once we receive and inspect your return, store credit will be applied to your account.
+                  Returns are accepted within 30 days of delivery for unworn, unwashed items with tags attached, for both Pro Shop and subscription box orders.
+                  Pro Shop items are refunded to your original payment method. Subscription box items are refunded if you start the return within 14 days of delivery, and receive store credit from day 15 to day 30.
+                  Final sale items can&rsquo;t be returned.
                 </p>
               </div>
 
@@ -474,7 +601,11 @@ function ReturnsContent() {
             <SpecificItemForm
               order={order}
               customerEmail={email}
-              onBack={() => setBoxChoice("pending")}
+              onBack={() => {
+                if (isBoxOrder(order)) setBoxChoice("pending");
+                else { setBoxChoice(null); setStep(2); }
+              }}
+              onTokenExpired={restartLookup}
             />
           )}
 
@@ -531,11 +662,23 @@ function ReturnsContent() {
                           )}
                         </div>
 
-                        {/* Image placeholder */}
+                        {/* Item image (placeholder when Shopify has none) */}
                         <div className="w-16 h-16 rounded-lg bg-bone-dark flex items-center justify-center shrink-0 overflow-hidden">
-                          <svg className="w-6 h-6 text-taupe/50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
-                          </svg>
+                          {item.image ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={item.image}
+                              alt={item.title}
+                              width={64}
+                              height={64}
+                              loading="lazy"
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <svg className="w-6 h-6 text-taupe/50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1} aria-hidden="true">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
+                            </svg>
+                          )}
                         </div>
 
                         {/* Details */}
@@ -549,7 +692,15 @@ function ReturnsContent() {
                           )}
                           {!isEligible && (
                             <span className="inline-block text-[10px] tracking-wide uppercase text-charcoal/40 mt-1">
-                              {item.alreadyReturned ? "Already returned" : item.isFinalSale ? "Final sale" : "Not eligible"}
+                              {ineligibleLabel(item)}
+                            </span>
+                          )}
+                          {isEligible && item.resolution && (
+                            <span
+                              data-testid={`resolution-${item.lineItemId}`}
+                              className="block text-[11px] text-forest mt-1"
+                            >
+                              {RESOLUTION_LABELS[item.resolution]}
                             </span>
                           )}
                         </div>
@@ -606,10 +757,23 @@ function ReturnsContent() {
                 })}
               </div>
 
+              {policy?.exchangeAllowed && !isBoxOrder(order) && (
+                <p className="text-center text-xs text-charcoal/50 mb-4">
+                  Need a different size instead?{" "}
+                  <button
+                    type="button"
+                    onClick={() => { setBoxChoice("specific"); setStep(1); }}
+                    className="underline hover:text-charcoal transition-colors"
+                  >
+                    Request a free size exchange
+                  </button>
+                </p>
+              )}
+
               {/* Credit summary + Continue */}
               <div className="rounded-xl bg-forest/5 border border-forest/10 p-5 mb-6">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-charcoal/60">Estimated store credit</span>
+                  <span className="text-sm text-charcoal/60">Estimated {creditLabel}</span>
                   <span className="text-lg font-serif font-bold text-forest">${creditTotal().toFixed(2)}</span>
                 </div>
               </div>
@@ -657,6 +821,9 @@ function ReturnsContent() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-obsidian">{item.title}</p>
                         <p className="text-xs text-charcoal/40">{item.variantTitle} &middot; Qty {sel.quantity}</p>
+                        {item.resolution && (
+                          <p className="text-[11px] text-forest mt-0.5">{RESOLUTION_LABELS[item.resolution]}</p>
+                        )}
                       </div>
                       <span className="text-sm font-medium text-obsidian shrink-0">
                         ${(item.price * sel.quantity).toFixed(2)}
@@ -680,7 +847,7 @@ function ReturnsContent() {
                     </span>
                   </div>
                   <div className="flex items-center justify-between pt-3 border-t border-forest/10">
-                    <span className="text-sm font-semibold text-obsidian">Total store credit</span>
+                    <span className="text-sm font-semibold text-obsidian">{SUMMARY_LABELS[resolutionSummary].title}</span>
                     <span className="text-xl font-serif font-bold text-forest">${netCredit().toFixed(2)}</span>
                   </div>
                 </div>
@@ -689,7 +856,11 @@ function ReturnsContent() {
               {/* Policy note */}
               <div className="rounded-xl border border-taupe/20 bg-white px-5 py-4 mb-6">
                 <p className="text-xs text-charcoal/50 leading-relaxed">
-                  Store credit is awarded upon receipt of goods in good condition. Once we receive and inspect your items, credit will be applied to your Mully Pro Shop account and you&rsquo;ll receive an email confirmation.
+                  Items must be unworn and unwashed with tags attached.{" "}
+                  {hasRefund && <>Refunds go to your original payment method once we receive and inspect your items.{" "}</>}
+                  {hasCredit && <>Store credit is applied to your Mully Pro Shop account once we receive and inspect your items.{" "}</>}
+                  {resolutionSummary === "mixed" && <>Any return shipping fee comes off the refund first.{" "}</>}
+                  You&rsquo;ll receive an email confirmation.
                 </p>
               </div>
 
@@ -753,7 +924,11 @@ function ReturnsContent() {
                     "We review your return request",
                     "You receive a prepaid shipping label via email",
                     "Drop off your package at the carrier",
-                    "Store credit is applied once we inspect your items",
+                    isRefund
+                      ? "Your refund is issued to your original payment method once we inspect your items"
+                      : hasRefund
+                        ? "Refund items go back to your original payment method and store credit items are credited once we inspect them"
+                        : "Store credit is applied once we inspect your items",
                   ].map((s, i) => (
                     <li key={i} className="flex items-start gap-3">
                       <span className="w-5 h-5 rounded-full bg-forest/10 text-forest text-[10px] font-semibold flex items-center justify-center shrink-0 mt-0.5">
@@ -767,7 +942,7 @@ function ReturnsContent() {
 
               {/* Credit breakdown */}
               <div className="rounded-xl bg-forest/5 border border-forest/10 p-5 mb-6 max-w-sm mx-auto text-left">
-                <p className="text-xs tracking-wide uppercase text-sage font-medium mb-3">Estimated Store Credit</p>
+                <p className="text-xs tracking-wide uppercase text-sage font-medium mb-3">{SUMMARY_LABELS[resolutionSummary].title}</p>
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-charcoal/60">Return value</span>
@@ -780,12 +955,12 @@ function ReturnsContent() {
                     </span>
                   </div>
                   <div className="flex justify-between pt-2 border-t border-forest/10">
-                    <span className="text-sm font-semibold text-obsidian">Estimated credit</span>
+                    <span className="text-sm font-semibold text-obsidian">{SUMMARY_LABELS[resolutionSummary].title}</span>
                     <span className="text-lg font-serif font-bold text-forest">${confirmation.estimatedCreditAmount.toFixed(2)}</span>
                   </div>
                 </div>
                 <p className="text-xs text-charcoal/40 mt-3 leading-relaxed">
-                  Awarded upon receipt of goods in good condition.
+                  Issued once we receive your items unworn and unwashed, with tags attached.
                 </p>
               </div>
 
