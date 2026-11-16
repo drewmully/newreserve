@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { daysAgo, fulfillment, jsonRes, line, order } from "../fixtures/returnsOrder";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { NOW, daysAgo, fulfillment, jsonRes, line, order } from "../fixtures/returnsOrder";
 
 const mocks = vi.hoisted(() => ({
   fetch: vi.fn(),
@@ -187,7 +187,7 @@ describe("POST /api/returns/create", () => {
     const res = await POST(req({ returnToken: tokenFor(signReturnToken), items, membershipTier: "black", customerEmail: "x@y.com" }));
     expect(res.status).toBe(200);
     const json = await res.json();
-    expect(json).toMatchObject({ returnId: "gid://shopify/Return/77", returnStatus: "REQUESTED", itemsCreditAmount: 50, shippingCost: 9.95, estimatedCreditAmount: 40.05, status: "submitted" });
+    expect(json).toMatchObject({ returnId: "gid://shopify/Return/77", returnStatus: "REQUESTED", itemsCreditAmount: 50, shippingCost: 9.95, estimatedCreditAmount: 40.05, estimatedRefundAmount: 40.05, estimatedStoreCreditAmount: 0, resolution: "refund_original_payment", status: "submitted" });
     expect(mocks.verifyIdToken).not.toHaveBeenCalled();
   });
 
@@ -217,7 +217,7 @@ describe("POST /api/returns/create", () => {
     await POST(req({ returnToken: tokenFor(signReturnToken), items: [{ lineItemId: "91", quantity: 2, reason: "Wrong size" }] }));
     expect(returnRequestCalls()[0].variables.input).toEqual({
       orderId: "gid://shopify/Order/11",
-      returnLineItems: [{ fulfillmentLineItemId: "gid://shopify/FulfillmentLineItem/501", quantity: 2, returnReason: "OTHER", customerNote: "Wrong size" }],
+      returnLineItems: [{ fulfillmentLineItemId: "gid://shopify/FulfillmentLineItem/501", quantity: 2, returnReason: "OTHER", customerNote: "Wrong size. Resolution: Refund to original payment" }],
     });
   });
 
@@ -261,5 +261,78 @@ describe("POST /api/returns/create", () => {
     expect(res.status).toBe(500);
     expect(JSON.stringify(json)).not.toContain("secret shop detail");
     expect(JSON.stringify(json)).not.toContain("502");
+  });
+
+  describe("subscription refund vs store credit (server-side)", () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(NOW);
+    });
+    afterEach(() => vi.useRealTimers());
+    const subOrder = (deliveredDaysAgo: number) =>
+      order({
+        tags: ["Subscription Recurring Order"],
+        lineItems: [line({ id: 91, title: "Box Polo", price: "50.00" })],
+        fulfillments: [fulfillment(1, [{ fli: 501, lineItem: 91 }], { createdAt: daysAgo(deliveredDaysAgo + 3), deliveredAt: daysAgo(deliveredDaysAgo) })],
+      });
+    const subToken = (sign: Parameters<typeof tokenFor>[0]) =>
+      sign({ orderId: "11", orderName: "#1234", email: "member@example.com", orderType: "subscription" })!;
+
+    it.each([
+      [14, "refund_original_payment", 40.05, 0],
+      [15, "store_credit", 0, 40.05],
+      [30, "store_credit", 0, 40.05],
+    ] as const)("day %i -> %s", async (day, resolution, refund, credit) => {
+      mockShopify(subOrder(day));
+      const { POST, signReturnToken } = await load();
+      const res = await POST(req({ returnToken: subToken(signReturnToken), items, resolution: "refund_original_payment" }));
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json).toMatchObject({ orderType: "subscription", resolution, estimatedRefundAmount: refund, estimatedStoreCreditAmount: credit });
+      expect(json.items).toEqual([{ lineItemId: "91", quantity: 1, resolution }]);
+      const note = returnRequestCalls()[0].variables.input.returnLineItems[0].customerNote;
+      expect(note).toBe(`Too large. Resolution: ${resolution === "store_credit" ? "Store credit" : "Refund to original payment"}`);
+      const mail = mocks.sendPlainText.mock.calls[0][0];
+      expect(mail.text).toContain(resolution === "store_credit" ? "Store credit" : "Refund to original payment");
+    });
+
+    it("day 31 is closed", async () => {
+      mockShopify(subOrder(31));
+      const { POST, signReturnToken } = await load();
+      const res = await POST(req({ returnToken: subToken(signReturnToken), items }));
+      expect(res.status).toBe(422);
+      expect((await res.json()).code).toBe("outside_window");
+      expect(returnRequestCalls()).toHaveLength(0);
+    });
+
+    it("mixed shipments: one line refunded, one credited; split line uses refund units first", async () => {
+      mockShopify(
+        order({
+          tags: ["Subscription Recurring Order"],
+          lineItems: [line({ id: 91, price: "50.00", quantity: 2 }), line({ id: 92, price: "20.00" })],
+          fulfillments: [
+            fulfillment(1, [{ fli: 501, lineItem: 91 }, { fli: 502, lineItem: 92 }], { createdAt: daysAgo(23), deliveredAt: daysAgo(20) }),
+            fulfillment(2, [{ fli: 601, lineItem: 91 }], { createdAt: daysAgo(6), deliveredAt: daysAgo(3) }),
+          ],
+        })
+      );
+      const { POST, signReturnToken } = await load();
+      const res = await POST(req({ returnToken: subToken(signReturnToken), items: [{ lineItemId: "91", quantity: 2, reason: "Too small" }, { lineItemId: "92", quantity: 1, reason: "Other" }] }));
+      expect(res.status).toBe(200);
+      const json = await res.json();
+      expect(json.resolution).toBe("mixed");
+      expect(json.items).toEqual([
+        { lineItemId: "91", quantity: 2, resolution: "mixed" },
+        { lineItemId: "92", quantity: 1, resolution: "store_credit" },
+      ]);
+      // $50 refund - $9.95 fee; $50 + $20 credit.
+      expect(json.estimatedRefundAmount).toBe(40.05);
+      expect(json.estimatedStoreCreditAmount).toBe(70);
+      expect(returnRequestCalls()[0].variables.input.returnLineItems).toEqual([
+        { fulfillmentLineItemId: "gid://shopify/FulfillmentLineItem/601", quantity: 1, returnReason: "SIZE_TOO_SMALL", customerNote: "Too small. Resolution: Refund to original payment" },
+        { fulfillmentLineItemId: "gid://shopify/FulfillmentLineItem/501", quantity: 1, returnReason: "SIZE_TOO_SMALL", customerNote: "Too small. Resolution: Store credit" },
+        { fulfillmentLineItemId: "gid://shopify/FulfillmentLineItem/502", quantity: 1, returnReason: "OTHER", customerNote: "Other. Resolution: Store credit" },
+      ]);
+    });
   });
 });

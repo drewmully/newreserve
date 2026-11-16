@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { daysAgo, fulfillment, jsonRes, line, order } from "../fixtures/returnsOrder";
+import { NOW, daysAgo, fulfillment, jsonRes, line, order } from "../fixtures/returnsOrder";
 
 const { checkRateLimitMock, fetchMock, verifyIdTokenMock, userDocMock } = vi.hoisted(() => ({
   checkRateLimitMock: vi.fn(),
@@ -139,7 +139,12 @@ describe("POST /api/returns/lookup", () => {
         orderId: "11",
         orderName: "#1234",
         orderType: "pro_shop",
-        policy: { windowDays: 30, resolution: "refund_original_payment", exchangeAllowed: true },
+        policy: {
+          windowDays: 30,
+          resolutionSchedule: [{ throughDay: 30, resolution: "refund_original_payment" }],
+          exchangeAllowed: true,
+          condition: "unworn_with_tags",
+        },
         returnShippingCost: 9.95,
         items: [
           expect.objectContaining({
@@ -148,6 +153,7 @@ describe("POST /api/returns/lookup", () => {
             alreadyReturned: false,
             price: 38,
             image: "https://cdn.shopify.com/cap.jpg",
+            resolution: "refund_original_payment",
           }),
         ],
       })
@@ -212,7 +218,39 @@ describe("POST /api/returns/lookup", () => {
     const json = await (await POST(makeRequest({ orderNumber: "#1234", email: "member@example.com" }, { Authorization: "Bearer t" }))).json();
     expect(json.returnShippingCost).toBe(5.95);
     expect(json.orderType).toBe("subscription");
-    expect(json.policy.resolution).toBe("store_credit");
+    expect(json.policy.resolutionSchedule).toEqual([
+      { throughDay: 14, resolution: "refund_original_payment" },
+      { throughDay: 30, resolution: "store_credit" },
+    ]);
+    expect(json.policy).not.toHaveProperty("pendingOwnerDecision");
+  });
+
+  it("returns refund vs store credit per item for a subscription order with mixed shipments", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(NOW);
+    try {
+    mockShopify(
+      order({
+        tags: ["Subscription Recurring Order"],
+        lineItems: [line({ id: 91 }), line({ id: 92 }), line({ id: 93 })],
+        fulfillments: [
+          fulfillment(1, [{ fli: 501, lineItem: 91 }], { createdAt: daysAgo(17), deliveredAt: daysAgo(14) }),
+          fulfillment(2, [{ fli: 502, lineItem: 92 }], { createdAt: daysAgo(18), deliveredAt: daysAgo(15) }),
+          fulfillment(3, [{ fli: 503, lineItem: 93 }], { createdAt: daysAgo(34), deliveredAt: daysAgo(31) }),
+        ],
+      })
+    );
+    const { POST } = await loadRoute();
+    const json = await (await POST(makeRequest({ orderNumber: "#1234", email: "member@example.com" }))).json();
+    expect(json.items.map((i: { lineItemId: string; resolution: string | null; ineligibleReason: string | null }) => [i.lineItemId, i.resolution, i.ineligibleReason])).toEqual([
+      ["91", "refund_original_payment", null],
+      ["92", "store_credit", null],
+      ["93", null, "outside_window"],
+    ]);
+    expect(json.items[0].resolutionUntil).toBe(NOW.toISOString());
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("hides Shopify error details", async () => {

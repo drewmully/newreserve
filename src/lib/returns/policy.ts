@@ -15,46 +15,64 @@ export type OrderReturnType = "pro_shop" | "subscription";
 
 export type ReturnResolution = "refund_original_payment" | "store_credit";
 
+/**
+ * One step of a resolution schedule: returns requested up to and including
+ * `throughDay` days after the window start get `resolution`.
+ */
+export interface ResolutionStep {
+  throughDay: number;
+  resolution: ReturnResolution;
+}
+
 export interface ReturnRules {
   /** Days after the window start during which a return can be requested. */
   windowDays: number;
   /** What starts the clock. Only "delivered" is supported. */
   windowStart: "delivered";
-  /** How the customer is made whole once the return is received. */
-  resolution: ReturnResolution;
+  /**
+   * How the customer is made whole, by how many days after delivery the
+   * return is REQUESTED. Ascending `throughDay`; the last step's
+   * `throughDay` must equal `windowDays`.
+   */
+  resolutionSchedule: readonly ResolutionStep[];
   /** Whether the /returns page offers the size-exchange request form. */
   exchangeAllowed: boolean;
   /** Items flagged final sale at purchase are never returnable. */
   finalSaleExcluded: true;
-  /**
-   * True while the owner is still auditing these rules. Purely informational
-   * (search for PENDING OWNER DECISION); it does not change behaviour.
-   */
-  pendingOwnerDecision: boolean;
+  /** Condition required for every return (shown in /returns copy). */
+  condition: "unworn_with_tags";
 }
 
 export const RETURN_RULES: Record<OrderReturnType, ReturnRules> = {
-  // Matches /policies/refund: 30 days from delivery, unworn/unwashed with
-  // tags, refund to the original payment method, final sale excluded.
+  // /policies/refund: 30 days from delivery, unworn/unwashed with tags,
+  // refund to the original payment method, final sale excluded.
   pro_shop: {
     windowDays: 30,
     windowStart: "delivered",
-    resolution: "refund_original_payment",
+    resolutionSchedule: [{ throughDay: 30, resolution: "refund_original_payment" }],
     exchangeAllowed: true,
     finalSaleExcluded: true,
-    pendingOwnerDecision: false,
+    condition: "unworn_with_tags",
   },
-  // PENDING OWNER DECISION: subscription box rules are being audited.
-  // For now: 30 days from delivery and store credit (what the /returns
-  // page has always promised for boxes). Change it here only.
+  // Owner decision (Nov 2026): refund to original payment if requested
+  // within 14 days of delivery, store credit from day 15 through day 30,
+  // closed after day 30. Same condition and final-sale rules as Pro Shop.
   subscription: {
     windowDays: 30,
     windowStart: "delivered",
-    resolution: "store_credit",
+    resolutionSchedule: [
+      { throughDay: 14, resolution: "refund_original_payment" },
+      { throughDay: 30, resolution: "store_credit" },
+    ],
     exchangeAllowed: true,
     finalSaleExcluded: true,
-    pendingOwnerDecision: true,
+    condition: "unworn_with_tags",
   },
+};
+
+export const RESOLUTION_LABELS: Record<ReturnResolution, string> = {
+  refund_original_payment: "Refund to original payment",
+  store_credit: "Store credit",
 };
 
 /**
@@ -134,6 +152,33 @@ export function isWithinReturnWindow(
 ): boolean {
   const deadline = returnDeadline(f, rules);
   return deadline !== null && now.getTime() <= deadline.getTime();
+}
+
+export interface ResolutionAt {
+  resolution: ReturnResolution;
+  /** End of the schedule step that applies now. */
+  until: Date;
+}
+
+/**
+ * Resolution for a return requested `now` against this fulfillment, or null
+ * when the window is closed. Inclusive: exactly `throughDay` days after the
+ * window start still gets that step (day 14 = refund, day 15 = credit for
+ * subscriptions; day 30 open, day 31 closed).
+ */
+export function resolutionAt(
+  f: FulfillmentTiming,
+  rules: ReturnRules,
+  now: Date = new Date()
+): ResolutionAt | null {
+  const ws = returnWindowStart(f);
+  if (!ws) return null;
+  for (const step of rules.resolutionSchedule) {
+    if (step.throughDay > rules.windowDays) break;
+    const until = new Date(ws.start.getTime() + step.throughDay * DAY_MS);
+    if (now.getTime() <= until.getTime()) return { resolution: step.resolution, until };
+  }
+  return null;
 }
 
 export function outsideWindowMessage(rules: ReturnRules): string {

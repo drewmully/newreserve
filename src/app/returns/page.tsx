@@ -5,7 +5,13 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useMembership } from "../context/MembershipContext";
 import { ShopPageShell } from "../shop/components/ShopPageShell";
-import { RETURN_REASONS, RETURN_RULES, type OrderReturnType } from "@/lib/returns/policy";
+import {
+  RESOLUTION_LABELS,
+  RETURN_REASONS,
+  RETURN_RULES,
+  type OrderReturnType,
+  type ReturnResolution,
+} from "@/lib/returns/policy";
 
 /* ═══════════════════════════════════════════
    RETURNS FLOW — 4 Steps
@@ -32,13 +38,30 @@ interface ReturnableItem {
   alreadyReturned?: boolean;
   ineligibleReason?: "final_sale" | "not_fulfilled" | "already_returned" | "outside_window" | null;
   returnDeadline?: string | null;
+  /** Server-computed: refund vs store credit if requested now. */
+  resolution?: ReturnResolution | null;
+  resolutionUntil?: string | null;
 }
 
 interface OrderPolicy {
   windowDays: number;
-  resolution: "refund_original_payment" | "store_credit";
   exchangeAllowed: boolean;
 }
+
+/** Overall outcome of a selection: all refund, all credit, or both. */
+type ResolutionSummary = ReturnResolution | "mixed";
+
+function summarizeResolutions(list: Array<ReturnResolution | "mixed" | null | undefined>): ResolutionSummary {
+  const set = new Set(list.filter((r): r is ReturnResolution | "mixed" => !!r));
+  if (set.has("mixed") || set.size > 1) return "mixed";
+  return set.values().next().value ?? "store_credit";
+}
+
+const SUMMARY_LABELS: Record<ResolutionSummary, { short: string; title: string }> = {
+  refund_original_payment: { short: "refund", title: "Estimated refund" },
+  store_credit: { short: "store credit", title: "Estimated store credit" },
+  mixed: { short: "refund and store credit", title: "Estimated refund and store credit" },
+};
 
 interface OrderData {
   orderId: string;
@@ -67,7 +90,7 @@ const TOKEN_ERROR_CODES = new Set(["return_token_expired", "return_token_invalid
 function policyFor(order: OrderData): OrderPolicy {
   if (order.policy) return order.policy;
   const rules = RETURN_RULES[order.orderType ?? "pro_shop"];
-  return { windowDays: rules.windowDays, resolution: rules.resolution, exchangeAllowed: rules.exchangeAllowed };
+  return { windowDays: rules.windowDays, exchangeAllowed: rules.exchangeAllowed };
 }
 
 function ineligibleLabel(item: ReturnableItem): string {
@@ -112,6 +135,7 @@ interface ReturnConfirmation {
   itemsCreditAmount: number;
   shippingCost: number;
   estimatedCreditAmount: number;
+  resolution?: ResolutionSummary;
 }
 
 
@@ -400,8 +424,20 @@ function ReturnsContent() {
   }
 
   const policy = order ? policyFor(order) : null;
-  const isRefund = policy?.resolution === "refund_original_payment";
-  const creditLabel = isRefund ? "refund" : "store credit";
+  // Per-item resolution comes from the server (lookup); create recomputes it.
+  const selectedResolution: ResolutionSummary = order
+    ? summarizeResolutions(
+        (selectedItems.length > 0
+          ? selectedItems.map((sel) => order.items.find((it) => it.lineItemId === sel.lineItemId))
+          : order.items.filter((it) => it.returnableQty > 0 && !it.isFinalSale)
+        ).map((it) => it?.resolution),
+      )
+    : "store_credit";
+  const resolutionSummary: ResolutionSummary = confirmation?.resolution ?? selectedResolution;
+  const isRefund = resolutionSummary === "refund_original_payment";
+  const hasRefund = resolutionSummary !== "store_credit";
+  const hasCredit = resolutionSummary !== "refund_original_payment";
+  const creditLabel = SUMMARY_LABELS[resolutionSummary].short;
 
   function netCredit(): number {
     return Math.max(0, creditTotal() - shippingCost());
@@ -448,7 +484,9 @@ function ReturnsContent() {
                 </h1>
                 <p className="text-sm text-charcoal/60 max-w-md mx-auto leading-relaxed">
                   Enter your order details below and we&rsquo;ll pull up your items.
-                  Returns are accepted within 30 days of delivery for unworn items with tags attached. Final sale items can&rsquo;t be returned.
+                  Returns are accepted within 30 days of delivery for unworn, unwashed items with tags attached, for both Pro Shop and subscription box orders.
+                  Pro Shop items are refunded to your original payment method. Subscription box items are refunded if you start the return within 14 days of delivery, and receive store credit from day 15 to day 30.
+                  Final sale items can&rsquo;t be returned.
                 </p>
               </div>
 
@@ -657,6 +695,14 @@ function ReturnsContent() {
                               {ineligibleLabel(item)}
                             </span>
                           )}
+                          {isEligible && item.resolution && (
+                            <span
+                              data-testid={`resolution-${item.lineItemId}`}
+                              className="block text-[11px] text-forest mt-1"
+                            >
+                              {RESOLUTION_LABELS[item.resolution]}
+                            </span>
+                          )}
                         </div>
 
                         {/* Price */}
@@ -775,6 +821,9 @@ function ReturnsContent() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-obsidian">{item.title}</p>
                         <p className="text-xs text-charcoal/40">{item.variantTitle} &middot; Qty {sel.quantity}</p>
+                        {item.resolution && (
+                          <p className="text-[11px] text-forest mt-0.5">{RESOLUTION_LABELS[item.resolution]}</p>
+                        )}
                       </div>
                       <span className="text-sm font-medium text-obsidian shrink-0">
                         ${(item.price * sel.quantity).toFixed(2)}
@@ -798,7 +847,7 @@ function ReturnsContent() {
                     </span>
                   </div>
                   <div className="flex items-center justify-between pt-3 border-t border-forest/10">
-                    <span className="text-sm font-semibold text-obsidian">{isRefund ? "Estimated refund" : "Total store credit"}</span>
+                    <span className="text-sm font-semibold text-obsidian">{SUMMARY_LABELS[resolutionSummary].title}</span>
                     <span className="text-xl font-serif font-bold text-forest">${netCredit().toFixed(2)}</span>
                   </div>
                 </div>
@@ -807,9 +856,11 @@ function ReturnsContent() {
               {/* Policy note */}
               <div className="rounded-xl border border-taupe/20 bg-white px-5 py-4 mb-6">
                 <p className="text-xs text-charcoal/50 leading-relaxed">
-                  {isRefund
-                    ? <>Refunds go to your original payment method once we receive and inspect your items. Items must be unworn and unwashed with tags attached. You&rsquo;ll receive an email confirmation.</>
-                    : <>Store credit is awarded upon receipt of goods in good condition. Once we receive and inspect your items, credit will be applied to your Mully Pro Shop account and you&rsquo;ll receive an email confirmation.</>}
+                  Items must be unworn and unwashed with tags attached.{" "}
+                  {hasRefund && <>Refunds go to your original payment method once we receive and inspect your items.{" "}</>}
+                  {hasCredit && <>Store credit is applied to your Mully Pro Shop account once we receive and inspect your items.{" "}</>}
+                  {resolutionSummary === "mixed" && <>Any return shipping fee comes off the refund first.{" "}</>}
+                  You&rsquo;ll receive an email confirmation.
                 </p>
               </div>
 
@@ -875,7 +926,9 @@ function ReturnsContent() {
                     "Drop off your package at the carrier",
                     isRefund
                       ? "Your refund is issued to your original payment method once we inspect your items"
-                      : "Store credit is applied once we inspect your items",
+                      : hasRefund
+                        ? "Refund items go back to your original payment method and store credit items are credited once we inspect them"
+                        : "Store credit is applied once we inspect your items",
                   ].map((s, i) => (
                     <li key={i} className="flex items-start gap-3">
                       <span className="w-5 h-5 rounded-full bg-forest/10 text-forest text-[10px] font-semibold flex items-center justify-center shrink-0 mt-0.5">
@@ -889,7 +942,7 @@ function ReturnsContent() {
 
               {/* Credit breakdown */}
               <div className="rounded-xl bg-forest/5 border border-forest/10 p-5 mb-6 max-w-sm mx-auto text-left">
-                <p className="text-xs tracking-wide uppercase text-sage font-medium mb-3">{isRefund ? "Estimated Refund" : "Estimated Store Credit"}</p>
+                <p className="text-xs tracking-wide uppercase text-sage font-medium mb-3">{SUMMARY_LABELS[resolutionSummary].title}</p>
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-charcoal/60">Return value</span>
@@ -902,12 +955,12 @@ function ReturnsContent() {
                     </span>
                   </div>
                   <div className="flex justify-between pt-2 border-t border-forest/10">
-                    <span className="text-sm font-semibold text-obsidian">{isRefund ? "Estimated refund" : "Estimated credit"}</span>
+                    <span className="text-sm font-semibold text-obsidian">{SUMMARY_LABELS[resolutionSummary].title}</span>
                     <span className="text-lg font-serif font-bold text-forest">${confirmation.estimatedCreditAmount.toFixed(2)}</span>
                   </div>
                 </div>
                 <p className="text-xs text-charcoal/40 mt-3 leading-relaxed">
-                  Awarded upon receipt of goods in good condition.
+                  Issued once we receive your items unworn and unwashed, with tags attached.
                 </p>
               </div>
 

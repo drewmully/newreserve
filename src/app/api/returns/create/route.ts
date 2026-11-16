@@ -6,7 +6,9 @@ import {
   shopifyAdminGraphQL,
 } from "@/lib/returns/eligibility";
 import {
+  RESOLUTION_LABELS,
   RETURN_REASON_MAP,
+  type ReturnResolution,
   isAllowedReturnReason,
   outsideWindowMessage,
   returnShippingCostByTier,
@@ -20,6 +22,12 @@ const GENERIC_ERROR =
 const MAX_ITEMS = 50;
 const MAX_QTY = 100;
 
+type ItemResolution = ReturnResolution | "mixed";
+
+function combine(parts: ReturnResolution[]): ItemResolution {
+  return parts.every((r) => r === parts[0]) ? parts[0] : "mixed";
+}
+
 interface ReturnItemInput {
   lineItemId: string;
   quantity: number;
@@ -32,6 +40,10 @@ function getClientIp(request: NextRequest): string {
     request.headers.get("x-real-ip") ??
     "unknown"
   );
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
 }
 
 function bad(error: string, status = 400, code?: string) {
@@ -116,6 +128,16 @@ export async function POST(request: NextRequest) {
       customerNote: string;
     }> = [];
     let itemsCreditAmount = 0;
+    let refundValue = 0;
+    let storeCreditValue = 0;
+    const itemResults: Array<{
+      lineItemId: string;
+      title: string;
+      variantTitle: string;
+      quantity: number;
+      reason: string;
+      resolution: ItemResolution;
+    }> = [];
 
     for (const item of items) {
       const line = linesById.get(item.lineItemId);
@@ -145,14 +167,27 @@ export async function POST(request: NextRequest) {
         return bad(GENERIC_ERROR, 422, "invalid_items");
       }
       for (const p of parts) {
+        // Resolution is decided now (request time) and recorded on the
+        // Shopify return so whoever approves it knows refund vs credit.
         returnLineItems.push({
           fulfillmentLineItemId: p.fulfillmentLineItemId,
           quantity: p.quantity,
           returnReason: RETURN_REASON_MAP[item.reason] ?? "OTHER",
-          customerNote: item.reason,
+          customerNote: `${item.reason}. Resolution: ${RESOLUTION_LABELS[p.resolution]}`,
         });
+        const value = line.unitPrice * p.quantity;
+        if (p.resolution === "refund_original_payment") refundValue += value;
+        else storeCreditValue += value;
       }
       itemsCreditAmount += line.unitPrice * item.quantity;
+      itemResults.push({
+        lineItemId: line.lineItemId,
+        title: line.title,
+        variantTitle: line.variantTitle,
+        quantity: item.quantity,
+        reason: item.reason,
+        resolution: combine(parts.map((p) => p.resolution)),
+      });
     }
 
     // 3. Submit via returnRequest (→ REQUESTED, awaiting review in Shopify
@@ -191,6 +226,16 @@ export async function POST(request: NextRequest) {
     const tier = await resolveReturnTier(request, order.email);
     const shippingCost = returnShippingCostByTier(tier);
     const estimatedCreditAmount = Math.max(0, itemsCreditAmount - shippingCost);
+    // The flat fee comes off the refund first, then off store credit.
+    const feeFromRefund = Math.min(refundValue, shippingCost);
+    const estimatedRefundAmount = round2(refundValue - feeFromRefund);
+    const estimatedStoreCreditAmount = round2(Math.max(0, storeCreditValue - (shippingCost - feeFromRefund)));
+    const resolution: ItemResolution =
+      refundValue > 0 && storeCreditValue > 0
+        ? "mixed"
+        : refundValue > 0
+          ? "refund_original_payment"
+          : "store_credit";
 
     // 5. Confirmation email. Never fails the request.
     try {
@@ -199,14 +244,12 @@ export async function POST(request: NextRequest) {
         returnId: shopifyReturn.id,
         orderName: order.orderName,
         orderType: order.orderType,
-        rules: order.rules,
-        items: items.map((i) => {
-          const line = linesById.get(i.lineItemId)!;
-          return { title: line.title, variantTitle: line.variantTitle, quantity: i.quantity, reason: i.reason };
-        }),
+        items: itemResults,
         itemsCreditAmount,
         shippingCost,
         estimatedCreditAmount,
+        estimatedRefundAmount,
+        estimatedStoreCreditAmount,
       });
     } catch (err) {
       console.error("[returns/create] confirmation email failed:", shopifyReturn.id, err);
@@ -218,8 +261,11 @@ export async function POST(request: NextRequest) {
       itemsCreditAmount,
       shippingCost,
       estimatedCreditAmount,
+      estimatedRefundAmount,
+      estimatedStoreCreditAmount,
       orderType: order.orderType,
-      resolution: order.rules.resolution,
+      resolution,
+      items: itemResults.map(({ lineItemId, quantity, resolution: r }) => ({ lineItemId, quantity, resolution: r })),
       status: "submitted",
     });
   } catch (err) {

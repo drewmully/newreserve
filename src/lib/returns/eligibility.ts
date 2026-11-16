@@ -10,9 +10,10 @@
 import {
   RETURN_RULES,
   classifyOrder,
-  isWithinReturnWindow,
+  resolutionAt,
   returnDeadline,
   type OrderReturnType,
+  type ReturnResolution,
   type ReturnRules,
 } from "./policy";
 
@@ -165,6 +166,10 @@ export type IneligibleReason = "final_sale" | "not_fulfilled" | "already_returne
 export interface FulfillmentAllocation {
   fulfillmentLineItemId: string;
   available: number;
+  /** What a return requested now from this shipment gets. */
+  resolution: ReturnResolution;
+  /** When that resolution stops applying (ISO). */
+  resolutionUntil: string;
 }
 
 export interface LineEligibility {
@@ -180,6 +185,12 @@ export interface LineEligibility {
   ineligibleReason: IneligibleReason | null;
   /** Latest return deadline among this item's fulfillments (ISO), if shipped. */
   returnDeadline: string | null;
+  /**
+   * Resolution for the first unit returned (refund-eligible shipments are
+   * used first). Null when nothing is returnable.
+   */
+  resolution: ReturnResolution | null;
+  resolutionUntil: string | null;
   /** In-window fulfillment line items with remaining quantity, for returnRequest. */
   allocations: FulfillmentAllocation[];
 }
@@ -224,11 +235,10 @@ export function computeEligibility(order: RawOrder, now: Date = new Date()): Ord
   }
 
   const successful = (order.fulfillments ?? []).filter((f) => f.status === "SUCCESS");
-  const fulfillmentState = successful.map((f) => ({
-    f,
-    inWindow: isWithinReturnWindow(f, rules, now),
-    deadline: returnDeadline(f, rules),
-  }));
+  const fulfillmentState = successful.map((f) => {
+    const at = resolutionAt(f, rules, now);
+    return { f, at, inWindow: at !== null, deadline: returnDeadline(f, rules) };
+  });
 
   const lines: LineEligibility[] = lineNodes.map((li) => {
     const lineItemId = numericId(li.id);
@@ -239,18 +249,30 @@ export function computeEligibility(order: RawOrder, now: Date = new Date()): Ord
     let inWindowAvailable = 0;
     let latestDeadline: Date | null = null;
     const allocations: FulfillmentAllocation[] = [];
-    for (const { f, inWindow, deadline } of fulfillmentState) {
+    for (const { f, at, deadline } of fulfillmentState) {
       for (const fli of f.fulfillmentLineItems?.nodes ?? []) {
         if (numericId(fli.lineItem.id) !== lineItemId) continue;
         fulfilledQty += fli.quantity;
         if (deadline && (!latestDeadline || deadline > latestDeadline)) latestDeadline = deadline;
         const available = Math.max(0, fli.quantity - (returnedByFli[fli.id] ?? 0));
-        if (inWindow && available > 0) {
+        if (at && available > 0) {
           inWindowAvailable += available;
-          allocations.push({ fulfillmentLineItemId: fli.id, available });
+          allocations.push({
+            fulfillmentLineItemId: fli.id,
+            available,
+            resolution: at.resolution,
+            resolutionUntil: at.until.toISOString(),
+          });
         }
       }
     }
+
+    // Use refund-eligible shipments first, then the one open longest.
+    allocations.sort((a, b) => {
+      const ra = a.resolution === "refund_original_payment" ? 0 : 1;
+      const rb = b.resolution === "refund_original_payment" ? 0 : 1;
+      return ra - rb || b.resolutionUntil.localeCompare(a.resolutionUntil);
+    });
 
     // Refunded/removed units are assumed to come off unshipped units first.
     const refundedOrRemoved = Math.max(0, li.quantity - (li.refundableQuantity ?? li.quantity));
@@ -278,6 +300,8 @@ export function computeEligibility(order: RawOrder, now: Date = new Date()): Ord
       returnableQty,
       ineligibleReason,
       returnDeadline: latestDeadline ? latestDeadline.toISOString() : null,
+      resolution: returnableQty > 0 ? allocations[0]?.resolution ?? null : null,
+      resolutionUntil: returnableQty > 0 ? allocations[0]?.resolutionUntil ?? null : null,
       allocations,
     };
   });
@@ -315,14 +339,14 @@ export async function loadOrderEligibility(
 export function allocateReturnQuantity(
   line: LineEligibility,
   quantity: number
-): Array<{ fulfillmentLineItemId: string; quantity: number }> {
-  const out: Array<{ fulfillmentLineItemId: string; quantity: number }> = [];
+): Array<{ fulfillmentLineItemId: string; quantity: number; resolution: ReturnResolution }> {
+  const out: Array<{ fulfillmentLineItemId: string; quantity: number; resolution: ReturnResolution }> = [];
   let remaining = quantity;
   for (const a of line.allocations) {
     if (remaining <= 0) break;
     const take = Math.min(a.available, remaining);
     if (take > 0) {
-      out.push({ fulfillmentLineItemId: a.fulfillmentLineItemId, quantity: take });
+      out.push({ fulfillmentLineItemId: a.fulfillmentLineItemId, quantity: take, resolution: a.resolution });
       remaining -= take;
     }
   }

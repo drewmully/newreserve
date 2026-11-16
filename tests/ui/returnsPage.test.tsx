@@ -17,11 +17,11 @@ const lookupBody = (over: Record<string, unknown> = {}) => ({
   orderDate: "November 1, 2026",
   returnToken: "signed.token",
   orderType: "pro_shop",
-  policy: { windowDays: 30, resolution: "refund_original_payment", exchangeAllowed: true },
+  policy: { windowDays: 30, resolutionSchedule: [{ throughDay: 30, resolution: "refund_original_payment" }], exchangeAllowed: true, condition: "unworn_with_tags" },
   returnShippingCost: 0,
   items: [
-    { lineItemId: "91", sku: "S", title: "Club Polo", variantTitle: "M", quantity: 1, returnableQty: 1, price: 50, image: "https://cdn.shopify.com/polo.jpg", isChildSku: false, isFinalSale: false, alreadyReturned: false, ineligibleReason: null },
-    { lineItemId: "92", sku: "T", title: "Old Hat", variantTitle: "", quantity: 1, returnableQty: 0, price: 20, image: "", isChildSku: false, isFinalSale: false, alreadyReturned: false, ineligibleReason: "outside_window" },
+    { lineItemId: "91", sku: "S", title: "Club Polo", variantTitle: "M", quantity: 1, returnableQty: 1, price: 50, image: "https://cdn.shopify.com/polo.jpg", isChildSku: false, isFinalSale: false, alreadyReturned: false, ineligibleReason: null, resolution: "refund_original_payment" },
+    { lineItemId: "92", sku: "T", title: "Old Hat", variantTitle: "", quantity: 1, returnableQty: 0, price: 20, image: "", isChildSku: false, isFinalSale: false, alreadyReturned: false, ineligibleReason: "outside_window", resolution: null },
   ],
   ...over,
 });
@@ -118,10 +118,43 @@ describe("/returns token flow", () => {
     expect(body.message).toContain("#1234");
   });
 
-  it("shows store-credit copy for subscription orders", async () => {
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(res(lookupBody({ orderType: "subscription", policy: { windowDays: 30, resolution: "store_credit", exchangeAllowed: true } }))));
+  const subPolicy = { windowDays: 30, resolutionSchedule: [{ throughDay: 14, resolution: "refund_original_payment" }, { throughDay: 30, resolution: "store_credit" }], exchangeAllowed: true, condition: "unworn_with_tags" };
+  const subItem = (id: string, title: string, resolution: string) => ({ lineItemId: id, sku: id, title, variantTitle: "M", quantity: 1, returnableQty: 1, price: 50, image: "", isChildSku: false, isFinalSale: false, alreadyReturned: false, ineligibleReason: null, resolution });
+
+  it("lookup copy explains the unworn-with-tags rule and the subscription schedule", () => {
+    render(<ReturnsPage />);
+    expect(screen.getByText(/unworn, unwashed items with tags attached, for both Pro Shop and subscription box orders/)).toBeInTheDocument();
+    expect(screen.getByText(/refunded if you start the return within 14 days of delivery, and receive store credit from day 15 to day 30/)).toBeInTheDocument();
+  });
+
+  it("shows store-credit copy for a subscription item past day 14", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(res(lookupBody({ orderType: "subscription", policy: subPolicy, items: [subItem("91", "Club Polo", "store_credit")] }))));
     render(<ReturnsPage />);
     await lookUp();
+    expect(screen.getByTestId("resolution-91")).toHaveTextContent("Store credit");
     expect(screen.getByText("Estimated store credit")).toBeInTheDocument();
+    await selectAndContinue();
+    expect(screen.getByText(/Items must be unworn and unwashed with tags attached/)).toBeInTheDocument();
+    expect(screen.getByText(/Store credit is applied to your Mully Pro Shop account/)).toBeInTheDocument();
+  });
+
+  it("shows refund copy for a subscription item within 14 days", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(res(lookupBody({ orderType: "subscription", policy: subPolicy, items: [subItem("91", "Club Polo", "refund_original_payment")] }))));
+    render(<ReturnsPage />);
+    await lookUp();
+    expect(screen.getByTestId("resolution-91")).toHaveTextContent("Refund to original payment");
+    expect(screen.getByText("Estimated refund")).toBeInTheDocument();
+    await selectAndContinue();
+    expect(screen.getByText(/Items must be unworn and unwashed with tags attached/)).toBeInTheDocument();
+    expect(screen.getByText(/Refunds go to your original payment method/)).toBeInTheDocument();
+  });
+
+  it("labels each item when shipments differ (mixed)", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(res(lookupBody({ orderType: "subscription", policy: subPolicy, items: [subItem("91", "Club Polo", "refund_original_payment"), subItem("93", "Box Hat", "store_credit")] }))));
+    render(<ReturnsPage />);
+    await lookUp();
+    expect(screen.getByTestId("resolution-91")).toHaveTextContent("Refund to original payment");
+    expect(screen.getByTestId("resolution-93")).toHaveTextContent("Store credit");
+    expect(screen.getByText("Estimated refund and store credit")).toBeInTheDocument();
   });
 });

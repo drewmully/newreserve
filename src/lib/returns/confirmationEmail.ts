@@ -6,32 +6,48 @@
  * label). So this is the single acknowledgement, not a duplicate.
  */
 import { sendPlainText } from "@/lib/email/resend";
-import type { OrderReturnType, ReturnRules } from "./policy";
+import { RESOLUTION_LABELS, type OrderReturnType, type ReturnResolution } from "./policy";
 
 export interface ReturnConfirmationInput {
   to: string;
   returnId: string;
   orderName: string;
   orderType: OrderReturnType;
-  rules: ReturnRules;
-  items: Array<{ title: string; variantTitle: string; quantity: number; reason: string }>;
+  items: Array<{
+    title: string;
+    variantTitle: string;
+    quantity: number;
+    reason: string;
+    resolution: ReturnResolution | "mixed";
+  }>;
   itemsCreditAmount: number;
   shippingCost: number;
   estimatedCreditAmount: number;
+  estimatedRefundAmount: number;
+  estimatedStoreCreditAmount: number;
 }
 
 const money = (n: number) => `$${n.toFixed(2)}`;
 
+function resolutionLabel(r: ReturnResolution | "mixed"): string {
+  return r === "mixed" ? "Part refund, part store credit" : RESOLUTION_LABELS[r];
+}
+
 export function buildReturnConfirmationText(input: ReturnConfirmationInput): { subject: string; text: string } {
   const lines = input.items.map((i) => {
     const variant = i.variantTitle ? ` (${i.variantTitle})` : "";
-    return `- ${i.title}${variant} x ${i.quantity}: ${i.reason}`;
+    return `- ${i.title}${variant} x ${i.quantity}: ${i.reason}. ${resolutionLabel(i.resolution)}`;
   });
-  const isRefund = input.rules.resolution === "refund_original_payment";
-  const label = isRefund ? "Estimated refund" : "Estimated store credit";
-  const resolutionLine = isRefund
-    ? "Once your items arrive and pass inspection (unworn, unwashed, tags attached), we'll refund your original payment method."
-    : "Once your items arrive and pass inspection, store credit will be added to your Mully Pro Shop account.";
+  const hasRefund = input.estimatedRefundAmount > 0 || input.items.some((i) => i.resolution !== "store_credit");
+  const hasCredit = input.estimatedStoreCreditAmount > 0 || input.items.some((i) => i.resolution !== "refund_original_payment");
+
+  const totals: string[] = [];
+  if (hasRefund) totals.push(`Estimated refund to original payment: ${money(input.estimatedRefundAmount)}`);
+  if (hasCredit) totals.push(`Estimated store credit: ${money(input.estimatedStoreCreditAmount)}`);
+
+  const resolutionLines: string[] = [];
+  if (hasRefund) resolutionLines.push("refund your original payment method for refund items");
+  if (hasCredit) resolutionLines.push("add store credit to your Mully Pro Shop account for store credit items");
 
   const text = [
     "Hi there,",
@@ -43,12 +59,12 @@ export function buildReturnConfirmationText(input: ReturnConfirmationInput): { s
     "",
     `Return value: ${money(input.itemsCreditAmount)}`,
     `Return shipping: ${input.shippingCost === 0 ? "Free" : `-${money(input.shippingCost)}`}`,
-    `${label}: ${money(input.estimatedCreditAmount)}`,
+    ...totals,
     "",
     "What happens next:",
     "1. We review your request. You'll get an email from us when it's approved, with your return shipping instructions.",
-    "2. Please don't send anything back until you have those instructions.",
-    `3. ${resolutionLine}`,
+    "2. Please don't send anything back until you have those instructions. Items must be unworn and unwashed, with tags attached.",
+    `3. Once your items arrive and pass inspection, we'll ${resolutionLines.join(" and ")}.`,
     "",
     "Questions? Just reply to this email or write to info@mymully.com and include your order number.",
     "",

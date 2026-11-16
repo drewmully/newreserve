@@ -157,6 +157,9 @@ export async function POST(request: NextRequest) {
       alreadyReturned: line.ineligibleReason === "already_returned",
       ineligibleReason: line.ineligibleReason,
       returnDeadline: line.returnDeadline,
+      // Refund vs store credit if requested now (per shipment, server-side).
+      resolution: line.resolution,
+      resolutionUntil: line.resolutionUntil,
     }));
 
     return NextResponse.json({
@@ -172,7 +175,8 @@ export async function POST(request: NextRequest) {
       orderType: order.orderType,
       policy: {
         windowDays: order.rules.windowDays,
-        resolution: order.rules.resolution,
+        resolutionSchedule: order.rules.resolutionSchedule,
+        condition: order.rules.condition,
         exchangeAllowed: order.rules.exchangeAllowed,
       },
       returnShippingCost: returnShippingCostByTier(tier),

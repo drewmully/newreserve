@@ -8,6 +8,7 @@ import {
   isAllowedReturnReason,
   isWithinReturnWindow,
   outsideWindowMessage,
+  resolutionAt,
   returnShippingCostByTier,
   returnWindowStart,
 } from "@/lib/returns/policy";
@@ -33,24 +34,43 @@ describe("returns policy: order classification", () => {
 });
 
 describe("returns policy: per-type rules", () => {
-  it("Pro Shop: 30 days from delivery, refund to original payment, exchanges allowed", () => {
+  it("Pro Shop: 30 days from delivery, refund to original payment, unworn with tags", () => {
     expect(RETURN_RULES.pro_shop).toMatchObject({
       windowDays: 30,
       windowStart: "delivered",
-      resolution: "refund_original_payment",
+      resolutionSchedule: [{ throughDay: 30, resolution: "refund_original_payment" }],
+      condition: "unworn_with_tags",
       exchangeAllowed: true,
       finalSaleExcluded: true,
-      pendingOwnerDecision: false,
     });
   });
-  it("Subscription: 30 days from delivery, store credit, flagged pending owner decision", () => {
+  it("Subscription: refund through day 14, store credit days 15-30, unworn with tags", () => {
     expect(RETURN_RULES.subscription).toMatchObject({
       windowDays: 30,
       windowStart: "delivered",
-      resolution: "store_credit",
+      resolutionSchedule: [
+        { throughDay: 14, resolution: "refund_original_payment" },
+        { throughDay: 30, resolution: "store_credit" },
+      ],
+      condition: "unworn_with_tags",
       exchangeAllowed: true,
-      pendingOwnerDecision: true,
+      finalSaleExcluded: true,
     });
+    expect("pendingOwnerDecision" in RETURN_RULES.subscription).toBe(false);
+  });
+  it("resolutionAt: subscription day 14/15/30/31 and Pro Shop", () => {
+    const at = (days: number, type: "pro_shop" | "subscription" = "subscription") =>
+      resolutionAt({ deliveredAt: new Date(Date.UTC(2026, 9, 1)).toISOString(), createdAt: "2026-09-28T00:00:00Z" }, RETURN_RULES[type], new Date(Date.UTC(2026, 9, 1) + days * 86_400_000))?.resolution ?? null;
+    expect(at(0)).toBe("refund_original_payment");
+    expect(at(14)).toBe("refund_original_payment");
+    expect(at(14.01)).toBe("store_credit");
+    expect(at(15)).toBe("store_credit");
+    expect(at(30)).toBe("store_credit");
+    expect(at(30.01)).toBeNull();
+    expect(at(31)).toBeNull();
+    expect(at(15, "pro_shop")).toBe("refund_original_payment");
+    expect(at(30, "pro_shop")).toBe("refund_original_payment");
+    expect(at(31, "pro_shop")).toBeNull();
   });
   it("out-of-window copy mentions 30 days from delivery", () => {
     expect(outsideWindowMessage(RETURN_RULES.pro_shop)).toContain("30 days from delivery");
