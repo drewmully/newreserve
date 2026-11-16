@@ -1,12 +1,13 @@
 "use client";
 import { ShopifyOutfitMembershipCard } from "./ShopifyOutfitMembershipCard";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMembership, type FitProfile, type StoreCreditState, type SubscriptionsState } from "../context/MembershipContext";
 import { trackEvent } from "@/lib/tracking";
 import { SubscriptionManagerModal } from "./SubscriptionManagerModal";
+import { DifferentEmailHelp } from "./DifferentEmailHelp";
 
 interface OrderLineItem {
   name: string;
@@ -98,21 +99,29 @@ export default function AccountPage() {
     });
   }, [isSignedIn]);
 
-  useEffect(() => {
-    if (!isSignedIn || !user) return;
+  const loadOrders = useCallback(() => {
+    if (!user) return;
     setOrders({ items: [], source: "loading" });
     user.getIdToken().then((token) =>
       fetch("/api/shopify/orders", {
         headers: { Authorization: `Bearer ${token}` },
       })
     ).then((res) => (res.ok ? res.json() : { orders: [], source: "unavailable" as const }))
-      .then((data: { orders: OrderSummary[]; source?: OrdersState["source"] }) => {
+      .then((data: { orders?: OrderSummary[]; source?: OrdersState["source"] }) => {
         setOrders({
-          items: data.orders ?? [],
-          source: data.source ?? "shopify",
+          items: Array.isArray(data?.orders) ? data.orders : [],
+          source: data?.source ?? "shopify",
         });
       })
-      .catch(() => setOrders({ items: [], source: "unavailable" }));
+      .catch((err) => {
+        console.error("[Account] order history fetch failed:", err);
+        setOrders({ items: [], source: "unavailable" });
+      });
+  }, [user]);
+
+  useEffect(() => {
+    if (!isSignedIn || !user) return;
+    loadOrders();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSignedIn]);
 
@@ -169,7 +178,13 @@ export default function AccountPage() {
           />
 
           {/* ═══ ORDERS ═══ */}
-          <OrdersSection orders={orders} />
+          <OrdersSection
+            orders={orders}
+            onRetry={loadOrders}
+            email={email}
+            uid={user?.uid ?? null}
+            onSignOut={() => void signOut()}
+          />
 
           {/* ═══ ACCOUNT ACTIONS ═══ */}
           <div className="pt-6 border-t border-taupe/10 flex items-center gap-5">
@@ -753,7 +768,19 @@ function OrderStatusBadge({ status }: { status: string }) {
   );
 }
 
-function OrdersSection({ orders }: { orders: OrdersState }) {
+function OrdersSection({
+  orders,
+  onRetry,
+  email,
+  uid,
+  onSignOut,
+}: {
+  orders: OrdersState;
+  onRetry?: () => void;
+  email?: string | null;
+  uid?: string | null;
+  onSignOut?: () => void;
+}) {
   if (orders.source === "loading") {
     return (
       <section className="mb-10">
@@ -779,9 +806,18 @@ function OrdersSection({ orders }: { orders: OrdersState }) {
         <SectionLabel>Orders</SectionLabel>
         <div className="rounded-xl border border-taupe/12 bg-cream p-6 text-center">
           <p className="text-sm text-charcoal/45 mb-1">Order history is temporarily unavailable</p>
-          <p className="text-xs text-charcoal/30">
+          <p className="text-xs text-charcoal/30 mb-4">
             We couldn&rsquo;t reach Shopify just now. Try again in a moment.
           </p>
+          {onRetry && (
+            <button
+              type="button"
+              onClick={onRetry}
+              className="inline-flex items-center justify-center h-9 px-5 rounded-lg border border-taupe/20 text-xs font-medium tracking-wider uppercase text-charcoal/55 hover:border-forest/30 hover:text-forest transition-all duration-300 cursor-pointer"
+            >
+              Try again
+            </button>
+          )}
         </div>
       </section>
     );
@@ -802,6 +838,13 @@ function OrdersSection({ orders }: { orders: OrdersState }) {
           >
             Browse Pro Shop
           </Link>
+          <DifferentEmailHelp
+            email={email}
+            uid={uid}
+            topic="orders"
+            onSignOut={onSignOut}
+            className="mt-5 pt-4 border-t border-taupe/10"
+          />
         </div>
       </section>
     );
