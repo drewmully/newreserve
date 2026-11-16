@@ -7,6 +7,9 @@ import {
   isSignInWithEmailLink,
   signInWithEmailLink,
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
+  connectAuthEmulator,
   GoogleAuthProvider,
 } from "firebase/auth";
 import {
@@ -16,6 +19,7 @@ import {
   setDoc,
   updateDoc,
   serverTimestamp,
+  connectFirestoreEmulator,
 } from "firebase/firestore";
 import {
   getStorage,
@@ -53,6 +57,19 @@ export const db = isBrowser
 export const storage = isBrowser
   ? getStorage(app)
   : (null as unknown as ReturnType<typeof getStorage>);
+
+// Local QA only: point the browser SDK at the Firebase emulators when
+// NEXT_PUBLIC_FIREBASE_EMULATORS=1. Never set in Vercel; production and
+// preview builds are unaffected. Server routes use firebase-admin, which
+// honours FIRESTORE_EMULATOR_HOST / FIREBASE_AUTH_EMULATOR_HOST natively.
+if (isBrowser && process.env.NEXT_PUBLIC_FIREBASE_EMULATORS === "1") {
+  const g = globalThis as { __mullyEmulatorsConnected?: boolean };
+  if (!g.__mullyEmulatorsConnected) {
+    g.__mullyEmulatorsConnected = true;
+    connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
+    connectFirestoreEmulator(db, "127.0.0.1", 8080);
+  }
+}
 
 /**
  * Uploads an image File to Firebase Storage under community/posts/
@@ -178,10 +195,13 @@ export async function syncUserProfile(user: User): Promise<UserDocument> {
   const ref = doc(db, "users", user.uid);
   const snap = await getDoc(ref);
   const now = serverTimestamp();
+  // Stored lowercased so server lookups (orders-paid, Loop) match no matter
+  // how the address was typed. firestore.rules compares case-insensitively.
+  const email = (user.email ?? "").trim().toLowerCase();
 
   if (!snap.exists()) {
     const newDoc = {
-      email: user.email ?? "",
+      email,
       created_at: now,
       last_login: now,
       updated_at: now,
@@ -190,7 +210,7 @@ export async function syncUserProfile(user: User): Promise<UserDocument> {
     await setDoc(ref, newDoc);
   } else {
     const updates: Record<string, unknown> = {
-      email: user.email ?? "",
+      email,
       last_login: now,
       updated_at: now,
     };
@@ -226,6 +246,15 @@ export async function sendOTPEmail(email: string): Promise<void> {
     ? shopReturnFromLogin(window.location.search)
     : null;
   if (shopReturn) destination.searchParams.set("returnTo", shopReturn);
+  // A fresh link requested from an expired post-purchase link (/login?paid=1)
+  // keeps the paid marker, so pending onboarding never re-sends the buyer to
+  // checkout. The flag only suppresses the checkout redirect; it grants nothing.
+  if (
+    window.location.pathname === "/login" &&
+    new URLSearchParams(window.location.search).get("paid") === "1"
+  ) {
+    destination.searchParams.set("paid", "1");
+  }
   const actionCodeSettings = {
     // Must be whitelisted in Firebase Console → Authentication → Settings → Authorized domains.
     url: destination.toString(),
@@ -262,4 +291,35 @@ export { isSignInWithEmailLink };
 export async function signInWithGoogle(): Promise<void> {
   const provider = new GoogleAuthProvider();
   await signInWithPopup(auth, provider);
+}
+
+/** Session flag so /login only calls getRedirectResult after it started a redirect. */
+export const GOOGLE_REDIRECT_PENDING_KEY = "mully_google_redirect_pending";
+
+/**
+ * Full-page Google sign-in. Used only as a fallback when the popup flow is
+ * unsupported in this browser (auth/operation-not-supported-in-this-environment)
+ * or the popup was blocked. /login completes it via completeGoogleRedirectSignIn.
+ */
+export async function signInWithGoogleRedirect(): Promise<void> {
+  try {
+    sessionStorage.setItem(GOOGLE_REDIRECT_PENDING_KEY, "1");
+  } catch {}
+  const provider = new GoogleAuthProvider();
+  await signInWithRedirect(auth, provider);
+}
+
+/**
+ * Completes a Google redirect started by signInWithGoogleRedirect. Resolves
+ * false when no redirect was pending; throws the Firebase error on failure.
+ */
+export async function completeGoogleRedirectSignIn(): Promise<boolean> {
+  let pending = false;
+  try {
+    pending = sessionStorage.getItem(GOOGLE_REDIRECT_PENDING_KEY) === "1";
+    sessionStorage.removeItem(GOOGLE_REDIRECT_PENDING_KEY);
+  } catch {}
+  if (!pending) return false;
+  const result = await getRedirectResult(auth);
+  return Boolean(result?.user);
 }

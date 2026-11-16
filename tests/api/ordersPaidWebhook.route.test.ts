@@ -81,7 +81,7 @@ describe("POST /api/webhooks/shopify/orders-paid", () => {
       })};
       if (name === "users") return {
         where:()=>({limit:()=>({get:emptyUsers})}),
-        doc:()=>({set:setUser}),
+        doc:()=>({create:setUser,get:async()=>({exists:false})}),
       };
       throw new Error(`Unexpected collection ${name}`);
     });

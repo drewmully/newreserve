@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useMembership } from "../context/MembershipContext";
 import { LOOP_CHANGE_PLAN_OPTIONS } from "@/lib/membershipConfig";
+import { DifferentEmailHelp } from "./DifferentEmailHelp";
 import type { ShopifySubscription } from "../context/useShopifySubscriptions";
 
 interface LoopSubscriptionRecord extends Record<string, unknown> {
@@ -27,7 +28,7 @@ const CONNECTION_ERRORS: Record<string, string> = {
 };
 
 export function SubscriptionManagerModal({ open, onClose, provider = "loop" }: { open: boolean; onClose: () => void; provider?: "loop" | "shopify" }) {
-  const { user, acceptShopifySubscriptions, refreshShopifySubscriptions } = useMembership();
+  const { user, email: accountEmail, signOut, acceptShopifySubscriptions, refreshShopifySubscriptions } = useMembership();
   const [subscriptions, setSubscriptions] = useState<LoopSubscriptionRecord[]>([]);
   const [selectedSubscriptionId, setSelectedSubscriptionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -293,7 +294,15 @@ export function SubscriptionManagerModal({ open, onClose, provider = "loop" }: {
                 </> : <button className="text-sm underline underline-offset-4" onClick={() => {setError(null);setLoading(true);loadSubscriptions().catch(err=>setError(err.message)).finally(()=>setLoading(false));}}>Try again</button>}
               </div>
             ) : !sub ? (
-              <p className="text-sm text-charcoal/40 py-4">No subscription found.</p>
+              <div className="py-4 space-y-4 text-center">
+                <p className="text-sm text-charcoal/40">No subscription found.</p>
+                <DifferentEmailHelp
+                  email={accountEmail || user?.email || null}
+                  uid={user?.uid ?? null}
+                  topic="subscription"
+                  onSignOut={() => { onClose(); void signOut(); }}
+                />
+              </div>
             ) : view === "main" ? (
               <div className="space-y-5">
                 {subscriptions.length > 1 && (

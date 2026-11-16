@@ -40,6 +40,8 @@ import { useShopifySubscriptions, type ShopifySubscription, type ShopifySubscrip
 import { resolveMemberTierFromVariantId, resolveLegacyFromVariantId, getTierLabel } from "@/lib/membershipConfig";
 import {
   buildCompleteOnboardingUpdatePayload,
+  isE164Phone,
+  OnboardingSaveError,
   fromFirestoreOnboardingProfile,
 } from "@/lib/onboardingProfile";
 
@@ -1211,7 +1213,13 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
         });
 
       // Phone + SMS consent (TCPA: only mark consent when checkbox checked AND a valid phone is present)
-      const phoneE164 = (data.phone ?? "").trim();
+      // Firestore rules only accept E.164; an unusable number is dropped
+      // (with its SMS consent) instead of failing the whole onboarding save.
+      const rawPhone = (data.phone ?? "").trim();
+      const phoneE164 = isE164Phone(rawPhone) ? rawPhone : "";
+      if (rawPhone && !phoneE164) {
+        console.warn("[Onboarding] ignoring phone that is not E.164");
+      }
       const smsOptIn = !!(data.smsOptIn && phoneE164);
       if (phoneE164) {
         updates.phone_e164 = phoneE164;
@@ -1223,6 +1231,17 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
         updates.sms_consent_given_at = serverTimestamp();
       }
 
+      // Persist first. Local "completed" state only changes once Firestore
+      // has the answers, so a rejected write can't look like success.
+      if (user?.uid) {
+        try {
+          await updateDoc(doc(db, "users", user.uid), updates);
+        } catch (err) {
+          console.error("[Onboarding] Firestore persist failed:", err);
+          throw new OnboardingSaveError(err);
+        }
+      }
+
       setUsername(data.username);
       setOnboardingCompleted(true);
       setOnboardingProfileState(normalizedOnboardingProfile);
@@ -1232,13 +1251,6 @@ export function MembershipProvider({ children }: { children: ReactNode }) {
       });
       if (normalizedFitProfile) {
         setFitProfileState(normalizedFitProfile);
-      }
-      if (user?.uid) {
-        try {
-          await updateDoc(doc(db, "users", user.uid), updates);
-        } catch (err) {
-          console.error("[Onboarding] Firestore persist failed:", err);
-        }
       }
     },
     [user]

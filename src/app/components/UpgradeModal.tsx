@@ -2,6 +2,7 @@
 
 import { useEffect, useCallback, useState } from "react";
 import { buildCheckoutOriginAttributes } from "@/lib/shopifyCheckoutOrigin";
+import { getSignedInCheckoutIdentity } from "@/lib/checkoutIdentityClient";
 import { SHOPIFY_MEMBERSHIP_PLANS } from "@/lib/membershipConfig";
 import { useMembership } from "@/app/context/MembershipContext";
 
@@ -74,7 +75,10 @@ export function UpgradeModal({ open, onClose, currentTier }: UpgradeModalProps) 
     }
 
     const returnTo = `${window.location.origin}/auth/callback`;
-    const attributes = buildCheckoutOriginAttributes(returnTo);
+    // Signed-in upgrade: prefill the account email and carry the signed uid
+    // so orders-paid links the order to this account (see checkoutIdentity).
+    const identity = await getSignedInCheckoutIdentity();
+    const attributes = [...buildCheckoutOriginAttributes(returnTo), ...identity.attributes];
 
     const res = await fetch(`https://${domain}/api/2024-10/graphql.json`, {
       method: "POST",
@@ -87,6 +91,7 @@ export function UpgradeModal({ open, onClose, currentTier }: UpgradeModalProps) 
           $merchandiseId: ID!
           $sellingPlanId: ID!
           $attributes: [AttributeInput!]
+          $buyerIdentity: CartBuyerIdentityInput
         ) {
           cartCreate(input: {
             lines: [{
@@ -95,6 +100,7 @@ export function UpgradeModal({ open, onClose, currentTier }: UpgradeModalProps) 
               sellingPlanId: $sellingPlanId
             }],
             attributes: $attributes
+            buyerIdentity: $buyerIdentity
           }) {
             cart { checkoutUrl }
             userErrors { field message }
@@ -104,6 +110,7 @@ export function UpgradeModal({ open, onClose, currentTier }: UpgradeModalProps) 
           merchandiseId,
           sellingPlanId,
           attributes,
+          buyerIdentity: identity.email ? { email: identity.email } : null,
         },
       }),
     });

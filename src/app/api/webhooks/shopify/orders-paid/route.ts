@@ -14,6 +14,11 @@ import { verifyShopifyHmac } from "@/lib/events/verify";
 import { mirrorLegacyShopifyDelivery } from "@/lib/events/ingest";
 import { recordSourceSessionPaid } from "@/lib/analytics/journeySourceSessionPaid";
 import type { QueryDocumentSnapshot } from "firebase-admin/firestore";
+import {
+  CHECKOUT_UID_ATTRIBUTE,
+  normalizeAccountEmail,
+  verifyCheckoutUid,
+} from "@/lib/checkoutIdentity";
 import { randomUUID } from "crypto";
 import { dispatchAnalyticsEvent } from "@/app/api/_lib/analytics";
 import { getClientIp } from "@/app/api/_lib/clientIp";
@@ -201,16 +206,44 @@ function getShopifyCustomerIdCandidates(customerId?: string): string[] {
   return Array.from(new Set([trimmed, numericId, gid]));
 }
 
+/**
+ * Finds the MyMully account for a paid order, most specific signal first:
+ *   1. `_mully_uid_token` cart attribute, HMAC-verified (signed-in checkout)
+ *   2. Shopify customer id already linked on a user doc
+ *   3. Email, lowercased (how start-account / check-email / Firebase store it)
+ *   4. Email exactly as Shopify sent it (legacy docs stored in mixed case)
+ */
 async function resolvePurchaseUserDoc(
   shopifyCustomerId?: string,
-  email?: string
+  email?: string,
+  signedUid?: string | null
 ): Promise<UserDocSnapshot | null> {
+  if (signedUid) {
+    const snap = await adminDb.collection("users").doc(signedUid).get();
+    if (snap.exists) return snap as unknown as UserDocSnapshot;
+  }
+
   for (const candidate of getShopifyCustomerIdCandidates(shopifyCustomerId)) {
     const userDoc = await findFirstUserByField("shopify_customer_id", candidate);
     if (userDoc) return userDoc;
   }
 
-  return (await findFirstUserByField("email", email)) ?? null;
+  const trimmed = email?.trim();
+  const lower = normalizeAccountEmail(trimmed);
+  const byLower = await findFirstUserByField("email", lower);
+  if (byLower) return byLower;
+  if (trimmed && trimmed !== lower) {
+    return (await findFirstUserByField("email", trimmed)) ?? null;
+  }
+  return null;
+}
+
+function signedUidFromOrder(order: { note_attributes?: Array<{ name: string; value: string }> | null }): string | null {
+  const raw = order.note_attributes?.find((a) => a.name === CHECKOUT_UID_ATTRIBUTE)?.value;
+  if (!raw) return null;
+  const uid = verifyCheckoutUid(raw);
+  if (!uid) console.warn("[orders-paid] ignoring invalid or expired checkout uid attribute");
+  return uid;
 }
 
 // ─── Shopify order shape (minimal) ───────────────────────────────────────────
@@ -657,11 +690,14 @@ export async function POST(request: NextRequest) {
   }
 
   const email = order.email ?? order.customer?.email ?? undefined;
+  // Account matching/creation uses the lowercased email. `email` itself is
+  // left as Shopify sent it for analytics, gifts and other downstream uses.
+  const accountEmail = normalizeAccountEmail(email) ?? undefined;
   const shopifyCustomerId = order.customer?.id?.toString();
   const value = parseFloat(order.total_price);
   let purchaseUserDoc: UserDocSnapshot | null = null;
   try {
-    purchaseUserDoc = await resolvePurchaseUserDoc(shopifyCustomerId, email);
+    purchaseUserDoc = await resolvePurchaseUserDoc(shopifyCustomerId, email, signedUidFromOrder(order));
   } catch (err) {
     console.error("[orders-paid] user lookup failed:", err);
   }
@@ -921,23 +957,80 @@ export async function POST(request: NextRequest) {
         try {
           const emailFlow = tier === "member" || tier === "black" ? "member" : "access";
 
+          const latestPurchase = () => ({
+            shopify_order_id: String(order.id),
+            order_number: String(order.order_number),
+            value: Number(value),
+            currency: order.currency,
+            event_id: `purchase_${order.id}`,
+            paid_at: Date.now(),
+            event_id_captured: false,
+          });
+
+          // Existing account: only touch purchase fields. Never resets
+          // onboarding, profile, fit profile, password_set etc., and never
+          // sends a second "Unlock your Mully account" email.
+          const applyToExistingUser = async (userDoc: UserDocSnapshot) => {
+            const uid = userDoc.id;
+            const userData = (userDoc.data() ?? {}) as Record<string, unknown>;
+            const existingTier = userData.tier as string | undefined;
+            // Same never-downgrade rule as above, for docs found by fallback.
+            if (tier === "access" && (existingTier === "member" || existingTier === "black")) return;
+            const updates: Record<string, unknown> = {
+              tier,
+              updated_at: Date.now(),
+              tier_paid_at: Date.now(),
+              ...(outfitMembership ? { shopify_outfit_membership: outfitMembership } : {}),
+              // Refresh the latest_purchase snapshot so /auth/callback can
+              // dedup the CAPI Purchase for this order too, not just the
+              // very first one. See the parallel comment below.
+              latest_purchase: latestPurchase(),
+            };
+            if (shopifyCustomerId && !userData.shopify_customer_id) {
+              updates.shopify_customer_id = shopifyCustomerId;
+            }
+            await userDoc.ref.update(updates);
+
+            const firstName = (userData.username as string | undefined) ?? null;
+            await triggerEmailFlow(uid, email, firstName, emailFlow);
+          };
+
           if (!purchaseUserDoc) {
+            const newAccountEmail = accountEmail ?? email;
             let uid: string;
+            let authUserAlreadyExisted = false;
             try {
-              const newUser = await adminAuth.createUser({ email });
+              const newUser = await adminAuth.createUser({ email: newAccountEmail });
               uid = newUser.uid;
             } catch {
               try {
-                const existing = await adminAuth.getUserByEmail(email);
+                const existing = await adminAuth.getUserByEmail(newAccountEmail);
                 uid = existing.uid;
+                authUserAlreadyExisted = true;
               } catch (err) {
                 console.error("[orders-paid] could not create or find Firebase user for", email, err);
                 return;
               }
             }
 
-            await adminDb.collection("users").doc(uid).set({
-              email,
+            const userRef = adminDb.collection("users").doc(uid);
+            if (authUserAlreadyExisted) {
+              // The account exists but the lookups above missed its doc
+              // (e.g. email stored with different casing). Treat it as the
+              // existing user it is instead of overwriting their profile.
+              const existingSnap = await userRef.get();
+              if (existingSnap.exists) {
+                console.log(`[orders-paid] matched existing account uid=${uid} via Firebase Auth email lookup`);
+                await applyToExistingUser(existingSnap as unknown as UserDocSnapshot);
+                return;
+              }
+            }
+
+            // create(), not set(): if a doc appeared concurrently (e.g. the
+            // user's first sign-in via syncUserProfile) it is never
+            // overwritten; we fall back to the existing-user update instead.
+            const newDoc = {
+              email: newAccountEmail,
               tier,
               shopify_customer_id: shopifyCustomerId ?? null,
               onboarding_completed: false,
@@ -951,18 +1044,21 @@ export async function POST(request: NextRequest) {
               // set to false until the browser fires its Purchase pixel
               // and pings /api/purchase-context, then flipped to true so
               // refreshes don't re-fire.
-              latest_purchase: {
-                shopify_order_id: String(order.id),
-                order_number: String(order.order_number),
-                value: Number(value),
-                currency: order.currency,
-                event_id: `purchase_${order.id}`,
-                paid_at: Date.now(),
-                event_id_captured: false,
-              },
-            });
+              latest_purchase: latestPurchase(),
+            };
+            try {
+              await userRef.create(newDoc);
+            } catch (err) {
+              const code = (err as { code?: unknown })?.code;
+              const alreadyExists = code === 6 || code === "already-exists" || code === "ALREADY_EXISTS";
+              if (!alreadyExists) throw err;
+              const raced = await userRef.get();
+              if (!raced.exists) throw err;
+              await applyToExistingUser(raced as unknown as UserDocSnapshot);
+              return;
+            }
 
-            const magicLink = await adminAuth.generateSignInWithEmailLink(email, {
+            const magicLink = await adminAuth.generateSignInWithEmailLink(newAccountEmail, {
               url: "https://mymully.com/login?paid=1",
               handleCodeInApp: true,
             });
@@ -979,34 +1075,7 @@ export async function POST(request: NextRequest) {
 
             await triggerEmailFlow(uid, email, firstName, emailFlow);
           } else {
-            const userDoc = purchaseUserDoc;
-            const uid = userDoc.id;
-            const userData = userDoc.data();
-            const updates: Record<string, unknown> = {
-              tier,
-              updated_at: Date.now(),
-              tier_paid_at: Date.now(),
-              ...(outfitMembership ? { shopify_outfit_membership: outfitMembership } : {}),
-              // Refresh the latest_purchase snapshot so /auth/callback can
-              // dedup the CAPI Purchase for this order too, not just the
-              // very first one. See the parallel comment above.
-              latest_purchase: {
-                shopify_order_id: String(order.id),
-                order_number: String(order.order_number),
-                value: Number(value),
-                currency: order.currency,
-                event_id: `purchase_${order.id}`,
-                paid_at: Date.now(),
-                event_id_captured: false,
-              },
-            };
-            if (shopifyCustomerId && !userData.shopify_customer_id) {
-              updates.shopify_customer_id = shopifyCustomerId;
-            }
-            await userDoc.ref.update(updates);
-
-            const firstName = (userData.username as string | undefined) ?? null;
-            await triggerEmailFlow(uid, email, firstName, emailFlow);
+            await applyToExistingUser(purchaseUserDoc);
           }
         } catch (err) {
           console.error("[orders-paid] tier update failed:", err);

@@ -94,15 +94,23 @@ service cloud.firestore {
           "tier",
           "isLegacy",
           "legacyPlan",
-          "back9WelcomeSeen"
+          "back9WelcomeSeen",
+          "phone_e164",
+          "sms_consent_given_at"
         ])
-        && request.resource.data.created_at == resource.data.created_at
-        && request.resource.data.shopify_customer_id == resource.data.shopify_customer_id
+        // get(..., null): server-created docs (start-account, orders-paid,
+        // Loop provisioning) may lack these fields. A bare field read on a
+        // missing key is an error, which denied every client update to those
+        // docs (including syncUserProfile's last_login write). The values
+        // still cannot be changed or added by the client.
+        && request.resource.data.get("created_at", null) == resource.data.get("created_at", null)
+        && request.resource.data.get("shopify_customer_id", null) == resource.data.get("shopify_customer_id", null)
         && (
-          request.resource.data.email == resource.data.email
+          request.resource.data.get("email", null) == resource.data.get("email", null)
           || (
             request.auth.token.email != null
-            && request.resource.data.email == request.auth.token.email
+            && request.resource.data.email is string
+            && request.resource.data.email.lower() == request.auth.token.email.lower()
           )
         )
         && (
@@ -128,6 +136,25 @@ service cloud.firestore {
         && (
           !request.resource.data.diff(resource.data).affectedKeys().hasAny(["onboarding_profile"])
           || request.resource.data.onboarding_profile is map
+        )
+        // Onboarding phone: E.164 only.
+        && (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(["phone_e164"])
+          || (
+            request.resource.data.phone_e164 is string
+            && request.resource.data.phone_e164.matches('^[+][1-9][0-9]{6,14}$')
+          )
+        )
+        // SMS consent record: server time of this write, only alongside a
+        // valid phone and sms_marketing=true. Cannot be backdated or removed.
+        && (
+          !request.resource.data.diff(resource.data).affectedKeys().hasAny(["sms_consent_given_at"])
+          || (
+            request.resource.data.sms_consent_given_at is timestamp
+            && request.resource.data.sms_consent_given_at == request.time
+            && request.resource.data.get("phone_e164", null) is string
+            && request.resource.data.get("messaging_preferences", {}).get("sms_marketing", false) == true
+          )
         );
 
       allow delete: if false;

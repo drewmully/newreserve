@@ -183,6 +183,9 @@ export default function OnboardingPage() {
   const [magicLinkSent, setMagicLinkSent] = useState(false);
   const [sendingLink, setSendingLink] = useState(false);
   const [sendLinkError, setSendLinkError] = useState<string | null>(null);
+  // Post-auth save failure (e.g. Firestore rejected the write). Shown in place
+  // so the user can retry instead of being told everything worked.
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Sync pre-auth email to context so login page picks it up
   useEffect(() => {
@@ -284,7 +287,18 @@ export default function OnboardingPage() {
     }
 
     // Post-auth mode: save directly
-    await completeOnboarding(onboardingData);
+    setSaveError(null);
+    try {
+      await completeOnboarding(onboardingData);
+    } catch (err) {
+      console.error("[Onboarding] completeOnboarding failed:", err);
+      setSaveError(
+        err instanceof Error && err.message
+          ? err.message
+          : "We couldn't save your profile. Please try again."
+      );
+      return;
+    }
     if (newTier === "access" || newTier === "member") {
       // Paid tier — redirect to Shopify checkout; the orders-paid webhook
       // sets the tier in Firestore after payment is confirmed.
@@ -400,7 +414,7 @@ export default function OnboardingPage() {
             Click it to confirm your account and complete your membership.
           </p>
           <div className="rounded-xl bg-cream border border-taupe/15 px-5 py-4 text-sm text-charcoal/55 leading-relaxed mb-6">
-            The link expires after 1 hour. Check your spam folder if you don&apos;t see it.
+            Each link works once and expires after a while, so use the newest one. Check your spam folder if you don&apos;t see it.
           </div>
           <button
             onClick={() => {
@@ -426,6 +440,14 @@ export default function OnboardingPage() {
 
   return (
     <div className="min-h-screen bg-bone">
+      {saveError && (
+        <div
+          role="alert"
+          className="fixed bottom-4 inset-x-4 z-[60] mx-auto max-w-md rounded-xl bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 text-center shadow-sm"
+        >
+          {saveError}
+        </div>
+      )}
       {/* Header */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-bone/90 backdrop-blur-md border-b border-taupe/20">
         <div className="max-w-7xl mx-auto px-6 md:px-12 flex items-center justify-center h-16">

@@ -232,3 +232,63 @@ describe("native subscription management in the existing account modal", () => {
     expect(screen.queryByRole("button", { name: "Reactivate Subscription" })).not.toBeInTheDocument();
   });
 });
+
+describe("order history dead ends", () => {
+  beforeEach(() => {
+    mocks.getIdToken.mockResolvedValue("token-123");
+    mocks.signOut.mockClear();
+  });
+
+  it("offers a retry when the order fetch fails, and the retry reloads orders", async () => {
+    const fetchMock = vi.fn()
+      .mockRejectedValueOnce(new Error("network down"))
+      .mockResolvedValue({ ok: true, json: async () => ({ orders: [], source: "shopify" }) });
+    vi.stubGlobal("fetch", fetchMock);
+    const AccountPage = await loadPage();
+    render(<AccountPage />);
+    const retry = await screen.findByRole("button", { name: "Try again" });
+    expect(screen.getByText("Order history is temporarily unavailable")).toBeInTheDocument();
+    fireEvent.click(retry);
+    await waitFor(() => expect(screen.getByText("No orders yet")).toBeInTheDocument());
+    expect(fetchMock.mock.calls.filter(([u]) => u === "/api/shopify/orders")).toHaveLength(2);
+  });
+
+  it("treats a non-OK orders response as unavailable rather than empty", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500, json: async () => ({}) }));
+    const AccountPage = await loadPage();
+    render(<AccountPage />);
+    expect(await screen.findByText("Order history is temporarily unavailable")).toBeInTheDocument();
+    expect(screen.queryByText("No orders yet")).not.toBeInTheDocument();
+  });
+
+  it("explains the different-email case on an empty order list, with sign out and a prefilled support email", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ orders: [], source: "no_customer" }) }));
+    const AccountPage = await loadPage();
+    render(<AccountPage />);
+    const help = await screen.findByTestId("different-email-help");
+    expect(help.textContent).toMatch(/Bought with a different email\?/);
+    expect(help.textContent).toContain("member@example.com");
+    const contact = screen.getByRole("link", { name: "Contact us" }) as HTMLAnchorElement;
+    expect(contact.href.startsWith("mailto:info@mymully.com?")).toBe(true);
+    expect(decodeURIComponent(contact.href)).toContain("Account email: member@example.com");
+    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    expect(mocks.signOut).toHaveBeenCalled();
+  });
+});
+
+describe("no subscription found", () => {
+  it("explains the different-email case instead of dead-ending", async () => {
+    const onClose = vi.fn();
+    mocks.signOut.mockClear();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ subscriptions: [] }) }));
+    const { SubscriptionManagerModal } = await import("@/app/account/SubscriptionManagerModal");
+    render(<SubscriptionManagerModal open provider="shopify" onClose={onClose} />);
+    expect(await screen.findByText("No subscription found.")).toBeInTheDocument();
+    const help = screen.getByTestId("different-email-help");
+    expect(help.textContent).toContain("member@example.com");
+    expect((screen.getByRole("link", { name: "Contact us" }) as HTMLAnchorElement).href).toMatch(/^mailto:info@mymully\.com\?/);
+    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    expect(onClose).toHaveBeenCalled();
+    expect(mocks.signOut).toHaveBeenCalled();
+  });
+});
