@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit } from "@/lib/rateLimit";
+import { loadOrderEligibility } from "@/lib/returns/eligibility";
+import { outsideWindowMessage, returnShippingCostByTier } from "@/lib/returns/policy";
+import { returnTokenError, signReturnToken } from "@/lib/returns/token";
+import { resolveReturnTier } from "@/lib/returns/tier";
 
 const STORE_DOMAIN = process.env.SHOPIFY_STORE_DOMAIN!;
 const API_VERSION = process.env.SHOPIFY_ADMIN_API_VERSION ?? "2024-10";
@@ -87,86 +91,96 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const url = `https://${STORE_DOMAIN}/admin/api/${API_VERSION}/orders.json?name=%23${normalized}&status=any`;
+    const url = `https://${STORE_DOMAIN}/admin/api/${API_VERSION}/orders.json?name=%23${normalized}&status=any&fields=id,name,email`;
     const res = await fetch(url, { headers: adminHeaders() });
 
     if (!res.ok) {
       throw new Error(`Shopify Admin error ${res.status}: ${await res.text()}`);
     }
 
-    const json = (await res.json()) as { orders: ShopifyOrder[] };
+    const json = (await res.json()) as { orders: ShopifyOrderSummary[] };
 
     // Verify email matches the order's customer
-    const order = json.orders.find(
+    const match = json.orders.find(
       (o) => o.email?.toLowerCase() === normalizedEmail
     );
 
-    if (!order) {
+    if (!match) {
       return NextResponse.json(
         { error: "Order not found. Please check your order number and email." },
         { status: 404 }
       );
     }
 
-    // Enforce 45-day return window
-    const orderAge = Date.now() - new Date(order.created_at).getTime();
-    const daysSinceOrder = orderAge / (1000 * 60 * 60 * 24);
-    if (daysSinceOrder > 45) {
+    // One GraphQL call: fulfillments + delivery dates, returns, images.
+    const order = await loadOrderEligibility(String(match.id));
+    if (!order || order.email !== normalizedEmail) {
       return NextResponse.json(
-        { error: "This order is outside our return window. Please email info@Mullybox.com or start a concierge request for more assistance." },
+        { error: "Order not found. Please check your order number and email." },
+        { status: 404 }
+      );
+    }
+
+    // Return window: shared policy (days from delivery, per order type).
+    if (order.allFulfillmentsOutsideWindow) {
+      return NextResponse.json(
+        { error: outsideWindowMessage(order.rules), code: "outside_window" },
         { status: 422 }
       );
     }
 
-    // Build a map of already-returned quantities from refunds
-    const returnedQtyById: Record<string, number> = {};
-    for (const refund of order.refunds ?? []) {
-      for (const rli of refund.refund_line_items ?? []) {
-        const id = String(rli.line_item_id);
-        returnedQtyById[id] = (returnedQtyById[id] ?? 0) + rli.quantity;
-      }
+    const returnToken = signReturnToken({
+      orderId: order.orderId,
+      orderName: order.orderName,
+      email: order.email,
+      orderType: order.orderType,
+    });
+    if (!returnToken) {
+      console.error("[returns/lookup] RETURNS_TOKEN_SECRET / CRON_SECRET not configured");
+      const { status, body } = returnTokenError("unconfigured");
+      return NextResponse.json(body, { status });
     }
 
-    const items = order.line_items.map((li) => {
-      const alreadyReturnedQty = returnedQtyById[String(li.id)] ?? 0;
-      const returnableQty = li.quantity - alreadyReturnedQty;
+    const tier = await resolveReturnTier(request, order.email);
 
-      // Check for final-sale tag via line item properties
-      const isFinalSale = (li.properties ?? []).some(
-        (p) =>
-          p.name === "_final_sale" ||
-          (p.name === "Final Sale" && p.value !== "false")
-      );
-
-      return {
-        lineItemId: String(li.id),
-        sku: li.sku ?? "",
-        title: li.title,
-        variantTitle: li.variant_title ?? "",
-        quantity: li.quantity,
-        returnableQty,
-        price: parseFloat(li.price),
-        image: li.image?.src ?? "",
-        isChildSku: false,
-        isFinalSale,
-        alreadyReturned: returnableQty <= 0,
-      };
-    });
+    const items = order.lines.map((line) => ({
+      lineItemId: line.lineItemId,
+      sku: line.sku,
+      title: line.title,
+      variantTitle: line.variantTitle,
+      quantity: line.quantity,
+      returnableQty: line.returnableQty,
+      price: line.unitPrice,
+      image: line.image,
+      isChildSku: false,
+      isFinalSale: line.isFinalSale,
+      alreadyReturned: line.ineligibleReason === "already_returned",
+      ineligibleReason: line.ineligibleReason,
+      returnDeadline: line.returnDeadline,
+    }));
 
     return NextResponse.json({
-      orderId: String(order.id),
-      orderName: order.name,
-      orderDate: new Date(order.created_at).toLocaleDateString("en-US", {
+      orderId: order.orderId,
+      orderName: order.orderName,
+      orderDate: new Date(order.createdAt).toLocaleDateString("en-US", {
         year: "numeric",
         month: "long",
         day: "numeric",
       }),
       items,
+      returnToken,
+      orderType: order.orderType,
+      policy: {
+        windowDays: order.rules.windowDays,
+        resolution: order.rules.resolution,
+        exchangeAllowed: order.rules.exchangeAllowed,
+      },
+      returnShippingCost: returnShippingCostByTier(tier),
     });
   } catch (err) {
     console.error("[returns/lookup]", err);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "We couldn't look up your order right now. Please try again, or email info@mymully.com." },
       { status: 500 }
     );
   }
@@ -174,36 +188,8 @@ export async function POST(request: NextRequest) {
 
 /* ── Shopify REST types (minimal) ── */
 
-interface ShopifyLineItemProperty {
-  name: string;
-  value: string;
-}
-
-interface ShopifyLineItem {
-  id: number;
-  sku: string | null;
-  title: string;
-  variant_title: string | null;
-  quantity: number;
-  price: string;
-  image: { src: string } | null;
-  properties: ShopifyLineItemProperty[];
-}
-
-interface ShopifyRefundLineItem {
-  line_item_id: number;
-  quantity: number;
-}
-
-interface ShopifyRefund {
-  refund_line_items: ShopifyRefundLineItem[];
-}
-
-interface ShopifyOrder {
+interface ShopifyOrderSummary {
   id: number;
   name: string;
-  email: string;
-  created_at: string;
-  line_items: ShopifyLineItem[];
-  refunds: ShopifyRefund[];
+  email: string | null;
 }
