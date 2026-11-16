@@ -13,7 +13,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
-import { isAllowedAdminEmail } from "@/lib/adminEmailAllowlist";
+import { isAdminIdToken } from "@/lib/adminTokenPolicy";
 import { getLoopRawSubscriptions, getLoopSubscriptionById } from "@/app/api/_lib/loopAdmin";
 import { resolveMemberTierFromVariantId, resolveLegacyFromVariantId } from "@/lib/membershipConfig";
 import { startFlow, type EmailFlow } from "@/lib/email/sequences";
@@ -23,7 +23,7 @@ async function verifyAdmin(request: NextRequest): Promise<string> {
   const token = header.replace(/^Bearer\s+/i, "").trim();
   if (!token) throw new Error("Missing Authorization header");
   const decoded = await adminAuth.verifyIdToken(token, true);
-  if (!decoded.email || !isAllowedAdminEmail(decoded.email)) {
+  if (!isAdminIdToken(decoded)) {
     throw new Error("Forbidden");
   }
   return decoded.uid;

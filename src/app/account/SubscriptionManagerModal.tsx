@@ -37,6 +37,13 @@ export function SubscriptionManagerModal({ open, onClose, provider = "loop" }: {
   const [error, setError] = useState<string | null>(null);
   const [fallbackUrl, setFallbackUrl] = useState<string | null>(null);
   const [needsConnection, setNeedsConnection] = useState(false);
+  // Set when Shopify connect is blocked because the MyMully email isn't
+  // verified yet (accounts started from the homepage email form). The user
+  // can request a standard Firebase email sign-in link; signing in with it
+  // marks the email verified, after which Connect works.
+  const [needsEmailVerification, setNeedsEmailVerification] = useState(false);
+  const [verificationSent, setVerificationSent] = useState(false);
+  const [verificationSending, setVerificationSending] = useState(false);
   const native = provider === "shopify";
 
   const loadSubscriptions = useCallback(async (token?: string) => {
@@ -81,10 +88,12 @@ export function SubscriptionManagerModal({ open, onClose, provider = "loop" }: {
     setCancelReason("");
     setError(null);
     setNeedsConnection(false);
+    setVerificationSent(false);
     const callbackCode = native ? new URLSearchParams(window.location.search).get("shopify") : null;
     const callbackError = callbackCode && callbackCode !== "connected"
       ? CONNECTION_ERRORS[callbackCode] || "The Shopify connection could not be completed. Please try again."
       : null;
+    setNeedsEmailVerification(callbackCode === "verify_email");
     loadSubscriptions()
       .catch((err) => {
         console.error("[SubManager] load failed:", err);
@@ -110,6 +119,12 @@ export function SubscriptionManagerModal({ open, onClose, provider = "loop" }: {
       const token = await user.getIdToken();
       const response = await fetch("/api/shopify-customer/connect", { method: "POST", headers: { Authorization: `Bearer ${token}` } });
       const payload = await response.json();
+      if (!response.ok && payload?.code === "verify_email") {
+        setNeedsEmailVerification(true);
+        setError(CONNECTION_ERRORS.verify_email);
+        setActionLoading(false);
+        return;
+      }
       if (!response.ok || !payload.url) throw new Error(payload.error || "Could not connect Shopify.");
       const url = new URL(payload.url);
       if (url.origin !== "https://shopify.com" || !url.pathname.startsWith("/authentication/56105304256/")) throw new Error("Invalid connection destination.");
@@ -117,6 +132,23 @@ export function SubscriptionManagerModal({ open, onClose, provider = "loop" }: {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not connect Shopify.");
       setActionLoading(false);
+    }
+  }
+
+  async function sendVerificationLink() {
+    const email = user?.email;
+    if (!email || verificationSending) return;
+    setVerificationSending(true);
+    try {
+      const { sendOTPEmail } = await import("@/lib/firebase");
+      await sendOTPEmail(email);
+      setVerificationSent(true);
+      setError(null);
+    } catch (err) {
+      console.error("[SubManager] verification link failed:", err);
+      setError("We couldn't send the verification link. Please try again in a minute.");
+    } finally {
+      setVerificationSending(false);
     }
   }
 
@@ -231,6 +263,24 @@ export function SubscriptionManagerModal({ open, onClose, provider = "loop" }: {
                 {[40, 32, 56].map((w) => (
                   <div key={w} className={`h-4 w-${w} bg-taupe/15 rounded animate-pulse`} />
                 ))}
+              </div>
+            ) : native && needsEmailVerification ? (
+              <div className="space-y-4">
+                {verificationSent ? (
+                  <p role="status" className="text-sm text-forest py-4">
+                    Check your inbox. We sent a sign-in link to {user?.email}. Open it on this device to verify your email, then come back here and connect Shopify.
+                  </p>
+                ) : (
+                  <p role="alert" className="text-sm text-ember/75 py-4">{error || CONNECTION_ERRORS.verify_email}</p>
+                )}
+                <button
+                  type="button"
+                  onClick={sendVerificationLink}
+                  disabled={verificationSending || !user?.email}
+                  className="w-full min-h-11 rounded-xl bg-forest px-4 text-sm text-bone disabled:opacity-50"
+                >
+                  {verificationSending ? "Sending…" : verificationSent ? "Resend verification link" : "Send verification link"}
+                </button>
               </div>
             ) : error ? (
               <div className="space-y-4">

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth } from "@/lib/firebase-admin";
-import { isAllowedAdminEmail } from "@/lib/adminEmailAllowlist";
+import { adminTokenRejection } from "@/lib/adminTokenPolicy";
 
 export interface VerifiedAdminRequest {
   uid: string;
@@ -23,7 +23,15 @@ export async function verifyAdminRequest(
       (await adminAuth.getUser(decoded.uid)).email?.toLowerCase() ??
       null;
 
-    if (!email || !isAllowedAdminEmail(email, process.env.ADMIN_EMAIL_ALLOWLIST)) {
+    // Allowlisted email AND a strong session: not a custom token (e.g. from
+    // /api/auth/start-account), not an email_only signup, verified email.
+    if (
+      !email ||
+      adminTokenRejection(decoded, {
+        email,
+        allowlist: process.env.ADMIN_EMAIL_ALLOWLIST,
+      }) !== null
+    ) {
       return null;
     }
 

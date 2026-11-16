@@ -21,7 +21,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth } from "@/lib/firebase-admin";
-import { isAllowedAdminEmail } from "@/lib/adminEmailAllowlist";
+import { isAdminIdToken } from "@/lib/adminTokenPolicy";
 import { getRocksProgress, type RocksData } from "@/app/api/_lib/loopRocks";
 import {
   latestSnapshot,
@@ -46,7 +46,7 @@ async function verifyCaller(request: NextRequest): Promise<void> {
   }
 
   const decoded = await adminAuth.verifyIdToken(token, true);
-  if (!decoded.email || !isAllowedAdminEmail(decoded.email)) {
+  if (!isAdminIdToken(decoded)) {
     throw new Error("Forbidden");
   }
 }

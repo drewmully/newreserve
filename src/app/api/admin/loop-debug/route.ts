@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth } from "@/lib/firebase-admin";
-import { isAllowedAdminEmail } from "@/lib/adminEmailAllowlist";
+import { isAdminIdToken } from "@/lib/adminTokenPolicy";
 import { getLoopRawSubscriptions } from "@/app/api/_lib/loopAdmin";
 import { resolveCustomerByEmail } from "@/app/api/_lib/shopifyAdmin";
 
@@ -9,7 +9,7 @@ async function verifyAdmin(request: NextRequest): Promise<string> {
   const token = header.replace(/^Bearer\s+/i, "").trim();
   if (!token) throw Object.assign(new Error("Missing token"), { status: 401 });
   const decoded = await adminAuth.verifyIdToken(token);
-  if (!isAllowedAdminEmail(decoded.email ?? ""))
+  if (!isAdminIdToken(decoded))
     throw Object.assign(new Error("Forbidden"), { status: 403 });
   return decoded.uid;
 }

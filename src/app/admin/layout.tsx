@@ -5,7 +5,8 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase";
-import { isAllowedAdminEmail } from "@/lib/adminEmailAllowlist";
+import { clientAdminStatus, type ClientAdminStatus } from "@/lib/adminClientGate";
+import { AdminReauthNotice } from "@/app/components/AdminGate";
 
 type NavLink = { href: string; label: string; exact?: boolean };
 
@@ -26,21 +27,23 @@ const NAV_LINKS: NavLink[] = [
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [status, setStatus] = useState<"loading" | "authorized" | "unauthorized">("loading");
+  const [status, setStatus] = useState<"loading" | ClientAdminStatus>("loading");
 
   useEffect(() => {
+    let cancelled = false;
     const unsub = onAuthStateChanged(auth, (user) => {
       if (!user || !user.email) {
         router.replace("/login");
         return;
       }
-      if (isAllowedAdminEmail(user.email)) {
-        setStatus("authorized");
-      } else {
-        setStatus("unauthorized");
-      }
+      void clientAdminStatus(user).then((next) => {
+        if (!cancelled) setStatus(next);
+      });
     });
-    return unsub;
+    return () => {
+      cancelled = true;
+      unsub();
+    };
   }, [router]);
 
   if (status === "loading") {
@@ -50,6 +53,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </div>
     );
   }
+
+  if (status === "reauth") return <AdminReauthNotice />;
 
   if (status === "unauthorized") {
     return (

@@ -16,23 +16,29 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
-import { isAllowedAdminEmail } from "@/lib/adminEmailAllowlist";
+import { clientAdminStatus, type ClientAdminStatus } from "@/lib/adminClientGate";
 
 export default function AdminGate({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const [status, setStatus] = useState<"loading" | "authorized" | "unauthorized">("loading");
+  const [status, setStatus] = useState<"loading" | ClientAdminStatus>("loading");
 
   useEffect(() => {
+    let cancelled = false;
     const unsub = onAuthStateChanged(auth, (user) => {
       if (!user || !user.email) {
         router.replace("/login");
         return;
       }
-      setStatus(isAllowedAdminEmail(user.email) ? "authorized" : "unauthorized");
+      void clientAdminStatus(user).then((next) => {
+        if (!cancelled) setStatus(next);
+      });
     });
-    return unsub;
+    return () => {
+      cancelled = true;
+      unsub();
+    };
   }, [router]);
 
   if (status === "loading") {
@@ -42,6 +48,7 @@ export default function AdminGate({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
+  if (status === "reauth") return <AdminReauthNotice />;
   if (status === "unauthorized") {
     return (
       <div className="min-h-screen bg-cream flex items-center justify-center">
@@ -50,4 +57,29 @@ export default function AdminGate({ children }: { children: React.ReactNode }) {
     );
   }
   return <>{children}</>;
+}
+
+/**
+ * Shown to allowlisted admins whose current session can't be used for admin
+ * access (e.g. a custom-token session from the homepage email form, or an
+ * unverified email). Signing in again with Google or an email link fixes it.
+ */
+export function AdminReauthNotice() {
+  const router = useRouter();
+  return (
+    <div className="min-h-screen bg-cream flex items-center justify-center px-6">
+      <div className="max-w-sm text-center space-y-4">
+        <p className="text-charcoal/70 text-sm">
+          Admin access needs a verified sign-in. Sign out, then sign in again with Google or an email link.
+        </p>
+        <button
+          type="button"
+          onClick={() => { void signOut(auth).finally(() => router.replace("/login")); }}
+          className="min-h-11 rounded-xl bg-forest px-5 text-sm text-bone"
+        >
+          Sign out and sign in again
+        </button>
+      </div>
+    </div>
+  );
 }

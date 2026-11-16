@@ -115,7 +115,8 @@ export function EmailCTA({ variant = "hero", ctaText }: { variant?: "hero" | "bo
       }
 
       // New user: create a Firebase account with no password and sign in
-      // with the returned custom token, then route to /choose-plan.
+      // with the returned custom token, then route to /choose-plan. If the
+      // server reports the account already exists, route to /login.
       const startRes = await fetch("/api/auth/start-account", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -135,7 +136,17 @@ export function EmailCTA({ variant = "hero", ctaText }: { variant?: "hero" | "bo
       const startData = (await startRes.json()) as {
         uid?: string;
         customToken?: string;
+        exists?: boolean;
       };
+
+      // The account already exists (e.g. check-email failed or raced). The
+      // server no longer issues a sign-in token for existing accounts, so
+      // route to /login exactly like the check-email "exists" path above.
+      if (startData.exists === true) {
+        try { sessionStorage.setItem(PENDING_SIGN_IN_EMAIL_KEY, email); } catch {}
+        router.push("/login");
+        return;
+      }
 
       if (startData.customToken) {
         try {
