@@ -11,9 +11,18 @@ export function safeShopReturn(value: string | null | undefined): string | null 
   }
 }
 
+/**
+ * Explicit shop return path carried by a login URL, or null.
+ *
+ * Returns null when the URL has no valid `returnTo` (and for paid membership
+ * links), so /login can run its pending-onboarding completion first. /login
+ * itself still falls back to "/" once nothing else applies, which keeps the
+ * shop-first default from 2026-10-02 (commit 4e2dd3b) without skipping the
+ * pending_onboarding_data branch for ordinary magic links.
+ */
 export function shopReturnFromLogin(search: string): string | null {
   const params = new URLSearchParams(search);
   // Paid membership links retain their original completion flow.
   if (params.has("paid") || params.has("paid_member")) return null;
-  return safeShopReturn(params.get("returnTo")) || "/";
+  return safeShopReturn(params.get("returnTo"));
 }

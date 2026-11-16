@@ -22,7 +22,11 @@ describe("shop-aware login", () => {
   it("leaves paid onboarding in control", () => {
     expect(shopReturnFromLogin("?paid=1&returnTo=%2Fshop")).toBeNull();
     expect(shopReturnFromLogin("?paid_member=1&returnTo=%2Fshop")).toBeNull();
-    expect(shopReturnFromLogin("")).toBe("/");
+    // No returnTo → null, so /login runs pending onboarding before its own
+    // "/" default (see tests/ui/shopLoginFlow.test.tsx). Explicit "/" stays.
+    expect(shopReturnFromLogin("")).toBeNull();
+    expect(shopReturnFromLogin("?returnTo=%2Fevil.test")).toBeNull();
+    expect(shopReturnFromLogin("?returnTo=%2F")).toBe("/");
   });
 });
 
