@@ -85,6 +85,19 @@ describe("expired / used email link recovery", () => {
     fireEvent.click(screen.getByText("Continue"));
     await waitFor(() => expect(mocks.sendOTPEmail).toHaveBeenCalledWith("jane@example.com"));
     expect(await screen.findByText("Check your email")).toBeTruthy();
+    expect(
+      screen.getByText("The link comes from info@mymully.com. Check Spam or Promotions if you don't see it.")
+    ).toBeTruthy();
+  });
+
+  it("shows the rate-limit copy when too many links were requested", async () => {
+    window.history.replaceState({}, "", "/login");
+    mocks.sendOTPEmail.mockRejectedValue(authErr("auth/too-many-requests"));
+    render(<LoginPage />);
+    fireEvent.change(screen.getByPlaceholderText("you@example.com"), { target: { value: "jane@example.com" } });
+    fireEvent.click(screen.getByText("Continue"));
+    expect(await screen.findByText("Too many attempts. Please wait a few minutes and try again.")).toBeTruthy();
+    expect(screen.queryByText("Check your email")).toBeNull();
   });
 
   it("rejects an invalid email without calling Firebase", async () => {

@@ -22,6 +22,9 @@ const COMMON: Record<string, string> = {
   "auth/invalid-email": "Please enter a valid email address.",
   "auth/missing-email": "Enter your email address to continue.",
   "auth/too-many-requests": "Too many attempts. Please wait a few minutes and try again.",
+  // Firebase's daily email-link send cap (only reachable on the fallback sender).
+  "auth/quota-exceeded":
+    "We've hit our sign-in email limit for now. Please try again later, or sign in with Google.",
   "auth/unauthorized-continue-uri": "Sign-in is not configured for this domain.",
   "auth/expired-action-code": DEAD_LINK_MESSAGE,
   "auth/invalid-action-code": DEAD_LINK_MESSAGE,

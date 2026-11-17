@@ -533,6 +533,9 @@ export default function LoginPage() {
               <div className="space-y-4">
                 <div className="rounded-xl bg-cream border border-taupe/15 px-5 py-4 text-sm text-charcoal/55 leading-relaxed">
                   Click the link in your inbox to sign in. Each link works once and expires after a while, so use the newest one. If it stops working, come back here for a fresh link.
+                  <span className="block mt-2">
+                    The link comes from info@mymully.com. Check Spam or Promotions if you don&apos;t see it.
+                  </span>
                 </div>
 
                 {errorBanner}
