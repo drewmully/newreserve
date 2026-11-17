@@ -235,32 +235,29 @@ export async function syncUserProfile(user: User): Promise<UserDocument> {
    ═══════════════════════════════════════════ */
 
 /**
- * Sends a Firebase Email Link (magic link) to the given email.
- * Saves the email in localStorage so confirmOTPSignIn can retrieve
- * it on the same device automatically.
+ * Sends a passwordless sign-in link (magic link) to the given email.
+ *
+ * Delivered from info@mymully.com via /api/auth/send-login-link (Resend).
+ * If that route is down, falls back to Firebase's own sender
+ * (noreply@mully-reserve.firebaseapp.com) with the identical continue URL.
+ * Saves the email in localStorage so confirmOTPSignIn can retrieve it on the
+ * same device automatically.
  */
 export async function sendOTPEmail(email: string): Promise<void> {
-  const { shopReturnFromLogin } = await import("./shopLogin");
-  const destination = new URL("/login", window.location.origin);
-  const shopReturn = window.location.pathname === "/login"
-    ? shopReturnFromLogin(window.location.search)
-    : null;
-  if (shopReturn) destination.searchParams.set("returnTo", shopReturn);
-  // A fresh link requested from an expired post-purchase link (/login?paid=1)
-  // keeps the paid marker, so pending onboarding never re-sends the buyer to
-  // checkout. The flag only suppresses the checkout redirect; it grants nothing.
-  if (
-    window.location.pathname === "/login" &&
-    new URLSearchParams(window.location.search).get("paid") === "1"
-  ) {
-    destination.searchParams.set("paid", "1");
-  }
-  const actionCodeSettings = {
-    // Must be whitelisted in Firebase Console → Authentication → Settings → Authorized domains.
-    url: destination.toString(),
-    handleCodeInApp: true,
-  };
-  await sendSignInLinkToEmail(auth, email, actionCodeSettings);
+  const { loginLinkTargetFromLocation, buildLoginContinueUrl } = await import("./loginLink");
+  const { requestLoginLink } = await import("./requestLoginLink");
+  // returnTo / paid=1 are only carried from /login (see loginLinkTargetFromLocation).
+  const target = loginLinkTargetFromLocation(window.location.pathname, window.location.search);
+  await requestLoginLink(email, target, {
+    firebaseFallback: () =>
+      sendSignInLinkToEmail(auth, email, {
+        // Must be whitelisted in Firebase Console → Authentication → Settings → Authorized domains.
+        url: buildLoginContinueUrl(window.location.origin, target),
+        handleCodeInApp: true,
+      }),
+    onFallback: (reason) =>
+      console.warn(`[sendOTPEmail] login-link route unavailable (${reason}); using Firebase sender`),
+  });
   try {
     localStorage.setItem("emailForSignIn", email);
   } catch {}
