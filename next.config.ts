@@ -37,6 +37,17 @@ const nextConfig: NextConfig = {
   // theme forwards those to this domain, so send them to the headless pages.
   async redirects() {
     return [
+      // Shopify-hosted transactional paths (order status, checkout, gift cards,
+      // classic account auth). Old emails may link these on mullybox.com, which
+      // will 308 here once its DNS moves to Vercel. Send them to the Shopify
+      // checkout domain. Temporary on purpose: transactional, not SEO.
+      { source: "/:shopId(\\d+)/orders/:path*", destination: "https://checkout.mymully.com/:shopId/orders/:path*", permanent: false },
+      { source: "/:shopId(\\d+)/checkouts/:path*", destination: "https://checkout.mymully.com/:shopId/checkouts/:path*", permanent: false },
+      { source: "/checkouts/:path*", destination: "https://checkout.mymully.com/checkouts/:path*", permanent: false },
+      { source: "/orders/:path*", destination: "https://checkout.mymully.com/orders/:path*", permanent: false },
+      { source: "/gift_cards/:path*", destination: "https://checkout.mymully.com/gift_cards/:path*", permanent: false },
+      { source: "/account/:sub(login|register|logout|orders|activate|reset|addresses|invalid_token)/:path*", destination: "https://checkout.mymully.com/account/:sub/:path*", permanent: false },
+      { source: "/tools/recurring/:path*", destination: "https://checkout.mymully.com/tools/recurring/:path*", permanent: false },
       // s03: old Shopify Markets locale paths (/en-gb/..., /en-au/...) drop the locale.
       { source: "/:locale(en-[a-z]{2})", destination: "/", permanent: true },
       { source: "/:locale(en-[a-z]{2})/products/:handle", destination: "/shop/:handle", permanent: true },
