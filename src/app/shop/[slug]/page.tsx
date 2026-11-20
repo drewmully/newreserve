@@ -7,6 +7,7 @@ import {
   PRIVATE_RELEASES_COLLECTION_HANDLE,
   PRO_SHOP_COLLECTION_HANDLE,
 } from "@/lib/shopify";
+import { GIFT_CARD_HANDLE, GIFT_CARD_PATH } from "@/lib/giftCard";
 import { ShopPDPClient } from "../components/ShopPDPClient";
 import { ShopPageShell } from "../components/ShopPageShell";
 import { ScrollToTop } from "../components/ScrollToTop";
@@ -75,6 +76,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function ProductPage({ params, searchParams }: Props) {
   const { slug } = await params;
+  // The gift card has its own page (recipient email, note, send date).
+  if (slug === GIFT_CARD_HANDLE) permanentRedirect(GIFT_CARD_PATH);
   const query = await searchParams;
   const requestedVariantId = query.variant;
 

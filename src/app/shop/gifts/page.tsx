@@ -8,6 +8,7 @@ import { GIFT_GUIDE_HUB_ORDER, GIFT_SEASON_HREF, GIFT_SEASON_LIVE, GRID_COLUMNS,
 import { GiftGuideTracker } from "./GiftGuideTracker";
 import { faqJsonLd, itemListJsonLd } from "./jsonLd";
 import {
+  GiftCardBand,
   GiftFaqs,
   GiftGridFill,
   GiftHeroRail,
@@ -105,6 +106,7 @@ export default async function GiftGuideHubPage() {
           </div>
         ))}
 
+        <GiftCardBand placement="hub-after-tiers" tier="hub" />
         <GiftFaqs />
       </main>
     </ShopPageShell>

@@ -20,9 +20,15 @@ const gear = [
   ["Bags", "/shop/collection/shop-bags"],
   ["Accessories", "/shop/collection/shop-accessories"],
 ];
+const gifts = [
+  ["Gift guide", "/shop/gifts"],
+  ["Gift a Season", "/lp/gift-season"],
+  ["Gift card", "/shop/gift-card"],
+];
 const allCategories = [
   ["Shop everything", "/shop/collection/shop-all"], ...apparel, ...gear,
   ["Gifts", "/shop/gifts"],
+  ["Gift card", "/shop/gift-card"],
 ];
 
 export function ShopSeasonalHeader({
@@ -97,7 +103,7 @@ export function ShopSeasonalHeader({
           <nav aria-label="Shop navigation" className="hidden items-center gap-4 text-[11px] uppercase tracking-[.1em] lg:flex xl:gap-6">
             <ShopAllDropdown />
             <Link href="/shop/new-arrivals" className="inline-flex min-h-11 items-center">New Arrivals</Link>
-            {([["Apparel", apparel], ["Gear", gear]] as const).map(([label, links]) => (
+            {([["Apparel", apparel], ["Gear", gear], ["Gifts", gifts]] as const).map(([label, links]) => (
               <details className="relative" key={label} onBlur={e => {
                 if (!e.currentTarget.contains(e.relatedTarget as Node | null)) e.currentTarget.open = false;
               }} onKeyDown={e => { if (e.key === "Escape") { e.currentTarget.open = false; e.currentTarget.querySelector("summary")?.focus(); } }}>
@@ -107,7 +113,6 @@ export function ShopSeasonalHeader({
                 </div>
               </details>
             ))}
-            <Link href="/shop/gifts" className="inline-flex min-h-11 items-center">Gifts</Link>
             <Link href="/shop#outfit" onClick={outfitClick} className="shop-build-link inline-flex min-h-11 items-center">Build an outfit</Link>
           </nav>
           <div className="flex items-center gap-3 sm:gap-5">
@@ -132,7 +137,7 @@ export function ShopSeasonalHeader({
           <Link href="/shop/new-arrivals" className="text-sm">New Arrivals</Link>
           <details><summary className="shop-nav-summary">Apparel</summary>{apparel.map(([name,href])=><Link key={href} href={href} className="pl-4 text-sm">{name}</Link>)}</details>
           <details><summary className="shop-nav-summary">Gear</summary>{gear.map(([name,href])=><Link key={href} href={href} className="pl-4 text-sm">{name}</Link>)}</details>
-          <Link href="/shop/gifts" className="text-sm">Gifts</Link>
+          <details><summary className="shop-nav-summary">Gifts</summary>{gifts.map(([name,href])=><Link key={href} href={href} className="pl-4 text-sm">{name}</Link>)}</details>
           <Link href="/shop#outfit" onClick={outfitClick} className="shop-build-link text-sm">Build an Outfit</Link>
           <div className="mt-4 border-t border-charcoal/15 pt-3 text-sm">
             <Link href="/blog">From the Journal</Link>

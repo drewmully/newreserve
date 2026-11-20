@@ -72,6 +72,8 @@ const VALID_EVENTS = new Set([
   "gift_guide_tier_click",
   "gift_guide_product_click",
   "gift_a_season_click",
+  "gift_card_click",
+  "gift_card_added",
   // Gift a Season LP funnel (#352). Without these the route returned 400 and
   // every gift_season_* event was dropped.
   "gift_season_view",
