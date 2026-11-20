@@ -9,7 +9,8 @@
  *
  * Property mapping (latest non-null per customer wins):
  *   - Shirt Size                       -> customer_facts.size_top
- *   - Pant Size | Bottom Size | Waist  -> customer_facts.size_bottom
+ *   - Pant Size | Bottom Size | Waist Size -> customer_facts.size_bottom
+ *     (Waist Size is the key the Mully Monthly landing page writes)
  *   - Shoe Size                        -> customer_facts.size_shoe
  *   - Style                            -> appended (unique) to customer_facts.style_tags
  *   - Gender, Glove Hand, Glove Size,
@@ -108,13 +109,14 @@ const NOTE_KEYS = [
   "Inseam",
   "Chest",
   "Waist",
+  "Never Send",
 ];
 
 function mergeProperties(agg: Aggregated, props: Props, when: string | null) {
   if (!props) return;
   const p = props as Record<string, string | null>;
   const top = pick(p, ["Shirt Size", "Top Size"]);
-  const bottom = pick(p, ["Pant Size", "Bottom Size", "Pants Size"]);
+  const bottom = pick(p, ["Pant Size", "Bottom Size", "Pants Size", "Waist Size"]);
   const shoe = pick(p, ["Shoe Size"]);
   const style = pick(p, ["Style"]);
 
