@@ -98,5 +98,6 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!api/webhooks).*)"],
+  // mullybox: proxied to the Mullybox app (MULLYBOX_ORIGIN), which runs its own middleware.
+  matcher: ["/((?!api/webhooks|mullybox).*)"],
 };

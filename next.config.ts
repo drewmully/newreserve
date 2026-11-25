@@ -17,6 +17,8 @@ const securityHeaders = [
   },
 ];
 
+const mullyboxOrigin = (process.env.MULLYBOX_ORIGIN || "").replace(/\/$/, "");
+
 const nextConfig: NextConfig = {
   output: "standalone",
   poweredByHeader: false,
@@ -29,6 +31,16 @@ const nextConfig: NextConfig = {
           source: "/lp/stylegame",
           destination: "/lp/stylegame/index.html",
         },
+        // Mullybox 2.0 lives in its own app (drewmully/mullybox-2, built with
+        // NEXT_BASE_PATH=/mullybox). Set MULLYBOX_ORIGIN to its production
+        // deployment (e.g. https://mullybox-prod.vercel.app) to serve it at
+        // www.mymully.com/mullybox. Unset means no rewrite.
+        ...(mullyboxOrigin
+          ? [
+              { source: "/mullybox", destination: `${mullyboxOrigin}/mullybox` },
+              { source: "/mullybox/:path*", destination: `${mullyboxOrigin}/mullybox/:path*` },
+            ]
+          : []),
       ],
     };
   },
