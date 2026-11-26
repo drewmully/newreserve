@@ -300,3 +300,32 @@ describe("historical consent time", () => {
     expect(pastConsentTime(new Date("bad"), now)).toBe("2026-10-05T11:59:00.000Z");
   });
 });
+
+describe("Mullybox 2.0 waitlist list", () => {
+  it("adds consented waitlist signups to the waitlist list, and only those", async () => {
+    const { buildStageInputs } = await import("@/lib/klaviyo/syncState");
+    const { syncSignupToKlaviyo } = await import("@/lib/klaviyo/syncSignup");
+    const { KLAVIYO_MULLYBOX_WAITLIST_LIST_ID } = await import("@/lib/klaviyo/config");
+    const listPath = `/api/lists/${KLAVIYO_MULLYBOX_WAITLIST_LIST_ID}/relationships/profiles`;
+    const { calls } = mockKlaviyo();
+    const wl = buildStageInputs("editorial_drop_list", "mb@example.com", { email: "mb@example.com", source: "mullybox-waitlist", mullyboxWaitlist: true, lastSubmissionConsent: true }).email;
+    expect((await syncSignupToKlaviyo(wl)).status).toBe("synced");
+    const adds = calls.filter((c) => c.path === listPath);
+    expect(adds).toHaveLength(1);
+    expect(adds[0].body).toEqual({ data: [{ type: "profile", id: "PROF1" }] });
+    expect(eventCalls(calls)[0].body.data.attributes.properties.source).toBe("mullybox-waitlist");
+
+    const other = mockKlaviyo();
+    const drop = buildStageInputs("editorial_drop_list", "d@example.com", { email: "d@example.com", source: "editorial-drop-bar", lastSubmissionConsent: true }).email;
+    await syncSignupToKlaviyo(drop);
+    expect(other.calls.filter((c) => c.path === listPath)).toHaveLength(0);
+  });
+
+  it("fails the stage for retry when the list add fails", async () => {
+    const { buildStageInputs } = await import("@/lib/klaviyo/syncState");
+    const { syncSignupToKlaviyo } = await import("@/lib/klaviyo/syncSignup");
+    mockKlaviyo((path) => (path.startsWith("/api/lists/") ? new Response("{}", { status: 400 }) : undefined));
+    const wl = buildStageInputs("editorial_drop_list", "mb@example.com", { email: "mb@example.com", source: "mullybox-waitlist", lastSubmissionConsent: true }).email;
+    expect((await syncSignupToKlaviyo(wl)).status).toBe("failed");
+  });
+});

@@ -18,6 +18,12 @@ export const KLAVIYO_REVISION = "2026-07-15";
  */
 export const KLAVIYO_SIGNUP_LIST_ID = "SFJgUB";
 
+/**
+ * "Mullybox 2.0 | Waitlist". Consented /mullybox waitlist signups are also
+ * added here so the launch email can target one list. No flow triggers on it.
+ */
+export const KLAVIYO_MULLYBOX_WAITLIST_LIST_ID = "W3ANSu";
+
 /** Klaviyo metric name for every on-site capture. */
 export const SIGNUP_METRIC = "Mully Site Signup";
 
