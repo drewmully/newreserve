@@ -64,6 +64,19 @@ describe("PDP initial selection", () => {
     expect(sel.Size).toBeUndefined();
   });
 
+  it("opens on a color that ships now when the first color is restocking", () => {
+    const product = {
+      ...sizeColorProduct,
+      variants: [
+        { id: "gid://shopify/ProductVariant/7", availableForSale: true, currentlyNotInStock: true, selectedOptions: [{ name: "Color", value: "Ember" }, { name: "Size", value: "M" }] },
+        { id: "gid://shopify/ProductVariant/8", availableForSale: true, currentlyNotInStock: false, selectedOptions: [{ name: "Color", value: "Black" }, { name: "Size", value: "L" }] },
+      ],
+      options: [{ name: "Color", values: ["Ember", "Black"] }, { name: "Size", values: ["M", "L"] }],
+    } as unknown as Parameters<typeof getPdpInitialSelection>[0];
+    expect(getPdpInitialSelection(product)).toEqual({ Color: "Black" });
+    expect(getPdpInitialSelection(product, { Color: "Ember" })).toEqual({ Color: "Ember" });
+  });
+
   it("keeps a size the link explicitly named", () => {
     const sel = getPdpInitialSelection(sizeColorProduct, { Color: "Navy", Size: "L" });
     expect(sel).toMatchObject({ Color: "Navy", Size: "L" });

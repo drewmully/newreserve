@@ -291,10 +291,18 @@ export function getPdpInitialSelection(
   product: VariantBearingProduct,
   preferredSelection: ProductVariantSelection = {}
 ): ProductVariantSelection {
-  const selection = getInitialVariantSelection(product, preferredSelection);
+  const variants = getProductVariants(product);
+  const hasPreference = Object.keys(preferredSelection).length > 0;
+  // With no color in the link, open on a color that ships now rather than
+  // a restocking one, when the product has both.
+  const shipsNow = hasPreference ? undefined : variants.find((v) => v.availableForSale && !v.currentlyNotInStock);
+  const seeded = shipsNow
+    ? withoutSizeOptions(getVariantSelection(shipsNow))
+    : preferredSelection;
+  const selection = getInitialVariantSelection(product, seeded);
   for (const option of getProductOptionGroups(product)) {
     if (!SIZE_OPTION_PATTERN.test(option.name) || option.values.length < 2) continue;
-    if (preferredSelection[option.name]) continue;
+    if (hasPreference && preferredSelection[option.name]) continue;
     delete selection[option.name];
   }
   return selection;
