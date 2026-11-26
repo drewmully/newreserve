@@ -147,10 +147,27 @@ function hash(s: string): number {
   return h;
 }
 
+const WARM_TOP = /long[ -]?sleeve|sweater|knit|quarter[ -]?zip|half[ -]?zip|hoodie|crew|fleece/i;
+
+/** Cold months (Nov through Feb, Eastern time) favor warm layers over short sleeves. */
+export function isColdSeason(now: Date = new Date()): boolean {
+  const month = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", month: "numeric" }).format(now));
+  return month >= 11 || month <= 2;
+}
+
+/** Seasonal nudge: short-sleeve tops sink and outer layers rise in winter. */
+export function seasonAdjustment(p: Pick<CartPickProduct, "name" | "category">, cold: boolean): number {
+  if (!cold) return 0;
+  if (p.category === "tops" && !WARM_TOP.test(p.name)) return -8;
+  if (p.category === "outerwear") return 2;
+  return 0;
+}
+
 export function scorePick(
   p: CartPickProduct,
   anchors: CartPickProduct[],
-  fatigue: PickFatigue
+  fatigue: PickFatigue,
+  cold = false
 ): number {
   const fit = anchors.length
     ? Math.max(...anchors.map((a) => COMPLEMENTS[a.category][p.category]))
@@ -163,7 +180,8 @@ export function scorePick(
     (p.featured ? 3 : 0) +
     // The cheaper piece gets the 15%, and a smaller second ticket is an easier yes.
     (p.price <= anchorTop ? 4 : 0) +
-    (p.price <= 130 ? 2 : 0) -
+    (p.price <= 130 ? 2 : 0) +
+    seasonAdjustment(p, cold) -
     Math.min(6, Math.floor(ignored / 2) * 2)
   );
 }
@@ -176,8 +194,9 @@ export function scorePick(
 export function selectCartPicks(
   catalog: CartPickProduct[],
   cartSlugs: string[],
-  opts: { fatigue?: PickFatigue; rotation?: number; count?: number; window?: number } = {}
+  opts: { fatigue?: PickFatigue; rotation?: number; count?: number; window?: number; now?: Date } = {}
 ): CartPickProduct[] {
+  const cold = isColdSeason(opts.now);
   const count = opts.count ?? 3;
   const windowSize = opts.window ?? 9;
   const fatigue = opts.fatigue ?? {};
@@ -187,7 +206,7 @@ export function selectCartPicks(
   if (!pool.length) return [];
 
   const ranked = pool
-    .map((p) => ({ p, s: scorePick(p, anchors, fatigue) }))
+    .map((p) => ({ p, s: scorePick(p, anchors, fatigue, cold) }))
     .sort((a, b) => b.s - a.s || hash(a.p.slug) - hash(b.p.slug))
     .map((x) => x.p);
 

@@ -30,7 +30,9 @@ export function BreadcrumbTrail({ productType, subcategory, brand }: Props) {
     crumbs.push({ label: productType, href: categoryPathForProductType(productType) ?? `/shop/collection/${slug}` });
   }
 
-  if (subcategory && subcategory.trim().length > 0) {
+  const sameAsType = !!subcategory && !!productType &&
+    subcategory.trim().toLowerCase().replace(/s$/, "") === productType.trim().toLowerCase().replace(/s$/, "");
+  if (subcategory && subcategory.trim().length > 0 && !sameAsType) {
     crumbs.push({ label: subcategory });
   } else if (crumbs.length === 1) {
     crumbs.push({ label: brand });
@@ -42,7 +44,7 @@ export function BreadcrumbTrail({ productType, subcategory, brand }: Props) {
         const isLast = i === crumbs.length - 1;
         return (
           <span key={`${c.label}-${i}`} className="flex items-center gap-2">
-            {c.href && !isLast ? (
+            {c.href && (!isLast || crumbs.length === 2) ? (
               <Link href={c.href} className="transition-colors hover:text-charcoal">
                 {c.label}
               </Link>

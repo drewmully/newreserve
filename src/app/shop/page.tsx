@@ -7,7 +7,7 @@ import { ShopSeasonalHeader } from "./components/ShopSeasonalHeader";
 import { ShopLanding } from "./components/ShopLanding";
 import { ShopFooter } from "./components/ShopFooter";
 import { SHOP_CATEGORIES } from "./shopCollections";
-import { getSeasonalTheme } from "./seasonalTheme";
+import { getSeasonalTheme, getShopPresentation } from "./seasonalTheme";
 import { getAllPublishedPosts } from "@/app/blog/posts";
 import { canonical } from "@/lib/seo";
 import type { HomeHeroProps } from "./components/ShopLanding";
@@ -38,6 +38,7 @@ export default async function ShopPage() {
  */
 export async function renderShopPage({ homeHero }: { homeHero?: HomeHeroProps } = {}) {
   const theme = getSeasonalTheme();
+  const presentation = getShopPresentation();
 
   // Fetch each category collection independently so one 404 doesn't blank
   // the whole landing.
@@ -74,13 +75,11 @@ export async function renderShopPage({ homeHero }: { homeHero?: HomeHeroProps } 
       }
     }
   });
-  const articleOrder = ["golf-quarter-zip-vs-hoodie", "best-golf-polos-2026-quiet-golf-rhone", "best-golf-belt-2026-braided-leather-stretch"];
+  // Newest editorial first (posts come back by publish_date desc), so the
+  // homepage journal tracks what the team is publishing now.
   const journalPosts = (await getAllPublishedPosts().catch(() => []))
-    .filter(p => ["Gear", "Travel", "Guides"].includes(p.category))
-    .sort((a, b) => {
-      const rank = (slug: string) => articleOrder.includes(slug) ? articleOrder.indexOf(slug) : 100;
-      return rank(a.slug) - rank(b.slug);
-    }).slice(0, 3)
+    .filter(p => !!p.image)
+    .slice(0, 3)
     .map(({slug, title, excerpt, image, imageAlt}) => ({slug, title, excerpt, image, imageAlt}));
 
   return (
@@ -92,6 +91,7 @@ export async function renderShopPage({ homeHero }: { homeHero?: HomeHeroProps } 
           editProducts={editProducts}
           productsByCategory={productsByCategory}
           theme={theme}
+          presentation={presentation}
           journalPosts={journalPosts}
           homeHero={homeHero}
         />

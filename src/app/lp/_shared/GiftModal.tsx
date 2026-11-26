@@ -152,7 +152,7 @@ export function GiftModal({
             onChange={(e) => setMessage(e.target.value.slice(0, MESSAGE_MAX))}
             rows={3}
             maxLength={MESSAGE_MAX}
-            placeholder="Happy birthday — dialed in for the season."
+            placeholder="Happy birthday. Dialed in for the season."
             className="w-full rounded-md border border-forest/25 bg-white px-4 py-3 text-base text-charcoal placeholder:text-charcoal/40 focus:outline-none focus:ring-2 focus:ring-forest/40 resize-none"
           />
           <div className="mt-1 text-right text-[11px] text-charcoal/45">

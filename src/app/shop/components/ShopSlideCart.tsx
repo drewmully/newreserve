@@ -50,8 +50,11 @@ export function ShopSlideCart({ accent }: { accent: string }) {
     } else {
       document.body.style.overflow = "";
     }
+    // Hides the closed chat launcher so it never sits on Checkout (globals.css).
+    document.body.dataset.cartOpen = String(cartOpen);
     return () => {
       document.body.style.overflow = "";
+      delete document.body.dataset.cartOpen;
     };
   }, [cartOpen]);
 

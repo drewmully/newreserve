@@ -6,11 +6,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import type { ShopifyProduct } from "@/lib/shopify";
 import { shopProductPhoto, shopProductLabel } from "@/lib/shopProductPhotos";
-import { selectShopEdit } from "@/lib/shopMerchandising";
+import { selectShopEdit, SHOP_EDIT_LIMIT } from "@/lib/shopMerchandising";
 import { useMembership } from "@/app/context/MembershipContext";
 import { money, variantLabel } from "@/lib/shopOutfit";
 import { GIFT_TIERS } from "../shopCollections";
-import type { SeasonalTheme } from "../seasonalTheme";
+import { getShopPresentation, type SeasonalTheme, type ShopSeasonPresentation } from "../seasonalTheme";
 import { ScrollToTop } from "./ScrollToTop";
 import { ShopOutfitBuilder } from "./ShopOutfitBuilder";
 import { ShopNewsletter } from "./ShopNewsletter";
@@ -48,8 +48,10 @@ export interface HomeHeroProps {
   reservePrice: string | null;
 }
 
-export function ShopLanding({ products, editProducts = products, productsByCategory, theme, journalPosts = [], homeHero }: {
+export function ShopLanding({ products, editProducts = products, productsByCategory, theme, presentation = getShopPresentation(), journalPosts = [], homeHero }: {
   products: ShopifyProduct[];
+  /** Seasonal hero, bar and copy. Computed on the server so hydration matches. */
+  presentation?: ShopSeasonPresentation;
   editProducts?: ShopifyProduct[];
   productsByCategory: Record<string, ShopifyProduct[]>;
   theme: SeasonalTheme;
@@ -67,9 +69,13 @@ export function ShopLanding({ products, editProducts = products, productsByCateg
   const dialog = useRef<HTMLDialogElement>(null);
   const heroImage = useRef<HTMLImageElement>(null);
   const quickTrigger = useRef<HTMLElement | null>(null);
-  const edit = useMemo(() => selectShopEdit(editProducts, editProducts.length), [editProducts]);
-  const gear = ["winston-golf-tour-towel", "technically-golf-tiger-stripe-needlepoint-belt", "duckhead-stretch-belt", "leon-weekender-duffel"]
-    .map(slug => products.find(p => p.slug === slug)).filter((p): p is ShopifyProduct => !!p);
+  const edit = useMemo(() => selectShopEdit(editProducts, SHOP_EDIT_LIMIT), [editProducts]);
+  // Giftable gear for the holiday window; anything sold out drops out.
+  const gear = ["technically-golf-tiger-stripe-needlepoint-belt", "sloat-organic-cotton-six-panel-hat", "jolly-golf-purist-organizer", "leon-weekender-duffel", "winston-golf-tour-towel"]
+    .map(slug => products.find(p => p.slug === slug))
+    .filter((p): p is ShopifyProduct => !!p && p.variants.some(v => v.availableForSale))
+    .slice(0, 4);
+  const editTitle = `The ${presentation.editName.charAt(0).toUpperCase() + presentation.editName.slice(1)} Edit`;
   useEffect(() => {
     function update() {
       const outfit = document.getElementById("outfit")?.getBoundingClientRect();
@@ -116,49 +122,36 @@ export function ShopLanding({ products, editProducts = products, productsByCateg
     } finally { setBusy(false); }
   }
   const activeVariant = quick?.variants.find(v => v.id === variant);
+  const heroSection = (
+        <section className="shop-hero" id="hero" aria-labelledby="shopHeroTitle">
+          <picture>
+            <source media="(max-width: 600px) and (orientation: portrait)" srcSet={presentation.hero.mobile} width={600} height={800} />
+            <img ref={heroImage} className="shop-hero__image" src={presentation.hero.desktop} alt={presentation.hero.alt} width={1920} height={800} fetchPriority="high" loading="eager" />
+          </picture>
+          <div className="wrap shop-hero__in">
+            <div className="shop-hero__copy">
+              <h1 id="shopHeroTitle">{editTitle}</h1>
+              <a className="shop-hero__cta" href="#edit" aria-label="Shop the edit" data-hero-cta="control_shop">[ shop ]</a>
+            </div>
+          </div>
+          <ShopHeroHotspots imageRef={heroImage} hotspot={presentation.hero.hotspot} />
+        </section>
+  );
   return (
     <>
       <ScrollToTop />
       <div className="shop-redesign shop-first" style={{ "--accent": theme.accent, "--accent-d": theme.accentDark } as CSSProperties}>
-        {homeHero ? <HomeHeroExperiment season={theme.season} reservePrice={homeHero.reservePrice}>
-        <section className="shop-hero" id="hero" aria-labelledby="shopHeroTitle">
-          <picture>
-            <source media="(max-width: 600px) and (orientation: portrait)" srcSet="/shop-redesign/lifestyle/fall-fairway-vest-mobile.webp" width={600} height={800} />
-            <img ref={heroImage} className="shop-hero__image" src="/shop-redesign/lifestyle/fall-fairway-vest-desktop.webp" alt="AI-styled editorial scene of a distant golfer wearing a brown quilted vest over a striped polo with tailored khakis on a foggy autumn fairway" width={1920} height={800} fetchPriority="high" loading="eager" />
-          </picture>
-          <div className="wrap shop-hero__in">
-            <div className="shop-hero__copy">
-              <h1 id="shopHeroTitle">The {theme.season.charAt(0).toUpperCase() + theme.season.slice(1)} Edit</h1>
-              <a className="shop-hero__cta" href="#edit" aria-label="Shop the edit" data-hero-cta="control_shop">[ shop ]</a>
-            </div>
-          </div>
-          <ShopHeroHotspots imageRef={heroImage} />
-        </section>
-                </HomeHeroExperiment> : <>
-        <section className="shop-hero" id="hero" aria-labelledby="shopHeroTitle">
-          <picture>
-            <source media="(max-width: 600px) and (orientation: portrait)" srcSet="/shop-redesign/lifestyle/fall-fairway-vest-mobile.webp" width={600} height={800} />
-            <img ref={heroImage} className="shop-hero__image" src="/shop-redesign/lifestyle/fall-fairway-vest-desktop.webp" alt="AI-styled editorial scene of a distant golfer wearing a brown quilted vest over a striped polo with tailored khakis on a foggy autumn fairway" width={1920} height={800} fetchPriority="high" loading="eager" />
-          </picture>
-          <div className="wrap shop-hero__in">
-            <div className="shop-hero__copy">
-              <h1 id="shopHeroTitle">The {theme.season.charAt(0).toUpperCase() + theme.season.slice(1)} Edit</h1>
-              <a className="shop-hero__cta" href="#edit" aria-label="Shop the edit" data-hero-cta="control_shop">[ shop ]</a>
-            </div>
-          </div>
-          <ShopHeroHotspots imageRef={heroImage} />
-        </section>
-                </>}
-        <div className="shop-colorway-strip" aria-hidden="true" />
+        {homeHero ? <HomeHeroExperiment season={presentation.editName} reservePrice={homeHero.reservePrice}>{heroSection}</HomeHeroExperiment> : heroSection}
+        <div className="shop-colorway-strip" aria-hidden="true" style={{ background: presentation.colorwayStrip }} />
         <section className="sec" id="edit">
           <div className="wrap">
-            <ShopEditRail count={edit.length} season={theme.season}>
+            <ShopEditRail count={edit.length} season={presentation.editName}>
               {edit.map(p => <ProductCard key={p.slug} product={p} onQuick={openQuick} />)}
             </ShopEditRail>
             {!edit.length && <p>New pieces are on their way. Please check back soon.</p>}
           </div>
         </section>
-        <ShopOutfitBuilder products={products} byCategory={productsByCategory} />
+        <ShopOutfitBuilder products={products} byCategory={productsByCategory} heading={presentation.outfitHeading} />
         {gear.length > 0 && <section className="sec shop-gear" id="seasonal-story">
           <div className="wrap">
             <div className="sechead">

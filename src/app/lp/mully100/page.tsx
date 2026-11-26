@@ -50,7 +50,7 @@ export default function Mully100Page() {
             The Mully 100 &nbsp;·&nbsp; Affiliate Feed
           </div>
           <h1 className="font-serif text-3xl md:text-5xl leading-[1.08] text-charcoal mb-5">
-            One hundred picks{" "}
+            Golf picks{" "}
             <span className="italic text-forest">worth</span> the click.
           </h1>
           <p className="text-[14.5px] md:text-[15px] leading-[1.7] text-charcoal/65 max-w-md mx-auto">

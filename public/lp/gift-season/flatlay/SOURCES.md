@@ -6,3 +6,4 @@ Every file is a cutout of live Shopify product photography. The white background
 - polo.webp: Quiet Golf Remy Polo, https://cdn.shopify.com/s/files/1/0561/0530/4256/files/mully-fall-2026-16.jpg?v=1790962847
 - hat.webp: Greyson Gothic "G" Dad Hat, https://cdn.shopify.com/s/files/1/0561/0530/4256/files/MG23A25_100_1_4858.webp?v=1781539302
 - belt.webp: Will Leather Saddle Belt, https://cdn.shopify.com/s/files/1/0561/0530/4256/files/60078_SADDLE_BELT_TAN_001_61d8e0d1-3437-47b3-b85c-79c3836fbe2b.jpg?v=1789573017
+- vest.webp (winter swap for polo.webp): Rhone Voyage Down Vest, Black, live Shopify packshot. White background removed with a luminance matte (the packshot is a black garment on pure white), trimmed and resized to 800px max. polo.webp is kept for spring and summer.

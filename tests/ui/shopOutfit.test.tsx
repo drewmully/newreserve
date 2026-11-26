@@ -26,16 +26,16 @@ function chooseSizes(){
 }
 describe("guided outfit flow",()=>{
   it("starts with one complete look, one CTA and no Reserve pitch",()=>{
-    render(<ShopOutfitBuilder products={products} byCategory={byCategory}/>);
+    render(<ShopOutfitBuilder products={products} byCategory={byCategory} heading="Built for the frost delay."/>);
     expect(screen.getByRole("button",{name:"Choose my sizes →"})).toBeEnabled();
     expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
     expect(screen.queryByRole("radio")).not.toBeInTheDocument();
     expect(screen.queryByText(/Subscribe & save/)).not.toBeInTheDocument();
-    expect(screen.getByRole("heading",{name:"Your fall outfit, for less."})).toBeInTheDocument();
+    expect(screen.getByRole("heading",{name:"Built for the frost delay."})).toBeInTheDocument();
     expect(document.querySelector(".guided-total")).toBeNull();
     expect([...document.querySelectorAll(".guided-piece-price")].map(p=>p.textContent)).toEqual(["$114","$138","$128"]);
-    expect(OUTFIT_SLOTS[2].slugs[0]).toBe("duckhead-fremont-sport-performance-quilted-vest-brandy-brown");
-    expect(screen.getByText("15% off one piece with BOGO15. Applied in your bag.")).toBeInTheDocument();
+    expect(OUTFIT_SLOTS[2].slugs[0]).toBe("rhone-voyage-down-vest");
+    expect(screen.getByText("Buy 2, take 15% off one. Applied in your bag.")).toBeInTheDocument();
   });
   it("requires explicit sizes, shares top/layer size, then sends three exact variants",()=>{
     render(<ShopOutfitBuilder products={products} byCategory={byCategory}/>);

@@ -7,7 +7,8 @@ import type { ShopifyProduct } from "@/lib/shopify";
 import { trackEvent } from "@/lib/tracking";
 import { useMembership } from "../../context/MembershipContext";
 import {
-  getInitialVariantSelection,
+  getPdpInitialSelection,
+  SIZE_OPTION_PATTERN,
   resolveVariantBySelection,
   applyVariantSelection,
   getDefaultProductVariant,
@@ -24,6 +25,7 @@ import { ShopProductCard } from "./ShopProductCard";
 import { getSizeGuide } from "@/lib/sizeCharts";
 import { SizeFitChart } from "./SizeFitChart";
 import { BreadcrumbTrail } from "./pdp/BreadcrumbTrail";
+import { categoryPathForProductType } from "@/lib/shopCategoryPages";
 import { ProofChip } from "./pdp/ProofChip";
 import { PromoPill } from "./pdp/PromoPill";
 import { PdpVariantGrid } from "./pdp/PdpVariantGrid";
@@ -80,7 +82,7 @@ export function ShopPDPClient({
   // Evaluated on the first shop PDP view, sticky per anonymous_id.
   const completeLookVariant = useCompleteLookVariant(true, forcedCompleteLookVariant);
   const [selection, setSelection] = useState<ProductVariantSelection>(() =>
-    getInitialVariantSelection(product, initialSelection)
+    getPdpInitialSelection(product, initialSelection)
   );
   const [added, setAdded] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -142,6 +144,9 @@ export function ShopPDPClient({
     getProductVariants(product).every((v) => v.availableForSale === false);
   const currentVariantUnavailable = displayVariant?.availableForSale === false;
   const unavailable = !selectedVariant || allVariantsSoldOut || currentVariantUnavailable;
+  // Size is never preselected; the CTA asks for it instead of reading "Unavailable".
+  const missingChoice = selectedVariant || allVariantsSoldOut ? undefined
+    : (product.options ?? []).find((o) => SIZE_OPTION_PATTERN.test(o.name) && o.values.length > 1 && !selection[o.name])?.name;
   const sizeKey = Object.keys(selection).find((k) => /^size$/i.test(k));
   const sizeSelected = sizeKey ? selection[sizeKey] : undefined;
 
@@ -288,6 +293,7 @@ export function ShopPDPClient({
               </div>
             )}
             {productHasVariantChoices ? (
+              <div id="pdp-options">
               <PdpVariantGrid
                 product={product}
                 selection={selection}
@@ -296,6 +302,7 @@ export function ShopPDPClient({
                 }
                 singleColorFallback="Standard"
               />
+              </div>
             ) : sizeGuide ? (
               // Fallback: product should carry sizes but variants aren't wired.
               <div className="space-y-6">
@@ -348,7 +355,14 @@ export function ShopPDPClient({
           <BuyBoxAction
             onAddToCart={handleAdd}
             added={added}
-            isUnavailable={unavailable}
+            isUnavailable={unavailable && !missingChoice}
+            missingChoice={missingChoice}
+            onRequestChoice={() => {
+              const grid = document.getElementById("pdp-options");
+              grid?.scrollIntoView({ block: "center", behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ? "auto" : "smooth" });
+              const group = Array.from(grid?.querySelectorAll<HTMLElement>("[data-option-group]") ?? []).find((el) => el.dataset.optionGroup === missingChoice);
+              (group?.querySelector<HTMLButtonElement>("button:not(:disabled)") ?? grid?.querySelector<HTMLButtonElement>("button:not(:disabled)"))?.focus({ preventScroll: true });
+            }}
             isPreorder={selectedVariant?.currentlyNotInStock}
             busy={adding}
             preOrderEtaWeeks={product.preOrderEtaWeeks}
@@ -379,7 +393,7 @@ export function ShopPDPClient({
                 ? { k: "Restocking", v: <>Est. ships <EstShipDate weeks={product.preOrderEtaWeeks} /></> }
                 : { k: "Mully Fulfillment", v: "Shipping at checkout" },
               { k: "Easy Returns", v: "30 days from delivery, unworn with tags" },
-              { k: "Real Support", v: "Real people" },
+              { k: "Questions", v: "info@mymully.com" },
             ].map((item, i) => (
               <div
                 key={item.k}
@@ -426,10 +440,10 @@ export function ShopPDPClient({
               <p className="mt-8 text-[10px] font-mono uppercase tracking-[0.24em] text-charcoal/40">
                 More from{" "}
                 <Link
-                  href={`/shop/collection/shop-all`}
+                  href={categoryPathForProductType(product.collection) ?? `/shop/collection/shop-all`}
                   className="underline underline-offset-4 hover:text-charcoal"
                 >
-                  Shop All
+                  {categoryPathForProductType(product.collection) ? product.collection : "Shop All"}
                 </Link>
               </p>
             </div>

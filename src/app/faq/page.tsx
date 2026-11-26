@@ -2,13 +2,17 @@ import Link from "next/link";
 import { ShopPageShell } from "../shop/components/ShopPageShell";
 import { canonical } from "@/lib/seo";
 
-export const metadata = { alternates: canonical("/faq") };
+export const metadata = {
+  title: "FAQ | Mully",
+  description: "Answers on shopping Mully, sizing, the Buy 2, take 15% off one offer, Mully Reserve, shipping, returns and your account.",
+  alternates: canonical("/faq"),
+};
 
 const sections = [
   { heading: "Shopping", items: [
     ["Do I need a membership to shop?", "No. Shop individual pieces or build an outfit without joining Mully Reserve."],
     ["How does Build an outfit work?", "Choose a top, bottom, and layer, then select your sizes. At the final step, buy available pieces once or choose Mully Reserve. Reserve purchases the subscription box and saves your selections as first-box instructions."],
-    ["How does BOGO15 work?", "Buy two or more eligible pieces and get 15% off one lowest-priced eligible item. It is not 15% off the whole outfit. Shopify confirms the discount and final total at checkout."],
+    ["How does Buy 2, take 15% off one work?", "Buy two or more eligible pieces and get 15% off the lowest-priced eligible item. It is not 15% off the whole outfit. Shopify confirms the discount and final total at checkout."],
     ["Where can I find sizing information?", "Look for the size guide in the outfit builder or on the product page. Check the selected brand and item, since sizing can vary."],
   ]},
   { heading: "Mully Reserve", items: [

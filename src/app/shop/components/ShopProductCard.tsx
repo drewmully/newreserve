@@ -48,7 +48,7 @@ export function ShopProductCard({
   const cover = (swatch ? swatch.fit : product.cardImageFit) === "cover";
   const fullBleed = cover && isFullBleedProduct(product.slug);
   const href = variantId
-    ? `/shop/${product.slug}?variant=${encodeURIComponent(variantId)}`
+    ? `/shop/${product.slug}?variant=${encodeURIComponent(variantId)}&pick=color`
     : `/shop/${product.slug}`;
   const colorVariants = color
     ? product.variants.filter(v => v.selectedOptions?.some(o => /^colou?r$/i.test(o.name) && o.value === color))

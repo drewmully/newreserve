@@ -793,7 +793,7 @@ function StepCategories({
         What do you reach for most?
       </h2>
       <p className="mb-6 text-sm text-charcoal/65">
-        Pick a few — we'll weight your edit accordingly.
+        Pick a few and we'll weight your edit accordingly.
       </p>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {CATEGORY_CARDS.map((c) => {
@@ -840,7 +840,7 @@ function StepFit({
         How do you like your fit?
       </h2>
       <p className="mb-6 text-sm text-charcoal/65">
-        Sizing's confirmed after checkout — this just sets the baseline.
+        Sizing's confirmed after checkout. This just sets the baseline.
       </p>
       <div className="grid gap-3">
         {FIT_CARDS.map((f) => (

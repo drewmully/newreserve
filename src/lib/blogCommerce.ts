@@ -229,11 +229,11 @@ export const END_COPY: Record<Exclude<EndIntent, "shop">, CtaCopy> = {
     href: "/subscription",
   },
   gift: {
-    eyebrow: "Give Mully Reserve",
-    heading: "A stylist-picked outfit for the golfer on your list.",
-    body: "They confirm their own sizing before anything ships, so nothing is a guess.",
-    cta: "Send Reserve as a gift",
-    href: "/lp/gift",
+    eyebrow: "Gift a Season",
+    heading: "A stylist-picked season for the golfer on your list.",
+    body: "Choose one, two or four seasons. You pay once and it never renews, and he can update his sizes before each season.",
+    cta: "Give a season",
+    href: "/lp/gift-season",
   },
 };
 

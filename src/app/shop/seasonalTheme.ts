@@ -159,18 +159,85 @@ const SUMMER_THEME: SeasonalTheme = {
   secondary: "#1F4D38",
 };
 
+export interface SeasonalHero {
+  desktop: string;
+  mobile: string;
+  alt: string;
+  /** Torso anchor (0..1 of natural image) for the "Shop the look" hotspot. */
+  hotspot: { desktop: { x: number; y: number }; mobile: { x: number; y: number } };
+}
+
+export interface ShopSeasonPresentation {
+  /** Word used in "The {Edit} Edit" headings, e.g. "holiday" or "winter". */
+  editName: string;
+  hero: SeasonalHero;
+  /** Announcement bar background. */
+  barColor: string;
+  /** Thin colorway strip under the hero (CSS gradient). */
+  colorwayStrip: string;
+  /** Outfit builder heading, e.g. "Built for the frost delay." */
+  outfitHeading: string;
+}
+
+const FALL_HERO: SeasonalHero = {
+  desktop: "/shop-redesign/lifestyle/fall-fairway-vest-desktop.webp",
+  mobile: "/shop-redesign/lifestyle/fall-fairway-vest-mobile.webp",
+  alt: "AI-styled editorial scene of a distant golfer wearing a brown quilted vest over a striped polo with tailored khakis on a foggy autumn fairway",
+  hotspot: { desktop: { x: 0.695, y: 0.625 }, mobile: { x: 0.659, y: 0.625 } },
+};
+
+const WINTER_HERO: SeasonalHero = {
+  desktop: "/shop-redesign/lifestyle/winter-frost-vest-desktop.webp",
+  mobile: "/shop-redesign/lifestyle/winter-frost-vest-mobile.webp",
+  alt: "AI-styled editorial scene of a distant golfer wearing a black quilted down vest over a white long-sleeve polo and stone trousers on a frosted, foggy winter fairway",
+  hotspot: { desktop: { x: 0.699, y: 0.612 }, mobile: { x: 0.66, y: 0.612 } },
+};
+
+const FALL_STRIP = "linear-gradient(90deg,#ede6d6 0%,#ede6d6 16%,#b08558 30%,#b08558 35%,#5b613f 49%,#5b613f 59%,#9b8b7a 74%,#4a3528 92%,#4a3528 100%)";
+// Frost, slate, evergreen, cranberry, espresso: winter layers keyed to the catalog.
+const WINTER_STRIP = "linear-gradient(90deg,#e9ecec 0%,#e9ecec 16%,#8fa3ad 30%,#8fa3ad 35%,#1f3a2e 49%,#1f3a2e 59%,#6e1f2a 74%,#4a3528 92%,#4a3528 100%)";
+
+const PRESENTATION: Record<"fall" | "holiday" | "winter" | "spring" | "summer", ShopSeasonPresentation> = {
+  fall: { editName: "fall", hero: FALL_HERO, barColor: "#5B613F", colorwayStrip: FALL_STRIP, outfitHeading: "Your fall outfit, for less." },
+  holiday: { editName: "holiday", hero: WINTER_HERO, barColor: "#1F3A2E", colorwayStrip: WINTER_STRIP, outfitHeading: "Built for the frost delay." },
+  winter: { editName: "winter", hero: WINTER_HERO, barColor: "#1F3A2E", colorwayStrip: WINTER_STRIP, outfitHeading: "Built for the frost delay." },
+  spring: { editName: "spring", hero: FALL_HERO, barColor: "#5B613F", colorwayStrip: FALL_STRIP, outfitHeading: "Your spring outfit, for less." },
+  summer: { editName: "summer", hero: FALL_HERO, barColor: "#5B613F", colorwayStrip: FALL_STRIP, outfitHeading: "Your summer outfit, for less." },
+};
+
+export type ShopPhase = keyof typeof PRESENTATION;
+const PHASES = Object.keys(PRESENTATION) as ShopPhase[];
+
 /**
- * Pick the theme for a given Date. Uses month boundaries (fall = Sep-Nov,
- * winter = Dec-Feb, spring = Mar-May, summer = Jun-Aug) so the swap
- * happens on the first of the month rather than the solstice, which is
- * easier to explain and QA.
+ * Pick the shop presentation phase. Holiday runs Nov 26 through Dec 25,
+ * winter Dec 26 through February. `NEXT_PUBLIC_SHOP_SEASON` (any phase key) overrides
+ * the calendar for QA or an early switch. Dates use America/New_York.
+ */
+export function getShopPhase(now: Date = new Date(), override = process.env.NEXT_PUBLIC_SHOP_SEASON): ShopPhase {
+  const forced = override?.trim().toLowerCase();
+  if (forced && (PHASES as string[]).includes(forced)) return forced as ShopPhase;
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", month: "numeric", day: "numeric" }).formatToParts(now);
+  const month = Number(parts.find(p => p.type === "month")?.value) - 1;
+  const day = Number(parts.find(p => p.type === "day")?.value);
+  if ((month === 10 && day >= 26) || (month === 11 && day <= 25)) return "holiday";
+  if (month === 11 || month <= 1) return "winter";
+  if (month >= 8 && month <= 10) return "fall";
+  return month >= 2 && month <= 4 ? "spring" : "summer";
+}
+
+export function getShopPresentation(now: Date = new Date(), override?: string): ShopSeasonPresentation {
+  return PRESENTATION[getShopPhase(now, override ?? process.env.NEXT_PUBLIC_SHOP_SEASON)];
+}
+
+/**
+ * Pick the theme for a given Date. Season follows the shop phase (holiday
+ * counts as winter for palette purposes). The shop accent stays espresso
+ * year round; the seasonal change lives in the hero, bar, strip and copy.
  */
 export function getSeasonalTheme(now: Date = new Date()): SeasonalTheme {
-  const month = now.getMonth(); // 0..11
-  const seasonal = month >= 8 && month <= 10 ? FALL_THEME
-    : month === 11 || month <= 1 ? WINTER_THEME
-    : month >= 2 && month <= 4 ? SPRING_THEME : SUMMER_THEME;
-  // Shop identity stays espresso; seasonal copy and merchandise can change.
+  const phase = getShopPhase(now);
+  const seasonal = phase === "holiday" || phase === "winter" ? WINTER_THEME
+    : phase === "fall" ? FALL_THEME : phase === "spring" ? SPRING_THEME : SUMMER_THEME;
   return { ...seasonal, accent: "#4A3528", accentDark: "#34251C",
     headline: FALL_THEME.headline, heroImage: FALL_THEME.heroImage };
 }

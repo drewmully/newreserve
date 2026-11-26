@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ShopifyProduct } from "@/lib/shopify";
 import { projectHeroPoint, SHOP_HERO_HOTSPOTS } from "@/lib/shopHeroHotspots";
-import { getSeasonalTheme } from "@/app/shop/seasonalTheme";
+import { getSeasonalTheme, getShopPresentation } from "@/app/shop/seasonalTheme";
 
 const cart = vi.hoisted(() => ({ add: vi.fn() }));
 vi.mock("@/app/context/MembershipContext", () => ({ useMembership: () => ({ addItemsToCart: cart.add }) }));
@@ -21,7 +21,7 @@ const products = SHOP_HERO_HOTSPOTS.map((hotspot, i) => ({
   ],
 })) as ShopifyProduct[];
 const mount = (catalog = products) => {
-  const view=render(<ShopLanding products={catalog} productsByCategory={{}} theme={getSeasonalTheme(new Date(2026, 8, 30))} />);
+  const view=render(<ShopLanding products={catalog} productsByCategory={{}} theme={getSeasonalTheme(new Date(2026, 8, 30))} presentation={getShopPresentation(new Date(2026, 8, 30), "")} />);
   return view;
 };
 

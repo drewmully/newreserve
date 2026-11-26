@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { ShopifyProduct } from "@/lib/shopify";
-import { getSeasonalTheme } from "@/app/shop/seasonalTheme";
+import { getSeasonalTheme, getShopPresentation } from "@/app/shop/seasonalTheme";
 vi.mock("@/app/context/MembershipContext", () => ({ useMembership: () => ({ addItemsToCart: vi.fn() }) }));
 vi.mock("@/app/shop/components/ScrollToTop", () => ({ ScrollToTop: () => null }));
 vi.mock("@/app/shop/components/ShopOutfitBuilder", () => ({ ShopOutfitBuilder: () => <section id="outfit" /> }));
@@ -18,8 +18,17 @@ const product={
 } as ShopifyProduct;
 
 describe("quiet shop visual contract",()=>{
+  it("swaps to the holiday edit with the frost hero from Nov 26",()=>{
+    const when=new Date("2026-12-01T17:00:00Z");
+    const {container}=render(<ShopLanding products={[product]} productsByCategory={{}} theme={getSeasonalTheme(when)} presentation={getShopPresentation(when,"")} />);
+    const hero=container.querySelector("#hero")!;
+    expect(hero.textContent?.trim()).toBe("The Holiday Edit[ shop ]");
+    expect(hero.querySelector("img")).toHaveAttribute("src","/shop-redesign/lifestyle/winter-frost-vest-desktop.webp");
+    expect(hero.querySelector("source")).toHaveAttribute("srcset","/shop-redesign/lifestyle/winter-frost-vest-mobile.webp");
+    expect(hero.querySelector("img")?.getAttribute("alt")).toMatch(/winter fairway/);
+  });
   it("keeps the hero to one short seasonal headline and one action",()=>{
-    const {container}=render(<ShopLanding products={[product]} productsByCategory={{}} theme={getSeasonalTheme(new Date(2026,8,30))} />);
+    const {container}=render(<ShopLanding products={[product]} productsByCategory={{}} theme={getSeasonalTheme(new Date(2026,8,30))} presentation={getShopPresentation(new Date(2026,8,30),"")} />);
     const hero=container.querySelector("#hero")!;
     expect(hero.textContent?.trim()).toBe("The Fall Edit[ shop ]");
     expect(hero.querySelectorAll("a")).toHaveLength(1);

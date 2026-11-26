@@ -62,6 +62,9 @@ const nextConfig: NextConfig = {
       // Early slugs shared with other teams.
       { source: "/shop/gifts/luxury", destination: "/shop/gifts/150-to-250", permanent: true },
       { source: "/shop/gifts/100-to-200", destination: "/shop/gifts/150-to-250", permanent: true },
+      // The recurring gift page duplicated (and contradicted) prepaid Gift a
+      // Season. Temporary so it can be reopened; page code kept.
+      { source: "/lp/gift", destination: "/lp/gift-season", permanent: false },
       // Swing Box pre-sale shut off 2026-11-19 (operating-plan cut). Temporary so it can be reopened; page code kept.
       { source: "/swingbox", destination: "/shop", permanent: false },
       { source: "/blogs/news", destination: "/blog", permanent: true },

@@ -1,7 +1,18 @@
 "use client";
 
+import { GIFT_ORDER_BY, isPastGiftOrderBy } from "@/lib/giftGuideDates";
+import { getShopPresentation } from "../seasonalTheme";
+
+/** Single customer-facing name for the automatic Shopify offer. */
+export const SHOP_OFFER_LABEL = "Buy 2, take 15% off one";
+
+/** "Dec 14" from the gift guide's single order-by date. */
+function orderByShort(): string {
+  return new Date(`${GIFT_ORDER_BY}T12:00:00-05:00`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "America/New_York" });
+}
+
 /**
- * The muted fall-olive strip above the header on every shop page. Three key
+ * The seasonal strip above the header on every shop page. Three key
  * shopping proofs separated by faint dividers, matching the pattern
  * Huckberry (and every serious editorial commerce site) runs.
  *
@@ -9,24 +20,32 @@
  */
 export function ShopAnnouncementBar({
   returnsLabel = "Easy Returns",
+  now,
 }: {
   /** Optional override for the returns promise. Defaults to the sitewide copy. */
   returnsLabel?: string;
+  /** Clock override for tests. */
+  now?: Date;
 } = {}) {
+  const presentation = getShopPresentation(now);
+  // Until the Christmas order-by date, the shipping slot carries the cutoff.
+  const holidayCutoff = presentation.editName === "holiday" && !isPastGiftOrderBy(now);
   const items = [
-    { icon: TruckIcon, text: "Ships from Mully Fulfillment" },
-    { icon: TagIcon, text: "Buy one, get 15% off the second" },
-    { icon: ReturnIcon, text: returnsLabel },
+    holidayCutoff
+      ? { icon: TruckIcon, text: `Order by ${orderByShort()} for Christmas`, short: `Order by ${orderByShort()}` }
+      : { icon: TruckIcon, text: "Ships from Mully Fulfillment", short: "Mully Fulfillment" },
+    { icon: TagIcon, text: SHOP_OFFER_LABEL, short: "Buy 2, 15% off one" },
+    { icon: ReturnIcon, text: returnsLabel, short: returnsLabel },
   ];
 
   return (
-    <div data-testid="shop-announcement" className="fixed left-0 right-0 top-0 z-50 bg-[#5B613F] text-[#FAF9F6]">
+    <div data-testid="shop-announcement" className="fixed left-0 right-0 top-0 z-50 text-[#FAF9F6]" style={{ backgroundColor: presentation.barColor }} data-season={presentation.editName}>
       <div className="mx-auto flex h-8 max-w-7xl items-center justify-center gap-3 whitespace-nowrap px-3 font-sans text-[10px] font-medium tracking-[0.01em] sm:gap-6 sm:text-[11px] md:gap-10">
         {items.map((item, i) => (
           <div key={i} className="flex items-center gap-1.5 sm:gap-2">
             <item.icon />
-            <span className="hidden sm:inline">{item.text}</span>
-            <span className="sm:hidden">{shortLabel(item.text)}</span>
+            <span className="hidden sm:inline" suppressHydrationWarning>{item.text}</span>
+            <span className="sm:hidden" suppressHydrationWarning>{item.short}</span>
             {i < items.length - 1 && (
               <span className="ml-3 hidden text-white/25 sm:inline sm:ml-6 md:ml-10">
                 |
@@ -37,16 +56,6 @@ export function ShopAnnouncementBar({
       </div>
     </div>
   );
-}
-
-/**
- * Compact mobile labels. Screens under 640px only fit the essentials, so
- * strip everything but the promise itself.
- */
-function shortLabel(full: string): string {
-  if (full.startsWith("Ships from")) return "Mully Fulfillment";
-  if (full.startsWith("Buy one")) return "BOGO 15%";
-  return full;
 }
 
 function TruckIcon() {

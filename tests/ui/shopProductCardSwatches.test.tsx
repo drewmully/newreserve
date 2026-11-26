@@ -9,8 +9,8 @@ import { ShopProductCard } from "../../src/app/shop/components/ShopProductCard";
 const product = {
   slug: "chino", name: "Chino", brand: "Duck Head", price: 118, reservePrice: 100, images: ["k.jpg", "n.jpg"],
   variants: [
-    { id: "gid://shopify/ProductVariant/1", selectedOptions: [{ name: "Color", value: "Khaki" }] },
-    { id: "gid://shopify/ProductVariant/2", selectedOptions: [{ name: "Color", value: "Navy" }], currentlyNotInStock: true },
+    { id: "gid://shopify/ProductVariant/1", availableForSale: true, selectedOptions: [{ name: "Color", value: "Khaki" }] },
+    { id: "gid://shopify/ProductVariant/2", availableForSale: true, selectedOptions: [{ name: "Color", value: "Navy" }], currentlyNotInStock: true },
   ],
   displayKey: "chino", cardColor: "Khaki", cardImage: "k.jpg",
   swatches: [
@@ -23,13 +23,13 @@ describe("ShopProductCard swatches", () => {
   it("swaps photo, color, link and preorder note when a swatch is chosen", () => {
     const { container } = render(<ShopProductCard product={product} />);
     expect(container.querySelector("img")?.getAttribute("src")).toBe("k.jpg");
-    expect(screen.queryByText(/Preorder/)).toBeNull();
+    expect(screen.queryByText(/Restocking/)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Navy" }));
     expect(container.querySelector("img")?.getAttribute("src")).toBe("n.jpg");
     expect(screen.getByText("Navy")).toBeTruthy();
-    expect(screen.getByText(/Preorder/)).toBeTruthy();
+    expect(screen.getByText(/Restocking/)).toBeTruthy();
     const links = [...container.querySelectorAll("a")].map((a) => a.getAttribute("href"));
-    expect(links.every((h) => h?.includes("ProductVariant%2F2"))).toBe(true);
+    expect(links.every((h) => h?.includes("ProductVariant%2F2") && h?.endsWith("&pick=color"))).toBe(true);
     expect(screen.getByText("2 colors")).toBeTruthy();
   });
 });

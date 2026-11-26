@@ -1,8 +1,25 @@
 import type { ShopifyProduct } from "./shopify";
 
-/** Preserve the merchant's Shop All collection order, including unavailable items. */
+/** Homepage edit rail size; "Shop all" links to the full collection. */
+export const SHOP_EDIT_LIMIT = 12;
+
+/** 0 ships now, 1 restocking only, 2 unavailable. */
+function stockRank(p: ShopifyProduct): number {
+  const sellable = p.variants.filter(v => v.availableForSale);
+  if (!sellable.length) return 2;
+  return sellable.some(v => !v.currentlyNotInStock) ? 0 : 1;
+}
+
+/**
+ * Keep the merchant's Shop All collection order within each stock band:
+ * pieces that ship now lead, restocking pieces follow, unavailable last.
+ */
 export function selectShopEdit(products: ShopifyProduct[], limit = 4): ShopifyProduct[] {
-  return products.slice(0, limit);
+  return products
+    .map((p, i) => ({ p, i, r: stockRank(p) }))
+    .sort((a, b) => a.r - b.r || a.i - b.i)
+    .slice(0, limit)
+    .map(x => x.p);
 }
 /** Merchant-maintained editorial content only; never fabricate a selection claim. */
 export function shopSelectionNote(p: ShopifyProduct): string {

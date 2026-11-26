@@ -1,6 +1,10 @@
 import { canonical } from "@/lib/seo";
 
-export const metadata = { alternates: canonical("/policies/shipping") };
+export const metadata = {
+  title: "Shipping Policy | Mully",
+  description: "Mully order processing times, shipping methods and rates, delivery coverage and tracking.",
+  alternates: canonical("/policies/shipping"),
+};
 
 /* ═══════════════════════════════════════════
    SHIPPING POLICY
@@ -26,7 +30,7 @@ export default function ShippingPolicyPage() {
         <h3>Reserve Member &amp; Black Tier</h3>
         <ul>
           <li><strong>Free 2-day shipping</strong> on all orders, no minimum.</li>
-          <li>Priority processing \u2014 your order ships first.</li>
+          <li>Priority processing: your order ships first.</li>
         </ul>
 
         <h3>Reserve Access Tier</h3>
@@ -36,7 +40,7 @@ export default function ShippingPolicyPage() {
 
         <h3>Free Tier</h3>
         <ul>
-          <li><strong>Standard shipping (5\u20137 business days):</strong> $5.95 per order.</li>
+          <li><strong>Standard shipping (5 to 7 business days):</strong> $5.95 per order.</li>
           <li><strong>Free standard shipping</strong> on orders over $75.</li>
           <li><strong>Expedited 2-day shipping:</strong> $12.95 per order.</li>
         </ul>
@@ -63,7 +67,7 @@ export default function ShippingPolicyPage() {
 
         <h2>Address Accuracy</h2>
         <p>
-          Please double-check your shipping address before placing an order. We are not responsible for orders shipped to incorrect addresses provided by the customer. If you notice an error, contact us immediately \u2014 we may be able to update the address before the order ships.
+          Please double-check your shipping address before placing an order. We are not responsible for orders shipped to incorrect addresses provided by the customer. If you notice an error, contact us immediately. We may be able to update the address before the order ships.
         </p>
 
         <h2>Questions?</h2>
