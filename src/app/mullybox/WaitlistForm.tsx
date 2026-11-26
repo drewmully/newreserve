@@ -51,7 +51,7 @@ export function WaitlistForm() {
     );
   }
   return (
-    <form onSubmit={submit} className="mt-7" data-source={MULLYBOX_WAITLIST_SOURCE}>
+    <form onSubmit={submit} className="mt-6" data-source={MULLYBOX_WAITLIST_SOURCE}>
       <label htmlFor="mbw-email" className="sr-only">Email address</label>
       <div className="flex flex-col gap-3 sm:flex-row">
         <input
