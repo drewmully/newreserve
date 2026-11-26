@@ -179,7 +179,7 @@ export function GiftHeroRail({ picks }: { picks: GiftRailPick[] }) {
       {picks.map((p, i) => {
         const { product } = p;
         const href = product.preferredVariantId
-          ? `/shop/${product.slug}?variant=${encodeURIComponent(product.preferredVariantId)}`
+          ? `/shop/${product.slug}?variant=${encodeURIComponent(product.preferredVariantId)}&pick=color`
           : `/shop/${product.slug}`;
         return (
           <li

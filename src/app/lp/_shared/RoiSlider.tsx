@@ -23,7 +23,7 @@ interface Tile {
 }
 
 export function RoiSlider({ className }: { className?: string }) {
-  const [visits, setVisits] = useState(12);
+  const [visits, setVisits] = useState(5);
 
   const tiles = useMemo<Tile[]>(() => {
     const hoursSaved = Math.round((visits * MINUTES_PER_TRIP) / 60);
@@ -43,7 +43,7 @@ export function RoiSlider({ className }: { className?: string }) {
       </div>
       <input
         type="range"
-        min={5}
+        min={2}
         max={24}
         step={1}
         value={visits}

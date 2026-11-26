@@ -7,7 +7,7 @@
  * the hero column.
  *
  * A (default, CRO pick): product flat lay built only from live Shopify
- *    product photography of pieces from a typical Reserve (Quiet Golf polo,
+ *    product photography of pieces from a typical Reserve (Rhone Voyage down vest,
  *    Rhone quarter zip, Greyson hat, Will Leather belt), cut out and arranged
  *    on a bone ground with one shared shadow. Nothing is generated.
  * B: the real Mully course photograph already used on /shop
@@ -43,7 +43,7 @@ const FLAT_LAY = [
     style: { left: "6%", top: "7%", width: "46%", transform: "rotate(-6deg)" },
   },
   {
-    src: "/lp/gift-season/flatlay/polo.webp",
+    src: "/lp/gift-season/flatlay/vest.webp",
     style: { right: "7%", top: "8%", width: "38%", transform: "rotate(4deg)" },
   },
   {
@@ -88,7 +88,7 @@ export function HeroMedia({ variant, priority = false }: { variant: GiftHeroVari
       <div
         className="absolute inset-0"
         role="img"
-        aria-label="Rhone quarter zip, Quiet Golf polo, Greyson hat and Will Leather belt"
+        aria-label="Rhone quarter zip, Rhone down vest, Greyson hat and Will Leather belt"
       >
         {FLAT_LAY.map((p) => (
           // eslint-disable-next-line @next/next/no-img-element

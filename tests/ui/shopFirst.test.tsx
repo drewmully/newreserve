@@ -34,7 +34,7 @@ const product = (slug: string, available: boolean, tags: string[] = []) =>
   ({ slug, tags, variants: [{ availableForSale: available }] }) as ShopifyProduct;
 
 describe("shop merchandising", () => {
-  it("preserves Shop All order regardless of stock, featured tags, or former pinned picks", () => {
+  it("keeps Shop All order within stock bands, ignoring featured tags and former pinned picks", () => {
     const products = [
       product("merchant-first", false),
       product("new", true),
@@ -42,8 +42,9 @@ describe("shop merchandising", () => {
       product("leon-weekender-duffel", true),
       product("merchant-last", true),
     ];
-    expect(selectShopEdit(products, products.length)).toEqual(products);
-    expect(selectShopEdit(products, 2)).toEqual(products.slice(0, 2));
+    // Unavailable pieces drop behind everything that can ship.
+    expect(selectShopEdit(products, products.length)).toEqual([...products.slice(1), products[0]]);
+    expect(selectShopEdit(products, 2)).toEqual(products.slice(1, 3));
     expect(selectShopEdit(products)).toHaveLength(4);
     expect(selectShopEdit(products)).not.toBe(products);
     expect(products[0].slug).toBe("merchant-first");

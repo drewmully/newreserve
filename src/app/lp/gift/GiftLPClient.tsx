@@ -203,23 +203,7 @@ export default function GiftLPClient() {
                 golfer with taste.
               </h1>
 
-              <div className="mt-3 flex items-center gap-2 text-sm">
-                <div className="inline-flex items-center gap-0.5 text-ember">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <svg
-                      key={i}
-                      className="h-4 w-4"
-                      viewBox="0 0 24 24"
-                      fill="currentColor"
-                    >
-                      <path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 22 12 18.56 5.82 22 7 14.14l-5-4.87 6.91-1.01L12 2z" />
-                    </svg>
-                  ))}
-                </div>
-                <span className="text-charcoal/70 text-xs">
-                  4.9 · 1,247 members
-                </span>
-              </div>
+              {/* Unverified rating line removed 2026-11-26; real reviews live on /subscription. */}
 
               <p className="text-sm text-charcoal/80 mt-4 leading-relaxed">
                 Hand-curated quarterly box. $300+ retail value. We email your

@@ -1,6 +1,10 @@
 import { canonical } from "@/lib/seo";
 
-export const metadata = { alternates: canonical("/policies/terms") };
+export const metadata = {
+  title: "Terms of Service | Mully",
+  description: "The terms that apply when you use mymully.com, shop with Mully or subscribe to Mully Reserve.",
+  alternates: canonical("/policies/terms"),
+};
 
 /* ═══════════════════════════════════════════
    TERMS OF SERVICE
@@ -43,7 +47,7 @@ export default function TermsPage() {
 
         <h2>5. Intellectual Property</h2>
         <p>
-          All content on the Service \u2014 including text, graphics, logos, images, and software \u2014 is the property of Mully Group, Inc. or its licensors and is protected by copyright, trademark, and other intellectual property laws. You may not reproduce, distribute, or create derivative works without our prior written consent.
+          All content on the Service, including text, graphics, logos, images, and software, is the property of Mully Group, Inc. or its licensors and is protected by copyright, trademark, and other intellectual property laws. You may not reproduce, distribute, or create derivative works without our prior written consent.
         </p>
 
         <h2>6. User Content</h2>

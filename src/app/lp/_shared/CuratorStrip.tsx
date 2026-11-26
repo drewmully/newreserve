@@ -41,7 +41,7 @@ export function CuratorStrip() {
             Who&rsquo;s behind Reserve
           </div>
           <h2 className="font-serif text-3xl leading-[1.1] text-forest sm:text-4xl">
-            Built by two guys who build things&nbsp;&mdash; and golf too much.
+            Built by two guys who build things and golf too much.
           </h2>
         </div>
 
@@ -50,12 +50,12 @@ export function CuratorStrip() {
           <FounderCard
             name="Drew"
             avatarSrc="/founders/drew.webp"
-            avatarAlt="Illustrated portrait of Drew, Reserve co-curator — placeholder cartoon avatar."
+            avatarAlt="Illustrated portrait of Drew, Reserve co-curator, placeholder cartoon avatar."
             bio={
               <>
                 A venture investor who spent his career spotting what&rsquo;s
                 worth building. Now he aims the same eye at what&rsquo;s
-                actually worth wearing. 12 handicap, 20 years playing &mdash;
+                actually worth wearing. 12 handicap, 20 years playing,
                 the friend everyone texts before they buy anything for their
                 bag.
               </>
@@ -64,12 +64,12 @@ export function CuratorStrip() {
           <FounderCard
             name="Jack"
             avatarSrc="/founders/jack.webp"
-            avatarAlt="Illustrated portrait of Jack, Reserve co-curator and operations lead — placeholder cartoon avatar."
+            avatarAlt="Illustrated portrait of Jack, Reserve co-curator and operations lead, placeholder cartoon avatar."
             bio={
               <>
                 Ran large-scale digital operations, so every Reserve ships
                 right, fits right, and gets handled when it doesn&rsquo;t. 7
-                handicap, 20 years playing &mdash; the one who reads the spec
+                handicap, 20 years playing, the one who reads the spec
                 sheet before he buys.
               </>
             }

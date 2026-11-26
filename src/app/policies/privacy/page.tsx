@@ -1,6 +1,10 @@
 import { canonical } from "@/lib/seo";
 
-export const metadata = { alternates: canonical("/policies/privacy") };
+export const metadata = {
+  title: "Privacy Policy | Mully",
+  description: "How Mully Group, Inc. collects, uses and protects your information when you shop, subscribe or contact us.",
+  alternates: canonical("/policies/privacy"),
+};
 
 /* ═══════════════════════════════════════════
    PRIVACY POLICY

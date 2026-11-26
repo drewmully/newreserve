@@ -1696,3 +1696,7 @@ input:focus-visible {
       radial-gradient(120% 90% at 50% 40%, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.22) 100%);
   }
 }
+
+/* Bag drawer open: hide the closed Alhena chat launcher so it never covers
+   Checkout. An open chat panel is unaffected; the launcher returns on close. */
+body[data-cart-open="true"] div:has(> [aria-label="Mully Group, Inc. customer support chat"]){visibility:hidden;pointer-events:none}

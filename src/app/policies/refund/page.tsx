@@ -1,6 +1,10 @@
 import { canonical } from "@/lib/seo";
 
-export const metadata = { alternates: canonical("/policies/refund") };
+export const metadata = {
+  title: "Returns and Refund Policy | Mully",
+  description: "How returns, exchanges and refunds work for Mully shop orders and Mully Reserve shipments.",
+  alternates: canonical("/policies/refund"),
+};
 
 /* ═══════════════════════════════════════════
    REFUND POLICY

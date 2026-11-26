@@ -192,7 +192,7 @@ export function ShopCartBogoNudge({ accent }: { accent: string }) {
         <div>
           <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-charcoal/55">Don&apos;t forget</p>
           <h3 id="bogo-nudge-title" className="mt-1 font-serif text-[19px] leading-tight text-charcoal">
-            Take advantage of BOGO15
+            Buy 2, take 15% off one
           </h3>
           <p className="mt-1 text-[13px] leading-snug text-charcoal/70">
             Add one more piece and save 15% on one of them. It applies automatically.

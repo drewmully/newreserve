@@ -149,7 +149,16 @@ export function applyVariantSelection(
     v.selectedOptions.some((o) => o.name === optionName && o.value === optionValue)
   );
   const fallback = withValue.find((v) => v.availableForSale) ?? withValue[0];
-  return fallback ? { ...next, ...getVariantSelection(fallback) } : next;
+  if (!fallback) return next;
+  const moved = { ...next, ...getVariantSelection(fallback) };
+  // Never swap a size the shopper picked for one they did not: clear it so
+  // they choose again from what this color actually comes in.
+  for (const name of Object.keys(moved)) {
+    if (name !== optionName && SIZE_OPTION_PATTERN.test(name) && current[name] && current[name] !== moved[name]) {
+      delete moved[name];
+    }
+  }
+  return moved;
 }
 
 export function hasVariantChoices(product: VariantBearingProduct): boolean {
@@ -263,4 +272,38 @@ export function formatVariantSummary(variant: ShopifyProductVariant | null): str
   if (!variant) return "";
   if (variant.selectedOptions.length === 0) return variant.title;
   return variant.selectedOptions.map((option) => option.value).join(" / ");
+}
+
+/** Option names a shopper must choose themselves (never preselected). */
+export const SIZE_OPTION_PATTERN = /^(size|waist|inseam|length)$/i;
+
+/** Remove size-like options from a selection, keeping color and fit. */
+export function withoutSizeOptions(selection: ProductVariantSelection): ProductVariantSelection {
+  return Object.fromEntries(Object.entries(selection).filter(([name]) => !SIZE_OPTION_PATTERN.test(name)));
+}
+
+/**
+ * PDP opening selection. Color (and any single-value option) is preselected
+ * so the gallery matches; size stays empty unless the link named an exact
+ * variant, so nobody checks out in a size they never picked.
+ */
+export function getPdpInitialSelection(
+  product: VariantBearingProduct,
+  preferredSelection: ProductVariantSelection = {}
+): ProductVariantSelection {
+  const variants = getProductVariants(product);
+  const hasPreference = Object.keys(preferredSelection).length > 0;
+  // With no color in the link, open on a color that ships now rather than
+  // a restocking one, when the product has both.
+  const shipsNow = hasPreference ? undefined : variants.find((v) => v.availableForSale && !v.currentlyNotInStock);
+  const seeded = shipsNow
+    ? withoutSizeOptions(getVariantSelection(shipsNow))
+    : preferredSelection;
+  const selection = getInitialVariantSelection(product, seeded);
+  for (const option of getProductOptionGroups(product)) {
+    if (!SIZE_OPTION_PATTERN.test(option.name) || option.values.length < 2) continue;
+    if (hasPreference && preferredSelection[option.name]) continue;
+    delete selection[option.name];
+  }
+  return selection;
 }

@@ -109,7 +109,7 @@
  },
  {
   "source": "/blogs/news/black-friday-golf-deals-get-the-best-value-with-mullybox",
-  "destination": "/lp/gift"
+  "destination": "/lp/gift-season"
  },
  {
   "source": "/blogs/news/how-to-choose-the-right-training-aids-for-your-skill-level",
@@ -321,7 +321,7 @@
  },
  {
   "source": "/pages/fathers",
-  "destination": "/lp/gift"
+  "destination": "/lp/gift-season"
  },
  {
   "source": "/pages/member-activation",
@@ -333,11 +333,11 @@
  },
  {
   "source": "/pages/gift",
-  "destination": "/lp/gift"
+  "destination": "/lp/gift-season"
  },
  {
   "source": "/pages/bfcm25",
-  "destination": "/lp/gift"
+  "destination": "/lp/gift-season"
  },
  {
   "source": "/pages/mullyboxquarterly-e",

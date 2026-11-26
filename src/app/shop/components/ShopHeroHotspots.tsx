@@ -3,9 +3,15 @@ import { useEffect, useState, type RefObject } from "react";
 import { projectHeroPoint } from "@/lib/shopHeroHotspots";
 
 /** Project the torso point through the responsive crop, never the viewport. */
-export function ShopHeroHotspots({ imageRef }: {
+type Point = { x: number; y: number };
+const DEFAULT_HOTSPOT = { desktop: { x: .695, y: .625 }, mobile: { x: .659, y: .625 } };
+
+export function ShopHeroHotspots({ imageRef, hotspot = DEFAULT_HOTSPOT }: {
   imageRef: RefObject<HTMLImageElement | null>;
+  /** Torso anchor in natural-image fractions for each crop. */
+  hotspot?: { desktop: Point; mobile: Point };
 }) {
+  const { desktop, mobile: mobilePoint } = hotspot;
   const [point,setPoint]=useState<{x:number;y:number}|null>(null);
   useEffect(()=>{
     const image=imageRef.current;
@@ -18,7 +24,7 @@ export function ShopHeroHotspots({ imageRef }: {
       const [x,y]=getComputedStyle(image).objectPosition.split(" ");
       const percent=(value:string)=>value?.endsWith("%")?parseFloat(value)/100:.5;
       setPoint(projectHeroPoint({width:box.width,height:box.height,naturalWidth:image.naturalWidth,naturalHeight:image.naturalHeight,
-        point:mobile?{x:.659,y:.625}:{x:.695,y:.625},positionX:percent(x),positionY:percent(y)}));
+        point:mobile?mobilePoint:desktop,positionX:percent(x),positionY:percent(y)}));
     }
     const schedule=()=>{cancelAnimationFrame(frame);frame=requestAnimationFrame(update)};
     const observer=typeof ResizeObserver!=="undefined"?new ResizeObserver(schedule):null;
@@ -29,7 +35,7 @@ export function ShopHeroHotspots({ imageRef }: {
     schedule();
     return ()=>{cancelAnimationFrame(frame);observer?.disconnect();image.removeEventListener("load",schedule);
       image.removeEventListener("error",schedule);window.removeEventListener("resize",schedule)};
-  },[imageRef]);
+  },[imageRef, desktop, mobilePoint]);
   if(!point)return null;
   return <a href="#outfit" className="shop-hero-hotspot" aria-label="Shop the look: build this outfit"
     style={{left:point.x,top:point.y}} onClick={e=>{

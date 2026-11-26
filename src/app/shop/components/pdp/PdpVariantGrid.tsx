@@ -60,7 +60,9 @@ export function PdpVariantGrid({
         const isWaist = /^waist$/i.test(group.name);
         const isInseam = /^inseam$|^length$/i.test(group.name);
         const isFit = /^fit$|^style$/i.test(group.name);
-        const selected = selection[group.name] ?? group.values[0];
+        // Color falls back to the first value so the gallery has a match;
+        // sizes stay unselected until the shopper picks one.
+        const selected = isColor ? (selection[group.name] ?? group.values[0]) : selection[group.name];
         const available = (v: string) =>
           isVariantValueAvailable(product, selection, group.name, v);
         // Hide sizes that don't exist at all for the selected color (sold-out
@@ -123,12 +125,12 @@ function TileGrid({
 }: {
   groupName: string;
   values: string[];
-  selected: string;
+  selected?: string;
   available: (v: string) => boolean;
   onChange: (v: string) => void;
 }) {
   return (
-    <div>
+    <div data-option-group={groupName}>
       <div className="mb-3 flex items-baseline justify-between">
         <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-charcoal/50">
           {groupName}
@@ -171,7 +173,7 @@ function ChipGrid({
 }: {
   groupName: string;
   values: string[];
-  selected: string;
+  selected?: string;
   available: (v: string) => boolean;
   onChange: (v: string) => void;
   columns: number;
@@ -184,12 +186,12 @@ function ChipGrid({
         : "grid-cols-3 sm:grid-cols-4";
 
   return (
-    <div>
+    <div data-option-group={groupName} role="group" aria-label={groupName}>
       <div className="mb-3 flex items-baseline justify-between">
         <p className="text-[10px] font-mono uppercase tracking-[0.22em] text-charcoal/50">
           {groupName}
         </p>
-        <p className="text-[12px] text-charcoal/70">{selected}</p>
+        <p className="text-[12px] text-charcoal/70">{selected ?? `Choose a ${groupName.toLowerCase()}`}</p>
       </div>
       <div className={`grid gap-1.5 ${gridCols}`}>
         {values.map((v) => {

@@ -231,7 +231,7 @@ export default function OutingsPage() {
               <ScrollReveal delay={2}>
                 <p className="text-base leading-[1.7] text-muted mb-8">
                   Every box is built around your event. Hand-picked apparel,
-                  accessories, and gear — branded with your logo and packed in
+                  accessories, and gear, branded with your logo and packed in
                   our signature green box.
                 </p>
               </ScrollReveal>
@@ -266,7 +266,7 @@ export default function OutingsPage() {
                 <p className="text-base leading-[1.7] text-muted mb-6">
                   From the tissue paper to the branded box tape, we obsess over
                   presentation. Your guests should feel something when they open
-                  it — not just see it.
+                  it, not just see it.
                 </p>
                 <a href="#contact" className="btn-primary">
                   <span>Build Your Box</span>
@@ -457,7 +457,7 @@ export default function OutingsPage() {
               <ScrollReveal delay={1}>
                 <blockquote className="font-serif text-[clamp(22px,3vw,32px)] leading-[1.25] tracking-[-0.01em] text-cream mb-6">
                   &ldquo;I&apos;ve played in dozens of outings where the gift
-                  bag was an afterthought — a logo&apos;d koozie and a sleeve of
+                  bag was an afterthought: a logo&apos;d koozie and a sleeve of
                   range balls. We started Mully because your guests deserve
                   better than that.&rdquo;
                 </blockquote>
@@ -518,7 +518,7 @@ export default function OutingsPage() {
               <ScrollReveal delay={1}>
                 <p className="text-base leading-[1.7] text-muted mb-8 max-w-md">
                   Tell us about your event and we&apos;ll send custom package
-                  options within 24 hours. No commitment — just great options.
+                  options within 24 hours. No commitment, just great options.
                 </p>
               </ScrollReveal>
 

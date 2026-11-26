@@ -123,7 +123,7 @@ export default function GiftSizingClient({
               </h1>
               <p className="text-sm text-charcoal/75 leading-relaxed max-w-md mx-auto">
                 We&apos;ve got your sizing. Your first Mully Reserve box will be
-                hand-curated and ship in 5\u20137 business days. Watch your inbox
+                hand-curated and ship in 5 to 7 business days. Watch your inbox
                 for tracking.
               </p>
               <p className="text-xs text-charcoal/55 mt-6 leading-relaxed max-w-md mx-auto">
@@ -142,12 +142,12 @@ export default function GiftSizingClient({
                 Mully Reserve \u00b7 Gift Box
               </div>
               <h1 className="font-serif text-3xl sm:text-4xl text-forest leading-[1.1]">
-                Hey {recipient} \u2014 {fromName} sent you Mully Reserve.
+                Hey {recipient}, {fromName} sent you Mully Reserve.
               </h1>
               <p className="text-sm text-charcoal/80 mt-4 leading-relaxed">
                 A hand-curated quarterly box of premium golf apparel and
                 accessories is on its way. $300+ retail value in every box.
-                Confirm your sizing below \u2014 takes about 2 minutes.
+                Confirm your sizing below. It takes about 2 minutes.
               </p>
 
               {giftMessage ? (
@@ -206,7 +206,7 @@ export default function GiftSizingClient({
                   <textarea
                     value={s.notes}
                     onChange={(e) => setS({ ...s, notes: e.target.value })}
-                    placeholder="e.g. between sizes \u2014 size up; runs hot/cold; allergies; style preferences"
+                    placeholder="e.g. between sizes, size up; runs hot/cold; allergies; style preferences"
                     rows={3}
                     className="w-full bg-bone border border-forest/20 rounded px-3 py-2.5 text-sm text-charcoal focus:outline-none focus:border-forest resize-none"
                   />
@@ -230,7 +230,7 @@ export default function GiftSizingClient({
                 <p className="text-[11px] text-charcoal/55 leading-relaxed pt-3 border-t border-forest/10">
                   Wrong fit on anything? We swap it free, no shipping fee.*
                   Your subscription auto-cancels after the
-                  first box ships \u2014 you&apos;re only charged once unless you
+                  first box ships, so you&apos;re only charged once unless you
                   choose to stay on.
                   <span className="block mt-1">{RETURN_WINDOW_FOOTNOTE}</span>
                 </p>

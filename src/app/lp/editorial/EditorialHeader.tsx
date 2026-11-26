@@ -240,7 +240,7 @@ export function EditorialHeader({ brands, collections }: EditorialHeaderProps) {
                     onClick={() => jumpTo("editorial-top")}
                     className="w-full text-left py-2.5 text-[15px] text-forest hover:text-forest-dark transition-colors border-b border-charcoal/[0.05]"
                   >
-                    The Feed <span className="text-charcoal/40">— all recent</span>
+                    The Feed <span className="text-charcoal/40">· all recent</span>
                   </button>
                 </li>
                 {(tab === "brand" ? brands : collections).map((name) => (

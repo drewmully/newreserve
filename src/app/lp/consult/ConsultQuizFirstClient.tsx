@@ -89,7 +89,7 @@ export default function ConsultQuizFirstClient() {
           </div>
 
           <div className="mt-5 text-center text-[11px] tracking-[0.2em] uppercase text-charcoal/45">
-            $250 / quarter · cancel after your first
+            $250 / quarter · cancel anytime after your first quarter
           </div>
         </div>
       </section>

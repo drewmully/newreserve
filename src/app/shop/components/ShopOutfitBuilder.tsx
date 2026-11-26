@@ -19,13 +19,24 @@ function groups(p: ShopifyProduct) {
     name,values:[...new Set(p.variants.flatMap(v=>v.selectedOptions.filter(o=>o.name===name).map(o=>o.value)))],
   }));
 }
+/** Start on the colorway with the most pieces that ship now. */
+function initialBase(p: ShopifyProduct) {
+  const color=p.variants[0]?.selectedOptions.find(o=>/^colou?r$/i.test(o.name))?.name;
+  if(!color)return p.variants[0];
+  const ready=(v:ShopifyProduct["variants"][number])=>v.availableForSale&&!v.currentlyNotInStock;
+  const count=new Map<string,number>();
+  for(const v of p.variants){const c=v.selectedOptions.find(o=>o.name===color)?.value;if(c&&ready(v))count.set(c,(count.get(c)||0)+1)}
+  let best=p.variants[0];let bestN=-1;
+  for(const v of p.variants){const c=v.selectedOptions.find(o=>o.name===color)?.value||"";const n=count.get(c)||0;if(n>bestN){best=v;bestN=n}}
+  return best;
+}
 function initialOptions(p: ShopifyProduct) {
-  const base=p.variants[0];
+  const base=initialBase(p);
   return Object.fromEntries(groups(p).filter(g=>!isFit(g.name)||g.values.length===1)
     .map(g=>[g.name,base?.selectedOptions.find(o=>o.name===g.name)?.value||g.values[0]]));
 }
 
-export function ShopOutfitBuilder({products,byCategory}:{products:ShopifyProduct[];byCategory:Record<string,ShopifyProduct[]>}) {
+export function ShopOutfitBuilder({products,byCategory,heading="Build the outfit, for less."}:{products:ShopifyProduct[];byCategory:Record<string,ShopifyProduct[]>;heading?:string}) {
   const choices=useMemo(()=>OUTFIT_SLOTS.map(s=>outfitOptions(products,byCategory[s.category]||[],s.slugs)),[products,byCategory]);
   const [indices,setIndices]=useState([0,0,0]);
   const [selections,setSelections]=useState<Record<string,Record<string,string>>>({});
@@ -108,7 +119,7 @@ export function ShopOutfitBuilder({products,byCategory}:{products:ShopifyProduct
   return <section id="outfit" ref={root} tabIndex={-1} className={`sec sec--cream guided-outfit guided-step-${step}`} aria-labelledby="outfitTitle">
     <div className="wrap">
       <header className="guided-heading"><div>
-        <h2 className="h2" id="outfitTitle">Your fall outfit, for less.</h2>
+        <h2 className="h2" id="outfitTitle">{heading}</h2>
         <p className="guided-intro">Three pieces. Already paired. Just choose your sizes.</p></div>
         <ol aria-label="Outfit progress">{["The look","Your sizes","Review"].map((s,i)=><li key={s} aria-current={step===i?"step":undefined}><span>{i<step?"✓":i+1}</span>{s}</li>)}</ol>
       </header>
@@ -125,7 +136,7 @@ export function ShopOutfitBuilder({products,byCategory}:{products:ShopifyProduct
           <div className="guided-content">
             {step===0?<><p className="guided-kicker">Selected by Mully</p><h3>The look is ready.<br/>Make it yours.</h3>
               <p>Choose your sizes. Swap a piece only if you want to.</p>
-              <div className="guided-bundle-note"><strong>Buy the outfit. Save together.</strong><span>{hasShopDiscount?`Your membership saves ${Math.round(shopDiscountRate*100)}% on every piece.`:"15% off one piece with BOGO15. Applied in your bag."}</span></div>
+              <div className="guided-bundle-note"><strong>Buy the outfit. Save together.</strong><span>{hasShopDiscount?`Your membership saves ${Math.round(shopDiscountRate*100)}% on every piece.`:"Buy 2, take 15% off one. Applied in your bag."}</span></div>
             </>:step===1?<><div className="guided-panel-title"><h3>Make it your size.</h3><button onClick={()=>show(fit.current)}>Size &amp; fit ↗</button></div>
               {shared?<fieldset className="guided-shared-size"><legend>Top &amp; layer size</legend>
                 <div>{sharedSizes.map(value=><button key={value} aria-pressed={sharedValue===value} onClick={()=>{
@@ -138,7 +149,7 @@ export function ShopOutfitBuilder({products,byCategory}:{products:ShopifyProduct
               <ul className="guided-review-lines">{selected.map((p,i)=><li key={p.slug}><span>{OUTFIT_SLOTS[i].label}</span><strong>{variants[i]?variantLabel(variants[i]!):"Choose size"}</strong></li>)}</ul>
               <fieldset className="guided-purchase"><legend className="sr-only">How would you like it?</legend>
                 <label className={mode==="once"?"is-selected":""}><input type="radio" name="guided-purchase" checked={mode==="once"} onChange={()=>setMode("once")}/>
-                  <span><strong>Just this time <b>{money(estimate.total)}</b></strong><small>{hasShopDiscount?"Subscriber estimate":"BOGO15 estimate"} · {money(estimate.savings)} off {hasShopDiscount?"the outfit":"one piece"}</small></span></label>
+                  <span><strong>Just this time <b>{money(estimate.total)}</b></strong><small>{hasShopDiscount?"Subscriber estimate":"Buy 2 offer estimate"} · {money(estimate.savings)} off {hasShopDiscount?"the outfit":"one piece"}</small></span></label>
                 <label className={mode==="reserve"?"is-selected":""}><input type="radio" name="guided-purchase" checked={mode==="reserve"} onChange={()=>setMode("reserve")}/>
                   <span><strong>Subscribe {estimate.total>RESERVE_OUTFIT_PRICE?"& save": "to Reserve"} <b>{money(RESERVE_OUTFIT_PRICE)}<em> / season</em></b></strong><small>Mully Reserve · {estimate.total>RESERVE_OUTFIT_PRICE?`Save ${money(estimate.total-RESERVE_OUTFIT_PRICE)} on this outfit`:"Your first outfit included"}</small>
                     <p>Your outfit first. Then new styles curated with your {money(RESERVE_OUTFIT_PRICE)} seasonal budget. 4 shipments a year.</p></span></label>

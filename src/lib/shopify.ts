@@ -282,6 +282,7 @@ interface RawCartLine {
     id: string;
     title?: string;
     price: { amount: string; currencyCode: string };
+    image?: { url: string } | null;
     product: {
       handle: string;
       title: string;
@@ -414,7 +415,8 @@ function mapCart(raw: RawCart): ShopifyCart {
         brand: line.merchandise.product.vendor,
         price: line.cost && line.quantity > 0 ? parseFloat(line.cost.totalAmount.amount) / line.quantity : retailPrice,
         retailPrice,
-        image: line.merchandise.product.images.nodes[0]?.url,
+        // The chosen color's photo, not the product's first (often another color).
+        image: line.merchandise.image?.url ?? line.merchandise.product.images.nodes[0]?.url,
         quantity: line.quantity,
       };
     }),
@@ -487,6 +489,7 @@ const CART_LINE_FIELDS = `
       id
       title
       price { amount currencyCode }
+      image { url }
       product {
         handle
         title

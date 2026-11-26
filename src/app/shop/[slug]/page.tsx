@@ -11,9 +11,11 @@ import { ShopPDPClient } from "../components/ShopPDPClient";
 import { ShopPageShell } from "../components/ShopPageShell";
 import { ScrollToTop } from "../components/ScrollToTop";
 import { getSeasonalTheme } from "../seasonalTheme";
-import { getVariantById, getVariantSelection } from "@/lib/productVariants";
+import { getVariantById, getVariantSelection, withoutSizeOptions } from "@/lib/productVariants";
 import { MysteryBundleClient } from "../components/MysteryBundleClient";
 import { canonical } from "@/lib/seo";
+import { productJsonLd } from "@/lib/productJsonLd";
+import { serializeJsonLd } from "@/lib/safeJsonLd";
 import { isCompleteLookProduct, parseCompleteLookVariant, PDP_COMPLETE_LOOK_QUERY } from "@/lib/pdpCompleteLook";
 import { loadCompleteLook } from "@/lib/pdpCompleteLookServer";
 
@@ -21,7 +23,7 @@ export const revalidate = 3600;
 
 interface Props {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ variant?: string; [PDP_COMPLETE_LOOK_QUERY]?: string }>;
+  searchParams: Promise<{ variant?: string; pick?: string; [PDP_COMPLETE_LOOK_QUERY]?: string }>;
 }
 
 export async function generateStaticParams() {
@@ -92,7 +94,10 @@ export default async function ProductPage({ params, searchParams }: Props) {
   const preferredVariant = requestedVariantId
     ? getVariantById(product, requestedVariantId)
     : null;
-  const initialSelection = getVariantSelection(preferredVariant);
+  // Card links name a colorway's variant so the gallery opens on that color.
+  // `pick=color` says only the color was chosen: leave size for the shopper.
+  const variantSelection = getVariantSelection(preferredVariant);
+  const initialSelection = query.pick === "color" ? withoutSizeOptions(variantSelection) : variantSelection;
   // A final-sale assortment needs its own focused terms, not the standard
   // apparel template's free-returns strip, color picker or outfit upsells.
   if (product.slug === "mystery-bundle-closeout") {
@@ -131,6 +136,7 @@ export default async function ProductPage({ params, searchParams }: Props) {
   return (
     <ShopPageShell className="shop-pdp">
       <ScrollToTop />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(productJsonLd(product)) }} />
 
       <main className="shop-main pb-24">
         {/* Product detail (breadcrumb is rendered inside ShopPDPClient) */}

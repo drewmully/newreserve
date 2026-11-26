@@ -101,7 +101,7 @@ export function RecentBoxesCarousel() {
           </h2>
           <p className="text-sm text-charcoal/70 mt-3 max-w-2xl mx-auto">
             These are examples of brands and pieces past members have received.
-            Curation rotates every quarter — your edit will include a new
+            Curation rotates every quarter, and your edit will include a new
             handpicked mix from labels worth knowing.
           </p>
         </div>
@@ -301,7 +301,7 @@ export function LifestyleGallery() {
             >
               <Image
                 src={p.image}
-                alt={`${p.vendor} ${p.title} — featured in a past Mully Reserve curation.`}
+                alt={`${p.vendor} ${p.title}, featured in a past Mully Reserve curation.`}
                 fill
                 sizes="(min-width: 1024px) 22vw, 45vw"
                 className="object-cover"
@@ -353,7 +353,7 @@ export function ProductDetails({ giftMode = false }: { giftMode?: boolean }) {
               at retail. You'll find apparel layers (polos, quarter-zips,
               shorts, hoodies), an accessory or two (belts, hats, yardage
               books, headcovers), and an occasional surprise from a small
-              brand worth knowing. We rotate the entire mix every quarter —
+              brand worth knowing. We rotate the entire mix every quarter, so
               you'll never get the same edit twice.
             </p>
           </div>
@@ -364,8 +364,8 @@ export function ProductDetails({ giftMode = false }: { giftMode?: boolean }) {
             </h3>
             <p className="text-sm text-charcoal/80 leading-relaxed">
               {giftMode
-                ? "After your purchase confirms, your recipient receives an email with a private link to enter their sizing — shirt, pant, shoe, glove, and a quick fit preference. Their first edit ships within one business day of submission."
-                : "After checkout we'll email you a private link to enter your sizing — shirt, pant, shoe, glove, and a quick fit preference. Takes under two minutes. Your first edit ships within one business day of submission. We don't ship anything until sizing is confirmed."}
+                ? "After your purchase confirms, your recipient receives an email with a private link to enter their sizing: shirt, pant, shoe, glove, and a quick fit preference. Their first edit ships within one business day of submission."
+                : "After checkout we'll email you a private link to enter your sizing: shirt, pant, shoe, glove, and a quick fit preference. Takes under two minutes. Your first edit ships within one business day of submission. We don't ship anything until sizing is confirmed."}
             </p>
           </div>
 
@@ -376,7 +376,7 @@ export function ProductDetails({ giftMode = false }: { giftMode?: boolean }) {
             <p className="text-sm text-charcoal/80 leading-relaxed">
               Free shipping in the continental US. Shipments arrive quarterly
               on your billing date. Cancel anytime from your account after the
-              first quarter — there's no annual lock-in.
+              first quarter. There's no annual lock-in.
             </p>
           </div>
 

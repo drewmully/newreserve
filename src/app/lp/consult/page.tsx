@@ -18,11 +18,11 @@ import ConsultQuizFirstClient from "./ConsultQuizFirstClient";
 export const metadata: Metadata = {
   title: "Mully | Personalized golf apparel, curated by hand",
   description:
-    "Take the 60-second style quiz and see your quarterly picks before you commit. $250 / quarter, cancel after your first.",
+    "Take the 60-second style quiz and see your quarterly picks before you commit. $250 / quarter, cancel anytime after your first quarter.",
   openGraph: {
     title: "Mully | Personalized golf apparel, curated by hand",
     description:
-      "Take the 60-second style quiz and see your quarterly picks before you commit. $250 / quarter, cancel after your first.",
+      "Take the 60-second style quiz and see your quarterly picks before you commit. $250 / quarter, cancel anytime after your first quarter.",
     images: ["/founders/martine-hero.webp"],
   },
 };

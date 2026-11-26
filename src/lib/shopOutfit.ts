@@ -1,23 +1,25 @@
 import type { ShopifyProduct, ShopifyProductVariant } from "./shopify";
 import { SHOPIFY_OUTFIT_SUBSCRIPTION } from "./membershipConfig";
 
+// Winter default look: long sleeves, performance five-pocket, down vest.
+// Matches the winter hero styling the "Shop the look" hotspot points to.
 export const OUTFIT_SLOTS = [
   {
     label: "Top",
     category: "shop-tops",
-    slugs: ["quiet-golf-remy-polo-active-pique", "olydoe-og-supima-hollow-polo"],
+    slugs: ["olydoe-pima-long-sleeve-polo", "quiet-golf-remy-polo-active-pique"],
   },
   {
     label: "Bottom",
     category: "shop-bottoms",
-    slugs: ["duckhead-classic-fit-gold-school-chino-khaki", "duckhead-long-drive-performance-five-pocket"],
+    slugs: ["duckhead-long-drive-performance-five-pocket", "duckhead-classic-fit-gold-school-chino-khaki"],
   },
   {
     label: "Layer",
     category: "shop-outerwear",
     slugs: [
+      "rhone-voyage-down-vest",
       "duckhead-fremont-sport-performance-quilted-vest-brandy-brown",
-      "olydoe-merino-ponte-quarter-zip",
     ],
   },
 ] as const;
