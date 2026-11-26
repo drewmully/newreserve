@@ -21,6 +21,8 @@ import {
   HOME_HERO_OVERRIDE_PARAM,
   HOME_HERO_RESERVE_IMAGES,
   HOME_HERO_SHOP_IMAGES,
+  HOME_HERO_STORAGE_KEY,
+  HOME_HERO_TEST_ACTIVE,
   homeHeroHeadline,
   isHomeHeroVariant,
   storeHomeHeroVariant,
@@ -90,6 +92,12 @@ export function HomeHeroExperiment({
     const forced = readOverride();
     if (forced) {
       settle(forced, true);
+      return;
+    }
+    if (!HOME_HERO_TEST_ACTIVE) {
+      // Test paused: photo hero for everyone. Drop any old arm so carts
+      // aren't tagged with a variant the visitor no longer sees.
+      try { window.localStorage.removeItem(HOME_HERO_STORAGE_KEY); } catch { /* storage blocked */ }
       return;
     }
     if (looksLikeBot() || !posthog.__loaded) return; // Control, untracked.

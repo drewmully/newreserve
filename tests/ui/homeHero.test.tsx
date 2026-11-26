@@ -17,6 +17,7 @@ import { HomeHeroExperiment } from "@/app/shop/components/HomeHeroExperiment";
 import {
   HOME_HERO_CART_ATTR,
   HOME_HERO_FLAG,
+  HOME_HERO_TEST_ACTIVE,
   HOME_HERO_NEW_H1,
   HOME_HERO_RESERVE_IMAGES,
   HOME_HERO_SHOP_IMAGES,
@@ -74,7 +75,16 @@ describe("home_hero_dual server HTML", () => {
 });
 
 describe("home_hero_dual client", () => {
-  it("swaps to dual with the new h1 when bucketed and records exposure", async () => {
+  it("while the test is paused, a dual-bucketed visitor keeps the photo hero with no swap", async () => {
+    if (HOME_HERO_TEST_ACTIVE) return;
+    flagResolves("dual");
+    await act(async () => { render(hero()); });
+    expect(ph.getFeatureFlag).not.toHaveBeenCalled();
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("The Fall Edit");
+    expect(ph.capture).not.toHaveBeenCalledWith("home_hero_exposure", expect.anything(), expect.anything());
+  });
+
+  it.skipIf(!HOME_HERO_TEST_ACTIVE)("swaps to dual with the new h1 when bucketed and records exposure", async () => {
     flagResolves("dual");
     await act(async () => { render(hero()); });
     expect(ph.getFeatureFlag).toHaveBeenCalledWith(HOME_HERO_FLAG);
@@ -84,7 +94,7 @@ describe("home_hero_dual client", () => {
     expect(window.localStorage.getItem(HOME_HERO_STORAGE_KEY)).toBe("dual");
   });
 
-  it("keeps control for control arm, missing flag, bots and no PostHog", async () => {
+  it.skipIf(!HOME_HERO_TEST_ACTIVE)("keeps control for control arm, missing flag, bots and no PostHog", async () => {
     flagResolves("control");
     await act(async () => { render(hero()); });
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("The Fall Edit");
