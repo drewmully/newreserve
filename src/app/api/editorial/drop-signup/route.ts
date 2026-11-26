@@ -16,7 +16,7 @@ import { headers } from "next/headers";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebase-admin";
 import { captureSyncFields, scheduleKlaviyoSync } from "@/lib/klaviyo/syncState";
-import { DROP_BAR_CONSENT, isJoinSource, JOIN_CONSENT_VERSION, SHOP_NEWSLETTER_CONSENT } from "@/lib/shopSignup";
+import { DROP_BAR_CONSENT, isJoinSource, JOIN_CONSENT_VERSION, MULLYBOX_WAITLIST_CONSENT, MULLYBOX_WAITLIST_CONSENT_VERSION, MULLYBOX_WAITLIST_SOURCE, SHOP_NEWSLETTER_CONSENT } from "@/lib/shopSignup";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -102,8 +102,9 @@ export async function POST(req: Request) {
   // Source whitelist: shop footer, /join sources, else the editorial drop bar.
   const shopSignup = body.source === "shop-newsletter";
   const joinSignup = isJoinSource(body.source);
-  const source: string = shopSignup ? "shop-newsletter" : joinSignup ? (body.source as string) : "editorial-drop-bar";
-  if ((shopSignup || joinSignup) && body.consent !== true) {
+  const waitlistSignup = body.source === MULLYBOX_WAITLIST_SOURCE;
+  const source: string = shopSignup ? "shop-newsletter" : joinSignup ? (body.source as string) : waitlistSignup ? MULLYBOX_WAITLIST_SOURCE : "editorial-drop-bar";
+  if ((shopSignup || joinSignup || waitlistSignup) && body.consent !== true) {
     return NextResponse.json({ error: "consent_required" }, { status: 400 });
   }
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
@@ -196,10 +197,12 @@ export async function POST(req: Request) {
           ...(consent ? {
             emailMarketingConsent: true,
             emailMarketingConsentAt: FieldValue.serverTimestamp(),
-            emailMarketingConsentVersion: shopSignup ? "shop-newsletter-2026-09" : joinSignup ? JOIN_CONSENT_VERSION : "editorial-drop-bar-2026-10",
+            emailMarketingConsentVersion: shopSignup ? "shop-newsletter-2026-09" : joinSignup ? JOIN_CONSENT_VERSION : waitlistSignup ? MULLYBOX_WAITLIST_CONSENT_VERSION : "editorial-drop-bar-2026-10",
             // /join mirrors the shop newsletter's consent copy exactly.
-            emailMarketingConsentText: shopSignup || joinSignup ? SHOP_NEWSLETTER_CONSENT : DROP_BAR_CONSENT,
+            emailMarketingConsentText: shopSignup || joinSignup ? SHOP_NEWSLETTER_CONSENT : waitlistSignup ? MULLYBOX_WAITLIST_CONSENT : DROP_BAR_CONSENT,
           } : {}),
+          // Sticky flag so the launch email can target the waitlist even if a later signup changes `source`.
+          ...(waitlistSignup ? { mullyboxWaitlist: true, mullyboxWaitlistAt: FieldValue.serverTimestamp() } : {}),
           lastSubmissionConsent: consent,
           ...captureSyncFields("email"),
           variant: variant ?? null,

@@ -37,6 +37,10 @@ export function joinSource(raw: unknown): JoinSource {
 export const JOIN_CONSENT_VERSION = "join-2026-11";
 export const JOIN_LANDING_PATH = "/join";
 /** Optional, unticked checkbox on the /lp/editorial "Never miss a drop" bar. */
+/** Mullybox 2.0 coming-soon waitlist (/mullybox). Its own Klaviyo source, kept out of the welcome flows. */
+export const MULLYBOX_WAITLIST_SOURCE = "mullybox-waitlist";
+export const MULLYBOX_WAITLIST_CONSENT_VERSION = "mullybox-waitlist-2026-11";
+export const MULLYBOX_WAITLIST_CONSENT = "Email me when Mullybox 2.0 is live, plus other emails from Mully. Unsubscribe anytime.";
 export const DROP_BAR_CONSENT = "Email me new drops and offers. Unsubscribe anytime.";
 export function normalizeSignupPhone(raw: unknown): string | null {
   if (typeof raw !== "string" || raw.length > 35) return null;
