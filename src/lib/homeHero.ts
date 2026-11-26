@@ -17,6 +17,11 @@
  */
 
 export const HOME_HERO_FLAG = "home-hero-dual";
+/**
+ * Paused 2026-11-26: everyone gets the photo hero (no swap after load).
+ * ?hh=dual still previews the dual arm for QA. Set true to resume bucketing.
+ */
+export const HOME_HERO_TEST_ACTIVE = false;
 export type HomeHeroVariant = "control" | "dual";
 
 /** localStorage key holding the last resolved arm (read at cart time). */
