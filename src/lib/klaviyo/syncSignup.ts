@@ -13,7 +13,7 @@
  */
 
 import { KlaviyoError, klaviyoRequest } from "./client";
-import { KLAVIYO_SIGNUP_LIST_ID, SIGNUP_METRIC } from "./config";
+import { KLAVIYO_MULLYBOX_WAITLIST_LIST_ID, KLAVIYO_SIGNUP_LIST_ID, SIGNUP_METRIC } from "./config";
 
 export interface SignupSyncInput {
   source: string;
@@ -137,6 +137,13 @@ export async function syncSignupToKlaviyo(input: SignupSyncInput): Promise<Signu
             relationships: { list: { data: { type: "list", id: KLAVIYO_SIGNUP_LIST_ID } } },
           },
         },
+      });
+    }
+
+    // 2a. Mullybox 2.0 waitlist: also add to its own list (idempotent; a failure retries the stage).
+    if (wantEmail && profileId && input.source === "mullybox-waitlist") {
+      await klaviyoRequest(`/api/lists/${KLAVIYO_MULLYBOX_WAITLIST_LIST_ID}/relationships/profiles`, {
+        body: { data: [{ type: "profile", id: profileId }] },
       });
     }
 
