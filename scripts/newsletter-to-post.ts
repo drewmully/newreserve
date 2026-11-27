@@ -134,7 +134,7 @@ async function main() {
     const copied = await localizeImages(sqlFile, draft);
     if (copied) console.error(`Copied ${copied} image(s) to public/${LOCAL_IMAGE_ROOT}/${draft.slug}/. Commit them with the draft.`);
     const row = toRow(draft);
-    const problems = validateLetterRow(row);
+    const problems = validateLetterRow(row, draft._allow ?? []);
     if (problems.length) {
       console.error(`Not ready (${problems.length}):\n- ${problems.join("\n- ")}`);
       process.exit(1);
