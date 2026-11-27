@@ -25,6 +25,11 @@ export const HOME_HERO_FLAG = "home-hero-dual";
  * Set false to bring back the seasonal photo hero.
  */
 export const HOME_BF_HERO_ACTIVE = true;
+/** Auto-off after Cyber Monday: Tue 2026-12-01 11:59pm ET (CMO, 2026-11-27). */
+export const HOME_BF_HERO_ENDS_AT = Date.parse("2026-12-02T04:59:00Z");
+export function homeBfHeroLive(now: number = Date.now()): boolean {
+  return HOME_BF_HERO_ACTIVE && now < HOME_BF_HERO_ENDS_AT;
+}
 export const HOME_BF_LETTER_HREF = "/blog/why-were-skipping-black-friday-november-2026";
 /**
  * Paused 2026-11-26: everyone gets the photo hero (no swap after load).
