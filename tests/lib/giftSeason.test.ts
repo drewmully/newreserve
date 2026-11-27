@@ -324,10 +324,10 @@ describe("checkout", () => {
     expect(validateGiftSeasonInput({ ...base, recipientEmail: "" })).toBeNull();
     expect(validateGiftSeasonInput({ ...base, recipientName: " " })).toMatch(/name/);
     expect(validateGiftSeasonInput({ ...base, recipientEmail: "nope" })).toMatch(/email/);
-    expect(validateGiftSeasonInput({ ...base, sizing: { ...SIZES, waist: "" } })).toBe("Pick their pant waist.");
+    expect(validateGiftSeasonInput({ ...base, sizing: { ...SIZES, waist: "" } })).toBeNull();
     expect(validateGiftSeasonInput({ ...base, sizing: { ...SIZES, shirt: "" } })).toBe("Pick their shirt size.");
-    // Only shirt and waist are required.
-    expect(validateGiftSeasonInput({ ...base, sizing: { ...EMPTY_SIZING, shirt: "L", waist: "34" } })).toBeNull();
+    // Only shirt is required.
+    expect(validateGiftSeasonInput({ ...base, sizing: { ...EMPTY_SIZING, shirt: "L" } })).toBeNull();
     expect(validateGiftSeasonInput({ ...base, sizing: { ...SIZES, notes: "" } })).toBeNull();
     expect(validateGiftSeasonInput({ ...base, seasons: 3 as never })).toMatch(/length/);
     expect(validateGiftSeasonInput({ ...base, message: "x".repeat(501) })).toMatch(/500/);
@@ -384,13 +384,14 @@ describe("checkout", () => {
 });
 
 describe("sizing", () => {
-  it("only shirt and pant waist are required; the rest are optional", () => {
+  it("only shirt is required; the rest are optional", () => {
     const min = { ...EMPTY_SIZING, shirt: "M", waist: "32" };
-    expect(isSizingComplete(min)).toBe(true);
+    expect(isSizingComplete({ ...EMPTY_SIZING, shirt: "M" })).toBe(true);
     expect(isSizingFullyComplete(min)).toBe(false);
     expect(missingOptionalSizing(min)).toEqual(["Pant inseam", "Shoe size (US)", "Glove size", "Glove hand"]);
-    expect(requiredSizingCount(EMPTY_SIZING)).toEqual({ done: 0, total: 2 });
-    expect(requiredSizingCount(min)).toEqual({ done: 2, total: 2 });
+    expect(missingOptionalSizing({ ...EMPTY_SIZING, shirt: "M" })[0]).toBe("Pant waist");
+    expect(requiredSizingCount(EMPTY_SIZING)).toEqual({ done: 0, total: 1 });
+    expect(requiredSizingCount(min)).toEqual({ done: 1, total: 1 });
     expect(formatSizingLine(min)).toBe("Shirt M, Waist 32");
     expect(formatSizingLine({ ...min, glove_hand: "Right" })).toBe("Shirt M, Waist 32, Glove hand Right");
   });

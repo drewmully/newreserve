@@ -19,13 +19,13 @@ export const SIZING_OPTIONS = {
 export type SizingKey = keyof typeof SIZING_OPTIONS;
 
 /**
- * Shirt and pant waist are required at purchase (low friction for gifters).
+ * Only shirt is required at purchase (low friction for gifters; Drew, 11/27).
  * The rest are optional; the stylist sees which are blank, and the
  * /gift-address link prompts the recipient to fill them in.
  */
 export const SIZING_FIELDS: Array<{ key: SizingKey; label: string; short: string; required: boolean }> = [
   { key: "shirt", label: "Shirt size", short: "Shirt", required: true },
-  { key: "waist", label: "Pant waist", short: "Waist", required: true },
+  { key: "waist", label: "Pant waist", short: "Waist", required: false },
   { key: "inseam", label: "Pant inseam", short: "Inseam", required: false },
   { key: "shoe", label: "Shoe size (US)", short: "Shoe", required: false },
   { key: "glove_size", label: "Glove size", short: "Glove", required: false },
@@ -76,7 +76,7 @@ export function sanitizeSizing(input: unknown): GiftSizing {
   return out;
 }
 
-/** Required fields still missing, as display labels (shirt, pant waist). */
+/** Required fields still missing, as display labels (shirt). */
 export function missingSizing(s: GiftSizing): string[] {
   return REQUIRED_SIZING_FIELDS.filter((f) => !s[f.key]).map((f) => f.label);
 }
