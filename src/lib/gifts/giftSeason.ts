@@ -520,3 +520,15 @@ export function isContinueOfferDue(
   const dueMs = Date.parse(`${finalDueOn}T00:00:00Z`);
   return nowMs >= dueMs - SEASON_NOTICE_LEAD_DAYS * DAY_MS;
 }
+
+/**
+ * Largest saving across the multi-season gifts at live prices, formatted
+ * ("$196"), or null when there is no saving or no 1-season price.
+ */
+export function maxGiftSeasonSavings(live: Record<string, number>): string | null {
+  const options = withLivePrices(GIFT_SEASON_OPTIONS, live);
+  const single = options.find((o) => o.seasons === 1)?.price ?? 0;
+  if (!single) return null;
+  const best = Math.max(0, ...options.map((o) => seasonSavings(o.price, o.seasons, single)));
+  return best > 0 ? formatUsd(best) : null;
+}

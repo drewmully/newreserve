@@ -3,6 +3,8 @@ import { renderShopPage, metadata as shopMetadata } from "./shop/page";
 import { getReserveQuarterlyPrice } from "@/lib/shopify";
 import { SHOPIFY_MEMBERSHIP_PLANS } from "@/lib/membershipConfig";
 import { formatHeroPrice } from "@/lib/homeHero";
+import { fetchGiftSeasonLivePrices } from "@/lib/gifts/giftSeasonPrices";
+import { maxGiftSeasonSavings } from "@/lib/gifts/giftSeason";
 import ShopLayout from "./shop/layout";
 import { SITE_URL, canonical } from "@/lib/seo";
 export const revalidate = 3600;
@@ -50,10 +52,16 @@ const WEBSITE_JSON_LD = {
 
 export default async function Home() {
   const member = SHOPIFY_MEMBERSHIP_PLANS.member;
-  const reservePrice = formatHeroPrice(await getReserveQuarterlyPrice(member.merchandiseId, member.sellingPlanGid));
+  const [quarterly, giftPrices] = await Promise.all([
+    getReserveQuarterlyPrice(member.merchandiseId, member.sellingPlanGid),
+    fetchGiftSeasonLivePrices(),
+  ]);
+  const reservePrice = formatHeroPrice(quarterly);
+  // Only show a savings number when it comes from live Shopify prices.
+  const giftSavings = giftPrices ? maxGiftSeasonSavings(giftPrices) : null;
   return <>
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ORGANIZATION_JSON_LD).replace(/</g, "\\u003c") }} />
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(WEBSITE_JSON_LD).replace(/</g, "\\u003c") }} />
-    <ShopLayout>{await renderShopPage({ homeHero: { reservePrice } })}</ShopLayout>
+    <ShopLayout>{await renderShopPage({ homeHero: { reservePrice, giftSavings } })}</ShopLayout>
   </>;
 }
