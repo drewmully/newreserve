@@ -51,10 +51,16 @@ const LP_SOURCE = "lp_gift_season";
 /** Real Reserve unboxing photo (approved by Drew for the gift moment). */
 const GIFT_MOMENT_IMAGE = "/lp/discover/Unboxing-7.jpg";
 
+/** Every multi-season length ships one Reserve every 3 months; 1 season is a single Reserve. */
+const QUARTERLY_LINE = "Multi-season gifts ship quarterly, one Reserve every 3 months.";
+function shipCadence(seasons: GiftSeasonCount): string {
+  return seasons === 1 ? "One Reserve" : "Quarterly, every 3 months";
+}
+
 const OPTION_COPY: Record<GiftSeasonCount, { title: string; detail: string; badge?: string }> = {
-  1: { title: "1 season", detail: "One Reserve" },
-  2: { title: "2 seasons", detail: "Two Reserves, 3 months apart" },
-  4: { title: "4 seasons", detail: "One Reserve each season", badge: "Full year, best value" },
+  1: { title: "1 season", detail: "One Reserve, ships once" },
+  2: { title: "2 seasons", detail: "Two Reserves, ships quarterly" },
+  4: { title: "4 seasons", detail: "Four Reserves, ships quarterly", badge: "Full year, best value" },
 };
 
 export const GIFT_STEPS = [
@@ -392,7 +398,7 @@ export default function GiftSeasonLPClient({
                     })}
                   </div>
                   <p className="text-[11px] text-charcoal/70 mt-3 leading-relaxed" data-testid="gift-season-timing">
-                    {giftSeasonTimingLine({ now })}
+                    {giftSeasonTimingLine({ now })} {QUARTERLY_LINE}
                   </p>
 
                 {/* Desktop: one CTA to step 2, trust row directly under it. */}
@@ -530,6 +536,9 @@ export default function GiftSeasonLPClient({
                   <div className="mt-1 text-[11px] text-charcoal/60">
                     {formatUsd(perSeasonPrice(option.price, option.seasons))} per season · Paid once, never renews.
                   </div>
+                  <div className="mt-0.5 text-[11px] text-charcoal/60" data-testid="season-cadence-mobile">
+                    {option.seasons === 1 ? "Ships once, one Reserve." : "Ships quarterly, one Reserve every 3 months."}
+                  </div>
                 </div>
 
                 <button
@@ -582,6 +591,10 @@ export default function GiftSeasonLPClient({
                   <span>Per season</span>
                   <span>{formatUsd(perSeasonPrice(option.price, option.seasons))}</span>
                 </div>
+                <div className="flex justify-between" data-testid="gift-summary-cadence">
+                  <span>Ships</span>
+                  <span>{shipCadence(option.seasons)}</span>
+                </div>
                 {seasonSavings(option.price, option.seasons, singlePrice) > 0 ? (
                   <div className="flex justify-between text-ember">
                     <span>You save</span>
@@ -611,7 +624,7 @@ export default function GiftSeasonLPClient({
               </div>
               <div className="mt-2 text-right text-[11px] text-[#625e55]">Paid once, never renews.</div>
               <p className="mt-4 pt-4 border-t border-forest/10 text-[11px] leading-relaxed text-[#625e55]" data-testid="gift-summary-timing">
-                {giftSeasonTimingLine({ now })} Then one every 3 months.
+                {giftSeasonTimingLine({ now })}{option.seasons > 1 ? " Then one every 3 months." : ""}
               </p>
             </aside>
           </div>
