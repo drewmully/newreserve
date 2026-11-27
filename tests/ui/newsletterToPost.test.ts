@@ -53,12 +53,20 @@ describe("newsletterToPost", () => {
     expect(problems.some(p => p.includes("TODO"))).toBe(true);
   });
 
+  it("allows the product name Mullybox 2.0 but not the bare word", () => {
+    const base = toRow(JSON.parse(readFileSync(path.resolve(__dirname, "../../content/newsletters/why-were-skipping-black-friday-november-2026.json"), "utf8")) as LetterDraft);
+    const bare = { ...base, intro: "Open your Mullybox." };
+    expect(validateLetterRow(bare, ["discount code, offer or member-only line"])).toEqual(["intro: the word Mullybox"]);
+    expect(validateLetterRow({ ...base, intro: "Meet Mullybox 2.0." }, ["discount code, offer or member-only line"])).toEqual([]);
+  });
+
   const dir = path.resolve(__dirname, "../../content/newsletters");
   for (const file of readdirSync(dir).filter(f => f.endsWith(".json"))) {
     it(`archived issue ${file} is ready to insert`, () => {
       const draft = JSON.parse(readFileSync(path.join(dir, file), "utf8")) as LetterDraft;
       const row = toRow(draft);
-      expect(validateLetterRow(row)).toEqual([]);
+      expect(validateLetterRow(row, draft._allow)).toEqual([]);
+      if (draft._allow?.length) expect(draft._allowReason).toBeTruthy();
       expect(insertSql(row)).toContain("on conflict (slug) do nothing");
     });
   }

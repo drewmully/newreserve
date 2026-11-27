@@ -6,6 +6,7 @@ import { notFound } from "next/navigation";
 import { getPostBySlug, getRelatedPosts } from "../posts";
 import { ShopPageShell } from "../../shop/components/ShopPageShell";
 import { applyAddenda, BLOG_POST_OVERRIDES } from "@/lib/blogAddenda";
+import { Mullybox2Panel } from "../Mullybox2Panel";
 import { InlineText } from "../InlineText";
 import { GiftSeasonLink } from "../GiftSeasonLink";
 import { canonical } from "@/lib/seo";
@@ -66,18 +67,20 @@ export default async function BlogPostPage({ params, searchParams }: Props) {
           </aside>}
           {letter && <LetterSignup placement="inline" />}
           <ProductRow products={rows.top} block="product_row_top" size="compact" />
-          {sections.map((section, i) => <Fragment key={section.heading}>
+          {sections.map((section, i) => <Fragment key={section.heading || i}>
             <section>
-              <h2>{section.heading}</h2>
+              {section.heading && <h2>{section.heading}</h2>}
               {section.image && section.image !== post.image && <figure className="my-6">
                 <img className="shop-article-image" src={section.image} alt={section.imageAlt ?? ""} width={960} height={640} loading="lazy" />
                 {section.caption && <figcaption className="mt-2 text-xs text-charcoal/60">{section.caption}</figcaption>}
               </figure>}
               {section.paragraphs.map(p => <p key={p}><InlineText text={p} /></p>)}
+              {section.quote && <blockquote className="shop-article-pullquote my-8 border-l-2 border-forest pl-5 font-serif text-2xl leading-snug text-forest md:text-[28px]">{section.quote}</blockquote>}
+              {section.panel === "mullybox-2" && <Mullybox2Panel />}
             </section>
             {i === 1 && commerce?.reserveMid && <ReserveMid />}
           </Fragment>)}
-          <div className="shop-article-highlights"><p>{post.closing}</p></div>
+          <div className="shop-article-highlights"><p><InlineText text={post.closing} /></p></div>
           {letter && <LetterSignup placement="end" />}
           <EndPanel intent={intent} />
           {intent === "shop" && rows.bottom.length === 0 && <EndShopLink />}

@@ -15,6 +15,8 @@ import { LETTER_ISSUE_SLUGS, LETTER_STORED_CATEGORY } from "@/lib/letterIssues";
 export interface DraftSection {
   heading: string;
   paragraphs: string[];
+  quote?: string;
+  panel?: "mullybox-2";
   image?: string;
   imageAlt?: string;
   caption?: string;
@@ -54,6 +56,9 @@ export interface LetterDraft extends LetterRow {
   /** Product handles linked from the email (they render as live product rows). */
   _products: string[];
   _warnings: string[];
+  /** BANNED labels waived for this issue (editorial exceptions), with the reason. */
+  _allow?: string[];
+  _allowReason?: string;
 }
 
 /** Issue images are copied to public/<LOCAL_IMAGE_ROOT>/<slug>/ (no hot-linking). */
@@ -326,13 +331,14 @@ const BANNED: [RegExp, string][] = [
   [/unsubscribe|you're receiving this|manage preferences/i, "unsubscribe or footer copy"],
   [PRICE, "hard-coded price"],
   [OFFER, "discount code, offer or member-only line"],
-  [/\bmullybox\b/i, "the word Mullybox"],
+  // "Mullybox 2.0" is a product name (Drew, 11/27); the bare word stays banned.
+  [/\bmullybox\b(?!\s*2\.0)/i, "the word Mullybox"],
   [/\bTODO\b/, "unfinished TODO"],
   [/\]\(https?:\/\/(?:www\.)?(?:mymully|mullybox)\.com/i, "absolute Mully link (use a relative path)"],
 ];
 
 /** Problems that block an insert. Empty array means the row is ready. */
-export function validateLetterRow(row: LetterRow): string[] {
+export function validateLetterRow(row: LetterRow, allow: readonly string[] = []): string[] {
   const problems: string[] = [];
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(row.slug)) problems.push("slug must be lowercase words joined by hyphens");
   if (row.category !== LETTER_STORED_CATEGORY) problems.push(`category must be "${LETTER_STORED_CATEGORY}" (the stored category for letter issues)`);
@@ -350,10 +356,11 @@ export function validateLetterRow(row: LetterRow): string[] {
   const fields: [string, string][] = [
     ["title", row.title], ["excerpt", row.excerpt], ["intro", row.intro], ["closing", row.closing], ["image_alt", row.image_alt],
     ...row.highlights.map((h, i) => [`highlights[${i}]`, h] as [string, string]),
-    ...row.sections.flatMap((s, i) => [[`sections[${i}].heading`, s.heading], [`sections[${i}].imageAlt`, s.imageAlt ?? ""], [`sections[${i}].caption`, s.caption ?? ""], ...s.paragraphs.map((p, j) => [`sections[${i}].paragraphs[${j}]`, p])] as [string, string][]),
+    ...row.sections.flatMap((s, i) => [[`sections[${i}].heading`, s.heading], [`sections[${i}].quote`, s.quote ?? ""], [`sections[${i}].imageAlt`, s.imageAlt ?? ""], [`sections[${i}].caption`, s.caption ?? ""], ...s.paragraphs.map((p, j) => [`sections[${i}].paragraphs[${j}]`, p])] as [string, string][]),
   ];
   for (const [name, value] of fields) {
     for (const [re, label] of BANNED) {
+      if (allow.includes(label)) continue;
       const g = new RegExp(re.source, re.flags.replace("g", ""));
       if (g.test(value)) problems.push(`${name}: ${label}`);
     }
