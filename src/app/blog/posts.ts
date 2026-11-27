@@ -18,6 +18,10 @@ export interface BlogSection {
   imageAlt?: string;
   /** Photo credit or caption shown under the section image. */
   caption?: string;
+  /** Pull quote shown after the paragraphs. */
+  quote?: string;
+  /** Coded panel shown after the paragraphs (own styling, copy lives in code). */
+  panel?: "mullybox-2";
 }
 
 export interface BlogPost {
