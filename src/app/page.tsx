@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { renderShopPage, metadata as shopMetadata } from "./shop/page";
 import { getReserveQuarterlyPrice } from "@/lib/shopify";
 import { SHOPIFY_MEMBERSHIP_PLANS } from "@/lib/membershipConfig";
-import { formatHeroPrice } from "@/lib/homeHero";
+import { formatHeroPrice, homeBfHeroLive } from "@/lib/homeHero";
 import { fetchGiftSeasonLivePrices } from "@/lib/gifts/giftSeasonPrices";
 import { maxGiftSeasonSavings } from "@/lib/gifts/giftSeason";
 import ShopLayout from "./shop/layout";
@@ -62,6 +62,6 @@ export default async function Home() {
   return <>
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(ORGANIZATION_JSON_LD).replace(/</g, "\\u003c") }} />
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(WEBSITE_JSON_LD).replace(/</g, "\\u003c") }} />
-    <ShopLayout>{await renderShopPage({ homeHero: { reservePrice, giftSavings } })}</ShopLayout>
+    <ShopLayout>{await renderShopPage({ homeHero: { reservePrice, giftSavings, bfHero: homeBfHeroLive() } })}</ShopLayout>
   </>;
 }

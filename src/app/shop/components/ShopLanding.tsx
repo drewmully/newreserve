@@ -19,7 +19,6 @@ import { ShopHeroHotspots } from "./ShopHeroHotspots";
 import { CompactVariantPicker } from "./CompactVariantPicker";
 import { HomeHeroExperiment } from "./HomeHeroExperiment";
 import { HomeBfHero } from "./HomeBfHero";
-import { HOME_BF_HERO_ACTIVE } from "@/lib/homeHero";
 import "./shop-redesign.css";
 import "./shop-redesign-native.css";
 import "./shop-outfit.css";
@@ -50,6 +49,8 @@ export interface HomeHeroProps {
   reservePrice: string | null;
   /** Largest live Gift a Season saving, formatted, for the holiday hero. */
   giftSavings?: string | null;
+  /** Holiday hero on; decided on the server so HTML and hydration agree. */
+  bfHero?: boolean;
 }
 
 export function ShopLanding({ products, editProducts = products, productsByCategory, theme, presentation = getShopPresentation(), journalPosts = [], homeHero }: {
@@ -145,7 +146,7 @@ export function ShopLanding({ products, editProducts = products, productsByCateg
     <>
       <ScrollToTop />
       <div className="shop-redesign shop-first" style={{ "--accent": theme.accent, "--accent-d": theme.accentDark } as CSSProperties}>
-        {homeHero && HOME_BF_HERO_ACTIVE ? <HomeBfHero giftSavings={homeHero.giftSavings ?? null} backgroundDesktop={presentation.hero.desktop} backgroundMobile={presentation.hero.mobile} /> : homeHero ? <HomeHeroExperiment season={presentation.editName} reservePrice={homeHero.reservePrice}>{heroSection}</HomeHeroExperiment> : heroSection}
+        {homeHero?.bfHero ? <HomeBfHero giftSavings={homeHero.giftSavings ?? null} backgroundDesktop={presentation.hero.desktop} backgroundMobile={presentation.hero.mobile} /> : homeHero ? <HomeHeroExperiment season={presentation.editName} reservePrice={homeHero.reservePrice}>{heroSection}</HomeHeroExperiment> : heroSection}
         <div className="shop-colorway-strip" aria-hidden="true" style={{ background: presentation.colorwayStrip }} />
         <section className="sec" id="edit">
           <div className="wrap">
