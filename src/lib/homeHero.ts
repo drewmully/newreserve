@@ -17,6 +17,15 @@
  */
 
 export const HOME_HERO_FLAG = "home-hero-dual";
+
+/**
+ * Holiday 2026 hero (HomeBfHero): "Black Friday, not here" with Mullybox 2.0
+ * and Gift a Season cards. Approved by Drew 2026-11-27. While true it
+ * replaces the photo hero and the dual test on "/" only (not /shop).
+ * Set false to bring back the seasonal photo hero.
+ */
+export const HOME_BF_HERO_ACTIVE = true;
+export const HOME_BF_LETTER_HREF = "/blog/why-were-skipping-black-friday-november-2026";
 /**
  * Paused 2026-11-26: everyone gets the photo hero (no swap after load).
  * ?hh=dual still previews the dual arm for QA. Set true to resume bucketing.

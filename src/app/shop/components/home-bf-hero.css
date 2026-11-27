@@ -1,0 +1,87 @@
+/* Holiday 2026 homepage hero (HomeBfHero.tsx). Mobile first. */
+.shop-redesign .hbf{position:relative;overflow:hidden;background:#17241d;color:#f5f1e8;isolation:isolate}
+.shop-redesign .hbf__bg{position:absolute;inset:0;z-index:-1}
+.shop-redesign .hbf__bg img{width:100%;height:100%;object-fit:cover;object-position:60% 30%;display:block}
+.shop-redesign .hbf__bg::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(14,24,18,.55) 0%,rgba(14,24,18,.78) 50%,rgba(14,24,18,.9) 100%)}
+.shop-redesign .hbf__in{padding:26px 16px 20px}
+.shop-redesign .hbf__intro{padding:0 2px}
+.shop-redesign .hbf__kick{margin:0;font-family:var(--mono);font-size:10.5px;letter-spacing:.22em;text-transform:uppercase;font-weight:500;display:flex;gap:9px;color:#f5f1e8}
+.shop-redesign .hbf__kick s{opacity:.55;text-decoration-thickness:1.5px}
+.shop-redesign .hbf__kick span{color:#e9d9a8}
+.shop-redesign .hbf h1{margin:12px 0 0;font:400 27px/1.12 var(--serif);letter-spacing:-.02em;color:#f5f1e8;text-wrap:balance}
+.shop-redesign .hbf__dek{margin:10px 0 0;font-family:var(--sans);font-size:14px;line-height:1.5;color:rgba(245,241,232,.86)}
+.shop-redesign .hbf__dek a{color:#fff;text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1px;white-space:nowrap}
+
+.shop-redesign .hbf__cards{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:22px}
+.shop-redesign .hbf__card{display:flex;flex-direction:column;border-radius:6px;overflow:hidden;background:rgba(10,18,14,.55);border:1px solid rgba(245,241,232,.16);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);color:#f5f1e8;text-decoration:none;transition:transform .2s ease,border-color .2s ease}
+.shop-redesign .hbf__card:hover{transform:translateY(-2px);border-color:rgba(245,241,232,.32)}
+.shop-redesign .hbf__card:focus-visible{outline:2px solid #e9d9a8;outline-offset:3px}
+.shop-redesign .hbf__band{position:relative;aspect-ratio:16/10;overflow:hidden}
+.shop-redesign .hbf__art{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.shop-redesign .hbf__tag{position:absolute;left:7px;top:7px;z-index:3;font-family:var(--sans);font-size:10px;font-weight:700;letter-spacing:.04em;line-height:1;padding:4px 6px;border-radius:3px}
+.shop-redesign .hbf__body{display:flex;flex-direction:column;flex:1;padding:10px 10px 10px}
+.shop-redesign .hbf__k{margin:0;font-family:var(--mono);font-size:9px;letter-spacing:.18em;text-transform:uppercase;font-weight:500;color:rgba(245,241,232,.72)}
+.shop-redesign .hbf h2{margin:4px 0 0;font:400 19px/1.1 var(--serif);letter-spacing:-.01em;color:#f5f1e8}
+.shop-redesign .hbf__s{display:none;margin:6px 0 0;font-family:var(--sans);font-size:14px;line-height:1.45;color:rgba(245,241,232,.82)}
+.shop-redesign .hbf__btn{margin-top:10px;display:flex;justify-content:center;align-items:center;height:38px;border-radius:3px;font-family:var(--sans);font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap}
+
+/* Mullybox 2.0: night, neon, prize cards fanned over the art */
+.shop-redesign .hbf__card--mb .hbf__band{background:#16112b}
+.shop-redesign .hbf__card--mb .hbf__band::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(22,17,43,0) 30%,rgba(22,17,43,.6))}
+.shop-redesign .hbf__card--mb .hbf__tag{background:#ff4fa3;color:#16112b;font-style:italic;font-weight:900;letter-spacing:0;transform:rotate(-3deg);box-shadow:0 2px 0 #16112b}
+.shop-redesign .hbf__fan{position:absolute;left:0;right:0;bottom:6px;height:52px;z-index:2}
+.shop-redesign .hbf__fan img{position:absolute;bottom:0;width:44px;height:44px;object-fit:cover;border-radius:5px;border:2px solid #fff;box-shadow:0 5px 12px rgba(0,0,0,.5),0 0 14px rgba(255,79,163,.35)}
+.shop-redesign .hbf__fan img:nth-child(1){left:calc(50% - 58px);transform:rotate(-9deg)}
+.shop-redesign .hbf__fan img:nth-child(2){left:calc(50% - 22px);bottom:7px;z-index:2;box-shadow:0 5px 12px rgba(0,0,0,.5),0 0 16px rgba(34,225,208,.45)}
+.shop-redesign .hbf__fan img:nth-child(3){left:calc(50% + 14px);transform:rotate(9deg)}
+.shop-redesign .hbf__card--mb .hbf__k{color:#22e1d0}
+.shop-redesign .hbf__card--mb .hbf__btn{background:#ecc560;color:#16112b}
+/* Gift a Season */
+.shop-redesign .hbf__card--gs .hbf__tag{background:#f5f1e8;color:#1e3a2c}
+.shop-redesign .hbf__card--gs .hbf__btn{background:#f5f1e8;color:#1f1d1a}
+
+.shop-redesign .hbf__fine{margin:10px 2px 0;font-family:var(--sans);font-size:10px;line-height:1.4;color:rgba(245,241,232,.6)}
+
+@media (min-width:380px){
+ .shop-redesign .hbf__fan{height:58px}
+ .shop-redesign .hbf__fan img{width:50px;height:50px}
+ .shop-redesign .hbf__fan img:nth-child(1){left:calc(50% - 64px)}
+ .shop-redesign .hbf__fan img:nth-child(2){left:calc(50% - 25px)}
+ .shop-redesign .hbf__fan img:nth-child(3){left:calc(50% + 14px)}
+}
+@media (min-width:700px){
+ .shop-redesign .hbf__in{padding:44px 32px 40px}
+ .shop-redesign .hbf h1{font-size:40px}
+ .shop-redesign .hbf__s{display:block}
+ .shop-redesign .hbf__body{padding:16px 16px 18px}
+ .shop-redesign .hbf h2{font-size:26px}
+ .shop-redesign .hbf__btn{height:44px;font-size:11.5px;margin-top:14px}
+ .shop-redesign .hbf__tag{font-size:12px;padding:5px 8px;left:12px;top:12px}
+ .shop-redesign .hbf__fan{height:100px;bottom:14px}
+ .shop-redesign .hbf__fan img{width:84px;height:84px;border-radius:7px;border-width:3px}
+ .shop-redesign .hbf__fan img:nth-child(1){left:calc(50% - 112px)}
+ .shop-redesign .hbf__fan img:nth-child(2){left:calc(50% - 42px);bottom:12px}
+ .shop-redesign .hbf__fan img:nth-child(3){left:calc(50% + 28px)}
+}
+@media (min-width:1000px){
+ .shop-redesign .hbf__bg img{object-position:50% 50%}
+ .shop-redesign .hbf__bg::after{background:linear-gradient(90deg,rgba(14,24,18,.85) 0%,rgba(14,24,18,.66) 45%,rgba(14,24,18,.5) 100%)}
+ .shop-redesign .hbf__in{max-width:1240px;margin:0 auto;padding:60px 40px 52px;display:grid;grid-template-columns:360px 1fr;gap:64px;align-items:center}
+ .shop-redesign .hbf__kick{font-size:13px}
+ .shop-redesign .hbf h1{font-size:52px;line-height:1.04;margin-top:14px}
+ .shop-redesign .hbf__dek{font-size:16px;margin-top:16px}
+ .shop-redesign .hbf__cards{gap:18px;margin-top:0}
+ .shop-redesign .hbf__body{padding:20px 22px 22px}
+ .shop-redesign .hbf__k{font-size:11.5px}
+ .shop-redesign .hbf h2{font-size:30px;margin-top:8px}
+ .shop-redesign .hbf__btn{height:48px;font-size:12px;margin-top:18px}
+ .shop-redesign .hbf__tag{font-size:12px}
+ .shop-redesign .hbf__card--mb .hbf__tag{font-size:14px}
+ .shop-redesign .hbf__fan{height:126px;bottom:18px}
+ .shop-redesign .hbf__fan img{width:104px;height:104px;border-radius:8px}
+ .shop-redesign .hbf__fan img:nth-child(1){left:calc(50% - 138px)}
+ .shop-redesign .hbf__fan img:nth-child(2){left:calc(50% - 52px);bottom:16px}
+ .shop-redesign .hbf__fan img:nth-child(3){left:calc(50% + 34px)}
+ .shop-redesign .hbf__fine{font-size:11px;text-align:right}
+}
+@media (prefers-reduced-motion:reduce){.shop-redesign .hbf__card{transition:none}.shop-redesign .hbf__card:hover{transform:none}}
